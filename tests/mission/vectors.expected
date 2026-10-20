@@ -1,0 +1,18 @@
+Housekeeping{version=0, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, mode=Nominal, temperature=25.19685039370079, battery_voltage=12.0, charging=true, bus_current=1.5, uptime=16909060, attitude=1.5, delta=-2, offset=-5, trim=-3} | 0864c02a001201a04e2805dc040302013fc00000fffe8050fc
+Housekeeping{version=0, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, mode=Error, temperature=0.0, battery_voltage=12.0, charging=true, bus_current=1.5, uptime=16909060, attitude=1.5, delta=-2, offset=-5, trim=-3} | 0864c02a001214804e2805dc040302013fc00000fffe8050fc
+ScienceHousekeeping{version=0, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, temperature=17.322834645669293, battery_voltage=12.0, charging=true, bus_current=1.5, uptime=16909060, attitude=1.5, delta=-2, offset=-5, trim=-3, science_count=18446744073709551614} | 0864c02a001202964e2805dc040302013fc00000fffe8050fcfffffffffffffffe
+Housekeeping{version=0, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, mode=Science, temperature=96.06299212598425, battery_voltage=12.0, charging=true, bus_current=1.5, uptime=16909060, attitude=1.5, delta=-2, offset=-5, trim=-3} | 0864c02a001202fa4e2805dc040302013fc00000fffe8050fc
+Thermal{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, heater_power=3.5} | error:NotInvertible
+Event{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, event_id=513, origin="ORBIT", message="hello, world", source="src", data_=0xdeadbeef, timestamp=1250000000.0, charging=true, coarse_time=1600000000.0, fine_time=0.5} | 08c8c02a001202014f524249540000000c68656c6c6f2c20776f726c6473726300deadbeef000000205fa0d241afaf0800400000
+Event{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, event_id=1, origin="ABCDEFGH", message="é\"", source="\x01\x7f", data_=0x00000000, timestamp=-0.0, charging=false, coarse_time=none, fine_time=none} | 00c8c02a00120001414243444546474803c3a922017f0000000000000000000000008000
+error:InvalidString | -
+error:Truncated | -
+error:NoMatch | -
+error:NoMatch | -
+error:Truncated | -
+error:Mismatch | -
+SetMode{seq_count=5, packet_length=1, mode=Science} | 112cc00500010102
+Reboot{seq_count=6, packet_length=10, delay=30.0, force=true, reason="maint"} | 112cc006000a02012c0100056d61696e74
+Patch{seq_count=7, packet_length=11, address=536875008, bytes_=0xdeadbeef0001, checksum=48879} | 112dc007000b03001000200fdeadbeef0001beef
+error:NoMatch | -
+error:NoMatch | -

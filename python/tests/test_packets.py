@@ -1,0 +1,131 @@
+"""Tests of the packet codecs generated from tests/mission/demo.xml."""
+
+import dataclasses
+import sys
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
+
+import demo  # noqa: E402
+from xtce import ManagedBuffer  # noqa: E402
+from xtce.packet import Codec, PacketError, enum_value, float_to_raw  # noqa: E402
+
+
+def housekeeping(**kw) -> demo.Housekeeping:
+    args = dict(
+        sec_hdr_flag=True,
+        seq_flags=demo.SeqFlagsType.UNSEGMENTED,
+        seq_count=42,
+        packet_length=18,
+        mode=demo.ModeType.NOMINAL,
+        temperature=25.0,
+        battery_voltage=12.0,
+        charging=True,
+        bus_current=1.5,
+        uptime=0x01020304,
+        attitude=1.5,
+        delta=-2,
+        offset=-5,
+        trim=-3,
+    )
+    args.update(kw)
+    return demo.Housekeeping(**args)
+
+
+class PacketTests(unittest.TestCase):
+    def kind(self, packet) -> str:
+        with self.assertRaises(PacketError) as cm:
+            packet.to_bytes()
+        return cm.exception.kind
+
+    def test_binary32_rounding(self):
+        # The Rust and C runtimes must give the same bits.
+        for x, raw in (
+            (3.4028235e38, 0x7F7FFFFF),
+            (-3.4028235e38, 0xFF7FFFFF),
+            (3.4028235677973362e38, 0x7F7FFFFF),
+            (3.4028235677973366e38, 0x7F800000),
+            (1e39, 0x7F800000),
+            (-1e39, 0xFF800000),
+        ):
+            self.assertEqual(float_to_raw(x, 32), raw, x)
+
+    def test_inherited_constants(self):
+        data = housekeeping().to_bytes()
+        self.assertEqual(data[:2], b"\x08\x64")
+        self.assertEqual(len(data), demo.Housekeeping.MAX_BYTES)
+        hk = demo.CCSDSPacketKind.decode(data)
+        self.assertIsInstance(hk, demo.Housekeeping)
+        self.assertAlmostEqual(hk.temperature, 25.0, delta=0.5)
+        self.assertEqual(hk.trim, -3)
+
+    def test_dispatch(self):
+        data = demo.ScienceHousekeeping(temperature=20.0, science_count=2**64 - 1).to_bytes()
+        p = demo.CCSDSPacketKind.decode(data)
+        self.assertIsInstance(p, demo.ScienceHousekeeping)
+        self.assertEqual(p.science_count, 2**64 - 1)
+        self.assertEqual(demo.Housekeeping.decode(data).mode, demo.ModeType.SCIENCE)
+
+    def test_encode_errors(self):
+        self.assertEqual(self.kind(demo.ScienceHousekeeping(temperature=45.0)), "Mismatch")
+        self.assertEqual(self.kind(housekeeping(seq_count=1 << 14)), "OutOfRange")
+        self.assertEqual(self.kind(housekeeping(temperature=150.0)), "Calibration")
+        self.assertEqual(self.kind(housekeeping(offset=-2048)), "OutOfRange")
+        self.assertEqual(self.kind(demo.Thermal()), "NotInvertible")
+
+    def test_strings_and_binary(self):
+        ev = demo.Event(origin="ORBIT", message="x" * 32, source="abc", data_=b"\x01\x02\x03\x04")
+        self.assertEqual(demo.Event.decode(ev.to_bytes()), ev)
+        for change, kind in [
+            (dict(message="x" * 33), "TooLong"),
+            (dict(origin="NINE BYTE"), "TooLong"),
+            (dict(origin="a\0b"), "InvalidString"),
+            (dict(data_=b"\x01\x02\x03"), "OutOfRange"),
+        ]:
+            self.assertEqual(self.kind(dataclasses.replace(ev, **change)), kind, change)
+
+    def test_commands(self):
+        cmd = demo.Reboot(seq_count=6, packet_length=10, delay=30.0, force=True, reason="maint")
+        data = cmd.to_bytes()
+        self.assertEqual(data.hex(), "112cc006000a02012c0100056d61696e74")
+        self.assertEqual(demo.CCSDSCommandKind.decode(data), cmd)
+        back = demo.SetMode.decode(demo.SetMode(mode=enum_value(demo.ModeArgType, 9)).to_bytes())
+        self.assertEqual(int(back.mode), 9)
+        self.assertIsNone(back.mode.label)
+        self.assertEqual(demo.ModeType(16).label, "Error")
+        self.assertEqual(enum_value(demo.ModeType, 20).label, "Error")
+
+    def test_codec_reuses_buffers(self):
+        codec = Codec.for_packet(demo.CCSDSPacketKind)
+        caps = (codec.input_capacity, codec.output_capacity)
+        self.assertGreaterEqual(caps[1], demo.CCSDSPacketKind.MAX_BYTES)
+        packets = [housekeeping(), demo.Event(data_=bytes(4)), demo.ScienceHousekeeping()]
+        for _ in range(100):
+            for p in packets:
+                with codec.encode(p) as v:
+                    data = bytes(v)
+                codec.load(data)
+                back = codec.decode(demo.CCSDSPacketKind)
+                with codec.encode(back) as v:
+                    self.assertEqual(bytes(v), data)
+        self.assertEqual((codec.input_capacity, codec.output_capacity), caps)
+
+    def test_include_condition(self):
+        ev = demo.Event(sec_hdr_flag=True, data_=bytes(4), coarse_time=1.6e9, fine_time=0.5)
+        full = ev.to_bytes()
+        self.assertEqual(demo.Event.decode(full).fine_time, 0.5)
+        short = dataclasses.replace(ev, sec_hdr_flag=False).to_bytes()
+        self.assertEqual(len(short) + 6, len(full))
+        self.assertIsNone(demo.Event.decode(short).coarse_time)
+        self.assertEqual(self.kind(dataclasses.replace(ev, fine_time=None)), "Missing")
+
+    def test_encode_into_existing_buffer(self):
+        buf = ManagedBuffer(64)
+        housekeeping().encode(buf)
+        self.assertEqual(len(buf), demo.Housekeeping.MAX_BYTES)
+        self.assertEqual(buf.capacity, 64)
+
+
+if __name__ == "__main__":
+    unittest.main()

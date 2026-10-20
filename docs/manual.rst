@@ -1,0 +1,1193 @@
+=======================
+tcsxtce User Manual
+=======================
+
+.. contents:: Contents
+   :depth: 2
+   :local:
+
+Introduction
+============
+
+tcsxtce is flight software. It provides libraries in Rust, C/C++ and Python
+for working with OMG **XTCE** (XML Telemetric and Command Exchange) in two
+layers:
+
+**The XML binding**
+   Typed data structures for the whole XTCE 1.3 schema, with code that
+   reads and writes XTCE documents. Use it to load, inspect, edit,
+   validate and write a mission database.
+
+**The packet codecs**
+   ``tcsxtce`` compiles one mission's XTCE document into typed packet
+   structures with encode and decode functions. Use it to read
+   telemetry and build commands in the binary formats that the mission
+   database describes.
+
+Both layers serialize into *managed buffers*. These are allocated in
+advance, reused for every operation, and released when the object that
+owns them goes away.
+
+All three languages are generated from the same model and produce
+byte-identical output. The test suite checks this on every build.
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Directory
+     - Contents
+   * - ``references/``
+     - Downloaded XTCE documents (``SpaceSystem.xsd``, ``XTCE.pdf``, ``VERSION``) plus ``xml.xsd`` and ``catalog.xml`` for offline validation
+   * - ``generator/xtcegen/``
+     - Generates the XML binding from the schema
+   * - ``generator/tcsxtce/``, ``generator/xtcepkt/``
+     - The ``tcsxtce`` command, and the compiler behind it that turns a mission's XTCE document into packet codecs
+   * - ``rust/``
+     - The ``xtce`` Rust crate
+   * - ``cpp/``
+     - The C++20 library (``libxtce.a``, ``libxtce.so``) and its C API
+   * - ``python/``
+     - The ``xtce`` Python package (3.10+, standard library only)
+   * - ``tests/``
+     - Schema-coverage samples, the demo mission, packet vectors and the cross-language checks
+   * - ``docs/``
+     - This manual and the design description
+   * - ``examples/``
+     - Example XTCE files with generated code and programs in each language
+
+
+Building and testing
+====================
+
+Requirements: ``curl``, ``xmllint``, Python 3.10 or later, a Rust
+toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
+
+.. code-block:: sh
+
+   make                 # fetch references if missing, generate, build, test
+   make references      # check OMG for the latest XTCE and download it
+   make generate        # regenerate all generated code
+   make packets         # regenerate the demo mission's packet codecs
+   make rust | cpp | python
+   make test            # every language's tests and both cross-language checks
+   make fmt             # format Rust code
+   make fmt-check       # verify Rust formatting (run by every `make rust`)
+   make clean           # remove build products
+   make distclean       # also remove the downloaded references
+
+``references/Makefile`` reads the OMG specification page
+(https://www.omg.org/spec/XTCE/) to find the latest version instead of
+using a fixed one. At the time of writing that is XTCE 1.3, schema
+namespace ``http://www.omg.org/spec/XTCE/20250214``.
+
+All Rust code must follow standard ``rustfmt`` formatting. Generated Rust
+is passed through ``rustfmt``. ``make rust`` runs ``cargo fmt --check``.
+In Claude Code sessions, a hook in ``.claude/settings.json`` checks each
+``.rs`` file as it is edited.
+
+
+Managed buffers
+===============
+
+Every buffer the libraries serialize into, or parse from, is a managed
+buffer:
+
+* It is preallocated when it is created. The default is 64 KiB for
+  documents; packet codecs use the size of the largest packet.
+* Clearing a buffer resets its length but keeps its allocation, so later
+  operations reuse the same memory.
+* A buffer grows only when its contents exceed the current allocation.
+* It is owned by a ``Document`` or ``Codec`` and is freed with that
+  object.
+
+Rust: ``xtce::Buffer``
+----------------------
+
+.. list-table::
+   :widths: auto
+
+   * - ``Buffer::new()``
+     - Preallocate ``DEFAULT_CAPACITY`` (65536) bytes
+   * - ``Buffer::with_capacity(n)``
+     - Preallocate ``n`` bytes
+   * - ``clear()``
+     - Empty the buffer, keep the allocation
+   * - ``reserve(n)``
+     - Ensure room for ``n`` more bytes
+   * - ``load(&[u8])``
+     - Replace the contents
+   * - ``load_from(impl Read) -> io::Result<usize>``
+     - Replace the contents with a reader's data
+   * - ``resize(n)``
+     - Set the length, zero filling new bytes
+   * - ``push(u8)``, ``extend_from_slice``, ``push_str``
+     - Append
+   * - ``as_bytes() -> &[u8]``
+     - View the contents
+   * - ``as_mut_bytes() -> &mut [u8]``
+     - Mutable view of the contents
+   * - ``len()``, ``is_empty()``, ``capacity()``
+     - Sizes
+
+C++: ``xtce::Buffer`` (``xtce/buffer.hpp``)
+-------------------------------------------
+
+.. list-table::
+   :widths: auto
+
+   * - ``Buffer(std::size_t capacity = kDefaultCapacity)``
+     - Preallocate
+   * - ``clear()``, ``reserve(n)``
+     - As in Rust
+   * - ``load(const void*, n)``, ``load(string_view)``
+     - Replace the contents
+   * - ``load_from(std::istream&)``
+     - Replace the contents with a stream's data
+   * - ``resize(n)``
+     - Set the length, zero filling new bytes
+   * - ``push(char)``, ``append(string_view)``
+     - Append
+   * - ``data()``, ``mutable_data()``
+     - Pointers to the bytes
+   * - ``view() -> std::string_view``
+     - View the contents
+   * - ``size()``, ``empty()``, ``capacity()``
+     - Sizes
+
+Python: ``xtce.ManagedBuffer``
+------------------------------
+
+.. list-table::
+   :widths: auto
+
+   * - ``ManagedBuffer(capacity=DEFAULT_CAPACITY)``
+     - Preallocate a ``bytearray``
+   * - ``clear()``, ``reserve(n)``
+     - As in Rust
+   * - ``load(data)``, ``write(data)``
+     - Replace or append the contents
+   * - ``load_from(stream)``
+     - Replace the contents; fills the existing allocation before growing it
+   * - ``resize(n)``
+     - Set the length, zero filling new bytes
+   * - ``view() -> memoryview``
+     - Zero-copy view; release it before the buffer has to grow
+   * - ``getvalue() -> bytes``
+     - Copy of the contents
+   * - ``len(buf)``, ``buf.capacity``
+     - Sizes
+
+
+The XML binding
+===============
+
+Documents
+---------
+
+A ``Document`` holds a root ``SpaceSystemType`` together with an input
+buffer and an output buffer.
+
+Rust (``xtce::Document``):
+
+.. list-table::
+   :widths: auto
+
+   * - ``root: SpaceSystemType``
+     - The document's data (public field)
+   * - ``indent: bool``
+     - Pretty-print output (default ``true``)
+   * - ``Document::new(root)``
+     - Wrap ``root``; both buffers get ``DEFAULT_CAPACITY``
+   * - ``Document::with_capacity(root, input, output)``
+     - Wrap ``root`` with explicit buffer sizes
+   * - ``Document::from_bytes(&[u8]) -> Result<Document>``
+     - Parse a document
+   * - ``load(&mut self, &[u8]) -> Result<()>``
+     - Replace ``root`` by parsing, reusing the input buffer
+   * - ``read_from(&mut self, impl Read) -> Result<()>``
+     - Same, reading from a stream
+   * - ``serialize(&mut self) -> Result<&[u8]>``
+     - Write ``root`` into the output buffer; the slice is valid until the document changes
+   * - ``write_to(&mut self, impl Write) -> Result<()>``
+     - Serialize and write to a stream
+   * - ``input()``, ``output() -> &Buffer``
+     - The managed buffers
+
+``xtce::to_xml(&value, tag, &mut buf, indent)`` and
+``xtce::from_xml::<T>(bytes, tag)`` read and write any generated type as
+a stand-alone element.
+
+Errors are ``xtce::Error { message, line, column }``. ``line`` is 1-based,
+or 0 when the error is not tied to a position in the input.
+
+C++ (``xtce::Document``, ``#include "xtce/document.hpp"``):
+
+.. list-table::
+   :widths: auto
+
+   * - ``Document(SpaceSystemType root = {}, size_t in = kDefaultCapacity, size_t out = kDefaultCapacity)``
+     - Wrap ``root`` and preallocate both buffers
+   * - ``root``, ``indent``
+     - Public members, as in Rust
+   * - ``static Document from_bytes(std::string_view)``
+     - Parse a document
+   * - ``load(std::string_view)``, ``read_from(std::istream&)``
+     - Replace ``root`` by parsing
+   * - ``std::string_view serialize()``
+     - View of the output buffer
+   * - ``write_to(std::ostream&)``
+     - Serialize to a stream
+   * - ``input()``, ``output()``
+     - The managed buffers
+
+Errors are thrown as ``xtce::Error``, with ``message()``, ``line()`` and
+``column()``.
+
+C (``#include "xtce/xtce.h"``, link with ``libxtce`` and the C++
+runtime):
+
+.. list-table::
+   :widths: auto
+
+   * - ``xtce_document* xtce_document_new(size_t in, size_t out)``
+     - Create a document (0 means the default size)
+   * - ``void xtce_document_free(xtce_document*)``
+     - Free the document and its buffers
+   * - ``int xtce_document_load(doc, const void* data, size_t len)``
+     - Parse; returns ``XTCE_OK`` or ``XTCE_ERROR``
+   * - ``int xtce_document_serialize(doc, const uint8_t** out, size_t* n)``
+     - Serialize; ``*out`` points into the output buffer
+   * - ``xtce_document_set_indent(doc, int)``
+     - Pretty-print on or off
+   * - ``xtce_document_name``, ``xtce_document_set_name``
+     - Root ``SpaceSystem`` name
+   * - ``xtce_document_error``, ``xtce_document_error_line``
+     - Last error message and line
+   * - ``xtce_document_input_capacity``, ``xtce_document_output_capacity``
+     - Buffer sizes
+   * - ``xtce_schema_version()``, ``xtce_namespace()``
+     - Schema information
+   * - ``xtce::Document* xtce_document_cxx(doc)``
+     - The C++ object, for typed access (C++ only)
+
+Python (``xtce.Document``):
+
+.. list-table::
+   :widths: auto
+
+   * - ``Document(root=None, *, input_capacity=..., output_capacity=..., indent=True)``
+     - Wrap ``root`` (an empty ``SpaceSystemType`` by default) and preallocate both buffers
+   * - ``root``, ``indent``
+     - Attributes
+   * - ``Document.from_bytes(data)``, ``Document.from_file(path)``
+     - Parse a document
+   * - ``load(data)``, ``read_from(stream)``
+     - Replace ``root`` by parsing
+   * - ``serialize() -> memoryview``
+     - View of the output buffer; use it in a ``with`` block
+   * - ``to_bytes() -> bytes``, ``write_to(stream)``
+     - Serialize to a copy or a stream
+   * - ``input``, ``output``
+     - The managed buffers (properties)
+   * - ``close()``, ``with Document(...) as doc:``
+     - Release the buffers early
+
+``xtce.to_xml`` and ``xtce.from_xml`` work like their Rust
+counterparts. Errors are raised as ``xtce.XtceError`` (a ``ValueError``)
+with ``message`` and ``line`` attributes.
+
+Generated data structures
+-------------------------
+
+Every complex type in ``SpaceSystem.xsd`` becomes a record. Type names
+match the schema (``SpaceSystemType``, ``IntegerParameterType``, ...).
+Field names are the snake_case form of the XML names. Inherited content
+(``complexContent`` extensions) is copied into the derived record.
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - XSD
+     - Rust
+     - C++
+     - Python
+   * - complex type
+     - ``struct``
+     - ``struct``
+     - ``@dataclass``
+   * - ``<choice>``
+     - ``enum``
+     - ``struct`` + ``std::variant``
+     - dataclass with ``name`` and ``value``
+   * - enumeration
+     - ``enum``
+     - ``enum class``
+     - ``str`` ``Enum``
+   * - optional element or attribute
+     - ``Option<T>``
+     - ``std::optional<T>``
+     - ``Optional[T]``
+   * - repeated element
+     - ``Vec<T>``
+     - ``std::vector<T>``
+     - ``list[T]``
+   * - recursive field
+     - ``Box<T>``
+     - ``xtce::Box<T>``
+     - plain reference
+   * - string, dates, durations, hexBinary, unions
+     - ``String``
+     - ``std::string``
+     - ``str``
+   * - boolean
+     - ``bool``
+     - ``bool``
+     - ``bool``
+   * - long, integer / int / unsignedShort
+     - ``i64`` / ``i32`` / ``u16``
+     - ``int64_t`` / ``int32_t`` / ``uint16_t``
+     - ``int``
+   * - double
+     - ``f64``
+     - ``double``
+     - ``float``
+
+Choices:
+
+* **Rust**: an ``enum`` with one variant per alternative, for example
+  ``EntryListChoice::ParameterRefEntry(ParameterRefEntryType)``.
+* **C++**: a struct holding ``std::variant value``, with ``kind()``,
+  ``xml_name()``, ``make_X(v)`` constructors and ``as_X()`` accessors
+  that return ``nullptr`` for another alternative.
+* **Python**: a dataclass with ``name`` (the element name) and ``value``,
+  plus class-method constructors such as
+  ``EntryListChoice.parameter_ref_entry(v)``.
+
+Every record and choice has a default value that is schema-valid where
+the schema allows. All three languages support equality comparison.
+Each record reads and writes itself as XML (``XmlElement`` in Rust,
+``write_xml``/``read_xml`` in C++, ``to_xml``/``from_xml`` in Python).
+Usually you don't call these directly.
+
+Example (Rust):
+
+.. code-block:: rust
+
+   use xtce::{Document, SpaceSystemType};
+
+   let mut doc = Document::from_bytes(&std::fs::read("sat.xml")?)?;
+   println!("{}", doc.root.name);
+   doc.root.short_description = Some("updated".into());
+   let bytes: &[u8] = doc.serialize()?;   // view of the managed buffer
+
+Behaviour
+---------
+
+* The binding follows XTCE 1.3 strictly. Documents written for older
+  versions are rejected wherever the schema changed, and errors give the
+  line number.
+* Elements are matched by local name; the namespace URI is not checked.
+* Pattern, range and ``xs:key`` constraints are not checked. Use
+  ``xmllint`` with ``references/catalog.xml`` for full validation.
+* Schema defaults are not filled in, so documents round-trip as written.
+* Comments, processing instructions and attributes in other namespaces
+  (such as ``xsi:schemaLocation``) are not preserved.
+* Doubles are written in their shortest round-trip form (Python ``repr``
+  style), identically in every language.
+
+
+Packet codecs
+=============
+
+Overview
+--------
+
+``tcsxtce`` reads a mission's XTCE document and generates, for one
+language:
+
+* a **struct per concrete container or meta-command** with one field
+  per value the user supplies;
+* **decode** and **encode** functions for each struct;
+* a **dispatch type** (a *kind*) per inheritance tree, which decodes a
+  packet into whichever concrete container or command it matches;
+* an **enumeration type** per enumerated parameter or argument type in
+  use.
+
+The generated code uses a small runtime: ``xtce::packet`` in Rust,
+``xtce/packet.h`` in C and C++, and ``xtce.packet`` in Python.
+
+Running the compiler
+--------------------
+
+.. code-block:: sh
+
+   cd generator
+   python3 -m tcsxtce INPUT OUTPUT --lang LANG
+
+   python3 -m tcsxtce demo.xml demo.rs --lang rust
+   python3 -m tcsxtce demo.xml demo.h  --lang c
+   python3 -m tcsxtce demo.xml demo.py --lang python
+
+Each run writes one language. Run it once per language you need.
+
+.. list-table::
+   :widths: auto
+
+   * - ``INPUT``
+     - The mission's XTCE document, read with the ``xtce`` Python package
+   * - ``OUTPUT``
+     - The file to write
+   * - ``--lang LANG``
+     - Required. ``rust`` writes a Rust module, formatted with ``rustfmt``
+       (which must be installed). ``python`` writes a Python module.
+       ``c`` and ``c++`` write the same file: a header that compiles both
+       as C11 and as C++.
+   * - ``--prefix P``
+     - C/C++ only: prefix of every name the header defines (default: the
+       root SpaceSystem name in snake_case followed by ``_``, such as
+       ``demo_``)
+   * - ``--skip-unsupported``
+     - Leave out containers and meta-commands that use unsupported XTCE features, with a warning, instead of failing
+   * - ``--bit-packing``
+     - Store integer, enumerated and boolean fields in bit-packed storage
+       with no padding between them, reached through accessors (see
+       `Bit packing`_)
+   * - ``--source-name NAME``
+     - Mission file name recorded in the generated headers
+
+By default the compiler stops if any container or meta-command uses an
+unsupported construct, and lists every such construct with its cause.
+
+Using the generated code:
+
+* **Rust**: add the file as a module (``mod demo;``) in a crate that
+  depends on ``xtce``.
+* **C and C++**: include the header with ``cpp/include`` on the include
+  path. The header and its runtime ``xtce/packet.h`` are self-contained
+  and need no library. In C, link with ``-lm``.
+* **Python**: import the module with the ``xtce`` package on the path.
+
+``make packets`` regenerates the demo mission
+(``tests/mission/demo.xml``) into ``rust/tests/mission/demo.rs``,
+``cpp/tests/mission/demo.h`` and ``python/tests/mission/demo.py``, and
+their bit-packed versions ``demo_packed.*``.
+
+Generated packet types
+----------------------
+
+Names are derived from XTCE names, and are the same in every language.
+In C and C++, every name the header defines also starts with the
+prefix (``demo_Housekeeping``, ``demo_Housekeeping_decode``), because C
+has no namespaces.
+
+* Structs and enumeration types use CamelCase (``CCSDSPacket`` stays
+  ``CCSDSPacket``, ``ccsds_header`` becomes ``CcsdsHeader``).
+* Fields use snake_case. A name reserved in any of the three languages,
+  or by the generated code (such as ``data``, ``type`` or ``bytes``),
+  gets a trailing ``_``.
+* Clashes are resolved by qualifying with the SpaceSystem path, then
+  with a numeric suffix.
+
+**Packet structs.** There is one struct per non-abstract
+``SequenceContainer`` and per non-abstract ``MetaCommand``. Its fields
+are, in packet order:
+
+* every value the container's inheritance chain encodes, base container
+  first, with included containers (``ContainerRefEntry``) flattened in;
+* **except** values fixed by an ``==`` restriction criterion or argument
+  assignment along the chain. These are constants: they are written
+  automatically when encoding and checked when decoding. For example,
+  the demo's ``Housekeeping`` has no ``apid`` field because its
+  ``BaseContainer`` requires ``APID == 100``.
+
+Command structs hold the command's arguments, including those inherited
+from base meta-commands that are not assigned. They also hold any
+parameters the command container includes. ``FixedValueEntry`` bits are
+written automatically and ignored when decoding.
+
+Field types:
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Engineering type
+     - Rust
+     - C/C++
+     - Python
+   * - integer (by encoded size and sign)
+     - ``u8`` … ``u64``, ``i8`` … ``i64``
+     - ``uint8_t`` … ``int64_t``
+     - ``int``
+   * - float, calibrated integer, time
+     - ``f64``
+     - ``double``
+     - ``float``
+   * - enumerated
+     - generated type
+     - generated ``int64_t`` typedef
+     - generated ``IntEnum``
+   * - boolean
+     - ``bool``
+     - ``bool``
+     - ``bool``
+   * - string
+     - ``String``
+     - ``demo_strN``: ``size_t len`` and ``char data[N + 1]``
+     - ``str``
+   * - binary
+     - ``Vec<u8>``
+     - ``demo_bytesN``: ``uint8_t data[N]``
+     - ``bytes``
+   * - with an ``IncludeCondition``
+     - ``Option<T>``
+     - ``bool has_<field>`` before the field
+     - ``Optional[T]``
+
+In C/C++, ``N`` is the most bytes the field's encoding can hold, so
+fields need no allocation. ``data`` always has room for a terminating
+NUL, which decoding writes. Encoding uses ``len``, not the NUL.
+
+Integer field widths come from the *encoding*: an 11-bit unsigned field
+is a ``u16``, and a 12-bit sign-magnitude field is an ``i16``. Floats
+are always 64-bit in memory. 32-bit encodings round when written.
+Time types are in seconds, as described below.
+
+**Enumeration types** hold the raw integer, so values the enumeration
+doesn't list survive decoding and re-encoding:
+
+* **Rust**: ``pub struct ModeType(pub i64)`` with associated constants
+  (``ModeType::NOMINAL``), ``label() -> Option<&'static str>`` and
+  ``Display``.
+* **C/C++**: ``typedef int64_t demo_ModeType`` with a macro per label
+  (``demo_ModeType_NOMINAL``) and ``const char* demo_ModeType_label(demo_ModeType)``,
+  which returns ``NULL`` for an unlisted value.
+* **Python**: ``class ModeType(enum.IntEnum)`` with a ``label``
+  property. ``xtce.packet.enum_value(ModeType, 20)`` builds a value
+  even when it isn't listed.
+
+A range entry (``maxValue``) gives one label to all values in the range.
+The constant uses the range's first value.
+
+**Kinds.** An inheritance tree whose root has descendants gets a dispatch
+type named ``<Root>Kind``. Its members are every concrete container (or
+command) in the tree, in document order:
+
+* **Rust**: ``enum CCSDSPacketKind { Housekeeping(Housekeeping), ... }``,
+  with ``From<Member>`` for each member.
+* **C/C++**: ``struct demo_CCSDSPacketKind { demo_CCSDSPacketKind_tag tag; union { demo_Housekeeping Housekeeping; ... } u; }``,
+  where ``tag`` is ``demo_CCSDSPacketKind_Housekeeping_tag``, and so on.
+* **Python**: ``class CCSDSPacketKind`` with ``MEMBERS``. Its ``decode``
+  returns an instance of the matching member class.
+
+Bit packing
+-----------
+
+By default every field of a packet struct is an ordinary member, so a
+3-bit value followed by a 5-bit value takes two bytes in memory (a
+``u8`` each), although they take only 8 bits on the wire. With
+``--bit-packing``, ``tcsxtce`` stores these fields in one byte array
+instead, and the two values take one byte.
+
+Which fields are packed:
+
+* integer and enumerated fields, in the number of bits of their
+  encoding, as their raw encoded value (so a 12-bit sign-magnitude field
+  takes 12 bits);
+* boolean fields, in one bit.
+
+Optional fields (those with an ``IncludeCondition``), floats (including
+calibrated integers and times), strings and binary fields are not packed
+and stay ordinary members. A struct with no packable field is the same
+as without the flag.
+
+Layout: the storage uses the order XTCE uses for encoded data, which
+the schema calls "packed" (members "ordered and contiguous").
+
+* Packed fields come one after another, in field order, with no padding.
+  The first starts at bit 0.
+* Bit 0 is the most significant bit of byte 0, bit 8 the most
+  significant bit of byte 1, and so on.
+* Each value is stored as it is encoded: most significant bit first,
+  crossing byte boundaries as needed, and with its bytes swapped if its
+  encoding is little-endian. The storage takes ``ceil(total bits / 8)``
+  bytes.
+* The layout is the same in every language and does not depend on the
+  compiler: C and C++ use a ``uint8_t`` array, not bit-fields, whose
+  order is implementation-defined.
+
+The wire format does not change. Packed and unpacked codecs decode and
+encode the same bytes and print the same canonical text.
+
+The storage is not the packet, though. When every field is packable and
+nothing else is encoded, the two are byte for byte the same (see the
+``bit-packing`` example). In general the storage differs from the
+encoded packet because:
+
+* fields fixed by a restriction criterion or argument assignment, and
+  ``FixedValueEntry`` bits, are encoded but not stored;
+* gaps and overlaps from ``LocationInContainerInBits`` are encoded but
+  not stored;
+* optional, float, string and binary fields are encoded among the
+  others but stored as ordinary members, outside the packed storage;
+* a boolean is stored in one bit, whatever its encoding's size;
+* a value is checked against its encoding when it is set, not when the
+  packet is encoded.
+
+Accessors replace the packed members. ``x`` stands for a field name and
+``T`` for the struct, here ``demo_Housekeeping``:
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Rust
+     - C/C++
+     - Python
+   * - ``packed(&self) -> &[u8; N]``
+     - member ``uint8_t packed[N]``
+     - read-only property ``p.packed`` (``bytes``)
+   * - ``x(&self) -> T``
+     - ``T T_x(const T*)``
+     - property ``p.x``
+   * - ``set_x(&mut self, v) -> Result<()>``
+     - ``int T_set_x(T*, v, xtce_pk_error* err)``
+     - ``p.x = v``
+   * - ``set_x(&mut self, v: bool)`` (booleans)
+     - ``void T_set_x(T*, bool v)`` (booleans)
+     - ``p.x = v``
+
+The field types are the same as without packing. Integer and enumerated
+setters fail with ``OutOfRange`` (Rust ``Err``, C/C++ return code,
+Python ``PacketError``) when the value doesn't fit its encoding, and
+leave the field unchanged. Boolean setters cannot fail. Without packing,
+the same check happens when the packet is encoded.
+
+Creating a packet:
+
+* **Rust**: the struct can no longer be built with a struct literal. Use
+  ``Default::default()`` and the setters.
+* **C/C++**: call ``T_init`` and then the setters; set the other fields
+  directly.
+* **Python**: the constructor takes the same keyword arguments as
+  without packing and calls the setters. Classes with packed fields are
+  plain classes with ``__slots__``, ``__eq__`` and ``__repr__`` rather
+  than dataclasses.
+
+Example (Rust):
+
+.. code-block:: rust
+
+   let mut hk = demo::Housekeeping::default();
+   hk.set_seq_count(42)?;          // 14 bits
+   hk.set_sec_hdr_flag(true);      // 1 bit
+   hk.temperature = 25.0;          // not packed
+   assert_eq!(hk.seq_count(), 42);
+
+The ``set_`` names are kept free: no field is named ``set_`` followed by
+another field's name, with or without packing, so field names don't
+depend on the flag. ``packed``, ``init`` and ``to_bytes`` are also
+reserved, and fields with those names get a trailing ``_``.
+
+``make packets`` also generates the demo mission with ``--bit-packing``
+(``demo_packed.rs``, ``demo_packed.h`` with prefix ``demo_packed_``, and
+``demo_packed.py``). ``tests/packet_check.sh`` checks that they behave
+exactly like the unpacked codecs.
+
+Methods
+-------
+
+Every packet struct and kind has the members below. Rust implements the
+``xtce::packet::Packet`` trait. Python classes derive from
+``xtce.packet.Packet`` (structs) or ``xtce.packet.PacketKind`` (kinds).
+In C/C++ they are macros and ``static inline`` functions named after the
+type, shown here for ``T`` = ``demo_Housekeeping``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Rust
+     - C/C++
+     - Python
+     - Meaning
+   * - ``NAME``
+     - ``T_NAME``
+     - ``NAME``
+     - Qualified XTCE name (the root, for kinds)
+   * - ``MAX_BYTES``
+     - ``T_MAX_BYTES``
+     - ``MAX_BYTES``
+     - Upper bound on the encoded size
+   * - ``Default``
+     - ``T_init(T*)``
+     - constructor
+     - A packet with every field zero
+   * - ``decode(&[u8]) -> Result<Self>``
+     - ``int T_decode(T* out, const uint8_t* data, size_t len, xtce_pk_error* err)``
+     - ``decode(data)`` (class or static method)
+     - Decode a packet that starts at byte 0; trailing bytes are ignored
+   * - ``encode_into(&mut BitWriter)``
+     - ``int T_encode_into(const T*, xtce_pk_writer*)``
+     - ``encode_into(w)``
+     - Write with a bit writer
+   * - ``encode(&mut Buffer)``
+     - ``int T_encode(const T*, uint8_t* buf, size_t cap, size_t* len, xtce_pk_error* err)``
+     - ``encode(buf)``
+     - Replace a buffer's contents with the packet
+   * - ``to_bytes()``
+     - —
+     - ``to_bytes()``
+     - Encode into a new byte vector
+   * - ``Display``
+     - ``size_t T_describe(const T*, char* buf, size_t cap)``
+     - ``describe()``, ``str()``
+     - Canonical text (below)
+   * - ``PartialEq``, ``Clone``
+     - assignment; compare ``T_describe`` output
+     - dataclass ``==``
+     - Comparison
+
+The C/C++ functions return ``0`` on success, or an ``XTCE_PK_*`` error
+code after filling in ``*err`` (``err`` may be ``NULL``). ``T_describe``
+works like ``snprintf``: it returns the full length of the text and
+writes as much as fits in ``cap`` bytes, NUL included.
+
+Decoding a single container (``Housekeeping::decode``) decodes its whole
+inheritance chain and checks every restriction criterion along it.
+Decoding a kind reads the root's entries, then tries each child in
+document order and takes the first whose criteria match. It repeats
+this down the tree and returns the deepest match. If the deepest match
+is abstract, decoding fails with ``NoMatch``.
+
+Encoding checks every criterion that involves a field (for example the
+demo's ``Temperature < 40`` for ``ScienceHousekeeping``). It writes the
+fixed values and fails with ``Mismatch`` if a criterion doesn't hold.
+
+The codec
+---------
+
+A ``Codec`` owns one input and one output buffer, sized for the largest
+packet of its type. It reuses them for every packet until it is dropped.
+
+Rust:
+
+.. code-block:: rust
+
+   use xtce::packet::{Codec, Packet};
+
+   let mut codec = Codec::for_packet::<demo::CCSDSPacketKind>();
+   codec.load(&frame_bytes);                       // copy into the input buffer
+   match codec.decode::<demo::CCSDSPacketKind>()? {
+       demo::CCSDSPacketKind::Housekeeping(hk) => println!("{hk}"),
+       other => println!("{other}"),
+   }
+   let cmd = demo::SetMode { seq_count: 5, packet_length: 1, mode: demo::ModeArgType::SCIENCE };
+   let wire: &[u8] = codec.encode(&cmd)?;           // view of the output buffer
+
+Rust ``Codec`` methods: ``with_capacity(n)``, ``for_packet::<P>()``,
+``load(&[u8])``, ``read_from(impl Read)``, ``input() -> &[u8]``,
+``decode::<P>() -> Result<P>``, ``encode(&P) -> Result<&[u8]>``,
+``input_capacity()``, ``output_capacity()``.
+
+C and C++ have no codec object. The caller owns the buffers and
+nothing is allocated. Size the buffers with the ``*_MAX_BYTES``
+constants and reuse them for every packet. The same code compiles as C
+and as C++:
+
+.. code-block:: c
+
+   #include "demo.h"
+
+   static uint8_t out[demo_CCSDSCommandKind_MAX_BYTES];
+
+   demo_CCSDSPacketKind packet;
+   xtce_pk_error err;
+   if (demo_CCSDSPacketKind_decode(&packet, frame, frame_len, &err) != 0) {
+       char msg[128];
+       xtce_pk_error_message(&err, msg, sizeof msg);
+       fprintf(stderr, "%s: %s\n", xtce_pk_error_kind(err.code), msg);
+   } else if (packet.tag == demo_CCSDSPacketKind_Housekeeping_tag) {
+       printf("%f\n", packet.u.Housekeeping.temperature);
+   }
+
+   demo_SetMode cmd;
+   size_t len;
+   demo_SetMode_init(&cmd);
+   cmd.seq_count = 5;
+   cmd.mode = demo_ModeArgType_SCIENCE;
+   if (demo_SetMode_encode(&cmd, out, sizeof out, &len, &err) == 0) {
+       send(sock, out, len, 0);
+   }
+
+Python (``xtce.packet.Codec``):
+
+.. code-block:: python
+
+   from xtce.packet import Codec
+   import demo
+
+   codec = Codec.for_packet(demo.CCSDSPacketKind)
+   codec.load(frame)
+   packet = codec.decode(demo.CCSDSPacketKind)     # a demo.Housekeeping, ...
+   with codec.encode(demo.SetMode(seq_count=5, mode=demo.ModeArgType.SCIENCE)) as wire:
+       sock.send(wire)                              # memoryview of the output buffer
+
+``Codec(capacity=4096)``: ``Codec.for_packet(cls)``, ``load(data)``,
+``read_from(stream)``, ``decode(cls)``, ``encode(packet) -> memoryview``,
+and the properties ``input``, ``output``, ``input_capacity`` and
+``output_capacity``.
+
+Errors
+------
+
+Errors are ``xtce::packet::PacketError`` (a Rust enum) and
+``xtce.packet.PacketError`` (a Python ``ValueError``). In C and C++
+they are the code a function returns, plus the ``xtce_pk_error`` it
+fills in: ``code``, the ``field`` involved and, for ``Mismatch``, the
+criterion in ``detail``. Each error carries a *kind* that is the same in
+every language: ``kind()`` in Rust, ``.kind`` in Python, and
+``xtce_pk_error_kind(code)`` in C/C++. ``xtce_pk_error_message()``
+formats the message.
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Kind
+     - Meaning
+   * - ``Truncated``
+     - The packet ends before a field does
+   * - ``BadPosition``
+     - A location offset places a field before the start of the packet
+   * - ``NoMatch``
+     - No concrete container or command in the tree matches
+   * - ``Mismatch``
+     - A restriction criterion or argument assignment doesn't hold
+   * - ``OutOfRange``
+     - A value doesn't fit its encoding, or a binary value is too short
+   * - ``InvalidString``
+     - A string isn't valid UTF-8, or contains its termination character
+   * - ``TooLong``
+     - A string or binary value is longer than its encoding allows
+   * - ``Calibration``
+     - A value is outside the range of a spline calibrator without extrapolation
+   * - ``NotInvertible``
+     - Encoding a field whose calibrator can't be inverted
+   * - ``Missing``
+     - An optional field is absent although its include condition holds
+   * - ``NoSpace``
+     - C/C++ only: the output buffer is smaller than the packet
+
+Canonical text
+--------------
+
+``describe()`` / ``Display`` produce text that is identical in every
+language. The cross-language tests compare it directly.
+
+::
+
+   Housekeeping{version=0, sec_hdr_flag=true, seq_flags=Unsegmented, ..., temperature=25.19685039370079}
+
+* Integers are written in decimal, and booleans as ``true`` or ``false``.
+* Floats use the shortest round-trip form.
+* Enumerations show their label, or the number if the value is unlisted.
+* Strings are double-quoted. ``"`` and ``\`` are escaped with a
+  backslash, and control characters are written as ``\xNN``.
+* Binary values are written as ``0x`` followed by lowercase hex.
+* Absent optional fields are written as ``none``.
+
+Runtime reference
+-----------------
+
+Generated code calls these, and they are also available for hand-written
+codecs. The names are the same in every language unless noted.
+
+In C/C++ (``xtce/packet.h``) every name has the prefix ``xtce_pk_``,
+types are structs operated on by functions, and fallible functions
+return an error code and their result through a pointer. Examples:
+``xtce_pk_reader_init(data, len, err)`` and
+``xtce_pk_read_uint(&r, bits, little_endian, field, &value)``;
+``xtce_pk_writer_init(buf, cap, err)`` and
+``xtce_pk_write_uint(&w, bits, little_endian, value)``.
+``xtce_pk_text`` accumulates canonical text into a fixed buffer, like
+``snprintf``.
+
+``BitReader(data)``
+   ``position()``, ``seek(start, offset, field)``, ``skip(offset, field)``;
+   ``uint(bits, field)`` reads 1–64 bits, most significant bit first;
+   ``uint_order(bits, little_endian, field)``; ``bytes(n, field)``.
+
+``BitWriter(buffer)``
+   Clears the buffer, then ``uint(bits, value)``,
+   ``uint_order(bits, little_endian, value)``, ``bytes(data)``, ``seek``
+   and ``skip``. In Rust and C/C++, ``zeros(bits)``
+   (``xtce_pk_write_zeros``) writes a run of zero bits. The buffer grows,
+   zero filled, to cover the furthest bit written. Writing over earlier
+   bits replaces them. Byte-aligned ``bytes`` and ``zeros`` copy or fill
+   whole bytes at once.
+
+Bit packing
+   ``packed_get(storage, offset, width)`` and
+   ``packed_set(storage, offset, width, raw)`` read and write the
+   bit-packed storage described in `Bit packing`_.
+
+Integers
+   ``to_signed(raw, bits, encoding)`` and
+   ``from_signed(value, bits, encoding, field)`` handle the unsigned,
+   two's-complement, sign-magnitude and ones'-complement encodings.
+   ``from_unsigned`` checks unsigned ranges. ``int_to_f64`` (Rust),
+   ``xtce_pk_int_to_double`` (C/C++) and ``int_to_float`` (Python) convert raw
+   values to floats. ``f64_to_int`` / ``double_to_int`` /
+   ``float_to_int`` round half away from zero and check the range.
+
+Floats
+   ``float_from_raw(raw, bits)`` and ``float_to_raw(value, bits)`` for
+   IEEE 754 binary32 and binary64. Converting to 32 bits rounds to
+   nearest, and overflows to infinity.
+
+Calibrators
+   ``polynomial(x, terms)``, ``polynomial_inverse(y, intercept, slope)``,
+   ``spline(x, points, order, extrapolate, field)`` and
+   ``spline_inverse(y, points, extrapolate, field)``.
+
+Strings and binary
+   ``read_string``, ``write_string`` (with a ``StringSpec``: fixed bits,
+   maximum bits, terminator, size-tag bits) and ``write_binary``.
+
+Supported XTCE
+--------------
+
+The compiler supports the subset below. Anything else is reported as
+unsupported, naming the construct and its location.
+
+Parameter and argument types
+   Integer, Float, Enumerated, Boolean, String, Binary, AbsoluteTime and
+   RelativeTime. Types that use ``baseType``, and Array and Aggregate
+   types, are not supported.
+
+Integer encoding
+   1–64 bits; ``unsigned``, ``twosComplement``, ``signMagnitude`` and
+   ``onesComplement``; most significant bit first. Little-endian byte
+   order is allowed when the size is a whole number of bytes.
+
+Float encoding
+   ``IEEE754_1985`` or ``IEEE754``, 32 or 64 bits, in either byte order.
+
+Calibrators
+   ``PolynomialCalibrator`` and ``SplineCalibrator`` of order 0 or 1, as
+   the ``DefaultCalibrator`` of an integer or float encoding on a float
+   type. Encoding uses the inverse calibrator. This works for
+   polynomials of degree 0 or 1 with a non-zero slope, and for linear
+   splines whose calibrated values strictly increase or decrease. Other
+   calibrators are decode-only: encoding them fails with
+   ``NotInvertible``. Engineering values are rounded half away from zero
+   to the nearest raw integer.
+
+Strings
+   UTF-8 or US-ASCII. The supported layouts are:
+
+   * a fixed size (``SizeInBits/Fixed``) ending at the termination
+     character (``00`` by default) or at the end of the field;
+   * a fixed size with a leading size tag;
+   * a variable size (``Variable``) with a termination character;
+   * a variable size with a leading size tag.
+
+   Sizes must be whole bytes, and size tags count bytes. When encoding,
+   fixed fields are padded with the terminator and then zeros.
+
+Binary
+   A fixed size in whole bytes. Values must have exactly that length.
+
+Times
+   The ``Encoding`` (integer or float, ``units="seconds"``) with
+   ``scale`` and ``offset`` gives seconds relative to the
+   ``ReferenceTime``. The reference time is recorded in the generated
+   documentation but not applied.
+
+Containers
+   ``SequenceContainer`` entry lists with ``ParameterRefEntry`` and
+   ``ContainerRefEntry``. Included containers are flattened in and may
+   not have a ``BaseContainer``. ``BaseContainer`` inheritance uses
+   ``RestrictionCriteria`` with ``Comparison`` or ``ComparisonList``,
+   using the operators ``== != < <= > >=`` on calibrated or raw values.
+
+Locations
+   ``LocationInContainerInBits`` with a ``FixedValue`` relative to
+   ``previousEntry`` (the default) or ``containerStart``. Negative
+   offsets are allowed. ``containerStart`` is the start of the packet
+   for inherited entries, and the inclusion point for entries of an
+   included container.
+
+Include conditions
+   ``IncludeCondition`` (``Comparison`` or ``ComparisonList``) on
+   ``ParameterRefEntry`` and ``ContainerRefEntry``, on values decoded
+   earlier that are not themselves conditional. The affected fields
+   become optional. They are decoded when the condition holds, and
+   encoded when the condition holds on the struct's fields. Encoding
+   fails with ``Missing`` if the condition holds but the value is
+   absent.
+
+Commands
+   ``MetaCommand`` with ``ArgumentList``, ``BaseMetaCommand`` and
+   ``ArgumentAssignmentList``, and a ``CommandContainer`` whose
+   ``BaseContainer`` is the base meta-command's container. The container
+   may hold ``ArgumentRefEntry``, ``ParameterRefEntry`` and
+   ``FixedValueEntry`` (at most 64 bits). Argument assignments act like
+   ``==`` restriction criteria: they fix the value when encoding and
+   select the command when decoding.
+
+Name references
+   Absolute (``/Root/Sub/name``), relative (``Sub/name``, ``../name``),
+   and unqualified names. An unqualified name is looked up in the
+   current SpaceSystem, then in each enclosing one.
+
+Not supported
+   ``RepeatEntry``, array and aggregate entries, ``IndirectParameterRefEntry``,
+   stream and segment entries, ``DynamicValue`` and
+   ``DiscreteLookupList`` sizes and locations, ``BooleanExpression`` and
+   ``CustomAlgorithm`` criteria, ``NextContainer``, container
+   ``BinaryEncoding``, ``ErrorDetectCorrect``, context calibrators,
+   ``MathOperationCalibrator``, BCD encodings, MIL-STD-1750A floats,
+   byte orders other than big and little endian, least-significant-bit-first
+   bit order, and include conditions in command containers.
+
+Known limitations
+-----------------
+
+* Length fields (for example the CCSDS packet length) and checksums are
+  ordinary fields: the application computes them, because XTCE describes
+  them with algorithms that aren't supported.
+* Decoding ignores bytes after the packet. Spare bits and gaps are
+  written as zeros, so re-encoding a decoded packet can change them.
+* Binary fields default to empty and must be set to their exact size
+  before encoding.
+* Enumerated values must fit in a signed 64-bit integer.
+
+
+Examples
+========
+
+``examples/`` holds self-contained examples. Every example exists in all
+supported languages: C/C++, Rust and Python 3. ``make examples`` fails if
+an example is missing one. Each has an XTCE file, the
+code ``tcsxtce`` generated from it, and a program per language that uses
+that code. ``make`` in an example's directory, or ``make examples`` at
+the top level:
+
+* regenerates the code if the XTCE file or the generator changed;
+* builds and runs the Rust, C and Python programs, and the C program
+  again compiled as C++;
+* checks that their output is identical.
+
+``make`` in ``examples/`` itself converts ``examples/README.rst``, the
+index of examples, into ``README.html``.
+
+``simple-string``
+-----------------
+
+``examples/simple-string/simple_string.xml`` describes a container,
+``SimpleString``, holding one parameter, ``Text``. ``Text`` is a string
+that always occupies 64 bits and ends at a NUL byte, so it holds up to
+8 bytes:
+
+.. code-block:: xml
+
+   <StringParameterType name="String8Type">
+     <StringDataEncoding encoding="UTF-8">
+       <SizeInBits>
+         <Fixed><FixedValue>64</FixedValue></Fixed>
+         <TerminationChar>00</TerminationChar>
+       </SizeInBits>
+     </StringDataEncoding>
+   </StringParameterType>
+
+``tcsxtce`` generates a ``SimpleString`` structure in each language:
+
+* Rust: ``struct SimpleString { pub text: String }``
+  (``rust/src/simple_string.rs``)
+* C/C++: ``simple_string_SimpleString``, whose ``text`` is a
+  ``simple_string_str8`` (``c/simple_string.h``)
+* Python: ``@dataclass class SimpleString`` with ``text: str``
+  (``python/simple_string.py``)
+
+Each has the methods described in `Methods`_. The Rust and Python
+programs use a ``Codec``, whose two buffers are preallocated to
+``MAX_BYTES`` (8). The C program (``c/main.c``) uses two arrays of
+``simple_string_SimpleString_MAX_BYTES`` bytes instead. Each program
+serializes several strings into the codec's output buffer and
+deserializes them from its input buffer. It shows that a 9-byte string
+fails with ``TooLong``, and that the buffers were never reallocated:
+
+::
+
+   serialize "Hi" -> 4869000000000000
+   deserialize 4869000000000000 -> SimpleString{text="Hi"}
+   serialize "ABCDEFGHI" -> error:TooLong (Text is too long for its encoding)
+   buffers reused without reallocation: true
+
+``bit-packing``
+---------------
+
+``examples/bit-packing/bit_packing.xml`` describes a container,
+``Status``, holding five small fields: a 3-bit enumeration (``Mode``), a
+5-bit unsigned integer (``Level``), a boolean (``Enabled``), a 4-bit
+two's complement integer (``Offset``) and a 10-bit unsigned integer
+(``Count``). Together they take 23 bits.
+
+The code is generated with ``--bit-packing`` (see `Bit packing`_), so
+the five fields share a 3-byte array. Without the flag, the C struct
+takes 16 bytes. Each program sets the fields through the setters, prints
+the packed storage in binary, shows that a ``Level`` of 32 (6 bits) is
+rejected and leaves the field unchanged, then serializes and
+deserializes the record:
+
+::
+
+   storage byte 0: 10110011
+   storage byte 1: 11101100
+   storage byte 2: 10110000
+   set level 32 -> error:OutOfRange (value of Level does not fit its encoding); level is still 19
+   serialize -> b3ecb0
+
+Byte 0 holds the 3-bit ``Mode`` (5, ``101``) in its top bits and the
+5-bit ``Level`` (19, ``10011``) below it. ``Count`` starts at bit 13 and
+continues into byte 2. Every field of ``Status`` is packed and nothing
+else is encoded, so here the storage is byte for byte the serialized
+record.
+
+
+Testing
+=======
+
+``make test`` runs:
+
+* the unit tests of every language (``cargo test``, ``cpp/tests``,
+  ``python -m unittest``);
+* the packet compiler's tests (``generator/tests``), which compile small
+  XTCE documents and check the model, including that malformed documents
+  are reported as unsupported rather than crashing the generator;
+* ``tests/cross_check.sh``: 21 generated XML documents that together use
+  every element and every choice alternative of the schema. Each must
+  validate with ``xmllint``. Each must round-trip through every
+  language, with byte-identical output that also validates.
+* ``tests/packet_check.sh``, which checks that:
+
+  * the demo mission validates;
+  * every language turns the hand-built packets in
+    ``tests/mission/vectors.txt`` into exactly
+    ``tests/mission/vectors.expected``;
+  * 3000 random packets give byte-identical results in Rust, Python,
+    and the C tool compiled both as C and as C++;
+  * decoding a re-encoded packet gives the same values and the same
+    bytes.
+
+The ``packet_tool`` programs (``rust/examples``, ``cpp/tests``, built as
+``cpp/build/packet_tool`` and ``cpp/build/packet_tool_cxx``, and
+``python/tests``) run any vectors file:
+
+.. code-block:: sh
+
+   rust/target/release/examples/packet_tool tests/mission/vectors.txt

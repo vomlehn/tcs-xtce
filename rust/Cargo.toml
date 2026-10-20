@@ -1,0 +1,11 @@
+[package]
+name = "xtce"
+version = "0.1.0"
+edition = "2021"
+description = "Flight software: serialization and deserialization of OMG XTCE documents into managed, preallocated buffers, being integrated with NASA's cFS and JPL's F Prime"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+
+[lib]
+path = "src/lib.rs"

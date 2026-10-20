@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A status record of five small fields: a 3-bit enumeration, then a 5-bit
+     integer, a 1-bit boolean, a 4-bit signed integer and a 10-bit integer.
+
+     They take 23 bits, so 3 bytes, on the wire.  Generated with
+     tcsxtce with bit packing, they take 3 bytes in memory too, instead of
+     one or more bytes per field. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="BitPacking">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <EnumeratedParameterType name="ModeType">
+        <IntegerDataEncoding sizeInBits="3"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Off"/>
+          <Enumeration value="1" label="Safe"/>
+          <Enumeration value="2" label="Nominal"/>
+          <Enumeration value="5" label="Science"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+      <IntegerParameterType name="U5" signed="false">
+        <IntegerDataEncoding sizeInBits="5"/>
+      </IntegerParameterType>
+      <BooleanParameterType name="FlagType">
+        <IntegerDataEncoding sizeInBits="1"/>
+      </BooleanParameterType>
+      <IntegerParameterType name="S4">
+        <IntegerDataEncoding sizeInBits="4" encoding="twosComplement"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="U10" signed="false">
+        <IntegerDataEncoding sizeInBits="10"/>
+      </IntegerParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="Mode" parameterTypeRef="ModeType"/>
+      <Parameter name="Level" parameterTypeRef="U5"/>
+      <Parameter name="Enabled" parameterTypeRef="FlagType"/>
+      <Parameter name="Offset" parameterTypeRef="S4"/>
+      <Parameter name="Count" parameterTypeRef="U10"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="Status">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Mode"/>
+          <ParameterRefEntry parameterRef="Level"/>
+          <ParameterRefEntry parameterRef="Enabled"/>
+          <ParameterRefEntry parameterRef="Offset"/>
+          <ParameterRefEntry parameterRef="Count"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

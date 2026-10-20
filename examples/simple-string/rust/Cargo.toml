@@ -1,0 +1,12 @@
+[package]
+name = "simple-string"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Serializes and deserializes an 8-byte string described in XTCE"
+
+[dependencies]
+xtce = { path = "../../../rust" }
+
+# A stand-alone crate, not part of any enclosing workspace.
+[workspace]

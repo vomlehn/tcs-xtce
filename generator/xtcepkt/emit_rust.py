@@ -1,0 +1,498 @@
+"""Emit a Rust module of packet codecs (uses ``xtce::packet``)."""
+
+from __future__ import annotations
+
+import json
+
+from .common import flt, int_enc, invertible, le, packed_le, string_spec
+from .model import walk, BinaryEnc, Cond, Criterion, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Polynomial, Seek, Spline, Value, VType
+
+
+def rstr(s: str) -> str:
+    out = []
+    for c in s:
+        if c in '"\\':
+            out.append("\\" + c)
+        elif ord(c) < 0x20 or ord(c) == 0x7F:
+            out.append(f"\\u{{{ord(c):x}}}")
+        else:
+            out.append(c)
+    return '"' + "".join(out) + '"'
+
+
+def field_type(vt: VType, optional: bool = False) -> str:
+    if optional:
+        return f"Option<{field_type(vt)}>"
+    k = vt.kind
+    if k == "int":
+        return f"{'i' if vt.signed else 'u'}{vt.width}"
+    return {"float": "f64", "bool": "bool", "string": "String", "binary": "Vec<u8>"}.get(k) or vt.ident
+
+
+def literal(vt: VType, v) -> str:
+    k = vt.kind
+    if k == "int":
+        return str(v)
+    if k == "float":
+        return flt(v) + "_f64"
+    if k == "enum":
+        return f"{vt.ident}({v})"
+    if k == "bool":
+        return "true" if v else "false"
+    if k == "string":
+        return rstr(v)
+    return "&[" + ", ".join(f"0x{b:02x}" for b in v) + "][..]"
+
+
+def points(cal: Spline) -> str:
+    return "&[" + ", ".join(f"({flt(a)}, {flt(b)})" for a, b in cal.points) + "]"
+
+
+def calibrate(vt: VType, x: str, f: str) -> str:
+    cal = vt.calibrator
+    if cal is None:
+        return x
+    if isinstance(cal, Polynomial):
+        terms = ", ".join(f"({flt(c)}, {e})" for c, e in cal.terms)
+        return f"pk::polynomial({x}, &[{terms}])"
+    return f"pk::spline({x}, {points(cal)}, {cal.order}, {str(cal.extrapolate).lower()}, {f})?"
+
+
+def uncalibrate(vt: VType, y: str, f: str) -> str:
+    cal = vt.calibrator
+    if cal is None:
+        return y
+    if isinstance(cal, Polynomial):
+        return f"pk::polynomial_inverse({y}, {flt(cal.intercept)}, {flt(cal.slope)})"
+    return f"pk::spline_inverse({y}, {points(cal)}, {str(cal.extrapolate).lower()}, {f})?"
+
+
+def spec(vt: VType) -> str:
+    fixed, mx, term, tag = string_spec(vt)
+    fixed = f"Some({fixed})" if fixed is not None else "None"
+    term = f"Some({term})" if term is not None else "None"
+    return f"&StringSpec {{ fixed_bits: {fixed}, max_bits: {mx}, terminator: {term}, size_tag_bits: {tag} }}"
+
+
+def read_expr(vt: VType, f: str) -> str:
+    """Expression reading one value with BitReader ``r``."""
+    e = vt.enc
+    if isinstance(e, IntEnc):
+        raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
+        enc = f"IntEncoding::{int_enc(vt)}"
+        if vt.kind == "int":
+            if vt.signed:
+                return f"pk::to_signed({raw}, {e.bits}, {enc}) as i{vt.width}"
+            return f"{raw} as u{vt.width}"
+        if vt.kind == "enum":
+            if vt.signed:
+                return f"{vt.ident}(pk::to_signed({raw}, {e.bits}, {enc}))"
+            return f"{vt.ident}({raw} as i64)"
+        if vt.kind == "bool":
+            return f"{raw} != 0"
+        return calibrate(vt, f"pk::int_to_f64({raw}, {e.bits}, {enc})", f)
+    if isinstance(e, FloatEnc):
+        raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
+        return calibrate(vt, f"pk::float_from_raw({raw}, {e.bits})", f)
+    if isinstance(e, BinaryEnc):
+        return f"r.bytes({e.bits // 8}, {f})?"
+    return f"pk::read_string(&mut r, {spec(vt)}, {f})?"
+
+
+def write_stmt(vt: VType, x: str, f: str) -> str:
+    """Statement writing value ``x`` (a place or literal) with BitWriter ``w``."""
+    e = vt.enc
+    if isinstance(e, IntEnc):
+        bits, order = e.bits, str(le(vt)).lower()
+        enc = f"IntEncoding::{int_enc(vt)}"
+        if vt.kind == "int":
+            raw = f"pk::from_signed({x} as i64, {bits}, {enc}, {f})?" if vt.signed else f"pk::from_unsigned({x} as u64, {bits}, {f})?"
+        elif vt.kind == "enum":
+            raw = f"pk::from_signed({x}.0, {bits}, {enc}, {f})?"
+        elif vt.kind == "bool":
+            raw = f"{x} as u64"
+        else:
+            if not invertible(vt):
+                return f"return Err(PacketError::NotInvertible {{ field: {f} }});"
+            raw = f"pk::f64_to_int({uncalibrate(vt, x, f)}, {bits}, {enc}, {f})?"
+        return f"w.uint_order({bits}, {order}, {raw});"
+    if isinstance(e, FloatEnc):
+        if not invertible(vt):
+            return f"return Err(PacketError::NotInvertible {{ field: {f} }});"
+        return f"w.uint_order({e.bits}, {str(le(vt)).lower()}, pk::float_to_raw({uncalibrate(vt, x, f)}, {e.bits}));"
+    if isinstance(e, BinaryEnc):
+        return f"pk::write_binary(w, &{x}, {e.bits // 8}, {f})?;"
+    return f"pk::write_string(w, {spec(vt)}, &{x}, {f})?;"
+
+
+def packed_getter(vt: VType, off: int, width: int) -> str:
+    """Expression reading a bit-packed field of `self`."""
+    raw = f"pk::packed_get(&self.packed, {off}, {width}, {str(packed_le(vt)).lower()})"
+    if vt.kind == "bool":
+        return f"{raw} != 0"
+    signed = f"pk::to_signed({raw}, {width}, IntEncoding::{int_enc(vt)})"
+    if vt.kind == "enum":
+        return f"{vt.ident}({signed if vt.signed else raw + ' as i64'})"
+    return f"{signed} as i{vt.width}" if vt.signed else f"{raw} as u{vt.width}"
+
+
+def packed_raw(vt: VType, width: int, f: str) -> str:
+    """Expression converting setter argument `v` to its raw bits."""
+    enc = f"IntEncoding::{int_enc(vt)}"
+    if vt.kind == "enum":
+        return f"pk::from_signed(v.0, {width}, {enc}, {f})?"
+    if vt.signed:
+        return f"pk::from_signed(v as i64, {width}, {enc}, {f})?"
+    return f"pk::from_unsigned(v as u64, {width}, {f})?"
+
+
+def describe(vt: VType, x: str) -> str:
+    """Expression appending the canonical text of ``x`` to ``s``."""
+    k = vt.kind
+    if k == "float":
+        return f"pk::describe_f64({x}, &mut s)"
+    if k == "string":
+        return f"pk::describe_str(&{x}, &mut s)"
+    if k == "binary":
+        return f"pk::describe_bytes(&{x}, &mut s)"
+    return f"s.push_str(&{x}.to_string())"
+
+
+def conjunction(conds: list) -> str:
+    if not conds:
+        return "true"
+    return conds[0] if len(conds) == 1 else " && ".join(f"({c})" for c in conds)
+
+
+def condition(c: Criterion, x: str) -> str:
+    vt = c.local.vtype
+    if vt.kind == "int":
+        return f"({x} as i128) {c.op} {c.value}"
+    if vt.kind == "enum":
+        return f"{x}.0 {c.op} {c.value}"
+    if vt.kind == "binary":
+        return f"{x}[..] {c.op} *{literal(vt, c.value)}"
+    return f"{x} {c.op} {literal(vt, c.value)}"
+
+
+def field(n: Node, name: str, lc: Local) -> str:
+    """Expression for a field of `self`: an accessor call if it is packed."""
+    return f"self.{name}()" if lc in n.packed else f"self.{name}"
+
+
+class RustEmitter:
+    def __init__(self, mission: Mission, source: str):
+        self.m = mission
+        self.source = source
+        self.out: list[str] = []
+
+    def line(self, s: str = "", depth: int = 0) -> None:
+        self.out.append("    " * depth + s if s else "")
+
+    def emit(self) -> str:
+        m = self.m
+        self.line(f"// @generated by tcsxtce from {self.source} (SpaceSystem {m.name!r}).")
+        self.line("// Do not edit by hand; regenerate with `python3 -m tcsxtce`.")
+        self.line(f"//! Packet codecs for the `{m.name}` mission.")
+        self.line("#![allow(dead_code, unused_imports, unused_variables, unreachable_code, clippy::all)]")
+        self.line()
+        self.line("use std::fmt;")
+        self.line("use xtce::packet::{self as pk, BitReader, BitWriter, IntEncoding, Packet, PacketError, Result, StringSpec};")
+        for vt in m.types:
+            self.enum_type(vt)
+        for n in m.nodes:
+            self.node(n)
+        for k in m.kinds:
+            self.kind(k)
+        return "\n".join(self.out) + "\n"
+
+    def enum_type(self, vt: VType) -> None:
+        self.line()
+        self.line(f"/// Enumeration `{vt.key}`; holds the raw value so unlisted values survive decoding.")
+        self.line("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]")
+        self.line(f"pub struct {vt.ident}(pub i64);")
+        self.line()
+        self.line(f"impl {vt.ident} {{")
+        for lab in vt.labels:
+            self.line(f"pub const {lab.ident}: Self = Self({lab.value});", 1)
+        self.line()
+        self.line("/// The label of this value, if the enumeration lists it.", 1)
+        self.line("pub fn label(self) -> Option<&'static str> {", 1)
+        self.line("match self.0 {", 2)
+        for lab in vt.labels:
+            pat = str(lab.value) if lab.value == lab.max_value else f"{lab.value}..={lab.max_value}"
+            self.line(f"{pat} => Some({rstr(lab.label)}),", 3)
+        self.line("_ => None,", 3)
+        self.line("}", 2)
+        self.line("}", 1)
+        self.line("}")
+        self.line()
+        self.line(f"impl fmt::Display for {vt.ident} {{")
+        self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {", 1)
+        self.line("match self.label() {", 2)
+        self.line("Some(l) => f.write_str(l),", 3)
+        self.line("None => write!(f, \"{}\", self.0),", 3)
+        self.line("}", 2)
+        self.line("}", 1)
+        self.line("}")
+
+    # -- decoding --
+
+    def read_items(self, items, depth: int, where: str, assign: bool = False) -> None:
+        for it in items:
+            if isinstance(it, Seek):
+                if it.from_start is None:
+                    self.line(f"r.skip({it.offset}, {rstr(where)})?;", depth)
+                else:
+                    self.line(f"r.seek({self.mark(it.from_start)}, {it.offset}, {rstr(where)})?;", depth)
+            elif isinstance(it, Mark):
+                self.line(f"let m{it.id} = r.position();", depth)
+            elif isinstance(it, Value):
+                lc = it.local
+                expr = read_expr(lc.vtype, rstr(lc.name))
+                if assign:
+                    self.line(f"v{lc.id} = Some({expr});", depth)
+                else:
+                    self.line(f"let v{lc.id} = {expr};", depth)
+            elif isinstance(it, Cond):
+                if not assign:
+                    for v in walk(it.items):
+                        if isinstance(v, Value):
+                            self.line(f"let mut v{v.local.id} = None;", depth)
+                self.line(f"if {conjunction([condition(c, f'v{c.local.id}') for c in it.criteria])} {{", depth)
+                self.read_items(it.items, depth + 1, where, True)
+                self.line("}", depth)
+            else:
+                self.line(f"r.uint({it.bits}, {rstr(where)})?;", depth)
+
+    def write_items(self, n: Node, items, depth: int, where: str, names: dict) -> None:
+        for it in items:
+            if isinstance(it, Seek):
+                if it.from_start is None:
+                    self.line(f"w.skip({it.offset}, {rstr(where)})?;", depth)
+                else:
+                    self.line(f"w.seek({self.mark(it.from_start)}, {it.offset}, {rstr(where)})?;", depth)
+            elif isinstance(it, Mark):
+                self.line(f"let m{it.id} = w.position();", depth)
+            elif isinstance(it, Fixed):
+                self.line(f"w.uint({it.bits}, 0x{it.value:x});", depth)
+            elif isinstance(it, Cond):
+                conds = [condition(c, self.place(n, c.local, names)) for c in it.criteria]
+                self.line(f"if {conjunction(conds)} {{", depth)
+                self.write_items(n, it.items, depth + 1, where, names)
+                self.line("}", depth)
+            else:
+                lc = it.local
+                f = rstr(lc.name)
+                if lc.optional:
+                    self.line(
+                        f"let o{lc.id} = self.{names[lc]}.as_ref().ok_or(PacketError::Missing {{ field: {f} }})?;",
+                        depth,
+                    )
+                    x = f"o{lc.id}" if lc.vtype.kind in ("string", "binary") else f"*o{lc.id}"
+                else:
+                    x = self.place(n, lc, names)
+                self.line(write_stmt(lc.vtype, x, f), depth)
+
+    @staticmethod
+    def place(n: Node, lc, names: dict) -> str:
+        """Expression for a value when encoding: a field or a fixed constant."""
+        if lc in names:
+            return field(n, names[lc], lc)
+        x = literal(lc.vtype, n.fixed[lc])
+        return f"({x})" if lc.vtype.kind == "binary" else x
+
+    @staticmethod
+    def mark(i: int) -> str:
+        return "0" if i == 0 else f"m{i}"
+
+    def construct(self, n: Node) -> str:
+        if not n.packed:
+            fields = ", ".join(f"{name}: v{lc.id}" for name, lc in n.fields)
+            return f"{n.ident} {{ {fields} }}"
+        fields = [f"packed: [0; {n.packed_bytes}]"]
+        fields += [f"{name}: v{lc.id}" for name, lc in n.fields if lc not in n.packed]
+        out = f"{{ let mut p = {n.ident} {{ {', '.join(fields)} }}; "
+        for name, lc in n.fields:
+            if lc in n.packed:
+                out += f"p.set_{name}(v{lc.id}){';' if lc.vtype.kind == 'bool' else '?;'} "
+        return out + "p }"
+
+    def node(self, n: Node) -> None:
+        what = "Sequence container" if n.kind == "tm" else "Meta-command"
+        self.line()
+        self.line(f"/// {what} `{n.key}`.")
+        fixed = [f"`{lc.name}` = {v!r}" for lc, v in n.fixed.items()]
+        if fixed:
+            self.line("///")
+            self.line(f"/// Fixed by its inheritance: {', '.join(fixed)}.")
+        self.line(f"#[derive(Debug, Clone, PartialEq{'' if n.packed else ', Default'})]")
+        self.line(f"pub struct {n.ident} {{")
+        if n.packed:
+            self.line("/// The integer, enumerated and boolean fields, bit-packed; use their accessors.", 1)
+            self.line(f"packed: [u8; {n.packed_bytes}],", 1)
+        for name, lc in n.fields:
+            if lc in n.packed:
+                continue
+            doc = f"; {lc.vtype.doc}" if lc.vtype.doc else ""
+            cond = "; present only when its include condition holds" if lc.optional else ""
+            self.line(f"/// `{lc.key}` ({lc.vtype.key}{doc}{cond})", 1)
+            self.line(f"pub {name}: {field_type(lc.vtype, lc.optional)},", 1)
+        self.line("}")
+        if n.packed:
+            self.accessors(n)
+        self.line()
+        self.line(f"impl Packet for {n.ident} {{")
+        self.line(f"const NAME: &'static str = {rstr(n.key)};", 1)
+        self.line(f"const MAX_BYTES: usize = {n.max_bytes};", 1)
+        self.line()
+        self.line("fn decode(data: &[u8]) -> Result<Self> {", 1)
+        self.line("let mut r = BitReader::new(data);", 2)
+        for i, node in enumerate(n.chain()):
+            for c in node.criteria:
+                self.line(f"if !({condition(c, f'v{c.local.id}')}) {{", 2)
+                self.line(f"return Err(PacketError::Mismatch {{ container: {rstr(node.key)}, criterion: {rstr(c.text)} }});", 3)
+                self.line("}", 2)
+            self.read_items(node.items, 2, node.key)
+        self.line(f"Ok({self.construct(n)})", 2)
+        self.line("}", 1)
+        self.line()
+        self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> {", 1)
+        names = {lc: name for name, lc in n.fields}
+        for node in n.chain():
+            for c in node.criteria:
+                if c.local in names:
+                    self.line(f"if !({condition(c, field(n, names[c.local], c.local))}) {{", 2)
+                    self.line(f"return Err(PacketError::Mismatch {{ container: {rstr(node.key)}, criterion: {rstr(c.text)} }});", 3)
+                    self.line("}", 2)
+        for node in n.chain():
+            self.write_items(n, node.items, 2, node.key, names)
+        self.line("Ok(())", 2)
+        self.line("}", 1)
+        self.line("}")
+        self.line()
+        self.line(f"impl fmt::Display for {n.ident} {{")
+        self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {", 1)
+        self.line(f"let mut s = String::from({rstr(n.ident + '{')});", 2)
+        for i, (name, lc) in enumerate(n.fields):
+            sep = ", " if i else ""
+            self.line(f"s.push_str({rstr(sep + name + '=')});", 2)
+            if lc.optional:
+                self.line(f"match &self.{name} {{", 2)
+                self.line(f"Some(v) => {describe(lc.vtype, '*v')},", 3)
+                self.line("None => s.push_str(pk::DESCRIBE_NONE),", 3)
+                self.line("}", 2)
+            else:
+                self.line(describe(lc.vtype, field(n, name, lc)) + ";", 2)
+        self.line("s.push('}');", 2)
+        self.line("f.write_str(&s)", 2)
+        self.line("}", 1)
+        self.line("}")
+
+    def accessors(self, n: Node) -> None:
+        self.line()
+        self.line(f"impl Default for {n.ident} {{")
+        self.line("fn default() -> Self {", 1)
+        self.line("Self {", 2)
+        self.line(f"packed: [0; {n.packed_bytes}],", 3)
+        for name, lc in n.fields:
+            if lc not in n.packed:
+                self.line(f"{name}: Default::default(),", 3)
+        self.line("}", 2)
+        self.line("}", 1)
+        self.line("}")
+        self.line()
+        self.line(f"impl {n.ident} {{")
+        self.line("/// The bit-packed storage of the integer, enumerated and boolean fields.", 1)
+        self.line(f"pub fn packed(&self) -> &[u8; {n.packed_bytes}] {{", 1)
+        self.line("&self.packed", 2)
+        self.line("}", 1)
+        for name, lc in n.fields:
+            if lc not in n.packed:
+                continue
+            off, width = n.packed[lc]
+            vt = lc.vtype
+            t = field_type(vt)
+            doc = f"; {vt.doc}" if vt.doc else ""
+            self.line()
+            self.line(f"/// `{lc.key}` ({vt.key}{doc}); bits {off}..{off + width} of the packed storage.", 1)
+            self.line(f"pub fn {name}(&self) -> {t} {{", 1)
+            self.line(packed_getter(vt, off, width), 2)
+            self.line("}", 1)
+            self.line()
+            if vt.kind == "bool":
+                self.line(f"/// Sets `{name}`.", 1)
+                self.line(f"pub fn set_{name}(&mut self, v: {t}) {{", 1)
+                self.line(f"pk::packed_set(&mut self.packed, {off}, {width}, v as u64, false);", 2)
+            else:
+                self.line(f"/// Sets `{name}`; fails with `OutOfRange` if `v` does not fit its encoding.", 1)
+                self.line(f"pub fn set_{name}(&mut self, v: {t}) -> Result<()> {{", 1)
+                self.line(f"let raw = {packed_raw(vt, width, rstr(lc.name))};", 2)
+                self.line(f"pk::packed_set(&mut self.packed, {off}, {width}, raw, {str(packed_le(vt)).lower()});", 2)
+                self.line("Ok(())", 2)
+            self.line("}", 1)
+        self.line("}")
+
+    # -- dispatch --
+
+    def kind(self, k: Kind) -> None:
+        self.line()
+        self.line(f"/// Every concrete packet derived from `{k.root.key}`.")
+        self.line("#[derive(Debug, Clone, PartialEq)]")
+        self.line(f"pub enum {k.ident} {{")
+        for m in k.members:
+            self.line(f"{m.ident}({m.ident}),", 1)
+        self.line("}")
+        self.line()
+        self.line(f"impl Packet for {k.ident} {{")
+        self.line(f"const NAME: &'static str = {rstr(k.root.key)};", 1)
+        self.line(f"const MAX_BYTES: usize = {k.max_bytes};", 1)
+        self.line()
+        self.line("/// Decodes the root's entries, then picks the first child (in", 1)
+        self.line("/// document order) whose criteria match, recursively.", 1)
+        self.line("fn decode(data: &[u8]) -> Result<Self> {", 1)
+        self.line("let mut r = BitReader::new(data);", 2)
+        self.read_items(k.root.items, 2, k.root.key)
+        self.dispatch(k, k.root, 2)
+        self.line("}", 1)
+        self.line()
+        self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> {", 1)
+        self.line("match self {", 2)
+        for m in k.members:
+            self.line(f"Self::{m.ident}(p) => p.encode_into(w),", 3)
+        self.line("}", 2)
+        self.line("}", 1)
+        self.line("}")
+        self.line()
+        self.line(f"impl fmt::Display for {k.ident} {{")
+        self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {", 1)
+        self.line("match self {", 2)
+        for m in k.members:
+            self.line(f"Self::{m.ident}(p) => p.fmt(f),", 3)
+        self.line("}", 2)
+        self.line("}", 1)
+        self.line("}")
+        for m in k.members:
+            self.line()
+            self.line(f"impl From<{m.ident}> for {k.ident} {{")
+            self.line(f"fn from(p: {m.ident}) -> Self {{", 1)
+            self.line(f"Self::{m.ident}(p)", 2)
+            self.line("}", 1)
+            self.line("}")
+
+    def dispatch(self, k: Kind, n: Node, depth: int) -> None:
+        for c in n.children:
+            if c.error:
+                continue
+            self.line(f"if {conjunction([condition(x, f'v{x.local.id}') for x in c.criteria])} {{", depth)
+            self.read_items(c.items, depth + 1, c.key)
+            self.dispatch(k, c, depth + 1)
+            self.line("}", depth)
+        if n.abstract:
+            self.line(f"return Err(PacketError::NoMatch {{ container: {rstr(n.key)} }});", depth)
+        else:
+            self.line(f"return Ok(Self::{n.ident}({self.construct(n)}));", depth)
+
+
+def emit(mission: Mission, source: str) -> str:
+    return RustEmitter(mission, source).emit()

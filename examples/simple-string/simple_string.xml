@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A data structure holding one string of up to 8 bytes.
+
+     The string always occupies 64 bits (8 bytes) on the wire.  Shorter
+     strings end at a NUL byte and are padded with zeros; an 8-byte string
+     fills the field and has no terminator. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="SimpleString">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <StringParameterType name="String8Type">
+        <StringDataEncoding encoding="UTF-8">
+          <SizeInBits>
+            <Fixed>
+              <FixedValue>64</FixedValue>
+            </Fixed>
+            <TerminationChar>00</TerminationChar>
+          </SizeInBits>
+        </StringDataEncoding>
+      </StringParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="Text" parameterTypeRef="String8Type"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="SimpleString">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Text"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

@@ -1,0 +1,444 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Demonstration mission for the packet layer.  It uses CCSDS space packet
+     headers, container inheritance with restriction criteria, an included
+     container from a nested SpaceSystem, every supported encoding, both
+     calibrator kinds and commands with argument assignments. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Demo">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="U3" signed="false">
+        <IntegerDataEncoding sizeInBits="3"/>
+      </IntegerParameterType>
+      <EnumeratedParameterType name="PacketTypeType">
+        <IntegerDataEncoding sizeInBits="1"/>
+        <EnumerationList>
+          <Enumeration value="0" label="TM"/>
+          <Enumeration value="1" label="TC"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+      <BooleanParameterType name="FlagType">
+        <IntegerDataEncoding sizeInBits="1"/>
+      </BooleanParameterType>
+      <IntegerParameterType name="U11" signed="false">
+        <IntegerDataEncoding sizeInBits="11"/>
+      </IntegerParameterType>
+      <EnumeratedParameterType name="SeqFlagsType">
+        <IntegerDataEncoding sizeInBits="2"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Continuation"/>
+          <Enumeration value="1" label="First"/>
+          <Enumeration value="2" label="Last"/>
+          <Enumeration value="3" label="Unsegmented"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+      <IntegerParameterType name="U14" signed="false">
+        <IntegerDataEncoding sizeInBits="14"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="U16" signed="false">
+        <IntegerDataEncoding sizeInBits="16"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="S16">
+        <IntegerDataEncoding sizeInBits="16" encoding="twosComplement"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="S12SignMagnitude">
+        <IntegerDataEncoding sizeInBits="12" encoding="signMagnitude"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="S8OnesComplement">
+        <IntegerDataEncoding sizeInBits="8" encoding="onesComplement"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="U32LE" signed="false">
+        <IntegerDataEncoding sizeInBits="32" byteOrder="leastSignificantByteFirst"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="U64" signed="false" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="64"/>
+      </IntegerParameterType>
+      <EnumeratedParameterType name="ModeType">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Safe"/>
+          <Enumeration value="1" label="Nominal"/>
+          <Enumeration value="2" label="Science"/>
+          <Enumeration value="16" maxValue="31" label="Error"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+      <FloatParameterType name="TemperatureType">
+        <UnitSet>
+          <Unit>degC</Unit>
+        </UnitSet>
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <SplineCalibrator>
+              <SplinePoint raw="0" calibrated="-50"/>
+              <SplinePoint raw="128" calibrated="0"/>
+              <SplinePoint raw="255" calibrated="100"/>
+            </SplineCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <FloatParameterType name="F32">
+        <FloatDataEncoding sizeInBits="32"/>
+      </FloatParameterType>
+      <FloatParameterType name="F64LE" sizeInBits="64">
+        <FloatDataEncoding sizeInBits="64" byteOrder="leastSignificantByteFirst"/>
+      </FloatParameterType>
+      <StringParameterType name="Name8Type">
+        <StringDataEncoding>
+          <SizeInBits>
+            <Fixed>
+              <FixedValue>64</FixedValue>
+            </Fixed>
+          </SizeInBits>
+        </StringDataEncoding>
+      </StringParameterType>
+      <StringParameterType name="MessageType">
+        <StringDataEncoding>
+          <Variable maxSizeInBits="264">
+            <LeadingSize sizeInBitsOfSizeTag="8"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+      <StringParameterType name="CStringType">
+        <StringDataEncoding encoding="US-ASCII">
+          <Variable maxSizeInBits="128">
+            <TerminationChar>00</TerminationChar>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+      <AbsoluteTimeParameterType name="CoarseTimeType">
+        <Encoding units="seconds">
+          <IntegerDataEncoding sizeInBits="32"/>
+        </Encoding>
+        <ReferenceTime>
+          <Epoch>TAI</Epoch>
+        </ReferenceTime>
+      </AbsoluteTimeParameterType>
+      <RelativeTimeParameterType name="FineTimeType">
+        <Encoding units="seconds" scale="0.0000152587890625">
+          <IntegerDataEncoding sizeInBits="16"/>
+        </Encoding>
+        <ReferenceTime>
+          <OffsetFrom parameterRef="CoarseTime"/>
+        </ReferenceTime>
+      </RelativeTimeParameterType>
+      <BinaryParameterType name="Blob4Type">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <FixedValue>32</FixedValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="Version" parameterTypeRef="U3"/>
+      <Parameter name="PacketType" parameterTypeRef="PacketTypeType"/>
+      <Parameter name="SecHdrFlag" parameterTypeRef="FlagType"/>
+      <Parameter name="APID" parameterTypeRef="U11"/>
+      <Parameter name="SeqFlags" parameterTypeRef="SeqFlagsType"/>
+      <Parameter name="SeqCount" parameterTypeRef="U14"/>
+      <Parameter name="PacketLength" parameterTypeRef="U16"/>
+      <Parameter name="Mode" parameterTypeRef="ModeType"/>
+      <Parameter name="Temperature" parameterTypeRef="TemperatureType"/>
+      <Parameter name="Uptime" parameterTypeRef="U32LE"/>
+      <Parameter name="Attitude" parameterTypeRef="F32"/>
+      <Parameter name="Delta" parameterTypeRef="S16"/>
+      <Parameter name="Offset" parameterTypeRef="S12SignMagnitude"/>
+      <Parameter name="Trim" parameterTypeRef="S8OnesComplement"/>
+      <Parameter name="ScienceCount" parameterTypeRef="U64"/>
+      <Parameter name="EventId" parameterTypeRef="U16"/>
+      <Parameter name="Origin" parameterTypeRef="Name8Type"/>
+      <Parameter name="Message" parameterTypeRef="MessageType"/>
+      <Parameter name="Source" parameterTypeRef="CStringType"/>
+      <Parameter name="Data" parameterTypeRef="Blob4Type"/>
+      <Parameter name="Timestamp" parameterTypeRef="F64LE"/>
+      <Parameter name="CoarseTime" parameterTypeRef="CoarseTimeType"/>
+      <Parameter name="FineTime" parameterTypeRef="FineTimeType"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="CCSDSPacket" abstract="true">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Version"/>
+          <ParameterRefEntry parameterRef="PacketType"/>
+          <ParameterRefEntry parameterRef="SecHdrFlag"/>
+          <ParameterRefEntry parameterRef="APID"/>
+          <ParameterRefEntry parameterRef="SeqFlags"/>
+          <ParameterRefEntry parameterRef="SeqCount"/>
+          <ParameterRefEntry parameterRef="PacketLength"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="Housekeeping">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Mode"/>
+          <ParameterRefEntry parameterRef="Temperature"/>
+          <ContainerRefEntry containerRef="Power/PowerBlock"/>
+          <ParameterRefEntry parameterRef="Uptime"/>
+          <ParameterRefEntry parameterRef="Attitude"/>
+          <ParameterRefEntry parameterRef="Delta"/>
+          <ParameterRefEntry parameterRef="Offset"/>
+          <ParameterRefEntry parameterRef="Trim">
+            <LocationInContainerInBits referenceLocation="previousEntry">
+              <FixedValue>4</FixedValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <ComparisonList>
+              <Comparison parameterRef="APID" value="100"/>
+              <Comparison parameterRef="PacketType" value="TM"/>
+            </ComparisonList>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="ScienceHousekeeping">
+        <EntryList>
+          <ParameterRefEntry parameterRef="ScienceCount"/>
+        </EntryList>
+        <BaseContainer containerRef="Housekeeping">
+          <RestrictionCriteria>
+            <ComparisonList>
+              <Comparison parameterRef="Mode" value="Science"/>
+              <Comparison parameterRef="Temperature" comparisonOperator="&lt;" value="40"/>
+            </ComparisonList>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="Thermal">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Power/HeaterPower"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="150"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="Event">
+        <EntryList>
+          <ParameterRefEntry parameterRef="EventId"/>
+          <ParameterRefEntry parameterRef="Origin"/>
+          <ParameterRefEntry parameterRef="Message"/>
+          <ParameterRefEntry parameterRef="Source"/>
+          <ParameterRefEntry parameterRef="Data"/>
+          <ParameterRefEntry parameterRef="Timestamp"/>
+          <ParameterRefEntry parameterRef="/Demo/Power/Charging"/>
+          <ContainerRefEntry containerRef="TimeStamp">
+            <IncludeCondition>
+              <Comparison parameterRef="SecHdrFlag" value="true"/>
+            </IncludeCondition>
+          </ContainerRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="200"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="TimeStamp" abstract="true">
+        <EntryList>
+          <ParameterRefEntry parameterRef="CoarseTime"/>
+          <ParameterRefEntry parameterRef="FineTime"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+  <CommandMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="ChecksumType" signed="false">
+        <IntegerDataEncoding sizeInBits="16"/>
+      </IntegerParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="Checksum" parameterTypeRef="ChecksumType"/>
+    </ParameterSet>
+    <ArgumentTypeSet>
+      <IntegerArgumentType name="U11Arg" signed="false">
+        <IntegerDataEncoding sizeInBits="11"/>
+      </IntegerArgumentType>
+      <IntegerArgumentType name="U14Arg" signed="false">
+        <IntegerDataEncoding sizeInBits="14"/>
+      </IntegerArgumentType>
+      <IntegerArgumentType name="U16Arg" signed="false">
+        <IntegerDataEncoding sizeInBits="16"/>
+      </IntegerArgumentType>
+      <IntegerArgumentType name="OpcodeType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </IntegerArgumentType>
+      <EnumeratedArgumentType name="ModeArgType">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Safe"/>
+          <Enumeration value="1" label="Nominal"/>
+          <Enumeration value="2" label="Science"/>
+        </EnumerationList>
+      </EnumeratedArgumentType>
+      <FloatArgumentType name="DelayType">
+        <IntegerDataEncoding sizeInBits="16">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="0.1" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatArgumentType>
+      <BooleanArgumentType name="ForceType" zeroStringValue="no" oneStringValue="yes">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </BooleanArgumentType>
+      <StringArgumentType name="ReasonType">
+        <StringDataEncoding>
+          <Variable maxSizeInBits="128">
+            <LeadingSize sizeInBitsOfSizeTag="16"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringArgumentType>
+      <BinaryArgumentType name="PatchType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <FixedValue>48</FixedValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryArgumentType>
+      <IntegerArgumentType name="AddressType" signed="false">
+        <IntegerDataEncoding sizeInBits="32" byteOrder="leastSignificantByteFirst"/>
+      </IntegerArgumentType>
+    </ArgumentTypeSet>
+    <MetaCommandSet>
+      <MetaCommand name="CCSDSCommand" abstract="true">
+        <ArgumentList>
+          <Argument name="APID" argumentTypeRef="U11Arg"/>
+          <Argument name="SeqCount" argumentTypeRef="U14Arg"/>
+          <Argument name="PacketLength" argumentTypeRef="U16Arg"/>
+          <Argument name="Opcode" argumentTypeRef="OpcodeType"/>
+        </ArgumentList>
+        <CommandContainer name="CCSDSCommandContainer">
+          <EntryList>
+            <FixedValueEntry name="Version" binaryValue="00" sizeInBits="3"/>
+            <FixedValueEntry name="PacketType" binaryValue="01" sizeInBits="1"/>
+            <FixedValueEntry name="SecHdrFlag" binaryValue="00" sizeInBits="1"/>
+            <ArgumentRefEntry argumentRef="APID"/>
+            <FixedValueEntry name="SeqFlags" binaryValue="03" sizeInBits="2"/>
+            <ArgumentRefEntry argumentRef="SeqCount"/>
+            <ArgumentRefEntry argumentRef="PacketLength"/>
+            <ArgumentRefEntry argumentRef="Opcode"/>
+          </EntryList>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="SetMode">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="300"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="1"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Mode" argumentTypeRef="ModeArgType"/>
+        </ArgumentList>
+        <CommandContainer name="SetModeContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Mode"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Reboot">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="300"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="2"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Delay" argumentTypeRef="DelayType"/>
+          <Argument name="Force" argumentTypeRef="ForceType"/>
+          <Argument name="Reason" argumentTypeRef="ReasonType"/>
+        </ArgumentList>
+        <CommandContainer name="RebootContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Delay"/>
+            <ArgumentRefEntry argumentRef="Force"/>
+            <ArgumentRefEntry argumentRef="Reason"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Patch">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="301"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="3"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Address" argumentTypeRef="AddressType"/>
+          <Argument name="Bytes" argumentTypeRef="PatchType"/>
+        </ArgumentList>
+        <CommandContainer name="PatchContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Address"/>
+            <FixedValueEntry name="Spare" binaryValue="0F" sizeInBits="8"/>
+            <ArgumentRefEntry argumentRef="Bytes"/>
+            <ParameterRefEntry parameterRef="Checksum"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+    </MetaCommandSet>
+  </CommandMetaData>
+  <SpaceSystem name="Power">
+    <TelemetryMetaData>
+      <ParameterTypeSet>
+        <FloatParameterType name="VoltageType">
+          <UnitSet>
+            <Unit>V</Unit>
+          </UnitSet>
+          <IntegerDataEncoding sizeInBits="12">
+            <DefaultCalibrator>
+              <PolynomialCalibrator>
+                <Term coefficient="-0.5" exponent="0"/>
+                <Term coefficient="0.01" exponent="1"/>
+              </PolynomialCalibrator>
+            </DefaultCalibrator>
+          </IntegerDataEncoding>
+        </FloatParameterType>
+        <FloatParameterType name="CurrentType">
+          <IntegerDataEncoding sizeInBits="16">
+            <DefaultCalibrator>
+              <PolynomialCalibrator>
+                <Term coefficient="0.001" exponent="1"/>
+              </PolynomialCalibrator>
+            </DefaultCalibrator>
+          </IntegerDataEncoding>
+        </FloatParameterType>
+        <FloatParameterType name="HeaterPowerType">
+          <IntegerDataEncoding sizeInBits="16">
+            <DefaultCalibrator>
+              <PolynomialCalibrator>
+                <Term coefficient="0.5" exponent="0"/>
+                <Term coefficient="0.001" exponent="1"/>
+                <Term coefficient="0.000002" exponent="2"/>
+              </PolynomialCalibrator>
+            </DefaultCalibrator>
+          </IntegerDataEncoding>
+        </FloatParameterType>
+      </ParameterTypeSet>
+      <ParameterSet>
+        <Parameter name="HeaterPower" parameterTypeRef="HeaterPowerType"/>
+        <Parameter name="BatteryVoltage" parameterTypeRef="VoltageType"/>
+        <Parameter name="BusCurrent" parameterTypeRef="CurrentType"/>
+        <Parameter name="Charging" parameterTypeRef="../FlagType"/>
+      </ParameterSet>
+      <ContainerSet>
+        <SequenceContainer name="PowerBlock">
+          <EntryList>
+            <ParameterRefEntry parameterRef="BatteryVoltage"/>
+            <ParameterRefEntry parameterRef="Charging"/>
+            <ParameterRefEntry parameterRef="BusCurrent">
+              <LocationInContainerInBits referenceLocation="containerStart">
+                <FixedValue>16</FixedValue>
+              </LocationInContainerInBits>
+            </ParameterRefEntry>
+          </EntryList>
+        </SequenceContainer>
+      </ContainerSet>
+    </TelemetryMetaData>
+  </SpaceSystem>
+</SpaceSystem>
