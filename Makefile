@@ -130,13 +130,15 @@ examples: cpp python
 	done
 	for d in $(EXAMPLES); do $(MAKE) -C $$d || exit 1; done
 
+# The examples' Rust code includes their generated codecs, so generate them
+# first.
 fmt:
 	cd rust && $(CARGO) fmt
-	for d in $(EXAMPLES); do (cd $$d/rust && $(CARGO) fmt) || exit 1; done
+	for d in $(EXAMPLES); do $(MAKE) -C $$d generate && (cd $$d/rust && $(CARGO) fmt) || exit 1; done
 
 fmt-check:
 	cd rust && $(CARGO) fmt --check
-	for d in $(EXAMPLES); do (cd $$d/rust && $(CARGO) fmt --check) || exit 1; done
+	for d in $(EXAMPLES); do $(MAKE) -C $$d generate && (cd $$d/rust && $(CARGO) fmt --check) || exit 1; done
 
 clean:
 	cd rust && $(CARGO) clean
