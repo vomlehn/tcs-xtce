@@ -16,6 +16,16 @@ The full documentation is in [`docs/manual.rst`](docs/manual.rst) (user
 manual, including every data structure and method) and
 [`docs/design.rst`](docs/design.rst) (design and rationale).
 
+Work is under way on integrating tcsxtce with NASA's core Flight System (cFS)
+and JPL's F´ (F Prime): generating cFS messages and F´ FPP from XTCE, or
+reading their definitions into it, and dictionaries for their ground systems.
+The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
+[tcslog](https://github.com/vomlehn/tcslog), is in tcspecial's
+[`docs/third-party.rst`](https://github.com/vomlehn/tcspecial/blob/main/docs/third-party.rst).
+
+> **Note:** integration with cFS and F´ is a work in progress. None of it is
+> built yet, and the plan may change as it is.
+
 | Directory     | Contents |
 |---------------|----------|
 | `references/` | Downloaded XTCE documents: `SpaceSystem.xsd`, `XTCE.pdf`, `VERSION`, plus `xml.xsd` and `catalog.xml` for offline validation |
