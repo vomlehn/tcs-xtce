@@ -35,11 +35,7 @@ PKT_SRC  := $(wildcard generator/xtcepkt/*.py generator/tcsxtce/*.py)
 PKT_RUST := rust/tests/mission/demo.rs
 PKT_CPP  := cpp/tests/mission/demo.h
 PKT_PY   := python/tests/mission/demo.py
-# The same mission generated with --bit-packing.
-PKT_RUST_PACKED := rust/tests/mission/demo_packed.rs
-PKT_CPP_PACKED  := cpp/tests/mission/demo_packed.h
-PKT_PY_PACKED   := python/tests/mission/demo_packed.py
-PKT_GEN  := $(PKT_RUST) $(PKT_CPP) $(PKT_PY) $(PKT_RUST_PACKED) $(PKT_CPP_PACKED) $(PKT_PY_PACKED)
+PKT_GEN  := $(PKT_RUST) $(PKT_CPP) $(PKT_PY)
 RUST_PKT_TOOL := rust/target/release/examples/packet_tool
 C_PKT_TOOL    := cpp/build/packet_tool
 CXX_PKT_TOOL  := cpp/build/packet_tool_cxx
@@ -84,22 +80,19 @@ $(PKT_GEN) &: $(MISSION) $(PKT_SRC) $(PY_GEN)
 	cd generator && $(PKT) ../$(PKT_RUST) --lang rust
 	cd generator && $(PKT) ../$(PKT_CPP) --lang c
 	cd generator && $(PKT) ../$(PKT_PY) --lang python
-	cd generator && $(PKT) ../$(PKT_RUST_PACKED) --lang rust --bit-packing
-	cd generator && $(PKT) ../$(PKT_CPP_PACKED) --lang c --bit-packing --prefix demo_packed_
-	cd generator && $(PKT) ../$(PKT_PY_PACKED) --lang python --bit-packing
 	@touch $(PKT_GEN)
 
 packets: $(PKT_GEN)
 
 # Rust formatting is checked on every build so unformatted code is caught as
 # soon as it is added.
-rust: $(RUST_GEN) $(PKT_RUST) $(PKT_RUST_PACKED) fmt-check
+rust: $(RUST_GEN) $(PKT_RUST) fmt-check
 	cd rust && $(CARGO) build --release --all-targets
 
-cpp: $(CPP_GEN) $(PKT_CPP) $(PKT_CPP_PACKED)
+cpp: $(CPP_GEN) $(PKT_CPP)
 	$(MAKE) -C cpp
 
-python: $(PY_GEN) $(PKT_PY) $(PKT_PY_PACKED)
+python: $(PY_GEN) $(PKT_PY)
 	$(PYTHON) -m compileall -q python/xtce
 
 EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))

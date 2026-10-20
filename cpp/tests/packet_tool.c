@@ -2,19 +2,16 @@
  *
  * For each vector prints `<description of the decoded packet> | <hex of the
  * re-encoded packet>`, with `error:<kind>` in place of either on failure.  The
- * Rust and Python versions of this tool print identical output.  With
- * --packed it uses the codecs generated with --bit-packing (prefix
- * demo_packed_), which must print the same.  The Makefile builds this file
- * both as C and as C++.
+ * Rust and Python versions of this tool print identical output.  The Makefile
+ * builds this file both as C and as C++.
  *
- * Usage: packet_tool [--packed] VECTORS
+ * Usage: packet_tool VECTORS
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "mission/demo.h"
-#include "mission/demo_packed.h"
 
 /* Buffers for the largest packet and description, allocated once. */
 static uint8_t input[4096];
@@ -54,15 +51,13 @@ static void print_hex(const uint8_t* b, size_t n) {
 int main(int argc, char** argv) {
   FILE* in;
   static char line[16384];
-  int packed = argc == 3 && strcmp(argv[1], "--packed") == 0;
-  const char* path = argv[argc - 1];
-  if (argc != 2 && !packed) {
-    fprintf(stderr, "usage: packet_tool [--packed] VECTORS\n");
+  if (argc != 2) {
+    fprintf(stderr, "usage: packet_tool VECTORS\n");
     return 2;
   }
-  in = fopen(path, "r");
+  in = fopen(argv[1], "r");
   if (!in) {
-    perror(path);
+    perror(argv[1]);
     return 1;
   }
   while (fgets(line, sizeof line, in)) {
@@ -75,18 +70,12 @@ int main(int argc, char** argv) {
       char byte[3] = {hex[i], hex[i + 1], 0};
       input[n++] = (uint8_t)strtoul(byte, NULL, 16);
     }
-    if (strcmp(kind, "tm") == 0 && !packed) {
+    if (strcmp(kind, "tm") == 0) {
       RUN(demo_CCSDSPacketKind, n);
-    } else if (strcmp(kind, "tc") == 0 && !packed) {
-      RUN(demo_CCSDSCommandKind, n);
-    } else if (strcmp(kind, "hk") == 0 && !packed) {
-      RUN(demo_Housekeeping, n);
-    } else if (strcmp(kind, "tm") == 0) {
-      RUN(demo_packed_CCSDSPacketKind, n);
     } else if (strcmp(kind, "tc") == 0) {
-      RUN(demo_packed_CCSDSCommandKind, n);
+      RUN(demo_CCSDSCommandKind, n);
     } else if (strcmp(kind, "hk") == 0) {
-      RUN(demo_packed_Housekeeping, n);
+      RUN(demo_Housekeeping, n);
     } else {
       fprintf(stderr, "unknown vector kind %s\n", kind);
       return 1;

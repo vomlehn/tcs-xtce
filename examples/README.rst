@@ -27,7 +27,3 @@ Run ``make`` in this directory to turn this file into ``README.html``.
    * - `simple-string <simple-string/README.md>`__
      - A structure holding one string of up to 8 bytes, serialized into
        and deserialized from managed buffers
-   * - `bit-packing <bit-packing/README.md>`__
-     - A record of five small fields generated with ``--bit-packing``, so
-       that 23 bits of fields take 3 bytes in memory instead of one or more
-       bytes per field

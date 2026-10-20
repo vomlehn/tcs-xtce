@@ -132,6 +132,9 @@ class VType:
     zero_string: str = "False"
     ident: str = ""  # generated type name (enums only)
     doc: str = ""  # extra description for generated documentation
+    # Integers: the smallest and largest valid value from ValidRange (or the
+    # union of an argument's ValidRangeSet), when the document gives both.
+    valid_range: Optional[tuple[int, int]] = None
 
     @property
     def width(self) -> int:
@@ -234,13 +237,6 @@ class Node:
     fixed: dict = field(default_factory=dict)  # Local -> engineering value
     max_bytes: int = 0
     error: Optional[str] = None
-    # With bit packing: Local -> (bit offset, width) in the packed storage,
-    # whose size is packed_bytes.  The layout is that of XTCE's encoded
-    # ("packed") data: bit 0 is the most significant bit of byte 0, each value
-    # is stored most significant bit first, and little-endian values have
-    # their bytes swapped, as encoded.
-    packed: dict = field(default_factory=dict)
-    packed_bytes: int = 0
 
     def chain(self) -> list["Node"]:
         """This node and its bases, root first."""

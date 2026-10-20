@@ -45,9 +45,6 @@ __pycache__/
 /examples/simple-string/rust/src/simple_string.rs
 /examples/simple-string/c/simple_string.h
 /examples/simple-string/python/simple_string.py
-/examples/bit-packing/rust/src/bit_packing.rs
-/examples/bit-packing/c/bit_packing.h
-/examples/bit-packing/python/bit_packing.py
 
 # Downloaded by make references
 /references/*

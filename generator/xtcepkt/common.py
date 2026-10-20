@@ -30,12 +30,6 @@ def le(vt: VType) -> bool:
     return bool(getattr(vt.enc, "little_endian", False))
 
 
-def packed_le(vt: VType) -> bool:
-    """Whether a bit-packed field is stored with its bytes swapped: a
-    little-endian integer or enumeration.  Booleans take one bit."""
-    return le(vt) and vt.kind != "bool"
-
-
 def raw_is_int(vt: VType) -> bool:
     return isinstance(vt.enc, IntEnc)
 
@@ -75,7 +69,6 @@ __all__ = [
     "int_enc",
     "invertible",
     "le",
-    "packed_le",
     "raw_is_int",
     "string_spec",
     "values",

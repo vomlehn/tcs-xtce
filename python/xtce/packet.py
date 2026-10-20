@@ -282,36 +282,6 @@ def from_unsigned(v: int, bits: int, field: str) -> int:
     return v
 
 
-def _swap(v: int, bits: int) -> int:
-    return int.from_bytes(v.to_bytes(bits // 8, "big"), "little")
-
-
-def packed_get(b: bytearray, offset: int, width: int, le: bool = False) -> int:
-    """Read ``width`` bits at bit ``offset`` of bit-packed storage, swapping
-    the bytes back when ``le`` is set.
-
-    The layout is that of XTCE's encoded ("packed") data: bit 0 is the most
-    significant bit of byte 0, and each value is stored most significant bit
-    first, crossing byte boundaries as needed.  A little-endian value is
-    stored with its bytes swapped, as it is encoded.  Packet classes
-    generated with ``--bit-packing`` keep their integer, enumerated and
-    boolean fields this way.
-    """
-    shift = len(b) * 8 - offset - width
-    v = (int.from_bytes(b, "big") >> shift) & ((1 << width) - 1)
-    return _swap(v, width) if le else v
-
-
-def packed_set(b: bytearray, offset: int, width: int, raw: int, le: bool = False) -> None:
-    """Store the low ``width`` bits of ``raw`` at bit ``offset`` of ``b``."""
-    if le:
-        raw = _swap(raw, width)
-    shift = len(b) * 8 - offset - width
-    m = ((1 << width) - 1) << shift
-    v = (int.from_bytes(b, "big") & ~m) | ((raw << shift) & m)
-    b[:] = v.to_bytes(len(b), "big")
-
-
 def int_to_float(raw: int, bits: int, enc: str) -> float:
     return float(to_signed(raw, bits, enc))
 

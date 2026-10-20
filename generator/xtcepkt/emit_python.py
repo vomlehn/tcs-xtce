@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .common import flt, int_enc, invertible, le, packed_le, string_spec
+from .common import flt, invertible, le, string_spec
 from .model import walk, BinaryEnc, Cond, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, Value, VType
 
 
@@ -239,8 +239,7 @@ class PythonEmitter:
         what = "Sequence container" if n.kind == "tm" else "Meta-command"
         self.line()
         self.line()
-        if not n.packed:
-            self.line("@dataclass(slots=True)")
+        self.line("@dataclass(slots=True)")
         self.line(f"class {n.ident}(pk.Packet):")
         self.line(f'"""{what} ``{n.key}``.', 1)
         if n.fixed:
@@ -251,11 +250,9 @@ class PythonEmitter:
         self.line()
         self.line(f"NAME: ClassVar[str] = {pstr(n.key)}", 1)
         self.line(f"MAX_BYTES: ClassVar[int] = {n.max_bytes}", 1)
-        if n.packed:
-            self.packed_members(n)
-        elif n.fields:
+        if n.fields:
             self.line()
-        for name, lc in ([] if n.packed else n.fields):
+        for name, lc in n.fields:
             if lc.optional:
                 self.line(f"{name}: Optional[{field_type(lc.vtype)}] = None", 1)
             else:
@@ -311,73 +308,6 @@ class PythonEmitter:
         for (name, _), p in zip(n.fields, parts):
             self.line(f"{pstr(name + '=')} + {p},", 3)
         self.line(')) + "}"', 2)
-
-    def packed_members(self, n: Node) -> None:
-        """Slots, constructor, comparison and accessors of a class whose
-        integer, enumerated and boolean fields are bit-packed."""
-        plain = [name for name, lc in n.fields if lc not in n.packed]
-        self.line()
-        self.line(f"__slots__ = ({', '.join(pstr(x) for x in ['_packed'] + plain)},)", 1)
-        self.line()
-        params = []
-        for name, lc in n.fields:
-            if lc.optional:
-                params.append(f"{name}: Optional[{field_type(lc.vtype)}] = None")
-            else:
-                params.append(f"{name}: {field_type(lc.vtype)} = {default(lc.vtype)}")
-        self.line("def __init__(", 1)
-        self.line("self,", 2)
-        for x in params:
-            self.line(f"{x},", 2)
-        self.line(") -> None:", 1)
-        self.line(f"self._packed = bytearray({n.packed_bytes})", 2)
-        for name, _ in n.fields:
-            self.line(f"self.{name} = {name}", 2)
-        self.line()
-        self.line("def __eq__(self, other) -> bool:", 1)
-        self.line("if other.__class__ is not self.__class__:", 2)
-        self.line("return NotImplemented", 3)
-        same = ["self._packed == other._packed"] + [f"self.{x} == other.{x}" for x in plain]
-        self.line(f"return {' and '.join(same)}", 2)
-        self.line()
-        self.line("__hash__ = None  # mutable, like a dataclass", 1)
-        self.line()
-        self.line("def __repr__(self) -> str:", 1)
-        args = ", ".join(f"{name}={{self.{name}!r}}" for name, _ in n.fields)
-        self.line(f'return f"{n.ident}({args})"', 2)
-        self.line()
-        self.line("@property", 1)
-        self.line("def packed(self) -> bytes:", 1)
-        self.line('"""The bit-packed storage of the integer, enumerated and boolean fields."""', 2)
-        self.line("return bytes(self._packed)", 2)
-        for name, lc in n.fields:
-            vt = lc.vtype
-            doc = f"; {vt.doc}" if vt.doc else ""
-            self.line()
-            if lc not in n.packed:
-                cond = "; present only when its include condition holds" if lc.optional else ""
-                self.line(f"# {name}: ``{lc.key}`` ({vt.key}{doc}{cond})", 1)
-                continue
-            off, width = n.packed[lc]
-            raw = f"pk.packed_get(self._packed, {off}, {width}, {packed_le(vt)})"
-            enc = repr(vt.enc.encoding)
-            if vt.kind == "bool":
-                get, put = f"{raw} != 0", "1 if v else 0"
-            else:
-                get = f"pk.to_signed({raw}, {width}, {enc})" if vt.signed else raw
-                if vt.kind == "enum":
-                    get = f"pk.enum_value({vt.ident}, {get})"
-                    put = f"pk.from_signed(int(v), {width}, {enc}, {pstr(lc.name)})"
-                else:
-                    put = f"pk.from_signed(v, {width}, {enc}, {pstr(lc.name)})"
-            self.line("@property", 1)
-            self.line(f"def {name}(self) -> {field_type(vt)}:", 1)
-            self.line(f'"""``{lc.key}`` ({vt.key}{doc}); bits {off} to {off + width - 1} of the packed storage."""', 2)
-            self.line(f"return {get}", 2)
-            self.line()
-            self.line(f"@{name}.setter", 1)
-            self.line(f"def {name}(self, v: {field_type(vt)}) -> None:", 1)
-            self.line(f"pk.packed_set(self._packed, {off}, {width}, {put}, {packed_le(vt)})", 2)
 
     def kind(self, k: Kind) -> None:
         self.line()

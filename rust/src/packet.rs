@@ -458,47 +458,6 @@ pub fn from_unsigned(v: u64, bits: u32, field: &'static str) -> Result<u64> {
     }
 }
 
-/// Reads `width` (1 to 64) bits at bit `offset` of bit-packed storage,
-/// swapping the bytes back when `le` is set.
-///
-/// The layout is that of XTCE's encoded ("packed") data: bit 0 is the most
-/// significant bit of byte 0, and each value is stored most significant bit
-/// first, crossing byte boundaries as needed.  A little-endian value is stored
-/// with its bytes swapped, as it is encoded.  Packet structs generated with
-/// `--bit-packing` keep their integer, enumerated and boolean fields this way.
-pub fn packed_get(bytes: &[u8], offset: usize, width: u32, le: bool) -> u64 {
-    let (mut v, mut left, mut pos) = (0u64, width, offset);
-    while left > 0 {
-        let avail = 8 - (pos % 8) as u32;
-        let take = avail.min(left);
-        v = (v << take) | ((bytes[pos / 8] as u64 >> (avail - take)) & mask(take));
-        left -= take;
-        pos += take as usize;
-    }
-    if le {
-        swap_bytes(v, width)
-    } else {
-        v
-    }
-}
-
-/// Stores the low `width` bits of `raw` at bit `offset` of bit-packed
-/// storage, laid out as for [`packed_get`].
-pub fn packed_set(bytes: &mut [u8], offset: usize, width: u32, raw: u64, le: bool) {
-    let raw = if le { swap_bytes(raw, width) } else { raw };
-    let (mut left, mut pos) = (width, offset);
-    while left > 0 {
-        let avail = 8 - (pos % 8) as u32;
-        let take = avail.min(left);
-        let shift = avail - take;
-        let m = (mask(take) << shift) as u8;
-        let bits = (((raw >> (left - take)) & mask(take)) << shift) as u8;
-        bytes[pos / 8] = (bytes[pos / 8] & !m) | bits;
-        left -= take;
-        pos += take as usize;
-    }
-}
-
 /// Decodes a raw integer as unsigned or signed, as a float.
 pub fn int_to_f64(raw: u64, bits: u32, enc: IntEncoding) -> f64 {
     match enc {
@@ -822,29 +781,6 @@ mod tests {
         }
         assert_eq!(from_signed(-128, 8, TwosComplement, "x"), Ok(0x80));
         assert_eq!(to_signed(u64::MAX, 64, TwosComplement), -1);
-    }
-
-    #[test]
-    fn packed_bits() {
-        // A 3-bit then a 5-bit value fill one byte, most significant bit first.
-        let mut b = [0u8; 1];
-        packed_set(&mut b, 0, 3, 0b101, false);
-        packed_set(&mut b, 3, 5, 0b10011, false);
-        assert_eq!(b, [0b1011_0011]);
-        assert_eq!(packed_get(&b, 0, 3, false), 0b101);
-        assert_eq!(packed_get(&b, 3, 5, false), 0b10011);
-        // Values cross byte boundaries, and setting one leaves the others.
-        let mut b = [0xffu8; 10];
-        packed_set(&mut b, 5, 64, 0x0123_4567_89ab_cdef, false);
-        assert_eq!(packed_get(&b, 5, 64, false), 0x0123_4567_89ab_cdef);
-        assert_eq!(packed_get(&b, 0, 5, false), 0x1f);
-        assert_eq!(packed_get(&b, 69, 11, false), 0x7ff);
-        assert_eq!(b[0], 0xf8);
-        // A little-endian value is stored as it is encoded: bytes swapped.
-        let mut b = [0u8; 2];
-        packed_set(&mut b, 0, 16, 0x1234, true);
-        assert_eq!(b, [0x34, 0x12]);
-        assert_eq!(packed_get(&b, 0, 16, true), 0x1234);
     }
 
     #[test]

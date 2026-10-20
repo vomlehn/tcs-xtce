@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from .common import flt, int_enc, invertible, le, packed_le, string_spec
+from .common import flt, int_enc, invertible, le, string_spec
 from .model import walk, BinaryEnc, Cond, Criterion, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Polynomial, Seek, Spline, Value, VType
 
 
@@ -125,27 +125,6 @@ def write_stmt(vt: VType, x: str, f: str) -> str:
     return f"pk::write_string(w, {spec(vt)}, &{x}, {f})?;"
 
 
-def packed_getter(vt: VType, off: int, width: int) -> str:
-    """Expression reading a bit-packed field of `self`."""
-    raw = f"pk::packed_get(&self.packed, {off}, {width}, {str(packed_le(vt)).lower()})"
-    if vt.kind == "bool":
-        return f"{raw} != 0"
-    signed = f"pk::to_signed({raw}, {width}, IntEncoding::{int_enc(vt)})"
-    if vt.kind == "enum":
-        return f"{vt.ident}({signed if vt.signed else raw + ' as i64'})"
-    return f"{signed} as i{vt.width}" if vt.signed else f"{raw} as u{vt.width}"
-
-
-def packed_raw(vt: VType, width: int, f: str) -> str:
-    """Expression converting setter argument `v` to its raw bits."""
-    enc = f"IntEncoding::{int_enc(vt)}"
-    if vt.kind == "enum":
-        return f"pk::from_signed(v.0, {width}, {enc}, {f})?"
-    if vt.signed:
-        return f"pk::from_signed(v as i64, {width}, {enc}, {f})?"
-    return f"pk::from_unsigned(v as u64, {width}, {f})?"
-
-
 def describe(vt: VType, x: str) -> str:
     """Expression appending the canonical text of ``x`` to ``s``."""
     k = vt.kind
@@ -173,11 +152,6 @@ def condition(c: Criterion, x: str) -> str:
     if vt.kind == "binary":
         return f"{x}[..] {c.op} *{literal(vt, c.value)}"
     return f"{x} {c.op} {literal(vt, c.value)}"
-
-
-def field(n: Node, name: str, lc: Local) -> str:
-    """Expression for a field of `self`: an accessor call if it is packed."""
-    return f"self.{name}()" if lc in n.packed else f"self.{name}"
 
 
 class RustEmitter:
@@ -298,7 +272,7 @@ class RustEmitter:
     def place(n: Node, lc, names: dict) -> str:
         """Expression for a value when encoding: a field or a fixed constant."""
         if lc in names:
-            return field(n, names[lc], lc)
+            return f"self.{names[lc]}"
         x = literal(lc.vtype, n.fixed[lc])
         return f"({x})" if lc.vtype.kind == "binary" else x
 
@@ -307,16 +281,8 @@ class RustEmitter:
         return "0" if i == 0 else f"m{i}"
 
     def construct(self, n: Node) -> str:
-        if not n.packed:
-            fields = ", ".join(f"{name}: v{lc.id}" for name, lc in n.fields)
-            return f"{n.ident} {{ {fields} }}"
-        fields = [f"packed: [0; {n.packed_bytes}]"]
-        fields += [f"{name}: v{lc.id}" for name, lc in n.fields if lc not in n.packed]
-        out = f"{{ let mut p = {n.ident} {{ {', '.join(fields)} }}; "
-        for name, lc in n.fields:
-            if lc in n.packed:
-                out += f"p.set_{name}(v{lc.id}){';' if lc.vtype.kind == 'bool' else '?;'} "
-        return out + "p }"
+        fields = ", ".join(f"{name}: v{lc.id}" for name, lc in n.fields)
+        return f"{n.ident} {{ {fields} }}"
 
     def node(self, n: Node) -> None:
         what = "Sequence container" if n.kind == "tm" else "Meta-command"
@@ -326,21 +292,14 @@ class RustEmitter:
         if fixed:
             self.line("///")
             self.line(f"/// Fixed by its inheritance: {', '.join(fixed)}.")
-        self.line(f"#[derive(Debug, Clone, PartialEq{'' if n.packed else ', Default'})]")
+        self.line("#[derive(Debug, Clone, PartialEq, Default)]")
         self.line(f"pub struct {n.ident} {{")
-        if n.packed:
-            self.line("/// The integer, enumerated and boolean fields, bit-packed; use their accessors.", 1)
-            self.line(f"packed: [u8; {n.packed_bytes}],", 1)
         for name, lc in n.fields:
-            if lc in n.packed:
-                continue
             doc = f"; {lc.vtype.doc}" if lc.vtype.doc else ""
             cond = "; present only when its include condition holds" if lc.optional else ""
             self.line(f"/// `{lc.key}` ({lc.vtype.key}{doc}{cond})", 1)
             self.line(f"pub {name}: {field_type(lc.vtype, lc.optional)},", 1)
         self.line("}")
-        if n.packed:
-            self.accessors(n)
         self.line()
         self.line(f"impl Packet for {n.ident} {{")
         self.line(f"const NAME: &'static str = {rstr(n.key)};", 1)
@@ -362,7 +321,7 @@ class RustEmitter:
         for node in n.chain():
             for c in node.criteria:
                 if c.local in names:
-                    self.line(f"if !({condition(c, field(n, names[c.local], c.local))}) {{", 2)
+                    self.line(f"if !({condition(c, 'self.' + names[c.local])}) {{", 2)
                     self.line(f"return Err(PacketError::Mismatch {{ container: {rstr(node.key)}, criterion: {rstr(c.text)} }});", 3)
                     self.line("}", 2)
         for node in n.chain():
@@ -383,54 +342,10 @@ class RustEmitter:
                 self.line("None => s.push_str(pk::DESCRIBE_NONE),", 3)
                 self.line("}", 2)
             else:
-                self.line(describe(lc.vtype, field(n, name, lc)) + ";", 2)
+                self.line(describe(lc.vtype, f"self.{name}") + ";", 2)
         self.line("s.push('}');", 2)
         self.line("f.write_str(&s)", 2)
         self.line("}", 1)
-        self.line("}")
-
-    def accessors(self, n: Node) -> None:
-        self.line()
-        self.line(f"impl Default for {n.ident} {{")
-        self.line("fn default() -> Self {", 1)
-        self.line("Self {", 2)
-        self.line(f"packed: [0; {n.packed_bytes}],", 3)
-        for name, lc in n.fields:
-            if lc not in n.packed:
-                self.line(f"{name}: Default::default(),", 3)
-        self.line("}", 2)
-        self.line("}", 1)
-        self.line("}")
-        self.line()
-        self.line(f"impl {n.ident} {{")
-        self.line("/// The bit-packed storage of the integer, enumerated and boolean fields.", 1)
-        self.line(f"pub fn packed(&self) -> &[u8; {n.packed_bytes}] {{", 1)
-        self.line("&self.packed", 2)
-        self.line("}", 1)
-        for name, lc in n.fields:
-            if lc not in n.packed:
-                continue
-            off, width = n.packed[lc]
-            vt = lc.vtype
-            t = field_type(vt)
-            doc = f"; {vt.doc}" if vt.doc else ""
-            self.line()
-            self.line(f"/// `{lc.key}` ({vt.key}{doc}); bits {off}..{off + width} of the packed storage.", 1)
-            self.line(f"pub fn {name}(&self) -> {t} {{", 1)
-            self.line(packed_getter(vt, off, width), 2)
-            self.line("}", 1)
-            self.line()
-            if vt.kind == "bool":
-                self.line(f"/// Sets `{name}`.", 1)
-                self.line(f"pub fn set_{name}(&mut self, v: {t}) {{", 1)
-                self.line(f"pk::packed_set(&mut self.packed, {off}, {width}, v as u64, false);", 2)
-            else:
-                self.line(f"/// Sets `{name}`; fails with `OutOfRange` if `v` does not fit its encoding.", 1)
-                self.line(f"pub fn set_{name}(&mut self, v: {t}) -> Result<()> {{", 1)
-                self.line(f"let raw = {packed_raw(vt, width, rstr(lc.name))};", 2)
-                self.line(f"pk::packed_set(&mut self.packed, {off}, {width}, raw, {str(packed_le(vt)).lower()});", 2)
-                self.line("Ok(())", 2)
-            self.line("}", 1)
         self.line("}")
 
     # -- dispatch --

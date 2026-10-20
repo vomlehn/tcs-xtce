@@ -387,41 +387,6 @@ static inline int xtce_pk_double_to_int(double x, unsigned bits, int enc, const 
   return xtce_pk_from_signed((int64_t)r, bits, enc, f, err, out);
 }
 
-/* Bit-packed storage, as used by packet structs generated with --bit-packing.
- * The layout is that of XTCE's encoded ("packed") data: bit 0 is the most
- * significant bit of byte 0, and each value is stored most significant bit
- * first, crossing byte boundaries as needed.  A little-endian value (`le`) is
- * stored with its bytes swapped, as it is encoded.  xtce_pk_packed_get reads
- * `width` (1 to 64) bits at bit `offset`; xtce_pk_packed_set stores the low
- * `width` bits of `raw` there. */
-static inline uint64_t xtce_pk_packed_get(const uint8_t* bytes, size_t offset, unsigned width, bool le) {
-  uint64_t v = 0;
-  unsigned left = width;
-  while (left > 0) {
-    unsigned avail = 8 - (unsigned)(offset % 8);
-    unsigned take = avail < left ? avail : left;
-    v = (v << take) | (((uint64_t)bytes[offset / 8] >> (avail - take)) & xtce_pk_mask(take));
-    left -= take;
-    offset += take;
-  }
-  return le ? xtce_pk_swap_bytes(v, width) : v;
-}
-
-static inline void xtce_pk_packed_set(uint8_t* bytes, size_t offset, unsigned width, uint64_t raw, bool le) {
-  unsigned left = width;
-  if (le) raw = xtce_pk_swap_bytes(raw, width);
-  while (left > 0) {
-    unsigned avail = 8 - (unsigned)(offset % 8);
-    unsigned take = avail < left ? avail : left;
-    unsigned shift = avail - take;
-    uint8_t m = (uint8_t)(xtce_pk_mask(take) << shift);
-    uint8_t bits = (uint8_t)(((raw >> (left - take)) & xtce_pk_mask(take)) << shift);
-    bytes[offset / 8] = (uint8_t)((bytes[offset / 8] & (uint8_t)~m) | bits);
-    left -= take;
-    offset += take;
-  }
-}
-
 /* Three-way comparisons of integers of different signedness. */
 static inline int xtce_pk_cmp_u(uint64_t a, uint64_t b) { return a < b ? -1 : a > b; }
 static inline int xtce_pk_cmp_i(int64_t a, int64_t b) { return a < b ? -1 : a > b; }

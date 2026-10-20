@@ -2,16 +2,12 @@
 //!
 //! For each vector prints `<description of the decoded packet> | <hex of the
 //! re-encoded packet>`, with `error:<kind>` in place of either on failure.
-//! The C++ and Python versions of this tool print identical output.  With
-//! `--packed` it uses the codecs generated with `--bit-packing`, which must
-//! print the same.
+//! The C++ and Python versions of this tool print identical output.
 //!
-//! Usage: `packet_tool [--packed] VECTORS`
+//! Usage: `packet_tool VECTORS`
 
 #[path = "../tests/mission/demo.rs"]
 mod demo;
-#[path = "../tests/mission/demo_packed.rs"]
-mod demo_packed;
 
 use std::fmt::Display;
 use xtce::packet::{Codec, Packet};
@@ -35,12 +31,7 @@ fn run<P: Packet + Display>(data: &[u8]) -> String {
 }
 
 fn main() {
-    let mut args: Vec<String> = std::env::args().skip(1).collect();
-    let packed = args.first().is_some_and(|a| a == "--packed");
-    if packed {
-        args.remove(0);
-    }
-    let path = args.first().expect("usage: packet_tool [--packed] VECTORS");
+    let path = std::env::args().nth(1).expect("usage: packet_tool VECTORS");
     let text = std::fs::read_to_string(path).expect("cannot read vectors");
     for line in text.lines() {
         let line = line.split('#').next().unwrap_or("");
@@ -52,13 +43,10 @@ fn main() {
             .step_by(2)
             .map(|i| u8::from_str_radix(&h[i..i + 2], 16).expect("bad hex"))
             .collect();
-        let out = match (kind, packed) {
-            ("tm", false) => run::<demo::CCSDSPacketKind>(&data),
-            ("tc", false) => run::<demo::CCSDSCommandKind>(&data),
-            ("hk", false) => run::<demo::Housekeeping>(&data),
-            ("tm", true) => run::<demo_packed::CCSDSPacketKind>(&data),
-            ("tc", true) => run::<demo_packed::CCSDSCommandKind>(&data),
-            ("hk", true) => run::<demo_packed::Housekeeping>(&data),
+        let out = match kind {
+            "tm" => run::<demo::CCSDSPacketKind>(&data),
+            "tc" => run::<demo::CCSDSCommandKind>(&data),
+            "hk" => run::<demo::Housekeeping>(&data),
             _ => panic!("unknown vector kind {kind}"),
         };
         println!("{out}");

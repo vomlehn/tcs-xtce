@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .common import flt, int_enc, invertible, le, packed_le, string_spec
+from .common import flt, int_enc, invertible, le, string_spec
 from .compile import snake
 from .model import walk, BinaryEnc, Cond, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
 
@@ -385,15 +385,7 @@ class CEmitter:
         self.line(f"#define {t}_NAME {cstr(n.key)}")
         self.line(f"#define {t}_MAX_BYTES {n.max_bytes}")
         self.line(f"typedef struct {t} {{")
-        if n.packed:
-            self.line(
-                f"uint8_t packed[{n.packed_bytes}]; /* the integer, enumerated and boolean fields, bit-packed; "
-                "use their accessors */",
-                1,
-            )
         for name, lc in n.fields:
-            if lc in n.packed:
-                continue
             doc = f"; {lc.vtype.doc}" if lc.vtype.doc else ""
             if lc.optional:
                 self.line(f"bool has_{name}; /* whether {name} is present (its include condition holds) */", 1)
@@ -401,45 +393,7 @@ class CEmitter:
         if not n.fields:
             self.line("char unused_; /* C structs need a member */", 1)
         self.line(f"}} {t};")
-        self.accessors(n)
         self.packet_prototypes(t)
-
-    def accessors(self, n: Node) -> None:
-        t = self.p + n.ident
-        for name, lc in n.fields:
-            if lc not in n.packed:
-                continue
-            off, width = n.packed[lc]
-            vt = lc.vtype
-            ct = self.ctype(vt)
-            doc = f"; {vt.doc}" if vt.doc else ""
-            raw = f"xtce_pk_packed_get(p->packed, {off}, {width}, {bool_lit(packed_le(vt))})"
-            enc = ENC[int_enc(vt)]
-            if vt.kind == "bool":
-                get = f"{raw} != 0"
-            elif vt.signed:
-                get = f"({ct})xtce_pk_to_signed({raw}, {width}, {enc})"
-            else:
-                get = f"({ct}){raw}"
-            self.line()
-            self.line(f"/* {lc.key} ({vt.key}{doc}); bits {off} to {off + width - 1} of the packed storage. */")
-            self.line(f"static inline {ct} {t}_{name}(const {t}* p) {{ return {get}; }}")
-            f = cstr(lc.name)
-            if vt.kind == "bool":
-                self.line(f"static inline void {t}_set_{name}({t}* p, bool v) {{")
-                self.line(f"xtce_pk_packed_set(p->packed, {off}, {width}, v ? 1u : 0u, false);", 1)
-                self.line("}")
-                continue
-            self.line("/* Fails with XTCE_PK_OUT_OF_RANGE if `v` does not fit its encoding. */")
-            self.line(f"static inline int {t}_set_{name}({t}* p, {ct} v, xtce_pk_error* err) {{")
-            self.line("uint64_t raw;", 1)
-            if vt.kind == "enum" or vt.signed:
-                self.line(f"XTCE_PK_TRY(xtce_pk_from_signed((int64_t)v, {width}, {enc}, {f}, err, &raw));", 1)
-            else:
-                self.line(f"XTCE_PK_TRY(xtce_pk_from_unsigned((uint64_t)v, {width}, {f}, err, &raw));", 1)
-            self.line(f"xtce_pk_packed_set(p->packed, {off}, {width}, raw, {bool_lit(packed_le(vt))});", 1)
-            self.line("return 0;", 1)
-            self.line("}")
 
     def packet_prototypes(self, t: str, kind: bool = False) -> None:
         self.line()
@@ -557,17 +511,7 @@ class CEmitter:
         return "0" if i == 0 else f"m{i}"
 
     def construct(self, n: Node, out: str, depth: int) -> None:
-        t = self.p + n.ident
-        if n.packed:
-            # Clears the bits after the last packed field too.
-            self.line(f"memset({out}->packed, 0, sizeof {out}->packed);", depth)
         for name, lc in n.fields:
-            if lc in n.packed:
-                if lc.vtype.kind == "bool":
-                    self.line(f"{t}_set_{name}({out}, v{lc.id});", depth)
-                else:
-                    self.line(f"XTCE_PK_TRY({t}_set_{name}({out}, v{lc.id}, err));", depth)
-                continue
             if lc.optional:
                 self.line(f"{out}->has_{name} = h{lc.id};", depth)
             self.line(f"{out}->{name} = v{lc.id};", depth)
@@ -594,7 +538,7 @@ class CEmitter:
         self.line()
         self.line(f"static inline int {t}_encode_into(const {t}* p, xtce_pk_writer* w) {{")
         self.line("(void)p;", 1)
-        names = {lc: Acc(self.field(n, name, lc), f"p->has_{name}" if lc.optional else None) for name, lc in n.fields}
+        names = {lc: Acc(f"p->{name}", f"p->has_{name}" if lc.optional else None) for name, lc in n.fields}
         for node in n.chain():
             for c in node.criteria:
                 if c.local in names:
@@ -621,14 +565,10 @@ class CEmitter:
                 self.line('xtce_pk_text_puts(t, "none");', 2)
                 self.line("}", 1)
             else:
-                self.describe_value(lc.vtype, self.field(n, name, lc), 1)
+                self.describe_value(lc.vtype, f"p->{name}", 1)
         self.line("xtce_pk_text_putc(t, '}');", 1)
         self.line("return t->len;", 1)
         self.line("}")
-
-    def field(self, n: Node, name: str, lc) -> str:
-        """Expression for a field of `p`: an accessor call if it is packed."""
-        return f"{self.p}{n.ident}_{name}(p)" if lc in n.packed else f"p->{name}"
 
     def encode(self, t: str) -> None:
         self.line()

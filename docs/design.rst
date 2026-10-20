@@ -341,21 +341,7 @@ For each concrete node the emitters write:
   (``v12``), checks every criterion, then builds the struct;
 * ``encode_into``, which checks the criteria that involve fields, then
   writes the chain, using fixed values where needed;
-* the canonical text form;
-* with ``--bit-packing``, the accessors of the packed fields.
-
-**Bit packing** is decided in the compiler. ``Node.packed`` maps each
-packed field to its bit offset and width, and ``Node.packed_bytes``
-gives the storage size. The emitters only read the map. ``decode``
-builds the struct through the setters, which cannot fail on a decoded
-value. ``encode_into`` and ``describe`` read through the getters, so the
-wire code is the same as without packing. The storage is a byte array
-filled by ``packed_get`` and ``packed_set`` in each runtime, in the
-order XTCE uses for encoded data (most significant bit first, little-endian
-values byte-swapped), not C bit-fields, so its layout is the same in
-every language and with every compiler. Fields are stored as
-their raw encoded value, which reuses the range checks of
-``from_signed`` and ``from_unsigned``.
+* the canonical text form.
 
 For each tree they write a *kind*. Its ``decode`` reads the root's
 items once, then descends through nested ``if`` blocks: one per child,

@@ -9,9 +9,6 @@
 #      the C++ tool the same header compiled as C++.
 #   4. Re-encoding is a fixed point: decoding a re-encoded packet gives the
 #      same values and re-encodes to the same bytes.
-#   5. Steps 2 to 4 are repeated with the codecs generated with
-#      --bit-packing (each tool's --packed option); their output must equal
-#      that of the unpacked codecs.
 #
 # Usage: tests/packet_check.sh RUST_TOOL C_TOOL CXX_TOOL [COUNT]
 set -eu
@@ -37,12 +34,11 @@ XML_CATALOG_FILES="$top/references/catalog.xml" \
 }
 
 status=0
-mode=
 run_all() { # vectors-file name
-    "$rust_tool" $mode "$1" >"$out/$2.rust"
-    "$c_tool" $mode "$1" >"$out/$2.c"
-    "$cxx_tool" $mode "$1" >"$out/$2.cxx"
-    py_tool $mode "$1" >"$out/$2.py"
+    "$rust_tool" "$1" >"$out/$2.rust"
+    "$c_tool" "$1" >"$out/$2.c"
+    "$cxx_tool" "$1" >"$out/$2.cxx"
+    py_tool "$1" >"$out/$2.py"
     for lang in c cxx py; do
         if ! cmp -s "$out/$2.rust" "$out/$2.$lang"; then
             echo "MISMATCH: $2: rust vs $lang" >&2
@@ -74,25 +70,8 @@ if ! cmp -s "$out/again.rust" "$out/again.expected"; then
     status=1
 fi
 
-# The bit-packed codecs must behave exactly like the unpacked ones.
-mode=--packed
-for name in vectors random again; do
-    cp "$out/$name.rust" "$out/$name.unpacked"
-done
-run_all "$mission/vectors.txt" vectors
-run_all "$out/random.txt" random
-run_all "$out/again.txt" again
-for name in vectors random again; do
-    if ! cmp -s "$out/$name.unpacked" "$out/$name.rust"; then
-        echo "MISMATCH: $name: bit-packed codecs differ from unpacked ones" >&2
-        diff "$out/$name.unpacked" "$out/$name.rust" | head -10 >&2
-        status=1
-    fi
-done
-
 if [ $status -eq 0 ]; then
     echo "packet_check: $(wc -l <"$out/vectors.rust") vectors match vectors.expected;" \
-        "$count random and $(wc -l <"$out/again.txt") re-encoded packets identical across Rust, C, C++ and Python," \
-        "with and without bit packing"
+        "$count random and $(wc -l <"$out/again.txt") re-encoded packets identical across Rust, C, C++ and Python"
 fi
 exit $status

@@ -74,7 +74,7 @@ RESERVED = set(keyword.kwlist) | {
     "bytes", "int", "float", "str", "list", "dict", "type", "id", "len",
     # generated members
     "decode", "encode", "encode_into", "describe", "label", "value", "raw",
-    "name", "max_bytes", "data", "buf", "r", "w", "init", "to_bytes", "packed",
+    "name", "max_bytes", "data", "buf", "r", "w", "init", "to_bytes",
 }
 
 
@@ -84,6 +84,21 @@ def hex_bytes(text: str, where: str) -> bytes:
     if not re.fullmatch(r"[0-9A-Fa-f]*", text):
         raise Unsupported(f"{where}: {text!r} is not hexBinary")
     return bytes.fromhex(text.zfill(len(text) + len(text) % 2))
+
+
+def integer_range(t) -> Optional[tuple[int, int]]:
+    """(min, max) of an integer type's ValidRange, or of the union of an
+    argument type's ValidRangeSet; None unless every bound is given.  Integer
+    types have no calibrator, so the range applies to the raw value."""
+    if getattr(t, "valid_range", None) is not None:
+        ranges = [t.valid_range]
+    elif getattr(t, "valid_range_set", None) is not None:
+        ranges = t.valid_range_set.valid_range
+    else:
+        return None
+    if not ranges or any(r.min_inclusive is None or r.max_inclusive is None for r in ranges):
+        return None
+    return min(r.min_inclusive for r in ranges), max(r.max_inclusive for r in ranges)
 
 
 def snake(name: str) -> str:
@@ -119,33 +134,16 @@ class Namer:
     def __init__(self, reserved=()):
         self.used = set(reserved)
 
-    def free(self, name: str) -> bool:
-        return name not in self.used
-
     def take(self, *candidates: str) -> str:
         for c in candidates:
-            if self.free(c):
+            if c not in self.used:
                 self.used.add(c)
                 return c
         base, n = candidates[-1], 2
-        while not self.free(f"{base}{n}"):
+        while f"{base}{n}" in self.used:
             n += 1
         self.used.add(f"{base}{n}")
         return f"{base}{n}"
-
-
-class FieldNamer(Namer):
-    """Field names, kept clear of each other's ``set_`` accessors.
-
-    Bit-packed fields get a ``set_<name>`` setter, so no field may be named
-    after another's setter.  The rule applies with and without bit packing so
-    that names do not depend on it.
-    """
-
-    def free(self, name: str) -> bool:
-        if name in self.used or f"set_{name}" in self.used:
-            return False
-        return not (name.startswith("set_") and name[4:] in self.used)
 
 
 # Type names the runtimes or the generated modules define.
@@ -160,10 +158,9 @@ RUNTIME_NAMES = {
 
 
 class Compiler:
-    def __init__(self, root, skip_unsupported: bool = False, bit_packing: bool = False):
+    def __init__(self, root, skip_unsupported: bool = False):
         self.root = root
         self.skip_unsupported = skip_unsupported
-        self.bit_packing = bit_packing
         self.ptypes: dict[Key, tuple] = {}
         self.params: dict[Key, tuple] = {}
         self.atypes: dict[Key, tuple] = {}
@@ -278,6 +275,8 @@ class Compiler:
                 article = "an" if base[0] in "AEIOU" else "a"
                 raise Unsupported(f"{where}: calibrator on {article} {base.lower()} type")
             vt.kind = {"Integer": "int", "Enumerated": "enum", "Boolean": "bool"}[base]
+            if base == "Integer":
+                vt.valid_range = integer_range(t)
         elif base == "String":
             if not isinstance(enc, StringEnc):
                 raise Unsupported(f"{where}: string with {enc_name}")
@@ -751,35 +750,13 @@ class Compiler:
             if c.op == "==" and c.local not in fixed:
                 fixed[c.local] = c.value
         n.fixed = fixed
-        names = FieldNamer()
+        names = Namer()
         n.fields = [
             (names.take(snake(it.local.name)), it.local)
             for it in walk(n.all_items())
             if isinstance(it, Value) and it.local not in fixed
         ]
         n.max_bytes = (max_bits(n.all_items()) + 7) // 8
-        if self.bit_packing:
-            # Packed fields follow each other with no padding, the first at
-            # bit 0, crossing byte boundaries as needed.
-            offset = 0
-            for _, lc in n.fields:
-                width = packed_width(lc)
-                if width:
-                    n.packed[lc] = (offset, width)
-                    offset += width
-            n.packed_bytes = (offset + 7) // 8
-
-
-def packed_width(lc: Local) -> int:
-    """Bits a field takes in bit-packed storage, or 0 if it is not packed.
-
-    Integer and enumerated fields are stored as their raw encoding, booleans
-    as one bit.  Optional, float, string and binary fields are not packed.
-    """
-    vt = lc.vtype
-    if lc.optional or vt.kind not in ("int", "enum", "bool") or not isinstance(vt.enc, IntEnc):
-        return 0
-    return 1 if vt.kind == "bool" else vt.enc.bits
 
 
 def item_bits(vt: VType) -> int:
@@ -806,5 +783,5 @@ def max_bits(items: list[Item]) -> int:
     return extent
 
 
-def compile_document(root, skip_unsupported: bool = False, bit_packing: bool = False) -> Mission:
-    return Compiler(root, skip_unsupported, bit_packing).compile()
+def compile_document(root, skip_unsupported: bool = False) -> Mission:
+    return Compiler(root, skip_unsupported).compile()

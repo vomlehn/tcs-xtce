@@ -438,9 +438,9 @@ Each run writes one language. Run it once per language you need.
    * - ``INPUT``
      - The mission's XTCE document, read with the ``xtce`` Python package
    * - ``OUTPUT``
-     - The file to write
+     - The file to write (optional with ``--size-report``)
    * - ``--lang LANG``
-     - Required. ``rust`` writes a Rust module, formatted with ``rustfmt``
+     - Required, except with ``--size-report``. ``rust`` writes a Rust module, formatted with ``rustfmt``
        (which must be installed). ``python`` writes a Python module.
        ``c`` and ``c++`` write the same file: a header that compiles both
        as C11 and as C++.
@@ -450,15 +450,63 @@ Each run writes one language. Run it once per language you need.
        ``demo_``)
    * - ``--skip-unsupported``
      - Leave out containers and meta-commands that use unsupported XTCE features, with a warning, instead of failing
-   * - ``--bit-packing``
-     - Store integer, enumerated and boolean fields in bit-packed storage
-       with no padding between them, reached through accessors (see
-       `Bit packing`_)
+   * - ``--size-report``
+     - Write a size report instead of code (see `Size report`_), to
+       ``OUTPUT`` or standard output
    * - ``--source-name NAME``
      - Mission file name recorded in the generated headers
 
 By default the compiler stops if any container or meta-command uses an
 unsupported construct, and lists every such construct with its cause.
+
+Size report
+-----------
+
+``python3 -m tcsxtce INPUT --size-report`` writes no code. For each
+packet it lists every field with the bits it takes on the wire and the
+bits the XTCE document says its values need, to show where the mission
+database could make packets smaller. It changes nothing: the codecs
+always use the encodings as written.
+
+A field's need comes only from the document:
+
+* an integer needs the fewest bits that hold its ``ValidRange`` (for an
+  argument, every range in its ``ValidRangeSet``) in the same encoding,
+  or as unsigned when the range has no negative values;
+* an enumeration needs the bits for its smallest and largest listed
+  values;
+* a boolean needs one bit;
+* a little-endian field is rounded up to whole bytes, which its encoding
+  requires.
+
+Integers without a ``ValidRange``, floats and binary fields have no
+stated need and show ``-``. The ``sizeInBits`` and ``signed`` attributes
+of engineering types are not used: XTCE defines them only as hints.
+Fixed-size strings are flagged, because shorter strings are padded to
+the full size. Bits that ``LocationInContainerInBits`` skips over are
+counted separately.
+
+::
+
+   /Sat/Status (container Status): at most 196 bits, 25 bytes
+     field  type         bits  needs  saves
+     C      /Sat/Count     32     10     22  ValidRange 0..1000
+     L      /Sat/Level     16      7      9  ValidRange 0..100, as unsigned
+     O      /Sat/Open      16      -         no ValidRange
+     M      /Sat/Mode       8      3      5  values 0..5
+     F      /Sat/Flag       8      1      7  boolean
+     N      /Sat/Name      64      -         fixed size: strings shorter than 8 bytes are padded
+     ...
+     right-sized fields save 67 bits: at most 129 bits, 17 bytes
+
+``=`` after a field name marks a constant: a value fixed by a
+restriction criterion or argument assignment, or a ``FixedValueEntry``.
+A summary at the end names the packets that would be whole bytes
+smaller, and the integer types that have no ``ValidRange`` and so could
+not be checked. Containers and meta-commands with unsupported
+constructs are listed rather than analysed. Savings for packets whose
+entries are placed with ``LocationInContainerInBits`` assume the layout
+is repacked.
 
 Using the generated code:
 
@@ -471,8 +519,7 @@ Using the generated code:
 
 ``make packets`` regenerates the demo mission
 (``tests/mission/demo.xml``) into ``rust/tests/mission/demo.rs``,
-``cpp/tests/mission/demo.h`` and ``python/tests/mission/demo.py``, and
-their bit-packed versions ``demo_packed.*``.
+``cpp/tests/mission/demo.h`` and ``python/tests/mission/demo.py``.
 
 Generated packet types
 ----------------------
@@ -581,120 +628,6 @@ command) in the tree, in document order:
   where ``tag`` is ``demo_CCSDSPacketKind_Housekeeping_tag``, and so on.
 * **Python**: ``class CCSDSPacketKind`` with ``MEMBERS``. Its ``decode``
   returns an instance of the matching member class.
-
-Bit packing
------------
-
-By default every field of a packet struct is an ordinary member, so a
-3-bit value followed by a 5-bit value takes two bytes in memory (a
-``u8`` each), although they take only 8 bits on the wire. With
-``--bit-packing``, ``tcsxtce`` stores these fields in one byte array
-instead, and the two values take one byte.
-
-Which fields are packed:
-
-* integer and enumerated fields, in the number of bits of their
-  encoding, as their raw encoded value (so a 12-bit sign-magnitude field
-  takes 12 bits);
-* boolean fields, in one bit.
-
-Optional fields (those with an ``IncludeCondition``), floats (including
-calibrated integers and times), strings and binary fields are not packed
-and stay ordinary members. A struct with no packable field is the same
-as without the flag.
-
-Layout: the storage uses the order XTCE uses for encoded data, which
-the schema calls "packed" (members "ordered and contiguous").
-
-* Packed fields come one after another, in field order, with no padding.
-  The first starts at bit 0.
-* Bit 0 is the most significant bit of byte 0, bit 8 the most
-  significant bit of byte 1, and so on.
-* Each value is stored as it is encoded: most significant bit first,
-  crossing byte boundaries as needed, and with its bytes swapped if its
-  encoding is little-endian. The storage takes ``ceil(total bits / 8)``
-  bytes.
-* The layout is the same in every language and does not depend on the
-  compiler: C and C++ use a ``uint8_t`` array, not bit-fields, whose
-  order is implementation-defined.
-
-The wire format does not change. Packed and unpacked codecs decode and
-encode the same bytes and print the same canonical text.
-
-The storage is not the packet, though. When every field is packable and
-nothing else is encoded, the two are byte for byte the same (see the
-``bit-packing`` example). In general the storage differs from the
-encoded packet because:
-
-* fields fixed by a restriction criterion or argument assignment, and
-  ``FixedValueEntry`` bits, are encoded but not stored;
-* gaps and overlaps from ``LocationInContainerInBits`` are encoded but
-  not stored;
-* optional, float, string and binary fields are encoded among the
-  others but stored as ordinary members, outside the packed storage;
-* a boolean is stored in one bit, whatever its encoding's size;
-* a value is checked against its encoding when it is set, not when the
-  packet is encoded.
-
-Accessors replace the packed members. ``x`` stands for a field name and
-``T`` for the struct, here ``demo_Housekeeping``:
-
-.. list-table::
-   :header-rows: 1
-   :widths: auto
-
-   * - Rust
-     - C/C++
-     - Python
-   * - ``packed(&self) -> &[u8; N]``
-     - member ``uint8_t packed[N]``
-     - read-only property ``p.packed`` (``bytes``)
-   * - ``x(&self) -> T``
-     - ``T T_x(const T*)``
-     - property ``p.x``
-   * - ``set_x(&mut self, v) -> Result<()>``
-     - ``int T_set_x(T*, v, xtce_pk_error* err)``
-     - ``p.x = v``
-   * - ``set_x(&mut self, v: bool)`` (booleans)
-     - ``void T_set_x(T*, bool v)`` (booleans)
-     - ``p.x = v``
-
-The field types are the same as without packing. Integer and enumerated
-setters fail with ``OutOfRange`` (Rust ``Err``, C/C++ return code,
-Python ``PacketError``) when the value doesn't fit its encoding, and
-leave the field unchanged. Boolean setters cannot fail. Without packing,
-the same check happens when the packet is encoded.
-
-Creating a packet:
-
-* **Rust**: the struct can no longer be built with a struct literal. Use
-  ``Default::default()`` and the setters.
-* **C/C++**: call ``T_init`` and then the setters; set the other fields
-  directly.
-* **Python**: the constructor takes the same keyword arguments as
-  without packing and calls the setters. Classes with packed fields are
-  plain classes with ``__slots__``, ``__eq__`` and ``__repr__`` rather
-  than dataclasses.
-
-Example (Rust):
-
-.. code-block:: rust
-
-   let mut hk = demo::Housekeeping::default();
-   hk.set_seq_count(42)?;          // 14 bits
-   hk.set_sec_hdr_flag(true);      // 1 bit
-   hk.temperature = 25.0;          // not packed
-   assert_eq!(hk.seq_count(), 42);
-
-The ``set_`` names are kept free: no field is named ``set_`` followed by
-another field's name, with or without packing, so field names don't
-depend on the flag. ``packed``, ``init`` and ``to_bytes`` are also
-reserved, and fields with those names get a trailing ``_``.
-
-``make packets`` also generates the demo mission with ``--bit-packing``
-(``demo_packed.rs``, ``demo_packed.h`` with prefix ``demo_packed_``, and
-``demo_packed.py``). ``tests/packet_check.sh`` checks that they behave
-exactly like the unpacked codecs.
 
 Methods
 -------
@@ -929,11 +862,6 @@ return an error code and their result through a pointer. Examples:
    bits replaces them. Byte-aligned ``bytes`` and ``zeros`` copy or fill
    whole bytes at once.
 
-Bit packing
-   ``packed_get(storage, offset, width)`` and
-   ``packed_set(storage, offset, width, raw)`` read and write the
-   bit-packed storage described in `Bit packing`_.
-
 Integers
    ``to_signed(raw, bits, encoding)`` and
    ``from_signed(value, bits, encoding, field)`` handle the unsigned,
@@ -1128,36 +1056,6 @@ fails with ``TooLong``, and that the buffers were never reallocated:
    serialize "ABCDEFGHI" -> error:TooLong (Text is too long for its encoding)
    buffers reused without reallocation: true
 
-``bit-packing``
----------------
-
-``examples/bit-packing/bit_packing.xml`` describes a container,
-``Status``, holding five small fields: a 3-bit enumeration (``Mode``), a
-5-bit unsigned integer (``Level``), a boolean (``Enabled``), a 4-bit
-two's complement integer (``Offset``) and a 10-bit unsigned integer
-(``Count``). Together they take 23 bits.
-
-The code is generated with ``--bit-packing`` (see `Bit packing`_), so
-the five fields share a 3-byte array. Without the flag, the C struct
-takes 16 bytes. Each program sets the fields through the setters, prints
-the packed storage in binary, shows that a ``Level`` of 32 (6 bits) is
-rejected and leaves the field unchanged, then serializes and
-deserializes the record:
-
-::
-
-   storage byte 0: 10110011
-   storage byte 1: 11101100
-   storage byte 2: 10110000
-   set level 32 -> error:OutOfRange (value of Level does not fit its encoding); level is still 19
-   serialize -> b3ecb0
-
-Byte 0 holds the 3-bit ``Mode`` (5, ``101``) in its top bits and the
-5-bit ``Level`` (19, ``10011``) below it. ``Count`` starts at bit 13 and
-continues into byte 2. Every field of ``Status`` is packed and nothing
-else is encoded, so here the storage is byte for byte the serialized
-record.
-
 
 Testing
 =======
@@ -1167,8 +1065,9 @@ Testing
 * the unit tests of every language (``cargo test``, ``cpp/tests``,
   ``python -m unittest``);
 * the packet compiler's tests (``generator/tests``), which compile small
-  XTCE documents and check the model, including that malformed documents
-  are reported as unsupported rather than crashing the generator;
+  XTCE documents and check the model and the size report, including that
+  malformed documents are reported as unsupported rather than crashing
+  the generator;
 * ``tests/cross_check.sh``: 21 generated XML documents that together use
   every element and every choice alternative of the schema. Each must
   validate with ``xmllint``. Each must round-trip through every
