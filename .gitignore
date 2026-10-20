@@ -52,4 +52,3 @@ __pycache__/
 # Downloaded by make references
 /references/*
 !/references/Makefile
-/generator/xml.xsd
