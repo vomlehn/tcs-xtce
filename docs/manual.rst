@@ -664,6 +664,13 @@ string). The value is ``slope * x + intercept`` (its
 or argument. That value must be decoded earlier in the same packet,
 outside any ``IncludeCondition``.
 
+Inside an aggregate type, a reference may instead name an earlier member
+of the aggregate, as Yamcs reads it. Each value of the aggregate then
+uses its own member: in the demo, each ``BatchType`` in ``Batches`` has
+a ``Size`` that counts its ``Values``. The member's name wins over a
+parameter or argument with the same name, and other references from
+inside an aggregate are not supported.
+
 The referenced value stays an ordinary field. When encoding, the
 generated code computes the size or count from it and fails with
 ``BadSize`` if the data doesn't match: set both. When decoding, a size
@@ -1138,7 +1145,8 @@ Name references
    current SpaceSystem, then in each enclosing one.
 
 Not supported
-   references to aggregate members, array subsets (a ``DimensionList`` in an entry),
+   references to aggregate members (other than sizes from an earlier
+   member), array subsets (a ``DimensionList`` in an entry),
    arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
    ``DynamicValue`` locations and offsets, other instances than 0,
    ``DiscreteLookupList`` values, ``BooleanExpression`` and

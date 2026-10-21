@@ -265,7 +265,7 @@ class CEmitter:
             self.line(f"size_t n = {d};", depth)
             return
         self.line("size_t n;", depth)
-        x = f"(double)({ref(d.local)})"
+        x = f"(double)({ref(d)})"
         args = f"{x}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, {f}, {err}, &n"
         self.line(f"XTCE_PK_TRY(xtce_pk_dynamic_size({args}));", depth)
         if d.factor != 1:
@@ -286,10 +286,11 @@ class CEmitter:
         gives a size or count."""
         e = vt.enc
         if isinstance(e, AggregateEnc):
+            inner = lambda d: f"{dst}.{d.member}" if d.member else ref(d)  # noqa: E731
             for m in e.members:
                 if m.skip:
                     self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {m.skip}, {f}));", depth)
-                self.read_value(m.vtype, f"{dst}.{m.ident}", f, depth, ref)
+                self.read_value(m.vtype, f"{dst}.{m.ident}", f, depth, inner)
             if e.pad:
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {e.pad}, {f}));", depth)
         elif isinstance(e, ArrayEnc):
@@ -357,10 +358,11 @@ class CEmitter:
         e = vt.enc
         bad = f"return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, {f}, NULL);"
         if isinstance(e, AggregateEnc):
+            inner = lambda d: f"{x}.{d.member}" if d.member else ref(d)  # noqa: E731
             for m in e.members:
                 if m.skip:
                     self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {m.skip}));", depth)
-                self.write_value(m.vtype, f"{x}.{m.ident}", f, depth, ref)
+                self.write_value(m.vtype, f"{x}.{m.ident}", f, depth, inner)
             if e.pad:
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {e.pad}));", depth)
             return
@@ -602,7 +604,7 @@ class CEmitter:
                 lc = it.local
                 if not nested:
                     self.local(lc.vtype, f"v{lc.id}", depth)
-                self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth, lambda r: f"v{r.id}")
+                self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth, lambda d: f"v{d.local.id}")
                 if nested:
                     self.line(f"h{lc.id} = true;", depth)
             elif isinstance(it, Cond):
@@ -652,7 +654,7 @@ class CEmitter:
             else:
                 lc = it.local
                 f = cstr(lc.name)
-                ref = lambda r: self.place(n, r, names).expr  # noqa: E731
+                ref = lambda d: self.place(n, d.local, names).expr  # noqa: E731
                 if lc in names:
                     acc = names[lc]
                     if acc.present:

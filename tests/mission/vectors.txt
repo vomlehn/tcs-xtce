@@ -50,3 +50,7 @@ tm 0118c02a0012000000  # log, no records
 tm 0918c02a0012013fffffffffff  # log, padding not zero
 tm 0918c02a0012013048d0  # log truncated in a record's padding
 tm 0918c02a0012013048d000  # log without its trailer
+tm 0922c02a0012022aabb0  # batches, sizes from a member of each
+tm 0122c02a001200  # batches, none
+tm 0922c02a00120140  # batches, a size beyond its ValidRange
+tm 0922c02a0012013aab  # batches truncated in the values

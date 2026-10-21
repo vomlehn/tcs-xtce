@@ -73,12 +73,12 @@ def need(vt: VType) -> tuple[Optional[int], str]:
     if isinstance(e, ArrayEnc):
         n, why = need(e.elem)
         count = e.max_count
-        what = f"{count} values" if isinstance(e.count, int) else f"up to {count} values (count from {e.count.local.name})"
+        what = f"{count} values" if isinstance(e.count, int) else f"up to {count} values (count from {e.count.source})"
         if n is None:
             return None, "; ".join(x for x in (what, why) if x)
         return n * count + e.gap * max(count - 1, 0), f"{what}, each {why}"
     if vt.dyn is not None:
-        return None, f"size from {vt.dyn.local.name}, at most {nbytes(vt.dyn.max)}"
+        return None, f"size from {vt.dyn.source}, at most {nbytes(vt.dyn.max)}"
     if isinstance(e, BinaryEnc) and e.rest:
         return None, f"rest of the packet, at most {nbytes(e.bits // 8)}"
     if vt.kind == "int" and vt.calibrator is not None:

@@ -131,6 +131,46 @@
       <IntegerParameterType name="U8" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
       </IntegerParameterType>
+      <IntegerParameterType name="BatchSizeType" signed="false">
+        <IntegerDataEncoding sizeInBits="4"/>
+        <ValidRange minInclusive="0" maxInclusive="3"/>
+      </IntegerParameterType>
+      <ArrayParameterType name="BatchValuesType" arrayTypeRef="U8">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <DynamicValue>
+                <ParameterInstanceRef parameterRef="Size"/>
+                <LinearAdjustment intercept="-1"/>
+              </DynamicValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <AggregateParameterType name="BatchType">
+        <MemberList>
+          <Member name="Size" typeRef="BatchSizeType"/>
+          <Member name="Values" typeRef="BatchValuesType"/>
+        </MemberList>
+      </AggregateParameterType>
+      <ArrayParameterType name="BatchesType" arrayTypeRef="BatchType">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <DynamicValue>
+                <ParameterInstanceRef parameterRef="BatchCount"/>
+                <LinearAdjustment intercept="-1"/>
+              </DynamicValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
       <IntegerParameterType name="BoardTempType" sizeInBits="8">
         <IntegerDataEncoding sizeInBits="8">
           <DefaultCalibrator>
@@ -317,6 +357,8 @@
       <Parameter name="Records" parameterTypeRef="U8"/>
       <Parameter name="Rest" parameterTypeRef="RestType"/>
       <Parameter name="LogCount" parameterTypeRef="SampleCountType"/>
+      <Parameter name="BatchCount" parameterTypeRef="SampleCountType"/>
+      <Parameter name="Batches" parameterTypeRef="BatchesType"/>
       <Parameter name="Channel" parameterTypeRef="U4"/>
       <Parameter name="Reading" parameterTypeRef="S16"/>
       <Parameter name="Closed" parameterTypeRef="FlagType"/>
@@ -465,6 +507,17 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="280"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="Batches">
+        <EntryList>
+          <ParameterRefEntry parameterRef="BatchCount"/>
+          <ArrayParameterRefEntry parameterRef="Batches"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="290"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

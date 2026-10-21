@@ -80,29 +80,35 @@ def size(d: DynSize, x: str, f: str) -> str:
 
 def count(vt: VType, ref, f: str) -> str:
     c = vt.enc.count
-    return size(c, ref(c.local), f) if isinstance(c, DynSize) else str(c)
+    return size(c, ref(c), f) if isinstance(c, DynSize) else str(c)
 
 
 def spec(vt: VType, ref, f: str) -> str:
     d = vt.enc.dyn
     s = repr(string_spec(vt))
-    return f"pk.sized({s}, {size(d, ref(d.local), f)})" if d is not None else s
+    return f"pk.sized({s}, {size(d, ref(d), f)})" if d is not None else s
 
 
-def read_expr(vt: VType, f: str, ref) -> str:
+def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
     """Expression reading one value with BitReader ``r``; ``ref`` gives the
     expression for a value that gives a size or count."""
     e = vt.enc
     if isinstance(e, AggregateEnc):
         # Arguments and tuple items are evaluated in order.
+        # Members that give the size of a later one are kept in locals.
+        a = f"_a{depth}_"
+        sizes = {m.vtype.dyn.member for m in e.members if m.vtype.dyn is not None}
+        inner = lambda d: a + d.member if d.member else ref(d)  # noqa: E731
         parts = []
         for m in e.members:
-            x = read_expr(m.vtype, f, ref)
+            x = read_expr(m.vtype, f, inner, depth + 1)
+            if m.ident in sizes:
+                x = f"({a}{m.ident} := {x})"
             parts.append(f"{m.ident}=" + (f"(r.pad({m.skip}, {f}), {x})[1]" if m.skip else x))
         agg = f"{vt.ident}({', '.join(parts)})"
         return f"({agg}, r.pad({e.pad}, {f}))[0]" if e.pad else agg
     if isinstance(e, ArrayEnc):
-        return f"pk.read_list(r, {count(vt, ref, f)}, {e.gap}, {f}, lambda: {read_expr(e.elem, f, ref)})"
+        return f"pk.read_list(r, {count(vt, ref, f)}, {e.gap}, {f}, lambda: {read_expr(e.elem, f, ref, depth + 1)})"
     if isinstance(e, IntEnc):
         raw = f"r.uint_order({e.bits}, {le(vt)}, {f})"
         enc = repr(e.encoding)
@@ -123,7 +129,7 @@ def read_expr(vt: VType, f: str, ref) -> str:
     if isinstance(e, BinaryEnc):
         if e.rest:
             return f"r.bytes(r.rest_bytes({e.bits // 8}, {f}), {f})"
-        n = size(e.dyn, ref(e.dyn.local), f) if e.dyn else e.bits // 8
+        n = size(e.dyn, ref(e.dyn), f) if e.dyn else e.bits // 8
         return f"r.bytes({n}, {f})"
     return f"pk.read_string(r, {spec(vt, ref, f)}, {f})"
 
@@ -277,7 +283,7 @@ class PythonEmitter:
                 self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
             elif isinstance(it, Value):
                 lc = it.local
-                self.line(f"v{lc.id} = {read_expr(lc.vtype, pstr(lc.name), lambda r: f'v{r.id}')}", depth)
+                self.line(f"v{lc.id} = {read_expr(lc.vtype, pstr(lc.name), lambda d: f'v{d.local.id}')}", depth)
             elif isinstance(it, Cond):
                 if not nested:
                     for v in walk(it.items):
@@ -312,15 +318,16 @@ class PythonEmitter:
                 if lc.optional:
                     self.line(f"if {x} is None:", depth)
                     self.line(f'raise pk.PacketError("Missing", {pstr(lc.name)})', depth + 1)
-                self.write_value(lc.vtype, x, pstr(lc.name), lambda r: self.place(n, r, names), depth)
+                self.write_value(lc.vtype, x, pstr(lc.name), lambda d: self.place(n, d.local, names), depth)
 
     def write_value(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
         e = vt.enc
         if isinstance(e, AggregateEnc):
+            inner = lambda d: f"{x}.{d.member}" if d.member else ref(d)  # noqa: E731
             for m in e.members:
                 if m.skip:
                     self.line(f"w.zeros({m.skip})", depth)
-                self.write_value(m.vtype, f"{x}.{m.ident}", f, ref, depth)
+                self.write_value(m.vtype, f"{x}.{m.ident}", f, inner, depth)
             if e.pad:
                 self.line(f"w.zeros({e.pad})", depth)
         elif isinstance(e, ArrayEnc):
@@ -334,7 +341,7 @@ class PythonEmitter:
                 self.line(f"w.skip({e.gap}, {f})", depth + 2)
             self.write_value(e.elem, el, f, ref, depth + 1)
         elif isinstance(e, BinaryEnc) and e.dyn is not None:
-            self.line(f"pk.check_size({x}, {size(e.dyn, ref(e.dyn.local), f)}, {f})", depth)
+            self.line(f"pk.check_size({x}, {size(e.dyn, ref(e.dyn), f)}, {f})", depth)
             self.line(f"w.bytes({x})", depth)
         else:
             self.line(write_stmt(vt, x, f, ref), depth)

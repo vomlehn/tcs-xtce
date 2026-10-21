@@ -377,3 +377,29 @@ fn repeated_containers_and_container_sizes() {
         Err(PacketError::BadSize { field: "LogRecord" })
     );
 }
+
+#[test]
+fn sizes_from_aggregate_members() {
+    let b = Batches {
+        sec_hdr_flag: true,
+        batch_count: 2,
+        batches: vec![
+            BatchType {
+                size: 2,
+                values: vec![0xaa, 0xbb],
+            },
+            BatchType {
+                size: 0,
+                values: vec![],
+            },
+        ],
+        ..Default::default()
+    };
+    let bytes = b.to_bytes().unwrap();
+    assert_eq!(&bytes[6..], &[0x02, 0x2a, 0xab, 0xb0]);
+    assert_eq!(Batches::decode(&bytes).unwrap(), b);
+    // Each copy's size must match its own values.
+    let mut e = b.clone();
+    e.batches[1].size = 1;
+    assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Batches" }));
+}

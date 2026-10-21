@@ -400,8 +400,19 @@ class Compiler:
             for m in t.member_list.member:
                 mkey = self.resolve(m.type_ref, path, table, "member type")
                 mt = self.vtype(mkey, table)
-                if mt.dyn is not None:
-                    raise Unsupported(f"{where}: member {m.name} has a size that another value gives")
+                d = mt.dyn
+                if d is not None:
+                    # Like Yamcs, a reference to an earlier member's name
+                    # means that member of the same aggregate value.
+                    sib = next((x for x in members if x.name == d.name), None)
+                    if sib is None:
+                        raise Unsupported(
+                            f"{where}: member {m.name} has a size that another value gives, "
+                            f"and {d.name} is not an earlier member"
+                        )
+                    if sib.vtype.kind != "int":
+                        raise Unsupported(f"{where}: size or count from {sib.vtype.kind} member {sib.name}")
+                    mt = bounded(mt, dataclasses.replace(d, member=sib.ident), sib.vtype)
                 if is_rest(mt):
                     raise Unsupported(f"{where}: member {m.name} takes the rest of the packet")
                 members.append(Member(m.name, names.take(snake(m.name)), mt))
@@ -432,9 +443,14 @@ class Compiler:
         if not (math.isfinite(slope) and math.isfinite(intercept)):
             raise Unsupported(f"{where}: {what} with a non-finite LinearAdjustment")
         if kind == "ParameterInstanceRef":
-            key = qname(self.resolve(ref.parameter_ref, path, self.params, "parameter"))
-            return DynSize(key=key, slope=slope, intercept=intercept)
-        return DynSize(arg=ref.argument_ref.strip(), slope=slope, intercept=intercept)
+            name = ref.parameter_ref.strip()
+            try:
+                key = qname(self.resolve(name, path, self.params, "parameter"))
+            except Unsupported:
+                key = None  # an error unless it names an aggregate member
+            return DynSize(key=key, name=name, slope=slope, intercept=intercept)
+        name = ref.argument_ref.strip()
+        return DynSize(arg=name, name=name, slope=slope, intercept=intercept)
 
     def encoding(self, name: str, e, path: Key, where: str):
         if getattr(e, "bit_order", None) and e.bit_order.value != "mostSignificantBitFirst":
@@ -636,6 +652,8 @@ class Compiler:
             if arg_key is None:
                 raise Unsupported(f"{where}: size from argument {d.arg!r} outside a command")
             key, name = arg_key(d.arg), d.arg
+        elif d.key is None:
+            raise Unsupported(f"{where}: unresolved parameter reference {d.name!r}")
         else:
             key = name = d.key
         ref = next((lc for lc in reversed(scope) if lc.key == key), None)
@@ -645,22 +663,7 @@ class Compiler:
             raise Unsupported(f"{where}: size or count from {name}, which has an IncludeCondition")
         if ref.vtype.kind != "int":
             raise Unsupported(f"{where}: size or count from {ref.vtype.kind} value {name}")
-        lo, hi = ref.vtype.valid_range or value_range(ref.vtype)
-        top = max(d.slope * lo, d.slope * hi) + d.intercept
-        units = max(math.floor(top), 0) // d.unit if math.isfinite(top) else MAX_FIELD_BITS
-        e = vt.enc
-        b = dataclasses.replace(d, local=ref)
-        if isinstance(e, ArrayEnc):
-            step = max(item_bits(e.elem) + e.gap, 1)
-            b.max = min(units, (MAX_FIELD_BITS + e.gap) // step // b.factor)
-            enc = dataclasses.replace(e, count=b)
-        elif isinstance(e, StringEnc):
-            b.max = min(units, e.max_bits // 8, MAX_FIELD_BITS // 8)
-            enc = dataclasses.replace(e, max_bits=b.max * 8, dyn=b)
-        else:
-            b.max = min(units, MAX_FIELD_BITS // 8)
-            enc = dataclasses.replace(e, bits=b.max * 8, dyn=b)
-        local.vtype = dataclasses.replace(vt, enc=enc)
+        local.vtype = bounded(vt, dataclasses.replace(d, local=ref), ref.vtype)
         return local
 
     def param_local(self, ref: str, path: Key) -> Local:
@@ -1097,6 +1100,26 @@ def value_range(vt: VType) -> tuple[int, int]:
     if not all(math.isfinite(x) for x in ends):
         return elo, elim - 1
     return max(math.floor(min(ends)), elo), min(math.ceil(max(ends)), elim - 1)
+
+
+def bounded(vt: VType, b: DynSize, ref: VType) -> VType:
+    """A copy of ``vt`` whose size or count is ``b``, bound to a value of
+    integer type ``ref``, with ``b.max`` set from the range of ``ref``."""
+    lo, hi = ref.valid_range or value_range(ref)
+    top = max(b.slope * lo, b.slope * hi) + b.intercept
+    units = max(math.floor(top), 0) // b.unit if math.isfinite(top) else MAX_FIELD_BITS
+    e = vt.enc
+    if isinstance(e, ArrayEnc):
+        step = max(item_bits(e.elem) + e.gap, 1)
+        b.max = min(units, (MAX_FIELD_BITS + e.gap) // step // b.factor)
+        enc = dataclasses.replace(e, count=b)
+    elif isinstance(e, StringEnc):
+        b.max = min(units, e.max_bits // 8, MAX_FIELD_BITS // 8)
+        enc = dataclasses.replace(e, max_bits=b.max * 8, dyn=b)
+    else:
+        b.max = min(units, MAX_FIELD_BITS // 8)
+        enc = dataclasses.replace(e, bits=b.max * 8, dyn=b)
+    return dataclasses.replace(vt, enc=enc)
 
 
 def fixed_bits(vt: VType) -> Optional[int]:

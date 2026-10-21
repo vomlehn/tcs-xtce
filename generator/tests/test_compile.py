@@ -502,6 +502,23 @@ class AggregateTests(unittest.TestCase):
                 compile_xml(aggregate_mission(types, '<ParameterRefEntry parameterRef="N"/><ParameterRefEntry parameterRef="Agg"/>'))
             self.assertIn(message, str(cm.exception))
 
+    def test_size_from_an_earlier_member(self):
+        types = (
+            aggregate("A", ("N", "U8"), ("Data", "Blob"))
+            + '<BinaryParameterType name="Blob"><BinaryDataEncoding><SizeInBits>'
+            + dynamic("N", slope="8")
+            + "</SizeInBits></BinaryDataEncoding></BinaryParameterType>"
+        )
+        m = compile_xml(aggregate_mission(types))
+        data = m.aggregates[0].enc.members[1].vtype
+        self.assertEqual((data.dyn.member, data.dyn.local, data.dyn.max), ("n", None, 255))
+        # Only earlier members count.
+        types = types.replace('<Member name="N" typeRef="U8"/><Member name="Data" typeRef="Blob"/>',
+                              '<Member name="Data" typeRef="Blob"/><Member name="N" typeRef="U8"/>')
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(aggregate_mission(types))
+        self.assertIn("N is not an earlier member", str(cm.exception))
+
     def test_criterion_on_aggregate(self):
         types = aggregate("A", ("X", "U8"))
         text = aggregate_mission(types).replace(

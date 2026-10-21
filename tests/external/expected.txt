@@ -12,8 +12,7 @@ yamcs/arg-locations.xml: schema valid; loaded by the binding
 yamcs/array-arg.xml: schema valid; loaded by the binding
   1 packet, 0 not supported
 yamcs/array-in-array-arg.xml: schema valid; loaded by the binding
-  0 packets, 1 not supported
-    unsupported: /ArrayInArrayArgTest/cmd1: type /ArrayInArrayArgTest/aggr_type: member inner_array has a size that another value gives
+  1 packet, 0 not supported
 yamcs/array-tm.xml: schema valid; loaded by the binding
   4 packets, 0 not supported
 yamcs/b.xml: schema valid; loaded by the binding
@@ -41,8 +40,8 @@ yamcs/refsolver3.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
 yamcs/strings-cmd.xml: schema valid; loaded by the binding
   3 packets, 3 not supported
-    unsupported: /StringsCmd/command3: unresolved parameter reference '_yamcs_ignore' in /StringsCmd
-    unsupported: /StringsCmd/command5: unresolved parameter reference '_yamcs_ignore' in /StringsCmd
+    unsupported: /StringsCmd/command3: meta-command /StringsCmd/command3: unresolved parameter reference '_yamcs_ignore'
+    unsupported: /StringsCmd/command5: meta-command /StringsCmd/command5: unresolved parameter reference '_yamcs_ignore'
     unsupported: /StringsCmd/command6: type /StringsCmd/string6: string with BinaryDataEncoding
 yamcs/strings-tm.xml: schema invalid; rejected by the binding
 yamcs/test_float_add_js.xml: schema invalid; rejected by the binding

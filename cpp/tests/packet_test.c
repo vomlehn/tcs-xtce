@@ -360,6 +360,27 @@ int main(void) {
     CHECK(strcmp(ENCODE(demo_Log, &l), "BadSize") == 0);
   }
 
+  /* Sizes from aggregate members. */
+  {
+    static demo_Batches b, b2;
+    static const uint8_t body[] = {0x02, 0x2a, 0xab, 0xb0};
+    demo_Batches_init(&b);
+    b.sec_hdr_flag = true;
+    b.batch_count = 2;
+    b.batches.len = 2;
+    b.batches.data[0].size = 2;
+    b.batches.data[0].values.len = 2;
+    b.batches.data[0].values.data[0] = 0xaa;
+    b.batches.data[0].values.data[1] = 0xbb;
+    CHECK(strcmp(ENCODE(demo_Batches, &b), "Ok") == 0);
+    CHECK(len == 10 && memcmp(buf + 6, body, sizeof body) == 0);
+    CHECK(demo_Batches_decode(&b2, buf, len, &err) == 0);
+    CHECK(b2.batches.len == 2 && b2.batches.data[0].values.data[1] == 0xbb && b2.batches.data[1].values.len == 0);
+    /* Each copy's size must match its own values. */
+    b.batches.data[1].size = 1;
+    CHECK(strcmp(ENCODE(demo_Batches, &b), "BadSize") == 0);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

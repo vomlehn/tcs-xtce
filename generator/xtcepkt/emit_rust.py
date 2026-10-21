@@ -79,7 +79,7 @@ def spec(vt: VType, ref, f: str) -> str:
     term = f"Some({term})" if term is not None else "None"
     s = f"StringSpec {{ fixed_bits: {fixed}, max_bits: {mx}, terminator: {term}, size_tag_bits: {tag} }}"
     d = vt.enc.dyn
-    return f"&({s}).sized({size(d, ref(d.local), f)})" if d is not None else "&" + s
+    return f"&({s}).sized({size(d, ref(d), f)})" if d is not None else "&" + s
 
 
 def size(d: DynSize, x: str, f: str) -> str:
@@ -90,25 +90,39 @@ def size(d: DynSize, x: str, f: str) -> str:
 
 def count(vt: VType, ref, f: str) -> str:
     c = vt.enc.count
-    return size(c, ref(c.local), f) if isinstance(c, DynSize) else f"{c}usize"
+    return size(c, ref(c), f) if isinstance(c, DynSize) else f"{c}usize"
 
 
-def read_expr(vt: VType, f: str, ref) -> str:
+def member_sizes(e: AggregateEnc) -> set:
+    """The members of an aggregate that give the size of another."""
+    return {m.vtype.dyn.member for m in e.members if m.vtype.dyn is not None}
+
+
+def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
     """Expression reading one value with BitReader ``r``; ``ref`` gives the
-    expression for a value that gives a size or count."""
+    expression for the value that gives a size or count (a DynSize).
+    ``depth`` numbers the locals of nested aggregates."""
     e = vt.enc
     if isinstance(e, AggregateEnc):
-        parts = []
+        a = f"a{depth}_"
+        inner = lambda d: a + d.member if d.member else ref(d)  # noqa: E731
+        reads = []
         for m in e.members:
-            x = read_expr(m.vtype, f, ref)
-            parts.append(f"{m.ident}: " + (f"{{ r.pad({m.skip}, {f})?; {x} }}" if m.skip else x))
-        agg = f"{vt.ident} {{ {', '.join(parts)} }}"
+            x = read_expr(m.vtype, f, inner, depth + 1)
+            reads.append((m.ident, f"{{ r.pad({m.skip}, {f})?; {x} }}" if m.skip else x))
+        if member_sizes(e):
+            # Read members into locals, in order, so later ones can use them.
+            lets = " ".join(f"let {a}{i} = {x};" for i, x in reads)
+            pad = f" r.pad({e.pad}, {f})?;" if e.pad else ""
+            fields = ", ".join(f"{i}: {a}{i}" for i, _ in reads)
+            return f"{{ {lets}{pad} {vt.ident} {{ {fields} }} }}"
+        agg = f"{vt.ident} {{ {', '.join(f'{i}: {x}' for i, x in reads)} }}"
         return f"{{ let a = {agg}; r.pad({e.pad}, {f})?; a }}" if e.pad else agg
     if isinstance(e, ArrayEnc):
         gap = f"if i > 0 {{ r.skip({e.gap}, {f})?; }}" if e.gap else ""
         return (
             f"{{ let n = {count(vt, ref, f)}; let mut a = Vec::with_capacity(n); "
-            f"for i in 0..n {{ {gap} a.push({read_expr(e.elem, f, ref)}); }} a }}"
+            f"for i in 0..n {{ {gap} a.push({read_expr(e.elem, f, ref, depth + 1)}); }} a }}"
         )
     if isinstance(e, IntEnc):
         raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
@@ -134,7 +148,7 @@ def read_expr(vt: VType, f: str, ref) -> str:
     if isinstance(e, BinaryEnc):
         if e.rest:
             return f"{{ let n = r.rest_bytes({e.bits // 8}, {f})?; r.bytes(n, {f})? }}"
-        n = size(e.dyn, ref(e.dyn.local), f) if e.dyn else e.bits // 8
+        n = size(e.dyn, ref(e.dyn), f) if e.dyn else e.bits // 8
         return f"r.bytes({n}, {f})?"
     return f"pk::read_string(&mut r, {spec(vt, ref, f)}, {f})?"
 
@@ -145,11 +159,12 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     e = vt.enc
     bad = f"return Err(PacketError::BadSize {{ field: {f} }});"
     if isinstance(e, AggregateEnc):
+        inner = lambda d: f"{x}.{d.member}" if d.member else ref(d)  # noqa: E731
         parts = []
         for m in e.members:
             if m.skip:
                 parts.append(f"w.zeros({m.skip});")
-            parts.append(write_stmt(m.vtype, f"{x}.{m.ident}", f, ref))
+            parts.append(write_stmt(m.vtype, f"{x}.{m.ident}", f, inner))
         if e.pad:
             parts.append(f"w.zeros({e.pad});")
         return "{ " + " ".join(parts) + " }"
@@ -160,7 +175,7 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
             f"for (i, {elem_pattern(e.elem)}) in {x}.iter().enumerate() {{ {gap} {write_stmt(e.elem, 'e', f, ref)} }} }}"
         )
     if isinstance(e, BinaryEnc) and e.dyn is not None:
-        n = size(e.dyn, ref(e.dyn.local), f)
+        n = size(e.dyn, ref(e.dyn), f)
         return f"{{ let n = {n}; if {x}.len() != n {{ {bad} }} w.bytes(&{x}); }}"
     if isinstance(e, IntEnc):
         bits, order = e.bits, str(le(vt)).lower()
@@ -319,7 +334,7 @@ class RustEmitter:
                 self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
             elif isinstance(it, Value):
                 lc = it.local
-                expr = read_expr(lc.vtype, rstr(lc.name), lambda r: f"v{r.id}")
+                expr = read_expr(lc.vtype, rstr(lc.name), lambda d: f"v{d.local.id}")
                 if assign:
                     self.line(f"v{lc.id} = Some({expr});", depth)
                 else:
@@ -364,7 +379,7 @@ class RustEmitter:
                     x = f"o{lc.id}" if lc.vtype.kind in ("string", "binary", "array", "aggregate") else f"*o{lc.id}"
                 else:
                     x = self.place(n, lc, names)
-                self.line(write_stmt(lc.vtype, x, f, lambda r: self.place(n, r, names)), depth)
+                self.line(write_stmt(lc.vtype, x, f, lambda d: self.place(n, d.local, names)), depth)
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:

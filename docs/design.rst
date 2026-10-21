@@ -441,10 +441,23 @@ gets a named struct, so values can be built and compared as a unit.
 ``Mission.aggregates`` lists them inner first, which is the order C
 needs to declare them in.
 
-Members can't take their size from other members. Yamcs reads an
-``ArgumentInstanceRef`` to a member's name that way, but XTCE resolves
-references to parameters and arguments, so such documents are reported
-as unsupported rather than guessed at.
+A member can take its size or count from an earlier member of the same
+aggregate. XTCE has no clear way to say this: references name parameters
+and arguments. Yamcs reads a reference to a member's name as that member
+of the same value, and its test documents depend on it, so the compiler
+does the same. Inside an aggregate type, a ``DynamicValue`` whose
+reference, as written, is the name of an earlier member binds to that
+member, even if a parameter or argument has the same name. Any other
+reference from inside an aggregate is still unsupported, since one type
+can be used in packets where the referenced value is not decoded first.
+
+The bound ``DynSize`` has ``member`` (the member's field name) rather
+than ``local``. The emitters pass the whole ``DynSize`` to the callback
+that gives a size's value, and an aggregate wraps that callback, mapping
+its members to the value being read or written. Reading stores the
+members in locals (Rust) or names them with ``:=`` (Python), since the
+struct doesn't exist until all of them are read. C reads into the struct
+in place.
 
 A repeated ``ContainerRefEntry`` reuses this. The included container's
 entries are compiled on their own, then turned into members, each with
@@ -537,7 +550,7 @@ Limitations and future work
 
 * **Packet codecs** — the main missing XTCE features are:
 
-  * references to aggregate members, in sizes and criteria;
+  * references to aggregate members by path, in sizes and criteria;
   * ``DynamicValue`` locations, ``DiscreteLookupList`` values and array
     subsets;
   * ``BooleanExpression`` criteria;

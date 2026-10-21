@@ -204,6 +204,19 @@ class PacketTests(unittest.TestCase):
         self.assertEqual((cm.exception.kind, cm.exception.what), ("Truncated", ("/Demo/Log",)))
         self.assertEqual(self.kind(dataclasses.replace(log, log_count=1)), "BadSize")
 
+    def test_sizes_from_aggregate_members(self):
+        b = demo.Batches(
+            sec_hdr_flag=True,
+            batch_count=2,
+            batches=[demo.BatchType(size=2, values=[0xAA, 0xBB]), demo.BatchType(size=0, values=[])],
+        )
+        data = b.to_bytes()
+        self.assertEqual(bytes(data[6:]).hex(), "022aabb0")
+        self.assertEqual(demo.Batches.decode(data), b)
+        # Each copy's size must match its own values.
+        bad = dataclasses.replace(b, batches=[b.batches[0], demo.BatchType(size=1, values=[])])
+        self.assertEqual(self.kind(bad), "BadSize")
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

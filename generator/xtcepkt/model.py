@@ -46,15 +46,19 @@ class DynSize:
     ``DynamicValue``): ``factor * (slope * value + intercept)``.
 
     Types hold it unbound: ``key`` names the parameter (its qualified name)
-    or ``arg`` the argument whose value it uses.  Each packet entry binds a
-    copy to the ``local`` it reads, decoded before the entry, and sets
-    ``max``: the largest value of ``(slope * value + intercept) / unit``
-    that the packet can hold, from the range of the value and the
-    ``MAX_FIELD_BITS`` limit.
+    or ``arg`` the argument whose value it uses, and ``name`` is the
+    reference as written.  Each packet entry binds a copy to the ``local``
+    it reads, decoded before the entry; inside an aggregate, a reference
+    to an earlier member binds to that ``member`` (its field name)
+    instead.  Binding sets ``max``: the largest value of ``(slope * value
+    + intercept) / unit`` that the packet can hold, from the range of the
+    value and the ``MAX_FIELD_BITS`` limit.
     """
 
     key: Optional[str] = None
     arg: Optional[str] = None
+    name: str = ""
+    member: Optional[str] = None
     slope: float = 1.0
     intercept: float = 0.0
     factor: int = 1
@@ -65,6 +69,11 @@ class DynSize:
     @property
     def max_total(self) -> int:
         return self.factor * self.max
+
+    @property
+    def source(self) -> str:
+        """The name of the value that gives the size, once bound."""
+        return self.local.name if self.local is not None else self.name
 
 
 @dataclass

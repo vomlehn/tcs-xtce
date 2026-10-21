@@ -50,3 +50,7 @@ Log{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_co
 Log{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, log_count=1, log_record=[{channel=3, reading=-1}], closed=true} | 0918c02a00120133fffc008000
 error:Truncated | -
 error:Truncated | -
+Batches{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, batch_count=2, batches=[{size=2, values=[170, 187]}, {size=0, values=[]}]} | 0922c02a0012022aabb0
+Batches{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, batch_count=0, batches=[]} | 0122c02a001200
+error:BadSize | -
+error:Truncated | -
