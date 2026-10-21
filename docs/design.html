@@ -1,0 +1,931 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.22.4: https://docutils.sourceforge.io/" />
+<title>tcsxtce Design</title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 9511 2024-01-13 09:50:07Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+Despite the name, some widely supported CSS2 features are used.
+
+See https://docutils.sourceforge.io/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+.subscript {
+  vertical-align: sub;
+  font-size: smaller }
+
+.superscript {
+  vertical-align: super;
+  font-size: smaller }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
+}
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left, table.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right, table.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+table.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+.align-top    {
+  vertical-align: top }
+
+.align-middle {
+  vertical-align: middle }
+
+.align-bottom {
+  vertical-align: bottom }
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: gray; } /* line numbers */
+pre.code, code { background-color: #eeeeee }
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic, pre.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+</style>
+</head>
+<body>
+<div class="document" id="tcsxtce-design">
+<h1 class="title">tcsxtce Design</h1>
+
+<div class="contents local topic" id="contents">
+<p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
+<ul class="simple">
+<li><a class="reference internal" href="#goals" id="toc-entry-1">Goals</a></li>
+<li><a class="reference internal" href="#overview" id="toc-entry-2">Overview</a></li>
+<li><a class="reference internal" href="#fetching-the-references" id="toc-entry-3">Fetching the references</a></li>
+<li><a class="reference internal" href="#the-xml-binding-xtcegen" id="toc-entry-4">The XML binding (xtcegen)</a><ul>
+<li><a class="reference internal" href="#pipeline" id="toc-entry-5">Pipeline</a></li>
+<li><a class="reference internal" href="#reading-and-writing" id="toc-entry-6">Reading and writing</a></li>
+<li><a class="reference internal" href="#error-handling" id="toc-entry-7">Error handling</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#managed-buffers" id="toc-entry-8">Managed buffers</a></li>
+<li><a class="reference internal" href="#the-packet-codecs-tcsxtce" id="toc-entry-9">The packet codecs (tcsxtce)</a><ul>
+<li><a class="reference internal" href="#code-generation-or-interpretation" id="toc-entry-10">Code generation or interpretation</a></li>
+<li><a class="reference internal" href="#one-header-for-c-and-c" id="toc-entry-11">One header for C and C++</a></li>
+<li><a class="reference internal" href="#compiler-pipeline" id="toc-entry-12">Compiler pipeline</a></li>
+<li><a class="reference internal" href="#generated-code" id="toc-entry-13">Generated code</a></li>
+<li><a class="reference internal" href="#determinism-across-languages" id="toc-entry-14">Determinism across languages</a></li>
+<li><a class="reference internal" href="#arrays-and-sizes-from-other-fields" id="toc-entry-15">Arrays and sizes from other fields</a></li>
+<li><a class="reference internal" href="#aggregates" id="toc-entry-16">Aggregates</a></li>
+<li><a class="reference internal" href="#runtime" id="toc-entry-17">Runtime</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#testing-strategy" id="toc-entry-18">Testing strategy</a></li>
+<li><a class="reference internal" href="#limitations-and-future-work" id="toc-entry-19">Limitations and future work</a></li>
+</ul>
+</div>
+<div class="section" id="goals">
+<h1><a class="toc-backref" href="#toc-entry-1">Goals</a></h1>
+<p>tcsxtce is flight software, and these goals are set with that in mind.</p>
+<ol class="arabic simple">
+<li>Libraries in Rust, C/C++ and Python that serialize and deserialize
+XTCE data, with data structures and functions in each language.</li>
+<li>Serialization into <strong>managed buffers</strong>. These are preallocated and
+kept alive for exactly as long as the data structures that use them.</li>
+<li>Everything comes from the <strong>official XTCE documents</strong>. A top-level
+<tt class="docutils literal">make</tt> downloads them into <tt class="docutils literal">references/</tt>, and code is generated
+from them rather than written by hand.</li>
+<li>All Rust code follows standard <tt class="docutils literal">rustfmt</tt> formatting, checked as
+code is added.</li>
+</ol>
+<p>There are two meanings of &quot;serialize XTCE data&quot;, and the project
+implements both:</p>
+<ul class="simple">
+<li><strong>The XML binding</strong> maps the XTCE <em>schema</em> to native types, and reads
+and writes XTCE <em>documents</em>.</li>
+<li><strong>The packet codecs</strong> read <em>one mission's</em> XTCE document and generate
+native types, with encoders and decoders for the <em>binary packets</em> that
+document describes. This layer is built on the first: the compiler
+reads the mission with the generated Python binding.</li>
+</ul>
+</div>
+<div class="section" id="overview">
+<h1><a class="toc-backref" href="#toc-entry-2">Overview</a></h1>
+<pre class="literal-block">
+references/Makefile ── curl ──&gt; SpaceSystem.xsd, XTCE.pdf, xml.xsd, catalog.xml
+                                     │
+                  generator/xtcegen  │  (XSD → model → binding → emitters)
+                                     ▼
+         rust/src/generated.rs   cpp/{include,src}/generated.*   python/xtce/generated.py
+                 + hand-written runtimes: buffer, xml reader/writer, document
+                                     │
+                                     │  mission.xml (any XTCE 1.3 document)
+   tcsxtce (generator/xtcepkt)  ▼  (uses python/xtce to read it)
+         &lt;mission&gt;.rs            &lt;mission&gt;.h (C and C++)         &lt;mission&gt;.py
+                 + hand-written runtimes: xtce::packet / xtce/packet.h / xtce.packet
+</pre>
+<p>Each language has two parts:</p>
+<ul class="simple">
+<li>a small <strong>hand-written runtime</strong>: buffers, an XML reader and writer,
+and the packet bit reader and writer;</li>
+<li><strong>generated code</strong> that only calls into the runtime.</li>
+</ul>
+<p>The generators are written in Python, using only the standard library.
+They emit text for all three languages from a single language-neutral
+model, so the three outputs can't drift apart.</p>
+</div>
+<div class="section" id="fetching-the-references">
+<h1><a class="toc-backref" href="#toc-entry-3">Fetching the references</a></h1>
+<p><tt class="docutils literal">references/Makefile</tt> downloads the OMG XTCE specification page and
+picks the highest version it links to. It then downloads that version's
+<tt class="docutils literal">SpaceSystem.xsd</tt> and <tt class="docutils literal">XTCE.pdf</tt> and records the version in
+<tt class="docutils literal">VERSION</tt>.</p>
+<p>The schema imports the W3C <tt class="docutils literal">xml.xsd</tt>. That file is downloaded too, and
+<tt class="docutils literal">catalog.xml</tt> maps its URL to the local copy, so <tt class="docutils literal">xmllint</tt> validates
+offline (<tt class="docutils literal"><span class="pre">--nonet</span></tt>).</p>
+<p>The top-level <tt class="docutils literal">make references</tt> always checks for a newer release.
+Other targets download only when nothing has been downloaded yet.</p>
+</div>
+<div class="section" id="the-xml-binding-xtcegen">
+<h1><a class="toc-backref" href="#toc-entry-4">The XML binding (xtcegen)</a></h1>
+<div class="section" id="pipeline">
+<h2><a class="toc-backref" href="#toc-entry-5">Pipeline</a></h2>
+<dl class="docutils">
+<dt><tt class="docutils literal">xsd.py</tt> — parse</dt>
+<dd>Reads <tt class="docutils literal">SpaceSystem.xsd</tt> into a language-neutral model of named
+simple and complex types, elements, attributes, sequences and
+choices. <tt class="docutils literal">complexContent</tt> extensions are flattened, so a derived
+type holds all inherited content. Any XSD construct the model can't
+represent raises an error. A future schema can therefore fail the
+build, but never produce a binding that silently drops content.</dd>
+<dt><tt class="docutils literal">binding.py</tt> — bind</dt>
+<dd><p class="first">Turns each complex type into a record of fields. A field is an
+attribute, text content, a child element, or a <tt class="docutils literal">&lt;choice&gt;</tt>, and has
+a cardinality: ONE, OPT or MANY. The binding is then checked and
+annotated:</p>
+<ul class="last simple">
+<li><strong>Lookahead.</strong> For every content model, it checks that the next
+element's name alone decides which field it belongs to. This one
+element of lookahead lets the generated readers be simple pull
+parsers with no backtracking.</li>
+<li><strong>Recursion.</strong> Strongly connected components of the type graph are
+computed with Tarjan's algorithm. Fields that close a cycle are
+<em>boxed</em> (<tt class="docutils literal">Box&lt;T&gt;</tt> in Rust, <tt class="docutils literal"><span class="pre">xtce::Box&lt;T&gt;</span></tt> in C++) so that types
+have a finite size.</li>
+<li><strong>Order.</strong> Types are emitted in dependency order, which C++ needs.</li>
+<li><strong>Defaults.</strong> Every required choice gets a default alternative. The
+default is chosen by a cost function (the size of the smallest valid
+instance, with <tt class="docutils literal">min × cost</tt> for repeated fields), which guarantees
+that default values are finite and schema-valid.</li>
+</ul>
+</dd>
+<dt><tt class="docutils literal">emit_rust.py</tt>, <tt class="docutils literal">emit_cpp.py</tt>, <tt class="docutils literal">emit_python.py</tt> — emit</dt>
+<dd>Generate the types, enumerations with their lexical forms, and one
+reader and one writer per record and choice. The Rust output is run
+through <tt class="docutils literal">rustfmt</tt>.</dd>
+<dt><tt class="docutils literal">sample.py</tt> — sample</dt>
+<dd>Generates test documents from the model. Together they use every
+element slot of every type reachable from <tt class="docutils literal">&lt;SpaceSystem&gt;</tt> (834 of
+834), and every alternative of every choice. The generator prefers
+alternatives not yet covered, and respects range-restricted numbers,
+fixed values and the schema's <tt class="docutils literal">xs:key</tt> constraint on message
+names. Every sample is checked with <tt class="docutils literal">xmllint</tt>.</dd>
+</dl>
+</div>
+<div class="section" id="reading-and-writing">
+<h2><a class="toc-backref" href="#toc-entry-6">Reading and writing</a></h2>
+<ul class="simple">
+<li><strong>Rust and C++</strong> parse <em>in place</em>. <tt class="docutils literal">Reader</tt> is a pull parser over the
+bytes of the document's input buffer. Element names, attribute values
+and text are slices of that buffer, so data is only copied when it is
+stored in a field. Entities are decoded only when a value contains
+them.</li>
+<li><strong>Python</strong> uses the standard library's expat parser to build a light
+node tree, read through a cursor that follows the same protocol as the
+Rust and C++ readers.</li>
+<li><strong>Writers</strong> append directly to the output buffer. Attribute and text
+escaping is the same in every language.</li>
+</ul>
+<p>Doubles must print identically in every language. They use the
+shortest string that reads back to the same value, in Python <tt class="docutils literal">repr</tt>
+style:</p>
+<ul class="simple">
+<li>Python uses <tt class="docutils literal">repr</tt>.</li>
+<li>C++ uses <tt class="docutils literal"><span class="pre">std::to_chars</span></tt>.</li>
+<li>Rust takes the shortest digit count from <tt class="docutils literal">{:e}</tt>, then re-formats at
+that precision.</li>
+</ul>
+<p>The re-formatting step matters when two candidates of that length are
+equally close to the exact value. Rust's shortest formatter may then
+pick either one, while precision formatting rounds the exact binary
+value half to even, as Python and C++ do. The packet tests found such a
+case (the binary32 value -830.72296142578125), and a check of 200,000
+random doubles now gives identical output in all three languages.</p>
+</div>
+<div class="section" id="error-handling">
+<h2><a class="toc-backref" href="#toc-entry-7">Error handling</a></h2>
+<p>Malformed or schema-invalid input raises <tt class="docutils literal"><span class="pre">xtce::Error</span></tt> (Rust and C++)
+or <tt class="docutils literal">xtce.XtceError</tt> (Python), with a 1-based line number. The C API
+turns exceptions into status codes and keeps the message in the
+document.</p>
+</div>
+</div>
+<div class="section" id="managed-buffers">
+<h1><a class="toc-backref" href="#toc-entry-8">Managed buffers</a></h1>
+<p>A <tt class="docutils literal">Buffer</tt> (<tt class="docutils literal">ManagedBuffer</tt> in Python) owns one allocation, made in
+advance:</p>
+<ul class="simple">
+<li>Clearing it resets the length but keeps the memory.</li>
+<li>Loading or writing reuses the existing capacity, and grows it only
+when needed.</li>
+<li>Rust and C++ build <tt class="docutils literal">Buffer</tt> on <tt class="docutils literal">Vec&lt;u8&gt;</tt> and <tt class="docutils literal"><span class="pre">std::string</span></tt>,
+whose <tt class="docutils literal">clear()</tt> keeps capacity. Python uses a <tt class="docutils literal">bytearray</tt> and its
+own length counter, writing with slice assignment.</li>
+</ul>
+<p>Buffers are <em>owned</em>, never global:</p>
+<ul class="simple">
+<li>A <tt class="docutils literal">Document</tt> owns an input and an output buffer.</li>
+<li>A packet <tt class="docutils literal">Codec</tt> owns an input and an output buffer, sized from the
+generated <tt class="docutils literal">MAX_BYTES</tt>.</li>
+</ul>
+<p>Their lifetime is therefore that of the owning object. Rust frees them
+on <tt class="docutils literal">Drop</tt>, C++ in the destructor, and Python on garbage collection or
+explicitly with <tt class="docutils literal">close()</tt> / <tt class="docutils literal">with</tt>.</p>
+<p>Results are <strong>views into the buffers</strong>: <tt class="docutils literal">&amp;[u8]</tt>, <tt class="docutils literal"><span class="pre">std::string_view</span></tt>
+or <tt class="docutils literal"><span class="pre">std::span</span></tt>, and <tt class="docutils literal">memoryview</tt>. They stay valid until the owner
+next changes. Python's <tt class="docutils literal">ManagedBuffer</tt> refuses to grow while a view is
+held, because a <tt class="docutils literal">bytearray</tt> can't be resized while exported. This is
+why the API hands out views for use in <tt class="docutils literal">with</tt> blocks.</p>
+<p>A test in each language checks that the capacity stays the same across
+repeated loads and serializations. One such test found that Python's
+<tt class="docutils literal">load_from</tt> grew the buffer on every reload; it now fills the existing
+allocation first.</p>
+</div>
+<div class="section" id="the-packet-codecs-tcsxtce">
+<h1><a class="toc-backref" href="#toc-entry-9">The packet codecs (tcsxtce)</a></h1>
+<div class="section" id="code-generation-or-interpretation">
+<h2><a class="toc-backref" href="#toc-entry-10">Code generation or interpretation</a></h2>
+<p>There were two ways to build a packet codec:</p>
+<ul class="simple">
+<li><strong>Interpret</strong> a mission database at run time in each language.</li>
+<li><strong>Compile</strong> it once into code.</li>
+</ul>
+<p><tt class="docutils literal">tcsxtce</tt> compiles, for three reasons:</p>
+<ul class="simple">
+<li><strong>The difficult part is written once.</strong> Name resolution, container
+inheritance, include flattening, criteria analysis and size bounds are
+done once, in Python. Each language only needs simple straight-line
+code and a small runtime. An interpreter would need all of that logic
+in each of the three languages.</li>
+<li><strong>The data structures are typed.</strong> Users get <tt class="docutils literal">Housekeeping { mode,
+temperature, ... }</tt> instead of a map of names to dynamic values.
+Mistakes in field names or types become compile errors in Rust and C++.</li>
+<li><strong>It fits the original goal</strong> of &quot;data structures and methods per
+language&quot;, and flight or ground software can use it without parsing
+XML at run time.</li>
+</ul>
+<p>The cost is that a database change requires regenerating the code, as
+for the XML binding.</p>
+<p>The command line, <tt class="docutils literal">generator/tcsxtce</tt>, writes one language per run
+(<tt class="docutils literal">tcsxtce INPUT OUTPUT <span class="pre">--lang</span> LANG</tt>). The compiler and the emitters it
+calls live in <tt class="docutils literal">generator/xtcepkt</tt>.</p>
+</div>
+<div class="section" id="one-header-for-c-and-c">
+<h2><a class="toc-backref" href="#toc-entry-11">One header for C and C++</a></h2>
+<p><tt class="docutils literal"><span class="pre">--lang</span> c</tt> and <tt class="docutils literal"><span class="pre">--lang</span> c++</tt> write the same file: C11 that also
+compiles as C++. A separate C++ API would be a second emitter and a
+second runtime to keep bit-identical with the others, for little gain.
+C++ can call a C API directly, but C can't call a C++ one. Writing that
+header means:</p>
+<ul class="simple">
+<li><strong>Names</strong> carry a prefix (<tt class="docutils literal">demo_</tt>), because C has no namespaces.
+The generated names never contain <tt class="docutils literal">_</tt> themselves (types are
+CamelCase, functions lowercase suffixes, labels upper case), so
+<tt class="docutils literal"><span class="pre">&lt;prefix&gt;&lt;Type&gt;_&lt;member&gt;</span></tt> can't collide.</li>
+<li><strong>Errors</strong> are returned codes plus an <tt class="docutils literal">xtce_pk_error</tt>, because C has
+no exceptions. Generated code propagates them with <tt class="docutils literal">XTCE_PK_TRY</tt>.</li>
+<li><strong>Storage</strong> is fixed. Strings are <tt class="docutils literal">{len, data[N + 1]}</tt> with <tt class="docutils literal">N</tt>
+the encoding's capacity, binary values are <tt class="docutils literal">data[N]</tt>, and optional
+fields have a <tt class="docutils literal">has_</tt> flag. Encoding writes into a buffer the caller
+supplies, typically <tt class="docutils literal">*_MAX_BYTES</tt> long. Nothing is allocated, which
+suits flight software.</li>
+<li><strong>Portability.</strong> The header uses only constructs valid in both
+languages: no designated initializers, compound literals or implicit
+<tt class="docutils literal">void*</tt> conversions. <tt class="docutils literal">XTCE_PK_ZERO</tt> gives <tt class="docutils literal">{0}</tt> in C and <tt class="docutils literal">{}</tt>
+in C++. The tests and the example build every C source both ways, and
+the cross-language check runs both builds.</li>
+<li><strong>Double formatting</strong> can't use C++'s <tt class="docutils literal"><span class="pre">std::to_chars</span></tt>. The C
+runtime takes the shortest <tt class="docutils literal"><span class="pre">%.*e</span></tt> precision that round-trips through
+<tt class="docutils literal">strtod</tt>. Like Rust, it then has <tt class="docutils literal">printf</tt> round the exact value,
+which matches Python's <tt class="docutils literal">repr</tt>.</li>
+</ul>
+</div>
+<div class="section" id="compiler-pipeline">
+<h2><a class="toc-backref" href="#toc-entry-12">Compiler pipeline</a></h2>
+<p><tt class="docutils literal">compile.py</tt> turns the mission document, loaded with <tt class="docutils literal">python/xtce</tt>,
+into the model in <tt class="docutils literal">model.py</tt>:</p>
+<dl class="docutils">
+<dt><strong>Indexing and name resolution.</strong></dt>
+<dd><p class="first">Parameter types, parameters, argument types, containers and
+meta-commands are indexed by SpaceSystem path. References are resolved
+in the following order:</p>
+<ul class="last simple">
+<li>absolute paths;</li>
+<li>relative paths with <tt class="docutils literal">.</tt> and <tt class="docutils literal">..</tt>;</li>
+<li>unqualified names in the current SpaceSystem, then in each
+enclosing one.</li>
+</ul>
+</dd>
+<dt><strong>Types</strong> (<tt class="docutils literal">VType</tt>).</dt>
+<dd><p class="first">Each parameter or argument type becomes an engineering kind (<tt class="docutils literal">int</tt>,
+<tt class="docutils literal">float</tt>, <tt class="docutils literal">enum</tt>, <tt class="docutils literal">bool</tt>, <tt class="docutils literal">string</tt>, <tt class="docutils literal">binary</tt>), plus:</p>
+<ul class="simple">
+<li>an encoding (<tt class="docutils literal">IntEnc</tt>, <tt class="docutils literal">FloatEnc</tt>, <tt class="docutils literal">StringEnc</tt>,
+<tt class="docutils literal">BinaryEnc</tt>);</li>
+<li>an optional calibrator (<tt class="docutils literal">Polynomial</tt> or <tt class="docutils literal">Spline</tt>).</li>
+</ul>
+<p>A calibrated integer keeps the <tt class="docutils literal">int</tt> kind; <tt class="docutils literal">eng</tt> holds the type's
+<tt class="docutils literal">sizeInBits</tt> and <tt class="docutils literal">signed</tt>, which size the generated field instead
+of the encoding. A binary value with an XTCE size of -1 has a
+<tt class="docutils literal">BinaryEnc</tt> with <tt class="docutils literal">rest</tt> set and a bound of <tt class="docutils literal">MAX_FIELD_BITS</tt>.
+The compiler checks that nothing follows it in any packet, so the end
+of the packet gives its size.</p>
+<p class="last">Schema defaults are filled in here: 8-bit unsigned integers, 32-bit
+IEEE floats, <tt class="docutils literal">previousEntry</tt> locations, a <tt class="docutils literal">00</tt> terminator and
+16-bit size tags. Time types become <tt class="docutils literal">float</tt> seconds, with
+<tt class="docutils literal">scale</tt>/<tt class="docutils literal">offset</tt> as a linear calibrator.</p>
+</dd>
+<dt><strong>Items.</strong></dt>
+<dd><p class="first">A container's entry list becomes a flat list of items:</p>
+<ul class="simple">
+<li><tt class="docutils literal">Value</tt> reads or writes one parameter or argument, through a
+<tt class="docutils literal">Local</tt>;</li>
+<li><tt class="docutils literal">Seek</tt> applies a location offset;</li>
+<li><tt class="docutils literal">Mark</tt> records the start of an included container, for
+<tt class="docutils literal">containerStart</tt> offsets;</li>
+<li><tt class="docutils literal">Fixed</tt> is a constant bit pattern;</li>
+<li><tt class="docutils literal">Pad</tt> is the padding up to a container's fixed size;</li>
+<li><tt class="docutils literal">Cond</tt> is an <tt class="docutils literal">IncludeCondition</tt> block.</li>
+</ul>
+<p class="last"><tt class="docutils literal">ContainerRefEntry</tt> is flattened in, so generated structs have no
+nesting to navigate. A repeated one is the exception: it becomes a
+<tt class="docutils literal">Value</tt> holding an array of an aggregate (see Aggregates).</p>
+</dd>
+<dt><strong>Nodes.</strong></dt>
+<dd><p class="first">Each container or meta-command becomes a <tt class="docutils literal">Node</tt> with:</p>
+<ul class="simple">
+<li>its base;</li>
+<li>its own items;</li>
+<li>the <tt class="docutils literal">Criterion</tt> list that selects it relative to its base;</li>
+<li>its children.</li>
+</ul>
+<p class="last">Argument assignments become <tt class="docutils literal">==</tt> criteria. This turns command
+inheritance into the same structure as telemetry inheritance, so one
+code path handles both.</p>
+</dd>
+<dt><strong>Fields.</strong></dt>
+<dd><p class="first">For each concrete node:</p>
+<ul class="last simple">
+<li>Every <tt class="docutils literal">==</tt> criterion along the chain <em>fixes</em> its local. Fixed
+locals are not fields: they are written automatically and checked
+when decoding.</li>
+<li>The remaining locals, in packet order, are the struct's fields.</li>
+<li>Names are deduplicated per struct.</li>
+</ul>
+</dd>
+<dt><strong>Bounds.</strong></dt>
+<dd><tt class="docutils literal">max_bits</tt> walks the items with the largest size of each value (the
+maximum for variable strings). This gives <tt class="docutils literal">MAX_BYTES</tt>, which
+<tt class="docutils literal">Codec</tt> uses to preallocate.</dd>
+<dt><strong>Unsupported constructs</strong></dt>
+<dd>raise <tt class="docutils literal">Unsupported</tt> with the construct and where it occurs. The
+failure applies to that node and its descendants only.
+<tt class="docutils literal"><span class="pre">--skip-unsupported</span></tt> leaves those nodes out. Otherwise every failure
+is reported and generation stops.</dd>
+</dl>
+</div>
+<div class="section" id="generated-code">
+<h2><a class="toc-backref" href="#toc-entry-13">Generated code</a></h2>
+<p>For each concrete node the emitters write:</p>
+<ul class="simple">
+<li>the struct;</li>
+<li><tt class="docutils literal">decode</tt>, which reads the whole chain into numbered locals
+(<tt class="docutils literal">v12</tt>), checks every criterion, then builds the struct;</li>
+<li><tt class="docutils literal">encode_into</tt>, which checks the criteria that involve fields, then
+writes the chain, using fixed values where needed;</li>
+<li>the canonical text form.</li>
+</ul>
+<p>For each tree they write a <em>kind</em>. Its <tt class="docutils literal">decode</tt> reads the root's
+items once, then descends through nested <tt class="docutils literal">if</tt> blocks: one per child,
+testing the child's criteria in document order. Each child's items are
+read only after its criteria pass. Decoding therefore never reads a
+field twice and never backtracks, and the first matching child wins.
+This is the usual reading of XTCE when several children match.</p>
+<p>Locals keep engineering values. Criteria are compared on those values.
+Comparisons on raw values are accepted only where raw and engineering
+values are numerically equal (uncalibrated integers, enumerations and
+booleans).</p>
+</div>
+<div class="section" id="determinism-across-languages">
+<h2><a class="toc-backref" href="#toc-entry-14">Determinism across languages</a></h2>
+<p>The three emitters produce the same structure. The runtimes are written
+to give bit-identical results:</p>
+<ul class="simple">
+<li><strong>Rounding</strong> an engineering value to a raw integer is half away from
+zero. Rust uses <tt class="docutils literal"><span class="pre">f64::round</span></tt>, C <tt class="docutils literal">round</tt>, and Python an
+explicit <tt class="docutils literal">trunc</tt>-based function, because Python's <tt class="docutils literal">round</tt> rounds
+half to even.</li>
+<li><strong>Polynomials</strong> are evaluated term by term, in document order. Powers
+above 1 go through the C library <tt class="docutils literal">pow</tt> in all three languages
+(<tt class="docutils literal">powf</tt>, <tt class="docutils literal">pow</tt>, <tt class="docutils literal">math.pow</tt>).</li>
+<li><strong>Splines</strong> use the same interpolation expression with the same
+evaluation order.</li>
+<li><strong>binary32</strong> conversion rounds to nearest. Overflow gives infinity in
+all three languages; Python's <tt class="docutils literal">struct</tt> would raise, so it is caught.</li>
+<li><strong>UTF-8</strong> is strictly validated in all three: C has its own
+validator that matches Rust and Python, rejecting overlong forms,
+surrogates and values beyond U+10FFFF.</li>
+<li><strong>Errors</strong> have the same kinds in every language, and <tt class="docutils literal">describe()</tt>
+output is identical. This makes cross-language testing a simple text
+comparison.</li>
+</ul>
+<p>Enumerations keep the raw value: a Rust newtype, a C <tt class="docutils literal">int64_t</tt>
+typedef with a macro per label, and a Python <tt class="docutils literal">IntEnum</tt> with
+pseudo-members.
+Unlisted values therefore round-trip instead of failing. Telemetry from
+newer flight software decodes even when the database is out of date.</p>
+</div>
+<div class="section" id="arrays-and-sizes-from-other-fields">
+<h2><a class="toc-backref" href="#toc-entry-15">Arrays and sizes from other fields</a></h2>
+<p>Arrays and repeated entries share one representation: a <tt class="docutils literal">VType</tt> of
+kind <tt class="docutils literal">array</tt> whose <tt class="docutils literal">ArrayEnc</tt> holds the element type, a count and
+the gap between elements. A multi-dimensional array is flattened into
+one list in encoding order, because the dimensions add nothing to the
+wire format, and nested lists would differ between the languages.</p>
+<p>A <tt class="docutils literal">DynamicValue</tt> becomes a <tt class="docutils literal">DynSize</tt>: <tt class="docutils literal">factor * (slope * value +
+intercept)</tt>. Types hold it unbound, because an argument reference only
+means something inside a particular meta-command. When an entry is
+compiled, the size is bound to the value it reads, which must be decoded
+earlier in the packet, and given a bound:</p>
+<ul class="simple">
+<li>from the referenced value's <tt class="docutils literal">ValidRange</tt>, or its encoding (through
+its calibrator, for a calibrated integer);</li>
+<li>capped at <tt class="docutils literal">MAX_FIELD_BITS</tt> (64 KiB on the wire).</li>
+</ul>
+<p>The bound becomes <tt class="docutils literal">N</tt> in the C storage types and in <tt class="docutils literal">MAX_BYTES</tt>.
+That is how C keeps fixed-size structs and no allocation while counts
+vary.</p>
+<p>Binding copies the <tt class="docutils literal">VType</tt>, so the C emitter, which keys constants by
+type identity, sees distinct types when two packets bound the same type
+differently. <tt class="docutils literal">EndingIndex - StartingIndex + 1</tt> and several dimensions
+fold into the intercept and factor, so one runtime function,
+<tt class="docutils literal">dynamic_size</tt>, covers every case. It works in <tt class="docutils literal">double</tt> in every
+language, so the three runtimes accept and reject exactly the same
+values.</p>
+<p>The referenced field stays an ordinary field that the caller sets.
+Deriving it from the data when encoding would make <tt class="docutils literal">encode</tt> change its
+input, or need a second, derived struct. Instead the encoder checks that
+the data matches and fails with <tt class="docutils literal">BadSize</tt> if not.</p>
+</div>
+<div class="section" id="aggregates">
+<h2><a class="toc-backref" href="#toc-entry-16">Aggregates</a></h2>
+<p>An aggregate is a <tt class="docutils literal">VType</tt> of kind <tt class="docutils literal">aggregate</tt> whose
+<tt class="docutils literal">AggregateEnc</tt> lists its members. Generated code reads and writes the
+members in place, recursing through member types, so aggregates nest in
+arrays and in each other without new runtime functions. Each language
+gets a named struct, so values can be built and compared as a unit.
+<tt class="docutils literal">Mission.aggregates</tt> lists them inner first, which is the order C
+needs to declare them in.</p>
+<p>A member can take its size or count from an earlier member of the same
+aggregate. XTCE has no clear way to say this: references name parameters
+and arguments. Yamcs reads a reference to a member's name as that member
+of the same value, and its test documents depend on it, so the compiler
+does the same. Inside an aggregate type, a <tt class="docutils literal">DynamicValue</tt> whose
+reference, as written, is the name of an earlier member binds to that
+member, even if a parameter or argument has the same name. Any other
+reference from inside an aggregate is still unsupported, since one type
+can be used in packets where the referenced value is not decoded first.</p>
+<p>The bound <tt class="docutils literal">DynSize</tt> has <tt class="docutils literal">member</tt> (the member's field name) rather
+than <tt class="docutils literal">local</tt>. The emitters pass the whole <tt class="docutils literal">DynSize</tt> to the callback
+that gives a size's value, and an aggregate wraps that callback, mapping
+its members to the value being read or written. Reading stores the
+members in locals (Rust) or names them with <tt class="docutils literal">:=</tt> (Python), since the
+struct doesn't exist until all of them are read. C reads into the struct
+in place.</p>
+<p>A repeated <tt class="docutils literal">ContainerRefEntry</tt> reuses this. The included container's
+entries are compiled on their own, then turned into members, each with
+the bits to skip before it (from locations), and the aggregate gets the
+padding after its last member (from a container size). That keeps the
+emitters' item code unchanged: an array of aggregates already reads and
+writes in a loop. It needs the layout of one copy to be known when
+compiling, which rules out overlapping entries and include conditions,
+as it does for a fixed container size. <tt class="docutils literal">static_end</tt> works out that
+layout, and <tt class="docutils literal">Pad</tt> covers the rest of a fixed-size container that is
+not repeated.</p>
+</div>
+<div class="section" id="runtime">
+<h2><a class="toc-backref" href="#toc-entry-17">Runtime</a></h2>
+<p><tt class="docutils literal">BitReader</tt> and <tt class="docutils literal">BitWriter</tt> handle fields of 1–64 bits, most
+significant bit first, at any bit position:</p>
+<ul class="simple">
+<li>Little-endian fields are read big-endian and then byte-swapped, so
+they must be a whole number of bytes.</li>
+<li>The writer zero-fills the buffer as it grows, and overwrites bits
+under a mask. Backward <tt class="docutils literal">containerStart</tt> seeks therefore work.</li>
+<li>In Rust and Python the writer always writes into a managed <tt class="docutils literal">Buffer</tt>.
+<tt class="docutils literal"><span class="pre">Packet::encode</span></tt> takes the buffer to fill, and <tt class="docutils literal">Codec</tt> supplies its
+own. In C the writer fills a caller-owned array and fails with
+<tt class="docutils literal">NoSpace</tt> rather than grow it.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="testing-strategy">
+<h1><a class="toc-backref" href="#toc-entry-18">Testing strategy</a></h1>
+<dl class="docutils">
+<dt><strong>Schema coverage</strong></dt>
+<dd>21 generated sample documents cover every element slot and every
+choice alternative. All are validated with <tt class="docutils literal">xmllint</tt>. Each language
+round-trips each sample (deserialize, serialize, deserialize and
+compare). <tt class="docutils literal">tests/cross_check.sh</tt> requires the three outputs to be
+byte-identical, and to validate too.</dd>
+<dt><strong>Packet vectors</strong></dt>
+<dd><tt class="docutils literal">tests/mission/demo.xml</tt> uses every supported feature, and is
+checked with <tt class="docutils literal">xmllint</tt>. <tt class="docutils literal">vectors.txt</tt> holds packets built by an
+independent bit-string packer rather than by the generated code.
+<tt class="docutils literal">vectors.expected</tt> holds their decoded text and re-encodings. Every
+language must reproduce <tt class="docutils literal">vectors.expected</tt> exactly.</dd>
+<dt><strong>Random packets</strong></dt>
+<dd><tt class="docutils literal">random_vectors.py</tt> produces packets with valid headers and random
+payloads. They reach every success path and every error kind. All
+three languages must agree byte for byte. Successful re-encodings are
+fed back in, and must decode to the same values and the same bytes.</dd>
+<dt><strong>Unit tests</strong></dt>
+<dd><p class="first">Each language tests encoding from structs:</p>
+<ul class="simple">
+<li>constants inherited from criteria;</li>
+<li>dispatch;</li>
+<li>range, criteria, calibration and string errors;</li>
+<li>include conditions;</li>
+<li>commands;</li>
+<li>arrays, repeated entries and sizes from other fields, including
+data that doesn't match its count or size;</li>
+<li>aggregates, nested and in arrays;</li>
+<li>that codec buffers keep their capacity over many packets.</li>
+</ul>
+<p class="last">The C tests (<tt class="docutils literal">cpp/tests/packet_test.c</tt>) are built and run both as
+C and as C++.</p>
+</dd>
+<dt><strong>Public documents</strong></dt>
+<dd><tt class="docutils literal">make <span class="pre">samples-check</span></tt> runs the binding and compiler on 34 public
+XTCE documents from Yamcs and the XTCE Toolkit, pinned by commit and
+SHA-256. Generated code is compiled in every language, and each
+document's summary is compared with <tt class="docutils literal">tests/external/expected.txt</tt>.
+This catches crashes and disagreements with <tt class="docutils literal">xmllint</tt>, which
+hand-written tests can miss, and shows which unsupported constructs
+real documents use.</dd>
+<dt><strong>Formatting</strong></dt>
+<dd>Every <tt class="docutils literal">make rust</tt> runs <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt>. A Claude Code
+<tt class="docutils literal">PostToolUse</tt> hook runs <tt class="docutils literal">rustfmt <span class="pre">--check</span></tt> on each <tt class="docutils literal">.rs</tt> file
+as it is written, and rejects the edit if formatting differs.</dd>
+</dl>
+</div>
+<div class="section" id="limitations-and-future-work">
+<h1><a class="toc-backref" href="#toc-entry-19">Limitations and future work</a></h1>
+<ul>
+<li><p class="first"><strong>XML binding:</strong></p>
+<ul class="simple">
+<li>The binding is strict XTCE 1.3. Supporting 1.1/1.2 would need a
+version-tolerant reading mode or one binding per schema version.</li>
+<li>Namespace URIs aren't checked.</li>
+<li>Facet and <tt class="docutils literal">xs:key</tt> constraints are left to <tt class="docutils literal">xmllint</tt>.</li>
+</ul>
+</li>
+<li><p class="first"><strong>Packet codecs</strong> — the main missing XTCE features are:</p>
+<ul class="simple">
+<li>references to aggregate members by path, in sizes and criteria;</li>
+<li><tt class="docutils literal">DynamicValue</tt> locations, <tt class="docutils literal">DiscreteLookupList</tt> values and array
+subsets;</li>
+<li><tt class="docutils literal">BooleanExpression</tt> criteria.</li>
+</ul>
+<p>The model has room for each of these: new <tt class="docutils literal">Item</tt> kinds, and
+<tt class="docutils literal">VType</tt> kinds for structured values, as arrays have.</p>
+<p>Error detection (<tt class="docutils literal">ErrorDetectCorrect</tt>: CRCs and checksums) is left
+out on purpose: the packets travel over a link that already detects
+errors. Documents that use it are reported as unsupported.</p>
+</li>
+<li><p class="first"><strong>Computed fields:</strong> length and checksum fields are left to the
+application.</p>
+</li>
+</ul>
+</div>
+</div>
+</body>
+</html>

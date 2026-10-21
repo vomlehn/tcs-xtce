@@ -1,0 +1,1756 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.22.4: https://docutils.sourceforge.io/" />
+<title>tcsxtce User Manual</title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 9511 2024-01-13 09:50:07Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+Despite the name, some widely supported CSS2 features are used.
+
+See https://docutils.sourceforge.io/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+.subscript {
+  vertical-align: sub;
+  font-size: smaller }
+
+.superscript {
+  vertical-align: super;
+  font-size: smaller }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
+}
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left, table.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right, table.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+table.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+.align-top    {
+  vertical-align: top }
+
+.align-middle {
+  vertical-align: middle }
+
+.align-bottom {
+  vertical-align: bottom }
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: gray; } /* line numbers */
+pre.code, code { background-color: #eeeeee }
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic, pre.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+</style>
+</head>
+<body>
+<div class="document" id="tcsxtce-user-manual">
+<h1 class="title">tcsxtce User Manual</h1>
+
+<div class="contents local topic" id="contents">
+<p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
+<ul class="simple">
+<li><a class="reference internal" href="#introduction" id="toc-entry-1">Introduction</a></li>
+<li><a class="reference internal" href="#building-and-testing" id="toc-entry-2">Building and testing</a></li>
+<li><a class="reference internal" href="#managed-buffers" id="toc-entry-3">Managed buffers</a><ul>
+<li><a class="reference internal" href="#rust-xtce-buffer" id="toc-entry-4">Rust: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt></a></li>
+<li><a class="reference internal" href="#c-xtce-buffer-xtce-buffer-hpp" id="toc-entry-5">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal">xtce/buffer.hpp</tt>)</a></li>
+<li><a class="reference internal" href="#python-xtce-managedbuffer" id="toc-entry-6">Python: <tt class="docutils literal">xtce.ManagedBuffer</tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-xml-binding" id="toc-entry-7">The XML binding</a><ul>
+<li><a class="reference internal" href="#documents" id="toc-entry-8">Documents</a></li>
+<li><a class="reference internal" href="#generated-data-structures" id="toc-entry-9">Generated data structures</a></li>
+<li><a class="reference internal" href="#behaviour" id="toc-entry-10">Behaviour</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#packet-codecs" id="toc-entry-11">Packet codecs</a><ul>
+<li><a class="reference internal" href="#overview" id="toc-entry-12">Overview</a></li>
+<li><a class="reference internal" href="#running-the-compiler" id="toc-entry-13">Running the compiler</a></li>
+<li><a class="reference internal" href="#size-report" id="toc-entry-14">Size report</a></li>
+<li><a class="reference internal" href="#generated-packet-types" id="toc-entry-15">Generated packet types</a></li>
+<li><a class="reference internal" href="#methods" id="toc-entry-16">Methods</a></li>
+<li><a class="reference internal" href="#the-codec" id="toc-entry-17">The codec</a></li>
+<li><a class="reference internal" href="#errors" id="toc-entry-18">Errors</a></li>
+<li><a class="reference internal" href="#canonical-text" id="toc-entry-19">Canonical text</a></li>
+<li><a class="reference internal" href="#runtime-reference" id="toc-entry-20">Runtime reference</a></li>
+<li><a class="reference internal" href="#supported-xtce" id="toc-entry-21">Supported XTCE</a></li>
+<li><a class="reference internal" href="#known-limitations" id="toc-entry-22">Known limitations</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#examples" id="toc-entry-23">Examples</a><ul>
+<li><a class="reference internal" href="#simple-string" id="toc-entry-24"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#testing" id="toc-entry-25">Testing</a></li>
+</ul>
+</div>
+<div class="section" id="introduction">
+<h1><a class="toc-backref" href="#toc-entry-1">Introduction</a></h1>
+<p>tcsxtce is flight software. It provides libraries in Rust, C/C++ and Python
+for working with OMG <strong>XTCE</strong> (XML Telemetric and Command Exchange) in two
+layers:</p>
+<dl class="docutils">
+<dt><strong>The XML binding</strong></dt>
+<dd>Typed data structures for the whole XTCE 1.3 schema, with code that
+reads and writes XTCE documents. Use it to load, inspect, edit,
+validate and write a mission database.</dd>
+<dt><strong>The packet codecs</strong></dt>
+<dd><tt class="docutils literal">tcsxtce</tt> compiles one mission's XTCE document into typed packet
+structures with encode and decode functions. Use it to read
+telemetry and build commands in the binary formats that the mission
+database describes.</dd>
+</dl>
+<p>Both layers serialize into <em>managed buffers</em>. These are allocated in
+advance, reused for every operation, and released when the object that
+owns them goes away.</p>
+<p>All three languages are generated from the same model and produce
+byte-identical output. The test suite checks this on every build.</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Directory</th>
+<th class="head">Contents</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">references/</tt></td>
+<td>Downloaded XTCE documents (<tt class="docutils literal">SpaceSystem.xsd</tt>, <tt class="docutils literal">XTCE.pdf</tt>, <tt class="docutils literal">VERSION</tt>) plus <tt class="docutils literal">xml.xsd</tt> and <tt class="docutils literal">catalog.xml</tt> for offline validation</td>
+</tr>
+<tr><td><tt class="docutils literal">generator/xtcegen/</tt></td>
+<td>Generates the XML binding from the schema</td>
+</tr>
+<tr><td><tt class="docutils literal">generator/tcsxtce/</tt>, <tt class="docutils literal">generator/xtcepkt/</tt></td>
+<td>The <tt class="docutils literal">tcsxtce</tt> command, and the compiler behind it that turns a mission's XTCE document into packet codecs</td>
+</tr>
+<tr><td><tt class="docutils literal">rust/</tt></td>
+<td>The <tt class="docutils literal">xtce</tt> Rust crate</td>
+</tr>
+<tr><td><tt class="docutils literal">cpp/</tt></td>
+<td>The C++20 library (<tt class="docutils literal">libxtce.a</tt>, <tt class="docutils literal">libxtce.so</tt>) and its C API</td>
+</tr>
+<tr><td><tt class="docutils literal">python/</tt></td>
+<td>The <tt class="docutils literal">xtce</tt> Python package (3.10+, standard library only)</td>
+</tr>
+<tr><td><tt class="docutils literal">tests/</tt></td>
+<td>Schema-coverage samples, the demo mission, packet vectors, the cross-language checks, and the list of public XTCE documents for <tt class="docutils literal">make <span class="pre">samples-check</span></tt></td>
+</tr>
+<tr><td><tt class="docutils literal">docs/</tt></td>
+<td>This manual and the design description</td>
+</tr>
+<tr><td><tt class="docutils literal">examples/</tt></td>
+<td>Example XTCE files and programs in each language that use the code generated from them</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="building-and-testing">
+<h1><a class="toc-backref" href="#toc-entry-2">Building and testing</a></h1>
+<p>Requirements: <tt class="docutils literal">curl</tt>, <tt class="docutils literal">xmllint</tt>, Python 3.10 or later, a Rust
+toolchain with <tt class="docutils literal">rustfmt</tt>, a C11 compiler, and a C++20 compiler.</p>
+<pre class="code sh literal-block">
+make<span class="whitespace">                 </span><span class="comment single"># fetch references if missing, generate, build, test
+</span>make<span class="whitespace"> </span>references<span class="whitespace">      </span><span class="comment single"># check OMG for the latest XTCE and download it
+</span>make<span class="whitespace"> </span>generate<span class="whitespace">        </span><span class="comment single"># regenerate all generated code
+</span>make<span class="whitespace"> </span>packets<span class="whitespace">         </span><span class="comment single"># regenerate the demo mission's packet codecs
+</span>make<span class="whitespace"> </span>rust<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>cpp<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>python<span class="whitespace">
+</span>make<span class="whitespace"> </span><span class="name builtin">test</span><span class="whitespace">            </span><span class="comment single"># every language's tests and both cross-language checks
+</span>make<span class="whitespace"> </span>samples-check<span class="whitespace">   </span><span class="comment single"># check against public XTCE documents (downloads them)
+</span>make<span class="whitespace"> </span>fmt<span class="whitespace">             </span><span class="comment single"># format Rust code
+</span>make<span class="whitespace"> </span>fmt-check<span class="whitespace">       </span><span class="comment single"># verify Rust formatting (run by every `make rust`)
+</span>make<span class="whitespace"> </span>clean<span class="whitespace">           </span><span class="comment single"># remove build products
+</span>make<span class="whitespace"> </span>distclean<span class="whitespace">       </span><span class="comment single"># also remove the downloaded references</span>
+</pre>
+<p><tt class="docutils literal">references/Makefile</tt> reads the OMG specification page
+(<a class="reference external" href="https://www.omg.org/spec/XTCE/">https://www.omg.org/spec/XTCE/</a>) to find the latest version instead of
+using a fixed one. At the time of writing that is XTCE 1.3, schema
+namespace <tt class="docutils literal"><span class="pre">http://www.omg.org/spec/XTCE/20250214</span></tt>.</p>
+<p>All Rust code must follow standard <tt class="docutils literal">rustfmt</tt> formatting. Generated Rust
+is passed through <tt class="docutils literal">rustfmt</tt>. <tt class="docutils literal">make rust</tt> runs <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt>.
+In Claude Code sessions, a hook in <tt class="docutils literal">.claude/settings.json</tt> checks each
+<tt class="docutils literal">.rs</tt> file as it is edited.</p>
+</div>
+<div class="section" id="managed-buffers">
+<h1><a class="toc-backref" href="#toc-entry-3">Managed buffers</a></h1>
+<p>Every buffer the libraries serialize into, or parse from, is a managed
+buffer:</p>
+<ul class="simple">
+<li>It is preallocated when it is created. The default is 64 KiB for
+documents; packet codecs use the size of the largest packet.</li>
+<li>Clearing a buffer resets its length but keeps its allocation, so later
+operations reuse the same memory.</li>
+<li>A buffer grows only when its contents exceed the current allocation.</li>
+<li>It is owned by a <tt class="docutils literal">Document</tt> or <tt class="docutils literal">Codec</tt> and is freed with that
+object.</li>
+</ul>
+<div class="section" id="rust-xtce-buffer">
+<h2><a class="toc-backref" href="#toc-entry-4">Rust: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt></a></h2>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal"><span class="pre">Buffer::new()</span></tt></td>
+<td>Preallocate <tt class="docutils literal">DEFAULT_CAPACITY</tt> (65536) bytes</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">Buffer::with_capacity(n)</span></tt></td>
+<td>Preallocate <tt class="docutils literal">n</tt> bytes</td>
+</tr>
+<tr><td><tt class="docutils literal">clear()</tt></td>
+<td>Empty the buffer, keep the allocation</td>
+</tr>
+<tr><td><tt class="docutils literal">reserve(n)</tt></td>
+<td>Ensure room for <tt class="docutils literal">n</tt> more bytes</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">load(&amp;[u8])</span></tt></td>
+<td>Replace the contents</td>
+</tr>
+<tr><td><tt class="docutils literal">load_from(impl Read) <span class="pre">-&gt;</span> <span class="pre">io::Result&lt;usize&gt;</span></tt></td>
+<td>Replace the contents with a reader's data</td>
+</tr>
+<tr><td><tt class="docutils literal">resize(n)</tt></td>
+<td>Set the length, zero filling new bytes</td>
+</tr>
+<tr><td><tt class="docutils literal">push(u8)</tt>, <tt class="docutils literal">extend_from_slice</tt>, <tt class="docutils literal">push_str</tt></td>
+<td>Append</td>
+</tr>
+<tr><td><tt class="docutils literal">as_bytes() <span class="pre">-&gt;</span> &amp;[u8]</tt></td>
+<td>View the contents</td>
+</tr>
+<tr><td><tt class="docutils literal">as_mut_bytes() <span class="pre">-&gt;</span> &amp;mut [u8]</tt></td>
+<td>Mutable view of the contents</td>
+</tr>
+<tr><td><tt class="docutils literal">len()</tt>, <tt class="docutils literal">is_empty()</tt>, <tt class="docutils literal">capacity()</tt></td>
+<td>Sizes</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="c-xtce-buffer-xtce-buffer-hpp">
+<h2><a class="toc-backref" href="#toc-entry-5">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal">xtce/buffer.hpp</tt>)</a></h2>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal"><span class="pre">Buffer(std::size_t</span> capacity = kDefaultCapacity)</tt></td>
+<td>Preallocate</td>
+</tr>
+<tr><td><tt class="docutils literal">clear()</tt>, <tt class="docutils literal">reserve(n)</tt></td>
+<td>As in Rust</td>
+</tr>
+<tr><td><tt class="docutils literal">load(const void*, n)</tt>, <tt class="docutils literal">load(string_view)</tt></td>
+<td>Replace the contents</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">load_from(std::istream&amp;)</span></tt></td>
+<td>Replace the contents with a stream's data</td>
+</tr>
+<tr><td><tt class="docutils literal">resize(n)</tt></td>
+<td>Set the length, zero filling new bytes</td>
+</tr>
+<tr><td><tt class="docutils literal">push(char)</tt>, <tt class="docutils literal">append(string_view)</tt></td>
+<td>Append</td>
+</tr>
+<tr><td><tt class="docutils literal">data()</tt>, <tt class="docutils literal">mutable_data()</tt></td>
+<td>Pointers to the bytes</td>
+</tr>
+<tr><td><tt class="docutils literal">view() <span class="pre">-&gt;</span> <span class="pre">std::string_view</span></tt></td>
+<td>View the contents</td>
+</tr>
+<tr><td><tt class="docutils literal">size()</tt>, <tt class="docutils literal">empty()</tt>, <tt class="docutils literal">capacity()</tt></td>
+<td>Sizes</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="python-xtce-managedbuffer">
+<h2><a class="toc-backref" href="#toc-entry-6">Python: <tt class="docutils literal">xtce.ManagedBuffer</tt></a></h2>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">ManagedBuffer(capacity=DEFAULT_CAPACITY)</tt></td>
+<td>Preallocate a <tt class="docutils literal">bytearray</tt></td>
+</tr>
+<tr><td><tt class="docutils literal">clear()</tt>, <tt class="docutils literal">reserve(n)</tt></td>
+<td>As in Rust</td>
+</tr>
+<tr><td><tt class="docutils literal">load(data)</tt>, <tt class="docutils literal">write(data)</tt></td>
+<td>Replace or append the contents</td>
+</tr>
+<tr><td><tt class="docutils literal">load_from(stream)</tt></td>
+<td>Replace the contents; fills the existing allocation before growing it</td>
+</tr>
+<tr><td><tt class="docutils literal">resize(n)</tt></td>
+<td>Set the length, zero filling new bytes</td>
+</tr>
+<tr><td><tt class="docutils literal">view() <span class="pre">-&gt;</span> memoryview</tt></td>
+<td>Zero-copy view; release it before the buffer has to grow</td>
+</tr>
+<tr><td><tt class="docutils literal">getvalue() <span class="pre">-&gt;</span> bytes</tt></td>
+<td>Copy of the contents</td>
+</tr>
+<tr><td><tt class="docutils literal">len(buf)</tt>, <tt class="docutils literal">buf.capacity</tt></td>
+<td>Sizes</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="section" id="the-xml-binding">
+<h1><a class="toc-backref" href="#toc-entry-7">The XML binding</a></h1>
+<div class="section" id="documents">
+<h2><a class="toc-backref" href="#toc-entry-8">Documents</a></h2>
+<p>A <tt class="docutils literal">Document</tt> holds a root <tt class="docutils literal">SpaceSystemType</tt> together with an input
+buffer and an output buffer.</p>
+<p>Rust (<tt class="docutils literal"><span class="pre">xtce::Document</span></tt>):</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">root: SpaceSystemType</tt></td>
+<td>The document's data (public field)</td>
+</tr>
+<tr><td><tt class="docutils literal">indent: bool</tt></td>
+<td>Pretty-print output (default <tt class="docutils literal">true</tt>)</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">Document::new(root)</span></tt></td>
+<td>Wrap <tt class="docutils literal">root</tt>; both buffers get <tt class="docutils literal">DEFAULT_CAPACITY</tt></td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">Document::with_capacity(root,</span> input, output)</tt></td>
+<td>Wrap <tt class="docutils literal">root</tt> with explicit buffer sizes</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">Document::from_bytes(&amp;[u8])</span> <span class="pre">-&gt;</span> Result&lt;Document&gt;</tt></td>
+<td>Parse a document</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">load(&amp;mut</span> self, &amp;[u8]) <span class="pre">-&gt;</span> <span class="pre">Result&lt;()&gt;</span></tt></td>
+<td>Replace <tt class="docutils literal">root</tt> by parsing, reusing the input buffer</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">read_from(&amp;mut</span> self, impl Read) <span class="pre">-&gt;</span> <span class="pre">Result&lt;()&gt;</span></tt></td>
+<td>Same, reading from a stream</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">serialize(&amp;mut</span> self) <span class="pre">-&gt;</span> <span class="pre">Result&lt;&amp;[u8]&gt;</span></tt></td>
+<td>Write <tt class="docutils literal">root</tt> into the output buffer; the slice is valid until the document changes</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">write_to(&amp;mut</span> self, impl Write) <span class="pre">-&gt;</span> <span class="pre">Result&lt;()&gt;</span></tt></td>
+<td>Serialize and write to a stream</td>
+</tr>
+<tr><td><tt class="docutils literal">input()</tt>, <tt class="docutils literal">output() <span class="pre">-&gt;</span> &amp;Buffer</tt></td>
+<td>The managed buffers</td>
+</tr>
+</tbody>
+</table>
+<p><tt class="docutils literal"><span class="pre">xtce::to_xml(&amp;value,</span> tag, &amp;mut buf, indent)</tt> and
+<tt class="docutils literal"><span class="pre">xtce::from_xml::&lt;T&gt;(bytes,</span> tag)</tt> read and write any generated type as
+a stand-alone element.</p>
+<p>Errors are <tt class="docutils literal"><span class="pre">xtce::Error</span> { message, line, column }</tt>. <tt class="docutils literal">line</tt> is 1-based,
+or 0 when the error is not tied to a position in the input.</p>
+<p>C++ (<tt class="docutils literal"><span class="pre">xtce::Document</span></tt>, <tt class="docutils literal">#include &quot;xtce/document.hpp&quot;</tt>):</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">Document(SpaceSystemType root = {}, size_t in = kDefaultCapacity, size_t out = kDefaultCapacity)</tt></td>
+<td>Wrap <tt class="docutils literal">root</tt> and preallocate both buffers</td>
+</tr>
+<tr><td><tt class="docutils literal">root</tt>, <tt class="docutils literal">indent</tt></td>
+<td>Public members, as in Rust</td>
+</tr>
+<tr><td><tt class="docutils literal">static Document <span class="pre">from_bytes(std::string_view)</span></tt></td>
+<td>Parse a document</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">load(std::string_view)</span></tt>, <tt class="docutils literal"><span class="pre">read_from(std::istream&amp;)</span></tt></td>
+<td>Replace <tt class="docutils literal">root</tt> by parsing</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">std::string_view</span> serialize()</tt></td>
+<td>View of the output buffer</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">write_to(std::ostream&amp;)</span></tt></td>
+<td>Serialize to a stream</td>
+</tr>
+<tr><td><tt class="docutils literal">input()</tt>, <tt class="docutils literal">output()</tt></td>
+<td>The managed buffers</td>
+</tr>
+</tbody>
+</table>
+<p>Errors are thrown as <tt class="docutils literal"><span class="pre">xtce::Error</span></tt>, with <tt class="docutils literal">message()</tt>, <tt class="docutils literal">line()</tt> and
+<tt class="docutils literal">column()</tt>.</p>
+<p>C (<tt class="docutils literal">#include &quot;xtce/xtce.h&quot;</tt>, link with <tt class="docutils literal">libxtce</tt> and the C++
+runtime):</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">xtce_document* xtce_document_new(size_t in, size_t out)</tt></td>
+<td>Create a document (0 means the default size)</td>
+</tr>
+<tr><td><tt class="docutils literal">void xtce_document_free(xtce_document*)</tt></td>
+<td>Free the document and its buffers</td>
+</tr>
+<tr><td><tt class="docutils literal">int xtce_document_load(doc, const void* data, size_t len)</tt></td>
+<td>Parse; returns <tt class="docutils literal">XTCE_OK</tt> or <tt class="docutils literal">XTCE_ERROR</tt></td>
+</tr>
+<tr><td><tt class="docutils literal">int xtce_document_serialize(doc, const uint8_t** out, size_t* n)</tt></td>
+<td>Serialize; <tt class="docutils literal">*out</tt> points into the output buffer</td>
+</tr>
+<tr><td><tt class="docutils literal">xtce_document_set_indent(doc, int)</tt></td>
+<td>Pretty-print on or off</td>
+</tr>
+<tr><td><tt class="docutils literal">xtce_document_name</tt>, <tt class="docutils literal">xtce_document_set_name</tt></td>
+<td>Root <tt class="docutils literal">SpaceSystem</tt> name</td>
+</tr>
+<tr><td><tt class="docutils literal">xtce_document_error</tt>, <tt class="docutils literal">xtce_document_error_line</tt></td>
+<td>Last error message and line</td>
+</tr>
+<tr><td><tt class="docutils literal">xtce_document_input_capacity</tt>, <tt class="docutils literal">xtce_document_output_capacity</tt></td>
+<td>Buffer sizes</td>
+</tr>
+<tr><td><tt class="docutils literal">xtce_schema_version()</tt>, <tt class="docutils literal">xtce_namespace()</tt></td>
+<td>Schema information</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">xtce::Document*</span> xtce_document_cxx(doc)</tt></td>
+<td>The C++ object, for typed access (C++ only)</td>
+</tr>
+</tbody>
+</table>
+<p>Python (<tt class="docutils literal">xtce.Document</tt>):</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">Document(root=None, *, <span class="pre">input_capacity=...,</span> <span class="pre">output_capacity=...,</span> indent=True)</tt></td>
+<td>Wrap <tt class="docutils literal">root</tt> (an empty <tt class="docutils literal">SpaceSystemType</tt> by default) and preallocate both buffers</td>
+</tr>
+<tr><td><tt class="docutils literal">root</tt>, <tt class="docutils literal">indent</tt></td>
+<td>Attributes</td>
+</tr>
+<tr><td><tt class="docutils literal">Document.from_bytes(data)</tt>, <tt class="docutils literal">Document.from_file(path)</tt></td>
+<td>Parse a document</td>
+</tr>
+<tr><td><tt class="docutils literal">load(data)</tt>, <tt class="docutils literal">read_from(stream)</tt></td>
+<td>Replace <tt class="docutils literal">root</tt> by parsing</td>
+</tr>
+<tr><td><tt class="docutils literal">serialize() <span class="pre">-&gt;</span> memoryview</tt></td>
+<td>View of the output buffer; use it in a <tt class="docutils literal">with</tt> block</td>
+</tr>
+<tr><td><tt class="docutils literal">to_bytes() <span class="pre">-&gt;</span> bytes</tt>, <tt class="docutils literal">write_to(stream)</tt></td>
+<td>Serialize to a copy or a stream</td>
+</tr>
+<tr><td><tt class="docutils literal">input</tt>, <tt class="docutils literal">output</tt></td>
+<td>The managed buffers (properties)</td>
+</tr>
+<tr><td><tt class="docutils literal">close()</tt>, <tt class="docutils literal">with <span class="pre">Document(...)</span> as doc:</tt></td>
+<td>Release the buffers early</td>
+</tr>
+</tbody>
+</table>
+<p><tt class="docutils literal">xtce.to_xml</tt> and <tt class="docutils literal">xtce.from_xml</tt> work like their Rust
+counterparts. Errors are raised as <tt class="docutils literal">xtce.XtceError</tt> (a <tt class="docutils literal">ValueError</tt>)
+with <tt class="docutils literal">message</tt> and <tt class="docutils literal">line</tt> attributes.</p>
+</div>
+<div class="section" id="generated-data-structures">
+<h2><a class="toc-backref" href="#toc-entry-9">Generated data structures</a></h2>
+<p>Every complex type in <tt class="docutils literal">SpaceSystem.xsd</tt> becomes a record. Type names
+match the schema (<tt class="docutils literal">SpaceSystemType</tt>, <tt class="docutils literal">IntegerParameterType</tt>, ...).
+Field names are the snake_case form of the XML names. Inherited content
+(<tt class="docutils literal">complexContent</tt> extensions) is copied into the derived record.</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">XSD</th>
+<th class="head">Rust</th>
+<th class="head">C++</th>
+<th class="head">Python</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>complex type</td>
+<td><tt class="docutils literal">struct</tt></td>
+<td><tt class="docutils literal">struct</tt></td>
+<td><tt class="docutils literal">&#64;dataclass</tt></td>
+</tr>
+<tr><td><tt class="docutils literal">&lt;choice&gt;</tt></td>
+<td><tt class="docutils literal">enum</tt></td>
+<td><tt class="docutils literal">struct</tt> + <tt class="docutils literal"><span class="pre">std::variant</span></tt></td>
+<td>dataclass with <tt class="docutils literal">name</tt> and <tt class="docutils literal">value</tt></td>
+</tr>
+<tr><td>enumeration</td>
+<td><tt class="docutils literal">enum</tt></td>
+<td><tt class="docutils literal">enum class</tt></td>
+<td><tt class="docutils literal">str</tt> <tt class="docutils literal">Enum</tt></td>
+</tr>
+<tr><td>optional element or attribute</td>
+<td><tt class="docutils literal">Option&lt;T&gt;</tt></td>
+<td><tt class="docutils literal"><span class="pre">std::optional&lt;T&gt;</span></tt></td>
+<td><tt class="docutils literal">Optional[T]</tt></td>
+</tr>
+<tr><td>repeated element</td>
+<td><tt class="docutils literal">Vec&lt;T&gt;</tt></td>
+<td><tt class="docutils literal"><span class="pre">std::vector&lt;T&gt;</span></tt></td>
+<td><tt class="docutils literal">list[T]</tt></td>
+</tr>
+<tr><td>recursive field</td>
+<td><tt class="docutils literal">Box&lt;T&gt;</tt></td>
+<td><tt class="docutils literal"><span class="pre">xtce::Box&lt;T&gt;</span></tt></td>
+<td>plain reference</td>
+</tr>
+<tr><td>string, dates, durations, hexBinary, unions</td>
+<td><tt class="docutils literal">String</tt></td>
+<td><tt class="docutils literal"><span class="pre">std::string</span></tt></td>
+<td><tt class="docutils literal">str</tt></td>
+</tr>
+<tr><td>boolean</td>
+<td><tt class="docutils literal">bool</tt></td>
+<td><tt class="docutils literal">bool</tt></td>
+<td><tt class="docutils literal">bool</tt></td>
+</tr>
+<tr><td>long, integer / int / unsignedShort</td>
+<td><tt class="docutils literal">i64</tt> / <tt class="docutils literal">i32</tt> / <tt class="docutils literal">u16</tt></td>
+<td><tt class="docutils literal">int64_t</tt> / <tt class="docutils literal">int32_t</tt> / <tt class="docutils literal">uint16_t</tt></td>
+<td><tt class="docutils literal">int</tt></td>
+</tr>
+<tr><td>double</td>
+<td><tt class="docutils literal">f64</tt></td>
+<td><tt class="docutils literal">double</tt></td>
+<td><tt class="docutils literal">float</tt></td>
+</tr>
+</tbody>
+</table>
+<p>Choices:</p>
+<ul class="simple">
+<li><strong>Rust</strong>: an <tt class="docutils literal">enum</tt> with one variant per alternative, for example
+<tt class="docutils literal"><span class="pre">EntryListChoice::ParameterRefEntry(ParameterRefEntryType)</span></tt>.</li>
+<li><strong>C++</strong>: a struct holding <tt class="docutils literal"><span class="pre">std::variant</span> value</tt>, with <tt class="docutils literal">kind()</tt>,
+<tt class="docutils literal">xml_name()</tt>, <tt class="docutils literal">make_X(v)</tt> constructors and <tt class="docutils literal">as_X()</tt> accessors
+that return <tt class="docutils literal">nullptr</tt> for another alternative.</li>
+<li><strong>Python</strong>: a dataclass with <tt class="docutils literal">name</tt> (the element name) and <tt class="docutils literal">value</tt>,
+plus class-method constructors such as
+<tt class="docutils literal">EntryListChoice.parameter_ref_entry(v)</tt>.</li>
+</ul>
+<p>Every record and choice has a default value that is schema-valid where
+the schema allows. All three languages support equality comparison.
+Each record reads and writes itself as XML (<tt class="docutils literal">XmlElement</tt> in Rust,
+<tt class="docutils literal">write_xml</tt>/<tt class="docutils literal">read_xml</tt> in C++, <tt class="docutils literal">to_xml</tt>/<tt class="docutils literal">from_xml</tt> in Python).
+Usually you don't call these directly.</p>
+<p>Example (Rust):</p>
+<pre class="code rust literal-block">
+<span class="keyword">use</span><span class="whitespace"> </span><span class="name">xtce</span><span class="punctuation">::{</span><span class="name">Document</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">SpaceSystemType</span><span class="punctuation">};</span><span class="whitespace">
+
+</span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="keyword">mut</span><span class="whitespace"> </span><span class="name">doc</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">Document</span><span class="punctuation">::</span><span class="name">from_bytes</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">std</span><span class="punctuation">::</span><span class="name">fs</span><span class="punctuation">::</span><span class="name">read</span><span class="punctuation">(</span><span class="literal string">&quot;sat.xml&quot;</span><span class="punctuation">)</span><span class="operator">?</span><span class="punctuation">)</span><span class="operator">?</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="name function magic">println!</span><span class="punctuation">(</span><span class="literal string">&quot;{}&quot;</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">doc</span><span class="punctuation">.</span><span class="name">root</span><span class="punctuation">.</span><span class="name">name</span><span class="punctuation">);</span><span class="whitespace">
+</span><span class="name">doc</span><span class="punctuation">.</span><span class="name">root</span><span class="punctuation">.</span><span class="name">short_description</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name builtin">Some</span><span class="punctuation">(</span><span class="literal string">&quot;updated&quot;</span><span class="punctuation">.</span><span class="name">into</span><span class="punctuation">());</span><span class="whitespace">
+</span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="name">bytes</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="keyword pseudo">&amp;</span><span class="punctuation">[</span><span class="keyword type">u8</span><span class="punctuation">]</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">doc</span><span class="punctuation">.</span><span class="name">serialize</span><span class="punctuation">()</span><span class="operator">?</span><span class="punctuation">;</span><span class="whitespace">   </span><span class="comment single">// view of the managed buffer</span>
+</pre>
+</div>
+<div class="section" id="behaviour">
+<h2><a class="toc-backref" href="#toc-entry-10">Behaviour</a></h2>
+<ul class="simple">
+<li>The binding follows XTCE 1.3 strictly. Documents written for older
+versions are rejected wherever the schema changed, and errors give the
+line number.</li>
+<li>Elements are matched by local name; the namespace URI is not checked.</li>
+<li>Pattern, range and <tt class="docutils literal">xs:key</tt> constraints are not checked. Use
+<tt class="docutils literal">xmllint</tt> with <tt class="docutils literal">references/catalog.xml</tt> for full validation.</li>
+<li>Schema defaults are not filled in, so documents round-trip as written.</li>
+<li>Comments, processing instructions and attributes in other namespaces
+(such as <tt class="docutils literal">xsi:schemaLocation</tt>) are not preserved.</li>
+<li>Doubles are written in their shortest round-trip form (Python <tt class="docutils literal">repr</tt>
+style), identically in every language.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="packet-codecs">
+<h1><a class="toc-backref" href="#toc-entry-11">Packet codecs</a></h1>
+<div class="section" id="overview">
+<h2><a class="toc-backref" href="#toc-entry-12">Overview</a></h2>
+<p><tt class="docutils literal">tcsxtce</tt> reads a mission's XTCE document and generates, for one
+language:</p>
+<ul class="simple">
+<li>a <strong>struct per concrete container or meta-command</strong> with one field
+per value the user supplies;</li>
+<li><strong>decode</strong> and <strong>encode</strong> functions for each struct;</li>
+<li>a <strong>dispatch type</strong> (a <em>kind</em>) per inheritance tree, which decodes a
+packet into whichever concrete container or command it matches;</li>
+<li>an <strong>enumeration type</strong> per enumerated parameter or argument type in
+use.</li>
+</ul>
+<p>The generated code uses a small runtime: <tt class="docutils literal"><span class="pre">xtce::packet</span></tt> in Rust,
+<tt class="docutils literal">xtce/packet.h</tt> in C and C++, and <tt class="docutils literal">xtce.packet</tt> in Python.</p>
+</div>
+<div class="section" id="running-the-compiler">
+<h2><a class="toc-backref" href="#toc-entry-13">Running the compiler</a></h2>
+<pre class="code sh literal-block">
+<span class="name builtin">cd</span><span class="whitespace"> </span>generator<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcsxtce<span class="whitespace"> </span>INPUT<span class="whitespace"> </span>OUTPUT<span class="whitespace"> </span>--lang<span class="whitespace"> </span>LANG<span class="whitespace">
+
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcsxtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcsxtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.h<span class="whitespace">  </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcsxtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python
+</pre>
+<p>Each run writes one language. Run it once per language you need.</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">INPUT</tt></td>
+<td>The mission's XTCE document, read with the <tt class="docutils literal">xtce</tt> Python package</td>
+</tr>
+<tr><td><tt class="docutils literal">OUTPUT</tt></td>
+<td>The file to write (optional with <tt class="docutils literal"><span class="pre">--size-report</span></tt>)</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">--lang</span> LANG</tt></td>
+<td>Required, except with <tt class="docutils literal"><span class="pre">--size-report</span></tt>. <tt class="docutils literal">rust</tt> writes a Rust module, formatted with <tt class="docutils literal">rustfmt</tt>
+(which must be installed). <tt class="docutils literal">python</tt> writes a Python module.
+<tt class="docutils literal">c</tt> and <tt class="docutils literal">c++</tt> write the same file: a header that compiles both
+as C11 and as C++.</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">--prefix</span> P</tt></td>
+<td>C/C++ only: prefix of every name the header defines (default: the
+root SpaceSystem name in snake_case followed by <tt class="docutils literal">_</tt>, such as
+<tt class="docutils literal">demo_</tt>)</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">--skip-unsupported</span></tt></td>
+<td>Leave out containers and meta-commands that use unsupported XTCE features, with a warning, instead of failing</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">--size-report</span></tt></td>
+<td>Write a size report instead of code (see <a class="reference internal" href="#size-report">Size report</a>), to
+<tt class="docutils literal">OUTPUT</tt> or standard output</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">--source-name</span> NAME</tt></td>
+<td>Mission file name recorded in the generated headers</td>
+</tr>
+</tbody>
+</table>
+<p>By default the compiler stops if any container or meta-command uses an
+unsupported construct, and lists every such construct with its cause.</p>
+</div>
+<div class="section" id="size-report">
+<h2><a class="toc-backref" href="#toc-entry-14">Size report</a></h2>
+<p><tt class="docutils literal">python3 <span class="pre">-m</span> tcsxtce INPUT <span class="pre">--size-report</span></tt> writes no code. For each
+packet it lists every field with the bits it takes on the wire and the
+bits the XTCE document says its values need, to show where the mission
+database could make packets smaller. It changes nothing: the codecs
+always use the encodings as written.</p>
+<p>A field's need comes only from the document:</p>
+<ul class="simple">
+<li>an integer needs the fewest bits that hold its <tt class="docutils literal">ValidRange</tt> (for an
+argument, every range in its <tt class="docutils literal">ValidRangeSet</tt>) in the same encoding,
+or as unsigned when the range has no negative values;</li>
+<li>an enumeration needs the bits for its smallest and largest listed
+values;</li>
+<li>a boolean needs one bit;</li>
+<li>a little-endian field is rounded up to whole bytes, which its encoding
+requires.</li>
+</ul>
+<p>Integers without a <tt class="docutils literal">ValidRange</tt>, floats and binary fields have no
+stated need and show <tt class="docutils literal">-</tt>. The <tt class="docutils literal">sizeInBits</tt> and <tt class="docutils literal">signed</tt> attributes
+of engineering types are not used: XTCE defines them only as hints.
+Fixed-size strings are flagged, because shorter strings are padded to
+the full size. Bits that <tt class="docutils literal">LocationInContainerInBits</tt> skips over are
+counted separately.</p>
+<pre class="literal-block">
+/Sat/Status (container Status): at most 196 bits, 25 bytes
+  field  type         bits  needs  saves
+  C      /Sat/Count     32     10     22  ValidRange 0..1000
+  L      /Sat/Level     16      7      9  ValidRange 0..100, as unsigned
+  O      /Sat/Open      16      -         no ValidRange
+  M      /Sat/Mode       8      3      5  values 0..5
+  F      /Sat/Flag       8      1      7  boolean
+  N      /Sat/Name      64      -         fixed size: strings shorter than 8 bytes are padded
+  ...
+  right-sized fields save 67 bits: at most 129 bits, 17 bytes
+</pre>
+<p><tt class="docutils literal">=</tt> after a field name marks a constant: a value fixed by a
+restriction criterion or argument assignment, or a <tt class="docutils literal">FixedValueEntry</tt>.
+A summary at the end names the packets that would be whole bytes
+smaller, and the integer types that have no <tt class="docutils literal">ValidRange</tt> and so could
+not be checked. Containers and meta-commands with unsupported
+constructs are listed rather than analysed. Savings for packets whose
+entries are placed with <tt class="docutils literal">LocationInContainerInBits</tt> assume the layout
+is repacked.</p>
+<p>Using the generated code:</p>
+<ul class="simple">
+<li><strong>Rust</strong>: add the file as a module (<tt class="docutils literal">mod demo;</tt>) in a crate that
+depends on <tt class="docutils literal">xtce</tt>.</li>
+<li><strong>C and C++</strong>: include the header with <tt class="docutils literal">cpp/include</tt> on the include
+path. The header and its runtime <tt class="docutils literal">xtce/packet.h</tt> are self-contained
+and need no library. In C, link with <tt class="docutils literal"><span class="pre">-lm</span></tt>.</li>
+<li><strong>Python</strong>: import the module with the <tt class="docutils literal">xtce</tt> package on the path.</li>
+</ul>
+<p><tt class="docutils literal">make packets</tt> regenerates the demo mission
+(<tt class="docutils literal">tests/mission/demo.xml</tt>) into <tt class="docutils literal">rust/tests/mission/demo.rs</tt>,
+<tt class="docutils literal">cpp/tests/mission/demo.h</tt> and <tt class="docutils literal">python/tests/mission/demo.py</tt>.</p>
+</div>
+<div class="section" id="generated-packet-types">
+<h2><a class="toc-backref" href="#toc-entry-15">Generated packet types</a></h2>
+<p>Names are derived from XTCE names, and are the same in every language.
+In C and C++, every name the header defines also starts with the
+prefix (<tt class="docutils literal">demo_Housekeeping</tt>, <tt class="docutils literal">demo_Housekeeping_decode</tt>), because C
+has no namespaces.</p>
+<ul class="simple">
+<li>Structs and enumeration types use CamelCase (<tt class="docutils literal">CCSDSPacket</tt> stays
+<tt class="docutils literal">CCSDSPacket</tt>, <tt class="docutils literal">ccsds_header</tt> becomes <tt class="docutils literal">CcsdsHeader</tt>).</li>
+<li>Fields use snake_case. A name reserved in any of the three languages,
+or by the generated code (such as <tt class="docutils literal">data</tt>, <tt class="docutils literal">type</tt> or <tt class="docutils literal">bytes</tt>),
+gets a trailing <tt class="docutils literal">_</tt>.</li>
+<li>Clashes are resolved by qualifying with the SpaceSystem path, then
+with a numeric suffix.</li>
+</ul>
+<p><strong>Packet structs.</strong> There is one struct per non-abstract
+<tt class="docutils literal">SequenceContainer</tt> and per non-abstract <tt class="docutils literal">MetaCommand</tt>. Its fields
+are, in packet order:</p>
+<ul class="simple">
+<li>every value the container's inheritance chain encodes, base container
+first, with included containers (<tt class="docutils literal">ContainerRefEntry</tt>) flattened in;</li>
+<li><strong>except</strong> values fixed by an <tt class="docutils literal">==</tt> restriction criterion or argument
+assignment along the chain. These are constants: they are written
+automatically when encoding and checked when decoding. For example,
+the demo's <tt class="docutils literal">Housekeeping</tt> has no <tt class="docutils literal">apid</tt> field because its
+<tt class="docutils literal">BaseContainer</tt> requires <tt class="docutils literal">APID == 100</tt>.</li>
+</ul>
+<p>Command structs hold the command's arguments, including those inherited
+from base meta-commands that are not assigned. They also hold any
+parameters the command container includes. <tt class="docutils literal">FixedValueEntry</tt> bits are
+written automatically and ignored when decoding.</p>
+<p>Field types:</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Engineering type</th>
+<th class="head">Rust</th>
+<th class="head">C/C++</th>
+<th class="head">Python</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>integer (by encoded size and sign; with a calibrator, by the
+type's <tt class="docutils literal">sizeInBits</tt> and <tt class="docutils literal">signed</tt>)</td>
+<td><tt class="docutils literal">u8</tt> … <tt class="docutils literal">u64</tt>, <tt class="docutils literal">i8</tt> … <tt class="docutils literal">i64</tt></td>
+<td><tt class="docutils literal">uint8_t</tt> … <tt class="docutils literal">int64_t</tt></td>
+<td><tt class="docutils literal">int</tt></td>
+</tr>
+<tr><td>float (with any encoding), time</td>
+<td><tt class="docutils literal">f64</tt></td>
+<td><tt class="docutils literal">double</tt></td>
+<td><tt class="docutils literal">float</tt></td>
+</tr>
+<tr><td>enumerated</td>
+<td>generated type</td>
+<td>generated <tt class="docutils literal">int64_t</tt> typedef</td>
+<td>generated <tt class="docutils literal">IntEnum</tt></td>
+</tr>
+<tr><td>boolean</td>
+<td><tt class="docutils literal">bool</tt></td>
+<td><tt class="docutils literal">bool</tt></td>
+<td><tt class="docutils literal">bool</tt></td>
+</tr>
+<tr><td>string</td>
+<td><tt class="docutils literal">String</tt></td>
+<td><tt class="docutils literal">demo_strN</tt>: <tt class="docutils literal">size_t len</tt> and <tt class="docutils literal">char data[N + 1]</tt></td>
+<td><tt class="docutils literal">str</tt></td>
+</tr>
+<tr><td>binary</td>
+<td><tt class="docutils literal">Vec&lt;u8&gt;</tt></td>
+<td><tt class="docutils literal">demo_bytesN</tt>: <tt class="docutils literal">uint8_t data[N]</tt></td>
+<td><tt class="docutils literal">bytes</tt></td>
+</tr>
+<tr><td>binary whose size another field gives</td>
+<td><tt class="docutils literal">Vec&lt;u8&gt;</tt></td>
+<td><tt class="docutils literal">demo_varbytesN</tt>: <tt class="docutils literal">size_t len</tt> and <tt class="docutils literal">uint8_t data[N]</tt></td>
+<td><tt class="docutils literal">bytes</tt></td>
+</tr>
+<tr><td>array, or entry with a <tt class="docutils literal">RepeatEntry</tt>, of element type <tt class="docutils literal">T</tt></td>
+<td><tt class="docutils literal">Vec&lt;T&gt;</tt></td>
+<td><tt class="docutils literal">demo_&lt;T&gt;_listN</tt>: <tt class="docutils literal">size_t len</tt> and <tt class="docutils literal">T data[N]</tt></td>
+<td><tt class="docutils literal">list[T]</tt></td>
+</tr>
+<tr><td>aggregate</td>
+<td>generated struct</td>
+<td>generated struct</td>
+<td>generated dataclass</td>
+</tr>
+<tr><td>with an <tt class="docutils literal">IncludeCondition</tt></td>
+<td><tt class="docutils literal">Option&lt;T&gt;</tt></td>
+<td><tt class="docutils literal">bool has_&lt;field&gt;</tt> before the field</td>
+<td><tt class="docutils literal">Optional[T]</tt></td>
+</tr>
+</tbody>
+</table>
+<p>In C/C++, <tt class="docutils literal">N</tt> is the most bytes (or elements) the field's encoding
+can hold, so fields need no allocation. A string's <tt class="docutils literal">data</tt> always has
+room for a terminating NUL, which decoding writes. Encoding uses <tt class="docutils literal">len</tt>,
+not the NUL. In the names of list types, <tt class="docutils literal">&lt;T&gt;</tt> is the element's C type
+without the prefix and any <tt class="docutils literal">_t</tt> (<tt class="docutils literal">demo_int16_list6</tt>,
+<tt class="docutils literal">demo_str8_list4</tt>).</p>
+<p><strong>Aggregates.</strong> An <tt class="docutils literal">AggregateParameterType</tt> or
+<tt class="docutils literal">AggregateArgumentType</tt> becomes a struct named like the type
+(<tt class="docutils literal">PositionType</tt>, <tt class="docutils literal">demo_PositionType</tt> in C), with one field per
+member, named like packet fields (snake_case, with a trailing <tt class="docutils literal">_</tt> for
+reserved names). Members are encoded one after another in the order of
+the <tt class="docutils literal">MemberList</tt> and may have any supported type, including arrays
+and other aggregates. In Rust the struct derives <tt class="docutils literal">Debug</tt>, <tt class="docutils literal">Clone</tt>,
+<tt class="docutils literal">PartialEq</tt> and <tt class="docutils literal">Default</tt>. In Python it is a dataclass, and a field
+of an aggregate type defaults to a new instance. In C, each type is
+declared after the types it contains. Errors in a member name the
+packet field that holds it.</p>
+<p><strong>Repeated containers.</strong> A <tt class="docutils literal">ContainerRefEntry</tt> with a <tt class="docutils literal">RepeatEntry</tt>
+becomes one field: a list of a struct that holds one copy of the
+included container's entries, named like the container (or
+<tt class="docutils literal">&lt;Name&gt;Item</tt> when a packet already has that name). In the demo,
+<tt class="docutils literal">Log</tt> has <tt class="docutils literal">log_record</tt>, a list of <tt class="docutils literal">LogRecord {channel, reading}</tt>.
+The included container's entries can have locations, but can't have an
+<tt class="docutils literal">IncludeCondition</tt>, overlap, or take a size or count from another
+value. Gaps that locations leave are written as zeros. A
+<tt class="docutils literal">containerStart</tt> location is relative to the start of each copy.</p>
+<p><strong>Container sizes.</strong> A <tt class="docutils literal">BinaryEncoding</tt> with a fixed <tt class="docutils literal">SizeInBits</tt> on
+a container (other than one with a <tt class="docutils literal">BaseContainer</tt>) makes it take
+exactly that many bits. The bits its entries leave are padding:
+encoding writes zeros, and decoding ignores their value but fails with
+<tt class="docutils literal">Truncated</tt> if they are missing. Its entries must have a fixed size
+and position, and must fit.</p>
+<p><strong>Arrays and repeated entries.</strong> An <tt class="docutils literal">ArrayParameterType</tt> or
+<tt class="docutils literal">ArrayArgumentType</tt>, and a parameter or argument entry with a
+<tt class="docutils literal">RepeatEntry</tt>, is a list of its elements in the order they are
+encoded. An array with several dimensions is flattened: its elements
+are in the order of the <tt class="docutils literal">DimensionList</tt>, without further structure.
+A <tt class="docutils literal">RepeatEntry</tt> <tt class="docutils literal">Offset</tt> puts that many bits between the elements
+(not after the last one). Encoding fails with <tt class="docutils literal">BadSize</tt> unless the list
+has exactly the number of elements its type gives, including for a
+fixed count, which decoding always fills.</p>
+<p><strong>Sizes and counts from other fields.</strong> XTCE can take a size or count
+from another value of the packet with a <tt class="docutils literal">DynamicValue</tt>: an array
+dimension's <tt class="docutils literal">EndingIndex</tt>, a <tt class="docutils literal">RepeatEntry</tt> <tt class="docutils literal">Count</tt>, a binary
+encoding's <tt class="docutils literal">SizeInBits</tt>, or the <tt class="docutils literal">DynamicValue</tt> of a variable string
+(the bits the string occupies; its content ends inside them at the
+termination character or after its leading size, like a fixed-size
+string). The value is <tt class="docutils literal">slope * x + intercept</tt> (its
+<tt class="docutils literal">LinearAdjustment</tt>), where <tt class="docutils literal">x</tt> is the referenced integer parameter
+or argument. That value must be decoded earlier in the same packet,
+outside any <tt class="docutils literal">IncludeCondition</tt>.</p>
+<p>Inside an aggregate type, a reference may instead name an earlier member
+of the aggregate, as Yamcs reads it. Each value of the aggregate then
+uses its own member: in the demo, each <tt class="docutils literal">BatchType</tt> in <tt class="docutils literal">Batches</tt> has
+a <tt class="docutils literal">Size</tt> that counts its <tt class="docutils literal">Values</tt>. The member's name wins over a
+parameter or argument with the same name, and other references from
+inside an aggregate are not supported.</p>
+<p>The referenced value stays an ordinary field. When encoding, the
+generated code computes the size or count from it and fails with
+<tt class="docutils literal">BadSize</tt> if the data doesn't match: set both. When decoding, a size
+or count that is negative, not whole, not a whole number of bytes (for
+sizes in bits of strings and binary), or above the field's bound fails
+with <tt class="docutils literal">BadSize</tt>.</p>
+<p>The bound is the largest value the referenced field's <tt class="docutils literal">ValidRange</tt>
+allows, or, without one, its encoding. It is limited to what fits in
+64 KiB on the wire, which keeps C structs bounded. In C this bound is
+<tt class="docutils literal">N</tt> in the field's type, so give count fields a <tt class="docutils literal">ValidRange</tt>: the
+demo's <tt class="docutils literal">SampleCount</tt> (<tt class="docutils literal"><span class="pre">0..6</span></tt>) makes <tt class="docutils literal">Readings</tt> a
+<tt class="docutils literal">demo_int16_list6</tt>, where an 8-bit count without a range would allow
+255 elements, and a 32-bit one 32768 of them.</p>
+<p>Integer field widths come from the <em>encoding</em>: an 11-bit unsigned field
+is a <tt class="docutils literal">u16</tt>, and a 12-bit sign-magnitude field is an <tt class="docutils literal">i16</tt>. Floats
+are always 64-bit in memory. 32-bit encodings round when written.
+Time types are in seconds, as described below.</p>
+<p><strong>Enumeration types</strong> hold the raw integer, so values the enumeration
+doesn't list survive decoding and re-encoding:</p>
+<ul class="simple">
+<li><strong>Rust</strong>: <tt class="docutils literal">pub struct ModeType(pub i64)</tt> with associated constants
+(<tt class="docutils literal"><span class="pre">ModeType::NOMINAL</span></tt>), <tt class="docutils literal">label() <span class="pre">-&gt;</span> <span class="pre">Option&lt;&amp;'static</span> str&gt;</tt> and
+<tt class="docutils literal">Display</tt>.</li>
+<li><strong>C/C++</strong>: <tt class="docutils literal">typedef int64_t demo_ModeType</tt> with a macro per label
+(<tt class="docutils literal">demo_ModeType_NOMINAL</tt>) and <tt class="docutils literal">const char* demo_ModeType_label(demo_ModeType)</tt>,
+which returns <tt class="docutils literal">NULL</tt> for an unlisted value.</li>
+<li><strong>Python</strong>: <tt class="docutils literal">class ModeType(enum.IntEnum)</tt> with a <tt class="docutils literal">label</tt>
+property. <tt class="docutils literal">xtce.packet.enum_value(ModeType, 20)</tt> builds a value
+even when it isn't listed.</li>
+</ul>
+<p>A range entry (<tt class="docutils literal">maxValue</tt>) gives one label to all values in the range.
+The constant uses the range's first value.</p>
+<p><strong>Kinds.</strong> An inheritance tree whose root has descendants gets a dispatch
+type named <tt class="docutils literal">&lt;Root&gt;Kind</tt>. Its members are every concrete container (or
+command) in the tree, in document order:</p>
+<ul class="simple">
+<li><strong>Rust</strong>: <tt class="docutils literal">enum CCSDSPacketKind { Housekeeping(Housekeeping), ... }</tt>,
+with <tt class="docutils literal">From&lt;Member&gt;</tt> for each member.</li>
+<li><strong>C/C++</strong>: <tt class="docutils literal">struct demo_CCSDSPacketKind { demo_CCSDSPacketKind_tag tag; union { demo_Housekeeping Housekeeping; ... } u; }</tt>,
+where <tt class="docutils literal">tag</tt> is <tt class="docutils literal">demo_CCSDSPacketKind_Housekeeping_tag</tt>, and so on.</li>
+<li><strong>Python</strong>: <tt class="docutils literal">class CCSDSPacketKind</tt> with <tt class="docutils literal">MEMBERS</tt>. Its <tt class="docutils literal">decode</tt>
+returns an instance of the matching member class.</li>
+</ul>
+</div>
+<div class="section" id="methods">
+<h2><a class="toc-backref" href="#toc-entry-16">Methods</a></h2>
+<p>Every packet struct and kind has the members below. Rust implements the
+<tt class="docutils literal"><span class="pre">xtce::packet::Packet</span></tt> trait. Python classes derive from
+<tt class="docutils literal">xtce.packet.Packet</tt> (structs) or <tt class="docutils literal">xtce.packet.PacketKind</tt> (kinds).
+In C/C++ they are macros and <tt class="docutils literal">static inline</tt> functions named after the
+type, shown here for <tt class="docutils literal">T</tt> = <tt class="docutils literal">demo_Housekeeping</tt>.</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Rust</th>
+<th class="head">C/C++</th>
+<th class="head">Python</th>
+<th class="head">Meaning</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">NAME</tt></td>
+<td><tt class="docutils literal">T_NAME</tt></td>
+<td><tt class="docutils literal">NAME</tt></td>
+<td>Qualified XTCE name (the root, for kinds)</td>
+</tr>
+<tr><td><tt class="docutils literal">MAX_BYTES</tt></td>
+<td><tt class="docutils literal">T_MAX_BYTES</tt></td>
+<td><tt class="docutils literal">MAX_BYTES</tt></td>
+<td>Upper bound on the encoded size</td>
+</tr>
+<tr><td><tt class="docutils literal">Default</tt></td>
+<td><tt class="docutils literal">T_init(T*)</tt></td>
+<td>constructor</td>
+<td>A packet with every field zero</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">decode(&amp;[u8])</span> <span class="pre">-&gt;</span> Result&lt;Self&gt;</tt></td>
+<td><tt class="docutils literal">int T_decode(T* out, const uint8_t* data, size_t len, xtce_pk_error* err)</tt></td>
+<td><tt class="docutils literal">decode(data)</tt> (class or static method)</td>
+<td>Decode a packet that starts at byte 0; trailing bytes are ignored</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">encode_into(&amp;mut</span> BitWriter)</tt></td>
+<td><tt class="docutils literal">int T_encode_into(const T*, xtce_pk_writer*)</tt></td>
+<td><tt class="docutils literal">encode_into(w)</tt></td>
+<td>Write with a bit writer</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">encode(&amp;mut</span> Buffer)</tt></td>
+<td><tt class="docutils literal">int T_encode(const T*, uint8_t* buf, size_t cap, size_t* len, xtce_pk_error* err)</tt></td>
+<td><tt class="docutils literal">encode(buf)</tt></td>
+<td>Replace a buffer's contents with the packet</td>
+</tr>
+<tr><td><tt class="docutils literal">to_bytes()</tt></td>
+<td>—</td>
+<td><tt class="docutils literal">to_bytes()</tt></td>
+<td>Encode into a new byte vector</td>
+</tr>
+<tr><td><tt class="docutils literal">Display</tt></td>
+<td><tt class="docutils literal">size_t T_describe(const T*, char* buf, size_t cap)</tt></td>
+<td><tt class="docutils literal">describe()</tt>, <tt class="docutils literal">str()</tt></td>
+<td>Canonical text (below)</td>
+</tr>
+<tr><td><tt class="docutils literal">PartialEq</tt>, <tt class="docutils literal">Clone</tt></td>
+<td>assignment; compare <tt class="docutils literal">T_describe</tt> output</td>
+<td>dataclass <tt class="docutils literal">==</tt></td>
+<td>Comparison</td>
+</tr>
+</tbody>
+</table>
+<p>The C/C++ functions return <tt class="docutils literal">0</tt> on success, or an <tt class="docutils literal">XTCE_PK_*</tt> error
+code after filling in <tt class="docutils literal">*err</tt> (<tt class="docutils literal">err</tt> may be <tt class="docutils literal">NULL</tt>). <tt class="docutils literal">T_describe</tt>
+works like <tt class="docutils literal">snprintf</tt>: it returns the full length of the text and
+writes as much as fits in <tt class="docutils literal">cap</tt> bytes, NUL included.</p>
+<p>Decoding a single container (<tt class="docutils literal"><span class="pre">Housekeeping::decode</span></tt>) decodes its whole
+inheritance chain and checks every restriction criterion along it.
+Decoding a kind reads the root's entries, then tries each child in
+document order and takes the first whose criteria match. It repeats
+this down the tree and returns the deepest match. If the deepest match
+is abstract, decoding fails with <tt class="docutils literal">NoMatch</tt>.</p>
+<p>Encoding checks every criterion that involves a field (for example the
+demo's <tt class="docutils literal">Temperature &lt; 40</tt> for <tt class="docutils literal">ScienceHousekeeping</tt>). It writes the
+fixed values and fails with <tt class="docutils literal">Mismatch</tt> if a criterion doesn't hold.</p>
+</div>
+<div class="section" id="the-codec">
+<h2><a class="toc-backref" href="#toc-entry-17">The codec</a></h2>
+<p>A <tt class="docutils literal">Codec</tt> owns one input and one output buffer, sized for the largest
+packet of its type. It reuses them for every packet until it is dropped.</p>
+<p>Rust:</p>
+<pre class="code rust literal-block">
+<span class="keyword">use</span><span class="whitespace"> </span><span class="name">xtce</span><span class="punctuation">::</span><span class="name">packet</span><span class="punctuation">::{</span><span class="name">Codec</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">Packet</span><span class="punctuation">};</span><span class="whitespace">
+
+</span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="keyword">mut</span><span class="whitespace"> </span><span class="name">codec</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">Codec</span><span class="punctuation">::</span><span class="name">for_packet</span><span class="punctuation">::</span><span class="operator">&lt;</span><span class="name">demo</span><span class="punctuation">::</span><span class="name">CCSDSPacketKind</span><span class="operator">&gt;</span><span class="punctuation">();</span><span class="whitespace">
+</span><span class="name">codec</span><span class="punctuation">.</span><span class="name">load</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">frame_bytes</span><span class="punctuation">);</span><span class="whitespace">                       </span><span class="comment single">// copy into the input buffer
+</span><span class="keyword">match</span><span class="whitespace"> </span><span class="name">codec</span><span class="punctuation">.</span><span class="name">decode</span><span class="punctuation">::</span><span class="operator">&lt;</span><span class="name">demo</span><span class="punctuation">::</span><span class="name">CCSDSPacketKind</span><span class="operator">&gt;</span><span class="punctuation">()</span><span class="operator">?</span><span class="whitespace"> </span><span class="punctuation">{</span><span class="whitespace">
+    </span><span class="name">demo</span><span class="punctuation">::</span><span class="name">CCSDSPacketKind</span><span class="punctuation">::</span><span class="name">Housekeeping</span><span class="punctuation">(</span><span class="name">hk</span><span class="punctuation">)</span><span class="whitespace"> </span><span class="operator">=&gt;</span><span class="whitespace"> </span><span class="name function magic">println!</span><span class="punctuation">(</span><span class="literal string">&quot;{hk}&quot;</span><span class="punctuation">),</span><span class="whitespace">
+    </span><span class="name">other</span><span class="whitespace"> </span><span class="operator">=&gt;</span><span class="whitespace"> </span><span class="name function magic">println!</span><span class="punctuation">(</span><span class="literal string">&quot;{other}&quot;</span><span class="punctuation">),</span><span class="whitespace">
+</span><span class="punctuation">}</span><span class="whitespace">
+</span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="name">cmd</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">demo</span><span class="punctuation">::</span><span class="name">SetMode</span><span class="whitespace"> </span><span class="punctuation">{</span><span class="whitespace"> </span><span class="name">seq_count</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="literal number integer">5</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">packet_length</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="literal number integer">1</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">mode</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="name class">demo</span><span class="punctuation">::</span><span class="name">ModeArgType</span><span class="punctuation">::</span><span class="name">SCIENCE</span><span class="whitespace"> </span><span class="punctuation">};</span><span class="whitespace">
+</span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="name">wire</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="keyword pseudo">&amp;</span><span class="punctuation">[</span><span class="keyword type">u8</span><span class="punctuation">]</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">codec</span><span class="punctuation">.</span><span class="name">encode</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">cmd</span><span class="punctuation">)</span><span class="operator">?</span><span class="punctuation">;</span><span class="whitespace">           </span><span class="comment single">// view of the output buffer</span>
+</pre>
+<p>Rust <tt class="docutils literal">Codec</tt> methods: <tt class="docutils literal">with_capacity(n)</tt>, <tt class="docutils literal"><span class="pre">for_packet::&lt;P&gt;()</span></tt>,
+<tt class="docutils literal"><span class="pre">load(&amp;[u8])</span></tt>, <tt class="docutils literal">read_from(impl Read)</tt>, <tt class="docutils literal">input() <span class="pre">-&gt;</span> &amp;[u8]</tt>,
+<tt class="docutils literal"><span class="pre">decode::&lt;P&gt;()</span> <span class="pre">-&gt;</span> Result&lt;P&gt;</tt>, <tt class="docutils literal"><span class="pre">encode(&amp;P)</span> <span class="pre">-&gt;</span> <span class="pre">Result&lt;&amp;[u8]&gt;</span></tt>,
+<tt class="docutils literal">input_capacity()</tt>, <tt class="docutils literal">output_capacity()</tt>.</p>
+<p>C and C++ have no codec object. The caller owns the buffers and
+nothing is allocated. Size the buffers with the <tt class="docutils literal">*_MAX_BYTES</tt>
+constants and reuse them for every packet. The same code compiles as C
+and as C++:</p>
+<pre class="code c literal-block">
+<span class="comment preproc">#include</span><span class="whitespace"> </span><span class="comment preprocfile">&quot;demo.h&quot;</span><span class="comment preproc">
+</span><span class="whitespace">
+</span><span class="keyword">static</span><span class="whitespace"> </span><span class="keyword type">uint8_t</span><span class="whitespace"> </span><span class="name">out</span><span class="punctuation">[</span><span class="name">demo_CCSDSCommandKind_MAX_BYTES</span><span class="punctuation">];</span><span class="whitespace">
+
+</span><span class="name">demo_CCSDSPacketKind</span><span class="whitespace"> </span><span class="name">packet</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="name">xtce_pk_error</span><span class="whitespace"> </span><span class="name">err</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="keyword">if</span><span class="whitespace"> </span><span class="punctuation">(</span><span class="name">demo_CCSDSPacketKind_decode</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">packet</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">frame</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">frame_len</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="operator">&amp;</span><span class="name">err</span><span class="punctuation">)</span><span class="whitespace"> </span><span class="operator">!=</span><span class="whitespace"> </span><span class="literal number integer">0</span><span class="punctuation">)</span><span class="whitespace"> </span><span class="punctuation">{</span><span class="whitespace">
+    </span><span class="keyword type">char</span><span class="whitespace"> </span><span class="name">msg</span><span class="punctuation">[</span><span class="literal number integer">128</span><span class="punctuation">];</span><span class="whitespace">
+    </span><span class="name">xtce_pk_error_message</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">err</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">msg</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="keyword">sizeof</span><span class="whitespace"> </span><span class="name">msg</span><span class="punctuation">);</span><span class="whitespace">
+    </span><span class="name">fprintf</span><span class="punctuation">(</span><span class="name">stderr</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal string">&quot;%s: %s</span><span class="literal string escape">\n</span><span class="literal string">&quot;</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">xtce_pk_error_kind</span><span class="punctuation">(</span><span class="name">err</span><span class="punctuation">.</span><span class="name">code</span><span class="punctuation">),</span><span class="whitespace"> </span><span class="name">msg</span><span class="punctuation">);</span><span class="whitespace">
+</span><span class="punctuation">}</span><span class="whitespace"> </span><span class="keyword">else</span><span class="whitespace"> </span><span class="keyword">if</span><span class="whitespace"> </span><span class="punctuation">(</span><span class="name">packet</span><span class="punctuation">.</span><span class="name">tag</span><span class="whitespace"> </span><span class="operator">==</span><span class="whitespace"> </span><span class="name">demo_CCSDSPacketKind_Housekeeping_tag</span><span class="punctuation">)</span><span class="whitespace"> </span><span class="punctuation">{</span><span class="whitespace">
+    </span><span class="name">printf</span><span class="punctuation">(</span><span class="literal string">&quot;%f</span><span class="literal string escape">\n</span><span class="literal string">&quot;</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">packet</span><span class="punctuation">.</span><span class="name">u</span><span class="punctuation">.</span><span class="name">Housekeeping</span><span class="punctuation">.</span><span class="name">temperature</span><span class="punctuation">);</span><span class="whitespace">
+</span><span class="punctuation">}</span><span class="whitespace">
+
+</span><span class="name">demo_SetMode</span><span class="whitespace"> </span><span class="name">cmd</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="keyword type">size_t</span><span class="whitespace"> </span><span class="name">len</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="name">demo_SetMode_init</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">cmd</span><span class="punctuation">);</span><span class="whitespace">
+</span><span class="name">cmd</span><span class="punctuation">.</span><span class="name">seq_count</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="literal number integer">5</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="name">cmd</span><span class="punctuation">.</span><span class="name">mode</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">demo_ModeArgType_SCIENCE</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="keyword">if</span><span class="whitespace"> </span><span class="punctuation">(</span><span class="name">demo_SetMode_encode</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">cmd</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">out</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="keyword">sizeof</span><span class="whitespace"> </span><span class="name">out</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="operator">&amp;</span><span class="name">len</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="operator">&amp;</span><span class="name">err</span><span class="punctuation">)</span><span class="whitespace"> </span><span class="operator">==</span><span class="whitespace"> </span><span class="literal number integer">0</span><span class="punctuation">)</span><span class="whitespace"> </span><span class="punctuation">{</span><span class="whitespace">
+    </span><span class="name">send</span><span class="punctuation">(</span><span class="name">sock</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">out</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">len</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">0</span><span class="punctuation">);</span><span class="whitespace">
+</span><span class="punctuation">}</span>
+</pre>
+<p>Python (<tt class="docutils literal">xtce.packet.Codec</tt>):</p>
+<pre class="code python literal-block">
+<span class="keyword namespace">from</span><span class="whitespace"> </span><span class="name namespace">xtce.packet</span><span class="whitespace"> </span><span class="keyword namespace">import</span> <span class="name">Codec</span><span class="whitespace">
+</span><span class="keyword namespace">import</span><span class="whitespace"> </span><span class="name namespace">demo</span><span class="whitespace">
+
+</span><span class="name">codec</span> <span class="operator">=</span> <span class="name">Codec</span><span class="operator">.</span><span class="name">for_packet</span><span class="punctuation">(</span><span class="name">demo</span><span class="operator">.</span><span class="name">CCSDSPacketKind</span><span class="punctuation">)</span><span class="whitespace">
+</span><span class="name">codec</span><span class="operator">.</span><span class="name">load</span><span class="punctuation">(</span><span class="name">frame</span><span class="punctuation">)</span><span class="whitespace">
+</span><span class="name">packet</span> <span class="operator">=</span> <span class="name">codec</span><span class="operator">.</span><span class="name">decode</span><span class="punctuation">(</span><span class="name">demo</span><span class="operator">.</span><span class="name">CCSDSPacketKind</span><span class="punctuation">)</span>     <span class="comment single"># a demo.Housekeeping, ...</span><span class="whitespace">
+</span><span class="keyword">with</span> <span class="name">codec</span><span class="operator">.</span><span class="name">encode</span><span class="punctuation">(</span><span class="name">demo</span><span class="operator">.</span><span class="name">SetMode</span><span class="punctuation">(</span><span class="name">seq_count</span><span class="operator">=</span><span class="literal number integer">5</span><span class="punctuation">,</span> <span class="name">mode</span><span class="operator">=</span><span class="name">demo</span><span class="operator">.</span><span class="name">ModeArgType</span><span class="operator">.</span><span class="name">SCIENCE</span><span class="punctuation">))</span> <span class="keyword">as</span> <span class="name">wire</span><span class="punctuation">:</span><span class="whitespace">
+</span>    <span class="name">sock</span><span class="operator">.</span><span class="name">send</span><span class="punctuation">(</span><span class="name">wire</span><span class="punctuation">)</span>                              <span class="comment single"># memoryview of the output buffer</span>
+</pre>
+<p><tt class="docutils literal">Codec(capacity=4096)</tt>: <tt class="docutils literal">Codec.for_packet(cls)</tt>, <tt class="docutils literal">load(data)</tt>,
+<tt class="docutils literal">read_from(stream)</tt>, <tt class="docutils literal">decode(cls)</tt>, <tt class="docutils literal">encode(packet) <span class="pre">-&gt;</span> memoryview</tt>,
+and the properties <tt class="docutils literal">input</tt>, <tt class="docutils literal">output</tt>, <tt class="docutils literal">input_capacity</tt> and
+<tt class="docutils literal">output_capacity</tt>.</p>
+</div>
+<div class="section" id="errors">
+<h2><a class="toc-backref" href="#toc-entry-18">Errors</a></h2>
+<p>Errors are <tt class="docutils literal"><span class="pre">xtce::packet::PacketError</span></tt> (a Rust enum) and
+<tt class="docutils literal">xtce.packet.PacketError</tt> (a Python <tt class="docutils literal">ValueError</tt>). In C and C++
+they are the code a function returns, plus the <tt class="docutils literal">xtce_pk_error</tt> it
+fills in: <tt class="docutils literal">code</tt>, the <tt class="docutils literal">field</tt> involved and, for <tt class="docutils literal">Mismatch</tt>, the
+criterion in <tt class="docutils literal">detail</tt>. Each error carries a <em>kind</em> that is the same in
+every language: <tt class="docutils literal">kind()</tt> in Rust, <tt class="docutils literal">.kind</tt> in Python, and
+<tt class="docutils literal">xtce_pk_error_kind(code)</tt> in C/C++. <tt class="docutils literal">xtce_pk_error_message()</tt>
+formats the message.</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Kind</th>
+<th class="head">Meaning</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">Truncated</tt></td>
+<td>The packet ends before a field does</td>
+</tr>
+<tr><td><tt class="docutils literal">BadPosition</tt></td>
+<td>A location offset places a field before the start of the packet</td>
+</tr>
+<tr><td><tt class="docutils literal">NoMatch</tt></td>
+<td>No concrete container or command in the tree matches</td>
+</tr>
+<tr><td><tt class="docutils literal">Mismatch</tt></td>
+<td>A restriction criterion or argument assignment doesn't hold</td>
+</tr>
+<tr><td><tt class="docutils literal">OutOfRange</tt></td>
+<td>A value doesn't fit its encoding, or a binary value is too short</td>
+</tr>
+<tr><td><tt class="docutils literal">InvalidString</tt></td>
+<td>A string isn't valid UTF-8, or contains its termination character</td>
+</tr>
+<tr><td><tt class="docutils literal">TooLong</tt></td>
+<td>A string or binary value is longer than its encoding allows</td>
+</tr>
+<tr><td><tt class="docutils literal">Calibration</tt></td>
+<td>A value is outside the range of a spline calibrator without extrapolation</td>
+</tr>
+<tr><td><tt class="docutils literal">NotInvertible</tt></td>
+<td>Encoding a field whose calibrator can't be inverted</td>
+</tr>
+<tr><td><tt class="docutils literal">Missing</tt></td>
+<td>An optional field is absent although its include condition holds</td>
+</tr>
+<tr><td><tt class="docutils literal">BadSize</tt></td>
+<td>A size or count that another field gives is invalid or above its
+bound, or an array or binary value doesn't have it</td>
+</tr>
+<tr><td><tt class="docutils literal">NoSpace</tt></td>
+<td>C/C++ only: the output buffer is smaller than the packet</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="canonical-text">
+<h2><a class="toc-backref" href="#toc-entry-19">Canonical text</a></h2>
+<p><tt class="docutils literal">describe()</tt> / <tt class="docutils literal">Display</tt> produce text that is identical in every
+language. The cross-language tests compare it directly.</p>
+<pre class="literal-block">
+Housekeeping{version=0, sec_hdr_flag=true, seq_flags=Unsegmented, ..., temperature=25.19685039370079}
+</pre>
+<ul class="simple">
+<li>Integers are written in decimal, and booleans as <tt class="docutils literal">true</tt> or <tt class="docutils literal">false</tt>.</li>
+<li>Floats use the shortest round-trip form.</li>
+<li>Enumerations show their label, or the number if the value is unlisted.</li>
+<li>Strings are double-quoted. <tt class="docutils literal">&quot;</tt> and <tt class="docutils literal">\</tt> are escaped with a
+backslash, and control characters are written as <tt class="docutils literal">\xNN</tt>.</li>
+<li>Binary values are written as <tt class="docutils literal">0x</tt> followed by lowercase hex.</li>
+<li>Arrays and repeated entries are written as <tt class="docutils literal">[a, b, c]</tt>, each element
+as above.</li>
+<li>Aggregates are written as <tt class="docutils literal">{x=1, <span class="pre">y=-2}</span></tt>, with the members' field
+names.</li>
+<li>Absent optional fields are written as <tt class="docutils literal">none</tt>.</li>
+</ul>
+</div>
+<div class="section" id="runtime-reference">
+<h2><a class="toc-backref" href="#toc-entry-20">Runtime reference</a></h2>
+<p>Generated code calls these, and they are also available for hand-written
+codecs. The names are the same in every language unless noted.</p>
+<p>In C/C++ (<tt class="docutils literal">xtce/packet.h</tt>) every name has the prefix <tt class="docutils literal">xtce_pk_</tt>,
+types are structs operated on by functions, and fallible functions
+return an error code and their result through a pointer. Examples:
+<tt class="docutils literal">xtce_pk_reader_init(data, len, err)</tt> and
+<tt class="docutils literal"><span class="pre">xtce_pk_read_uint(&amp;r,</span> bits, little_endian, field, &amp;value)</tt>;
+<tt class="docutils literal">xtce_pk_writer_init(buf, cap, err)</tt> and
+<tt class="docutils literal"><span class="pre">xtce_pk_write_uint(&amp;w,</span> bits, little_endian, value)</tt>.
+<tt class="docutils literal">xtce_pk_text</tt> accumulates canonical text into a fixed buffer, like
+<tt class="docutils literal">snprintf</tt>.</p>
+<dl class="docutils">
+<dt><tt class="docutils literal">BitReader(data)</tt></dt>
+<dd><tt class="docutils literal">position()</tt>, <tt class="docutils literal">seek(start, offset, field)</tt>, <tt class="docutils literal">skip(offset, field)</tt>;
+<tt class="docutils literal">uint(bits, field)</tt> reads 1–64 bits, most significant bit first;
+<tt class="docutils literal">uint_order(bits, little_endian, field)</tt>; <tt class="docutils literal">bytes(n, field)</tt>.</dd>
+<dt><tt class="docutils literal">BitWriter(buffer)</tt></dt>
+<dd>Clears the buffer, then <tt class="docutils literal">uint(bits, value)</tt>,
+<tt class="docutils literal">uint_order(bits, little_endian, value)</tt>, <tt class="docutils literal">bytes(data)</tt>, <tt class="docutils literal">seek</tt>
+and <tt class="docutils literal">skip</tt>. In Rust and C/C++, <tt class="docutils literal">zeros(bits)</tt>
+(<tt class="docutils literal">xtce_pk_write_zeros</tt>) writes a run of zero bits. The buffer grows,
+zero filled, to cover the furthest bit written. Writing over earlier
+bits replaces them. Byte-aligned <tt class="docutils literal">bytes</tt> and <tt class="docutils literal">zeros</tt> copy or fill
+whole bytes at once.</dd>
+<dt>Integers</dt>
+<dd><tt class="docutils literal">to_signed(raw, bits, encoding)</tt> and
+<tt class="docutils literal">from_signed(value, bits, encoding, field)</tt> handle the unsigned,
+two's-complement, sign-magnitude and ones'-complement encodings.
+<tt class="docutils literal">from_unsigned</tt> checks unsigned ranges. <tt class="docutils literal">int_to_f64</tt> (Rust),
+<tt class="docutils literal">xtce_pk_int_to_double</tt> (C/C++) and <tt class="docutils literal">int_to_float</tt> (Python) convert raw
+values to floats. <tt class="docutils literal">f64_to_int</tt> / <tt class="docutils literal">double_to_int</tt> /
+<tt class="docutils literal">float_to_int</tt> round half away from zero and check the range.</dd>
+<dt>Floats</dt>
+<dd><tt class="docutils literal">float_from_raw(raw, bits)</tt> and <tt class="docutils literal">float_to_raw(value, bits)</tt> for
+IEEE 754 binary32 and binary64. Converting to 32 bits rounds to
+nearest, and overflows to infinity.</dd>
+<dt>Calibrators</dt>
+<dd><tt class="docutils literal">polynomial(x, terms)</tt>, <tt class="docutils literal">polynomial_inverse(y, intercept, slope)</tt>,
+<tt class="docutils literal">spline(x, points, order, extrapolate, field)</tt> and
+<tt class="docutils literal">spline_inverse(y, points, extrapolate, field)</tt>.
+<tt class="docutils literal">round_to_int(y, lo, lim, field)</tt> rounds a calibrated value half away
+from zero and fails with <tt class="docutils literal">OutOfRange</tt> unless <tt class="docutils literal">lo &lt;= result &lt; lim</tt>.</dd>
+<dt>Strings and binary</dt>
+<dd><tt class="docutils literal">read_string</tt>, <tt class="docutils literal">write_string</tt> (with a <tt class="docutils literal">StringSpec</tt>: fixed bits,
+maximum bits, terminator, size-tag bits) and <tt class="docutils literal">write_binary</tt>.
+<tt class="docutils literal"><span class="pre">StringSpec::sized(bytes)</span></tt> (Rust), <tt class="docutils literal">xtce_pk_string_spec_sized</tt>
+(C/C++) and <tt class="docutils literal">sized(spec, bytes)</tt> (Python) give the spec of a string
+whose size another field gives. The reader's <tt class="docutils literal">pad(bits, field)</tt>
+(<tt class="docutils literal">xtce_pk_read_pad</tt>) skips padding that must be present. The
+reader's <tt class="docutils literal">rest_bytes(max, field)</tt>
+(<tt class="docutils literal">xtce_pk_read_rest</tt> in C/C++) gives the size of a binary value that
+takes the rest of the packet, and <tt class="docutils literal">write_rest</tt> writes one (C/C++
+generates it inline). <tt class="docutils literal">string_from_bytes(bytes, field)</tt> (Rust,
+Python), <tt class="docutils literal">xtce_pk_read_utf8</tt> and <tt class="docutils literal">xtce_pk_write_utf8</tt> (C/C++) read
+and write strings encoded as binary. Python's <tt class="docutils literal">bool_from_string(s,
+one, zero, field)</tt> decodes a boolean encoded as a string; the other
+languages generate it inline.</dd>
+<dt>Sizes from other fields</dt>
+<dd><tt class="docutils literal">dynamic_size(x, slope, intercept, unit, max, field)</tt> computes
+<tt class="docutils literal">(slope * x + intercept) / unit</tt> and fails with <tt class="docutils literal">BadSize</tt> unless it
+is a whole number from 0 to <tt class="docutils literal">max</tt>; <tt class="docutils literal">unit</tt> is 8 for a size in bits
+used in whole bytes. Python also has <tt class="docutils literal">read_list(r, n, gap, field,
+read)</tt>, <tt class="docutils literal">check_size(value, n, field)</tt> and <tt class="docutils literal">describe_list(values,
+describe)</tt>, which the other languages generate inline.</dd>
+</dl>
+</div>
+<div class="section" id="supported-xtce">
+<h2><a class="toc-backref" href="#toc-entry-21">Supported XTCE</a></h2>
+<p>The compiler supports the subset below. Anything else is reported as
+unsupported, naming the construct and its location.</p>
+<dl class="docutils">
+<dt>Parameter and argument types</dt>
+<dd>Integer, Float, Enumerated, Boolean, String, Binary, AbsoluteTime,
+RelativeTime, Array and Aggregate. Types that use <tt class="docutils literal">baseType</tt> are not
+supported.</dd>
+<dt>Aggregates</dt>
+<dd>Members of any supported type except the aggregate itself, values
+that take the rest of the packet, and values whose size another value
+gives, unless that value is an earlier member of the same aggregate.
+Restriction criteria and include conditions can't refer to an
+aggregate or its members.</dd>
+<dt>Arrays</dt>
+<dd>Elements of any supported type except arrays and values whose size
+another field gives. Each dimension's <tt class="docutils literal">StartingIndex</tt> is a
+<tt class="docutils literal">FixedValue</tt>; its <tt class="docutils literal">EndingIndex</tt> is a <tt class="docutils literal">FixedValue</tt> or, in at most
+one dimension, a <tt class="docutils literal">DynamicValue</tt>. Entries use the whole array:
+<tt class="docutils literal">ArrayParameterRefEntry</tt> and <tt class="docutils literal">ArrayArgumentRefEntry</tt> (or a plain
+<tt class="docutils literal">ParameterRefEntry</tt> or <tt class="docutils literal">ArgumentRefEntry</tt>) without a
+<tt class="docutils literal">DimensionList</tt>.</dd>
+<dt>Repeated entries</dt>
+<dd><tt class="docutils literal">RepeatEntry</tt> on parameter and argument entries, with a <tt class="docutils literal">Count</tt>
+that is a positive <tt class="docutils literal">FixedValue</tt> or a <tt class="docutils literal">DynamicValue</tt>, and an
+optional <tt class="docutils literal">Offset</tt> that is a <tt class="docutils literal">FixedValue</tt> of zero or more bits. A
+repeated array is not supported.</dd>
+<dt>Sizes and counts from other fields</dt>
+<dd><tt class="docutils literal">DynamicValue</tt> with <tt class="docutils literal">ParameterInstanceRef</tt> (instance 0) or, in
+argument types, <tt class="docutils literal">ArgumentInstanceRef</tt>, and an optional
+<tt class="docutils literal">LinearAdjustment</tt>, in array <tt class="docutils literal">EndingIndex</tt>, <tt class="docutils literal">RepeatEntry</tt>
+<tt class="docutils literal">Count</tt>, binary <tt class="docutils literal">SizeInBits</tt> and variable string sizes. It must
+refer to an integer value decoded earlier in the packet, outside any
+<tt class="docutils literal">IncludeCondition</tt>, or, inside an aggregate type, to an earlier
+integer member. See <a class="reference internal" href="#generated-packet-types">Generated packet types</a> for the checks and
+bounds.</dd>
+<dt>Integer encoding</dt>
+<dd>1–64 bits; <tt class="docutils literal">unsigned</tt>, <tt class="docutils literal">twosComplement</tt>, <tt class="docutils literal">signMagnitude</tt> and
+<tt class="docutils literal">onesComplement</tt>; most significant bit first. Little-endian byte
+order is allowed when the size is a whole number of bytes.</dd>
+<dt>Float encoding</dt>
+<dd><tt class="docutils literal">IEEE754_1985</tt> or <tt class="docutils literal">IEEE754</tt>, 32 or 64 bits, in either byte order.</dd>
+<dt>Calibrators</dt>
+<dd><p class="first"><tt class="docutils literal">PolynomialCalibrator</tt> and <tt class="docutils literal">SplineCalibrator</tt> of order 0 or 1, as
+the <tt class="docutils literal">DefaultCalibrator</tt> of an integer or float encoding on a float
+type, or of an integer encoding on an integer type. Encoding uses the
+inverse calibrator. This works for
+polynomials of degree 0 or 1 with a non-zero slope, and for linear
+splines whose calibrated values strictly increase or decrease. Other
+calibrators are decode-only: encoding them fails with
+<tt class="docutils literal">NotInvertible</tt>. Engineering values are rounded half away from zero
+to the nearest raw integer.</p>
+<p class="last">On an integer type the calibrated value is rounded half away from zero
+to an integer of the type's <tt class="docutils literal">sizeInBits</tt> (default 32) and <tt class="docutils literal">signed</tt>
+(default true); decoding fails with <tt class="docutils literal">OutOfRange</tt> if it doesn't fit.
+Rounding means a value may not survive encoding: in the demo,
+<tt class="docutils literal">RecordCount</tt> is <tt class="docutils literal"><span class="pre">-4</span> + raw / 2</tt>, so 1 encodes as raw 10 but raw 9
+decodes as 1 too. The type's <tt class="docutils literal">ValidRange</tt> applies to the calibrated
+value; with <tt class="docutils literal"><span class="pre">validRangeAppliesToCalibrated=&quot;false&quot;</span></tt> it is ignored. A
+size or count taken from it is bounded through the calibrator.
+Comparisons with <tt class="docutils literal"><span class="pre">useCalibratedValue=&quot;false&quot;</span></tt> are not supported on
+it, as the generated code keeps only the calibrated value.</p>
+</dd>
+<dt>Strings</dt>
+<dd><p class="first">UTF-8 or US-ASCII. The supported layouts are:</p>
+<ul class="simple">
+<li>a fixed size (<tt class="docutils literal">SizeInBits/Fixed</tt>) ending at the termination
+character (<tt class="docutils literal">00</tt> by default) or at the end of the field;</li>
+<li>a fixed size with a leading size tag;</li>
+<li>a variable size (<tt class="docutils literal">Variable</tt>) with a termination character;</li>
+<li>a variable size with a leading size tag;</li>
+<li>either of these within a size that another field gives
+(<tt class="docutils literal">Variable</tt> with a <tt class="docutils literal">DynamicValue</tt>).</li>
+</ul>
+<p>Sizes must be whole bytes, and size tags count bytes. When encoding,
+fixed fields are padded with the terminator and then zeros.</p>
+<p class="last">A string type may also have a <tt class="docutils literal">BinaryDataEncoding</tt> (fixed, or with a
+size another field gives). The field then holds the string's UTF-8
+bytes and nothing else: values must fill it exactly, as binary values
+do, and decoding fails with <tt class="docutils literal">InvalidString</tt> unless the bytes are
+UTF-8. In the demo, <tt class="docutils literal">Reply</tt> has <tt class="docutils literal">Code</tt> (3 bytes) and <tt class="docutils literal">Note</tt>
+(<tt class="docutils literal">NoteSize</tt> bytes).</p>
+</dd>
+<dt>Booleans</dt>
+<dd>An <tt class="docutils literal">IntegerDataEncoding</tt> (zero is false, anything else true), or a
+<tt class="docutils literal">StringDataEncoding</tt> in any of the layouts above, which holds
+<tt class="docutils literal">oneStringValue</tt> or <tt class="docutils literal">zeroStringValue</tt> (<tt class="docutils literal">True</tt> and <tt class="docutils literal">False</tt> by
+default). Encoding writes the string for the value. Decoding fails
+with <tt class="docutils literal">OutOfRange</tt> for any other string; a fixed field's content ends
+at its terminator, so bytes after it don't matter. The two strings
+must differ and fit the encoding. In the demo, <tt class="docutils literal">Reply</tt> has
+<tt class="docutils literal">Answer</tt>, which is <tt class="docutils literal">yes</tt> or <tt class="docutils literal">no</tt> in 4 bytes. Comparisons with
+<tt class="docutils literal"><span class="pre">useCalibratedValue=&quot;false&quot;</span></tt> are not supported on these booleans.</dd>
+<dt>Binary</dt>
+<dd><p class="first">A fixed size in whole bytes, or a size another field gives. Values
+must have exactly that length.</p>
+<p class="last">A <tt class="docutils literal">SizeInBits</tt> of <tt class="docutils literal"><span class="pre">-1</span></tt> (a Yamcs convention for &quot;the size of the
+value given&quot;) takes the rest of the packet, up to 64 KiB. It must be
+the last entry of every packet that contains it, and can't be an array
+element, an aggregate member or repeated. Decoding fails with
+<tt class="docutils literal">BadSize</tt> unless what is left is whole bytes, and encoding fails
+with <tt class="docutils literal">TooLong</tt> above 64 KiB. Yamcs also allows such values before
+other entries, where only the sender knows their size; those packets
+are not supported.</p>
+</dd>
+<dt>Times</dt>
+<dd>The <tt class="docutils literal">Encoding</tt> (integer or float, <tt class="docutils literal"><span class="pre">units=&quot;seconds&quot;</span></tt>) with
+<tt class="docutils literal">scale</tt> and <tt class="docutils literal">offset</tt> gives seconds relative to the
+<tt class="docutils literal">ReferenceTime</tt>. The reference time is recorded in the generated
+documentation but not applied.</dd>
+<dt>Containers</dt>
+<dd><tt class="docutils literal">SequenceContainer</tt> entry lists with <tt class="docutils literal">ParameterRefEntry</tt>,
+<tt class="docutils literal">ArrayParameterRefEntry</tt> and <tt class="docutils literal">ContainerRefEntry</tt>. Included containers are flattened in, or with
+a <tt class="docutils literal">RepeatEntry</tt> become a list, and may not have a <tt class="docutils literal">BaseContainer</tt>.
+A <tt class="docutils literal">BinaryEncoding</tt> with a fixed <tt class="docutils literal">SizeInBits</tt> pads a telemetry
+container to that size. <tt class="docutils literal">BaseContainer</tt> inheritance uses
+<tt class="docutils literal">RestrictionCriteria</tt> with <tt class="docutils literal">Comparison</tt> or <tt class="docutils literal">ComparisonList</tt>,
+using the operators <tt class="docutils literal">== != &lt; &lt;= &gt; &gt;=</tt> on calibrated or raw values,
+on values that are not arrays or aggregates.</dd>
+<dt>Locations</dt>
+<dd><tt class="docutils literal">LocationInContainerInBits</tt> with a <tt class="docutils literal">FixedValue</tt> relative to
+<tt class="docutils literal">previousEntry</tt> (the default) or <tt class="docutils literal">containerStart</tt>. Negative
+offsets are allowed. <tt class="docutils literal">containerStart</tt> is the start of the packet
+for inherited entries, and the inclusion point for entries of an
+included container.</dd>
+<dt>Include conditions</dt>
+<dd><tt class="docutils literal">IncludeCondition</tt> (<tt class="docutils literal">Comparison</tt> or <tt class="docutils literal">ComparisonList</tt>) on
+<tt class="docutils literal">ParameterRefEntry</tt> and <tt class="docutils literal">ContainerRefEntry</tt>, on values decoded
+earlier that are not themselves conditional. The affected fields
+become optional. They are decoded when the condition holds, and
+encoded when the condition holds on the struct's fields. Encoding
+fails with <tt class="docutils literal">Missing</tt> if the condition holds but the value is
+absent.</dd>
+<dt>Commands</dt>
+<dd><tt class="docutils literal">MetaCommand</tt> with <tt class="docutils literal">ArgumentList</tt>, <tt class="docutils literal">BaseMetaCommand</tt> and
+<tt class="docutils literal">ArgumentAssignmentList</tt>, and a <tt class="docutils literal">CommandContainer</tt> whose
+<tt class="docutils literal">BaseContainer</tt> is the base meta-command's container. The container
+may hold <tt class="docutils literal">ArgumentRefEntry</tt>, <tt class="docutils literal">ArrayArgumentRefEntry</tt>,
+<tt class="docutils literal">ParameterRefEntry</tt>, <tt class="docutils literal">ArrayParameterRefEntry</tt> and
+<tt class="docutils literal">FixedValueEntry</tt> (at most 64 bits). Argument assignments act like
+<tt class="docutils literal">==</tt> restriction criteria: they fix the value when encoding and
+select the command when decoding.</dd>
+<dt>Name references</dt>
+<dd>Absolute (<tt class="docutils literal">/Root/Sub/name</tt>), relative (<tt class="docutils literal">Sub/name</tt>, <tt class="docutils literal"><span class="pre">../name</span></tt>),
+and unqualified names. An unqualified name is looked up in the
+current SpaceSystem, then in each enclosing one.</dd>
+<dt>Not supported</dt>
+<dd>references to aggregate members (other than sizes from an earlier
+member), array subsets (a <tt class="docutils literal">DimensionList</tt> in an entry),
+arrays of arrays, <tt class="docutils literal">IndirectParameterRefEntry</tt>, stream and segment entries,
+<tt class="docutils literal">DynamicValue</tt> locations and offsets, other instances than 0,
+<tt class="docutils literal">DiscreteLookupList</tt> values, <tt class="docutils literal">BooleanExpression</tt> and
+<tt class="docutils literal">CustomAlgorithm</tt> criteria, <tt class="docutils literal">NextContainer</tt>, a container
+<tt class="docutils literal">BinaryEncoding</tt> on command containers, with a size from a
+<tt class="docutils literal">DynamicValue</tt> or with transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt>, context calibrators,
+<tt class="docutils literal">MathOperationCalibrator</tt>, BCD encodings, MIL-STD-1750A floats,
+byte orders other than big and little endian, least-significant-bit-first
+bit order, and include conditions in command containers.</dd>
+</dl>
+</div>
+<div class="section" id="known-limitations">
+<h2><a class="toc-backref" href="#toc-entry-22">Known limitations</a></h2>
+<ul class="simple">
+<li>Length fields (for example the CCSDS packet length) and checksums are
+ordinary fields: the application computes them, because XTCE describes
+them with algorithms that aren't supported.</li>
+<li>Decoding ignores bytes after the packet. Spare bits and gaps are
+written as zeros, so re-encoding a decoded packet can change them.</li>
+<li>Binary fields default to empty and must be set to their exact size
+before encoding. Arrays default to empty, and must have the number of
+elements their type gives, even when it is fixed.</li>
+<li>A size or count that another field gives is not filled in when
+encoding: set the field and the data to agree.</li>
+<li>Enumerated values must fit in a signed 64-bit integer.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="examples">
+<h1><a class="toc-backref" href="#toc-entry-23">Examples</a></h1>
+<p><tt class="docutils literal">examples/</tt> holds self-contained examples. Every example exists in all
+supported languages: C/C++, Rust and Python 3. <tt class="docutils literal">make examples</tt> fails if
+an example is missing one. Each has an XTCE file and a program per
+language that uses the code <tt class="docutils literal">tcsxtce</tt> generates from it. <tt class="docutils literal">make</tt> in an
+example's directory, or <tt class="docutils literal">make examples</tt> at the top level:</p>
+<ul class="simple">
+<li>regenerates the code if the XTCE file or the generator changed;</li>
+<li>builds and runs the Rust, C and Python programs, and the C program
+again compiled as C++;</li>
+<li>checks that their output is identical.</li>
+</ul>
+<p><tt class="docutils literal">make</tt> in <tt class="docutils literal">examples/</tt> itself converts <tt class="docutils literal">examples/README.rst</tt>, the
+index of examples, into <tt class="docutils literal">README.html</tt>.</p>
+<div class="section" id="simple-string">
+<h2><a class="toc-backref" href="#toc-entry-24"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
+<p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xml</span></tt> describes a container,
+<tt class="docutils literal">SimpleString</tt>, holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string
+that always occupies 64 bits and ends at a NUL byte, so it holds up to
+8 bytes:</p>
+<pre class="code xml literal-block">
+<span class="name tag">&lt;StringParameterType</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;String8Type&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;StringDataEncoding</span><span class="whitespace"> </span><span class="name attribute">encoding=</span><span class="literal string">&quot;UTF-8&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;SizeInBits&gt;</span><span class="whitespace">
+      </span><span class="name tag">&lt;Fixed&gt;&lt;FixedValue&gt;</span>64<span class="name tag">&lt;/FixedValue&gt;&lt;/Fixed&gt;</span><span class="whitespace">
+      </span><span class="name tag">&lt;TerminationChar&gt;</span>00<span class="name tag">&lt;/TerminationChar&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;/SizeInBits&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/StringDataEncoding&gt;</span><span class="whitespace">
+</span><span class="name tag">&lt;/StringParameterType&gt;</span>
+</pre>
+<p><tt class="docutils literal">tcsxtce</tt> generates a <tt class="docutils literal">SimpleString</tt> structure in each language:</p>
+<ul class="simple">
+<li>Rust: <tt class="docutils literal">struct SimpleString { pub text: String }</tt>
+(<tt class="docutils literal">rust/src/simple_string.rs</tt>)</li>
+<li>C/C++: <tt class="docutils literal">simple_string_SimpleString</tt>, whose <tt class="docutils literal">text</tt> is a
+<tt class="docutils literal">simple_string_str8</tt> (<tt class="docutils literal">c/simple_string.h</tt>)</li>
+<li>Python: <tt class="docutils literal">&#64;dataclass class SimpleString</tt> with <tt class="docutils literal">text: str</tt>
+(<tt class="docutils literal">python/simple_string.py</tt>)</li>
+</ul>
+<p>Each has the methods described in <a class="reference internal" href="#methods">Methods</a>. The Rust and Python
+programs use a <tt class="docutils literal">Codec</tt>, whose two buffers are preallocated to
+<tt class="docutils literal">MAX_BYTES</tt> (8). The C program (<tt class="docutils literal">c/main.c</tt>) uses two arrays of
+<tt class="docutils literal">simple_string_SimpleString_MAX_BYTES</tt> bytes instead. Each program
+serializes several strings into the codec's output buffer and
+deserializes them from its input buffer. It shows that a 9-byte string
+fails with <tt class="docutils literal">TooLong</tt>, and that the buffers were never reallocated:</p>
+<pre class="literal-block">
+serialize &quot;Hi&quot; -&gt; 4869000000000000
+deserialize 4869000000000000 -&gt; SimpleString{text=&quot;Hi&quot;}
+serialize &quot;ABCDEFGHI&quot; -&gt; error:TooLong (Text is too long for its encoding)
+buffers reused without reallocation: true
+</pre>
+</div>
+</div>
+<div class="section" id="testing">
+<h1><a class="toc-backref" href="#toc-entry-25">Testing</a></h1>
+<p><tt class="docutils literal">make test</tt> runs:</p>
+<ul class="simple">
+<li>the unit tests of every language (<tt class="docutils literal">cargo test</tt>, <tt class="docutils literal">cpp/tests</tt>,
+<tt class="docutils literal">python <span class="pre">-m</span> unittest</tt>);</li>
+<li>the packet compiler's tests (<tt class="docutils literal">generator/tests</tt>), which compile small
+XTCE documents and check the model and the size report, including that
+malformed documents are reported as unsupported rather than crashing
+the generator;</li>
+<li><tt class="docutils literal">tests/cross_check.sh</tt>: 21 generated XML documents that together use
+every element and every choice alternative of the schema. Each must
+validate with <tt class="docutils literal">xmllint</tt>. Each must round-trip through every
+language, with byte-identical output that also validates.</li>
+<li><tt class="docutils literal">tests/packet_check.sh</tt>, which checks that:<ul>
+<li>the demo mission validates;</li>
+<li>every language turns the hand-built packets in
+<tt class="docutils literal">tests/mission/vectors.txt</tt> into exactly
+<tt class="docutils literal">tests/mission/vectors.expected</tt>;</li>
+<li>3000 random packets give byte-identical results in Rust, Python,
+and the C tool compiled both as C and as C++;</li>
+<li>decoding a re-encoded packet gives the same values and the same
+bytes.</li>
+</ul>
+</li>
+</ul>
+<p>The <tt class="docutils literal">packet_tool</tt> programs (<tt class="docutils literal">rust/examples</tt>, <tt class="docutils literal">cpp/tests</tt>, built as
+<tt class="docutils literal">cpp/build/packet_tool</tt> and <tt class="docutils literal">cpp/build/packet_tool_cxx</tt>, and
+<tt class="docutils literal">python/tests</tt>) run any vectors file:</p>
+<pre class="code sh literal-block">
+rust/target/release/examples/packet_tool<span class="whitespace"> </span>tests/mission/vectors.txt
+</pre>
+<p><tt class="docutils literal">make <span class="pre">samples-check</span></tt> is not part of <tt class="docutils literal">make test</tt>, because it
+downloads files. It checks <tt class="docutils literal">tcsxtce</tt> against 34 public XTCE documents:
+the test documents of <a class="reference external" href="https://github.com/yamcs/yamcs">Yamcs</a> and the
+test documents and examples of the <a class="reference external" href="https://github.com/CesarCoelho/xtcetools">XTCE Toolkit</a>.
+<tt class="docutils literal">tests/external/sources.txt</tt> lists them, pinned to commits with a
+SHA-256 for each. They are downloaded once into
+<tt class="docutils literal">tests/external/files/</tt>. <tt class="docutils literal">tests/samples_check.py</tt> then checks that,
+for each document:</p>
+<ul class="simple">
+<li>the binding accepts it exactly when <tt class="docutils literal">xmllint</tt> finds it valid against
+the XTCE 1.3 schema (older XTCE namespaces are read as 1.3);</li>
+<li>a document the binding accepts writes back to an equal document;</li>
+<li>the compiler, the size report and every emitter produce output or
+report unsupported constructs, and never crash;</li>
+<li>the generated code compiles, without warnings: the C header as C11 and
+as C++, the Rust module against the <tt class="docutils literal">xtce</tt> crate, and the Python
+module.</li>
+</ul>
+<p>It prints a summary per document, with the constructs it found
+unsupported, which must equal <tt class="docutils literal">tests/external/expected.txt</tt>. A crash, a
+disagreement with the schema, a failed round trip or a failed compile
+always fails the check. After an intended change, <tt class="docutils literal">python3 <span class="pre">-I</span>
+tests/samples_check.py <span class="pre">--update</span></tt> rewrites <tt class="docutils literal">expected.txt</tt>; review its
+diff.</p>
+</div>
+</div>
+</body>
+</html>

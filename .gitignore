@@ -26,7 +26,6 @@ rustc-ice-*.txt
 # Build products of this project
 /cpp/build/
 /examples/*/build/
-/examples/README.html
 __pycache__/
 *.pyc
 

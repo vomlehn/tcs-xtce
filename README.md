@@ -14,7 +14,8 @@ Command Exchange) data into managed, preallocated buffers, in two layers:
 
 The full documentation is in [`docs/manual.rst`](docs/manual.rst) (user
 manual, including every data structure and method) and
-[`docs/design.rst`](docs/design.rst) (design and rationale).
+[`docs/design.rst`](docs/design.rst) (design and rationale), each rendered
+to HTML beside it by `make html`: see [See also](#see-also).
 
 Work is under way on integrating tcsxtce with NASA's core Flight System (cFS)
 and JPL's F´ (F Prime): generating cFS messages and F´ FPP from XTCE, or
@@ -223,3 +224,12 @@ packets.
   (such as `xsi:schemaLocation`) are not preserved. Doubles are written in
   their shortest round-trip form.
 * `xs:integer` is stored as a 64-bit integer.
+
+## See also
+
+* [The tcsxtce manual](https://vomlehn.github.io/tcsxtce/docs/manual.html):
+  every data structure and method, and the packet codecs.
+* [The tcsxtce design](https://vomlehn.github.io/tcsxtce/docs/design.html):
+  the design and its rationale.
+* [The examples](https://vomlehn.github.io/tcsxtce/examples/README.html):
+  what each example shows, and how to build and run it.

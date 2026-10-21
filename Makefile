@@ -157,11 +157,18 @@ fmt-check:
 	cd rust && $(CARGO) fmt --check
 	for d in $(EXAMPLES); do $(MAKE) -C $$d generate && (cd $$d/rust && $(CARGO) fmt --check) || exit 1; done
 
+# The documents as HTML: docs/ and the examples' README. Committed beside
+# their sources and served by GitHub Pages, so remade before a commit that
+# changes one, and left alone by clean.
+.PHONY: html
+html:
+	$(MAKE) -C docs html
+	$(MAKE) -C examples html
+
 clean:
 	cd rust && $(CARGO) clean
 	$(MAKE) -C cpp clean
 	for d in $(EXAMPLES); do $(MAKE) -C $$d clean; done
-	$(MAKE) -C examples clean
 	$(MAKE) -C references clean
 	find python generator -name __pycache__ -type d -prune -exec rm -rf {} +
 
