@@ -437,6 +437,42 @@ int main(void) {
     CHECK(strcmp(ENCODE(demo_Tune, &tu), "BadSize") == 0);
   }
 
+  /* References to aggregate members. */
+  {
+    static demo_Route ro, ro2;
+    static demo_Plan pl, pl2;
+    static const uint8_t body[] = {0x23, 1, 2, 3, 9};
+    demo_Route_init(&ro);
+    ro.sec_hdr_flag = true;
+    ro.route_hdr.kind = 2;
+    ro.route_hdr.count = 3;
+    ro.stops.len = 3;
+    ro.stops.data[0] = 1;
+    ro.stops.data[1] = 2;
+    ro.stops.data[2] = 3;
+    ro.has_detour = true;
+    ro.detour = 9;
+    CHECK(strcmp(ENCODE(demo_Route, &ro), "Ok") == 0);
+    CHECK(len == 11 && memcmp(buf + 6, body, sizeof body) == 0);
+    CHECK(demo_Route_decode(&ro2, buf, len, &err) == 0 && ro2.stops.len == 3 && ro2.has_detour && ro2.detour == 9);
+    /* RouteHdr.Kind 2 includes the detour, and RouteHdr.Count counts the stops. */
+    ro.has_detour = false;
+    CHECK(strcmp(ENCODE(demo_Route, &ro), "Missing") == 0);
+    ro.route_hdr.kind = 1;
+    CHECK(strcmp(ENCODE(demo_Route, &ro), "Ok") == 0 && len == 10);
+    ro.route_hdr.count = 2;
+    CHECK(strcmp(ENCODE(demo_Route, &ro), "BadSize") == 0);
+
+    demo_Plan_init(&pl);
+    pl.leg.mode = demo_ModeArgType_NOMINAL;
+    pl.leg.count = 2;
+    pl.points.len = 2;
+    pl.points.data[0] = 10;
+    pl.points.data[1] = 20;
+    CHECK(strcmp(ENCODE(demo_Plan, &pl), "Ok") == 0);
+    CHECK(demo_Plan_decode(&pl2, buf, len, &err) == 0 && pl2.leg.count == 2 && pl2.points.data[1] == 20);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

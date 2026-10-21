@@ -87,7 +87,7 @@ def source(d: DynSize, place) -> str:
     first matching value of a DiscreteLookupList.  ``place`` gives the
     expression for a Local."""
     if d.lookup is None:
-        return place(d.local)
+        return place(d.local) + "".join("." + p for p in d.path)
     x = f"{d.default}i64"
     for criteria, v in reversed(d.lookup):
         x = f"if {conjunction([condition(c, place(c.local)) for c in criteria])} {{ {v}i64 }} else {{ {x} }}"
@@ -270,7 +270,9 @@ def conjunction(conds: list) -> str:
 
 
 def condition(c: Criterion, x: str) -> str:
-    vt = c.local.vtype
+    """``x`` is the expression for the criterion's local."""
+    vt = c.vtype
+    x += "".join("." + p for p in c.path)
     if vt.kind == "int":
         return f"({x} as i128) {c.op} {c.value}"
     if vt.kind == "enum":

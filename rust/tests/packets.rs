@@ -464,3 +464,35 @@ fn lookups_and_locations_from_other_values() {
     };
     assert_eq!(t.to_bytes(), Err(PacketError::BadSize { field: "Setting" }));
 }
+
+#[test]
+fn references_to_aggregate_members() {
+    let r = Route {
+        sec_hdr_flag: true,
+        route_hdr: RouteHeaderType { kind: 2, count: 3 },
+        stops: vec![1, 2, 3],
+        detour: Some(9),
+        ..Default::default()
+    };
+    let b = r.to_bytes().unwrap();
+    assert_eq!(&b[6..], &[0x23, 1, 2, 3, 9]);
+    assert_eq!(Route::decode(&b).unwrap(), r);
+    // RouteHdr.Kind 2 includes the detour, and RouteHdr.Count counts the stops.
+    let mut e = r.clone();
+    e.detour = None;
+    assert_eq!(e.to_bytes(), Err(PacketError::Missing { field: "Detour" }));
+    e.route_hdr.kind = 1;
+    assert_eq!(Route::decode(&e.to_bytes().unwrap()).unwrap(), e);
+    e.route_hdr.count = 2;
+    assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Stops" }));
+
+    let p = Plan {
+        leg: LegType {
+            mode: ModeArgType::NOMINAL,
+            count: 2,
+        },
+        points: vec![10, 20],
+        ..Default::default()
+    };
+    assert_eq!(Plan::decode(&p.to_bytes().unwrap()).unwrap(), p);
+}

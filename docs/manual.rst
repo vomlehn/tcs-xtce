@@ -673,6 +673,12 @@ may name arguments (``ArgumentInstanceRef``). In the demo, ``Frame``'s
 ``FrameBody`` is 2 bytes when ``FrameKind`` is 1, 4 when it is 2 and
 empty otherwise, and ``Tune``'s ``Setting`` depends on its ``Mode``.
 
+The referenced value may be a member of an aggregate parameter or
+argument, named with XTCE's dot syntax: in the demo, ``Route``'s
+``Stops`` are counted by ``RouteHdr.Count`` and its ``Detour`` is
+included when ``RouteHdr.Kind`` is 2, and ``Plan``'s ``Points`` are
+counted by its argument ``Leg.Count``. Criteria use the same syntax.
+
 Inside an aggregate type, a reference may instead name an earlier member
 of the aggregate, as Yamcs reads it. Each value of the aggregate then
 uses its own member: in the demo, each ``BatchType`` in ``Batches`` has
@@ -1028,8 +1034,9 @@ Aggregates
    Members of any supported type except the aggregate itself, values
    that take the rest of the packet, and values whose size another value
    gives, unless that value is an earlier member of the same aggregate.
-   Restriction criteria and include conditions can't refer to an
-   aggregate or its members.
+   Criteria, lookups and sizes can refer to a member with XTCE's dot
+   syntax (``parameterRef="RouteHdr.Count"``, also nested, as in
+   ``P.a.b``, and in ``argumentRef``), but not to a whole aggregate.
 
 Arrays
    Elements of any supported type except arrays and values whose size
@@ -1185,8 +1192,7 @@ Name references
    current SpaceSystem, then in each enclosing one.
 
 Not supported
-   references to aggregate members (other than sizes from an earlier
-   member), array subsets (a ``DimensionList`` in an entry),
+   references to array elements (``P[2]``), array subsets (a ``DimensionList`` in an entry),
    arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
    ``RepeatEntry`` offsets that other values give, other instances than 0,
    ``BooleanExpression`` and

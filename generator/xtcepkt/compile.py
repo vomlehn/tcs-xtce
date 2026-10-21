@@ -97,6 +97,33 @@ def hex_bytes(text: str, where: str) -> bytes:
     return bytes.fromhex(text.zfill(len(text) + len(text) % 2))
 
 
+def member_path(ref: str) -> tuple[str, tuple]:
+    """Splits a reference to an aggregate member (``P.a.b``, XTCE's dot
+    syntax) into the reference to its parameter or argument and the
+    member names.  Names can't contain dots, so only ``.`` and ``..``
+    path segments are not members."""
+    head, sep, last = ref.strip().rpartition("/")
+    if last in (".", "..") or "." not in last:
+        return ref.strip(), ()
+    name, *members = last.split(".")
+    return head + sep + name, tuple(members)
+
+
+def walk_members(vt: VType, members: tuple, what: str) -> tuple[tuple, VType]:
+    """The field names of ``members`` inside type ``vt``, and the type of
+    the last one."""
+    path = []
+    for name in members:
+        if vt.kind != "aggregate":
+            raise Unsupported(f"{what}: {vt.kind} type {vt.key} has no member {name!r}")
+        m = next((m for m in vt.enc.members if m.name == name), None)
+        if m is None:
+            raise Unsupported(f"{what}: aggregate type {vt.key} has no member {name!r}")
+        path.append(m.ident)
+        vt = m.vtype
+    return tuple(path), vt
+
+
 def integer_range(t, calibrated: bool = False) -> Optional[tuple[int, int]]:
     """(min, max) of an integer type's ValidRange, or of the union of an
     argument type's ValidRangeSet; None unless every bound is given.  For a
@@ -469,13 +496,15 @@ class Compiler:
             raise Unsupported(f"{where}: {what} with a non-finite LinearAdjustment")
         if kind == "ParameterInstanceRef":
             name = ref.parameter_ref.strip()
+            base, members = member_path(name)
             try:
-                key = qname(self.resolve(name, path, self.params, "parameter"))
+                key = qname(self.resolve(base, path, self.params, "parameter"))
             except Unsupported:
                 key = None  # an error unless it names an aggregate member
-            return DynSize(key=key, name=name, slope=slope, intercept=intercept)
+            return DynSize(key=key, name=name, members=members, slope=slope, intercept=intercept)
         name = ref.argument_ref.strip()
-        return DynSize(arg=name, name=name, slope=slope, intercept=intercept)
+        base, members = member_path(name)
+        return DynSize(arg=base, name=name, members=members, slope=slope, intercept=intercept)
 
     def encoding(self, name: str, e, path: Key, where: str):
         if getattr(e, "bit_order", None) and e.bit_order.value != "mostSignificantBitFirst":
@@ -711,9 +740,10 @@ class Compiler:
             raise Unsupported(f"{where}: size or count from {name}, which is not decoded before it")
         if ref.optional:
             raise Unsupported(f"{where}: size or count from {name}, which has an IncludeCondition")
-        if ref.vtype.kind != "int":
-            raise Unsupported(f"{where}: size or count from {ref.vtype.kind} value {name}")
-        return dataclasses.replace(d, local=ref), int_bounds(ref.vtype)
+        member, vt = walk_members(ref.vtype, d.members, f"{where}: size or count from {d.name}")
+        if vt.kind != "int":
+            raise Unsupported(f"{where}: size or count from {vt.kind} value {d.name or name}")
+        return dataclasses.replace(d, local=ref, path=member), int_bounds(vt)
 
     def param_local(self, ref: str, path: Key) -> Local:
         pkey = self.resolve(ref, path, self.params, "parameter")
@@ -917,30 +947,35 @@ class Compiler:
                 if cmp.choice.name == "ArgumentInstanceRef":
                     if arg_key is None:
                         raise Unsupported(f"{where}: comparison of argument {ref.argument_ref!r} outside a command")
-                    pkey = arg_key(ref.argument_ref.strip())
+                    base, members = member_path(ref.argument_ref)
+                    pkey = arg_key(base)
                 else:
-                    pkey = qname(self.resolve(ref.parameter_ref, path, self.params, "parameter"))
+                    base, members = member_path(ref.parameter_ref)
+                    pkey = qname(self.resolve(base, path, self.params, "parameter"))
                     instance = ref.instance
             else:
-                pkey = qname(self.resolve(cmp.parameter_ref, path, self.params, "parameter"))
+                base, members = member_path(cmp.parameter_ref)
+                pkey = qname(self.resolve(base, path, self.params, "parameter"))
                 instance, raw = cmp.instance, cmp.use_calibrated_value is False
             local = next((lc for lc in reversed(scope) if lc.key == pkey), None)
             if local is None:
                 raise Unsupported(f"{where}: criterion on {pkey}, which is not decoded before it")
             if local.optional:
                 raise Unsupported(f"{where}: criterion on {pkey}, which has an IncludeCondition")
-            if local.vtype.kind in ("array", "aggregate"):
-                raise Unsupported(f"{where}: criterion on {pkey}, which is an {local.vtype.kind}")
+            member, vt = walk_members(local.vtype, members, f"{where}: criterion on {pkey}")
+            pkey = ".".join((pkey,) + members)
+            if vt.kind in ("array", "aggregate"):
+                raise Unsupported(f"{where}: criterion on {pkey}, which is an {vt.kind}")
             if instance:
                 raise Unsupported(f"{where}: comparison of instance {instance}")
-            vt = local.vtype
             if raw and (vt.kind not in ("int", "enum", "bool") or vt.calibrator is not None or isinstance(vt.enc, StringEnc)):
                 raise Unsupported(f"{where}: raw comparison on {vt.kind} parameter {pkey}")
             op = cmp.comparison_operator.value if cmp.comparison_operator else "=="
             if op not in ("==", "!=") and vt.kind in ("bool", "string", "binary"):
                 raise Unsupported(f"{where}: {op} on {vt.kind} parameter {pkey}")
             value = self.literal(vt, cmp.value, raw, where)
-            out.append(Criterion(local, op, value, f"{pkey} {op} {cmp.value}"))
+            target = vt if members else None
+            out.append(Criterion(local, op, value, f"{pkey} {op} {cmp.value}", member, target))
         return out
 
     # -- commands --
@@ -1125,7 +1160,7 @@ class Compiler:
     def _finish(self, n: Node) -> None:
         fixed = {}
         for c in n.all_criteria():
-            if c.op == "==" and c.local not in fixed:
+            if c.op == "==" and not c.path and c.local not in fixed:
                 fixed[c.local] = c.value
         n.fixed = fixed
         names = Namer()

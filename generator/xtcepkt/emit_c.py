@@ -457,7 +457,7 @@ class CEmitter:
             self.line("}", depth)
 
     def condition(self, c: Criterion, acc: Acc) -> str:
-        vt, x, op, v = c.local.vtype, acc.expr, c.op, c.value
+        vt, x, op, v = c.vtype, acc.expr + "".join("." + p for p in c.path), c.op, c.value
         k = vt.kind
         if k in ("int", "enum"):
             signed = k == "enum" or vt.signed
@@ -617,7 +617,7 @@ class CEmitter:
         first matching value of a DiscreteLookupList.  ``place`` gives the
         Acc of a Local."""
         if d.lookup is None:
-            return place(d.local).expr
+            return place(d.local).expr + "".join("." + p for p in d.path)
         x = slit(d.default)
         for criteria, v in reversed(d.lookup):
             cond = " && ".join(f"({self.condition(c, place(c.local))})" for c in criteria)

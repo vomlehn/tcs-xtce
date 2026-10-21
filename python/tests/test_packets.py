@@ -241,6 +241,20 @@ class PacketTests(unittest.TestCase):
         # Nominal takes the default of 1 byte.
         self.assertEqual(self.kind(dataclasses.replace(t, mode=demo.ModeArgType.NOMINAL)), "BadSize")
 
+    def test_references_to_aggregate_members(self):
+        r = demo.Route(sec_hdr_flag=True, route_hdr=demo.RouteHeaderType(kind=2, count=3), stops=[1, 2, 3], detour=9)
+        b = r.to_bytes()
+        self.assertEqual(bytes(b[6:]).hex(), "2301020309")
+        self.assertEqual(demo.Route.decode(b), r)
+        # RouteHdr.Kind 2 includes the detour, and RouteHdr.Count counts the stops.
+        self.assertEqual(self.kind(dataclasses.replace(r, detour=None)), "Missing")
+        short = dataclasses.replace(r, route_hdr=demo.RouteHeaderType(kind=1, count=3), detour=None)
+        self.assertEqual(demo.Route.decode(short.to_bytes()), short)
+        self.assertEqual(self.kind(dataclasses.replace(short, stops=[1])), "BadSize")
+
+        p = demo.Plan(leg=demo.LegType(mode=demo.ModeArgType.NOMINAL, count=2), points=[10, 20])
+        self.assertEqual(demo.Plan.decode(p.to_bytes()), p)
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

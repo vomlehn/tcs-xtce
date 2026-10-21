@@ -66,6 +66,10 @@ class DynSize:
     table: Optional[tuple] = None
     lookup: Optional[list] = None
     default: int = 0
+    # A reference to an aggregate member (``P.a.b``): ``members`` are its
+    # names, and binding sets ``path`` to their field names.
+    members: tuple = ()
+    path: tuple = ()
     slope: float = 1.0
     intercept: float = 0.0
     factor: int = 1
@@ -82,7 +86,9 @@ class DynSize:
         """The name of the value that gives the size, once bound."""
         if self.lookup is not None:
             return "a DiscreteLookupList"
-        return self.local.name if self.local is not None else self.name
+        if self.local is not None:
+            return ".".join((self.local.name,) + tuple(self.members))
+        return self.name
 
 
 @dataclass
@@ -361,12 +367,21 @@ def walk(items: list) -> list:
 
 @dataclass(eq=False)
 class Criterion:
-    """``local <op> value``; ``value`` is an engineering value."""
+    """``local <op> value``; ``value`` is an engineering value.  With a
+    ``path`` (field names of nested aggregate members, from a reference
+    such as ``P.a.b``) the criterion is on that member of ``local``, of
+    type ``target``."""
 
     local: Local
     op: str
     value: object
     text: str  # as written in the XTCE file, for error messages
+    path: tuple = ()
+    target: Optional["VType"] = None
+
+    @property
+    def vtype(self) -> "VType":
+        return self.target if self.target is not None else self.local.vtype
 
 
 @dataclass(eq=False)

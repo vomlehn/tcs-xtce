@@ -67,3 +67,9 @@ error:Truncated | -
 Tune{seq_count=6, packet_length=4, mode=Science, setting=0x010203} | 112ec00600040702010203
 Tune{seq_count=6, packet_length=4, mode=Safe, setting=0x} | 112ec00600040700
 Tune{seq_count=6, packet_length=4, mode=Nominal, setting=0x7f} | 112ec006000407017f
+Route{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, route_hdr={kind=2, count=3}, stops=[1, 2, 3], detour=9} | 094ac02a00122301020309
+Route{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, route_hdr={kind=1, count=0}, stops=[], detour=none} | 014ac02a001210
+error:BadSize | -
+error:Truncated | -
+Plan{seq_count=6, packet_length=4, leg={mode=Nominal, count=2}, points=[10, 20]} | 112ec0060004080102000a0014
+error:BadSize | -

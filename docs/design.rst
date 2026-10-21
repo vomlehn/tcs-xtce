@@ -425,6 +425,16 @@ fold into the intercept and factor, so one runtime function,
 language, so the three runtimes accept and reject exactly the same
 values.
 
+A reference to an aggregate member (XTCE's ``P.a.b``) is split into the
+parameter or argument and the member names; names can't contain dots,
+so that is unambiguous. Binding a ``DynSize``, or compiling a
+``Criterion``, walks the names through the aggregate types to the
+members' field names (``path``) and the member's type. Emitters append
+``.field`` for each to the expression for the value, which works in
+every language because generated aggregates are plain structs. An
+``==`` criterion on a member doesn't fix the value, since there is no
+field that holds only the member.
+
 A ``DiscreteLookupList`` is a ``DynSize`` too: instead of a ``local``,
 binding compiles its comparisons into ``lookup`` (criteria and a value
 per case, plus ``default``), and that value is ``x``. The emitters
@@ -560,8 +570,7 @@ Limitations and future work
 
 * **Packet codecs** — the main missing XTCE features are:
 
-  * references to aggregate members by path, in sizes and criteria;
-  * array subsets;
+  * references to array elements, and array subsets;
   * ``BooleanExpression`` criteria.
 
   The model has room for each of these: new ``Item`` kinds, and

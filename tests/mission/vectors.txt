@@ -67,3 +67,9 @@ tm 0940c02a0012013abc  # frame truncated in the body
 tc 112ec00600040702010203  # tune, a setting size from a lookup on an argument
 tc 112ec00600040700  # tune in safe mode, no setting
 tc 112ec006000407017f  # tune, the lookup's default size
+tm 094ac02a00122301020309  # route, a count and an include condition on aggregate members
+tm 014ac02a001210  # route, no stops and no detour
+tm 094ac02a00122401020304  # route, a member count beyond its ValidRange
+tm 094ac02a00122105  # route truncated before its detour
+tc 112ec0060004080102000a0014  # plan, a count from an argument's member
+tc 112ec0060004080205000100020003000400050006  # plan, a member count beyond its ValidRangeSet

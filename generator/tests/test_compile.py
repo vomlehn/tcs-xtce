@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 import xtce  # noqa: E402
 
 from xtcepkt import emit_c  # noqa: E402
-from xtcepkt.compile import compile_document, item_bits, value_range  # noqa: E402
+from xtcepkt.compile import compile_document, item_bits, member_path, value_range  # noqa: E402
 from xtcepkt.model import MAX_FIELD_BITS, Pad, Seek, Unsupported  # noqa: E402
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
@@ -717,6 +717,40 @@ class LookupAndLocationTests(unittest.TestCase):
         with self.assertRaises(Unsupported) as cm:
             compile_xml(text)
         self.assertIn("criterion on /Sat/N, which is not decoded before it", str(cm.exception))
+
+
+
+class MemberPathTests(unittest.TestCase):
+    def test_split(self):
+        self.assertEqual(member_path("P.a.b"), ("P", ("a", "b")))
+        self.assertEqual(member_path("../Sys/P.a"), ("../Sys/P", ("a",)))
+        self.assertEqual(member_path("../P"), ("../P", ()))
+
+    def test_criterion_on_a_nested_member(self):
+        text = aggregate_mission(
+            aggregate("A", ("Inner", "C")) + aggregate("C", ("N", "U8"), ("M", "U8")),
+            '<ParameterRefEntry parameterRef="Agg"/>'
+            '<ParameterRefEntry parameterRef="N"><IncludeCondition>'
+            '<Comparison parameterRef="Agg.Inner.M" value="1"/></IncludeCondition></ParameterRefEntry>',
+        )
+        crit = compile_xml(text).nodes[0].items[1].criteria[0]
+        self.assertEqual((crit.path, crit.vtype.key, crit.text), (("inner", "m"), "/Sat/U8", "/Sat/Agg.Inner.M == 1"))
+
+    def test_rejected(self):
+        for ref, why in (
+            ("Agg.Nope", "aggregate type /Sat/A has no member 'Nope'"),
+            ("Agg.N.x", "int type /Sat/U8 has no member 'x'"),
+            ("N.x", "int type /Sat/U8 has no member 'x'"),
+        ):
+            text = aggregate_mission(
+                aggregate("A", ("N", "U8")),
+                '<ParameterRefEntry parameterRef="N"/><ParameterRefEntry parameterRef="Agg"/>'
+                f'<ParameterRefEntry parameterRef="N"><IncludeCondition><Comparison parameterRef="{ref}" value="1"/>'
+                "</IncludeCondition></ParameterRefEntry>",
+            )
+            with self.subTest(ref), self.assertRaises(Unsupported) as cm:
+                compile_xml(text)
+            self.assertIn(why, str(cm.exception))
 
 
 if __name__ == "__main__":

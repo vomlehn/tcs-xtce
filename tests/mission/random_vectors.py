@@ -105,6 +105,13 @@ def frame(rng) -> bytes:
     return bits(f + [(gap, 0), (1, rng.randrange(2))])
 
 
+def route(rng) -> bytes:
+    """A Route body: a header whose members give the stop count and
+    whether there is a detour."""
+    kind, n = rng.choice([1, 2, rng.randrange(16)]), rng.choice([0, 1, 3, rng.randrange(16)])
+    return bytes([kind << 4 | n]) + rng.randbytes(min(n, 4) + (kind == 2))
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -121,7 +128,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
-            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, 320, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, 320, 330, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -145,10 +152,12 @@ def main() -> None:
                 data += reply(rng)
             elif apid == 320 and rng.random() < 0.8:
                 data += frame(rng)
+            elif apid == 330 and rng.random() < 0.8:
+                data += route(rng)
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
-            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, rng.randrange(256)])
+            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
@@ -158,6 +167,9 @@ def main() -> None:
             elif opcode == 7 and rng.random() < 0.8:
                 mode = rng.choice([0, 1, 2, rng.randrange(256)])
                 data += bytes([mode]) + rng.randbytes({0: 0, 2: 3}.get(mode, 1))
+            elif opcode == 8 and rng.random() < 0.8:
+                n = rng.choice([1, 2, 4, rng.randrange(6)])
+                data += bytes([rng.randrange(3), n]) + rng.randbytes(2 * min(n, 4))
             kind = "tc"
         data += rng.randbytes(rng.randrange(40))
         if rng.random() < 0.1:

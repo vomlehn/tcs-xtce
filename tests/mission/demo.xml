@@ -212,6 +212,12 @@
           </SizeInBits>
         </BinaryDataEncoding>
       </BinaryParameterType>
+      <AggregateParameterType name="RouteHeaderType">
+        <MemberList>
+          <Member name="Kind" typeRef="U4"/>
+          <Member name="Count" typeRef="BatchSizeType"/>
+        </MemberList>
+      </AggregateParameterType>
       <IntegerParameterType name="BoardTempType" sizeInBits="8">
         <IntegerDataEncoding sizeInBits="8">
           <DefaultCalibrator>
@@ -400,6 +406,9 @@
       <Parameter name="LogCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="BatchCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="FrameKind" parameterTypeRef="U8"/>
+      <Parameter name="RouteHdr" parameterTypeRef="RouteHeaderType"/>
+      <Parameter name="Stops" parameterTypeRef="U8"/>
+      <Parameter name="Detour" parameterTypeRef="U8"/>
       <Parameter name="FrameGap" parameterTypeRef="U4"/>
       <Parameter name="FrameBody" parameterTypeRef="FrameBodyType"/>
       <Parameter name="FrameEnd" parameterTypeRef="FlagType"/>
@@ -602,6 +611,30 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <SequenceContainer name="Route">
+        <EntryList>
+          <ParameterRefEntry parameterRef="RouteHdr"/>
+          <ParameterRefEntry parameterRef="Stops">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="RouteHdr.Count"/>
+                </DynamicValue>
+              </Count>
+            </RepeatEntry>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="Detour">
+            <IncludeCondition>
+              <Comparison parameterRef="RouteHdr.Kind" value="2"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="330"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="LogRecord" abstract="true">
         <BinaryEncoding>
           <SizeInBits>
@@ -783,6 +816,12 @@
           <Member name="Hold" typeRef="ForceType"/>
         </MemberList>
       </AggregateArgumentType>
+      <AggregateArgumentType name="LegType">
+        <MemberList>
+          <Member name="Mode" typeRef="ModeArgType"/>
+          <Member name="Count" typeRef="WordCountType"/>
+        </MemberList>
+      </AggregateArgumentType>
       <IntegerArgumentType name="AddressType" signed="false">
         <IntegerDataEncoding sizeInBits="32" byteOrder="leastSignificantByteFirst"/>
       </IntegerArgumentType>
@@ -932,6 +971,33 @@
           <EntryList>
             <ArgumentRefEntry argumentRef="Mode"/>
             <ArgumentRefEntry argumentRef="Setting"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Plan">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="8"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Leg" argumentTypeRef="LegType"/>
+          <Argument name="Points" argumentTypeRef="U16Arg"/>
+        </ArgumentList>
+        <CommandContainer name="PlanContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Leg"/>
+            <ArgumentRefEntry argumentRef="Points">
+              <RepeatEntry>
+                <Count>
+                  <DynamicValue>
+                    <ArgumentInstanceRef argumentRef="Leg.Count"/>
+                  </DynamicValue>
+                </Count>
+              </RepeatEntry>
+            </ArgumentRefEntry>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

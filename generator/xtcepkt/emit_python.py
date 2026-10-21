@@ -77,7 +77,7 @@ def source(d: DynSize, place) -> str:
     first matching value of a DiscreteLookupList.  ``place`` gives the
     expression for a Local."""
     if d.lookup is None:
-        return place(d.local)
+        return place(d.local) + "".join("." + p for p in d.path)
     x = str(d.default)
     for criteria, v in reversed(d.lookup):
         x = f"({v} if {' and '.join(f'({condition(c, place(c.local))})' for c in criteria)} else {x})"
@@ -192,7 +192,9 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
 
 
 def condition(c: Criterion, x: str) -> str:
-    vt = c.local.vtype
+    """``x`` is the expression for the criterion's local."""
+    vt = c.vtype
+    x += "".join("." + p for p in c.path)
     v = c.value if vt.kind in ("int", "enum") else literal(vt, c.value)
     return f"{x} {c.op} {v}"
 
