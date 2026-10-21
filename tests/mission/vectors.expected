@@ -54,3 +54,9 @@ Batches{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq
 Batches{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, batch_count=0, batches=[]} | 0122c02a001200
 error:BadSize | -
 error:Truncated | -
+Reply{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, answer=true, code="ABC", note_size=2, note="é"} | 0936c02a00127965730041424302c3a9
+Reply{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, answer=false, code="ABC", note_size=0, note=""} | 0136c02a00126e6f000041424300
+error:OutOfRange | -
+Reply{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, answer=true, code="ABC", note_size=2, note="hi"} | 0936c02a001279657300414243026869
+error:InvalidString | -
+error:Truncated | -

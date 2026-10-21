@@ -171,6 +171,33 @@
           </Dimension>
         </DimensionList>
       </ArrayParameterType>
+      <BooleanParameterType name="AnswerType" oneStringValue="yes" zeroStringValue="no">
+        <StringDataEncoding>
+          <SizeInBits>
+            <Fixed>
+              <FixedValue>32</FixedValue>
+            </Fixed>
+            <TerminationChar>00</TerminationChar>
+          </SizeInBits>
+        </StringDataEncoding>
+      </BooleanParameterType>
+      <StringParameterType name="CodeType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <FixedValue>24</FixedValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </StringParameterType>
+      <StringParameterType name="NoteType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="NoteSize"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </StringParameterType>
       <IntegerParameterType name="BoardTempType" sizeInBits="8">
         <IntegerDataEncoding sizeInBits="8">
           <DefaultCalibrator>
@@ -358,6 +385,10 @@
       <Parameter name="Rest" parameterTypeRef="RestType"/>
       <Parameter name="LogCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="BatchCount" parameterTypeRef="SampleCountType"/>
+      <Parameter name="Answer" parameterTypeRef="AnswerType"/>
+      <Parameter name="Code" parameterTypeRef="CodeType"/>
+      <Parameter name="NoteSize" parameterTypeRef="PayloadSizeType"/>
+      <Parameter name="Note" parameterTypeRef="NoteType"/>
       <Parameter name="Batches" parameterTypeRef="BatchesType"/>
       <Parameter name="Channel" parameterTypeRef="U4"/>
       <Parameter name="Reading" parameterTypeRef="S16"/>
@@ -518,6 +549,19 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="290"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="Reply">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Answer"/>
+          <ParameterRefEntry parameterRef="Code"/>
+          <ParameterRefEntry parameterRef="NoteSize"/>
+          <ParameterRefEntry parameterRef="Note"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="310"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

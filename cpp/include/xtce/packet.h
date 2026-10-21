@@ -660,6 +660,22 @@ static inline int xtce_pk_read_string(xtce_pk_reader* r, const xtce_pk_string_sp
   return 0;
 }
 
+/* Reads a string field encoded as binary: `n` bytes, which must be UTF-8,
+ * into `out`, which has room for `n + 1`; NUL-terminates them. */
+static inline int xtce_pk_read_utf8(xtce_pk_reader* r, size_t n, const char* f, char* out, size_t* len) {
+  XTCE_PK_TRY(xtce_pk_read_bytes(r, n, f, (uint8_t*)out));
+  out[n] = 0;
+  *len = n;
+  if (!xtce_pk_valid_utf8((const uint8_t*)out, n)) return xtce_pk_fail(r->err, XTCE_PK_INVALID_STRING, f, NULL);
+  return 0;
+}
+
+/* Writes a string field encoded as binary: the `n` bytes of UTF-8 at `s`. */
+static inline int xtce_pk_write_utf8(xtce_pk_writer* w, const char* s, size_t n, const char* f) {
+  if (!xtce_pk_valid_utf8((const uint8_t*)s, n)) return xtce_pk_fail(w->err, XTCE_PK_INVALID_STRING, f, NULL);
+  return xtce_pk_write_bytes(w, (const uint8_t*)s, n);
+}
+
 static inline int xtce_pk_write_string(xtce_pk_writer* w, const xtce_pk_string_spec* spec, const char* s, size_t n,
                                        const char* f) {
   const uint8_t* b = (const uint8_t*)s;

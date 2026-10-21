@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from .model import Criterion, FloatEnc, IntEnc, Node, Polynomial, Spline, StringEnc, Value, VType
+from .model import BinaryEnc, Criterion, FloatEnc, IntEnc, Node, Polynomial, Spline, StringEnc, Value, VType
 
 ENCODINGS = {
     "unsigned": "Unsigned",
@@ -43,6 +43,23 @@ def string_spec(vt: VType) -> tuple:
     return e.fixed_bits, e.max_bits, e.terminator, e.size_tag_bits or 0
 
 
+def str_cap(vt: VType) -> int:
+    """The most bytes of content a string field (or a boolean encoded as
+    a string) can hold."""
+    if isinstance(vt.enc, BinaryEnc):
+        return vt.enc.bits // 8  # a string encoded as binary fills its field
+    fixed, mx, term, tag = string_spec(vt)
+    if vt.enc.dyn is not None:
+        fixed = mx  # it occupies at most max_bits, like a fixed size
+    if fixed is not None and term is not None:
+        return fixed // 8
+    if fixed is not None:
+        return max(min((fixed - tag) // 8, (1 << tag) - 1), 0)
+    if term is not None:
+        return max(mx // 8 - 1, 0)
+    return max(min((mx - tag) // 8, (1 << tag) - 1), 0)
+
+
 def criteria_by_node(node: Node) -> list[tuple[Node, list[Criterion]]]:
     """(node, criteria) for every node of the chain below the root."""
     return [(n, n.criteria) for n in node.chain()[1:]]
@@ -70,6 +87,7 @@ __all__ = [
     "invertible",
     "le",
     "raw_is_int",
+    "str_cap",
     "string_spec",
     "values",
 ]

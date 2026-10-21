@@ -14,6 +14,7 @@ import math
 import re
 from typing import Callable, Optional
 
+from .common import str_cap
 from .model import (
     MAX_FIELD_BITS,
     AggregateEnc,
@@ -292,7 +293,8 @@ class Compiler:
                 raise Unsupported(f"{where}: float with {enc_name}")
             vt.kind = "float"
         elif base in ("Integer", "Enumerated", "Boolean"):
-            if not isinstance(enc, IntEnc):
+            # A boolean may also be one of two strings.
+            if not isinstance(enc, IntEnc) and not (base == "Boolean" and isinstance(enc, StringEnc)):
                 raise Unsupported(f"{where}: {base.lower()} with {enc_name}")
             if cal is not None and base != "Integer":
                 article = "an" if base[0] in "AEIOU" else "a"
@@ -308,8 +310,11 @@ class Compiler:
                     vt.eng = (bits, t.signed is not False)
                 vt.valid_range = integer_range(t, cal is not None)
         elif base == "String":
-            if not isinstance(enc, StringEnc):
+            # A string encoded as binary is its UTF-8 bytes, filling the field.
+            if not isinstance(enc, (StringEnc, BinaryEnc)):
                 raise Unsupported(f"{where}: string with {enc_name}")
+            if isinstance(enc, BinaryEnc) and enc.rest:
+                raise Unsupported(f"{where}: string with binary size -1")
             vt.kind = "string"
         else:
             if not isinstance(enc, BinaryEnc):
@@ -323,8 +328,24 @@ class Compiler:
         if vt.kind == "bool":
             vt.one_string = t.one_string_value if t.one_string_value is not None else "True"
             vt.zero_string = t.zero_string_value if t.zero_string_value is not None else "False"
+            if isinstance(enc, StringEnc):
+                self.check_bool_strings(vt, where)
         self.vtypes[cache] = vt
         return vt
+
+    @staticmethod
+    def check_bool_strings(vt: VType, where: str) -> None:
+        """A boolean encoded as a string: its two strings must differ and
+        fit the encoding."""
+        if vt.one_string == vt.zero_string:
+            raise Unsupported(f"{where}: oneStringValue and zeroStringValue are both {vt.one_string!r}")
+        e = vt.enc
+        for s in (vt.one_string, vt.zero_string):
+            b = s.encode("utf-8")
+            if e.terminator is not None and e.terminator in b:
+                raise Unsupported(f"{where}: {s!r} contains the termination character")
+            if e.dyn is None and len(b) > str_cap(vt):
+                raise Unsupported(f"{where}: {s!r} does not fit its encoding")
 
     def time_type(self, key: Key, base: str, t, path: Key, where: str) -> VType:
         """Times are seconds: ``scale * raw + offset`` from the reference time."""
@@ -870,7 +891,7 @@ class Compiler:
                 raise Unsupported(f"{where}: comparison of instance {cmp.instance}")
             raw = cmp.use_calibrated_value is False
             vt = local.vtype
-            if raw and (vt.kind not in ("int", "enum", "bool") or vt.calibrator is not None):
+            if raw and (vt.kind not in ("int", "enum", "bool") or vt.calibrator is not None or isinstance(vt.enc, StringEnc)):
                 raise Unsupported(f"{where}: raw comparison on {vt.kind} parameter {pkey}")
             op = cmp.comparison_operator.value if cmp.comparison_operator else "=="
             if op not in ("==", "!=") and vt.kind in ("bool", "string", "binary"):

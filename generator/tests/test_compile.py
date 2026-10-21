@@ -624,5 +624,60 @@ class ContainerTests(unittest.TestCase):
                 self.assertIn(why, str(cm.exception))
 
 
+
+def bool_string(attrs: str, bits: int = 32) -> str:
+    """Telemetry with a boolean X encoded as a fixed, terminated string."""
+    return mission(
+        tm=f"""
+        <ParameterTypeSet>
+          <BooleanParameterType name="T" {attrs}><StringDataEncoding><SizeInBits>
+            <Fixed><FixedValue>{bits}</FixedValue></Fixed><TerminationChar>00</TerminationChar>
+          </SizeInBits></StringDataEncoding></BooleanParameterType>
+        </ParameterTypeSet>
+        <ParameterSet><Parameter name="X" parameterTypeRef="T"/></ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="Status"><EntryList><ParameterRefEntry parameterRef="X"/></EntryList></SequenceContainer>
+        </ContainerSet>"""
+    )
+
+
+class EncodingTests(unittest.TestCase):
+    def test_boolean_as_a_string(self):
+        vt = compile_xml(bool_string('oneStringValue="on" zeroStringValue="off"')).nodes[0].fields[0][1].vtype
+        self.assertEqual((vt.kind, vt.one_string, vt.zero_string, item_bits(vt)), ("bool", "on", "off", 32))
+        # The defaults are True and False, which need 5 bytes.
+        self.assertEqual(compile_xml(bool_string("", 40)).nodes[0].fields[0][1].vtype.zero_string, "False")
+
+    def test_boolean_strings_rejected(self):
+        for attrs, bits, why in (
+            ('oneStringValue="a" zeroStringValue="a"', 32, "are both 'a'"),
+            ('oneStringValue="toolong" zeroStringValue="no"', 32, "'toolong' does not fit its encoding"),
+            ("", 32, "'False' does not fit its encoding"),
+        ):
+            with self.subTest(why=why), self.assertRaises(Unsupported) as cm:
+                compile_xml(bool_string(attrs, bits))
+            self.assertIn(why, str(cm.exception))
+
+    def test_string_as_binary(self):
+        text = mission(
+            tm="""
+            <ParameterTypeSet>
+              <StringParameterType name="T"><BinaryDataEncoding><SizeInBits>
+                <FixedValue>24</FixedValue></SizeInBits></BinaryDataEncoding></StringParameterType>
+              <StringParameterType name="R"><BinaryDataEncoding><SizeInBits>
+                <FixedValue>-1</FixedValue></SizeInBits></BinaryDataEncoding></StringParameterType>
+            </ParameterTypeSet>
+            <ParameterSet><Parameter name="X" parameterTypeRef="T"/><Parameter name="Y" parameterTypeRef="R"/></ParameterSet>
+            <ContainerSet>
+              <SequenceContainer name="Status"><EntryList><ParameterRefEntry parameterRef="X"/></EntryList></SequenceContainer>
+              <SequenceContainer name="Rest"><EntryList><ParameterRefEntry parameterRef="Y"/></EntryList></SequenceContainer>
+            </ContainerSet>"""
+        )
+        m = compile_xml(text, skip_unsupported=True)
+        vt = m.nodes[0].fields[0][1].vtype
+        self.assertEqual((vt.kind, vt.enc.bits), ("string", 24))
+        self.assertIn("string with binary size -1", m.skipped[0])
+
+
 if __name__ == "__main__":
     unittest.main()

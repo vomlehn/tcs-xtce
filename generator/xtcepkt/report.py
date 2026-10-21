@@ -83,6 +83,8 @@ def need(vt: VType) -> tuple[Optional[int], str]:
         return None, f"rest of the packet, at most {nbytes(e.bits // 8)}"
     if vt.kind == "int" and vt.calibrator is not None:
         return None, "calibrated, so its range does not bound the encoding"
+    if vt.kind == "bool" and isinstance(e, StringEnc):
+        return 1, "boolean, encoded as a string"
     if vt.kind == "bool":
         n, why = 1, "boolean"
     elif vt.kind in ("int", "enum"):

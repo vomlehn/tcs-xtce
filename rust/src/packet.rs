@@ -770,6 +770,12 @@ pub fn write_string(
     Ok(())
 }
 
+/// The string a string field encoded as binary holds: all of its bytes,
+/// which must be UTF-8.
+pub fn string_from_bytes(b: Vec<u8>, field: &'static str) -> Result<String> {
+    String::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
+}
+
 /// Writes a fixed-size binary field.
 pub fn write_binary(w: &mut BitWriter<'_>, b: &[u8], n: usize, field: &'static str) -> Result<()> {
     if b.len() != n {

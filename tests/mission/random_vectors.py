@@ -85,6 +85,17 @@ def batches(rng) -> bytes:
     return bits(f)
 
 
+def reply(rng) -> bytes:
+    """A Reply body: mostly valid answers, codes and notes."""
+    answer = rng.choice([b"yes\0", b"yes\0", b"no\0\0", b"no\0z", b"yes!", rng.randbytes(4)])
+    code = rng.choice([b"ABC", b"ABC", b"\xc3\xa9a", b"a\xff\0", rng.randbytes(3)])
+    size = rng.choice([0, 2, 8, rng.randrange(12)])
+    note = b"".join(rng.choice([b"h", b"i", b"\xc3\xa9"]) for _ in range(size))[: min(size, 8)]
+    if note and rng.random() < 0.2:
+        note = note[:-1] + b"\xff"
+    return answer + code + bytes([size]) + note
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -101,7 +112,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
-            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -121,6 +132,8 @@ def main() -> None:
                 data += log(rng)
             elif apid == 290 and rng.random() < 0.8:
                 data += batches(rng)
+            elif apid == 310 and rng.random() < 0.8:
+                data += reply(rng)
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))

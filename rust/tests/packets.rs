@@ -403,3 +403,29 @@ fn sizes_from_aggregate_members() {
     e.batches[1].size = 1;
     assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Batches" }));
 }
+
+#[test]
+fn booleans_and_strings_with_other_encodings() {
+    let r = Reply {
+        sec_hdr_flag: true,
+        answer: true,
+        code: "ABC".into(),
+        note_size: 2,
+        note: "é".into(),
+        ..Default::default()
+    };
+    let b = r.to_bytes().unwrap();
+    assert_eq!(&b[6..], b"yes\0ABC\x02\xc3\xa9");
+    assert_eq!(Reply::decode(&b).unwrap(), r);
+    let mut e = r.clone();
+    e.answer = false;
+    assert_eq!(&e.to_bytes().unwrap()[6..10], b"no\0\0");
+    // Strings encoded as binary fill their field exactly.
+    e.code = "AB".into();
+    assert_eq!(e.to_bytes(), Err(PacketError::OutOfRange { field: "Code" }));
+    e.code = "ABCD".into();
+    assert_eq!(e.to_bytes(), Err(PacketError::TooLong { field: "Code" }));
+    e.code = "ABC".into();
+    e.note = "e".into(); // 1 byte, but NoteSize says 2
+    assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Note" }));
+}

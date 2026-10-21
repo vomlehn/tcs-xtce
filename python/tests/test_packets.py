@@ -217,6 +217,17 @@ class PacketTests(unittest.TestCase):
         bad = dataclasses.replace(b, batches=[b.batches[0], demo.BatchType(size=1, values=[])])
         self.assertEqual(self.kind(bad), "BadSize")
 
+    def test_booleans_and_strings_with_other_encodings(self):
+        r = demo.Reply(sec_hdr_flag=True, answer=True, code="ABC", note_size=2, note="\u00e9")
+        b = r.to_bytes()
+        self.assertEqual(bytes(b[6:]), b"yes\0ABC\x02\xc3\xa9")
+        self.assertEqual(demo.Reply.decode(b), r)
+        self.assertEqual(bytes(dataclasses.replace(r, answer=False).to_bytes()[6:10]), b"no\0\0")
+        # Strings encoded as binary fill their field exactly.
+        self.assertEqual(self.kind(dataclasses.replace(r, code="AB")), "OutOfRange")
+        self.assertEqual(self.kind(dataclasses.replace(r, code="ABCD")), "TooLong")
+        self.assertEqual(self.kind(dataclasses.replace(r, note="e")), "BadSize")
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

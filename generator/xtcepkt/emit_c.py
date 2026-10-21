@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .common import flt, int_enc, invertible, le, string_spec
+from .common import flt, int_enc, invertible, le, str_cap, string_spec
 from .compile import snake
 from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
@@ -56,20 +56,6 @@ def ulit(v: int) -> str:
 
 def bool_lit(b: bool) -> str:
     return "true" if b else "false"
-
-
-def str_cap(vt: VType) -> int:
-    """The most bytes a string field can hold."""
-    fixed, mx, term, tag = string_spec(vt)
-    if vt.enc.dyn is not None:
-        fixed = mx  # it occupies at most max_bits, like a fixed size
-    if fixed is not None and term is not None:
-        return fixed // 8
-    if fixed is not None:
-        return max(min((fixed - tag) // 8, (1 << tag) - 1), 0)
-    if term is not None:
-        return max(mx // 8 - 1, 0)
-    return max(min((mx - tag) // 8, (1 << tag) - 1), 0)
 
 
 class Acc:
@@ -314,8 +300,11 @@ class CEmitter:
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_rest(r, {e.bits // 8}, {f}, &n));", depth + 1)
             else:
                 self.size(e.dyn, "r->err", f, ref, depth + 1)
-            self.line(f"XTCE_PK_TRY(xtce_pk_read_bytes(r, n, {f}, {dst}.data));", depth + 1)
-            self.line(f"{dst}.len = n;", depth + 1)
+            if vt.kind == "string":
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_utf8(r, n, {f}, {dst}.data, &{dst}.len));", depth + 1)
+            else:
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_bytes(r, n, {f}, {dst}.data));", depth + 1)
+                self.line(f"{dst}.len = n;", depth + 1)
             self.line("}", depth)
         elif isinstance(e, (IntEnc, FloatEnc)):
             self.line("{", depth)
@@ -342,8 +331,24 @@ class CEmitter:
                 else:
                     self.calibrate(vt, f"xtce_pk_int_to_double(raw, {e.bits}, {enc})", dst, f, d)
             self.line("}", depth)
+        elif isinstance(e, BinaryEnc) and vt.kind == "string":
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_utf8(r, {e.bits // 8}, {f}, {dst}.data, &{dst}.len));", depth)
         elif isinstance(e, BinaryEnc):
             self.line(f"XTCE_PK_TRY(xtce_pk_read_bytes(r, {e.bits // 8}, {f}, {dst}.data));", depth)
+        elif vt.kind == "bool":
+            # One of two strings.
+            cap = str_cap(vt)
+            self.line("{", depth)
+            d = depth + 1
+            self.line(f"char s[{cap + 1}];", d)
+            self.line("size_t n;", d)
+            spec = self.string_spec(vt, "r->err", f, ref, d)
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_string(r, {spec}, {f}, s, {cap}, &n));", d)
+            one, zero = vt.one_string, vt.zero_string
+            self.line(f"if (n == {blen(one)} && memcmp(s, {cstr(one)}, n) == 0) {dst} = true;", d)
+            self.line(f"else if (n == {blen(zero)} && memcmp(s, {cstr(zero)}, n) == 0) {dst} = false;", d)
+            self.line(f"else return xtce_pk_fail(r->err, XTCE_PK_OUT_OF_RANGE, {f}, NULL);", d)
+            self.line("}", depth)
         else:
             self.line("{", depth)
             spec = self.string_spec(vt, "r->err", f, ref, depth + 1)
@@ -385,11 +390,16 @@ class CEmitter:
             self.line(f"XTCE_PK_TRY(xtce_pk_write_bytes(w, {data}, {n}));", depth)
             return
         if isinstance(e, BinaryEnc) and e.dyn is not None:
-            data, n = (f"(const uint8_t*){x}", str(len(fixed))) if is_lit else (f"{x}.data", f"{x}.len")
+            if vt.kind == "string":
+                data, n = (x, str(blen(fixed))) if is_lit else (f"{x}.data", f"{x}.len")
+                put = f"xtce_pk_write_utf8(w, {data}, n, {f})"
+            else:
+                data, n = (f"(const uint8_t*){x}", str(len(fixed))) if is_lit else (f"{x}.data", f"{x}.len")
+                put = f"xtce_pk_write_bytes(w, {data}, n)"
             self.line("{", depth)
             self.size(e.dyn, "w->err", f, ref, depth + 1)
             self.line(f"if ({n} != n) {bad}", depth + 1)
-            self.line(f"XTCE_PK_TRY(xtce_pk_write_bytes(w, {data}, n));", depth + 1)
+            self.line(f"XTCE_PK_TRY({put});", depth + 1)
             self.line("}", depth)
             return
         if isinstance(e, (IntEnc, FloatEnc)) and vt.kind in ("float", "int") and not invertible(vt):
@@ -422,9 +432,23 @@ class CEmitter:
                 self.line(f"XTCE_PK_TRY(xtce_pk_double_to_int(y, {bits}, {enc}, {f}, w->err, &raw));", d)
             self.line(f"XTCE_PK_TRY(xtce_pk_write_uint(w, {bits}, {bool_lit(le(vt))}, raw));", d)
             self.line("}", depth)
+        elif isinstance(e, BinaryEnc) and vt.kind == "string":
+            # Exactly the field's bytes, like binary values.
+            data, n = (x, str(blen(fixed))) if is_lit else (f"{x}.data", f"{x}.len")
+            size = e.bits // 8
+            self.line(f"if ({n} > {size}) return xtce_pk_fail(w->err, XTCE_PK_TOO_LONG, {f}, NULL);", depth)
+            self.line(f"if ({n} < {size}) return xtce_pk_fail(w->err, XTCE_PK_OUT_OF_RANGE, {f}, NULL);", depth)
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_utf8(w, {data}, {size}, {f}));", depth)
         elif isinstance(e, BinaryEnc):
             data = f"(const uint8_t*){x}" if is_lit else f"{x}.data"
             self.line(f"XTCE_PK_TRY(xtce_pk_write_bytes(w, {data}, {e.bits // 8}));", depth)
+        elif vt.kind == "bool":
+            one, zero = vt.one_string, vt.zero_string
+            self.line("{", depth)
+            spec = self.string_spec(vt, "w->err", f, ref, depth + 1)
+            args = f"({x}) ? {cstr(one)} : {cstr(zero)}, ({x}) ? {blen(one)} : {blen(zero)}"
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_string(w, {spec}, {args}, {f}));", depth + 1)
+            self.line("}", depth)
         else:
             data, n = (x, str(blen(fixed))) if is_lit else (f"{x}.data", f"{x}.len")
             self.line("{", depth)

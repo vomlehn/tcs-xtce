@@ -130,8 +130,12 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         if e.rest:
             return f"r.bytes(r.rest_bytes({e.bits // 8}, {f}), {f})"
         n = size(e.dyn, ref(e.dyn), f) if e.dyn else e.bits // 8
-        return f"r.bytes({n}, {f})"
-    return f"pk.read_string(r, {spec(vt, ref, f)}, {f})"
+        b = f"r.bytes({n}, {f})"
+        return f"pk.string_from_bytes({b}, {f})" if vt.kind == "string" else b
+    s = f"pk.read_string(r, {spec(vt, ref, f)}, {f})"
+    if vt.kind == "bool":
+        return f"pk.bool_from_string({s}, {pstr(vt.one_string)}, {pstr(vt.zero_string)}, {f})"
+    return s
 
 
 def write_stmt(vt: VType, x: str, f: str, ref) -> str:
@@ -162,7 +166,11 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     if isinstance(e, BinaryEnc) and e.rest:
         return f"pk.write_rest(w, {x}, {e.bits // 8}, {f})"
     if isinstance(e, BinaryEnc):
-        return f"pk.write_binary(w, {x}, {e.bits // 8}, {f})"
+        data = f"{x}.encode()" if vt.kind == "string" else x
+        return f"pk.write_binary(w, {data}, {e.bits // 8}, {f})"
+    if vt.kind == "bool":
+        s = f"({pstr(vt.one_string)} if {x} else {pstr(vt.zero_string)})"
+        return f"pk.write_string(w, {spec(vt, ref, f)}, {s}, {f})"
     return f"pk.write_string(w, {spec(vt, ref, f)}, {x}, {f})"
 
 
@@ -341,8 +349,9 @@ class PythonEmitter:
                 self.line(f"w.skip({e.gap}, {f})", depth + 2)
             self.write_value(e.elem, el, f, ref, depth + 1)
         elif isinstance(e, BinaryEnc) and e.dyn is not None:
-            self.line(f"pk.check_size({x}, {size(e.dyn, ref(e.dyn), f)}, {f})", depth)
-            self.line(f"w.bytes({x})", depth)
+            data = f"{x}.encode()" if vt.kind == "string" else x
+            self.line(f"pk.check_size({data}, {size(e.dyn, ref(e.dyn), f)}, {f})", depth)
+            self.line(f"w.bytes({data})", depth)
         else:
             self.line(write_stmt(vt, x, f, ref), depth)
 

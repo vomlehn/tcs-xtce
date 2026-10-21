@@ -381,6 +381,33 @@ int main(void) {
     CHECK(strcmp(ENCODE(demo_Batches, &b), "BadSize") == 0);
   }
 
+  /* Booleans and strings with other encodings. */
+  {
+    static demo_Reply rp, rp2;
+    static const uint8_t body[] = {'y', 'e', 's', 0, 'A', 'B', 'C', 2, 0xc3, 0xa9};
+    demo_Reply_init(&rp);
+    rp.sec_hdr_flag = true;
+    rp.answer = true;
+    SET_STR(rp.code, "ABC");
+    rp.note_size = 2;
+    SET_STR(rp.note, "\xc3\xa9");
+    CHECK(strcmp(ENCODE(demo_Reply, &rp), "Ok") == 0);
+    CHECK(len == 16 && memcmp(buf + 6, body, sizeof body) == 0);
+    CHECK(demo_Reply_decode(&rp2, buf, len, &err) == 0);
+    CHECK(rp2.answer && strcmp(rp2.code.data, "ABC") == 0 && strcmp(rp2.note.data, "\xc3\xa9") == 0);
+    rp.answer = false;
+    CHECK(strcmp(ENCODE(demo_Reply, &rp), "Ok") == 0 && memcmp(buf + 6, "no\0\0", 4) == 0);
+    /* Strings encoded as binary fill their field exactly. */
+    SET_STR(rp.code, "AB");
+    CHECK(strcmp(ENCODE(demo_Reply, &rp), "OutOfRange") == 0);
+    SET_STR(rp.code, "ABC");
+    rp.code.data[1] = (char)0xff;
+    CHECK(strcmp(ENCODE(demo_Reply, &rp), "InvalidString") == 0);
+    SET_STR(rp.code, "ABC");
+    SET_STR(rp.note, "e");
+    CHECK(strcmp(ENCODE(demo_Reply, &rp), "BadSize") == 0);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

@@ -149,8 +149,13 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         if e.rest:
             return f"{{ let n = r.rest_bytes({e.bits // 8}, {f})?; r.bytes(n, {f})? }}"
         n = size(e.dyn, ref(e.dyn), f) if e.dyn else e.bits // 8
-        return f"r.bytes({n}, {f})?"
-    return f"pk::read_string(&mut r, {spec(vt, ref, f)}, {f})?"
+        b = f"r.bytes({n}, {f})?"
+        return f"pk::string_from_bytes({b}, {f})?" if vt.kind == "string" else b
+    s = f"pk::read_string(&mut r, {spec(vt, ref, f)}, {f})?"
+    if vt.kind == "bool":
+        bad = f"return Err(PacketError::OutOfRange {{ field: {f} }})"
+        return f"match {s}.as_str() {{ {rstr(vt.one_string)} => true, {rstr(vt.zero_string)} => false, _ => {bad} }}"
+    return s
 
 
 def write_stmt(vt: VType, x: str, f: str, ref) -> str:
@@ -174,9 +179,10 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
             f"{{ let n = {count(vt, ref, f)}; if {x}.len() != n {{ {bad} }} "
             f"for (i, {elem_pattern(e.elem)}) in {x}.iter().enumerate() {{ {gap} {write_stmt(e.elem, 'e', f, ref)} }} }}"
         )
+    data = f"{x}.as_bytes()" if vt.kind == "string" else f"&{x}"
     if isinstance(e, BinaryEnc) and e.dyn is not None:
         n = size(e.dyn, ref(e.dyn), f)
-        return f"{{ let n = {n}; if {x}.len() != n {{ {bad} }} w.bytes(&{x}); }}"
+        return f"{{ let n = {n}; if {x}.len() != n {{ {bad} }} w.bytes({data}); }}"
     if isinstance(e, IntEnc):
         bits, order = e.bits, str(le(vt)).lower()
         enc = f"IntEncoding::{int_enc(vt)}"
@@ -202,7 +208,10 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     if isinstance(e, BinaryEnc) and e.rest:
         return f"pk::write_rest(w, &{x}, {e.bits // 8}, {f})?;"
     if isinstance(e, BinaryEnc):
-        return f"pk::write_binary(w, &{x}, {e.bits // 8}, {f})?;"
+        return f"pk::write_binary(w, {data}, {e.bits // 8}, {f})?;"
+    if vt.kind == "bool":
+        s = f"if {x} {{ {rstr(vt.one_string)} }} else {{ {rstr(vt.zero_string)} }}"
+        return f"pk::write_string(w, {spec(vt, ref, f)}, {s}, {f})?;"
     return f"pk::write_string(w, {spec(vt, ref, f)}, &{x}, {f})?;"
 
 

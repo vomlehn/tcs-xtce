@@ -512,6 +512,25 @@ def write_binary(w: BitWriter, b: bytes, n: int, field: str) -> None:
     w.bytes(b)
 
 
+def string_from_bytes(b: bytes, field: str) -> str:
+    """The string a string field encoded as binary holds: all of its bytes,
+    which must be UTF-8."""
+    try:
+        return b.decode("utf-8")
+    except UnicodeDecodeError:
+        raise PacketError("InvalidString", field) from None
+
+
+def bool_from_string(s: str, one: str, zero: str, field: str) -> bool:
+    """The value of a boolean encoded as one of two strings; raises
+    ``OutOfRange`` for any other string."""
+    if s == one:
+        return True
+    if s == zero:
+        return False
+    raise PacketError("OutOfRange", field)
+
+
 def write_rest(w: BitWriter, b: bytes, max_: int, field: str) -> None:
     """Write a binary field that takes the rest of the packet: all of ``b``,
     which must be at most ``max_`` bytes."""

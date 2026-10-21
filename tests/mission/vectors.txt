@@ -54,3 +54,9 @@ tm 0922c02a0012022aabb0  # batches, sizes from a member of each
 tm 0122c02a001200  # batches, none
 tm 0922c02a00120140  # batches, a size beyond its ValidRange
 tm 0922c02a0012013aab  # batches truncated in the values
+tm 0936c02a00127965730041424302c3a9  # reply, a boolean and strings encoded as binary
+tm 0136c02a00126e6f007a41424300  # reply, no; bytes after the string's terminator are dropped
+tm 0936c02a00126d61796241424300  # reply, an answer that is neither string
+tm 0936c02a001279657300414243026869  # reply, a binary string of two characters
+tm 0936c02a00127965730041ff4300  # reply, a code that is not UTF-8
+tm 0936c02a0012796573004142430268  # reply truncated in the note

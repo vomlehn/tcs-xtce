@@ -989,7 +989,11 @@ Strings and binary
    reader's ``rest_bytes(max, field)``
    (``xtce_pk_read_rest`` in C/C++) gives the size of a binary value that
    takes the rest of the packet, and ``write_rest`` writes one (C/C++
-   generates it inline).
+   generates it inline). ``string_from_bytes(bytes, field)`` (Rust,
+   Python), ``xtce_pk_read_utf8`` and ``xtce_pk_write_utf8`` (C/C++) read
+   and write strings encoded as binary. Python's ``bool_from_string(s,
+   one, zero, field)`` decodes a boolean encoded as a string; the other
+   languages generate it inline.
 
 Sizes from other fields
    ``dynamic_size(x, slope, intercept, unit, max, field)`` computes
@@ -1011,10 +1015,11 @@ Parameter and argument types
    supported.
 
 Aggregates
-   Members of any supported type except the aggregate itself and values
-   whose size another value gives (such as an array whose count is
-   another member). Restriction criteria, include conditions and sizes
-   can't refer to an aggregate or its members.
+   Members of any supported type except the aggregate itself, values
+   that take the rest of the packet, and values whose size another value
+   gives, unless that value is an earlier member of the same aggregate.
+   Restriction criteria and include conditions can't refer to an
+   aggregate or its members.
 
 Arrays
    Elements of any supported type except arrays and values whose size
@@ -1037,8 +1042,9 @@ Sizes and counts from other fields
    ``LinearAdjustment``, in array ``EndingIndex``, ``RepeatEntry``
    ``Count``, binary ``SizeInBits`` and variable string sizes. It must
    refer to an integer value decoded earlier in the packet, outside any
-   ``IncludeCondition``. See `Generated packet types`_ for the checks
-   and bounds.
+   ``IncludeCondition``, or, inside an aggregate type, to an earlier
+   integer member. See `Generated packet types`_ for the checks and
+   bounds.
 
 Integer encoding
    1–64 bits; ``unsigned``, ``twosComplement``, ``signMagnitude`` and
@@ -1083,6 +1089,24 @@ Strings
 
    Sizes must be whole bytes, and size tags count bytes. When encoding,
    fixed fields are padded with the terminator and then zeros.
+
+   A string type may also have a ``BinaryDataEncoding`` (fixed, or with a
+   size another field gives). The field then holds the string's UTF-8
+   bytes and nothing else: values must fill it exactly, as binary values
+   do, and decoding fails with ``InvalidString`` unless the bytes are
+   UTF-8. In the demo, ``Reply`` has ``Code`` (3 bytes) and ``Note``
+   (``NoteSize`` bytes).
+
+Booleans
+   An ``IntegerDataEncoding`` (zero is false, anything else true), or a
+   ``StringDataEncoding`` in any of the layouts above, which holds
+   ``oneStringValue`` or ``zeroStringValue`` (``True`` and ``False`` by
+   default). Encoding writes the string for the value. Decoding fails
+   with ``OutOfRange`` for any other string; a fixed field's content ends
+   at its terminator, so bytes after it don't matter. The two strings
+   must differ and fit the encoding. In the demo, ``Reply`` has
+   ``Answer``, which is ``yes`` or ``no`` in 4 bytes. Comparisons with
+   ``useCalibratedValue="false"`` are not supported on these booleans.
 
 Binary
    A fixed size in whole bytes, or a size another field gives. Values
