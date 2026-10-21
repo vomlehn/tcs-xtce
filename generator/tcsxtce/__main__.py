@@ -61,7 +61,9 @@ def main(argv=None) -> int:
         help="instead of code, report the bits each packet field uses and the bits the document says it needs",
     )
     ap.add_argument("--source-name", help="name of the input file recorded in the generated header comment")
-    args = ap.parse_args(argv)
+    # Before Python 3.13, parse_args() can't place the optional OUTPUT when an
+    # option separates it from INPUT.
+    args = ap.parse_intermixed_args(argv)
     if args.size_report:
         if args.lang is not None or args.prefix is not None:
             ap.error("--size-report writes no code; leave out --lang and --prefix")
