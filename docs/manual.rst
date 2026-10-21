@@ -54,7 +54,7 @@ byte-identical output. The test suite checks this on every build.
    * - ``docs/``
      - This manual and the design description
    * - ``examples/``
-     - Example XTCE files with generated code and programs in each language
+     - Example XTCE files and programs in each language that use the code generated from them
 
 
 Building and testing
@@ -1122,10 +1122,9 @@ Examples
 
 ``examples/`` holds self-contained examples. Every example exists in all
 supported languages: C/C++, Rust and Python 3. ``make examples`` fails if
-an example is missing one. Each has an XTCE file, the
-code ``tcsxtce`` generated from it, and a program per language that uses
-that code. ``make`` in an example's directory, or ``make examples`` at
-the top level:
+an example is missing one. Each has an XTCE file and a program per
+language that uses the code ``tcsxtce`` generates from it. ``make`` in an
+example's directory, or ``make examples`` at the top level:
 
 * regenerates the code if the XTCE file or the generator changed;
 * builds and runs the Rust, C and Python programs, and the C program

@@ -33,6 +33,8 @@ python3 -m tcsxtce ../examples/simple-string/simple_string.xml \
     ../examples/simple-string/python/simple_string.py --lang python
 ```
 
+The generated files aren't kept in git; `make` runs `make generate` first.
+
 `--lang c++` writes the same `simple_string.h` as `--lang c`: one header for
 both languages.
 

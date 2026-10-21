@@ -33,9 +33,9 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | `rust/`       | `xtce` Rust crate |
 | `cpp/`        | C++20 library (`libxtce.a`, `libxtce.so`) with a C API (`xtce/xtce.h`), and the header-only C/C++ packet runtime (`xtce/packet.h`) |
 | `python/`     | `xtce` Python package (3.10+, standard library only) |
-| `tests/`      | Generated sample documents, the demo mission, packet vectors and the cross-language checks |
+| `tests/`      | The demo mission, packet vectors and the cross-language checks; `make` generates the schema-coverage samples into `tests/samples/` |
 | `docs/`       | `manual.rst` and `design.rst` |
-| `examples/`   | Example XTCE files with the generated code and a program per language (start with `simple-string`) |
+| `examples/`   | Example XTCE files and a program per language that uses the code generated from them (start with `simple-string`) |
 
 ## Building
 
