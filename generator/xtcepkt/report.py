@@ -8,7 +8,9 @@ from what the document says about its values:
   argument, the union of its ``ValidRangeSet``) in the same encoding, or as
   unsigned when the range has no negative values;
 * an enumeration needs the bits for its smallest and largest listed values;
-* a boolean needs one bit.
+* a boolean needs one bit;
+* an array or repeated entry needs its most elements times the need of
+  one element.
 
 Little-endian encodings must be whole bytes, so their need is rounded up.
 Integers without a ``ValidRange``, floats, and binary fields have no stated
@@ -24,7 +26,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .compile import item_bits, max_bits
-from .model import Fixed, IntEnc, Mark, Mission, Node, Seek, StringEnc, Value, VType, walk
+from .model import ArrayEnc, Fixed, IntEnc, Mark, Mission, Node, Seek, StringEnc, Value, VType, walk
 
 
 def nbytes(n: int) -> str:
@@ -60,6 +62,15 @@ class Row:
 def need(vt: VType) -> tuple[Optional[int], str]:
     """(bits the field needs, or None if the document doesn't say; why)."""
     e = vt.enc
+    if isinstance(e, ArrayEnc):
+        n, why = need(e.elem)
+        count = e.max_count
+        what = f"{count} values" if isinstance(e.count, int) else f"up to {count} values (count from {e.count.local.name})"
+        if n is None:
+            return None, "; ".join(x for x in (what, why) if x)
+        return n * count + e.gap * max(count - 1, 0), f"{what}, each {why}"
+    if vt.dyn is not None:
+        return None, f"size from {vt.dyn.local.name}, at most {nbytes(vt.dyn.max)}"
     if vt.kind == "bool":
         n, why = 1, "boolean"
     elif vt.kind in ("int", "enum"):
@@ -97,6 +108,8 @@ def rows(n: Node) -> list[Row]:
         if isinstance(it, Value):
             lc = it.local
             bits, (needs, why) = item_bits(lc.vtype), need(lc.vtype)
+            if needs is not None and needs > bits:
+                needs = bits
             fixed = lc in n.fixed
             if lc.optional:
                 why = "; ".join(x for x in (why, "only when its include condition holds") if x)

@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 import xtce  # noqa: E402
 
 from xtcepkt import emit_c  # noqa: E402
-from xtcepkt.compile import compile_document  # noqa: E402
-from xtcepkt.model import Unsupported  # noqa: E402
+from xtcepkt.compile import compile_document, item_bits  # noqa: E402
+from xtcepkt.model import MAX_FIELD_BITS, Unsupported  # noqa: E402
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -212,3 +212,147 @@ class ErrorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def dim(start: str, end: str) -> str:
+    return f"<Dimension><StartingIndex>{start}</StartingIndex><EndingIndex>{end}</EndingIndex></Dimension>"
+
+
+def fixed(v: int) -> str:
+    return f"<FixedValue>{v}</FixedValue>"
+
+
+def dynamic(param: str, slope: str = "1", intercept: str = "0") -> str:
+    return (
+        f'<DynamicValue><ParameterInstanceRef parameterRef="{param}"/>'
+        f'<LinearAdjustment slope="{slope}" intercept="{intercept}"/></DynamicValue>'
+    )
+
+
+def array_mission(dims: str, entries: str, count_type: str = "U8", element: str = "U16") -> str:
+    """Telemetry with an array type ``A`` of ``element`` and the parameters
+    ``N`` (a count) and ``Arr``, and a container with ``entries``."""
+    return mission(
+        tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+            <IntegerDataEncoding sizeInBits="8"/>
+          </IntegerParameterType>
+          <IntegerParameterType name="Small" signed="false">
+            <IntegerDataEncoding sizeInBits="8"/>
+            <ValidRange minInclusive="0" maxInclusive="5"/>
+          </IntegerParameterType>
+          <IntegerParameterType name="U32" signed="false">
+            <IntegerDataEncoding sizeInBits="32"/>
+          </IntegerParameterType>
+          <IntegerParameterType name="U16" signed="false">
+            <IntegerDataEncoding sizeInBits="16"/>
+          </IntegerParameterType>
+          <FloatParameterType name="F32">
+            <FloatDataEncoding sizeInBits="32"/>
+          </FloatParameterType>
+          <ArrayParameterType name="A" arrayTypeRef="{element}">
+            <DimensionList>{dims}</DimensionList>
+          </ArrayParameterType>
+          <ArrayParameterType name="AA" arrayTypeRef="A">
+            <DimensionList>{dim(fixed(0), fixed(1))}</DimensionList>
+          </ArrayParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="N" parameterTypeRef="{count_type}"/>
+          <Parameter name="F" parameterTypeRef="F32"/>
+          <Parameter name="Arr" parameterTypeRef="A"/>
+          <Parameter name="Nested" parameterTypeRef="AA"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="P"><EntryList>{entries}</EntryList></SequenceContainer>
+        </ContainerSet>""",
+    )
+
+
+COUNT_THEN_ARRAY = '<ParameterRefEntry parameterRef="N"/><ArrayParameterRefEntry parameterRef="Arr"/>'
+
+
+class ArrayTests(unittest.TestCase):
+    def array(self, m):
+        return next(lc for _, lc in m.nodes[0].fields if lc.name == "Arr").vtype
+
+    def unsupported(self, text: str, message: str) -> None:
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn(message, str(cm.exception))
+
+    def test_fixed_dimensions_multiply(self):
+        dims = dim(fixed(0), fixed(1)) + dim(fixed(2), fixed(4))
+        m = compile_xml(array_mission(dims, '<ArrayParameterRefEntry parameterRef="Arr"/>'))
+        self.assertEqual(self.array(m).enc.count, 6)
+        self.assertEqual(m.nodes[0].max_bytes, 12)
+
+    def test_count_bounded_by_valid_range(self):
+        m = compile_xml(array_mission(dim(fixed(0), dynamic("N", intercept="-1")), COUNT_THEN_ARRAY, "Small"))
+        d = self.array(m).enc.count
+        self.assertEqual((d.slope, d.intercept, d.max, d.local.name), (1.0, 0.0, 5, "N"))
+        self.assertEqual(m.nodes[0].max_bytes, 1 + 5 * 2)
+
+    def test_dynamic_dimension_times_fixed_ones(self):
+        dims = dim(fixed(0), dynamic("N")) + dim(fixed(0), fixed(2))
+        m = compile_xml(array_mission(dims, COUNT_THEN_ARRAY, "Small"))
+        d = self.array(m).enc.count
+        # N + 1 rows of 3, with N at most 5: the intercept holds the + 1.
+        self.assertEqual((d.intercept, d.factor, d.max, d.max_total), (1.0, 3, 6, 18))
+
+    def test_count_without_range_is_capped(self):
+        m = compile_xml(array_mission(dim(fixed(0), dynamic("N")), COUNT_THEN_ARRAY, "U32"))
+        vt = self.array(m)
+        self.assertEqual(vt.enc.max_count, MAX_FIELD_BITS // 16)
+        self.assertEqual(item_bits(vt), MAX_FIELD_BITS)
+
+    def test_rejected(self):
+        cases = [
+            (dim(fixed(0), dynamic("N")), '<ArrayParameterRefEntry parameterRef="Arr"/><ParameterRefEntry parameterRef="N"/>',
+             "U8", "which is not decoded before it"),
+            (dim(fixed(0), dynamic("F")), '<ParameterRefEntry parameterRef="F"/><ArrayParameterRefEntry parameterRef="Arr"/>',
+             "U8", "size or count from float value"),
+            (dim(dynamic("N"), fixed(3)), COUNT_THEN_ARRAY, "U8", "StartingIndex from DynamicValue"),
+            (dim(fixed(0), dynamic("N")) * 2, COUNT_THEN_ARRAY, "U8", "more than one dimension from DynamicValue"),
+            (dim(fixed(3), fixed(1)), COUNT_THEN_ARRAY, "U8", "EndingIndex 1 is before StartingIndex 3"),
+            (dim(fixed(0), fixed(1)), '<ArrayParameterRefEntry parameterRef="Nested"/>', "U8", "arrays of arrays"),
+        ]
+        for dims, entries, count_type, message in cases:
+            with self.subTest(message):
+                self.unsupported(array_mission(dims, entries, count_type), message)
+
+    def test_repeat_entry(self):
+        entries = (
+            '<ParameterRefEntry parameterRef="N"/>'
+            '<ParameterRefEntry parameterRef="N"><RepeatEntry>'
+            f'<Count>{dynamic("N")}</Count><Offset>{fixed(2)}</Offset>'
+            "</RepeatEntry></ParameterRefEntry>"
+        )
+        m = compile_xml(array_mission(dim(fixed(0), fixed(0)), entries, "Small"))
+        rep = m.nodes[0].fields[1][1].vtype
+        self.assertEqual((rep.kind, rep.enc.gap, rep.enc.count.max), ("array", 2, 5))
+        self.assertEqual(m.nodes[0].max_bytes, (8 + 5 * 8 + 4 * 2 + 7) // 8)
+        once = '<ParameterRefEntry parameterRef="N"><RepeatEntry><Count><FixedValue>1</FixedValue></Count></RepeatEntry></ParameterRefEntry>'
+        self.assertEqual(compile_xml(array_mission(dim(fixed(0), fixed(0)), once)).nodes[0].fields[0][1].vtype.kind, "int")
+        on_array = (
+            '<ArrayParameterRefEntry parameterRef="Arr"><RepeatEntry><Count><FixedValue>2</FixedValue></Count></RepeatEntry>'
+            "</ArrayParameterRefEntry>"
+        )
+        self.unsupported(array_mission(dim(fixed(0), fixed(0)), on_array), "RepeatEntry on an array")
+
+    def test_criterion_on_array(self):
+        text = array_mission(dim(fixed(0), fixed(0)), '<ArrayParameterRefEntry parameterRef="Arr"/>').replace(
+            '<SequenceContainer name="P"><EntryList><ArrayParameterRefEntry parameterRef="Arr"/></EntryList></SequenceContainer>',
+            '<SequenceContainer name="B" abstract="true"><EntryList><ArrayParameterRefEntry parameterRef="Arr"/></EntryList>'
+            "</SequenceContainer>"
+            '<SequenceContainer name="P"><EntryList/><BaseContainer containerRef="B"><RestrictionCriteria>'
+            '<Comparison parameterRef="Arr" value="1"/></RestrictionCriteria></BaseContainer></SequenceContainer>',
+        )
+        self.unsupported(text, "which is an array")
+
+    def test_c_storage(self):
+        m = compile_xml(array_mission(dim(fixed(0), dynamic("N", intercept="-1")), COUNT_THEN_ARRAY, "Small"))
+        header = emit_c.emit(m, "t.xml")
+        self.assertIn("typedef struct sat_uint16_list5 {", header)
+        self.assertIn("uint16_t data[5];", header)

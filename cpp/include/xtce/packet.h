@@ -46,6 +46,7 @@ enum {
   XTCE_PK_CALIBRATION,
   XTCE_PK_NOT_INVERTIBLE,
   XTCE_PK_MISSING,
+  XTCE_PK_BAD_SIZE,
   XTCE_PK_NO_SPACE,
 };
 
@@ -60,7 +61,8 @@ typedef struct xtce_pk_error {
 static inline const char* xtce_pk_error_kind(int code) {
   static const char* const kinds[] = {"Ok",        "Truncated",     "BadPosition", "NoMatch",
                                       "Mismatch",  "OutOfRange",    "InvalidString", "TooLong",
-                                      "Calibration", "NotInvertible", "Missing",     "NoSpace"};
+                                      "Calibration", "NotInvertible", "Missing",     "BadSize",
+                                      "NoSpace"};
   return code >= 0 && code <= XTCE_PK_NO_SPACE ? kinds[code] : "Unknown";
 }
 
@@ -90,6 +92,8 @@ static inline int xtce_pk_error_message(const xtce_pk_error* e, char* buf, size_
       return snprintf(buf, cap, "the calibrator of %s cannot be inverted for encoding", f);
     case XTCE_PK_MISSING:
       return snprintf(buf, cap, "%s is required by its include condition", f);
+    case XTCE_PK_BAD_SIZE:
+      return snprintf(buf, cap, "invalid size or count for %s", f);
     case XTCE_PK_NO_SPACE:
       return snprintf(buf, cap, "output buffer too small for %s", f);
   }
@@ -508,6 +512,23 @@ static inline int xtce_pk_spline_inverse(double y, const xtce_pk_point* p, size_
   return 0;
 }
 
+/* --- sizes from other fields ---------------------------------------------------------- */
+
+/* A size or count that another field gives (an XTCE DynamicValue):
+ * (slope * x + intercept) / unit, where x is that field's value and unit is 8
+ * for a size in bits used in whole bytes.  Fails with XTCE_PK_BAD_SIZE unless
+ * the result is a whole number from 0 to `max`. */
+static inline int xtce_pk_dynamic_size(double x, double slope, double intercept, unsigned unit, size_t max,
+                                       const char* f, xtce_pk_error* err, size_t* out) {
+  double y = slope * x + intercept;
+  double q = y / unit;
+  if (!(y >= 0.0) || y != floor(y) || q != floor(q) || q > (double)max) {
+    return xtce_pk_fail(err, XTCE_PK_BAD_SIZE, f, NULL);
+  }
+  *out = (size_t)q;
+  return 0;
+}
+
 /* --- strings and binary --------------------------------------------------------------- */
 
 /* Layout of a string field; exactly one of terminator and size_tag_bits is used. */
@@ -519,6 +540,15 @@ typedef struct xtce_pk_string_spec {
   uint8_t terminator;
   unsigned size_tag_bits;
 } xtce_pk_string_spec;
+
+/* The spec of a string whose size another field gives: exactly `bytes` bytes. */
+static inline xtce_pk_string_spec xtce_pk_string_spec_sized(const xtce_pk_string_spec* spec, size_t bytes) {
+  xtce_pk_string_spec s = *spec;
+  s.has_fixed = true;
+  s.fixed_bits = bytes * 8;
+  s.max_bits = bytes * 8;
+  return s;
+}
 
 /* True when the `n` bytes at `s` are well-formed UTF-8 (no overlongs,
  * surrogates or values beyond U+10FFFF), matching the Rust and Python

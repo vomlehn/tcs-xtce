@@ -206,3 +206,53 @@ fn include_condition() {
         Err(PacketError::Missing { field: "FineTime" })
     );
 }
+
+#[test]
+fn arrays_and_sizes_from_other_fields() {
+    let mut s = Samples {
+        sec_hdr_flag: true,
+        sample_count: 2,
+        readings: vec![-1, 7],
+        grid: Some(vec![1, 2, 3, 4, 5, 6]),
+        valid: vec![true, false, false, true],
+        label_size: 4,
+        label_: "abc".into(),
+        payload_size: 1,
+        payload: vec![0x5a],
+        ..Default::default()
+    };
+    let bytes = s.to_bytes().unwrap();
+    assert_eq!(Samples::decode(&bytes).unwrap(), s);
+
+    // The data must have the count or size that its field gives.
+    let bad = |s: &Samples| s.to_bytes().map_err(|e| e.to_string());
+    s.readings.push(3);
+    assert_eq!(bad(&s), Err("invalid size or count for Readings".into()));
+    s.readings.pop();
+    s.payload.clear();
+    assert_eq!(bad(&s), Err("invalid size or count for Payload".into()));
+    s.payload.push(0x5a);
+    s.valid.pop();
+    assert_eq!(bad(&s), Err("invalid size or count for Valid".into()));
+    s.valid.push(true);
+    s.label_size = 11; // beyond the ValidRange that bounds the label
+    assert_eq!(bad(&s), Err("invalid size or count for Label".into()));
+    s.label_size = 4;
+    s.label_ = "abcde".into();
+    assert_eq!(bad(&s), Err("Label is too long for its encoding".into()));
+    s.label_ = "abcd".into(); // fills its size, without a terminator
+    assert_eq!(Samples::decode(&s.to_bytes().unwrap()).unwrap(), s);
+
+    let mut up = Upload {
+        word_count: 3,
+        words: vec![1, 2, 3],
+        gains: vec![1.0, 2.5],
+        tag_size: 4,
+        tag: "ab".into(),
+        ..Default::default()
+    };
+    let back = Upload::decode(&up.to_bytes().unwrap()).unwrap();
+    assert_eq!(back, up);
+    up.gains.push(0.0);
+    assert_eq!(up.to_bytes(), Err(PacketError::BadSize { field: "Gains" }));
+}

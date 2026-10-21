@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from .common import flt, int_enc, invertible, le, string_spec
-from .model import walk, BinaryEnc, Cond, Criterion, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Polynomial, Seek, Spline, Value, VType
+from .model import walk, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 
 def rstr(s: str) -> str:
@@ -24,6 +24,8 @@ def field_type(vt: VType, optional: bool = False) -> str:
     if optional:
         return f"Option<{field_type(vt)}>"
     k = vt.kind
+    if k == "array":
+        return f"Vec<{field_type(vt.elem)}>"
     if k == "int":
         return f"{'i' if vt.signed else 'u'}{vt.width}"
     return {"float": "f64", "bool": "bool", "string": "String", "binary": "Vec<u8>"}.get(k) or vt.ident
@@ -67,16 +69,38 @@ def uncalibrate(vt: VType, y: str, f: str) -> str:
     return f"pk::spline_inverse({y}, {points(cal)}, {str(cal.extrapolate).lower()}, {f})?"
 
 
-def spec(vt: VType) -> str:
+def spec(vt: VType, ref, f: str) -> str:
+    """Expression for the StringSpec of a string type; ``ref`` gives the
+    expression for the value that gives a dynamic size."""
     fixed, mx, term, tag = string_spec(vt)
     fixed = f"Some({fixed})" if fixed is not None else "None"
     term = f"Some({term})" if term is not None else "None"
-    return f"&StringSpec {{ fixed_bits: {fixed}, max_bits: {mx}, terminator: {term}, size_tag_bits: {tag} }}"
+    s = f"StringSpec {{ fixed_bits: {fixed}, max_bits: {mx}, terminator: {term}, size_tag_bits: {tag} }}"
+    d = vt.enc.dyn
+    return f"&({s}).sized({size(d, ref(d.local), f)})" if d is not None else "&" + s
 
 
-def read_expr(vt: VType, f: str) -> str:
-    """Expression reading one value with BitReader ``r``."""
+def size(d: DynSize, x: str, f: str) -> str:
+    """Expression for a size or count that the value ``x`` gives."""
+    n = f"pk::dynamic_size({x} as f64, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, {f})?"
+    return f"{n} * {d.factor}" if d.factor != 1 else n
+
+
+def count(vt: VType, ref, f: str) -> str:
+    c = vt.enc.count
+    return size(c, ref(c.local), f) if isinstance(c, DynSize) else f"{c}usize"
+
+
+def read_expr(vt: VType, f: str, ref) -> str:
+    """Expression reading one value with BitReader ``r``; ``ref`` gives the
+    expression for a value that gives a size or count."""
     e = vt.enc
+    if isinstance(e, ArrayEnc):
+        gap = f"if i > 0 {{ r.skip({e.gap}, {f})?; }}" if e.gap else ""
+        return (
+            f"{{ let n = {count(vt, ref, f)}; let mut a = Vec::with_capacity(n); "
+            f"for i in 0..n {{ {gap} a.push({read_expr(e.elem, f, ref)}); }} a }}"
+        )
     if isinstance(e, IntEnc):
         raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
         enc = f"IntEncoding::{int_enc(vt)}"
@@ -95,13 +119,25 @@ def read_expr(vt: VType, f: str) -> str:
         raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
         return calibrate(vt, f"pk::float_from_raw({raw}, {e.bits})", f)
     if isinstance(e, BinaryEnc):
-        return f"r.bytes({e.bits // 8}, {f})?"
-    return f"pk::read_string(&mut r, {spec(vt)}, {f})?"
+        n = size(e.dyn, ref(e.dyn.local), f) if e.dyn else e.bits // 8
+        return f"r.bytes({n}, {f})?"
+    return f"pk::read_string(&mut r, {spec(vt, ref, f)}, {f})?"
 
 
-def write_stmt(vt: VType, x: str, f: str) -> str:
-    """Statement writing value ``x`` (a place or literal) with BitWriter ``w``."""
+def write_stmt(vt: VType, x: str, f: str, ref) -> str:
+    """Statement writing value ``x`` (a place or literal) with BitWriter ``w``;
+    ``ref`` gives the expression for a value that gives a size or count."""
     e = vt.enc
+    bad = f"return Err(PacketError::BadSize {{ field: {f} }});"
+    if isinstance(e, ArrayEnc):
+        gap = f"if i > 0 {{ w.skip({e.gap}, {f})?; }}" if e.gap else ""
+        return (
+            f"{{ let n = {count(vt, ref, f)}; if {x}.len() != n {{ {bad} }} "
+            f"for (i, {elem_pattern(e.elem)}) in {x}.iter().enumerate() {{ {gap} {write_stmt(e.elem, 'e', f, ref)} }} }}"
+        )
+    if isinstance(e, BinaryEnc) and e.dyn is not None:
+        n = size(e.dyn, ref(e.dyn.local), f)
+        return f"{{ let n = {n}; if {x}.len() != n {{ {bad} }} w.bytes(&{x}); }}"
     if isinstance(e, IntEnc):
         bits, order = e.bits, str(le(vt)).lower()
         enc = f"IntEncoding::{int_enc(vt)}"
@@ -122,12 +158,22 @@ def write_stmt(vt: VType, x: str, f: str) -> str:
         return f"w.uint_order({e.bits}, {str(le(vt)).lower()}, pk::float_to_raw({uncalibrate(vt, x, f)}, {e.bits}));"
     if isinstance(e, BinaryEnc):
         return f"pk::write_binary(w, &{x}, {e.bits // 8}, {f})?;"
-    return f"pk::write_string(w, {spec(vt)}, &{x}, {f})?;"
+    return f"pk::write_string(w, {spec(vt, ref, f)}, &{x}, {f})?;"
+
+
+def elem_pattern(vt: VType) -> str:
+    """Pattern binding ``e`` to an element of a slice: by value when it is
+    Copy, so that ``e`` can be used like a field."""
+    return "e" if vt.kind in ("string", "binary") else "&e"
 
 
 def describe(vt: VType, x: str) -> str:
     """Expression appending the canonical text of ``x`` to ``s``."""
     k = vt.kind
+    if k == "array":
+        el = describe(vt.elem, "e")
+        pat = elem_pattern(vt.elem)
+        return f"{{ s.push('['); for (i, {pat}) in ({x}).iter().enumerate() {{ if i > 0 {{ s.push_str(\", \"); }} {el}; }} s.push(']') }}"
     if k == "float":
         return f"pk::describe_f64({x}, &mut s)"
     if k == "string":
@@ -223,7 +269,7 @@ class RustEmitter:
                 self.line(f"let m{it.id} = r.position();", depth)
             elif isinstance(it, Value):
                 lc = it.local
-                expr = read_expr(lc.vtype, rstr(lc.name))
+                expr = read_expr(lc.vtype, rstr(lc.name), lambda r: f"v{r.id}")
                 if assign:
                     self.line(f"v{lc.id} = Some({expr});", depth)
                 else:
@@ -263,10 +309,10 @@ class RustEmitter:
                         f"let o{lc.id} = self.{names[lc]}.as_ref().ok_or(PacketError::Missing {{ field: {f} }})?;",
                         depth,
                     )
-                    x = f"o{lc.id}" if lc.vtype.kind in ("string", "binary") else f"*o{lc.id}"
+                    x = f"o{lc.id}" if lc.vtype.kind in ("string", "binary", "array") else f"*o{lc.id}"
                 else:
                     x = self.place(n, lc, names)
-                self.line(write_stmt(lc.vtype, x, f), depth)
+                self.line(write_stmt(lc.vtype, x, f, lambda r: self.place(n, r, names)), depth)
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:

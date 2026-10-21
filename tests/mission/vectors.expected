@@ -16,3 +16,16 @@ Reboot{seq_count=6, packet_length=10, delay=30.0, force=true, reason="maint"} | 
 Patch{seq_count=7, packet_length=11, address=536875008, bytes_=0xdeadbeef0001, checksum=48879} | 112dc007000b03001000200fdeadbeef0001beef
 error:NoMatch | -
 error:NoMatch | -
+Samples{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, sample_count=3, readings=[1, -2, 32767], grid=[1, 2, 3, 4, 5, 6], valid=[true, false, true, true], label_size=5, label_="hi", payload_size=2, payload=0xdead} | 08fac02a0012030001fffe7fff1234568a0ad0d200000005bd5a
+Samples{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, sample_count=3, readings=[1, -2, 32767], grid=none, valid=[true, false, true, true], label_size=5, label_="hi", payload_size=2, payload=0xdead} | 00fac02a0012030001fffe7fff8a0ad0d200000005bd5a
+Samples{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, sample_count=0, readings=[], grid=[1, 2, 3, 4, 5, 6], valid=[true, false, true, true], label_size=0, label_="", payload_size=0, payload=0x} | 08fac02a0012001234568a0000
+Samples{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, sample_count=3, readings=[1, -2, 32767], grid=[1, 2, 3, 4, 5, 6], valid=[true, false, true, true], label_size=5, label_="hello", payload_size=2, payload=0xdead} | 08fac02a0012030001fffe7fff1234568a0ad0cad8d8de05bd5a
+error:BadSize | -
+error:BadSize | -
+error:InvalidString | -
+error:Truncated | -
+Upload{seq_count=5, packet_length=9, word_count=2, words=[4660, 43981], gains=[1.0, 2.5], tag_size=4, tag="abc"} | 112ec005000904021234abcd000a00190403616263
+Upload{seq_count=5, packet_length=9, word_count=0, words=[], gains=[1.0, 2.5], tag_size=4, tag="abc"} | 112ec00500090400000a00190403616263
+error:BadSize | -
+error:BadSize | -
+error:TooLong | -

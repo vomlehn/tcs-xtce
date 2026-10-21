@@ -50,7 +50,7 @@ byte-identical output. The test suite checks this on every build.
    * - ``python/``
      - The ``xtce`` Python package (3.10+, standard library only)
    * - ``tests/``
-     - Schema-coverage samples, the demo mission, packet vectors and the cross-language checks
+     - Schema-coverage samples, the demo mission, packet vectors, the cross-language checks, and the list of public XTCE documents for ``make samples-check``
    * - ``docs/``
      - This manual and the design description
    * - ``examples/``
@@ -71,6 +71,7 @@ toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
    make packets         # regenerate the demo mission's packet codecs
    make rust | cpp | python
    make test            # every language's tests and both cross-language checks
+   make samples-check   # check against public XTCE documents (downloads them)
    make fmt             # format Rust code
    make fmt-check       # verify Rust formatting (run by every `make rust`)
    make clean           # remove build products
@@ -588,14 +589,61 @@ Field types:
      - ``Vec<u8>``
      - ``demo_bytesN``: ``uint8_t data[N]``
      - ``bytes``
+   * - binary whose size another field gives
+     - ``Vec<u8>``
+     - ``demo_varbytesN``: ``size_t len`` and ``uint8_t data[N]``
+     - ``bytes``
+   * - array, or entry with a ``RepeatEntry``, of element type ``T``
+     - ``Vec<T>``
+     - ``demo_<T>_listN``: ``size_t len`` and ``T data[N]``
+     - ``list[T]``
    * - with an ``IncludeCondition``
      - ``Option<T>``
      - ``bool has_<field>`` before the field
      - ``Optional[T]``
 
-In C/C++, ``N`` is the most bytes the field's encoding can hold, so
-fields need no allocation. ``data`` always has room for a terminating
-NUL, which decoding writes. Encoding uses ``len``, not the NUL.
+In C/C++, ``N`` is the most bytes (or elements) the field's encoding
+can hold, so fields need no allocation. A string's ``data`` always has
+room for a terminating NUL, which decoding writes. Encoding uses ``len``,
+not the NUL. In the names of list types, ``<T>`` is the element's C type
+without the prefix and any ``_t`` (``demo_int16_list6``,
+``demo_str8_list4``).
+
+**Arrays and repeated entries.** An ``ArrayParameterType`` or
+``ArrayArgumentType``, and a parameter or argument entry with a
+``RepeatEntry``, is a list of its elements in the order they are
+encoded. An array with several dimensions is flattened: its elements
+are in the order of the ``DimensionList``, without further structure.
+A ``RepeatEntry`` ``Offset`` puts that many bits between the elements
+(not after the last one). Encoding fails with ``BadSize`` unless the list
+has exactly the number of elements its type gives, including for a
+fixed count, which decoding always fills.
+
+**Sizes and counts from other fields.** XTCE can take a size or count
+from another value of the packet with a ``DynamicValue``: an array
+dimension's ``EndingIndex``, a ``RepeatEntry`` ``Count``, a binary
+encoding's ``SizeInBits``, or the ``DynamicValue`` of a variable string
+(the bits the string occupies; its content ends inside them at the
+termination character or after its leading size, like a fixed-size
+string). The value is ``slope * x + intercept`` (its
+``LinearAdjustment``), where ``x`` is the referenced integer parameter
+or argument. That value must be decoded earlier in the same packet,
+outside any ``IncludeCondition``.
+
+The referenced value stays an ordinary field. When encoding, the
+generated code computes the size or count from it and fails with
+``BadSize`` if the data doesn't match: set both. When decoding, a size
+or count that is negative, not whole, not a whole number of bytes (for
+sizes in bits of strings and binary), or above the field's bound fails
+with ``BadSize``.
+
+The bound is the largest value the referenced field's ``ValidRange``
+allows, or, without one, its encoding. It is limited to what fits in
+64 KiB on the wire, which keeps C structs bounded. In C this bound is
+``N`` in the field's type, so give count fields a ``ValidRange``: the
+demo's ``SampleCount`` (``0..6``) makes ``Readings`` a
+``demo_int16_list6``, where an 8-bit count without a range would allow
+255 elements, and a 32-bit one 32768 of them.
 
 Integer field widths come from the *encoding*: an 11-bit unsigned field
 is a ``u16``, and a 12-bit sign-magnitude field is an ``i16``. Floats
@@ -811,6 +859,9 @@ formats the message.
      - Encoding a field whose calibrator can't be inverted
    * - ``Missing``
      - An optional field is absent although its include condition holds
+   * - ``BadSize``
+     - A size or count that another field gives is invalid or above its
+       bound, or an array or binary value doesn't have it
    * - ``NoSpace``
      - C/C++ only: the output buffer is smaller than the packet
 
@@ -830,6 +881,8 @@ language. The cross-language tests compare it directly.
 * Strings are double-quoted. ``"`` and ``\`` are escaped with a
   backslash, and control characters are written as ``\xNN``.
 * Binary values are written as ``0x`` followed by lowercase hex.
+* Arrays and repeated entries are written as ``[a, b, c]``, each element
+  as above.
 * Absent optional fields are written as ``none``.
 
 Runtime reference
@@ -884,6 +937,17 @@ Calibrators
 Strings and binary
    ``read_string``, ``write_string`` (with a ``StringSpec``: fixed bits,
    maximum bits, terminator, size-tag bits) and ``write_binary``.
+   ``StringSpec::sized(bytes)`` (Rust), ``xtce_pk_string_spec_sized``
+   (C/C++) and ``sized(spec, bytes)`` (Python) give the spec of a string
+   whose size another field gives.
+
+Sizes from other fields
+   ``dynamic_size(x, slope, intercept, unit, max, field)`` computes
+   ``(slope * x + intercept) / unit`` and fails with ``BadSize`` unless it
+   is a whole number from 0 to ``max``; ``unit`` is 8 for a size in bits
+   used in whole bytes. Python also has ``read_list(r, n, gap, field,
+   read)``, ``check_size(value, n, field)`` and ``describe_list(values,
+   describe)``, which the other languages generate inline.
 
 Supported XTCE
 --------------
@@ -892,9 +956,33 @@ The compiler supports the subset below. Anything else is reported as
 unsupported, naming the construct and its location.
 
 Parameter and argument types
-   Integer, Float, Enumerated, Boolean, String, Binary, AbsoluteTime and
-   RelativeTime. Types that use ``baseType``, and Array and Aggregate
+   Integer, Float, Enumerated, Boolean, String, Binary, AbsoluteTime,
+   RelativeTime and Array. Types that use ``baseType``, and Aggregate
    types, are not supported.
+
+Arrays
+   Elements of any supported type except arrays and values whose size
+   another field gives. Each dimension's ``StartingIndex`` is a
+   ``FixedValue``; its ``EndingIndex`` is a ``FixedValue`` or, in at most
+   one dimension, a ``DynamicValue``. Entries use the whole array:
+   ``ArrayParameterRefEntry`` and ``ArrayArgumentRefEntry`` (or a plain
+   ``ParameterRefEntry`` or ``ArgumentRefEntry``) without a
+   ``DimensionList``.
+
+Repeated entries
+   ``RepeatEntry`` on parameter and argument entries, with a ``Count``
+   that is a positive ``FixedValue`` or a ``DynamicValue``, and an
+   optional ``Offset`` that is a ``FixedValue`` of zero or more bits. A
+   repeated array is not supported.
+
+Sizes and counts from other fields
+   ``DynamicValue`` with ``ParameterInstanceRef`` (instance 0) or, in
+   argument types, ``ArgumentInstanceRef``, and an optional
+   ``LinearAdjustment``, in array ``EndingIndex``, ``RepeatEntry``
+   ``Count``, binary ``SizeInBits`` and variable string sizes. It must
+   refer to an integer value decoded earlier in the packet, outside any
+   ``IncludeCondition``. See `Generated packet types`_ for the checks
+   and bounds.
 
 Integer encoding
    1–64 bits; ``unsigned``, ``twosComplement``, ``signMagnitude`` and
@@ -921,13 +1009,16 @@ Strings
      character (``00`` by default) or at the end of the field;
    * a fixed size with a leading size tag;
    * a variable size (``Variable``) with a termination character;
-   * a variable size with a leading size tag.
+   * a variable size with a leading size tag;
+   * either of these within a size that another field gives
+     (``Variable`` with a ``DynamicValue``).
 
    Sizes must be whole bytes, and size tags count bytes. When encoding,
    fixed fields are padded with the terminator and then zeros.
 
 Binary
-   A fixed size in whole bytes. Values must have exactly that length.
+   A fixed size in whole bytes, or a size another field gives. Values
+   must have exactly that length.
 
 Times
    The ``Encoding`` (integer or float, ``units="seconds"``) with
@@ -936,11 +1027,12 @@ Times
    documentation but not applied.
 
 Containers
-   ``SequenceContainer`` entry lists with ``ParameterRefEntry`` and
-   ``ContainerRefEntry``. Included containers are flattened in and may
+   ``SequenceContainer`` entry lists with ``ParameterRefEntry``,
+   ``ArrayParameterRefEntry`` and ``ContainerRefEntry``. Included containers are flattened in and may
    not have a ``BaseContainer``. ``BaseContainer`` inheritance uses
    ``RestrictionCriteria`` with ``Comparison`` or ``ComparisonList``,
-   using the operators ``== != < <= > >=`` on calibrated or raw values.
+   using the operators ``== != < <= > >=`` on calibrated or raw values,
+   on values that are not arrays.
 
 Locations
    ``LocationInContainerInBits`` with a ``FixedValue`` relative to
@@ -962,7 +1054,8 @@ Commands
    ``MetaCommand`` with ``ArgumentList``, ``BaseMetaCommand`` and
    ``ArgumentAssignmentList``, and a ``CommandContainer`` whose
    ``BaseContainer`` is the base meta-command's container. The container
-   may hold ``ArgumentRefEntry``, ``ParameterRefEntry`` and
+   may hold ``ArgumentRefEntry``, ``ArrayArgumentRefEntry``,
+   ``ParameterRefEntry``, ``ArrayParameterRefEntry`` and
    ``FixedValueEntry`` (at most 64 bits). Argument assignments act like
    ``==`` restriction criteria: they fix the value when encoding and
    select the command when decoding.
@@ -973,9 +1066,11 @@ Name references
    current SpaceSystem, then in each enclosing one.
 
 Not supported
-   ``RepeatEntry``, array and aggregate entries, ``IndirectParameterRefEntry``,
-   stream and segment entries, ``DynamicValue`` and
-   ``DiscreteLookupList`` sizes and locations, ``BooleanExpression`` and
+   aggregate types, array subsets (a ``DimensionList`` in an entry),
+   arrays of arrays, ``RepeatEntry`` on a ``ContainerRefEntry``,
+   ``IndirectParameterRefEntry``, stream and segment entries,
+   ``DynamicValue`` locations and offsets, other instances than 0,
+   ``DiscreteLookupList`` values, ``BooleanExpression`` and
    ``CustomAlgorithm`` criteria, ``NextContainer``, container
    ``BinaryEncoding``, ``ErrorDetectCorrect``, context calibrators,
    ``MathOperationCalibrator``, BCD encodings, MIL-STD-1750A floats,
@@ -991,7 +1086,10 @@ Known limitations
 * Decoding ignores bytes after the packet. Spare bits and gaps are
   written as zeros, so re-encoding a decoded packet can change them.
 * Binary fields default to empty and must be set to their exact size
-  before encoding.
+  before encoding. Arrays default to empty, and must have the number of
+  elements their type gives, even when it is fixed.
+* A size or count that another field gives is not filled in when
+  encoding: set the field and the data to agree.
 * Enumerated values must fit in a signed 64-bit integer.
 
 
@@ -1090,3 +1188,29 @@ The ``packet_tool`` programs (``rust/examples``, ``cpp/tests``, built as
 .. code-block:: sh
 
    rust/target/release/examples/packet_tool tests/mission/vectors.txt
+
+``make samples-check`` is not part of ``make test``, because it
+downloads files. It checks ``tcsxtce`` against 34 public XTCE documents:
+the test documents of `Yamcs <https://github.com/yamcs/yamcs>`_ and the
+test documents and examples of the `XTCE Toolkit
+<https://github.com/CesarCoelho/xtcetools>`_.
+``tests/external/sources.txt`` lists them, pinned to commits with a
+SHA-256 for each. They are downloaded once into
+``tests/external/files/``. ``tests/samples_check.py`` then checks that,
+for each document:
+
+* the binding accepts it exactly when ``xmllint`` finds it valid against
+  the XTCE 1.3 schema (older XTCE namespaces are read as 1.3);
+* a document the binding accepts writes back to an equal document;
+* the compiler, the size report and every emitter produce output or
+  report unsupported constructs, and never crash;
+* the generated code compiles, without warnings: the C header as C11 and
+  as C++, the Rust module against the ``xtce`` crate, and the Python
+  module.
+
+It prints a summary per document, with the constructs it found
+unsupported, which must equal ``tests/external/expected.txt``. A crash, a
+disagreement with the schema, a failed round trip or a failed compile
+always fails the check. After an intended change, ``python3 -I
+tests/samples_check.py --update`` rewrites ``expected.txt``; review its
+diff.

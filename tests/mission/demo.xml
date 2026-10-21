@@ -2,7 +2,8 @@
 <!-- Demonstration mission for the packet layer.  It uses CCSDS space packet
      headers, container inheritance with restriction criteria, an included
      container from a nested SpaceSystem, every supported encoding, both
-     calibrator kinds and commands with argument assignments. -->
+     calibrator kinds, commands with argument assignments, arrays, repeated
+     entries and sizes and counts given by other fields. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Demo">
   <TelemetryMetaData>
     <ParameterTypeSet>
@@ -120,6 +121,77 @@
           <OffsetFrom parameterRef="CoarseTime"/>
         </ReferenceTime>
       </RelativeTimeParameterType>
+      <IntegerParameterType name="SampleCountType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="6"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="U4" signed="false">
+        <IntegerDataEncoding sizeInBits="4"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="LabelSizeType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="10"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="PayloadSizeType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="8"/>
+      </IntegerParameterType>
+      <ArrayParameterType name="ReadingsType" arrayTypeRef="S16">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <DynamicValue>
+                <ParameterInstanceRef parameterRef="SampleCount"/>
+                <LinearAdjustment intercept="-1"/>
+              </DynamicValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <ArrayParameterType name="GridType" arrayTypeRef="U4">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>1</FixedValue>
+            </EndingIndex>
+          </Dimension>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>1</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>3</FixedValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <StringParameterType name="LabelType">
+        <StringDataEncoding>
+          <Variable maxSizeInBits="80">
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="LabelSize"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+            <TerminationChar>00</TerminationChar>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+      <BinaryParameterType name="PayloadType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="PayloadSize"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
       <BinaryParameterType name="Blob4Type">
         <BinaryDataEncoding>
           <SizeInBits>
@@ -152,6 +224,14 @@
       <Parameter name="Timestamp" parameterTypeRef="F64LE"/>
       <Parameter name="CoarseTime" parameterTypeRef="CoarseTimeType"/>
       <Parameter name="FineTime" parameterTypeRef="FineTimeType"/>
+      <Parameter name="SampleCount" parameterTypeRef="SampleCountType"/>
+      <Parameter name="Readings" parameterTypeRef="ReadingsType"/>
+      <Parameter name="Grid" parameterTypeRef="GridType"/>
+      <Parameter name="Valid" parameterTypeRef="FlagType"/>
+      <Parameter name="LabelSize" parameterTypeRef="LabelSizeType"/>
+      <Parameter name="Label" parameterTypeRef="LabelType"/>
+      <Parameter name="PayloadSize" parameterTypeRef="PayloadSizeType"/>
+      <Parameter name="Payload" parameterTypeRef="PayloadType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -233,6 +313,36 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <SequenceContainer name="Samples">
+        <EntryList>
+          <ParameterRefEntry parameterRef="SampleCount"/>
+          <ArrayParameterRefEntry parameterRef="Readings"/>
+          <ArrayParameterRefEntry parameterRef="Grid">
+            <IncludeCondition>
+              <Comparison parameterRef="SecHdrFlag" value="true"/>
+            </IncludeCondition>
+          </ArrayParameterRefEntry>
+          <ParameterRefEntry parameterRef="Valid">
+            <RepeatEntry>
+              <Count>
+                <FixedValue>4</FixedValue>
+              </Count>
+              <Offset>
+                <FixedValue>1</FixedValue>
+              </Offset>
+            </RepeatEntry>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="LabelSize"/>
+          <ParameterRefEntry parameterRef="Label"/>
+          <ParameterRefEntry parameterRef="PayloadSize"/>
+          <ParameterRefEntry parameterRef="Payload"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="250"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="TimeStamp" abstract="true">
         <EntryList>
           <ParameterRefEntry parameterRef="CoarseTime"/>
@@ -297,6 +407,35 @@
           </SizeInBits>
         </BinaryDataEncoding>
       </BinaryArgumentType>
+      <IntegerArgumentType name="WordCountType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRangeSet>
+          <ValidRange minInclusive="1" maxInclusive="4"/>
+        </ValidRangeSet>
+      </IntegerArgumentType>
+      <ArrayArgumentType name="GainsType" arrayTypeRef="DelayType">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>1</FixedValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayArgumentType>
+      <StringArgumentType name="TagType">
+        <StringDataEncoding>
+          <Variable maxSizeInBits="64">
+            <DynamicValue>
+              <ArgumentInstanceRef argumentRef="TagSize"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+            <LeadingSize sizeInBitsOfSizeTag="8"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringArgumentType>
       <IntegerArgumentType name="AddressType" signed="false">
         <IntegerDataEncoding sizeInBits="32" byteOrder="leastSignificantByteFirst"/>
       </IntegerArgumentType>
@@ -377,6 +516,39 @@
             <FixedValueEntry name="Spare" binaryValue="0F" sizeInBits="8"/>
             <ArgumentRefEntry argumentRef="Bytes"/>
             <ParameterRefEntry parameterRef="Checksum"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Upload">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="4"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="WordCount" argumentTypeRef="WordCountType"/>
+          <Argument name="Words" argumentTypeRef="U16Arg"/>
+          <Argument name="Gains" argumentTypeRef="GainsType"/>
+          <Argument name="TagSize" argumentTypeRef="OpcodeType"/>
+          <Argument name="Tag" argumentTypeRef="TagType"/>
+        </ArgumentList>
+        <CommandContainer name="UploadContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="WordCount"/>
+            <ArgumentRefEntry argumentRef="Words">
+              <RepeatEntry>
+                <Count>
+                  <DynamicValue>
+                    <ArgumentInstanceRef argumentRef="WordCount"/>
+                  </DynamicValue>
+                </Count>
+              </RepeatEntry>
+            </ArgumentRefEntry>
+            <ArrayArgumentRefEntry argumentRef="Gains"/>
+            <ArgumentRefEntry argumentRef="TagSize"/>
+            <ArgumentRefEntry argumentRef="Tag"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

@@ -41,26 +41,80 @@ class FloatEnc:
 
 
 @dataclass
+class DynSize:
+    """A size or count that another value of the packet gives (an XTCE
+    ``DynamicValue``): ``factor * (slope * value + intercept)``.
+
+    Types hold it unbound: ``key`` names the parameter (its qualified name)
+    or ``arg`` the argument whose value it uses.  Each packet entry binds a
+    copy to the ``local`` it reads, decoded before the entry, and sets
+    ``max``: the largest value of ``(slope * value + intercept) / unit``
+    that the packet can hold, from the range of the value and the
+    ``MAX_FIELD_BITS`` limit.
+    """
+
+    key: Optional[str] = None
+    arg: Optional[str] = None
+    slope: float = 1.0
+    intercept: float = 0.0
+    factor: int = 1
+    unit: int = 1  # 8 when the value is a size in bits, used in whole bytes
+    local: Optional["Local"] = None
+    max: int = 0
+
+    @property
+    def max_total(self) -> int:
+        return self.factor * self.max
+
+
+@dataclass
 class StringEnc:
     """Byte string on the wire.
 
     ``fixed_bits`` is set for strings that always occupy that many bits; for
     variable strings ``max_bits`` bounds the whole field.  The content ends at
     ``terminator`` or is preceded by a ``size_tag_bits`` length in bytes.
+    With ``dyn`` the field occupies the bits another value gives, at most
+    ``max_bits``, and the content ends inside it as for a fixed size.
     """
 
     fixed_bits: Optional[int]
     max_bits: int
     terminator: Optional[int] = 0
     size_tag_bits: Optional[int] = None
+    dyn: Optional[DynSize] = None
 
 
 @dataclass
 class BinaryEnc:
+    """Bytes on the wire: exactly ``bits``, or with ``dyn`` the bits another
+    value gives, at most ``bits``."""
+
     bits: int
+    dyn: Optional[DynSize] = None
 
 
-Encoding = Union[IntEnc, FloatEnc, StringEnc, BinaryEnc]
+@dataclass
+class ArrayEnc:
+    """``count`` values of type ``elem`` one after another, with ``gap`` bits
+    between them (from a RepeatEntry Offset).  ``count`` is a number, or a
+    DynSize when another value gives it."""
+
+    elem: "VType"
+    count: Union[int, DynSize]
+    gap: int = 0
+
+    @property
+    def max_count(self) -> int:
+        return self.count if isinstance(self.count, int) else self.count.max_total
+
+
+Encoding = Union[IntEnc, FloatEnc, StringEnc, BinaryEnc, ArrayEnc]
+
+# The most bits a field whose size or count another value gives may take on
+# the wire, unless the range of that value bounds it more tightly.  It keeps
+# the storage of C structs bounded.
+MAX_FIELD_BITS = 65536 * 8
 
 
 # --- calibrators -------------------------------------------------------------
@@ -117,9 +171,11 @@ class EnumLabel:
 class VType:
     """Engineering type of a parameter or argument plus its encoding.
 
-    ``kind`` is one of ``int``, ``float``, ``enum``, ``bool``, ``string`` and
-    ``binary``.  For ``int`` the generated field is ``width`` bits wide and
-    signed when the encoding is.
+    ``kind`` is one of ``int``, ``float``, ``enum``, ``bool``, ``string``,
+    ``binary`` and ``array``.  For ``int`` the generated field is ``width``
+    bits wide and signed when the encoding is.  An ``array`` (an array type
+    or a repeated entry) has an ArrayEnc and is a list of its elements, in
+    the order they are encoded.
     """
 
     key: str
@@ -144,6 +200,19 @@ class VType:
     @property
     def signed(self) -> bool:
         return isinstance(self.enc, IntEnc) and self.enc.signed
+
+    @property
+    def dyn(self) -> Optional[DynSize]:
+        """The size or count another value gives this type, if any."""
+        e = self.enc
+        if isinstance(e, ArrayEnc):
+            return e.count if isinstance(e.count, DynSize) else None
+        return getattr(e, "dyn", None)
+
+    @property
+    def elem(self) -> "VType":
+        """The element type of an array, or the type itself."""
+        return self.enc.elem if isinstance(self.enc, ArrayEnc) else self
 
 
 # --- containers --------------------------------------------------------------

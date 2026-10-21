@@ -16,3 +16,16 @@ tc 112cc006000a02012c0100056d61696e74  # reboot
 tc 112dc007000b03001000200fdeadbeef0001beef  # patch
 tc 112cc00100010900  # unknown opcode
 tc 112dc00100010200000000  # patch apid with reboot opcode
+tm 08fac02a0012030001fffe7fff1234568a0ad0d200000005bd5a  # samples
+tm 00fac02a0012030001fffe7fff8a0ad0d200000005bd5a  # samples without the optional grid
+tm 08fac02a0012001234568a0000  # samples, all empty
+tm 08fac02a0012030001fffe7fff1234568a0ad0cad8d8de05bd5a  # samples, label fills its size
+tm 08fac02a00120700010001000100010001000100011234568a0ad0d200000005bd5a  # samples, count beyond its ValidRange
+tm 08fac02a0012030001fffe7fff1234568a0ad0d200000012000000000000000000  # samples, payload size beyond its ValidRange
+tm 08fac02a0012030001fffe7fff1234568a06d1fed205bd5a  # samples, label not UTF-8
+tm 08fac02a0012030001fffe7fff1234568a0ad0d2  # samples truncated in the label
+tc 112ec005000904021234abcd000a00190403616263  # upload
+tc 112ec00500090400000a00190403616263  # upload, no words
+tc 112ec0050009040500010001000100010001000a00190403616263  # upload, too many words
+tc 112ec005000904021234abcd000a001909086162636465666768  # upload, tag size beyond its encoding's room
+tc 112ec005000904021234abcd000a00190203616263  # upload, tag longer than its size

@@ -120,6 +120,35 @@ class PacketTests(unittest.TestCase):
         self.assertIsNone(demo.Event.decode(short).coarse_time)
         self.assertEqual(self.kind(dataclasses.replace(ev, fine_time=None)), "Missing")
 
+    def test_arrays_and_sizes_from_other_fields(self):
+        s = demo.Samples(
+            sec_hdr_flag=True,
+            sample_count=2,
+            readings=[-1, 7],
+            grid=[1, 2, 3, 4, 5, 6],
+            valid=[True, False, False, True],
+            label_size=4,
+            label_="abc",
+            payload_size=1,
+            payload=b"\x5a",
+        )
+        self.assertEqual(demo.Samples.decode(s.to_bytes()), s)
+        # The data must have the count or size that its field gives.
+        self.assertEqual(self.kind(dataclasses.replace(s, readings=[-1, 7, 3])), "BadSize")
+        self.assertEqual(self.kind(dataclasses.replace(s, payload=b"")), "BadSize")
+        self.assertEqual(self.kind(dataclasses.replace(s, valid=[True])), "BadSize")
+        self.assertEqual(self.kind(dataclasses.replace(s, label_size=11)), "BadSize")
+        self.assertEqual(self.kind(dataclasses.replace(s, label_="abcde")), "TooLong")
+        full = dataclasses.replace(s, label_="abcd")
+        self.assertEqual(demo.Samples.decode(full.to_bytes()), full)
+        self.assertEqual(self.kind(dataclasses.replace(s, grid=None)), "Missing")
+
+        up = demo.Upload(word_count=3, words=[1, 2, 3], gains=[1.0, 2.5], tag_size=4, tag="ab")
+        self.assertEqual(demo.Upload.decode(up.to_bytes()), up)
+        self.assertEqual(self.kind(dataclasses.replace(up, gains=[1.0])), "BadSize")
+        # Lists are not shared between instances.
+        self.assertIsNot(demo.Upload().words, demo.Upload().words)
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

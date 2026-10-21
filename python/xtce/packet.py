@@ -35,8 +35,8 @@ class PacketError(ValueError):
 
     ``kind`` names the error and is the same in every runtime: ``Truncated``,
     ``BadPosition``, ``NoMatch``, ``Mismatch``, ``OutOfRange``,
-    ``InvalidString``, ``TooLong``, ``Calibration``, ``NotInvertible`` or
-    ``Missing``.
+    ``InvalidString``, ``TooLong``, ``Calibration``, ``NotInvertible``,
+    ``Missing`` or ``BadSize``.
     """
 
     MESSAGES = {
@@ -50,6 +50,7 @@ class PacketError(ValueError):
         "Calibration": "{0} is outside its calibration range",
         "NotInvertible": "the calibrator of {0} cannot be inverted for encoding",
         "Missing": "{0} is required by its include condition",
+        "BadSize": "invalid size or count for {0}",
     }
 
     def __init__(self, kind: str, *what: str) -> None:
@@ -373,6 +374,41 @@ def spline_inverse(y: float, points, extrapolate: bool, field: str) -> float:
     return _lerp(y, flip[-2], flip[-1])
 
 
+# -- sizes from other fields ----------------------------------------------------------
+
+
+def dynamic_size(x, slope: float, intercept: float, unit: int, max_: int, field: str) -> int:
+    """A size or count that another field gives (an XTCE ``DynamicValue``):
+    ``(slope * x + intercept) / unit``, where ``x`` is that field's value and
+    ``unit`` is 8 for a size in bits used in whole bytes.  Raises ``BadSize``
+    unless the result is a whole number from 0 to ``max_``."""
+    y = slope * float(x) + intercept
+    if not (y >= 0.0) or not y.is_integer() or not (y / unit).is_integer() or y / unit > max_:
+        raise PacketError("BadSize", field)
+    return int(y / unit)
+
+
+def read_list(r: "BitReader", n: int, gap: int, field: str, read) -> list:
+    """``n`` values read by ``read()``, with ``gap`` bits between them."""
+    out = []
+    for i in range(n):
+        if i and gap:
+            r.skip(gap, field)
+        out.append(read())
+    return out
+
+
+def check_size(v, n: int, field: str) -> None:
+    """Raises ``BadSize`` unless ``v`` has ``n`` elements or bytes."""
+    if len(v) != n:
+        raise PacketError("BadSize", field)
+
+
+def sized(spec: tuple, n: int) -> tuple:
+    """The spec of a string whose size another field gives: exactly ``n`` bytes."""
+    return (n * 8, n * 8, spec[2], spec[3])
+
+
 # -- strings and binary -------------------------------------------------------------
 
 
@@ -481,6 +517,10 @@ def describe_str(s: str) -> str:
 
 def describe_optional(v, describe) -> str:
     return "none" if v is None else describe(v)
+
+
+def describe_list(v, describe) -> str:
+    return "[" + ", ".join(describe(x) for x in v) + "]"
 
 
 def describe_bytes(b: bytes) -> str:

@@ -7,6 +7,7 @@
 #   make packets         regenerate the demo mission's packet codecs
 #   make rust|cpp|python build one library
 #   make test            run every language's tests and the cross-language checks
+#   make samples-check   check tcsxtce against public XTCE documents (downloads them)
 #   make examples        build and run every example in examples/
 #   make fmt             format Rust code;  make fmt-check  verify it
 #   make clean           remove build products (keeps generated sources)
@@ -14,6 +15,7 @@
 
 PYTHON  ?= python3
 CARGO   ?= cargo
+CURL    ?= curl -fsSL --retry 3 --retry-delay 2
 
 XSD     := references/SpaceSystem.xsd
 GEN     := $(PYTHON) -m xtcegen --xsd ../$(XSD)
@@ -41,7 +43,7 @@ C_PKT_TOOL    := cpp/build/packet_tool
 CXX_PKT_TOOL  := cpp/build/packet_tool_cxx
 
 .PHONY: all references generate samples packets rust cpp python test test-generator test-rust \
-        test-cpp test-python cross-check packet-check examples fmt fmt-check clean \
+        test-cpp test-python cross-check packet-check samples-check examples fmt fmt-check clean \
         distclean
 
 all: generate rust cpp python test
@@ -117,6 +119,21 @@ cross-check: rust cpp python $(SAMPLES)
 
 packet-check: rust cpp python
 	sh tests/packet_check.sh $(RUST_PKT_TOOL) $(C_PKT_TOOL) $(CXX_PKT_TOOL)
+
+# Public XTCE documents, pinned to commits in tests/external/sources.txt and
+# downloaded on demand; not part of `make test`, which needs no network.
+EXTERNAL := tests/external/files
+
+samples-check: rust $(PY_GEN)
+	@mkdir -p $(EXTERNAL)
+	@grep -v '^#' tests/external/sources.txt | while read -r name sha url; do \
+	    [ -n "$$name" ] || continue; \
+	    [ -f $(EXTERNAL)/$$name ] && continue; \
+	    mkdir -p $$(dirname $(EXTERNAL)/$$name); \
+	    echo "fetch $$name"; \
+	    $(CURL) -o $(EXTERNAL)/$$name.tmp "$$url" && mv $(EXTERNAL)/$$name.tmp $(EXTERNAL)/$$name || exit 1; \
+	done
+	$(PYTHON) -I tests/samples_check.py
 
 # Each example regenerates its code if needed, builds and runs it in Rust,
 # C, C++ and Python, and checks that the outputs match.

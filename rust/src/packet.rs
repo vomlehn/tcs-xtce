@@ -42,6 +42,9 @@ pub enum PacketError {
     NotInvertible { field: &'static str },
     /// An optional field is `None` although its include condition holds.
     Missing { field: &'static str },
+    /// The size or count that another field gives `field` is not a whole
+    /// number in range, or `field` does not have that size or count.
+    BadSize { field: &'static str },
 }
 
 impl PacketError {
@@ -58,6 +61,7 @@ impl PacketError {
             Self::Calibration { .. } => "Calibration",
             Self::NotInvertible { .. } => "NotInvertible",
             Self::Missing { .. } => "Missing",
+            Self::BadSize { .. } => "BadSize",
         }
     }
 }
@@ -87,6 +91,7 @@ impl fmt::Display for PacketError {
             Self::Missing { field } => {
                 write!(f, "{field} is required by its include condition")
             }
+            Self::BadSize { field } => write!(f, "invalid size or count for {field}"),
         }
     }
 }
@@ -589,6 +594,28 @@ pub fn spline_inverse(
     })
 }
 
+// --- sizes from other fields -------------------------------------------------------
+
+/// A size or count that another field gives (an XTCE `DynamicValue`):
+/// `(slope * x + intercept) / unit`, where `x` is that field's value and
+/// `unit` is 8 for a size in bits used in whole bytes.  Fails with `BadSize`
+/// unless the result is a whole number from 0 to `max`.
+pub fn dynamic_size(
+    x: f64,
+    slope: f64,
+    intercept: f64,
+    unit: u32,
+    max: usize,
+    field: &'static str,
+) -> Result<usize> {
+    let y = slope * x + intercept;
+    let unit = unit as f64;
+    if !(y >= 0.0) || y.fract() != 0.0 || (y / unit).fract() != 0.0 || y / unit > max as f64 {
+        return Err(PacketError::BadSize { field });
+    }
+    Ok((y / unit) as usize)
+}
+
 // --- strings ----------------------------------------------------------------------
 
 /// Layout of a string field.  Exactly one of `terminator` and `size_tag_bits`
@@ -601,6 +628,18 @@ pub struct StringSpec {
     pub max_bits: usize,
     pub terminator: Option<u8>,
     pub size_tag_bits: u32,
+}
+
+impl StringSpec {
+    /// The spec of a string whose size another field gives: it occupies
+    /// exactly `bytes` bytes.
+    pub fn sized(&self, bytes: usize) -> StringSpec {
+        StringSpec {
+            fixed_bits: Some(bytes * 8),
+            max_bits: bytes * 8,
+            ..*self
+        }
+    }
 }
 
 /// Whether `n` bytes after a `tag`-bit size tag fit in `bits` bits.  Avoids
@@ -842,6 +881,26 @@ mod tests {
         assert_eq!(float_to_raw(3.402_823_567_797_336_6e38, 32), 0x7f80_0000);
         assert_eq!(float_to_raw(1e39, 32), 0x7f80_0000);
         assert_eq!(float_to_raw(-1e39, 32), 0xff80_0000);
+    }
+
+    #[test]
+    fn dynamic_sizes() {
+        assert_eq!(dynamic_size(5.0, 1.0, -1.0, 1, 10, "f"), Ok(4));
+        assert_eq!(dynamic_size(24.0, 1.0, 0.0, 8, 3, "f"), Ok(3));
+        assert_eq!(dynamic_size(3.0, 8.0, 0.0, 8, 3, "f"), Ok(3));
+        for (x, slope, unit, max) in [
+            (0.0, 1.0, 1, 10),      // negative after the intercept
+            (12.0, 1.0, 1, 10),     // more than max
+            (5.0, 0.5, 1, 10),      // not whole
+            (12.0, 1.0, 8, 10),     // not whole bytes
+            (f64::NAN, 1.0, 1, 10), // not a number
+        ] {
+            let intercept = if x == 0.0 { -1.0 } else { 0.0 };
+            assert_eq!(
+                dynamic_size(x, slope, intercept, unit, max, "f"),
+                Err(PacketError::BadSize { field: "f" })
+            );
+        }
     }
 
     #[test]

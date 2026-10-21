@@ -185,6 +185,73 @@ int main(void) {
   CHECK(strcmp(ENCODE(demo_Event, &timed), "Missing") == 0);
   CHECK(err.field && strcmp(err.field, "FineTime") == 0);
 
+  /* Arrays, repeated entries and sizes from other fields. */
+  {
+    demo_Samples s, s2;
+    size_t i;
+    char msg[128];
+    demo_Samples_init(&s);
+    s.sec_hdr_flag = true;
+    s.sample_count = 2;
+    s.readings.len = 2;
+    s.readings.data[0] = -1;
+    s.readings.data[1] = 7;
+    s.has_grid = true;
+    s.grid.len = 6;
+    for (i = 0; i < 6; ++i) s.grid.data[i] = (uint8_t)(i + 1);
+    s.valid.len = 4;
+    s.valid.data[0] = s.valid.data[3] = true;
+    s.label_size = 4;
+    SET_STR(s.label_, "abc");
+    s.payload_size = 1;
+    s.payload.len = 1;
+    s.payload.data[0] = 0x5a;
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "Ok") == 0);
+    CHECK(demo_Samples_decode(&s2, buf, len, &err) == 0);
+    CHECK(s2.readings.len == 2 && s2.readings.data[0] == -1 && s2.readings.data[1] == 7);
+    CHECK(s2.has_grid && s2.grid.len == 6 && s2.grid.data[5] == 6);
+    CHECK(s2.valid.len == 4 && s2.valid.data[0] && !s2.valid.data[1] && s2.valid.data[3]);
+    CHECK(strcmp(s2.label_.data, "abc") == 0 && s2.payload.len == 1 && s2.payload.data[0] == 0x5a);
+    /* The data must have the count or size that its field gives. */
+    s.readings.len = 3;
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "BadSize") == 0);
+    xtce_pk_error_message(&err, msg, sizeof msg);
+    CHECK(strcmp(msg, "invalid size or count for Readings") == 0);
+    s.readings.len = 2;
+    s.payload.len = 0;
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "BadSize") == 0);
+    s.payload.len = 1;
+    s.label_size = 11; /* beyond the ValidRange that bounds the label */
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "BadSize") == 0);
+    s.label_size = 4;
+    SET_STR(s.label_, "abcde");
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "TooLong") == 0);
+    SET_STR(s.label_, "abcd");
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "Ok") == 0);
+    CHECK(demo_Samples_decode(&s2, buf, len, &err) == 0 && strcmp(s2.label_.data, "abcd") == 0);
+    s.has_grid = false;
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "Missing") == 0);
+  }
+  {
+    demo_Upload up, up2;
+    demo_Upload_init(&up);
+    up.word_count = 3;
+    up.words.len = 3;
+    up.words.data[0] = 1;
+    up.words.data[2] = 3;
+    up.gains.len = 2;
+    up.gains.data[0] = 1.0;
+    up.gains.data[1] = 2.5;
+    up.tag_size = 4;
+    SET_STR(up.tag, "ab");
+    CHECK(strcmp(ENCODE(demo_Upload, &up), "Ok") == 0);
+    CHECK(demo_Upload_decode(&up2, buf, len, &err) == 0);
+    CHECK(up2.words.len == 3 && up2.words.data[2] == 3 && up2.gains.data[1] == 2.5);
+    CHECK(strcmp(up2.tag.data, "ab") == 0);
+    up.gains.len = 1;
+    CHECK(strcmp(ENCODE(demo_Upload, &up), "BadSize") == 0);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

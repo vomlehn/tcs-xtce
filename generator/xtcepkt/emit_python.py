@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .common import flt, invertible, le, string_spec
-from .model import walk, BinaryEnc, Cond, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, Value, VType
+from .model import walk, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, Value, VType
 
 
 def pstr(s: str) -> str:
@@ -19,10 +19,14 @@ def pstr(s: str) -> str:
 
 
 def field_type(vt: VType) -> str:
+    if vt.kind == "array":
+        return f"list[{field_type(vt.elem)}]"
     return {"int": "int", "float": "float", "bool": "bool", "string": "str", "binary": "bytes"}.get(vt.kind) or vt.ident
 
 
 def default(vt: VType) -> str:
+    if vt.kind == "array":
+        return "dataclasses.field(default_factory=list)"
     return {"int": "0", "float": "0.0", "bool": "False", "string": '""', "binary": 'b""'}.get(vt.kind) or f"pk.enum_value({vt.ident}, 0)"
 
 
@@ -64,8 +68,29 @@ def uncalibrate(vt: VType, y: str, f: str) -> str:
     return f"pk.spline_inverse({y}, {points(cal)}, {cal.extrapolate}, {f})"
 
 
-def read_expr(vt: VType, f: str) -> str:
+def size(d: DynSize, x: str, f: str) -> str:
+    """Expression for a size or count that the value ``x`` gives."""
+    n = f"pk.dynamic_size({x}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, {f})"
+    return f"{n} * {d.factor}" if d.factor != 1 else n
+
+
+def count(vt: VType, ref, f: str) -> str:
+    c = vt.enc.count
+    return size(c, ref(c.local), f) if isinstance(c, DynSize) else str(c)
+
+
+def spec(vt: VType, ref, f: str) -> str:
+    d = vt.enc.dyn
+    s = repr(string_spec(vt))
+    return f"pk.sized({s}, {size(d, ref(d.local), f)})" if d is not None else s
+
+
+def read_expr(vt: VType, f: str, ref) -> str:
+    """Expression reading one value with BitReader ``r``; ``ref`` gives the
+    expression for a value that gives a size or count."""
     e = vt.enc
+    if isinstance(e, ArrayEnc):
+        return f"pk.read_list(r, {count(vt, ref, f)}, {e.gap}, {f}, lambda: {read_expr(e.elem, f, ref)})"
     if isinstance(e, IntEnc):
         raw = f"r.uint_order({e.bits}, {le(vt)}, {f})"
         enc = repr(e.encoding)
@@ -80,11 +105,14 @@ def read_expr(vt: VType, f: str) -> str:
     if isinstance(e, FloatEnc):
         return calibrate(vt, f"pk.float_from_raw(r.uint_order({e.bits}, {le(vt)}, {f}), {e.bits})", f)
     if isinstance(e, BinaryEnc):
-        return f"r.bytes({e.bits // 8}, {f})"
-    return f"pk.read_string(r, {string_spec(vt)!r}, {f})"
+        n = size(e.dyn, ref(e.dyn.local), f) if e.dyn else e.bits // 8
+        return f"r.bytes({n}, {f})"
+    return f"pk.read_string(r, {spec(vt, ref, f)}, {f})"
 
 
-def write_stmt(vt: VType, x: str, f: str) -> str:
+def write_stmt(vt: VType, x: str, f: str, ref) -> str:
+    """Statement writing ``x``; not for arrays or dynamic binary values,
+    which ``PythonEmitter.write_value`` writes."""
     e = vt.enc
     if isinstance(e, IntEnc):
         bits, enc = e.bits, repr(e.encoding)
@@ -105,13 +133,31 @@ def write_stmt(vt: VType, x: str, f: str) -> str:
         return f"w.uint_order({e.bits}, {le(vt)}, pk.float_to_raw({uncalibrate(vt, x, f)}, {e.bits}))"
     if isinstance(e, BinaryEnc):
         return f"pk.write_binary(w, {x}, {e.bits // 8}, {f})"
-    return f"pk.write_string(w, {string_spec(vt)!r}, {x}, {f})"
+    return f"pk.write_string(w, {spec(vt, ref, f)}, {x}, {f})"
 
 
 def condition(c: Criterion, x: str) -> str:
     vt = c.local.vtype
     v = c.value if vt.kind in ("int", "enum") else literal(vt, c.value)
     return f"{x} {c.op} {v}"
+
+
+def describer(vt: VType) -> str:
+    """Expression for a function giving the canonical text of a value."""
+    k = vt.kind
+    if k == "array":
+        return f"lambda v: pk.describe_list(v, {describer(vt.elem)})"
+    if k == "float":
+        return "pk.describe_float"
+    if k == "string":
+        return "pk.describe_str"
+    if k == "binary":
+        return "pk.describe_bytes"
+    if k == "enum":
+        return f"_DESCRIBE_{vt.ident}"
+    if k == "bool":
+        return "_describe_bool"
+    return "str"
 
 
 class PythonEmitter:
@@ -131,6 +177,7 @@ class PythonEmitter:
         self.line()
         self.line("from __future__ import annotations")
         self.line()
+        self.line("import dataclasses")
         self.line("import enum")
         self.line("from dataclasses import dataclass")
         self.line("from typing import ClassVar, Optional, Union")
@@ -188,7 +235,7 @@ class PythonEmitter:
                 self.line(f"m{it.id} = r.pos", depth)
             elif isinstance(it, Value):
                 lc = it.local
-                self.line(f"v{lc.id} = {read_expr(lc.vtype, pstr(lc.name))}", depth)
+                self.line(f"v{lc.id} = {read_expr(lc.vtype, pstr(lc.name), lambda r: f'v{r.id}')}", depth)
             elif isinstance(it, Cond):
                 if not nested:
                     for v in walk(it.items):
@@ -221,7 +268,22 @@ class PythonEmitter:
                 if lc.optional:
                     self.line(f"if {x} is None:", depth)
                     self.line(f'raise pk.PacketError("Missing", {pstr(lc.name)})', depth + 1)
-                self.line(write_stmt(lc.vtype, x, pstr(lc.name)), depth)
+                self.write_value(lc.vtype, x, pstr(lc.name), lambda r: self.place(n, r, names), depth)
+
+    def write_value(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
+        e = vt.enc
+        if isinstance(e, ArrayEnc):
+            self.line(f"pk.check_size({x}, {count(vt, ref, f)}, {f})", depth)
+            self.line(f"for _i, _e in enumerate({x}):", depth)
+            if e.gap:
+                self.line("if _i:", depth + 1)
+                self.line(f"w.skip({e.gap}, {f})", depth + 2)
+            self.line(write_stmt(e.elem, "_e", f, ref), depth + 1)
+        elif isinstance(e, BinaryEnc) and e.dyn is not None:
+            self.line(f"pk.check_size({x}, {size(e.dyn, ref(e.dyn.local), f)}, {f})", depth)
+            self.line(f"w.bytes({x})", depth)
+        else:
+            self.line(write_stmt(vt, x, f, ref), depth)
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:
@@ -286,21 +348,12 @@ class PythonEmitter:
         self.line('"""Canonical text form, identical in every generated language."""', 2)
         parts = []
         for name, lc in n.fields:
-            k = lc.vtype.kind
-            if k == "float":
-                fn = "pk.describe_float"
-            elif k == "string":
-                fn = "pk.describe_str"
-            elif k == "binary":
-                fn = "pk.describe_bytes"
-            elif k == "enum":
-                fn = f"_DESCRIBE_{lc.vtype.ident}"
-            elif k == "bool":
-                fn = "_describe_bool"
-            else:
-                fn = "str"
+            fn = describer(lc.vtype)
             v = f"self.{name}"
-            parts.append(f"pk.describe_optional({v}, {fn})" if lc.optional else f"{fn}({v})")
+            if lc.optional:
+                parts.append(f"pk.describe_optional({v}, {fn})")
+            else:
+                parts.append(f"({fn})({v})" if fn.startswith("lambda") else f"{fn}({v})")
         if not parts:
             self.line(f"return {pstr(n.ident + '{}')}", 2)
             return

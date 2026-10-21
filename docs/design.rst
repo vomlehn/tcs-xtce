@@ -385,6 +385,41 @@ pseudo-members.
 Unlisted values therefore round-trip instead of failing. Telemetry from
 newer flight software decodes even when the database is out of date.
 
+Arrays and sizes from other fields
+----------------------------------
+
+Arrays and repeated entries share one representation: a ``VType`` of
+kind ``array`` whose ``ArrayEnc`` holds the element type, a count and
+the gap between elements. A multi-dimensional array is flattened into
+one list in encoding order, because the dimensions add nothing to the
+wire format, and nested lists would differ between the languages.
+
+A ``DynamicValue`` becomes a ``DynSize``: ``factor * (slope * value +
+intercept)``. Types hold it unbound, because an argument reference only
+means something inside a particular meta-command. When an entry is
+compiled, the size is bound to the value it reads, which must be decoded
+earlier in the packet, and given a bound:
+
+* from the referenced value's ``ValidRange``, or its encoding;
+* capped at ``MAX_FIELD_BITS`` (64 KiB on the wire).
+
+The bound becomes ``N`` in the C storage types and in ``MAX_BYTES``.
+That is how C keeps fixed-size structs and no allocation while counts
+vary.
+
+Binding copies the ``VType``, so the C emitter, which keys constants by
+type identity, sees distinct types when two packets bound the same type
+differently. ``EndingIndex - StartingIndex + 1`` and several dimensions
+fold into the intercept and factor, so one runtime function,
+``dynamic_size``, covers every case. It works in ``double`` in every
+language, so the three runtimes accept and reject exactly the same
+values.
+
+The referenced field stays an ordinary field that the caller sets.
+Deriving it from the data when encoding would make ``encode`` change its
+input, or need a second, derived struct. Instead the encoder checks that
+the data matches and fails with ``BadSize`` if not.
+
 Runtime
 -------
 
@@ -431,10 +466,21 @@ Testing strategy
    * range, criteria, calibration and string errors;
    * include conditions;
    * commands;
+   * arrays, repeated entries and sizes from other fields, including
+     data that doesn't match its count or size;
    * that codec buffers keep their capacity over many packets.
 
    The C tests (``cpp/tests/packet_test.c``) are built and run both as
    C and as C++.
+
+**Public documents**
+   ``make samples-check`` runs the binding and compiler on 34 public
+   XTCE documents from Yamcs and the XTCE Toolkit, pinned by commit and
+   SHA-256. Generated code is compiled in every language, and each
+   document's summary is compared with ``tests/external/expected.txt``.
+   This catches crashes and disagreements with ``xmllint``, which
+   hand-written tests can miss, and shows which unsupported constructs
+   real documents use.
 
 **Formatting**
    Every ``make rust`` runs ``cargo fmt --check``. A Claude Code
@@ -453,17 +499,16 @@ Limitations and future work
 
 * **Packet codecs** — the main missing XTCE features are:
 
-  * ``RepeatEntry`` and array types, which need ``Vec`` fields with
-    dynamic counts;
-  * ``DynamicValue`` sizes, for example a payload sized by the CCSDS
-    length field;
-  * aggregate types;
+  * aggregate types (the most common unsupported construct in the
+    public documents), including arrays of aggregates;
+  * ``DynamicValue`` locations, ``DiscreteLookupList`` values, array
+    subsets and repeated containers;
   * ``BooleanExpression`` criteria;
   * container ``BinaryEncoding``;
   * error detection (CRC and checksum generation).
 
-  The model has room for each of these: new ``Item`` kinds, and a
-  ``VType`` for structured values.
+  The model has room for each of these: new ``Item`` kinds, and
+  ``VType`` kinds for structured values, as arrays have.
 
 * **Computed fields:** length and checksum fields are left to the
   application.

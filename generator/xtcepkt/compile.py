@@ -8,14 +8,19 @@ included containers and records which XTCE constructs it does not support.
 
 from __future__ import annotations
 
+import dataclasses
 import keyword
+import math
 import re
 from typing import Callable, Optional
 
 from .model import (
+    MAX_FIELD_BITS,
+    ArrayEnc,
     BinaryEnc,
     Cond,
     Criterion,
+    DynSize,
     EnumLabel,
     FloatEnc,
     Fixed,
@@ -70,8 +75,10 @@ RESERVED = set(keyword.kwlist) | {
     # C keywords and standard macros a struct member cannot be named
     "restrict", "errno", "assert", "stdin", "stdout", "stderr", "offsetof",
     "true", "false", "NULL", "EOF",
-    # Python builtins that would shadow useful names in dataclasses
+    # Python builtins that would shadow useful names in dataclasses, and the
+    # modules generated Python uses in class bodies
     "bytes", "int", "float", "str", "list", "dict", "type", "id", "len",
+    "pk", "dataclasses",
     # generated members
     "decode", "encode", "encode_into", "describe", "label", "value", "raw",
     "name", "max_bytes", "data", "buf", "r", "w", "init", "to_bytes",
@@ -254,7 +261,11 @@ class Compiler:
             raise Unsupported(f"{where}: baseType inheritance is not supported")
         base = kind.replace("ParameterType", "").replace("ArgumentType", "")
         if base in ("AbsoluteTime", "RelativeTime"):
-            vt = self.time_type(key, base, t, where)
+            vt = self.time_type(key, base, t, path, where)
+            self.vtypes[cache] = vt
+            return vt
+        if base == "Array":
+            vt = self.array_type(key, table, path, t, where)
             self.vtypes[cache] = vt
             return vt
         if base not in ("Integer", "Float", "Enumerated", "Boolean", "String", "Binary"):
@@ -262,7 +273,7 @@ class Compiler:
         if t.choice is None:
             raise Unsupported(f"{where}: no data encoding")
         enc_name, e = t.choice.name, t.choice.value
-        enc, cal = self.encoding(enc_name, e, where)
+        enc, cal = self.encoding(enc_name, e, path, where)
         vt = VType(key=qname(key), name=t.name, kind="", enc=enc, calibrator=cal)
         if base == "Float":
             if not isinstance(enc, (IntEnc, FloatEnc)):
@@ -296,7 +307,7 @@ class Compiler:
         self.vtypes[cache] = vt
         return vt
 
-    def time_type(self, key: Key, base: str, t, where: str) -> VType:
+    def time_type(self, key: Key, base: str, t, path: Key, where: str) -> VType:
         """Times are seconds: ``scale * raw + offset`` from the reference time."""
         enc = t.encoding
         if enc is None:
@@ -304,7 +315,7 @@ class Compiler:
         units = enc.units.value if enc.units else "seconds"
         if units != "seconds":
             raise Unsupported(f"{where}: time units {units}")
-        e, cal = self.encoding(enc.choice.name, enc.choice.value, where)
+        e, cal = self.encoding(enc.choice.name, enc.choice.value, path, where)
         if not isinstance(e, (IntEnc, FloatEnc)):
             raise Unsupported(f"{where}: time with {enc.choice.name}")
         if cal is not None:
@@ -323,7 +334,66 @@ class Compiler:
         what = "absolute" if base == "AbsoluteTime" else "relative"
         return VType(key=qname(key), name=t.name, kind="float", enc=e, calibrator=cal, doc=f"{what} time, {doc}")
 
-    def encoding(self, name: str, e, where: str):
+    def array_type(self, key: Key, table: dict, path: Key, t, where: str) -> VType:
+        """An array type: its elements in the order they are encoded, which
+        for several dimensions is the order of the DimensionList."""
+        ekey = self.resolve(t.array_type_ref, path, table, "array element type")
+        if table[ekey][1].startswith("Array"):
+            raise Unsupported(f"{where}: arrays of arrays")
+        elem = self.vtype(ekey, table)
+        if elem.dyn is not None:
+            raise Unsupported(f"{where}: elements whose size another value gives")
+        dims = t.dimension_list.dimension
+        if not dims:
+            raise Unsupported(f"{where}: array without dimensions")
+        fixed, dyn = 1, None
+        for d in dims:
+            start = self.int_value(d.starting_index, path, "array StartingIndex", where)
+            end = self.int_value(d.ending_index, path, "array EndingIndex", where)
+            if isinstance(start, DynSize):
+                raise Unsupported(f"{where}: StartingIndex from DynamicValue")
+            if isinstance(end, int):
+                if end < start - 1:
+                    raise Unsupported(f"{where}: EndingIndex {end} is before StartingIndex {start}")
+                fixed *= end - start + 1
+            elif dyn is not None:
+                raise Unsupported(f"{where}: more than one dimension from DynamicValue")
+            else:
+                end.intercept += 1 - start  # the count is end - start + 1
+                dyn = end
+        if dyn is not None:
+            dyn.factor = fixed
+        count = dyn if dyn is not None else fixed
+        return VType(key=qname(key), name=t.name, kind="array", enc=ArrayEnc(elem, count))
+
+    def int_value(self, iv, path: Key, what: str, where: str):
+        """An IntegerValueType: a number, or an unbound DynSize."""
+        c = iv.choice
+        if c.name == "FixedValue":
+            return int(c.value)
+        if c.name == "DynamicValue":
+            return self.dyn_size(c.value, path, what, where)
+        raise Unsupported(f"{where}: {what} from {c.name}")
+
+    def dyn_size(self, dv, path: Key, what: str, where: str) -> DynSize:
+        """A DynamicValue (or argument DynamicValue), unbound."""
+        if hasattr(dv, "parameter_instance_ref"):
+            ref, kind = dv.parameter_instance_ref, "ParameterInstanceRef"
+        else:
+            ref, kind = dv.choice.value, dv.choice.name
+        if getattr(ref, "instance", None):
+            raise Unsupported(f"{where}: {what} from instance {ref.instance} of a parameter")
+        adj = dv.linear_adjustment
+        slope = adj.slope if adj is not None and adj.slope is not None else 1.0
+        intercept = adj.intercept if adj is not None and adj.intercept is not None else 0.0
+        if not (math.isfinite(slope) and math.isfinite(intercept)):
+            raise Unsupported(f"{where}: {what} with a non-finite LinearAdjustment")
+        if kind == "ParameterInstanceRef":
+            key = qname(self.resolve(ref.parameter_ref, path, self.params, "parameter"))
+            return DynSize(key=key, slope=slope, intercept=intercept)
+        return DynSize(arg=ref.argument_ref.strip(), slope=slope, intercept=intercept)
+
+    def encoding(self, name: str, e, path: Key, where: str):
         if getattr(e, "bit_order", None) and e.bit_order.value != "mostSignificantBitFirst":
             raise Unsupported(f"{where}: bitOrder {e.bit_order.value}")
         if getattr(e, "error_detect_correct", None):
@@ -366,17 +436,25 @@ class Compiler:
                     return StringEnc(bits, bits, None, self._tag(tag, where)), None
                 return StringEnc(bits, bits, self._term(c.value.termination_char, where)), None
             v = c.value
+            dyn = None
             if v.choice1 is not None:
-                raise Unsupported(f"{where}: string size from {v.choice1.name}")
+                if v.choice1.name != "DynamicValue":
+                    raise Unsupported(f"{where}: string size from {v.choice1.name}")
+                dyn = self.dyn_size(v.choice1.value, path, "string size", where)
+                dyn.unit = 8
             mx = self._size(v.max_size_in_bits, "string", where)
             if v.choice2.name == "LeadingSize":
                 tag = v.choice2.value.size_in_bits_of_size_tag or 16
-                return StringEnc(None, mx, None, self._tag(tag, where)), None
-            return StringEnc(None, mx, self._term(v.choice2.value, where)), None
+                return StringEnc(None, mx, None, self._tag(tag, where), dyn), None
+            return StringEnc(None, mx, self._term(v.choice2.value, where), dyn=dyn), None
         if name == "BinaryDataEncoding":
             if e.from_binary_transform_algorithm or e.to_binary_transform_algorithm:
                 raise Unsupported(f"{where}: binary transform algorithms")
             c = e.size_in_bits.choice
+            if c.name == "DynamicValue":
+                dyn = self.dyn_size(c.value, path, "binary size", where)
+                dyn.unit = 8
+                return BinaryEnc(MAX_FIELD_BITS, dyn), None
             if c.name != "FixedValue":
                 raise Unsupported(f"{where}: binary size from {c.name}")
             bits = self._size(c.value, "binary", where)
@@ -470,10 +548,69 @@ class Compiler:
             return [Seek(None, off)] if off else []
         raise Unsupported(f"{where}: location relative to {ref}")
 
-    @staticmethod
-    def _no_repeat(e, where: str) -> None:
-        if e.repeat_entry is not None:
-            raise Unsupported(f"{where}: RepeatEntry")
+    def repeat(self, local: Local, e, path: Key, where: str) -> Local:
+        """Turns the value of an entry with a RepeatEntry into an array."""
+        rp = getattr(e, "repeat_entry", None)
+        if rp is None:
+            return local
+        vt = local.vtype
+        if vt.kind == "array":
+            raise Unsupported(f"{where}: RepeatEntry on an array")
+        if vt.dyn is not None:
+            raise Unsupported(f"{where}: RepeatEntry on a value whose size another value gives")
+        count = self.int_value(rp.count, path, "RepeatEntry Count", where)
+        gap = 0
+        if rp.offset is not None:
+            gap = self.int_value(rp.offset, path, "RepeatEntry Offset", where)
+            if isinstance(gap, DynSize):
+                raise Unsupported(f"{where}: RepeatEntry Offset from DynamicValue")
+            if gap < 0:
+                raise Unsupported(f"{where}: RepeatEntry Offset {gap} is negative")
+        if isinstance(count, int):
+            if count < 1:
+                raise Unsupported(f"{where}: RepeatEntry Count {count} is not positive")
+            if count == 1:
+                return local
+        local.vtype = VType(key=vt.key, name=vt.name, kind="array", enc=ArrayEnc(vt, count, gap), doc=vt.doc)
+        return local
+
+    def bind(self, local: Local, scope: list, where: str, arg_key: Optional[Callable] = None) -> Local:
+        """Binds the size or count of a value to the value that gives it,
+        which must be decoded before it, and bounds it."""
+        vt = local.vtype
+        d = vt.dyn
+        if d is None:
+            return local
+        if d.arg is not None:
+            if arg_key is None:
+                raise Unsupported(f"{where}: size from argument {d.arg!r} outside a command")
+            key, name = arg_key(d.arg), d.arg
+        else:
+            key = name = d.key
+        ref = next((lc for lc in reversed(scope) if lc.key == key), None)
+        if ref is None:
+            raise Unsupported(f"{where}: size or count from {name}, which is not decoded before it")
+        if ref.optional:
+            raise Unsupported(f"{where}: size or count from {name}, which has an IncludeCondition")
+        if ref.vtype.kind != "int":
+            raise Unsupported(f"{where}: size or count from {ref.vtype.kind} value {name}")
+        lo, hi = ref.vtype.valid_range or int_range(ref.vtype.enc)
+        top = max(d.slope * lo, d.slope * hi) + d.intercept
+        units = max(math.floor(top), 0) // d.unit if math.isfinite(top) else MAX_FIELD_BITS
+        e = vt.enc
+        b = dataclasses.replace(d, local=ref)
+        if isinstance(e, ArrayEnc):
+            step = max(item_bits(e.elem) + e.gap, 1)
+            b.max = min(units, (MAX_FIELD_BITS + e.gap) // step // b.factor)
+            enc = dataclasses.replace(e, count=b)
+        elif isinstance(e, StringEnc):
+            b.max = min(units, e.max_bits // 8, MAX_FIELD_BITS // 8)
+            enc = dataclasses.replace(e, max_bits=b.max * 8, dyn=b)
+        else:
+            b.max = min(units, MAX_FIELD_BITS // 8)
+            enc = dataclasses.replace(e, bits=b.max * 8, dyn=b)
+        local.vtype = dataclasses.replace(vt, enc=enc)
+        return local
 
     def param_local(self, ref: str, path: Key) -> Local:
         pkey = self.resolve(ref, path, self.params, "parameter")
@@ -488,16 +625,20 @@ class Compiler:
         for ch in sc.entry_list.items:
             e = ch.value
             where = f"container {qname(stack[-1])}"
-            if ch.name not in ("ParameterRefEntry", "ContainerRefEntry"):
+            if ch.name not in ("ParameterRefEntry", "ContainerRefEntry", "ArrayParameterRefEntry"):
                 raise Unsupported(f"{where}: {ch.name}")
-            self._no_repeat(e, where)
+            if ch.name == "ContainerRefEntry" and e.repeat_entry is not None:
+                raise Unsupported(f"{where}: RepeatEntry on a ContainerRefEntry")
+            if getattr(e, "dimension_list", None) is not None:
+                raise Unsupported(f"{where}: array subsets (DimensionList in an array entry)")
             cond = None
             if e.include_condition is not None:
                 cond = self.match(e.include_condition, path, scope, where)
             out = items if cond is None else []
             out += self.location(e.location_in_container_in_bits, start, where)
-            if ch.name == "ParameterRefEntry":
+            if ch.name != "ContainerRefEntry":
                 local = self.param_local(e.parameter_ref, path)
+                local = self.bind(self.repeat(local, e, path, where), scope, where)
                 out.append(Value(local))
                 scope.append(local)
             else:
@@ -577,6 +718,8 @@ class Compiler:
                 raise Unsupported(f"{where}: criterion on {pkey}, which is not decoded before it")
             if local.optional:
                 raise Unsupported(f"{where}: criterion on {pkey}, which has an IncludeCondition")
+            if local.vtype.kind == "array":
+                raise Unsupported(f"{where}: criterion on {pkey}, which is an array")
             if cmp.instance:
                 raise Unsupported(f"{where}: comparison of instance {cmp.instance}")
             raw = cmp.use_calibrated_value is False
@@ -659,7 +802,7 @@ class Compiler:
                         raise Unsupported(f"{where}: RestrictionCriteria on a CommandContainer")
                 elif base is not None and base.all_items():
                     raise Unsupported(f"{where}: CommandContainer does not extend its base's container")
-                node.items = self.tc_items(cc, scope, path, where)
+                node.items = self.tc_items(cc, scope, path, where, self.scope_of(base) if base else [])
             if base is not None:
                 base.children.append(node)
         except Unsupported as e:
@@ -669,21 +812,37 @@ class Compiler:
         self.order.append(node)
         return node
 
-    def tc_items(self, cc, scope: dict, path: Key, where: str) -> list[Item]:
+    def tc_items(self, cc, scope: dict, path: Key, where: str, values: list) -> list[Item]:
+        """Items for a CommandContainer's entries.  ``values`` lists the
+        values encoded so far (base meta-commands first) and grows."""
+
+        def arg_key(name: str) -> str:
+            if name not in scope:
+                raise Unsupported(f"{where}: unknown argument {name!r}")
+            return f"{qname(scope[name][0])}#{name}"
+
         items: list[Item] = []
         for ch in cc.entry_list.items:
             e = ch.value
-            if ch.name not in ("ArgumentRefEntry", "ParameterRefEntry", "FixedValueEntry"):
+            entries = ("ArgumentRefEntry", "ArrayArgumentRefEntry", "ParameterRefEntry", "ArrayParameterRefEntry")
+            if ch.name not in entries + ("FixedValueEntry",):
                 raise Unsupported(f"{where}: {ch.name} in a CommandContainer")
-            self._no_repeat(e, where)
             if e.include_condition is not None:
                 raise Unsupported(f"{where}: IncludeCondition in a CommandContainer")
+            if getattr(e, "dimension_list", None) is not None:
+                raise Unsupported(f"{where}: array subsets (DimensionList in an array entry)")
             items += self.location(e.location_in_container_in_bits, 0, where)
-            if ch.name == "ArgumentRefEntry":
-                items.append(Value(self.arg_local(scope, e.argument_ref, where)))
-            elif ch.name == "ParameterRefEntry":
-                items.append(Value(self.param_local(e.parameter_ref, path)))
+            if ch.name in entries:
+                if "Argument" in ch.name:
+                    local = self.arg_local(scope, e.argument_ref, where)
+                else:
+                    local = self.param_local(e.parameter_ref, path)
+                local = self.bind(self.repeat(local, e, path, where), values, where, arg_key)
+                items.append(Value(local))
+                values.append(local)
             else:
+                if e.repeat_entry is not None:
+                    raise Unsupported(f"{where}: RepeatEntry on a FixedValueEntry")
                 bits = e.size_in_bits
                 value = int.from_bytes(hex_bytes(e.binary_value.strip() or "0", where), "big")
                 if not 1 <= bits <= 64 or value >> bits:
@@ -728,8 +887,8 @@ class Compiler:
         for n in concrete:
             self._finish(n)
             for it in walk(n.all_items()):
-                if isinstance(it, Value) and it.local.vtype.kind == "enum":
-                    used[id(it.local.vtype)] = it.local.vtype
+                if isinstance(it, Value) and it.local.vtype.elem.kind == "enum":
+                    used[id(it.local.vtype.elem)] = it.local.vtype.elem
         for vt in used.values():
             vt.ident = names.take(camel(vt.name), camel(vt.key))
         for k in kinds:
@@ -759,8 +918,22 @@ class Compiler:
         n.max_bytes = (max_bits(n.all_items()) + 7) // 8
 
 
+def int_range(e: IntEnc) -> tuple[int, int]:
+    """The smallest and largest value an integer encoding holds."""
+    b = e.bits
+    if e.encoding == "unsigned":
+        return 0, (1 << b) - 1
+    if e.encoding == "twosComplement":
+        return -(1 << (b - 1)), (1 << (b - 1)) - 1
+    return -((1 << (b - 1)) - 1), (1 << (b - 1)) - 1
+
+
 def item_bits(vt: VType) -> int:
+    """The most bits a value of this type occupies."""
     e = vt.enc
+    if isinstance(e, ArrayEnc):
+        n = e.max_count
+        return n * item_bits(e.elem) + max(n - 1, 0) * e.gap
     if isinstance(e, StringEnc):
         return e.max_bits
     return e.bits

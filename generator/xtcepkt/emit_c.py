@@ -13,7 +13,7 @@ from typing import Optional
 
 from .common import flt, int_enc, invertible, le, string_spec
 from .compile import snake
-from .model import walk, BinaryEnc, Cond, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .model import walk, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 ENC = {
     "Unsigned": "XTCE_PK_UNSIGNED",
@@ -61,6 +61,8 @@ def bool_lit(b: bool) -> str:
 def str_cap(vt: VType) -> int:
     """The most bytes a string field can hold."""
     fixed, mx, term, tag = string_spec(vt)
+    if vt.enc.dyn is not None:
+        fixed = mx  # it occupies at most max_bits, like a fixed size
     if fixed is not None and term is not None:
         return fixed // 8
     if fixed is not None:
@@ -97,6 +99,10 @@ class CEmitter:
 
     def ctype(self, vt: VType) -> str:
         k = vt.kind
+        if k == "array":
+            return f"{self.p}{self.tname(vt.elem)}_list{vt.enc.max_count}"
+        if k == "binary" and vt.enc.dyn is not None:
+            return f"{self.p}varbytes{vt.enc.bits // 8}"
         if k == "int":
             return f"{'' if vt.signed else 'u'}int{vt.width}_t"
         if k == "float":
@@ -109,8 +115,14 @@ class CEmitter:
             return f"{self.p}bytes{vt.enc.bits // 8}"
         return self.p + vt.ident
 
+    def tname(self, vt: VType) -> str:
+        """The name of an element type inside the names of list types."""
+        t = self.ctype(vt)
+        t = t[len(self.p) :] if t.startswith(self.p) else t
+        return t[:-2] if t.endswith("_t") else t
+
     def zero(self, vt: VType) -> str:
-        return "XTCE_PK_ZERO" if vt.kind in ("string", "binary") else "0"
+        return "XTCE_PK_ZERO" if vt.kind in ("string", "binary", "array") else "0"
 
     def literal(self, vt: VType, v) -> str:
         k = vt.kind
@@ -125,16 +137,20 @@ class CEmitter:
         return cstr(v if k == "string" else bytes(v))
 
     def vtypes(self) -> list[VType]:
+        """Every type of a value, with the element types of arrays."""
         seen: dict[int, VType] = {}
         for n in self.m.nodes:
             for it in walk(n.all_items()):
                 if isinstance(it, Value):
-                    seen.setdefault(id(it.local.vtype), it.local.vtype)
+                    vt = it.local.vtype
+                    seen.setdefault(id(vt), vt)
+                    seen.setdefault(id(vt.elem), vt.elem)
         return list(seen.values())
 
     def declare_buffers(self) -> None:
         strs = sorted({str_cap(vt) for vt in self.vtypes() if vt.kind == "string"})
-        bins = sorted({vt.enc.bits // 8 for vt in self.vtypes() if vt.kind == "binary"})
+        bins = sorted({vt.enc.bits // 8 for vt in self.vtypes() if vt.kind == "binary" and vt.enc.dyn is None})
+        vbins = sorted({vt.enc.bits // 8 for vt in self.vtypes() if vt.kind == "binary" and vt.enc.dyn is not None})
         if strs:
             self.line()
             self.line("/* Strings of at most N bytes of UTF-8; `data` is always NUL-terminated. */")
@@ -150,6 +166,27 @@ class CEmitter:
                 self.line(f"typedef struct {self.p}bytes{n} {{")
                 self.line(f"uint8_t data[{max(n, 1)}];", 1)
                 self.line(f"}} {self.p}bytes{n};")
+        if vbins:
+            self.line()
+            self.line("/* Binary fields of at most N bytes, whose size another field gives. */")
+            for n in vbins:
+                self.line(f"typedef struct {self.p}varbytes{n} {{")
+                self.line("size_t len;", 1)
+                self.line(f"uint8_t data[{max(n, 1)}];", 1)
+                self.line(f"}} {self.p}varbytes{n};")
+        lists = {}
+        for vt in self.vtypes():
+            if vt.kind == "array":
+                lists.setdefault(self.ctype(vt), vt)
+        if lists:
+            self.line()
+            self.line("/* Arrays and repeated entries: `len` values of `data`, in the order they are")
+            self.line(" * encoded. */")
+            for name, vt in lists.items():
+                self.line(f"typedef struct {name} {{")
+                self.line("size_t len;", 1)
+                self.line(f"{self.ctype(vt.elem)} data[{max(vt.enc.max_count, 1)}];", 1)
+                self.line(f"}} {name};")
 
     def declare_consts(self) -> None:
         seen = []
@@ -212,9 +249,51 @@ class CEmitter:
             self.line("double y;", depth)
             self.line(f"XTCE_PK_TRY(xtce_pk_spline_inverse({y}, {self.table(vt)}, {ext}, {f}, w->err, &y));", depth)
 
-    def read_value(self, vt: VType, dst: str, f: str, depth: int) -> None:
+    def size(self, d, err: str, f: str, ref, depth: int) -> None:
+        """Declares ``size_t n``: a count, or the size or count that a value
+        gives (``ref`` gives the expression for that value)."""
+        if not isinstance(d, DynSize):
+            self.line(f"size_t n = {d};", depth)
+            return
+        self.line("size_t n;", depth)
+        x = f"(double)({ref(d.local)})"
+        args = f"{x}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, {f}, {err}, &n"
+        self.line(f"XTCE_PK_TRY(xtce_pk_dynamic_size({args}));", depth)
+        if d.factor != 1:
+            self.line(f"n *= {d.factor};", depth)
+
+    def string_spec(self, vt: VType, err: str, f: str, ref, depth: int) -> str:
+        """The address of the spec of a string type, declaring a sized copy
+        when another value gives its size."""
+        k = self.consts[id(vt)]
+        if vt.enc.dyn is None:
+            return f"&{k}"
+        self.size(vt.enc.dyn, err, f, ref, depth)
+        self.line(f"xtce_pk_string_spec s = xtce_pk_string_spec_sized(&{k}, n);", depth)
+        return "&s"
+
+    def read_value(self, vt: VType, dst: str, f: str, depth: int, ref) -> None:
+        """Reads into ``dst``; ``ref`` gives the expression for a value that
+        gives a size or count."""
         e = vt.enc
-        if isinstance(e, (IntEnc, FloatEnc)):
+        if isinstance(e, ArrayEnc):
+            self.line("{", depth)
+            d = depth + 1
+            self.size(e.count, "r->err", f, ref, d)
+            self.line(f"{dst}.len = n;", d)
+            self.line("for (size_t i = 0; i < n; ++i) {", d)
+            if e.gap:
+                self.line(f"if (i) XTCE_PK_TRY(xtce_pk_read_skip(r, {e.gap}, {f}));", d + 1)
+            self.read_value(e.elem, f"{dst}.data[i]", f, d + 1, ref)
+            self.line("}", d)
+            self.line("}", depth)
+        elif isinstance(e, BinaryEnc) and e.dyn is not None:
+            self.line("{", depth)
+            self.size(e.dyn, "r->err", f, ref, depth + 1)
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_bytes(r, n, {f}, {dst}.data));", depth + 1)
+            self.line(f"{dst}.len = n;", depth + 1)
+            self.line("}", depth)
+        elif isinstance(e, (IntEnc, FloatEnc)):
             self.line("{", depth)
             d = depth + 1
             self.line("uint64_t raw;", d)
@@ -236,13 +315,38 @@ class CEmitter:
         elif isinstance(e, BinaryEnc):
             self.line(f"XTCE_PK_TRY(xtce_pk_read_bytes(r, {e.bits // 8}, {f}, {dst}.data));", depth)
         else:
-            k = self.consts[id(vt)]
-            self.line(f"XTCE_PK_TRY(xtce_pk_read_string(r, &{k}, {f}, {dst}.data, {str_cap(vt)}, &{dst}.len));", depth)
+            self.line("{", depth)
+            spec = self.string_spec(vt, "r->err", f, ref, depth + 1)
+            args = f"r, {spec}, {f}, {dst}.data, {str_cap(vt)}, &{dst}.len"
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_string({args}));", depth + 1)
+            self.line("}", depth)
 
-    def write_value(self, vt: VType, x: str, f: str, depth: int, fixed=None) -> None:
-        """Writes `x`: a field access, or the literal of the value `fixed`."""
+    def write_value(self, vt: VType, x: str, f: str, depth: int, ref, fixed=None) -> None:
+        """Writes `x`: a field access, or the literal of the value `fixed`;
+        ``ref`` gives the expression for a value that gives a size or count."""
         is_lit = fixed is not None
         e = vt.enc
+        bad = f"return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, {f}, NULL);"
+        if isinstance(e, ArrayEnc):
+            self.line("{", depth)
+            d = depth + 1
+            self.size(e.count, "w->err", f, ref, d)
+            self.line(f"if ({x}.len != n) {bad}", d)
+            self.line("for (size_t i = 0; i < n; ++i) {", d)
+            if e.gap:
+                self.line(f"if (i) XTCE_PK_TRY(xtce_pk_write_skip(w, {e.gap}, {f}));", d + 1)
+            self.write_value(e.elem, f"{x}.data[i]", f, d + 1, ref)
+            self.line("}", d)
+            self.line("}", depth)
+            return
+        if isinstance(e, BinaryEnc) and e.dyn is not None:
+            data, n = (f"(const uint8_t*){x}", str(len(fixed))) if is_lit else (f"{x}.data", f"{x}.len")
+            self.line("{", depth)
+            self.size(e.dyn, "w->err", f, ref, depth + 1)
+            self.line(f"if ({n} != n) {bad}", depth + 1)
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_bytes(w, {data}, n));", depth + 1)
+            self.line("}", depth)
+            return
         if isinstance(e, (IntEnc, FloatEnc)) and vt.kind == "float" and not invertible(vt):
             self.line(f"return xtce_pk_fail(w->err, XTCE_PK_NOT_INVERTIBLE, {f}, NULL);", depth)
             return
@@ -274,9 +378,11 @@ class CEmitter:
             data = f"(const uint8_t*){x}" if is_lit else f"{x}.data"
             self.line(f"XTCE_PK_TRY(xtce_pk_write_bytes(w, {data}, {e.bits // 8}));", depth)
         else:
-            k = self.consts[id(vt)]
             data, n = (x, str(blen(fixed))) if is_lit else (f"{x}.data", f"{x}.len")
-            self.line(f"XTCE_PK_TRY(xtce_pk_write_string(w, &{k}, {data}, {n}, {f}));", depth)
+            self.line("{", depth)
+            spec = self.string_spec(vt, "w->err", f, ref, depth + 1)
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_string(w, {spec}, {data}, {n}, {f}));", depth + 1)
+            self.line("}", depth)
 
     def condition(self, c: Criterion, acc: Acc) -> str:
         vt, x, op, v = c.local.vtype, acc.expr, c.op, c.value
@@ -447,7 +553,7 @@ class CEmitter:
                 lc = it.local
                 if not nested:
                     self.local(lc.vtype, f"v{lc.id}", depth)
-                self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth)
+                self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth, lambda r: f"v{r.id}")
                 if nested:
                     self.line(f"h{lc.id} = true;", depth)
             elif isinstance(it, Cond):
@@ -495,13 +601,14 @@ class CEmitter:
             else:
                 lc = it.local
                 f = cstr(lc.name)
+                ref = lambda r: self.place(n, r, names).expr  # noqa: E731
                 if lc in names:
                     acc = names[lc]
                     if acc.present:
                         self.line(f"if (!{acc.present}) return xtce_pk_fail(w->err, XTCE_PK_MISSING, {f}, NULL);", depth)
-                    self.write_value(lc.vtype, acc.expr, f, depth)
+                    self.write_value(lc.vtype, acc.expr, f, depth, ref)
                 else:
-                    self.write_value(lc.vtype, self.literal(lc.vtype, n.fixed[lc]), f, depth, n.fixed[lc])
+                    self.write_value(lc.vtype, self.literal(lc.vtype, n.fixed[lc]), f, depth, ref, n.fixed[lc])
 
     def place(self, n: Node, lc, names: dict) -> Acc:
         return names[lc] if lc in names else Acc(self.literal(lc.vtype, n.fixed[lc]))
@@ -581,7 +688,19 @@ class CEmitter:
 
     def describe_value(self, vt: VType, x: str, depth: int) -> None:
         k = vt.kind
-        if k == "float":
+        if k == "array":
+            self.line("xtce_pk_text_putc(t, '[');", depth)
+            # `len` is checked against the storage, as callers may set it.
+            cap = f"sizeof {x}.data / sizeof {x}.data[0]"
+            self.line(f"for (size_t i = 0; i < {x}.len && i < {cap}; ++i) {{", depth)
+            self.line('if (i) xtce_pk_text_puts(t, ", ");', depth + 1)
+            self.describe_value(vt.elem, f"{x}.data[i]", depth + 1)
+            self.line("}", depth)
+            self.line("xtce_pk_text_putc(t, ']');", depth)
+        elif k == "binary" and vt.enc.dyn is not None:
+            n = f"({x}.len < sizeof {x}.data ? {x}.len : sizeof {x}.data)"
+            self.line(f"xtce_pk_text_bytes(t, {x}.data, {n});", depth)
+        elif k == "float":
             self.line(f"xtce_pk_text_double(t, {x});", depth)
         elif k == "string":
             self.line(f"xtce_pk_text_str(t, {x}.data, {x}.len);", depth)
