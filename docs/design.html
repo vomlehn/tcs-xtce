@@ -790,6 +790,42 @@ fold into the intercept and factor, so one runtime function,
 <tt class="docutils literal">dynamic_size</tt>, covers every case. It works in <tt class="docutils literal">double</tt> in every
 language, so the three runtimes accept and reject exactly the same
 values.</p>
+<p>Criteria are lists of terms that must all hold. A term is a
+<tt class="docutils literal">Criterion</tt> (one comparison) or, from a <tt class="docutils literal">BooleanExpression</tt>, an
+<tt class="docutils literal">AllOf</tt> or <tt class="docutils literal">AnyOf</tt> of further terms, so <tt class="docutils literal">ComparisonList</tt> and the
+expression trees share one representation. A <tt class="docutils literal">Criterion</tt> compares a
+value with a constant or, with <tt class="docutils literal">other</tt>, with a second value. Each
+emitter renders a term recursively with a callback that gives the
+expression for a value: the decoded local, the struct field, or the
+fixed constant when encoding. Only a top-level <tt class="docutils literal">==</tt> against a
+constant fixes a field, since nothing else pins down one value.</p>
+<p>A reference to an aggregate member (XTCE's <tt class="docutils literal">P.a.b</tt>) is split into the
+parameter or argument and the member names; names can't contain dots,
+so that is unambiguous. Binding a <tt class="docutils literal">DynSize</tt>, or compiling a
+<tt class="docutils literal">Criterion</tt>, walks the names through the aggregate types to the
+members' field names (<tt class="docutils literal">path</tt>) and the member's type. Emitters append
+<tt class="docutils literal">.field</tt> for each to the expression for the value, which works in
+every language because generated aggregates are plain structs. An
+<tt class="docutils literal">==</tt> criterion on a member doesn't fix the value, since there is no
+field that holds only the member.</p>
+<p>Array elements (<tt class="docutils literal">P[2]</tt>) extend the same paths with <tt class="docutils literal">Index</tt> steps,
+which emitters render as <tt class="docutils literal">[i]</tt> (<tt class="docutils literal">.data[i]</tt> in C). Only fixed counts
+are allowed, so an index is checked against the count when compiling,
+and decoded arrays always have every element. Encoding indexes the
+caller's data, though, and restriction criteria run before anything is
+written. <tt class="docutils literal">term_indexes</tt> lists the arrays a criterion indexes, and
+encoding checks their lengths first, failing with the same <tt class="docutils literal">BadSize</tt>
+that writing them would. Every other reference is to a value written
+earlier, whose length has already been checked.</p>
+<p>A <tt class="docutils literal">DiscreteLookupList</tt> is a <tt class="docutils literal">DynSize</tt> too: instead of a <tt class="docutils literal">local</tt>,
+binding compiles its comparisons into <tt class="docutils literal">lookup</tt> (criteria and a value
+per case, plus <tt class="docutils literal">default</tt>), and that value is <tt class="docutils literal">x</tt>. The emitters
+render it as a chain of conditions where they would use the field, so
+the size checks stay in <tt class="docutils literal">dynamic_size</tt>. A location from another value
+is a <tt class="docutils literal">Seek</tt> whose <tt class="docutils literal">offset</tt> is such a <tt class="docutils literal">DynSize</tt> rather than a
+number, with <tt class="docutils literal">unit</tt> 1 and a bound that <tt class="docutils literal">max_bits</tt> uses. Layouts that
+must be known when compiling (repeated and fixed-size containers) reject
+it.</p>
 <p>The referenced field stays an ordinary field that the caller sets.
 Deriving it from the data when encoding would make <tt class="docutils literal">encode</tt> change its
 input, or need a second, derived struct. Instead the encoder checks that
@@ -910,10 +946,8 @@ version-tolerant reading mode or one binding per schema version.</li>
 </li>
 <li><p class="first"><strong>Packet codecs</strong> — the main missing XTCE features are:</p>
 <ul class="simple">
-<li>references to aggregate members by path, in sizes and criteria;</li>
-<li><tt class="docutils literal">DynamicValue</tt> locations, <tt class="docutils literal">DiscreteLookupList</tt> values and array
-subsets;</li>
-<li><tt class="docutils literal">BooleanExpression</tt> criteria.</li>
+<li>array subsets, and references to elements of arrays with several
+dimensions or a count that varies.</li>
 </ul>
 <p>The model has room for each of these: new <tt class="docutils literal">Item</tt> kinds, and
 <tt class="docutils literal">VType</tt> kinds for structured values, as arrays have.</p>

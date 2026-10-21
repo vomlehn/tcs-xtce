@@ -1363,3 +1363,17 @@ disagreement with the schema, a failed round trip or a failed compile
 always fails the check. After an intended change, ``python3 -I
 tests/samples_check.py --update`` rewrites ``expected.txt``; review its
 diff.
+
+License
+=======
+
+tcsxtce -- the generator, the Rust crate, the C/C++ library and the Python
+package -- is licensed under either of the Apache License, Version 2.0
+(``LICENSE-APACHE``, or http://www.apache.org/licenses/LICENSE-2.0) or the MIT
+license (``LICENSE-MIT``, or http://opensource.org/licenses/MIT), at your
+option. The Rust crate and the Python package say so as ``MIT OR
+Apache-2.0``.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.

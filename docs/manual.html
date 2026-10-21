@@ -400,6 +400,7 @@ ul.auto-toc {
 </ul>
 </li>
 <li><a class="reference internal" href="#testing" id="toc-entry-25">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-26">License</a></li>
 </ul>
 </div>
 <div class="section" id="introduction">
@@ -1123,6 +1124,19 @@ string). The value is <tt class="docutils literal">slope * x + intercept</tt> (i
 <tt class="docutils literal">LinearAdjustment</tt>), where <tt class="docutils literal">x</tt> is the referenced integer parameter
 or argument. That value must be decoded earlier in the same packet,
 outside any <tt class="docutils literal">IncludeCondition</tt>.</p>
+<p>A <tt class="docutils literal">DiscreteLookupList</tt> can stand in for the <tt class="docutils literal">DynamicValue</tt> (or, in
+a binary or string encoding, for its <tt class="docutils literal">DynamicValue</tt>): <tt class="docutils literal">x</tt> is then
+the <tt class="docutils literal">value</tt> of the first <tt class="docutils literal">DiscreteLookup</tt> whose criteria hold, or
+<tt class="docutils literal">defaultValue</tt> if none do. Its
+comparisons follow the rules of restriction criteria, and in commands
+may name arguments (<tt class="docutils literal">ArgumentInstanceRef</tt>). In the demo, <tt class="docutils literal">Frame</tt>'s
+<tt class="docutils literal">FrameBody</tt> is 2 bytes when <tt class="docutils literal">FrameKind</tt> is 1, 4 when it is 2 and
+empty otherwise, and <tt class="docutils literal">Tune</tt>'s <tt class="docutils literal">Setting</tt> depends on its <tt class="docutils literal">Mode</tt>.</p>
+<p>The referenced value may be a member of an aggregate parameter or
+argument, named with XTCE's dot syntax: in the demo, <tt class="docutils literal">Route</tt>'s
+<tt class="docutils literal">Stops</tt> are counted by <tt class="docutils literal">RouteHdr.Count</tt> and its <tt class="docutils literal">Detour</tt> is
+included when <tt class="docutils literal">RouteHdr.Kind</tt> is 2, and <tt class="docutils literal">Plan</tt>'s <tt class="docutils literal">Points</tt> are
+counted by its argument <tt class="docutils literal">Leg.Count</tt>. Criteria use the same syntax.</p>
 <p>Inside an aggregate type, a reference may instead name an earlier member
 of the aggregate, as Yamcs reads it. Each value of the aggregate then
 uses its own member: in the demo, each <tt class="docutils literal">BatchType</tt> in <tt class="docutils literal">Batches</tt> has
@@ -1136,7 +1150,8 @@ or count that is negative, not whole, not a whole number of bytes (for
 sizes in bits of strings and binary), or above the field's bound fails
 with <tt class="docutils literal">BadSize</tt>.</p>
 <p>The bound is the largest value the referenced field's <tt class="docutils literal">ValidRange</tt>
-allows, or, without one, its encoding. It is limited to what fits in
+allows, or, without one, its encoding, or the largest of a
+<tt class="docutils literal">DiscreteLookupList</tt>'s values. It is limited to what fits in
 64 KiB on the wire, which keeps C structs bounded. In C this bound is
 <tt class="docutils literal">N</tt> in the field's type, so give count fields a <tt class="docutils literal">ValidRange</tt>: the
 demo's <tt class="docutils literal">SampleCount</tt> (<tt class="docutils literal"><span class="pre">0..6</span></tt>) makes <tt class="docutils literal">Readings</tt> a
@@ -1474,8 +1489,18 @@ supported.</dd>
 <dd>Members of any supported type except the aggregate itself, values
 that take the rest of the packet, and values whose size another value
 gives, unless that value is an earlier member of the same aggregate.
-Restriction criteria and include conditions can't refer to an
-aggregate or its members.</dd>
+Criteria, lookups and sizes can refer to a member with XTCE's dot
+syntax (<tt class="docutils literal"><span class="pre">parameterRef=&quot;RouteHdr.Count&quot;</span></tt>, also nested, as in
+<tt class="docutils literal">P.a.b</tt>, and in <tt class="docutils literal">argumentRef</tt>), but not to a whole aggregate.</dd>
+<dt>Array elements</dt>
+<dd>Criteria, lookups and sizes can refer to an element with XTCE's
+bracket syntax, mixed with members (<tt class="docutils literal"><span class="pre">Probes[1].Gains[0]</span></tt>). The
+array must have one dimension and a fixed count, and the index must
+be below it. When encoding, criteria are checked before any field is
+written, so arrays they index are first checked to have their count,
+and encoding fails with <tt class="docutils literal">BadSize</tt> (naming the field) otherwise. In
+the demo, <tt class="docutils literal">ProbeOne</tt> and <tt class="docutils literal">ProbeOther</tt> are chosen by
+<tt class="docutils literal"><span class="pre">Probes[0].Id</span></tt>, and <tt class="docutils literal">ProbeData</tt> is sized by <tt class="docutils literal"><span class="pre">Probes[1].Gains[0]</span></tt>.</dd>
 <dt>Arrays</dt>
 <dd>Elements of any supported type except arrays and values whose size
 another field gives. Each dimension's <tt class="docutils literal">StartingIndex</tt> is a
@@ -1493,10 +1518,12 @@ repeated array is not supported.</dd>
 <dd><tt class="docutils literal">DynamicValue</tt> with <tt class="docutils literal">ParameterInstanceRef</tt> (instance 0) or, in
 argument types, <tt class="docutils literal">ArgumentInstanceRef</tt>, and an optional
 <tt class="docutils literal">LinearAdjustment</tt>, in array <tt class="docutils literal">EndingIndex</tt>, <tt class="docutils literal">RepeatEntry</tt>
-<tt class="docutils literal">Count</tt>, binary <tt class="docutils literal">SizeInBits</tt> and variable string sizes. It must
-refer to an integer value decoded earlier in the packet, outside any
-<tt class="docutils literal">IncludeCondition</tt>, or, inside an aggregate type, to an earlier
-integer member. See <a class="reference internal" href="#generated-packet-types">Generated packet types</a> for the checks and
+<tt class="docutils literal">Count</tt>, binary <tt class="docutils literal">SizeInBits</tt>, variable string sizes and
+locations. It must refer to an integer value decoded earlier in the
+packet, outside any <tt class="docutils literal">IncludeCondition</tt>, or, inside an aggregate
+type, to an earlier integer member. <tt class="docutils literal">DiscreteLookupList</tt> works in
+the same places except aggregate members, with comparisons on values
+decoded earlier. See <a class="reference internal" href="#generated-packet-types">Generated packet types</a> for the checks and
 bounds.</dd>
 <dt>Integer encoding</dt>
 <dd>1–64 bits; <tt class="docutils literal">unsigned</tt>, <tt class="docutils literal">twosComplement</tt>, <tt class="docutils literal">signMagnitude</tt> and
@@ -1578,17 +1605,34 @@ documentation but not applied.</dd>
 a <tt class="docutils literal">RepeatEntry</tt> become a list, and may not have a <tt class="docutils literal">BaseContainer</tt>.
 A <tt class="docutils literal">BinaryEncoding</tt> with a fixed <tt class="docutils literal">SizeInBits</tt> pads a telemetry
 container to that size. <tt class="docutils literal">BaseContainer</tt> inheritance uses
-<tt class="docutils literal">RestrictionCriteria</tt> with <tt class="docutils literal">Comparison</tt> or <tt class="docutils literal">ComparisonList</tt>,
-using the operators <tt class="docutils literal">== != &lt; &lt;= &gt; &gt;=</tt> on calibrated or raw values,
-on values that are not arrays or aggregates.</dd>
+<tt class="docutils literal">RestrictionCriteria</tt>.</dd>
+<dt>Criteria</dt>
+<dd><tt class="docutils literal">RestrictionCriteria</tt>, <tt class="docutils literal">IncludeCondition</tt> and <tt class="docutils literal">DiscreteLookup</tt>
+take a <tt class="docutils literal">Comparison</tt>, a <tt class="docutils literal">ComparisonList</tt> (all must hold) or a
+<tt class="docutils literal">BooleanExpression</tt>: a <tt class="docutils literal">Condition</tt>, or <tt class="docutils literal">ANDedConditions</tt> and
+<tt class="docutils literal">ORedConditions</tt> nested to any depth. Comparisons use the operators
+<tt class="docutils literal">== != &lt; &lt;= &gt; &gt;=</tt> on calibrated or raw values (only <tt class="docutils literal">==</tt> and <tt class="docutils literal">!=</tt>
+for booleans, strings and binary), on values that are not arrays or
+aggregates. A <tt class="docutils literal">Condition</tt> may compare two values of the packet
+instead of a value and a constant: both of the same kind (integer,
+enumeration, float, boolean or string), calibrated, and for integers
+both signed or both unsigned. In the demo, <tt class="docutils literal">Gate</tt>'s <tt class="docutils literal">GateSpan</tt> is
+included when <tt class="docutils literal">GateLo &lt; GateHi</tt> or both are zero, and <tt class="docutils literal">Open</tt>'s
+<tt class="docutils literal">Data</tt> is 2 bytes when its <tt class="docutils literal">Lo &lt; Hi</tt>. Only a plain <tt class="docutils literal">==</tt>
+comparison with a constant fixes a field's value, so derived packets
+chosen by other criteria keep those fields, and encoding checks them.</dd>
 <dt>Locations</dt>
-<dd><tt class="docutils literal">LocationInContainerInBits</tt> with a <tt class="docutils literal">FixedValue</tt> relative to
-<tt class="docutils literal">previousEntry</tt> (the default) or <tt class="docutils literal">containerStart</tt>. Negative
-offsets are allowed. <tt class="docutils literal">containerStart</tt> is the start of the packet
-for inherited entries, and the inclusion point for entries of an
-included container.</dd>
+<dd><tt class="docutils literal">LocationInContainerInBits</tt> relative to <tt class="docutils literal">previousEntry</tt> (the
+default) or <tt class="docutils literal">containerStart</tt>. <tt class="docutils literal">containerStart</tt> is the start of the
+packet for inherited entries, and the inclusion point for entries of
+an included container. A <tt class="docutils literal">FixedValue</tt> offset may be negative. A
+<tt class="docutils literal">DynamicValue</tt> or <tt class="docutils literal">DiscreteLookupList</tt> offset is computed like a
+size, in bits, so it must be a whole number from 0 up to its bound
+(at most 64 KiB), or decoding and encoding fail with <tt class="docutils literal">BadSize</tt>; in
+the demo, <tt class="docutils literal">Frame</tt>'s <tt class="docutils literal">FrameEnd</tt> comes <tt class="docutils literal">FrameGap</tt> bits after the
+body. Repeated and fixed-size containers need fixed offsets.</dd>
 <dt>Include conditions</dt>
-<dd><tt class="docutils literal">IncludeCondition</tt> (<tt class="docutils literal">Comparison</tt> or <tt class="docutils literal">ComparisonList</tt>) on
+<dd><tt class="docutils literal">IncludeCondition</tt> (see Criteria) on
 <tt class="docutils literal">ParameterRefEntry</tt> and <tt class="docutils literal">ContainerRefEntry</tt>, on values decoded
 earlier that are not themselves conditional. The affected fields
 become optional. They are decoded when the condition holds, and
@@ -1609,11 +1653,10 @@ select the command when decoding.</dd>
 and unqualified names. An unqualified name is looked up in the
 current SpaceSystem, then in each enclosing one.</dd>
 <dt>Not supported</dt>
-<dd>references to aggregate members (other than sizes from an earlier
-member), array subsets (a <tt class="docutils literal">DimensionList</tt> in an entry),
+<dd>references to elements of arrays with several dimensions or a count
+that varies, array subsets (a <tt class="docutils literal">DimensionList</tt> in an entry),
 arrays of arrays, <tt class="docutils literal">IndirectParameterRefEntry</tt>, stream and segment entries,
-<tt class="docutils literal">DynamicValue</tt> locations and offsets, other instances than 0,
-<tt class="docutils literal">DiscreteLookupList</tt> values, <tt class="docutils literal">BooleanExpression</tt> and
+<tt class="docutils literal">RepeatEntry</tt> offsets that other values give, other instances than 0,
 <tt class="docutils literal">CustomAlgorithm</tt> criteria, <tt class="docutils literal">NextContainer</tt>, a container
 <tt class="docutils literal">BinaryEncoding</tt> on command containers, with a size from a
 <tt class="docutils literal">DynamicValue</tt> or with transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt>, context calibrators,
@@ -1750,6 +1793,18 @@ disagreement with the schema, a failed round trip or a failed compile
 always fails the check. After an intended change, <tt class="docutils literal">python3 <span class="pre">-I</span>
 tests/samples_check.py <span class="pre">--update</span></tt> rewrites <tt class="docutils literal">expected.txt</tt>; review its
 diff.</p>
+</div>
+<div class="section" id="license">
+<h1><a class="toc-backref" href="#toc-entry-26">License</a></h1>
+<p>tcsxtce -- the generator, the Rust crate, the C/C++ library and the Python
+package -- is licensed under either of the Apache License, Version 2.0
+(<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT
+license (<tt class="docutils literal"><span class="pre">LICENSE-MIT</span></tt>, or <a class="reference external" href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>), at your
+option. The Rust crate and the Python package say so as <tt class="docutils literal">MIT OR
+<span class="pre">Apache-2.0</span></tt>.</p>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
 </div>
 </div>
 </body>
