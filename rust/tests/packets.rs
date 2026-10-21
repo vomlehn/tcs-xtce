@@ -339,3 +339,41 @@ fn calibrated_integers_and_the_rest_of_the_packet() {
     let q = Poke::decode(&p.to_bytes().unwrap()).unwrap();
     assert_eq!((q.level, q.data_), (22, vec![0xbe, 0xef]));
 }
+
+#[test]
+fn repeated_containers_and_container_sizes() {
+    let l = Log {
+        sec_hdr_flag: true,
+        log_count: 2,
+        log_record: vec![
+            LogRecord {
+                channel: 3,
+                reading: 0x1234,
+            },
+            LogRecord {
+                channel: 15,
+                reading: -1,
+            },
+        ],
+        closed: true,
+        ..Default::default()
+    };
+    let b = l.to_bytes().unwrap();
+    // Each record is 4 + 2 + 16 bits padded to 32; the trailer 1 padded to 16.
+    assert_eq!(
+        &b[6..],
+        &[0x02, 0x30, 0x48, 0xd0, 0x00, 0xf3, 0xff, 0xfc, 0x00, 0x80, 0x00]
+    );
+    assert_eq!(Log::decode(&b).unwrap(), l);
+    // Padding must be there, though its value is ignored.
+    assert_eq!(
+        Log::decode(&b[..b.len() - 1]),
+        Err(PacketError::Truncated { field: "/Demo/Log" })
+    );
+    let mut e = l.clone();
+    e.log_count = 1;
+    assert_eq!(
+        e.to_bytes(),
+        Err(PacketError::BadSize { field: "LogRecord" })
+    );
+}

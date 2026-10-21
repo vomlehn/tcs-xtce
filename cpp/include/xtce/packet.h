@@ -200,6 +200,13 @@ static inline int xtce_pk_read_uint(xtce_pk_reader* r, unsigned bits, bool le, c
   return 0;
 }
 
+/* Skips `bits` bits of padding, which must be in the packet. */
+static inline int xtce_pk_read_pad(xtce_pk_reader* r, size_t bits, const char* f) {
+  XTCE_PK_TRY(xtce_pk_read_need(r, bits, f));
+  r->pos += bits;
+  return 0;
+}
+
 /* The bytes from the current position to the end of the packet, for a field
  * that takes the rest of it.  Fails with XTCE_PK_BAD_SIZE unless they are
  * whole bytes, at most `max` of them. */

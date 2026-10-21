@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .compile import item_bits, max_bits
-from .model import AggregateEnc, ArrayEnc, BinaryEnc, Fixed, IntEnc, Mark, Mission, Node, Seek, StringEnc, Value, VType, walk
+from .model import AggregateEnc, ArrayEnc, BinaryEnc, Fixed, IntEnc, Mark, Mission, Node, Pad, Seek, StringEnc, Value, VType, walk
 
 
 def nbytes(n: int) -> str:
@@ -132,13 +132,16 @@ def rows(n: Node) -> list[Row]:
 
 
 def gap_bits(n: Node) -> int:
-    """Bits inside the packet that no entry covers (left by location offsets)."""
+    """Bits inside the packet that no entry covers (left by location offsets
+    and container padding)."""
     pos, marks, spans = 0, {0: 0}, []
     for it in walk(n.all_items()):
         if isinstance(it, Seek):
             pos = (marks[it.from_start] if it.from_start is not None else pos) + it.offset
         elif isinstance(it, Mark):
             marks[it.id] = pos
+        elif isinstance(it, Pad):
+            pos += it.bits  # padding is not covered by an entry
         else:
             size = item_bits(it.local.vtype) if isinstance(it, Value) else it.bits
             spans.append((pos, pos + size))
@@ -190,7 +193,7 @@ def node_report(n: Node) -> list[str]:
     else:
         out.append("  no field is larger than the document says it needs")
     if gaps:
-        out.append(f"  {gaps} bits are skipped by location offsets and carry nothing")
+        out.append(f"  {gaps} bits are skipped by location offsets or padding and carry nothing")
     if any(isinstance(it, Seek) for it in walk(n.all_items())):
         out.append("  entries are placed with LocationInContainerInBits, so savings assume the layout is repacked")
     return out

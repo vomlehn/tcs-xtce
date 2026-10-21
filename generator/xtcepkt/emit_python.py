@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .common import flt, invertible, le, string_spec
-from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, Value, VType
+from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType
 
 
 def pstr(s: str) -> str:
@@ -94,8 +94,13 @@ def read_expr(vt: VType, f: str, ref) -> str:
     expression for a value that gives a size or count."""
     e = vt.enc
     if isinstance(e, AggregateEnc):
-        members = ", ".join(f"{m.ident}={read_expr(m.vtype, f, ref)}" for m in e.members)
-        return f"{vt.ident}({members})"
+        # Arguments and tuple items are evaluated in order.
+        parts = []
+        for m in e.members:
+            x = read_expr(m.vtype, f, ref)
+            parts.append(f"{m.ident}=" + (f"(r.pad({m.skip}, {f}), {x})[1]" if m.skip else x))
+        agg = f"{vt.ident}({', '.join(parts)})"
+        return f"({agg}, r.pad({e.pad}, {f}))[0]" if e.pad else agg
     if isinstance(e, ArrayEnc):
         return f"pk.read_list(r, {count(vt, ref, f)}, {e.gap}, {f}, lambda: {read_expr(e.elem, f, ref)})"
     if isinstance(e, IntEnc):
@@ -268,6 +273,8 @@ class PythonEmitter:
                     self.line(f"r.seek({self.mark(it.from_start)}, {it.offset}, {pstr(where)})", depth)
             elif isinstance(it, Mark):
                 self.line(f"m{it.id} = r.pos", depth)
+            elif isinstance(it, Pad):
+                self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
             elif isinstance(it, Value):
                 lc = it.local
                 self.line(f"v{lc.id} = {read_expr(lc.vtype, pstr(lc.name), lambda r: f'v{r.id}')}", depth)
@@ -293,6 +300,8 @@ class PythonEmitter:
                 self.line(f"m{it.id} = w.pos", depth)
             elif isinstance(it, Fixed):
                 self.line(f"w.uint({it.bits}, 0x{it.value:x})", depth)
+            elif isinstance(it, Pad):
+                self.line(f"w.zeros({it.bits})", depth)
             elif isinstance(it, Cond):
                 cond = " and ".join(f"({condition(c, self.place(n, c.local, names))})" for c in it.criteria)
                 self.line(f"if {cond}:", depth)
@@ -309,7 +318,11 @@ class PythonEmitter:
         e = vt.enc
         if isinstance(e, AggregateEnc):
             for m in e.members:
+                if m.skip:
+                    self.line(f"w.zeros({m.skip})", depth)
                 self.write_value(m.vtype, f"{x}.{m.ident}", f, ref, depth)
+            if e.pad:
+                self.line(f"w.zeros({e.pad})", depth)
         elif isinstance(e, ArrayEnc):
             # Loop variables are numbered by depth: an aggregate element may
             # hold another array.

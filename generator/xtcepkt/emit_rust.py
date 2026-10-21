@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from .common import flt, int_enc, invertible, le, string_spec
-from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 
 def rstr(s: str) -> str:
@@ -98,8 +98,12 @@ def read_expr(vt: VType, f: str, ref) -> str:
     expression for a value that gives a size or count."""
     e = vt.enc
     if isinstance(e, AggregateEnc):
-        members = ", ".join(f"{m.ident}: {read_expr(m.vtype, f, ref)}" for m in e.members)
-        return f"{vt.ident} {{ {members} }}"
+        parts = []
+        for m in e.members:
+            x = read_expr(m.vtype, f, ref)
+            parts.append(f"{m.ident}: " + (f"{{ r.pad({m.skip}, {f})?; {x} }}" if m.skip else x))
+        agg = f"{vt.ident} {{ {', '.join(parts)} }}"
+        return f"{{ let a = {agg}; r.pad({e.pad}, {f})?; a }}" if e.pad else agg
     if isinstance(e, ArrayEnc):
         gap = f"if i > 0 {{ r.skip({e.gap}, {f})?; }}" if e.gap else ""
         return (
@@ -141,7 +145,14 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     e = vt.enc
     bad = f"return Err(PacketError::BadSize {{ field: {f} }});"
     if isinstance(e, AggregateEnc):
-        return "{ " + " ".join(write_stmt(m.vtype, f"{x}.{m.ident}", f, ref) for m in e.members) + " }"
+        parts = []
+        for m in e.members:
+            if m.skip:
+                parts.append(f"w.zeros({m.skip});")
+            parts.append(write_stmt(m.vtype, f"{x}.{m.ident}", f, ref))
+        if e.pad:
+            parts.append(f"w.zeros({e.pad});")
+        return "{ " + " ".join(parts) + " }"
     if isinstance(e, ArrayEnc):
         gap = f"if i > 0 {{ w.skip({e.gap}, {f})?; }}" if e.gap else ""
         return (
@@ -304,6 +315,8 @@ class RustEmitter:
                     self.line(f"r.seek({self.mark(it.from_start)}, {it.offset}, {rstr(where)})?;", depth)
             elif isinstance(it, Mark):
                 self.line(f"let m{it.id} = r.position();", depth)
+            elif isinstance(it, Pad):
+                self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
             elif isinstance(it, Value):
                 lc = it.local
                 expr = read_expr(lc.vtype, rstr(lc.name), lambda r: f"v{r.id}")
@@ -333,6 +346,8 @@ class RustEmitter:
                 self.line(f"let m{it.id} = w.position();", depth)
             elif isinstance(it, Fixed):
                 self.line(f"w.uint({it.bits}, 0x{it.value:x});", depth)
+            elif isinstance(it, Pad):
+                self.line(f"w.zeros({it.bits});", depth)
             elif isinstance(it, Cond):
                 conds = [condition(c, self.place(n, c.local, names)) for c in it.criteria]
                 self.line(f"if {conjunction(conds)} {{", depth)

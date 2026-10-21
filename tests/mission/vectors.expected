@@ -45,3 +45,8 @@ error:OutOfRange | -
 error:Truncated | -
 Poke{seq_count=6, packet_length=4, level=20, data_=0xbeef} | 112ec00600040605beef
 Poke{seq_count=6, packet_length=4, level=520, data_=0x} | 112ec006000406ff
+Log{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, log_count=2, log_record=[{channel=3, reading=4660}, {channel=15, reading=-1}], closed=true} | 0918c02a0012023048d000f3fffc008000
+Log{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, log_count=0, log_record=[], closed=false} | 0118c02a0012000000
+Log{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, log_count=1, log_record=[{channel=3, reading=-1}], closed=true} | 0918c02a00120133fffc008000
+error:Truncated | -
+error:Truncated | -

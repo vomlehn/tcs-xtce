@@ -140,7 +140,7 @@ class Report(unittest.TestCase):
 
     def test_text(self):
         text = report(self.mission)
-        self.assertIn("4 bits are skipped by location offsets", text)
+        self.assertIn("4 bits are skipped by location offsets or padding", text)
         # 32+16+16+32+16+8+8 = 128 bits of integers etc. save 22+8+9+16+5+7 = 67.
         self.assertIn("right-sized fields save 67 bits", text)
         self.assertIn("/Sat/Status: 25 -> 17 bytes", text)

@@ -301,10 +301,12 @@ into the model in ``model.py``:
    * ``Mark`` records the start of an included container, for
      ``containerStart`` offsets;
    * ``Fixed`` is a constant bit pattern;
+   * ``Pad`` is the padding up to a container's fixed size;
    * ``Cond`` is an ``IncludeCondition`` block.
 
    ``ContainerRefEntry`` is flattened in, so generated structs have no
-   nesting to navigate.
+   nesting to navigate. A repeated one is the exception: it becomes a
+   ``Value`` holding an array of an aggregate (see Aggregates).
 
 **Nodes.**
    Each container or meta-command becomes a ``Node`` with:
@@ -444,6 +446,17 @@ Members can't take their size from other members. Yamcs reads an
 references to parameters and arguments, so such documents are reported
 as unsupported rather than guessed at.
 
+A repeated ``ContainerRefEntry`` reuses this. The included container's
+entries are compiled on their own, then turned into members, each with
+the bits to skip before it (from locations), and the aggregate gets the
+padding after its last member (from a container size). That keeps the
+emitters' item code unchanged: an array of aggregates already reads and
+writes in a loop. It needs the layout of one copy to be known when
+compiling, which rules out overlapping entries and include conditions,
+as it does for a fixed container size. ``static_end`` works out that
+layout, and ``Pad`` covers the rest of a fixed-size container that is
+not repeated.
+
 Runtime
 -------
 
@@ -525,10 +538,9 @@ Limitations and future work
 * **Packet codecs** — the main missing XTCE features are:
 
   * references to aggregate members, in sizes and criteria;
-  * ``DynamicValue`` locations, ``DiscreteLookupList`` values, array
-    subsets and repeated containers;
+  * ``DynamicValue`` locations, ``DiscreteLookupList`` values and array
+    subsets;
   * ``BooleanExpression`` criteria;
-  * container ``BinaryEncoding``;
   * error detection (CRC and checksum generation).
 
   The model has room for each of these: new ``Item`` kinds, and

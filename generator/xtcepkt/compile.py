@@ -33,6 +33,7 @@ from .model import (
     Member,
     Mission,
     Node,
+    Pad,
     Polynomial,
     Seek,
     Spline,
@@ -186,6 +187,7 @@ class Compiler:
         self.order: list[Node] = []
         self._ids = 0
         self._aggregating: set = set()  # aggregates being compiled, to find cycles
+        self.ctypes: dict = {}  # container key -> aggregate of a repeated container
         self._index(root, ())
 
     # -- indexing and name resolution --
@@ -676,8 +678,6 @@ class Compiler:
             where = f"container {qname(stack[-1])}"
             if ch.name not in ("ParameterRefEntry", "ContainerRefEntry", "ArrayParameterRefEntry"):
                 raise Unsupported(f"{where}: {ch.name}")
-            if ch.name == "ContainerRefEntry" and e.repeat_entry is not None:
-                raise Unsupported(f"{where}: RepeatEntry on a ContainerRefEntry")
             if getattr(e, "dimension_list", None) is not None:
                 raise Unsupported(f"{where}: array subsets (DimensionList in an array entry)")
             cond = None
@@ -697,17 +697,101 @@ class Compiler:
                 cpath, inc = self.containers[ckey]
                 if inc.base_container is not None:
                     raise Unsupported(f"{where}: included container {qname(ckey)} has a BaseContainer")
-                if inc.binary_encoding is not None:
-                    raise Unsupported(f"{where}: container BinaryEncoding")
-                m = self._id()
-                out.append(Mark(m))
-                out += self.tm_items(inc, cpath, stack + [ckey], m, scope)
+                if e.repeat_entry is not None:
+                    local = self.local(inc.name, qname(ckey), self.container_type(ckey, stack, where))
+                    local = self.bind(self.repeat(local, e, path, where), scope, where)
+                    out.append(Value(local))
+                    scope.append(local)
+                else:
+                    m = self._id()
+                    out.append(Mark(m))
+                    inner = self.tm_items(inc, cpath, stack + [ckey], m, scope)
+                    out += inner + self.size_pad(inc, inner, m, where)
             if cond is not None:
                 for it in walk(out):
                     if isinstance(it, Value):
                         it.local.optional = True
                 items.append(Cond(cond, out))
         return items
+
+    def size_pad(self, sc, items: list, start: int, where: str) -> list[Item]:
+        """The padding that makes a container with a BinaryEncoding occupy
+        its SizeInBits; ``items`` are its entries, from mark ``start``."""
+        be = sc.binary_encoding
+        if be is None:
+            return []
+        if be.error_detect_correct is not None:
+            raise Unsupported(f"{where}: ErrorDetectCorrect")
+        if be.from_binary_transform_algorithm or be.to_binary_transform_algorithm:
+            raise Unsupported(f"{where}: container transform algorithms")
+        if be.size_in_bits is None:
+            raise Unsupported(f"{where}: container BinaryEncoding without SizeInBits")
+        size = self.int_value(be.size_in_bits, (), "container SizeInBits", where)
+        if isinstance(size, DynSize):
+            raise Unsupported(f"{where}: container SizeInBits from DynamicValue")
+        size = self._size(size, "container", where)
+        end = static_end(items, start)
+        if end is None:
+            raise Unsupported(f"{where}: a container size with entries whose size or position varies")
+        pos, extent = end
+        if extent > size:
+            raise Unsupported(f"{where}: entries take {extent} bits, more than the container size {size}")
+        if pos != extent:
+            raise Unsupported(f"{where}: a container size after entries that overlap")
+        return [Pad(size - pos)] if size > pos else []
+
+    def container_type(self, ckey: Key, stack: list, where: str) -> VType:
+        """The aggregate holding one copy of a repeated container's entries,
+        with skips and padding from their locations and the container size."""
+        if ckey in self.ctypes:
+            return self.ctypes[ckey]
+        cpath, inc = self.containers[ckey]
+        what = f"{where}: repeated container {qname(ckey)}"
+        m = self._id()
+        # Its entries are values of each copy, so sizes can't come from
+        # values outside it; ones from values inside are rejected below.
+        items = self.tm_items(inc, cpath, stack + [ckey], m, [])
+        items += self.size_pad(inc, items, m, where)
+        members: list[Member] = []
+        names = Namer()
+        pos: Optional[int] = 0  # None once a value of varying size is passed
+        marks = {m: 0}
+        skip = 0
+        for it in items:
+            if isinstance(it, Cond):
+                raise Unsupported(f"{what} has an IncludeCondition")
+            if isinstance(it, Seek):
+                if it.from_start is not None:
+                    if it.from_start not in marks:
+                        raise Unsupported(f"{what} has a location relative to the start of another container")
+                    if marks[it.from_start] is None or pos is None:
+                        raise Unsupported(f"{what} has a location after a value whose size varies")
+                    delta = marks[it.from_start] + it.offset - pos
+                else:
+                    delta = it.offset
+                if delta < 0:
+                    raise Unsupported(f"{what} has entries that overlap")
+                skip += delta
+                pos = pos + delta if pos is not None else None
+            elif isinstance(it, Mark):
+                marks[it.id] = pos
+            elif isinstance(it, Pad):
+                skip += it.bits
+                pos = pos + it.bits if pos is not None else None
+            else:
+                vt = it.local.vtype
+                if vt.dyn is not None:
+                    raise Unsupported(f"{what}: {it.local.name} has a size that another value gives")
+                members.append(Member(it.local.name, names.take(snake(it.local.name)), vt, skip))
+                skip = 0
+                bits = fixed_bits(vt)
+                pos = pos + bits if pos is not None and bits is not None else None
+        if not members:
+            raise Unsupported(f"{what} has no entries")
+        vt = VType(key=qname(ckey), name=inc.name, kind="aggregate", enc=AggregateEnc(members, skip))
+        vt.doc = "one copy of a repeated container"
+        self.ctypes[ckey] = vt
+        return vt
 
     def tm_node(self, key: Key) -> Node:
         if key in self.nodes:
@@ -734,9 +818,10 @@ class Compiler:
                     if rc.next_container is not None:
                         raise Unsupported(f"container {node.key}: NextContainer")
                     node.criteria = self.match(rc, path, scope, f"container {node.key}")
-            if sc.binary_encoding is not None:
-                raise Unsupported(f"container {node.key}: BinaryEncoding")
+            if sc.binary_encoding is not None and base is not None:
+                raise Unsupported(f"container {node.key}: BinaryEncoding with a BaseContainer")
             node.items = self.tm_items(sc, path, [key], 0, scope)
+            node.items += self.size_pad(sc, node.items, 0, f"container {node.key}")
             self.check_rest(node, f"container {node.key}")
             if base is not None:
                 base.children.append(node)
@@ -952,8 +1037,11 @@ class Compiler:
                             used[id(vt)] = vt
                         elif vt.kind == "aggregate":
                             aggregates[id(vt)] = vt
-        for vt in list(used.values()) + list(aggregates.values()):
+        for vt in used.values():
             vt.ident = names.take(camel(vt.name), camel(vt.key))
+        for vt in aggregates.values():
+            # A repeated container is often a packet too.
+            vt.ident = names.take(camel(vt.name), camel(vt.name) + "Item", camel(vt.key))
         for k in kinds:
             k.max_bytes = max(m.max_bytes for m in k.members)
         return Mission(
@@ -1011,6 +1099,47 @@ def value_range(vt: VType) -> tuple[int, int]:
     return max(math.floor(min(ends)), elo), min(math.ceil(max(ends)), elim - 1)
 
 
+def fixed_bits(vt: VType) -> Optional[int]:
+    """The bits a value of this type always occupies, or None if it varies."""
+    e = vt.enc
+    if isinstance(e, ArrayEnc):
+        b = fixed_bits(e.elem)
+        if not isinstance(e.count, int) or b is None:
+            return None
+        return e.count * b + max(e.count - 1, 0) * e.gap
+    if isinstance(e, AggregateEnc):
+        bs = [fixed_bits(m.vtype) for m in e.members]
+        return None if None in bs else sum(bs) + sum(m.skip for m in e.members) + e.pad
+    if isinstance(e, StringEnc):
+        return e.fixed_bits if e.dyn is None else None
+    if isinstance(e, BinaryEnc):
+        return None if e.variable else e.bits
+    return e.bits
+
+
+def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
+    """(position, furthest bit) after ``items``, in bits from mark
+    ``start``, or None when they depend on the data."""
+    pos = extent = 0
+    marks = {start: 0}
+    for it in items:
+        if isinstance(it, Cond):
+            return None
+        if isinstance(it, Seek):
+            if it.from_start is not None and it.from_start not in marks:
+                return None
+            pos = (marks[it.from_start] if it.from_start is not None else pos) + it.offset
+        elif isinstance(it, Mark):
+            marks[it.id] = pos
+        else:
+            bits = fixed_bits(it.local.vtype) if isinstance(it, Value) else it.bits
+            if bits is None:
+                return None
+            pos += bits
+        extent = max(extent, pos)
+    return pos, extent
+
+
 def is_rest(vt: VType) -> bool:
     """Whether the value takes the rest of the packet."""
     return isinstance(vt.enc, BinaryEnc) and vt.enc.rest
@@ -1023,7 +1152,7 @@ def item_bits(vt: VType) -> int:
         n = e.max_count
         return n * item_bits(e.elem) + max(n - 1, 0) * e.gap
     if isinstance(e, AggregateEnc):
-        return sum(item_bits(m.vtype) for m in e.members)
+        return sum(m.skip + item_bits(m.vtype) for m in e.members) + e.pad
     if isinstance(e, StringEnc):
         return e.max_bits
     return e.bits

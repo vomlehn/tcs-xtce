@@ -316,6 +316,10 @@
       <Parameter name="RecordCount" parameterTypeRef="RecordCountType"/>
       <Parameter name="Records" parameterTypeRef="U8"/>
       <Parameter name="Rest" parameterTypeRef="RestType"/>
+      <Parameter name="LogCount" parameterTypeRef="SampleCountType"/>
+      <Parameter name="Channel" parameterTypeRef="U4"/>
+      <Parameter name="Reading" parameterTypeRef="S16"/>
+      <Parameter name="Closed" parameterTypeRef="FlagType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -443,6 +447,51 @@
             <Comparison parameterRef="APID" value="260"/>
           </RestrictionCriteria>
         </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="Log">
+        <EntryList>
+          <ParameterRefEntry parameterRef="LogCount"/>
+          <ContainerRefEntry containerRef="LogRecord">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="LogCount"/>
+                </DynamicValue>
+              </Count>
+            </RepeatEntry>
+          </ContainerRefEntry>
+          <ContainerRefEntry containerRef="LogTrailer"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="280"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="LogRecord" abstract="true">
+        <BinaryEncoding>
+          <SizeInBits>
+            <FixedValue>32</FixedValue>
+          </SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="Channel"/>
+          <ParameterRefEntry parameterRef="Reading">
+            <LocationInContainerInBits referenceLocation="previousEntry">
+              <FixedValue>2</FixedValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="LogTrailer" abstract="true">
+        <BinaryEncoding>
+          <SizeInBits>
+            <FixedValue>16</FixedValue>
+          </SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="Closed"/>
+        </EntryList>
       </SequenceContainer>
       <SequenceContainer name="Dump">
         <EntryList>

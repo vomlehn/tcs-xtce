@@ -184,6 +184,12 @@ class BitReader:
         v = self.uint(bits, field)
         return int.from_bytes(v.to_bytes(bits // 8, "big"), "little") if le else v
 
+    def pad(self, bits: int, field: str) -> None:
+        """Skip ``bits`` bits of padding, which must be in the packet."""
+        if self.pos + bits > self.nbits:
+            raise PacketError("Truncated", field)
+        self.pos += bits
+
     def rest_bytes(self, max_: int, field: str) -> int:
         """The bytes from the current position to the end of the packet, for
         a field that takes the rest of it.  Raises ``BadSize`` unless they
@@ -243,6 +249,10 @@ class BitWriter:
         if le:
             v = int.from_bytes(v.to_bytes(bits // 8, "big"), "little")
         self.uint(bits, v)
+
+    def zeros(self, bits: int) -> None:
+        if bits:
+            self.uint(bits, 0)
 
     def bytes(self, data) -> None:
         if data:

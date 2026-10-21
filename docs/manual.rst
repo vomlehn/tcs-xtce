@@ -626,6 +626,23 @@ of an aggregate type defaults to a new instance. In C, each type is
 declared after the types it contains. Errors in a member name the
 packet field that holds it.
 
+**Repeated containers.** A ``ContainerRefEntry`` with a ``RepeatEntry``
+becomes one field: a list of a struct that holds one copy of the
+included container's entries, named like the container (or
+``<Name>Item`` when a packet already has that name). In the demo,
+``Log`` has ``log_record``, a list of ``LogRecord {channel, reading}``.
+The included container's entries can have locations, but can't have an
+``IncludeCondition``, overlap, or take a size or count from another
+value. Gaps that locations leave are written as zeros. A
+``containerStart`` location is relative to the start of each copy.
+
+**Container sizes.** A ``BinaryEncoding`` with a fixed ``SizeInBits`` on
+a container (other than one with a ``BaseContainer``) makes it take
+exactly that many bits. The bits its entries leave are padding:
+encoding writes zeros, and decoding ignores their value but fails with
+``Truncated`` if they are missing. Its entries must have a fixed size
+and position, and must fit.
+
 **Arrays and repeated entries.** An ``ArrayParameterType`` or
 ``ArrayArgumentType``, and a parameter or argument entry with a
 ``RepeatEntry``, is a list of its elements in the order they are
@@ -960,7 +977,9 @@ Strings and binary
    maximum bits, terminator, size-tag bits) and ``write_binary``.
    ``StringSpec::sized(bytes)`` (Rust), ``xtce_pk_string_spec_sized``
    (C/C++) and ``sized(spec, bytes)`` (Python) give the spec of a string
-   whose size another field gives. The reader's ``rest_bytes(max, field)``
+   whose size another field gives. The reader's ``pad(bits, field)``
+   (``xtce_pk_read_pad``) skips padding that must be present. The
+   reader's ``rest_bytes(max, field)``
    (``xtce_pk_read_rest`` in C/C++) gives the size of a binary value that
    takes the rest of the packet, and ``write_rest`` writes one (C/C++
    generates it inline).
@@ -1079,8 +1098,10 @@ Times
 
 Containers
    ``SequenceContainer`` entry lists with ``ParameterRefEntry``,
-   ``ArrayParameterRefEntry`` and ``ContainerRefEntry``. Included containers are flattened in and may
-   not have a ``BaseContainer``. ``BaseContainer`` inheritance uses
+   ``ArrayParameterRefEntry`` and ``ContainerRefEntry``. Included containers are flattened in, or with
+   a ``RepeatEntry`` become a list, and may not have a ``BaseContainer``.
+   A ``BinaryEncoding`` with a fixed ``SizeInBits`` pads a telemetry
+   container to that size. ``BaseContainer`` inheritance uses
    ``RestrictionCriteria`` with ``Comparison`` or ``ComparisonList``,
    using the operators ``== != < <= > >=`` on calibrated or raw values,
    on values that are not arrays or aggregates.
@@ -1118,12 +1139,12 @@ Name references
 
 Not supported
    references to aggregate members, array subsets (a ``DimensionList`` in an entry),
-   arrays of arrays, ``RepeatEntry`` on a ``ContainerRefEntry``,
-   ``IndirectParameterRefEntry``, stream and segment entries,
+   arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
    ``DynamicValue`` locations and offsets, other instances than 0,
    ``DiscreteLookupList`` values, ``BooleanExpression`` and
-   ``CustomAlgorithm`` criteria, ``NextContainer``, container
-   ``BinaryEncoding``, ``ErrorDetectCorrect``, context calibrators,
+   ``CustomAlgorithm`` criteria, ``NextContainer``, a container
+   ``BinaryEncoding`` on command containers, with a size from a
+   ``DynamicValue`` or with transform algorithms, ``ErrorDetectCorrect``, context calibrators,
    ``MathOperationCalibrator``, BCD encodings, MIL-STD-1750A floats,
    byte orders other than big and little endian, least-significant-bit-first
    bit order, and include conditions in command containers.

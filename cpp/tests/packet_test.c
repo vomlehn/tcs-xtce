@@ -336,6 +336,30 @@ int main(void) {
     CHECK(demo_Poke_decode(&p2, buf, len, &err) == 0 && p2.level == 22 && p2.data_.len == 2 && p2.data_.data[1] == 0xef);
   }
 
+  /* Repeated containers and container sizes. */
+  {
+    static demo_Log l, l2;
+    static const uint8_t body[] = {0x02, 0x30, 0x48, 0xd0, 0x00, 0xf3, 0xff, 0xfc, 0x00, 0x80, 0x00};
+    demo_Log_init(&l);
+    l.sec_hdr_flag = true;
+    l.log_count = 2;
+    l.log_record.len = 2;
+    l.log_record.data[0].channel = 3;
+    l.log_record.data[0].reading = 0x1234;
+    l.log_record.data[1].channel = 15;
+    l.log_record.data[1].reading = -1;
+    l.closed = true;
+    CHECK(strcmp(ENCODE(demo_Log, &l), "Ok") == 0);
+    /* Each record is 4 + 2 + 16 bits padded to 32; the trailer 1 padded to 16. */
+    CHECK(len == 17 && memcmp(buf + 6, body, sizeof body) == 0);
+    CHECK(demo_Log_decode(&l2, buf, len, &err) == 0);
+    CHECK(l2.log_record.len == 2 && l2.log_record.data[1].reading == -1 && l2.closed);
+    /* Padding must be there, though its value is ignored. */
+    CHECK(demo_Log_decode(&l2, buf, len - 1, &err) == XTCE_PK_TRUNCATED);
+    l.log_count = 1;
+    CHECK(strcmp(ENCODE(demo_Log, &l), "BadSize") == 0);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

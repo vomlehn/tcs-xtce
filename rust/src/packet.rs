@@ -260,6 +260,13 @@ impl<'a> BitReader<'a> {
         Ok(if le { swap_bytes(v, bits) } else { v })
     }
 
+    /// Skips `bits` bits of padding, which must be in the packet.
+    pub fn pad(&mut self, bits: usize, field: &'static str) -> Result<()> {
+        self.need(bits, field)?;
+        self.pos += bits;
+        Ok(())
+    }
+
     /// The bytes from the current position to the end of the packet, for a
     /// field that takes the rest of it.  Fails with `BadSize` unless they
     /// are whole bytes, at most `max` of them.

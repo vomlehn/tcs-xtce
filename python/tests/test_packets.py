@@ -187,6 +187,23 @@ class PacketTests(unittest.TestCase):
         q = demo.Poke.decode(demo.Poke(level=21, data_=b"\xbe\xef").to_bytes())
         self.assertEqual((q.level, q.data_), (22, b"\xbe\xef"))
 
+    def test_repeated_containers_and_container_sizes(self):
+        log = demo.Log(
+            sec_hdr_flag=True,
+            log_count=2,
+            log_record=[demo.LogRecord(channel=3, reading=0x1234), demo.LogRecord(channel=15, reading=-1)],
+            closed=True,
+        )
+        b = log.to_bytes()
+        # Each record is 4 + 2 + 16 bits padded to 32; the trailer 1 padded to 16.
+        self.assertEqual(bytes(b[6:]).hex(), "023048d000f3fffc008000")
+        self.assertEqual(demo.Log.decode(b), log)
+        # Padding must be there, though its value is ignored.
+        with self.assertRaises(PacketError) as cm:
+            demo.Log.decode(b[:-1])
+        self.assertEqual((cm.exception.kind, cm.exception.what), ("Truncated", ("/Demo/Log",)))
+        self.assertEqual(self.kind(dataclasses.replace(log, log_count=1)), "BadSize")
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

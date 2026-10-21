@@ -11,7 +11,7 @@ import xtce  # noqa: E402
 
 from xtcepkt import emit_c  # noqa: E402
 from xtcepkt.compile import compile_document, item_bits, value_range  # noqa: E402
-from xtcepkt.model import MAX_FIELD_BITS, Unsupported  # noqa: E402
+from xtcepkt.model import MAX_FIELD_BITS, Pad, Unsupported  # noqa: E402
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -307,10 +307,6 @@ class RestTests(unittest.TestCase):
         self.assertIn("RepeatEntry on a value that takes the rest of the packet", str(cm.exception))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def dim(start: str, end: str) -> str:
     return f"<Dimension><StartingIndex>{start}</StartingIndex><EndingIndex>{end}</EndingIndex></Dimension>"
 
@@ -518,3 +514,98 @@ class AggregateTests(unittest.TestCase):
         with self.assertRaises(Unsupported) as cm:
             compile_xml(text)
         self.assertIn("which is an aggregate", str(cm.exception))
+
+
+def container_mission(record: str, entry: str) -> str:
+    """Telemetry where Status includes container Record with ``entry``
+    (the inside of a ContainerRefEntry); ``record`` is Record's contents."""
+    return mission(
+        tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U4" signed="false"><IntegerDataEncoding sizeInBits="4"/></IntegerParameterType>
+          <IntegerParameterType name="U8" signed="false"><IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <StringParameterType name="S"><StringDataEncoding><Variable maxSizeInBits="64">
+            <TerminationChar>00</TerminationChar></Variable></StringDataEncoding></StringParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="N" parameterTypeRef="U8"/>
+          <Parameter name="A" parameterTypeRef="U4"/>
+          <Parameter name="B" parameterTypeRef="U8"/>
+          <Parameter name="Text" parameterTypeRef="S"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="Status"><EntryList>
+            <ParameterRefEntry parameterRef="N"/>
+            <ContainerRefEntry containerRef="Record">{entry}</ContainerRefEntry>
+          </EntryList></SequenceContainer>
+          <SequenceContainer name="Record" abstract="true">{record}</SequenceContainer>
+        </ContainerSet>"""
+    )
+
+
+REPEAT = f"<RepeatEntry><Count>{dynamic('N')}</Count></RepeatEntry>"
+
+
+def size(bits: int) -> str:
+    return f"<BinaryEncoding><SizeInBits><FixedValue>{bits}</FixedValue></SizeInBits></BinaryEncoding>"
+
+
+def entries(*refs: str) -> str:
+    return "<EntryList>" + "".join(refs) + "</EntryList>"
+
+
+def ref(name: str, offset: str = "") -> str:
+    loc = (
+        f'<LocationInContainerInBits referenceLocation="{offset.split(":")[0]}">'
+        f"<FixedValue>{offset.split(':')[1]}</FixedValue></LocationInContainerInBits>"
+        if offset
+        else ""
+    )
+    return f'<ParameterRefEntry parameterRef="{name}">{loc}</ParameterRefEntry>'
+
+
+class ContainerTests(unittest.TestCase):
+    def test_repeated_container_is_a_list_of_aggregates(self):
+        record = entries(ref("A"), ref("B", "previousEntry:3"))
+        m = compile_xml(container_mission(size(24) + record, REPEAT))
+        vt = m.nodes[0].fields[1][1].vtype
+        self.assertEqual(vt.kind, "array")
+        agg = vt.elem.enc
+        self.assertEqual([(x.ident, x.skip) for x in agg.members], [("a", 0), ("b", 3)])
+        self.assertEqual(agg.pad, 9)  # 4 + 3 + 8 = 15 of 24 bits
+        self.assertEqual(item_bits(vt.elem), 24)
+        self.assertEqual(m.aggregates[0].ident, "Record")
+
+    def test_container_start_locations(self):
+        record = entries(ref("A"), ref("B", "containerStart:8"))
+        agg = compile_xml(container_mission(record, REPEAT)).nodes[0].fields[1][1].vtype.elem.enc
+        self.assertEqual(([x.skip for x in agg.members], agg.pad), ([0, 4], 0))
+
+    def test_fixed_size_pads_an_included_container(self):
+        m = compile_xml(container_mission(size(16) + entries(ref("A")), ""))
+        self.assertIsInstance(m.nodes[0].items[-1], Pad)
+        self.assertEqual(m.nodes[0].items[-1].bits, 12)
+        self.assertEqual(m.nodes[0].max_bytes, 3)
+
+    def test_rejected(self):
+        for record, entry, why in (
+            (size(8) + entries(ref("A"), ref("B")), "", "entries take 12 bits, more than the container size 8"),
+            (size(64) + entries(ref("Text")), "", "entries whose size or position varies"),
+            (entries(ref("A"), ref("B", "previousEntry:-2")), REPEAT, "has entries that overlap"),
+            (entries(ref("Text"), ref("A", "containerStart:80")), REPEAT, "location after a value whose size varies"),
+            # Sizes inside a copy can't come from values outside it.
+            (
+                entries(f'<ParameterRefEntry parameterRef="B">{REPEAT}</ParameterRefEntry>'),
+                REPEAT,
+                "size or count from /Sat/N, which is not decoded before it",
+            ),
+        ):
+            with self.subTest(why=why):
+                text = container_mission(record, entry)
+                with self.assertRaises(Unsupported) as cm:
+                    compile_xml(text)
+                self.assertIn(why, str(cm.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

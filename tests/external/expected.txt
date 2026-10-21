@@ -49,10 +49,7 @@ yamcs/test_float_add_js.xml: schema invalid; rejected by the binding
 xtcetools/BogusSAT-2.xml: schema invalid; rejected by the binding
 xtcetools/ccsds_sana_registrations_scid.xml: schema invalid; rejected by the binding
 xtcetools/Diagnostic_Log_Packets.xml: schema valid; loaded by the binding
-  0 packets, 3 not supported
-    unsupported: /Payload_Diagnostic_Buffer/Diag_Formats/FORMAT1: container /Payload_Diagnostic_Buffer/Diag_Formats/FORMAT1: RepeatEntry on a ContainerRefEntry
-    unsupported: /Payload_Diagnostic_Buffer/Diag_Formats/FORMAT2: container /Payload_Diagnostic_Buffer/Diag_Formats/FORMAT2: RepeatEntry on a ContainerRefEntry
-    unsupported: /Payload_Diagnostic_Buffer/Diag_Formats/FMT1_HIST_REC_SNAPSHOT: container /Payload_Diagnostic_Buffer/Diag_Formats/FMT1_HIST_REC_SNAPSHOT: BinaryEncoding
+  3 packets, 0 not supported
 xtcetools/GovSat_2_0_1.xml: schema invalid; rejected by the binding
 xtcetools/BogusSAT-1-Bad.xml: schema invalid; rejected by the binding
 xtcetools/BogusSAT-1.xml: schema invalid; rejected by the binding

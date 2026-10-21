@@ -13,7 +13,7 @@ from typing import Optional
 
 from .common import flt, int_enc, invertible, le, string_spec
 from .compile import snake
-from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 ENC = {
     "Unsigned": "XTCE_PK_UNSIGNED",
@@ -287,7 +287,11 @@ class CEmitter:
         e = vt.enc
         if isinstance(e, AggregateEnc):
             for m in e.members:
+                if m.skip:
+                    self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {m.skip}, {f}));", depth)
                 self.read_value(m.vtype, f"{dst}.{m.ident}", f, depth, ref)
+            if e.pad:
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {e.pad}, {f}));", depth)
         elif isinstance(e, ArrayEnc):
             # Indexes are numbered by depth: an aggregate element may hold
             # another array.
@@ -354,7 +358,11 @@ class CEmitter:
         bad = f"return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, {f}, NULL);"
         if isinstance(e, AggregateEnc):
             for m in e.members:
+                if m.skip:
+                    self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {m.skip}));", depth)
                 self.write_value(m.vtype, f"{x}.{m.ident}", f, depth, ref)
+            if e.pad:
+                self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {e.pad}));", depth)
             return
         if isinstance(e, ArrayEnc):
             i = f"i{depth}"
@@ -588,6 +596,8 @@ class CEmitter:
             elif isinstance(it, Mark):
                 self.line(f"size_t m{it.id} = r->pos;", depth)
                 self.line(f"(void)m{it.id};", depth)
+            elif isinstance(it, Pad):
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {it.bits}, {cstr(where)}));", depth)
             elif isinstance(it, Value):
                 lc = it.local
                 if not nested:
@@ -632,6 +642,8 @@ class CEmitter:
                 self.line(f"(void)m{it.id};", depth)
             elif isinstance(it, Fixed):
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_bits(w, {it.bits}, UINT64_C(0x{it.value:x})));", depth)
+            elif isinstance(it, Pad):
+                self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {it.bits}));", depth)
             elif isinstance(it, Cond):
                 cond = " && ".join(f"({self.condition(c, self.place(n, c.local, names))})" for c in it.criteria)
                 self.line(f"if ({cond}) {{", depth)

@@ -69,6 +69,12 @@ def dump(rng) -> bytes:
     return body + rng.randbytes(rng.choice([0, 0, 1, 5]))
 
 
+def log(rng) -> bytes:
+    """A Log body: a record count mostly in range, 32-bit records."""
+    n = rng.choice([0, 1, 3, 6, rng.randrange(8)])
+    return bytes([n]) + rng.randbytes(4 * min(n, 7) + rng.choice([0, 1, 2, 2]))
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -85,7 +91,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
-            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -101,6 +107,8 @@ def main() -> None:
                 data += targets(rng, data[0] & 0x08)
             elif apid == 270 and rng.random() < 0.8:
                 data += dump(rng)
+            elif apid == 280 and rng.random() < 0.8:
+                data += log(rng)
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))

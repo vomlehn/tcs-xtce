@@ -120,18 +120,22 @@ class ArrayEnc:
 @dataclass
 class Member:
     """One member of an aggregate: its XTCE name, its field name in
-    generated code, and its type."""
+    generated code, its type, and the bits to skip before it."""
 
     name: str
     ident: str
     vtype: "VType"
+    skip: int = 0
 
 
 @dataclass
 class AggregateEnc:
-    """The members of an aggregate, encoded one after another in order."""
+    """The members of an aggregate, encoded one after another in order,
+    then ``pad`` bits.  An aggregate made from a repeated container has
+    skips and padding from the container's entry locations and size."""
 
     members: list[Member]
+    pad: int = 0
 
 
 Encoding = Union[IntEnc, FloatEnc, StringEnc, BinaryEnc, ArrayEnc, AggregateEnc]
@@ -295,6 +299,14 @@ class Value:
 
 
 @dataclass
+class Pad:
+    """``bits`` zero bits, ignored when decoding but required to be there
+    (the rest of a container with a fixed size)."""
+
+    bits: int
+
+
+@dataclass
 class Fixed:
     """A constant bit pattern (command FixedValueEntry)."""
 
@@ -310,7 +322,7 @@ class Cond:
     items: list["Item"]
 
 
-Item = Union[Seek, Mark, Value, Fixed, Cond]
+Item = Union[Seek, Mark, Value, Fixed, Pad, Cond]
 
 
 def walk(items: list) -> list:
