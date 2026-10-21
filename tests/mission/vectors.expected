@@ -60,3 +60,10 @@ error:OutOfRange | -
 Reply{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, answer=true, code="ABC", note_size=2, note="hi"} | 0936c02a001279657300414243026869
 error:InvalidString | -
 error:Truncated | -
+Frame{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, frame_kind=1, frame_gap=3, frame_body=0xabcd, frame_end=true} | 0940c02a0012013abcd1
+Frame{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, frame_kind=0, frame_gap=0, frame_body=0x, frame_end=true} | 0140c02a00120008
+Frame{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, frame_kind=2, frame_gap=15, frame_body=0x11223344, frame_end=true} | 0940c02a001202f1122334400010
+error:Truncated | -
+Tune{seq_count=6, packet_length=4, mode=Science, setting=0x010203} | 112ec00600040702010203
+Tune{seq_count=6, packet_length=4, mode=Safe, setting=0x} | 112ec00600040700
+Tune{seq_count=6, packet_length=4, mode=Nominal, setting=0x7f} | 112ec006000407017f

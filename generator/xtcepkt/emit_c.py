@@ -612,13 +612,47 @@ class CEmitter:
         self.line(f"}} {t};")
         self.packet_prototypes(t, kind=True)
 
+    def size_source(self, d: DynSize, place) -> str:
+        """Expression for the value a bound DynSize adjusts: a field, or the
+        first matching value of a DiscreteLookupList.  ``place`` gives the
+        Acc of a Local."""
+        if d.lookup is None:
+            return place(d.local).expr
+        x = slit(d.default)
+        for criteria, v in reversed(d.lookup):
+            cond = " && ".join(f"({self.condition(c, place(c.local))})" for c in criteria)
+            x = f"({cond}) ? {slit(v)} : {x}"
+        return f"({x})"
+
+    def read_ref(self, d: DynSize) -> str:
+        """The value a size or location uses, when decoding."""
+        return self.size_source(d, lambda lc: Acc(f"v{lc.id}"))
+
+    def write_ref(self, n: Node, names: dict):
+        """The value a size or location uses, when encoding."""
+        return lambda d: self.size_source(d, lambda lc: self.place(n, lc, names))
+
+    def seek(self, it: Seek, side: str, ref, where: str, depth: int) -> None:
+        """A Seek, by the reader (``side`` "read") or writer ("write")."""
+        obj = "r" if side == "read" else "w"
+        f = cstr(where)
+        off = str(it.offset)
+        if isinstance(it.offset, DynSize):
+            self.line("{", depth)
+            depth += 1
+            self.size(it.offset, f"{obj}->err", f, ref, depth)
+            off = "(int64_t)n"
+        if it.from_start is None:
+            self.line(f"XTCE_PK_TRY(xtce_pk_{side}_skip({obj}, {off}, {f}));", depth)
+        else:
+            self.line(f"XTCE_PK_TRY(xtce_pk_{side}_seek({obj}, {self.mark(it.from_start)}, {off}, {f}));", depth)
+        if isinstance(it.offset, DynSize):
+            self.line("}", depth - 1)
+
     def read_items(self, items, depth: int, where: str, nested: bool = False) -> None:
         for it in items:
             if isinstance(it, Seek):
-                if it.from_start is None:
-                    self.line(f"XTCE_PK_TRY(xtce_pk_read_skip(r, {it.offset}, {cstr(where)}));", depth)
-                else:
-                    self.line(f"XTCE_PK_TRY(xtce_pk_read_seek(r, {self.mark(it.from_start)}, {it.offset}, {cstr(where)}));", depth)
+                self.seek(it, "read", self.read_ref, where, depth)
             elif isinstance(it, Mark):
                 self.line(f"size_t m{it.id} = r->pos;", depth)
                 self.line(f"(void)m{it.id};", depth)
@@ -628,7 +662,7 @@ class CEmitter:
                 lc = it.local
                 if not nested:
                     self.local(lc.vtype, f"v{lc.id}", depth)
-                self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth, lambda d: f"v{d.local.id}")
+                self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth, self.read_ref)
                 if nested:
                     self.line(f"h{lc.id} = true;", depth)
             elif isinstance(it, Cond):
@@ -659,10 +693,7 @@ class CEmitter:
     def write_items(self, n: Node, items, depth: int, where: str, names: dict) -> None:
         for it in items:
             if isinstance(it, Seek):
-                if it.from_start is None:
-                    self.line(f"XTCE_PK_TRY(xtce_pk_write_skip(w, {it.offset}, {cstr(where)}));", depth)
-                else:
-                    self.line(f"XTCE_PK_TRY(xtce_pk_write_seek(w, {self.mark(it.from_start)}, {it.offset}, {cstr(where)}));", depth)
+                self.seek(it, "write", self.write_ref(n, names), where, depth)
             elif isinstance(it, Mark):
                 self.line(f"size_t m{it.id} = w->pos;", depth)
                 self.line(f"(void)m{it.id};", depth)
@@ -678,7 +709,7 @@ class CEmitter:
             else:
                 lc = it.local
                 f = cstr(lc.name)
-                ref = lambda d: self.place(n, d.local, names).expr  # noqa: E731
+                ref = self.write_ref(n, names)
                 if lc in names:
                     acc = names[lc]
                     if acc.present:

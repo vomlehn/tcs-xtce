@@ -82,6 +82,26 @@ def spec(vt: VType, ref, f: str) -> str:
     return f"&({s}).sized({size(d, ref(d), f)})" if d is not None else "&" + s
 
 
+def source(d: DynSize, place) -> str:
+    """Expression for the value a bound DynSize adjusts: a field, or the
+    first matching value of a DiscreteLookupList.  ``place`` gives the
+    expression for a Local."""
+    if d.lookup is None:
+        return place(d.local)
+    x = f"{d.default}i64"
+    for criteria, v in reversed(d.lookup):
+        x = f"if {conjunction([condition(c, place(c.local)) for c in criteria])} {{ {v}i64 }} else {{ {x} }}"
+    return f"({x})"
+
+
+def offset(s: Seek, ref, f: str) -> str:
+    """Expression for the offset of a Seek."""
+    if isinstance(s.offset, int):
+        return str(s.offset)
+    n = size(s.offset, ref(s.offset), f)
+    return f"({n}) as i64" if s.offset.factor != 1 else f"{n} as i64"
+
+
 def size(d: DynSize, x: str, f: str) -> str:
     """Expression for a size or count that the value ``x`` gives."""
     n = f"pk::dynamic_size({x} as f64, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, {f})?"
@@ -333,17 +353,18 @@ class RustEmitter:
     def read_items(self, items, depth: int, where: str, assign: bool = False) -> None:
         for it in items:
             if isinstance(it, Seek):
+                off = offset(it, self.read_ref, rstr(where))
                 if it.from_start is None:
-                    self.line(f"r.skip({it.offset}, {rstr(where)})?;", depth)
+                    self.line(f"r.skip({off}, {rstr(where)})?;", depth)
                 else:
-                    self.line(f"r.seek({self.mark(it.from_start)}, {it.offset}, {rstr(where)})?;", depth)
+                    self.line(f"r.seek({self.mark(it.from_start)}, {off}, {rstr(where)})?;", depth)
             elif isinstance(it, Mark):
                 self.line(f"let m{it.id} = r.position();", depth)
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
             elif isinstance(it, Value):
                 lc = it.local
-                expr = read_expr(lc.vtype, rstr(lc.name), lambda d: f"v{d.local.id}")
+                expr = read_expr(lc.vtype, rstr(lc.name), self.read_ref)
                 if assign:
                     self.line(f"v{lc.id} = Some({expr});", depth)
                 else:
@@ -362,10 +383,11 @@ class RustEmitter:
     def write_items(self, n: Node, items, depth: int, where: str, names: dict) -> None:
         for it in items:
             if isinstance(it, Seek):
+                off = offset(it, self.write_ref(n, names), rstr(where))
                 if it.from_start is None:
-                    self.line(f"w.skip({it.offset}, {rstr(where)})?;", depth)
+                    self.line(f"w.skip({off}, {rstr(where)})?;", depth)
                 else:
-                    self.line(f"w.seek({self.mark(it.from_start)}, {it.offset}, {rstr(where)})?;", depth)
+                    self.line(f"w.seek({self.mark(it.from_start)}, {off}, {rstr(where)})?;", depth)
             elif isinstance(it, Mark):
                 self.line(f"let m{it.id} = w.position();", depth)
             elif isinstance(it, Fixed):
@@ -388,7 +410,16 @@ class RustEmitter:
                     x = f"o{lc.id}" if lc.vtype.kind in ("string", "binary", "array", "aggregate") else f"*o{lc.id}"
                 else:
                     x = self.place(n, lc, names)
-                self.line(write_stmt(lc.vtype, x, f, lambda d: self.place(n, d.local, names)), depth)
+                self.line(write_stmt(lc.vtype, x, f, self.write_ref(n, names)), depth)
+
+    @staticmethod
+    def read_ref(d: DynSize) -> str:
+        """The value a size or location uses, when decoding."""
+        return source(d, lambda lc: f"v{lc.id}")
+
+    def write_ref(self, n: Node, names: dict):
+        """The value a size or location uses, when encoding."""
+        return lambda d: source(d, lambda lc: self.place(n, lc, names))
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:

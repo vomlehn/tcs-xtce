@@ -664,6 +664,15 @@ string). The value is ``slope * x + intercept`` (its
 or argument. That value must be decoded earlier in the same packet,
 outside any ``IncludeCondition``.
 
+A ``DiscreteLookupList`` can stand in for the ``DynamicValue`` (or, in
+a binary or string encoding, for its ``DynamicValue``): ``x`` is then
+the ``value`` of the first ``DiscreteLookup`` whose ``Comparison`` or
+``ComparisonList`` holds, or ``defaultValue`` if none does. Its
+comparisons follow the rules of restriction criteria, and in commands
+may name arguments (``ArgumentInstanceRef``). In the demo, ``Frame``'s
+``FrameBody`` is 2 bytes when ``FrameKind`` is 1, 4 when it is 2 and
+empty otherwise, and ``Tune``'s ``Setting`` depends on its ``Mode``.
+
 Inside an aggregate type, a reference may instead name an earlier member
 of the aggregate, as Yamcs reads it. Each value of the aggregate then
 uses its own member: in the demo, each ``BatchType`` in ``Batches`` has
@@ -679,7 +688,8 @@ sizes in bits of strings and binary), or above the field's bound fails
 with ``BadSize``.
 
 The bound is the largest value the referenced field's ``ValidRange``
-allows, or, without one, its encoding. It is limited to what fits in
+allows, or, without one, its encoding, or the largest of a
+``DiscreteLookupList``'s values. It is limited to what fits in
 64 KiB on the wire, which keeps C structs bounded. In C this bound is
 ``N`` in the field's type, so give count fields a ``ValidRange``: the
 demo's ``SampleCount`` (``0..6``) makes ``Readings`` a
@@ -1040,10 +1050,12 @@ Sizes and counts from other fields
    ``DynamicValue`` with ``ParameterInstanceRef`` (instance 0) or, in
    argument types, ``ArgumentInstanceRef``, and an optional
    ``LinearAdjustment``, in array ``EndingIndex``, ``RepeatEntry``
-   ``Count``, binary ``SizeInBits`` and variable string sizes. It must
-   refer to an integer value decoded earlier in the packet, outside any
-   ``IncludeCondition``, or, inside an aggregate type, to an earlier
-   integer member. See `Generated packet types`_ for the checks and
+   ``Count``, binary ``SizeInBits``, variable string sizes and
+   locations. It must refer to an integer value decoded earlier in the
+   packet, outside any ``IncludeCondition``, or, inside an aggregate
+   type, to an earlier integer member. ``DiscreteLookupList`` works in
+   the same places except aggregate members, with comparisons on values
+   decoded earlier. See `Generated packet types`_ for the checks and
    bounds.
 
 Integer encoding
@@ -1138,11 +1150,15 @@ Containers
    on values that are not arrays or aggregates.
 
 Locations
-   ``LocationInContainerInBits`` with a ``FixedValue`` relative to
-   ``previousEntry`` (the default) or ``containerStart``. Negative
-   offsets are allowed. ``containerStart`` is the start of the packet
-   for inherited entries, and the inclusion point for entries of an
-   included container.
+   ``LocationInContainerInBits`` relative to ``previousEntry`` (the
+   default) or ``containerStart``. ``containerStart`` is the start of the
+   packet for inherited entries, and the inclusion point for entries of
+   an included container. A ``FixedValue`` offset may be negative. A
+   ``DynamicValue`` or ``DiscreteLookupList`` offset is computed like a
+   size, in bits, so it must be a whole number from 0 up to its bound
+   (at most 64 KiB), or decoding and encoding fail with ``BadSize``; in
+   the demo, ``Frame``'s ``FrameEnd`` comes ``FrameGap`` bits after the
+   body. Repeated and fixed-size containers need fixed offsets.
 
 Include conditions
    ``IncludeCondition`` (``Comparison`` or ``ComparisonList``) on
@@ -1172,8 +1188,8 @@ Not supported
    references to aggregate members (other than sizes from an earlier
    member), array subsets (a ``DimensionList`` in an entry),
    arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
-   ``DynamicValue`` locations and offsets, other instances than 0,
-   ``DiscreteLookupList`` values, ``BooleanExpression`` and
+   ``RepeatEntry`` offsets that other values give, other instances than 0,
+   ``BooleanExpression`` and
    ``CustomAlgorithm`` criteria, ``NextContainer``, a container
    ``BinaryEncoding`` on command containers, with a size from a
    ``DynamicValue`` or with transform algorithms, ``ErrorDetectCorrect``, context calibrators,

@@ -425,6 +425,16 @@ fold into the intercept and factor, so one runtime function,
 language, so the three runtimes accept and reject exactly the same
 values.
 
+A ``DiscreteLookupList`` is a ``DynSize`` too: instead of a ``local``,
+binding compiles its comparisons into ``lookup`` (criteria and a value
+per case, plus ``default``), and that value is ``x``. The emitters
+render it as a chain of conditions where they would use the field, so
+the size checks stay in ``dynamic_size``. A location from another value
+is a ``Seek`` whose ``offset`` is such a ``DynSize`` rather than a
+number, with ``unit`` 1 and a bound that ``max_bits`` uses. Layouts that
+must be known when compiling (repeated and fixed-size containers) reject
+it.
+
 The referenced field stays an ordinary field that the caller sets.
 Deriving it from the data when encoding would make ``encode`` change its
 input, or need a second, derived struct. Instead the encoder checks that
@@ -551,8 +561,7 @@ Limitations and future work
 * **Packet codecs** — the main missing XTCE features are:
 
   * references to aggregate members by path, in sizes and criteria;
-  * ``DynamicValue`` locations, ``DiscreteLookupList`` values and array
-    subsets;
+  * array subsets;
   * ``BooleanExpression`` criteria.
 
   The model has room for each of these: new ``Item`` kinds, and

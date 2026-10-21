@@ -72,6 +72,23 @@ def uncalibrate(vt: VType, y: str, f: str) -> str:
     return f"pk.spline_inverse({y}, {points(cal)}, {cal.extrapolate}, {f})"
 
 
+def source(d: DynSize, place) -> str:
+    """Expression for the value a bound DynSize adjusts: a field, or the
+    first matching value of a DiscreteLookupList.  ``place`` gives the
+    expression for a Local."""
+    if d.lookup is None:
+        return place(d.local)
+    x = str(d.default)
+    for criteria, v in reversed(d.lookup):
+        x = f"({v} if {' and '.join(f'({condition(c, place(c.local))})' for c in criteria)} else {x})"
+    return x
+
+
+def offset(s: Seek, ref, f: str) -> str:
+    """Expression for the offset of a Seek."""
+    return str(s.offset) if isinstance(s.offset, int) else size(s.offset, ref(s.offset), f)
+
+
 def size(d: DynSize, x: str, f: str) -> str:
     """Expression for a size or count that the value ``x`` gives."""
     n = f"pk.dynamic_size({x}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, {f})"
@@ -281,17 +298,18 @@ class PythonEmitter:
     def read_items(self, items, depth: int, where: str, nested: bool = False) -> None:
         for it in items:
             if isinstance(it, Seek):
+                off = offset(it, self.read_ref, pstr(where))
                 if it.from_start is None:
-                    self.line(f"r.skip({it.offset}, {pstr(where)})", depth)
+                    self.line(f"r.skip({off}, {pstr(where)})", depth)
                 else:
-                    self.line(f"r.seek({self.mark(it.from_start)}, {it.offset}, {pstr(where)})", depth)
+                    self.line(f"r.seek({self.mark(it.from_start)}, {off}, {pstr(where)})", depth)
             elif isinstance(it, Mark):
                 self.line(f"m{it.id} = r.pos", depth)
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
             elif isinstance(it, Value):
                 lc = it.local
-                self.line(f"v{lc.id} = {read_expr(lc.vtype, pstr(lc.name), lambda d: f'v{d.local.id}')}", depth)
+                self.line(f"v{lc.id} = {read_expr(lc.vtype, pstr(lc.name), self.read_ref)}", depth)
             elif isinstance(it, Cond):
                 if not nested:
                     for v in walk(it.items):
@@ -306,10 +324,11 @@ class PythonEmitter:
     def write_items(self, n: Node, items, depth: int, where: str, names: dict) -> None:
         for it in items:
             if isinstance(it, Seek):
+                off = offset(it, self.write_ref(n, names), pstr(where))
                 if it.from_start is None:
-                    self.line(f"w.skip({it.offset}, {pstr(where)})", depth)
+                    self.line(f"w.skip({off}, {pstr(where)})", depth)
                 else:
-                    self.line(f"w.seek({self.mark(it.from_start)}, {it.offset}, {pstr(where)})", depth)
+                    self.line(f"w.seek({self.mark(it.from_start)}, {off}, {pstr(where)})", depth)
             elif isinstance(it, Mark):
                 self.line(f"m{it.id} = w.pos", depth)
             elif isinstance(it, Fixed):
@@ -326,7 +345,7 @@ class PythonEmitter:
                 if lc.optional:
                     self.line(f"if {x} is None:", depth)
                     self.line(f'raise pk.PacketError("Missing", {pstr(lc.name)})', depth + 1)
-                self.write_value(lc.vtype, x, pstr(lc.name), lambda d: self.place(n, d.local, names), depth)
+                self.write_value(lc.vtype, x, pstr(lc.name), self.write_ref(n, names), depth)
 
     def write_value(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
         e = vt.enc
@@ -354,6 +373,15 @@ class PythonEmitter:
             self.line(f"w.bytes({data})", depth)
         else:
             self.line(write_stmt(vt, x, f, ref), depth)
+
+    @staticmethod
+    def read_ref(d: DynSize) -> str:
+        """The value a size or location uses, when decoding."""
+        return source(d, lambda lc: f"v{lc.id}")
+
+    def write_ref(self, n: Node, names: dict):
+        """The value a size or location uses, when encoding."""
+        return lambda d: source(d, lambda lc: self.place(n, lc, names))
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:

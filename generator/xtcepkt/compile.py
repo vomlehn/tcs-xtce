@@ -422,6 +422,8 @@ class Compiler:
                 mkey = self.resolve(m.type_ref, path, table, "member type")
                 mt = self.vtype(mkey, table)
                 d = mt.dyn
+                if d is not None and d.table is not None:
+                    raise Unsupported(f"{where}: member {m.name} has a size from a DiscreteLookupList")
                 if d is not None:
                     # Like Yamcs, a reference to an earlier member's name
                     # means that member of the same aggregate value.
@@ -433,7 +435,7 @@ class Compiler:
                         )
                     if sib.vtype.kind != "int":
                         raise Unsupported(f"{where}: size or count from {sib.vtype.kind} member {sib.name}")
-                    mt = bounded(mt, dataclasses.replace(d, member=sib.ident), sib.vtype)
+                    mt = bounded(mt, dataclasses.replace(d, member=sib.ident), int_bounds(sib.vtype))
                 if is_rest(mt):
                     raise Unsupported(f"{where}: member {m.name} takes the rest of the packet")
                 members.append(Member(m.name, names.take(snake(m.name)), mt))
@@ -448,6 +450,8 @@ class Compiler:
             return int(c.value)
         if c.name == "DynamicValue":
             return self.dyn_size(c.value, path, what, where)
+        if c.name == "DiscreteLookupList":
+            return DynSize(table=(path, c.value))
         raise Unsupported(f"{where}: {what} from {c.name}")
 
     def dyn_size(self, dv, path: Key, what: str, where: str) -> DynSize:
@@ -518,9 +522,12 @@ class Compiler:
             v = c.value
             dyn = None
             if v.choice1 is not None:
-                if v.choice1.name != "DynamicValue":
+                if v.choice1.name == "DynamicValue":
+                    dyn = self.dyn_size(v.choice1.value, path, "string size", where)
+                elif v.choice1.name == "DiscreteLookupList":
+                    dyn = DynSize(table=(path, v.choice1.value))
+                else:
                     raise Unsupported(f"{where}: string size from {v.choice1.name}")
-                dyn = self.dyn_size(v.choice1.value, path, "string size", where)
                 dyn.unit = 8
             mx = self._size(v.max_size_in_bits, "string", where)
             if v.choice2.name == "LeadingSize":
@@ -531,8 +538,8 @@ class Compiler:
             if e.from_binary_transform_algorithm or e.to_binary_transform_algorithm:
                 raise Unsupported(f"{where}: binary transform algorithms")
             c = e.size_in_bits.choice
-            if c.name == "DynamicValue":
-                dyn = self.dyn_size(c.value, path, "binary size", where)
+            if c.name in ("DynamicValue", "DiscreteLookupList"):
+                dyn = self.int_value(e.size_in_bits, path, "binary size", where)
                 dyn.unit = 8
                 return BinaryEnc(MAX_FIELD_BITS, dyn), None
             if c.name != "FixedValue":
@@ -621,13 +628,24 @@ class Compiler:
     def local(self, name: str, key: str, vt: VType) -> Local:
         return Local(self._id(), name, key, vt)
 
-    def location(self, loc, start: int, where: str) -> list[Item]:
+    def location(self, loc, start: int, path: Key, scope: list, where: str, arg_key=None) -> list[Item]:
+        """The Seek for an entry's location; one from other values is bound
+        to ``scope`` and must not move backwards."""
         if loc is None:
             return []
         ref = loc.reference_location.value if loc.reference_location else "previousEntry"
-        if loc.choice.name != "FixedValue":
-            raise Unsupported(f"{where}: location from {loc.choice.name}")
-        off = loc.choice.value
+        c = loc.choice
+        if c.name == "FixedValue":
+            off = c.value
+        else:
+            if c.name == "DynamicValue":
+                d = self.dyn_size(c.value, path, "location", where)
+            elif c.name == "DiscreteLookupList":
+                d = DynSize(table=(path, c.value))
+            else:
+                raise Unsupported(f"{where}: location from {c.name}")
+            off, rng = self.bind_dyn(d, scope, where, arg_key)
+            off.max = min(dyn_units(off, rng), MAX_FIELD_BITS)
         if ref == "containerStart":
             return [Seek(start, off)]
         if ref == "previousEntry":
@@ -663,12 +681,23 @@ class Compiler:
         return local
 
     def bind(self, local: Local, scope: list, where: str, arg_key: Optional[Callable] = None) -> Local:
-        """Binds the size or count of a value to the value that gives it,
-        which must be decoded before it, and bounds it."""
+        """Binds the size or count of a value to what gives it, which must
+        be decoded before it, and bounds it."""
         vt = local.vtype
-        d = vt.dyn
-        if d is None:
+        if vt.dyn is None:
             return local
+        b, rng = self.bind_dyn(vt.dyn, scope, where, arg_key)
+        local.vtype = bounded(vt, b, rng)
+        return local
+
+    def bind_dyn(self, d: DynSize, scope: list, where: str, arg_key: Optional[Callable] = None):
+        """A copy of ``d`` bound to the values in ``scope``, and the range
+        (lo, hi) of the value it adjusts."""
+        if d.table is not None:
+            path, table = d.table
+            lookup = [(self.match(lk, path, scope, where, arg_key), lk.value) for lk in table.discrete_lookup]
+            values = [v for _, v in lookup] + [table.default_value]
+            return dataclasses.replace(d, lookup=lookup, default=table.default_value), (min(values), max(values))
         if d.arg is not None:
             if arg_key is None:
                 raise Unsupported(f"{where}: size from argument {d.arg!r} outside a command")
@@ -684,8 +713,7 @@ class Compiler:
             raise Unsupported(f"{where}: size or count from {name}, which has an IncludeCondition")
         if ref.vtype.kind != "int":
             raise Unsupported(f"{where}: size or count from {ref.vtype.kind} value {name}")
-        local.vtype = bounded(vt, dataclasses.replace(d, local=ref), ref.vtype)
-        return local
+        return dataclasses.replace(d, local=ref), int_bounds(ref.vtype)
 
     def param_local(self, ref: str, path: Key) -> Local:
         pkey = self.resolve(ref, path, self.params, "parameter")
@@ -708,7 +736,7 @@ class Compiler:
             if e.include_condition is not None:
                 cond = self.match(e.include_condition, path, scope, where)
             out = items if cond is None else []
-            out += self.location(e.location_in_container_in_bits, start, where)
+            out += self.location(e.location_in_container_in_bits, start, path, scope, where)
             if ch.name != "ContainerRefEntry":
                 local = self.param_local(e.parameter_ref, path)
                 local = self.bind(self.repeat(local, e, path, where), scope, where)
@@ -785,6 +813,8 @@ class Compiler:
             if isinstance(it, Cond):
                 raise Unsupported(f"{what} has an IncludeCondition")
             if isinstance(it, Seek):
+                if isinstance(it.offset, DynSize):
+                    raise Unsupported(f"{what} has a location that other values give")
                 if it.from_start is not None:
                     if it.from_start not in marks:
                         raise Unsupported(f"{what} has a location relative to the start of another container")
@@ -868,8 +898,10 @@ class Compiler:
     def scope_of(node: Node) -> list[Local]:
         return [it.local for it in walk(node.all_items()) if isinstance(it, Value)]
 
-    def match(self, mc, path: Key, scope: list, where: str) -> list[Criterion]:
-        """Criteria of a RestrictionCriteria or IncludeCondition, on values in ``scope``."""
+    def match(self, mc, path: Key, scope: list, where: str, arg_key: Optional[Callable] = None) -> list[Criterion]:
+        """Criteria of a RestrictionCriteria, IncludeCondition or
+        DiscreteLookup, on values in ``scope``; ``arg_key`` resolves
+        argument names in commands."""
         c = mc.choice
         if c.name == "Comparison":
             comps = [c.value]
@@ -879,7 +911,19 @@ class Compiler:
             raise Unsupported(f"{where}: {c.name} criteria")
         out = []
         for cmp in comps:
-            pkey = qname(self.resolve(cmp.parameter_ref, path, self.params, "parameter"))
+            instance, raw = None, False
+            if hasattr(cmp, "choice"):  # an ArgumentComparison
+                ref = cmp.choice.value
+                if cmp.choice.name == "ArgumentInstanceRef":
+                    if arg_key is None:
+                        raise Unsupported(f"{where}: comparison of argument {ref.argument_ref!r} outside a command")
+                    pkey = arg_key(ref.argument_ref.strip())
+                else:
+                    pkey = qname(self.resolve(ref.parameter_ref, path, self.params, "parameter"))
+                    instance = ref.instance
+            else:
+                pkey = qname(self.resolve(cmp.parameter_ref, path, self.params, "parameter"))
+                instance, raw = cmp.instance, cmp.use_calibrated_value is False
             local = next((lc for lc in reversed(scope) if lc.key == pkey), None)
             if local is None:
                 raise Unsupported(f"{where}: criterion on {pkey}, which is not decoded before it")
@@ -887,9 +931,8 @@ class Compiler:
                 raise Unsupported(f"{where}: criterion on {pkey}, which has an IncludeCondition")
             if local.vtype.kind in ("array", "aggregate"):
                 raise Unsupported(f"{where}: criterion on {pkey}, which is an {local.vtype.kind}")
-            if cmp.instance:
-                raise Unsupported(f"{where}: comparison of instance {cmp.instance}")
-            raw = cmp.use_calibrated_value is False
+            if instance:
+                raise Unsupported(f"{where}: comparison of instance {instance}")
             vt = local.vtype
             if raw and (vt.kind not in ("int", "enum", "bool") or vt.calibrator is not None or isinstance(vt.enc, StringEnc)):
                 raise Unsupported(f"{where}: raw comparison on {vt.kind} parameter {pkey}")
@@ -999,7 +1042,7 @@ class Compiler:
                 raise Unsupported(f"{where}: IncludeCondition in a CommandContainer")
             if getattr(e, "dimension_list", None) is not None:
                 raise Unsupported(f"{where}: array subsets (DimensionList in an array entry)")
-            items += self.location(e.location_in_container_in_bits, 0, where)
+            items += self.location(e.location_in_container_in_bits, 0, path, values, where, arg_key)
             if ch.name in entries:
                 if "Argument" in ch.name:
                     local = self.arg_local(scope, e.argument_ref, where)
@@ -1123,12 +1166,22 @@ def value_range(vt: VType) -> tuple[int, int]:
     return max(math.floor(min(ends)), elo), min(math.ceil(max(ends)), elim - 1)
 
 
-def bounded(vt: VType, b: DynSize, ref: VType) -> VType:
-    """A copy of ``vt`` whose size or count is ``b``, bound to a value of
-    integer type ``ref``, with ``b.max`` set from the range of ``ref``."""
-    lo, hi = ref.valid_range or value_range(ref)
+def int_bounds(vt: VType) -> tuple[int, int]:
+    """The smallest and largest value of an integer type."""
+    return vt.valid_range or value_range(vt)
+
+
+def dyn_units(b: DynSize, rng: tuple[int, int]) -> int:
+    """The largest ``(slope * x + intercept) / unit`` for x in ``rng``."""
+    lo, hi = rng
     top = max(b.slope * lo, b.slope * hi) + b.intercept
-    units = max(math.floor(top), 0) // b.unit if math.isfinite(top) else MAX_FIELD_BITS
+    return max(math.floor(top), 0) // b.unit if math.isfinite(top) else MAX_FIELD_BITS
+
+
+def bounded(vt: VType, b: DynSize, rng: tuple[int, int]) -> VType:
+    """A copy of ``vt`` whose size or count is the bound ``b``, with
+    ``b.max`` set from the range ``rng`` of the value it adjusts."""
+    units = dyn_units(b, rng)
     e = vt.enc
     if isinstance(e, ArrayEnc):
         step = max(item_bits(e.elem) + e.gap, 1)
@@ -1170,6 +1223,8 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
         if isinstance(it, Cond):
             return None
         if isinstance(it, Seek):
+            if isinstance(it.offset, DynSize):
+                return None
             if it.from_start is not None and it.from_start not in marks:
                 return None
             pos = (marks[it.from_start] if it.from_start is not None else pos) + it.offset
@@ -1208,7 +1263,7 @@ def max_bits(items: list[Item]) -> int:
     marks = {0: 0}
     for it in walk(items):
         if isinstance(it, Seek):
-            pos = (marks[it.from_start] if it.from_start is not None else pos) + it.offset
+            pos = (marks[it.from_start] if it.from_start is not None else pos) + it.max_offset
         elif isinstance(it, Mark):
             marks[it.id] = pos
         elif isinstance(it, Value):

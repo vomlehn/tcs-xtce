@@ -228,6 +228,19 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(self.kind(dataclasses.replace(r, code="ABCD")), "TooLong")
         self.assertEqual(self.kind(dataclasses.replace(r, note="e")), "BadSize")
 
+    def test_lookups_and_locations_from_other_values(self):
+        f = demo.Frame(sec_hdr_flag=True, frame_kind=1, frame_gap=3, frame_body=b"\xab\xcd", frame_end=True)
+        b = f.to_bytes()
+        # Kind 1 means a 2-byte body; FrameEnd comes 3 bits after it.
+        self.assertEqual(bytes(b[6:]).hex(), "013abcd1")
+        self.assertEqual(demo.Frame.decode(b), f)
+        self.assertEqual(self.kind(dataclasses.replace(f, frame_kind=2)), "BadSize")
+
+        t = demo.Tune(mode=demo.ModeArgType.SCIENCE, setting=b"\x01\x02\x03")
+        self.assertEqual(demo.Tune.decode(t.to_bytes()), t)
+        # Nominal takes the default of 1 byte.
+        self.assertEqual(self.kind(dataclasses.replace(t, mode=demo.ModeArgType.NOMINAL)), "BadSize")
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

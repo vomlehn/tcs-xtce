@@ -429,3 +429,38 @@ fn booleans_and_strings_with_other_encodings() {
     e.note = "e".into(); // 1 byte, but NoteSize says 2
     assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Note" }));
 }
+
+#[test]
+fn lookups_and_locations_from_other_values() {
+    let f = Frame {
+        sec_hdr_flag: true,
+        frame_kind: 1,
+        frame_gap: 3,
+        frame_body: vec![0xab, 0xcd],
+        frame_end: true,
+        ..Default::default()
+    };
+    let b = f.to_bytes().unwrap();
+    // Kind 1 means a 2-byte body; FrameEnd comes 3 bits after it.
+    assert_eq!(&b[6..], &[0x01, 0x3a, 0xbc, 0xd1]);
+    assert_eq!(Frame::decode(&b).unwrap(), f);
+    let mut e = f.clone();
+    e.frame_kind = 2; // a 4-byte body
+    assert_eq!(
+        e.to_bytes(),
+        Err(PacketError::BadSize { field: "FrameBody" })
+    );
+
+    let t = Tune {
+        mode: ModeArgType::SCIENCE,
+        setting: vec![1, 2, 3],
+        ..Default::default()
+    };
+    assert_eq!(Tune::decode(&t.to_bytes().unwrap()).unwrap(), t);
+    let t = Tune {
+        mode: ModeArgType::NOMINAL, // the default of 1 byte
+        setting: vec![1, 2, 3],
+        ..Default::default()
+    };
+    assert_eq!(t.to_bytes(), Err(PacketError::BadSize { field: "Setting" }));
+}

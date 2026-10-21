@@ -408,6 +408,35 @@ int main(void) {
     CHECK(strcmp(ENCODE(demo_Reply, &rp), "BadSize") == 0);
   }
 
+  /* Lookups and locations from other values. */
+  {
+    static demo_Frame fr, fr2;
+    static demo_Tune tu, tu2;
+    static const uint8_t body[] = {0x01, 0x3a, 0xbc, 0xd1};
+    demo_Frame_init(&fr);
+    fr.sec_hdr_flag = true;
+    fr.frame_kind = 1;
+    fr.frame_gap = 3;
+    fr.frame_body.len = 2;
+    fr.frame_body.data[0] = 0xab;
+    fr.frame_body.data[1] = 0xcd;
+    fr.frame_end = true;
+    CHECK(strcmp(ENCODE(demo_Frame, &fr), "Ok") == 0);
+    /* Kind 1 means a 2-byte body; FrameEnd comes 3 bits after it. */
+    CHECK(len == 10 && memcmp(buf + 6, body, sizeof body) == 0);
+    CHECK(demo_Frame_decode(&fr2, buf, len, &err) == 0 && fr2.frame_body.len == 2 && fr2.frame_end);
+    fr.frame_kind = 2;
+    CHECK(strcmp(ENCODE(demo_Frame, &fr), "BadSize") == 0);
+
+    demo_Tune_init(&tu);
+    tu.mode = demo_ModeArgType_SCIENCE;
+    tu.setting.len = 3;
+    CHECK(strcmp(ENCODE(demo_Tune, &tu), "Ok") == 0);
+    CHECK(demo_Tune_decode(&tu2, buf, len, &err) == 0 && tu2.setting.len == 3);
+    tu.mode = demo_ModeArgType_NOMINAL; /* the default of 1 byte */
+    CHECK(strcmp(ENCODE(demo_Tune, &tu), "BadSize") == 0);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

@@ -11,7 +11,7 @@ import xtce  # noqa: E402
 
 from xtcepkt import emit_c  # noqa: E402
 from xtcepkt.compile import compile_document, item_bits, value_range  # noqa: E402
-from xtcepkt.model import MAX_FIELD_BITS, Pad, Unsupported  # noqa: E402
+from xtcepkt.model import MAX_FIELD_BITS, Pad, Seek, Unsupported  # noqa: E402
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -677,6 +677,46 @@ class EncodingTests(unittest.TestCase):
         vt = m.nodes[0].fields[0][1].vtype
         self.assertEqual((vt.kind, vt.enc.bits), ("string", 24))
         self.assertIn("string with binary size -1", m.skipped[0])
+
+
+
+def lookup(*cases: tuple[str, int], default: int = 0) -> str:
+    """A DiscreteLookupList on parameter N: (value of N, result) pairs."""
+    body = "".join(
+        f'<DiscreteLookup value="{v}"><Comparison parameterRef="N" value="{n}"/></DiscreteLookup>' for n, v in cases
+    )
+    return f'<DiscreteLookupList defaultValue="{default}">{body}</DiscreteLookupList>'
+
+
+class LookupAndLocationTests(unittest.TestCase):
+    def test_count_from_a_lookup(self):
+        text = array_mission(dim(fixed(0), lookup(("1", 2), ("2", 5), default=-1)), '<ParameterRefEntry parameterRef="N"/><ParameterRefEntry parameterRef="Arr"/>')
+        vt = compile_xml(text).nodes[0].fields[1][1].vtype
+        d = vt.enc.count
+        self.assertEqual([(c[0].value, v) for c, v in d.lookup], [(1, 2), (2, 5)])
+        self.assertEqual((d.default, d.intercept, d.max), (-1, 1.0, 6))  # EndingIndex 5 is 6 elements
+
+    def test_location_from_a_value(self):
+        loc = (
+            '<LocationInContainerInBits referenceLocation="previousEntry"><DynamicValue>'
+            '<ParameterInstanceRef parameterRef="N"/><LinearAdjustment slope="2"/></DynamicValue></LocationInContainerInBits>'
+        )
+        text = array_mission(dim(fixed(0), fixed(1)), f'<ParameterRefEntry parameterRef="N"/><ParameterRefEntry parameterRef="Arr">{loc}</ParameterRefEntry>')
+        n = compile_xml(text).nodes[0]
+        seek = n.items[1]
+        self.assertIsInstance(seek, Seek)
+        self.assertEqual((seek.offset.slope, seek.max_offset), (2.0, 510))
+        self.assertEqual(n.max_bytes, (8 + 510 + 32 + 7) // 8)
+
+    def test_location_needs_an_earlier_value(self):
+        loc = (
+            '<LocationInContainerInBits><DiscreteLookupList defaultValue="0"><DiscreteLookup value="4">'
+            '<Comparison parameterRef="N" value="1"/></DiscreteLookup></DiscreteLookupList></LocationInContainerInBits>'
+        )
+        text = array_mission(dim(fixed(0), fixed(1)), f'<ParameterRefEntry parameterRef="Arr">{loc}</ParameterRefEntry><ParameterRefEntry parameterRef="N"/>')
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("criterion on /Sat/N, which is not decoded before it", str(cm.exception))
 
 
 if __name__ == "__main__":

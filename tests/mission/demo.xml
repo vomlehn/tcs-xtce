@@ -198,6 +198,20 @@
           </SizeInBits>
         </BinaryDataEncoding>
       </StringParameterType>
+      <BinaryParameterType name="FrameBodyType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DiscreteLookupList defaultValue="0">
+              <DiscreteLookup value="16">
+                <Comparison parameterRef="FrameKind" value="1"/>
+              </DiscreteLookup>
+              <DiscreteLookup value="32">
+                <Comparison parameterRef="FrameKind" value="2"/>
+              </DiscreteLookup>
+            </DiscreteLookupList>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
       <IntegerParameterType name="BoardTempType" sizeInBits="8">
         <IntegerDataEncoding sizeInBits="8">
           <DefaultCalibrator>
@@ -385,6 +399,10 @@
       <Parameter name="Rest" parameterTypeRef="RestType"/>
       <Parameter name="LogCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="BatchCount" parameterTypeRef="SampleCountType"/>
+      <Parameter name="FrameKind" parameterTypeRef="U8"/>
+      <Parameter name="FrameGap" parameterTypeRef="U4"/>
+      <Parameter name="FrameBody" parameterTypeRef="FrameBodyType"/>
+      <Parameter name="FrameEnd" parameterTypeRef="FlagType"/>
       <Parameter name="Answer" parameterTypeRef="AnswerType"/>
       <Parameter name="Code" parameterTypeRef="CodeType"/>
       <Parameter name="NoteSize" parameterTypeRef="PayloadSizeType"/>
@@ -565,6 +583,25 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <SequenceContainer name="Frame">
+        <EntryList>
+          <ParameterRefEntry parameterRef="FrameKind"/>
+          <ParameterRefEntry parameterRef="FrameGap"/>
+          <ParameterRefEntry parameterRef="FrameBody"/>
+          <ParameterRefEntry parameterRef="FrameEnd">
+            <LocationInContainerInBits referenceLocation="previousEntry">
+              <DynamicValue>
+                <ParameterInstanceRef parameterRef="FrameGap"/>
+              </DynamicValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="320"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="LogRecord" abstract="true">
         <BinaryEncoding>
           <SizeInBits>
@@ -651,6 +688,24 @@
           </DefaultCalibrator>
         </IntegerDataEncoding>
       </IntegerArgumentType>
+      <BinaryArgumentType name="SettingType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DiscreteLookupList defaultValue="8">
+              <DiscreteLookup value="0">
+                <Comparison value="Safe">
+                  <ArgumentInstanceRef argumentRef="Mode"/>
+                </Comparison>
+              </DiscreteLookup>
+              <DiscreteLookup value="24">
+                <Comparison value="Science">
+                  <ArgumentInstanceRef argumentRef="Mode"/>
+                </Comparison>
+              </DiscreteLookup>
+            </DiscreteLookupList>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryArgumentType>
       <BinaryArgumentType name="RestArgType">
         <BinaryDataEncoding>
           <SizeInBits>
@@ -858,6 +913,25 @@
         <CommandContainer name="GotoContainer">
           <EntryList>
             <ArgumentRefEntry argumentRef="Waypoint"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Tune">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="7"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Mode" argumentTypeRef="ModeArgType"/>
+          <Argument name="Setting" argumentTypeRef="SettingType"/>
+        </ArgumentList>
+        <CommandContainer name="TuneContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Mode"/>
+            <ArgumentRefEntry argumentRef="Setting"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

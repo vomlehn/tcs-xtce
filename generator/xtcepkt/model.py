@@ -59,6 +59,13 @@ class DynSize:
     arg: Optional[str] = None
     name: str = ""
     member: Optional[str] = None
+    # A DiscreteLookupList gives the value instead of a parameter or
+    # argument: unbound, ``table`` is (path, DiscreteLookupList); bound,
+    # ``lookup`` lists (criteria, value), the first match wins, and
+    # ``default`` applies when none matches.
+    table: Optional[tuple] = None
+    lookup: Optional[list] = None
+    default: int = 0
     slope: float = 1.0
     intercept: float = 0.0
     factor: int = 1
@@ -73,6 +80,8 @@ class DynSize:
     @property
     def source(self) -> str:
         """The name of the value that gives the size, once bound."""
+        if self.lookup is not None:
+            return "a DiscreteLookupList"
         return self.local.name if self.local is not None else self.name
 
 
@@ -289,10 +298,15 @@ class Local:
 
 @dataclass
 class Seek:
-    """Move the bit position before the next entry."""
+    """Move the bit position before the next entry: ``offset`` bits, or the
+    bits a bound DynSize gives (at most its ``max_total``)."""
 
     from_start: Optional[int]  # start-marker id, or None for previousEntry
-    offset: int
+    offset: Union[int, DynSize]
+
+    @property
+    def max_offset(self) -> int:
+        return self.offset.max_total if isinstance(self.offset, DynSize) else self.offset
 
 
 @dataclass

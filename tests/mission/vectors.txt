@@ -60,3 +60,10 @@ tm 0936c02a00126d61796241424300  # reply, an answer that is neither string
 tm 0936c02a001279657300414243026869  # reply, a binary string of two characters
 tm 0936c02a00127965730041ff4300  # reply, a code that is not UTF-8
 tm 0936c02a0012796573004142430268  # reply truncated in the note
+tm 0940c02a0012013abcd1  # frame, a size from a DiscreteLookupList and a location from a DynamicValue
+tm 0140c02a00120008  # frame, the lookup's default size of 0
+tm 0940c02a001202f1122334400010  # frame, the largest gap
+tm 0940c02a0012013abc  # frame truncated in the body
+tc 112ec00600040702010203  # tune, a setting size from a lookup on an argument
+tc 112ec00600040700  # tune in safe mode, no setting
+tc 112ec006000407017f  # tune, the lookup's default size

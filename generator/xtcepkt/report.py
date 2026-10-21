@@ -139,7 +139,7 @@ def gap_bits(n: Node) -> int:
     pos, marks, spans = 0, {0: 0}, []
     for it in walk(n.all_items()):
         if isinstance(it, Seek):
-            pos = (marks[it.from_start] if it.from_start is not None else pos) + it.offset
+            pos = (marks[it.from_start] if it.from_start is not None else pos) + it.max_offset
         elif isinstance(it, Mark):
             marks[it.id] = pos
         elif isinstance(it, Pad):

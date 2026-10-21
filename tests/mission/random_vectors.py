@@ -96,6 +96,15 @@ def reply(rng) -> bytes:
     return answer + code + bytes([size]) + note
 
 
+def frame(rng) -> bytes:
+    """A Frame body: a kind that picks the body size, and a gap."""
+    kind = rng.choice([0, 1, 2, rng.randrange(256)])
+    gap = rng.randrange(16)
+    body = {1: 2, 2: 4}.get(kind, 0)
+    f = [(8, kind), (4, gap)] + [(8, rng.randrange(256)) for _ in range(body)]
+    return bits(f + [(gap, 0), (1, rng.randrange(2))])
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -112,7 +121,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
-            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, 320, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -134,16 +143,21 @@ def main() -> None:
                 data += batches(rng)
             elif apid == 310 and rng.random() < 0.8:
                 data += reply(rng)
+            elif apid == 320 and rng.random() < 0.8:
+                data += frame(rng)
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
-            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, rng.randrange(256)])
+            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
                 data += rng.randbytes(3) + n.to_bytes(2, "big") + bytes(rng.choice(b"ab\xc3\xa9") for _ in range(n))
             elif opcode == 4 and rng.random() < 0.8:
                 data += upload(rng)
+            elif opcode == 7 and rng.random() < 0.8:
+                mode = rng.choice([0, 1, 2, rng.randrange(256)])
+                data += bytes([mode]) + rng.randbytes({0: 0, 2: 3}.get(mode, 1))
             kind = "tc"
         data += rng.randbytes(rng.randrange(40))
         if rng.random() < 0.1:
