@@ -47,6 +47,7 @@ enum {
   XTCE_PK_NOT_INVERTIBLE,
   XTCE_PK_MISSING,
   XTCE_PK_BAD_SIZE,
+  XTCE_PK_BAD_LENGTH,
   XTCE_PK_NO_SPACE,
 };
 
@@ -62,7 +63,7 @@ static inline const char* xtce_pk_error_kind(int code) {
   static const char* const kinds[] = {"Ok",        "Truncated",     "BadPosition", "NoMatch",
                                       "Mismatch",  "OutOfRange",    "InvalidString", "TooLong",
                                       "Calibration", "NotInvertible", "Missing",     "BadSize",
-                                      "NoSpace"};
+                                      "BadLength", "NoSpace"};
   return code >= 0 && code <= XTCE_PK_NO_SPACE ? kinds[code] : "Unknown";
 }
 
@@ -94,6 +95,8 @@ static inline int xtce_pk_error_message(const xtce_pk_error* e, char* buf, size_
       return snprintf(buf, cap, "%s is required by its include condition", f);
     case XTCE_PK_BAD_SIZE:
       return snprintf(buf, cap, "invalid size or count for %s", f);
+    case XTCE_PK_BAD_LENGTH:
+      return snprintf(buf, cap, "%s does not match the length of the packet", f);
     case XTCE_PK_NO_SPACE:
       return snprintf(buf, cap, "output buffer too small for %s", f);
   }
@@ -146,11 +149,13 @@ static inline uint64_t xtce_pk_swap_bytes(uint64_t v, unsigned bits) {
 
 /* --- reading ----------------------------------------------------------------- */
 
-/* Reads big-endian bit fields from `len` bytes at `data`; `pos` is in bits. */
+/* Reads big-endian bit fields from `len` bytes at `data`; `pos` is in bits,
+ * and `end` is the furthest bit read. */
 typedef struct xtce_pk_reader {
   const uint8_t* data;
   size_t len;
   size_t pos;
+  size_t end;
   xtce_pk_error* err;
 } xtce_pk_reader;
 
@@ -159,16 +164,25 @@ static inline xtce_pk_reader xtce_pk_reader_init(const uint8_t* data, size_t len
   r.data = data;
   r.len = len;
   r.pos = 0;
+  r.end = 0;
   r.err = err;
   return r;
 }
 
+static inline void xtce_pk_read_moved(xtce_pk_reader* r) {
+  if (r->end < r->pos) r->end = r->pos;
+}
+
+/* Moves to `offset` bits from `start`.  Bits skipped over count as part of
+ * the packet, as the writer fills them. */
 static inline int xtce_pk_read_seek(xtce_pk_reader* r, size_t start, int64_t offset, const char* f) {
-  return xtce_pk_position(start, offset, f, r->err, &r->pos);
+  XTCE_PK_TRY(xtce_pk_position(start, offset, f, r->err, &r->pos));
+  xtce_pk_read_moved(r);
+  return 0;
 }
 
 static inline int xtce_pk_read_skip(xtce_pk_reader* r, int64_t offset, const char* f) {
-  return xtce_pk_position(r->pos, offset, f, r->err, &r->pos);
+  return xtce_pk_read_seek(r, r->pos, offset, f);
 }
 
 static inline int xtce_pk_read_need(const xtce_pk_reader* r, size_t bits, const char* f) {
@@ -189,6 +203,7 @@ static inline int xtce_pk_read_bits(xtce_pk_reader* r, unsigned bits, const char
     r->pos += take;
     left -= take;
   }
+  xtce_pk_read_moved(r);
   *out = v;
   return 0;
 }
@@ -204,6 +219,33 @@ static inline int xtce_pk_read_uint(xtce_pk_reader* r, unsigned bits, bool le, c
 static inline int xtce_pk_read_pad(xtce_pk_reader* r, size_t bits, const char* f) {
   XTCE_PK_TRY(xtce_pk_read_need(r, bits, f));
   r->pos += bits;
+  xtce_pk_read_moved(r);
+  return 0;
+}
+
+/* Ends the packet where the packet length field `f`, whose value `v` was
+ * just read, says: `v - adjust` bytes after the field.  Fails with
+ * XTCE_PK_TRUNCATED if the data is shorter. */
+static inline int xtce_pk_read_limit(xtce_pk_reader* r, uint64_t v, int64_t adjust, const char* f) {
+  size_t start = (r->pos + 7) / 8;
+  uint64_t after;
+  if (adjust >= 0) {
+    if (v < (uint64_t)adjust) return xtce_pk_fail(r->err, XTCE_PK_BAD_LENGTH, f, NULL);
+    after = v - (uint64_t)adjust;
+  } else {
+    uint64_t a = 0 - (uint64_t)adjust;
+    if (v > UINT64_MAX - a) return xtce_pk_fail(r->err, XTCE_PK_TRUNCATED, f, NULL);
+    after = v + a;
+  }
+  if (after > r->len - start) return xtce_pk_fail(r->err, XTCE_PK_TRUNCATED, f, NULL);
+  r->len = start + (size_t)after;
+  return 0;
+}
+
+/* Checks that the packet's entries reach the end that the packet length
+ * field `f` gave. */
+static inline int xtce_pk_read_finish(const xtce_pk_reader* r, const char* f) {
+  if ((r->end + 7) / 8 != r->len) return xtce_pk_fail(r->err, XTCE_PK_BAD_LENGTH, f, NULL);
   return 0;
 }
 
@@ -223,6 +265,7 @@ static inline int xtce_pk_read_bytes(xtce_pk_reader* r, size_t n, const char* f,
   if (r->pos % 8 == 0) {
     if (n) memcpy(out, r->data + r->pos / 8, n);
     r->pos += n * 8;
+    xtce_pk_read_moved(r);
     return 0;
   }
   for (i = 0; i < n; ++i) {
@@ -320,6 +363,28 @@ static inline int xtce_pk_write_bytes(xtce_pk_writer* w, const uint8_t* data, si
 }
 
 /* Writes `bits` zero bits, overwriting whatever a seek left there. */
+/* Fills in the packet length field `f` of `bits` bits at bit `at`, once the
+ * whole packet is written: the number of bytes after the field plus
+ * `adjust`. */
+static inline int xtce_pk_patch_length(xtce_pk_writer* w, size_t at, unsigned bits, bool le, int64_t adjust,
+                                        const char* f) {
+  size_t after = w->len - (at + bits + 7) / 8, end = w->pos;
+  uint64_t v;
+  if (adjust >= 0) {
+    v = (uint64_t)after + (uint64_t)adjust;
+    if (v < (uint64_t)after) return xtce_pk_fail(w->err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+  } else {
+    uint64_t a = 0 - (uint64_t)adjust;
+    if ((uint64_t)after < a) return xtce_pk_fail(w->err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+    v = (uint64_t)after - a;
+  }
+  if (v > xtce_pk_mask(bits)) return xtce_pk_fail(w->err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+  w->pos = at;
+  XTCE_PK_TRY(xtce_pk_write_uint(w, bits, le, v));
+  w->pos = end;
+  return 0;
+}
+
 static inline int xtce_pk_write_zeros(xtce_pk_writer* w, size_t bits) {
   size_t lead = (8 - w->pos % 8) % 8, whole;
   uint8_t* out;
@@ -677,7 +742,7 @@ static inline int xtce_pk_write_utf8(xtce_pk_writer* w, const char* s, size_t n,
 }
 
 static inline int xtce_pk_write_string(xtce_pk_writer* w, const xtce_pk_string_spec* spec, const char* s, size_t n,
-                                       const char* f) {
+                                        const char* f) {
   const uint8_t* b = (const uint8_t*)s;
   size_t tag = spec->size_tag_bits;
   if (!xtce_pk_valid_utf8(b, n)) return xtce_pk_fail(w->err, XTCE_PK_INVALID_STRING, f, NULL);

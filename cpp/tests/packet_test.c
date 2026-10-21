@@ -29,6 +29,14 @@ static xtce_pk_error err;
 /* Encodes `p` of generated type `T` into `buf`; yields the error kind. */
 #define ENCODE(T, p) xtce_pk_error_kind(T##_encode((p), buf, sizeof buf, &len, &err))
 
+/* A copy of the first `n` bytes of `buf` in `out`, with the CCSDS packet
+ * length set to `length`. */
+static void with_length(uint8_t* out, size_t n, unsigned length) {
+  memcpy(out, buf, n);
+  out[4] = (uint8_t)(length >> 8);
+  out[5] = (uint8_t)length;
+}
+
 static void set_str(char* data, size_t* n, const char* s, size_t sn) {
   memcpy(data, s, sn);
   data[sn] = 0;
@@ -42,7 +50,6 @@ static demo_Housekeeping housekeeping(void) {
   hk.sec_hdr_flag = true;
   hk.seq_flags = demo_SeqFlagsType_UNSEGMENTED;
   hk.seq_count = 42;
-  hk.packet_length = 18;
   hk.mode = demo_ModeType_NOMINAL;
   hk.temperature = 25.0;
   hk.battery_voltage = 12.0;
@@ -101,7 +108,8 @@ int main(void) {
   CHECK(strcmp(ENCODE(demo_ScienceHousekeeping, &sci), "Ok") == 0);
   CHECK(demo_CCSDSPacketKind_decode(&kind, buf, len, &err) == 0);
   CHECK(kind.tag == demo_CCSDSPacketKind_ScienceHousekeeping_tag);
-  CHECK(demo_Housekeeping_decode(&hk2, buf, len, &err) == 0 && hk2.mode == demo_ModeType_SCIENCE);
+  /* Its base container's entries end before the packet length does. */
+  CHECK(demo_Housekeeping_decode(&hk2, buf, len, &err) == XTCE_PK_BAD_LENGTH);
 
   /* Encoding errors. */
   sci.temperature = 45.0;
@@ -149,7 +157,6 @@ int main(void) {
   /* Commands. */
   demo_Reboot_init(&cmd);
   cmd.seq_count = 6;
-  cmd.packet_length = 10;
   cmd.delay = 30.0;
   cmd.force = true;
   SET_STR(cmd.reason, "maint");
@@ -160,6 +167,35 @@ int main(void) {
   CHECK(demo_CCSDSCommandKind_decode(&cmd_kind, buf, len, &err) == 0);
   CHECK(cmd_kind.tag == demo_CCSDSCommandKind_Reboot_tag);
   CHECK(cmd_kind.u.Reboot.force && cmd_kind.u.Reboot.reason.len == 5);
+
+  /* The packet length is the number of bytes after the 6-byte primary
+   * header, minus 1, so it follows the length of the reason string. */
+  {
+    uint8_t pk[sizeof buf + 2];
+    demo_Reboot r2;
+    demo_Reboot_init(&r2);
+    CHECK(strcmp(ENCODE(demo_Reboot, &r2), "Ok") == 0);
+    CHECK(len == 12 && buf[4] == 0 && buf[5] == 5);
+    SET_STR(r2.reason, "maint");
+    CHECK(strcmp(ENCODE(demo_Reboot, &r2), "Ok") == 0);
+    CHECK(len == 17 && buf[4] == 0 && buf[5] == 10);
+    /* Bytes after the packet are ignored. */
+    with_length(pk, len, 10);
+    pk[len] = pk[len + 1] = 0xee;
+    CHECK(demo_Reboot_decode(&r2, pk, len + 2, &err) == 0 && r2.reason.len == 5);
+    /* A length beyond the data received. */
+    with_length(pk, len, 11);
+    CHECK(demo_Reboot_decode(&r2, pk, len, &err) == XTCE_PK_TRUNCATED && strcmp(err.field, "PacketLength") == 0);
+    /* A length that ends the packet inside the reason string. */
+    with_length(pk, len, 9);
+    CHECK(demo_Reboot_decode(&r2, pk, len, &err) == XTCE_PK_TRUNCATED);
+    /* A length that leaves bytes the entries don't use. */
+    with_length(pk, len, 11);
+    pk[len] = 0;
+    CHECK(demo_Reboot_decode(&r2, pk, len + 1, &err) == XTCE_PK_BAD_LENGTH);
+    CHECK(strcmp(xtce_pk_error_kind(err.code), "BadLength") == 0);
+  }
+
   demo_SetMode_init(&set);
   set.mode = 9;
   CHECK(strcmp(ENCODE(demo_SetMode, &set), "Ok") == 0);
@@ -316,8 +352,13 @@ int main(void) {
     CHECK(len == 12 && memcmp(buf + 6, body, sizeof body) == 0);
     CHECK(demo_Dump_decode(&d2, buf, len, &err) == 0);
     CHECK(d2.board_temp == 25 && d2.record_count == 2 && d2.records.data[1] == 8 && d2.rest.len == 2);
-    /* The rest of the packet is whatever follows the records. */
-    CHECK(demo_Dump_decode(&d2, buf, 11, &err) == 0 && d2.rest.len == 1 && d2.rest.data[0] == 0xde);
+    /* The rest of the packet is whatever follows the records, up to the
+     * end that the packet length gives. */
+    {
+      uint8_t pk[11];
+      with_length(pk, sizeof pk, 4);
+      CHECK(demo_Dump_decode(&d2, pk, sizeof pk, &err) == 0 && d2.rest.len == 1 && d2.rest.data[0] == 0xde);
+    }
     d.record_count = 200; /* raw 408 does not fit 8 bits */
     CHECK(strcmp(ENCODE(demo_Dump, &d), "OutOfRange") == 0);
     d.record_count = 3;
@@ -355,7 +396,11 @@ int main(void) {
     CHECK(demo_Log_decode(&l2, buf, len, &err) == 0);
     CHECK(l2.log_record.len == 2 && l2.log_record.data[1].reading == -1 && l2.closed);
     /* Padding must be there, though its value is ignored. */
-    CHECK(demo_Log_decode(&l2, buf, len - 1, &err) == XTCE_PK_TRUNCATED);
+    {
+      uint8_t pk[sizeof buf];
+      with_length(pk, len - 1, (unsigned)(len - 1 - 7));
+      CHECK(demo_Log_decode(&l2, pk, len - 1, &err) == XTCE_PK_TRUNCATED);
+    }
     l.log_count = 1;
     CHECK(strcmp(ENCODE(demo_Log, &l), "BadSize") == 0);
   }

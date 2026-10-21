@@ -12,12 +12,16 @@ from xtce import ManagedBuffer  # noqa: E402
 from xtce.packet import Codec, PacketError, enum_value, float_to_raw  # noqa: E402
 
 
+def with_length(data, length: int) -> bytes:
+    """``data`` with the CCSDS packet length set to ``length``."""
+    return bytes(data[:4]) + length.to_bytes(2, "big") + bytes(data[6:])
+
+
 def housekeeping(**kw) -> demo.Housekeeping:
     args = dict(
         sec_hdr_flag=True,
         seq_flags=demo.SeqFlagsType.UNSEGMENTED,
         seq_count=42,
-        packet_length=18,
         mode=demo.ModeType.NOMINAL,
         temperature=25.0,
         battery_voltage=12.0,
@@ -65,7 +69,10 @@ class PacketTests(unittest.TestCase):
         p = demo.CCSDSPacketKind.decode(data)
         self.assertIsInstance(p, demo.ScienceHousekeeping)
         self.assertEqual(p.science_count, 2**64 - 1)
-        self.assertEqual(demo.Housekeeping.decode(data).mode, demo.ModeType.SCIENCE)
+        # Its base container's entries end before the packet length does.
+        with self.assertRaises(PacketError) as cm:
+            demo.Housekeeping.decode(data)
+        self.assertEqual((cm.exception.kind, cm.exception.what), ("BadLength", ("PacketLength",)))
 
     def test_encode_errors(self):
         self.assertEqual(self.kind(demo.ScienceHousekeeping(temperature=45.0)), "Mismatch")
@@ -86,7 +93,7 @@ class PacketTests(unittest.TestCase):
             self.assertEqual(self.kind(dataclasses.replace(ev, **change)), kind, change)
 
     def test_commands(self):
-        cmd = demo.Reboot(seq_count=6, packet_length=10, delay=30.0, force=True, reason="maint")
+        cmd = demo.Reboot(seq_count=6, delay=30.0, force=True, reason="maint")
         data = cmd.to_bytes()
         self.assertEqual(data.hex(), "112cc006000a02012c0100056d61696e74")
         self.assertEqual(demo.CCSDSCommandKind.decode(data), cmd)
@@ -95,6 +102,29 @@ class PacketTests(unittest.TestCase):
         self.assertIsNone(back.mode.label)
         self.assertEqual(demo.ModeType(16).label, "Error")
         self.assertEqual(enum_value(demo.ModeType, 20).label, "Error")
+
+    def test_packet_length_field(self):
+        # The CCSDS length is the number of bytes after the 6-byte primary
+        # header, minus 1, so it follows the length of the reason string.
+        for reason, length in [("", 5), ("maint", 10)]:
+            cmd = demo.Reboot(reason=reason)
+            data = cmd.to_bytes()
+            self.assertEqual(len(data), 7 + length)
+            self.assertEqual(int.from_bytes(data[4:6], "big"), length)
+            # Bytes after the packet are ignored.
+            self.assertEqual(demo.Reboot.decode(data + b"\xee\xee"), cmd)
+        data = demo.Reboot(reason="maint").to_bytes()
+        for bad, kind in [
+            (with_length(data, 11), "Truncated"),  # beyond the data received
+            (with_length(data, 9), "Truncated"),  # ends inside the reason string
+            (with_length(data, 11) + b"\0", "BadLength"),  # bytes the entries don't use
+        ]:
+            with self.assertRaises(PacketError) as cm:
+                demo.Reboot.decode(bad)
+            self.assertEqual(cm.exception.kind, kind)
+        with self.assertRaises(PacketError) as cm:
+            demo.Reboot.decode(with_length(data, 11))
+        self.assertEqual(cm.exception.what, ("PacketLength",))
 
     def test_codec_reuses_buffers(self):
         codec = Codec.for_packet(demo.CCSDSPacketKind)
@@ -177,8 +207,9 @@ class PacketTests(unittest.TestCase):
         # Raw values: 25 = -100 + 125 and 2 = -4 + 12 / 2.
         self.assertEqual(bytes(b[6:]), bytes([0x7D, 0x0C, 7, 8, 0xDE, 0xAD]))
         self.assertEqual(demo.Dump.decode(b), d)
-        # The rest of the packet is whatever follows the records.
-        self.assertEqual(demo.Dump.decode(b[:11]).rest, b"\xde")
+        # The rest of the packet is whatever follows the records, up to the
+        # end that the packet length gives.
+        self.assertEqual(demo.Dump.decode(with_length(b[:11], 4)).rest, b"\xde")
         self.assertEqual(self.kind(dataclasses.replace(d, record_count=200)), "OutOfRange")
         self.assertEqual(self.kind(dataclasses.replace(d, record_count=3)), "BadSize")
         self.assertEqual(self.kind(dataclasses.replace(d, rest=bytes(65537))), "TooLong")
@@ -200,7 +231,7 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(demo.Log.decode(b), log)
         # Padding must be there, though its value is ignored.
         with self.assertRaises(PacketError) as cm:
-            demo.Log.decode(b[:-1])
+            demo.Log.decode(with_length(b[:-1], len(b) - 1 - 7))
         self.assertEqual((cm.exception.kind, cm.exception.what), ("Truncated", ("/Demo/Log",)))
         self.assertEqual(self.kind(dataclasses.replace(log, log_count=1)), "BadSize")
 

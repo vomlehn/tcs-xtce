@@ -47,6 +47,7 @@ from .model import (
     Value,
     VType,
     ref_text,
+    term_locals,
     walk,
 )
 
@@ -234,6 +235,29 @@ RUNTIME_NAMES = {
     "Result", "Error", "ManagedBuffer", "Optional", "Union", "Any", "String",
     "Vec", "Self", "Option", "Box", "Ok", "Err", "Some", "None",
 }
+
+
+# The AncillaryData that marks a parameter or argument as a packet length
+# field; its value is the number to add to the bytes after the field.
+LENGTH_TAG = "tcsxtce.length"
+
+
+def length_adjust(item, vt: VType, where: str) -> Optional[int]:
+    """The adjustment of a packet length field, or None if ``item`` (a
+    Parameter or Argument) isn't one."""
+    ads = item.ancillary_data_set
+    tags = [a for a in (ads.ancillary_data if ads else []) if a.name == LENGTH_TAG]
+    if not tags:
+        return None
+    if len(tags) > 1:
+        raise Unsupported(f"{where}: more than one {LENGTH_TAG}")
+    try:
+        adjust = int(tags[0].value.strip())
+    except ValueError:
+        raise Unsupported(f"{where}: {LENGTH_TAG} {tags[0].value!r} is not an integer") from None
+    if vt.kind != "int" or not isinstance(vt.enc, IntEnc) or vt.enc.signed or vt.calibrator is not None:
+        raise Unsupported(f"{where}: a packet length field must be an uncalibrated unsigned integer")
+    return adjust
 
 
 # --- the compiler ---------------------------------------------------------------
@@ -757,6 +781,8 @@ class Compiler:
         rp = getattr(e, "repeat_entry", None)
         if rp is None:
             return local
+        if local.length is not None:
+            raise Unsupported(f"{where}: RepeatEntry on packet length field {local.name}")
         vt = local.vtype
         if vt.kind == "array":
             raise Unsupported(f"{where}: RepeatEntry on an array")
@@ -797,6 +823,10 @@ class Compiler:
         if d.table is not None:
             path, table = d.table
             lookup = [(self.match(lk, path, scope, where, arg_key), lk.value) for lk in table.discrete_lookup]
+            for crit, _ in lookup:
+                for lc in (x for c in crit for x in term_locals(c)):
+                    if lc.length is not None:
+                        raise Unsupported(f"{where}: size or count from packet length field {lc.name}")
             values = [v for _, v in lookup] + [table.default_value]
             return dataclasses.replace(d, lookup=lookup, default=table.default_value), (min(values), max(values))
         if d.arg is not None:
@@ -812,6 +842,8 @@ class Compiler:
             raise Unsupported(f"{where}: size or count from {name}, which is not decoded before it")
         if ref.optional:
             raise Unsupported(f"{where}: size or count from {name}, which has an IncludeCondition")
+        if ref.length is not None:
+            raise Unsupported(f"{where}: size or count from packet length field {name}")
         member, vt = walk_members(ref.vtype, d.members, f"{where}: size or count from {d.name}")
         if vt.kind != "int":
             raise Unsupported(f"{where}: size or count from {vt.kind} value {d.name or name}")
@@ -821,7 +853,9 @@ class Compiler:
         pkey = self.resolve(ref, path, self.params, "parameter")
         ppath, p = self.params[pkey]
         tkey = self.resolve(p.parameter_type_ref, ppath, self.ptypes, "parameter type")
-        return self.local(p.name, qname(pkey), self.vtype(tkey, self.ptypes))
+        local = self.local(p.name, qname(pkey), self.vtype(tkey, self.ptypes))
+        local.length = length_adjust(p, local.vtype, f"parameter {qname(pkey)}")
+        return local
 
     def tm_items(self, sc, path: Key, stack: list, start: int, scope: list) -> list[Item]:
         """Items for a container's entries.  ``scope`` lists the values read
@@ -936,6 +970,8 @@ class Compiler:
                 vt = it.local.vtype
                 if vt.dyn is not None:
                     raise Unsupported(f"{what}: {it.local.name} has a size that another value gives")
+                if it.local.length is not None:
+                    raise Unsupported(f"{what}: {it.local.name} is a packet length field")
                 members.append(Member(it.local.name, names.take(snake(it.local.name)), vt, skip))
                 skip = 0
                 bits = fixed_bits(vt)
@@ -977,6 +1013,7 @@ class Compiler:
             node.items = self.tm_items(sc, path, [key], 0, scope)
             node.items += self.size_pad(sc, node.items, 0, f"container {node.key}")
             self.check_rest(node, f"container {node.key}")
+            self.check_length(node, f"container {node.key}")
             if base is not None:
                 base.children.append(node)
         except Unsupported as e:
@@ -993,6 +1030,23 @@ class Compiler:
         for i, it in enumerate(items[:-1]):
             if isinstance(it, Value) and is_rest(it.local.vtype):
                 raise Unsupported(f"{where}: {it.local.name} takes the rest of the packet but is not last")
+
+    @staticmethod
+    def check_length(node: Node, where: str) -> None:
+        """A packet has at most one length field, which is always present
+        and which nothing compares or takes a size from."""
+        items = node.all_items()
+        lengths = [it.local for it in walk(items) if isinstance(it, Value) and it.local.length is not None]
+        if len(lengths) > 1:
+            raise Unsupported(f"{where}: more than one packet length field")
+        if not lengths:
+            return
+        lc = lengths[0]
+        if lc.optional:
+            raise Unsupported(f"{where}: packet length field {lc.name} has an IncludeCondition")
+        criteria = node.all_criteria() + [c for it in items for c in conds(it)]
+        if any(x is lc for c in criteria for x in term_locals(c)):
+            raise Unsupported(f"{where}: a criterion or assignment on packet length field {lc.name}")
 
     @staticmethod
     def scope_of(node: Node) -> list[Local]:
@@ -1108,7 +1162,9 @@ class Compiler:
             raise Unsupported(f"{where}: unknown argument {name!r}")
         owner, a = scope[name]
         tkey = self.resolve(a.argument_type_ref, self.mcs[owner][0], self.atypes, "argument type")
-        return self.local(a.name, f"{qname(owner)}#{a.name}", self.vtype(tkey, self.atypes))
+        local = self.local(a.name, f"{qname(owner)}#{a.name}", self.vtype(tkey, self.atypes))
+        local.length = length_adjust(a, local.vtype, f"argument {local.key}")
+        return local
 
     def tc_node(self, key: Key) -> Node:
         if key in self.nodes:
@@ -1158,6 +1214,7 @@ class Compiler:
                     raise Unsupported(f"{where}: CommandContainer does not extend its base's container")
                 node.items = self.tc_items(cc, scope, path, where, self.scope_of(base) if base else [])
             self.check_rest(node, where)
+            self.check_length(node, where)
             if base is not None:
                 base.children.append(node)
         except Unsupported as e:
@@ -1276,7 +1333,7 @@ class Compiler:
         n.fields = [
             (names.take(snake(it.local.name)), it.local)
             for it in walk(n.all_items())
-            if isinstance(it, Value) and it.local not in fixed
+            if isinstance(it, Value) and it.local not in fixed and it.local.length is None
         ]
         n.max_bytes = (max_bits(n.all_items()) + 7) // 8
 
@@ -1381,6 +1438,13 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
             pos += bits
         extent = max(extent, pos)
     return pos, extent
+
+
+def conds(it: Item) -> list[Term]:
+    """The criteria of a conditional block and the blocks inside it."""
+    if not isinstance(it, Cond):
+        return []
+    return it.criteria + [c for i in it.items for c in conds(i)]
 
 
 def is_rest(vt: VType) -> bool:

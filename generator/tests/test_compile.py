@@ -876,3 +876,138 @@ class ElementTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def length_tag(adjust: str = "-1") -> str:
+    return f'<AncillaryDataSet><AncillaryData name="tcsxtce.length">{adjust}</AncillaryData></AncillaryDataSet>'
+
+
+def length_mission(entries: str, len_type: str = "U16", tag: str = length_tag(), containers: str = "") -> str:
+    """Telemetry with a packet length field Len, a second one Len2, and
+    values X, Data and Looked in container Status."""
+    return mission(
+        tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U16" signed="false"><IntegerDataEncoding sizeInBits="16"/></IntegerParameterType>
+          <IntegerParameterType name="S16"><IntegerDataEncoding sizeInBits="16" encoding="twosComplement"/>
+          </IntegerParameterType>
+          <IntegerParameterType name="U8" signed="false"><IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <BinaryParameterType name="B"><BinaryDataEncoding><SizeInBits><DynamicValue>
+            <ParameterInstanceRef parameterRef="Len"/>
+          </DynamicValue></SizeInBits></BinaryDataEncoding></BinaryParameterType>
+          <BinaryParameterType name="BL"><BinaryDataEncoding><SizeInBits>
+            <DiscreteLookupList defaultValue="0"><DiscreteLookup value="8">
+              <Comparison parameterRef="Len" value="1"/>
+            </DiscreteLookup></DiscreteLookupList>
+          </SizeInBits></BinaryDataEncoding></BinaryParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="Len" parameterTypeRef="{len_type}">{tag}</Parameter>
+          <Parameter name="Len2" parameterTypeRef="U16">{length_tag("0")}</Parameter>
+          <Parameter name="X" parameterTypeRef="U8"/>
+          <Parameter name="Data" parameterTypeRef="B"/>
+          <Parameter name="Looked" parameterTypeRef="BL"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="Status"><EntryList>{entries}</EntryList></SequenceContainer>
+          {containers}
+        </ContainerSet>"""
+    )
+
+
+LEN = '<ParameterRefEntry parameterRef="Len"/>'
+X = '<ParameterRefEntry parameterRef="X"/>'
+
+
+class LengthTests(unittest.TestCase):
+    def test_length_field_is_computed(self):
+        m = compile_xml(length_mission(LEN + X))
+        n = m.nodes[0]
+        self.assertEqual([name for name, _ in n.fields], ["x"])
+        self.assertEqual((n.length_field().name, n.length_field().length), ("Len", -1))
+
+    def test_argument_length_field(self):
+        text = mission(
+            tc=U8_ARG
+            + "<MetaCommandSet>"
+            + command(
+                "Cmd",
+                f'<Argument name="Len" argumentTypeRef="U8">{length_tag("3")}</Argument>'
+                '<Argument name="A" argumentTypeRef="U8"/>',
+                '<ArgumentRefEntry argumentRef="Len"/><ArgumentRefEntry argumentRef="A"/>',
+            )
+            + "</MetaCommandSet>"
+        )
+        n = compile_xml(text).nodes[0]
+        self.assertEqual([name for name, _ in n.fields], ["a"])
+        self.assertEqual(n.length_field().length, 3)
+
+    def test_rejected(self):
+        criterion = (
+            '<SequenceContainer name="Short"><EntryList/><BaseContainer containerRef="Status"><RestrictionCriteria>'
+            '<Comparison parameterRef="Len" value="1"/></RestrictionCriteria></BaseContainer></SequenceContainer>'
+        )
+        repeated = (
+            '<SequenceContainer name="Rec"><EntryList>' + LEN + "</EntryList></SequenceContainer>"
+        )
+        for kw, why in (
+            (dict(entries=LEN, len_type="S16"), "must be an uncalibrated unsigned integer"),
+            (dict(entries=LEN, tag=length_tag("one")), "tcsxtce.length 'one' is not an integer"),
+            (
+                dict(
+                    entries=LEN,
+                    tag='<AncillaryDataSet><AncillaryData name="tcsxtce.length">-1</AncillaryData>'
+                    '<AncillaryData name="tcsxtce.length">0</AncillaryData></AncillaryDataSet>',
+                ),
+                "more than one tcsxtce.length",
+            ),
+            (dict(entries=LEN + '<ParameterRefEntry parameterRef="Len2"/>'), "more than one packet length field"),
+            (
+                dict(
+                    entries=X + '<ParameterRefEntry parameterRef="Len"><IncludeCondition>'
+                    '<Comparison parameterRef="X" value="1"/></IncludeCondition></ParameterRefEntry>'
+                ),
+                "packet length field Len has an IncludeCondition",
+            ),
+            (dict(entries=LEN, containers=criterion), "a criterion or assignment on packet length field Len"),
+            (dict(entries=LEN + '<ParameterRefEntry parameterRef="Data"/>'), "size or count from packet length field"),
+            (
+                dict(entries=LEN + '<ParameterRefEntry parameterRef="Looked"/>'),
+                "size or count from packet length field Len",
+            ),
+            (
+                dict(entries='<ParameterRefEntry parameterRef="Len"><RepeatEntry><Count><FixedValue>2</FixedValue>'
+                     "</Count></RepeatEntry></ParameterRefEntry>"),
+                "RepeatEntry on packet length field Len",
+            ),
+            (
+                dict(
+                    entries='<ContainerRefEntry containerRef="Rec"><RepeatEntry><Count><FixedValue>2</FixedValue>'
+                    "</Count></RepeatEntry></ContainerRefEntry>",
+                    containers=repeated,
+                ),
+                "Len is a packet length field",
+            ),
+        ):
+            with self.subTest(why=why):
+                with self.assertRaises(Unsupported) as cm:
+                    compile_xml(length_mission(**kw))
+                self.assertIn(why, str(cm.exception))
+
+    def test_assignment_rejected(self):
+        text = mission(
+            tc=U8_ARG
+            + "<MetaCommandSet>"
+            + command(
+                "Base",
+                f'<Argument name="Len" argumentTypeRef="U8">{length_tag()}</Argument>',
+                '<ArgumentRefEntry argumentRef="Len"/>',
+            )
+            + '<MetaCommand name="Cmd"><BaseMetaCommand metaCommandRef="Base"><ArgumentAssignmentList>'
+            '<ArgumentAssignment argumentName="Len" argumentValue="4"/></ArgumentAssignmentList>'
+            "</BaseMetaCommand></MetaCommand>"
+            + "</MetaCommandSet>"
+        )
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("a criterion or assignment on packet length field Len", str(cm.exception))

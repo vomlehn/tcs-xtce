@@ -45,6 +45,8 @@ pub enum PacketError {
     /// The size or count that another field gives `field` is not a whole
     /// number in range, or `field` does not have that size or count.
     BadSize { field: &'static str },
+    /// The packet length field `field` does not match the packet's length.
+    BadLength { field: &'static str },
 }
 
 impl PacketError {
@@ -62,6 +64,7 @@ impl PacketError {
             Self::NotInvertible { .. } => "NotInvertible",
             Self::Missing { .. } => "Missing",
             Self::BadSize { .. } => "BadSize",
+            Self::BadLength { .. } => "BadLength",
         }
     }
 }
@@ -92,6 +95,9 @@ impl fmt::Display for PacketError {
                 write!(f, "{field} is required by its include condition")
             }
             Self::BadSize { field } => write!(f, "invalid size or count for {field}"),
+            Self::BadLength { field } => {
+                write!(f, "{field} does not match the length of the packet")
+            }
         }
     }
 }
@@ -206,11 +212,16 @@ fn position(base: usize, offset: i64, field: &'static str) -> Result<usize> {
 pub struct BitReader<'a> {
     data: &'a [u8],
     pos: usize,
+    end: usize, // the furthest bit read
 }
 
 impl<'a> BitReader<'a> {
     pub fn new(data: &'a [u8]) -> Self {
-        Self { data, pos: 0 }
+        Self {
+            data,
+            pos: 0,
+            end: 0,
+        }
     }
 
     /// Current position in bits from the start of the packet.
@@ -218,9 +229,11 @@ impl<'a> BitReader<'a> {
         self.pos
     }
 
-    /// Moves to `offset` bits from `start`.
+    /// Moves to `offset` bits from `start`.  Bits skipped over count as
+    /// part of the packet, as the writer fills them.
     pub fn seek(&mut self, start: usize, offset: i64, field: &'static str) -> Result<()> {
         self.pos = position(start, offset, field)?;
+        self.end = self.end.max(self.pos);
         Ok(())
     }
 
@@ -251,6 +264,7 @@ impl<'a> BitReader<'a> {
             self.pos += take as usize;
             left -= take;
         }
+        self.end = self.end.max(self.pos);
         Ok(v)
     }
 
@@ -264,6 +278,32 @@ impl<'a> BitReader<'a> {
     pub fn pad(&mut self, bits: usize, field: &'static str) -> Result<()> {
         self.need(bits, field)?;
         self.pos += bits;
+        self.end = self.end.max(self.pos);
+        Ok(())
+    }
+
+    /// Ends the packet where the packet length field `field`, whose value
+    /// `v` was just read, says: `v - adjust` bytes after the field.  Fails
+    /// with `Truncated` if `data` is shorter.
+    pub fn limit(&mut self, v: u64, adjust: i64, field: &'static str) -> Result<()> {
+        let after = v as i128 - adjust as i128;
+        if after < 0 {
+            return Err(PacketError::BadLength { field });
+        }
+        let total = self.pos.div_ceil(8) as i128 + after;
+        if total > self.data.len() as i128 {
+            return Err(PacketError::Truncated { field });
+        }
+        self.data = &self.data[..total as usize];
+        Ok(())
+    }
+
+    /// Checks that the packet's entries reach the end that the packet
+    /// length field `field` gave.
+    pub fn finish(&self, field: &'static str) -> Result<()> {
+        if self.end.div_ceil(8) != self.data.len() {
+            return Err(PacketError::BadLength { field });
+        }
         Ok(())
     }
 
@@ -284,6 +324,7 @@ impl<'a> BitReader<'a> {
         if self.pos % 8 == 0 {
             let start = self.pos / 8;
             self.pos += n * 8;
+            self.end = self.end.max(self.pos);
             return Ok(self.data[start..start + n].to_vec());
         }
         (0..n)
@@ -360,6 +401,28 @@ impl<'a> BitWriter<'a> {
         let start = self.pos / 8;
         self.span(start, data.len()).copy_from_slice(data);
         self.pos += data.len() * 8;
+    }
+
+    /// Fills in the packet length field `field` of `bits` bits at bit `at`,
+    /// once the whole packet is written: the number of bytes after the
+    /// field plus `adjust`.
+    pub fn patch_length(
+        &mut self,
+        at: usize,
+        bits: u32,
+        le: bool,
+        adjust: i64,
+        field: &'static str,
+    ) -> Result<()> {
+        let v = self.buf.len() as i128 - (at + bits as usize).div_ceil(8) as i128 + adjust as i128;
+        if v < 0 || v > mask(bits) as i128 {
+            return Err(PacketError::OutOfRange { field });
+        }
+        let end = self.pos;
+        self.pos = at;
+        self.uint_order(bits, le, v as u64);
+        self.pos = end;
+        Ok(())
     }
 
     /// Writes `bits` zero bits, overwriting whatever a seek left there.

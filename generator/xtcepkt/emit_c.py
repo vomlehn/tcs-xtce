@@ -580,6 +580,9 @@ class CEmitter:
         if n.fixed:
             fixed = ", ".join(f"{lc.name} = {v!r}" for lc, v in n.fixed.items())
             self.line(f" * Fixed by its inheritance: {fixed}.")
+        length = n.length_field()
+        if length is not None:
+            self.line(f" * {length.name} is the packet length: computed when encoding, checked when decoding.")
         self.line(" */")
         self.line(f"#define {t}_NAME {cstr(n.key)}")
         self.line(f"#define {t}_MAX_BYTES {n.max_bytes}")
@@ -683,6 +686,10 @@ class CEmitter:
                 if not nested:
                     self.local(lc.vtype, f"v{lc.id}", depth)
                 self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth, self.read_ref)
+                if lc.length is not None:
+                    self.line(
+                        f"XTCE_PK_TRY(xtce_pk_read_limit(r, v{lc.id}, INT64_C({lc.length}), {cstr(lc.name)}));", depth
+                    )
                 if nested:
                     self.line(f"h{lc.id} = true;", depth)
             elif isinstance(it, Cond):
@@ -726,6 +733,10 @@ class CEmitter:
                 self.line(f"if ({cond}) {{", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
                 self.line("}", depth)
+            elif it.local.length is not None:
+                lc = it.local
+                self.line(f"size_t l{lc.id} = w->pos;", depth)
+                self.line(f"XTCE_PK_TRY(xtce_pk_write_bits(w, {lc.vtype.enc.bits}, 0));", depth)
             else:
                 lc = it.local
                 f = cstr(lc.name)
@@ -744,6 +755,12 @@ class CEmitter:
     @staticmethod
     def mark(i: int) -> str:
         return "0" if i == 0 else f"m{i}"
+
+    def finish(self, n: Node, depth: int) -> None:
+        """Checks the packet length field when decoding ends."""
+        lc = n.length_field()
+        if lc is not None:
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_finish(r, {cstr(lc.name)}));", depth)
 
     def construct(self, n: Node, out: str, depth: int) -> None:
         for name, lc in n.fields:
@@ -767,6 +784,7 @@ class CEmitter:
                 self.line(f"return xtce_pk_fail(err, XTCE_PK_MISMATCH, {cstr(node.key)}, {cstr(c.text)});", 2)
                 self.line("}", 1)
             self.read_items(node.items, 1, node.key)
+        self.finish(n, 1)
         self.construct(n, "out", 1)
         self.line("return 0;", 1)
         self.line("}")
@@ -791,6 +809,15 @@ class CEmitter:
                     self.line("}", 1)
         for node in n.chain():
             self.write_items(n, node.items, 1, node.key, names)
+        length = n.length_field()
+        if length is not None:
+            enc = length.vtype.enc
+            le = "true" if enc.little_endian else "false"
+            self.line(
+                f"XTCE_PK_TRY(xtce_pk_patch_length(w, l{length.id}, {enc.bits}, {le}, INT64_C({length.length}), "
+                f"{cstr(length.name)}));",
+                1,
+            )
         self.line("return 0;", 1)
         self.line("}")
         self.encode(t)
@@ -902,6 +929,7 @@ class CEmitter:
             self.line(f"return xtce_pk_fail(err, XTCE_PK_NO_MATCH, {cstr(n.key)}, NULL);", depth)
         else:
             t = self.p + k.ident
+            self.finish(n, depth)
             self.line(f"out->tag = {t}_{n.ident}_tag;", depth)
             self.line("{", depth)
             self.line(f"{self.p}{n.ident}* o = &out->u.{n.ident};", depth + 1)

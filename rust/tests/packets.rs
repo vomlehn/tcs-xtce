@@ -14,7 +14,6 @@ fn housekeeping() -> Housekeeping {
         sec_hdr_flag: true,
         seq_flags: SeqFlagsType::UNSEGMENTED,
         seq_count: 42,
-        packet_length: 18,
         mode: ModeType::NOMINAL,
         temperature: 25.0,
         battery_voltage: 12.0,
@@ -60,10 +59,12 @@ fn dispatches_to_derived_containers() {
     assert!(
         matches!(kind, CCSDSPacketKind::ScienceHousekeeping(ref s) if s.science_count == u64::MAX)
     );
-    // The same packet also decodes as its base container.
+    // Its base container's entries end before the packet length does.
     assert_eq!(
-        Housekeeping::decode(&bytes).unwrap().mode,
-        ModeType::SCIENCE
+        Housekeeping::decode(&bytes),
+        Err(PacketError::BadLength {
+            field: "PacketLength"
+        })
     );
 }
 
@@ -127,7 +128,6 @@ fn strings_and_binary() {
 fn commands() {
     let cmd = Reboot {
         seq_count: 6,
-        packet_length: 10,
         delay: 30.0,
         force: true,
         reason: "maint".into(),
@@ -152,6 +152,58 @@ fn commands() {
     let back = SetMode::decode(&set.to_bytes().unwrap()).unwrap();
     assert_eq!(back.mode, ModeArgType(9));
     assert_eq!(back.mode.label(), None);
+}
+
+#[test]
+fn packet_length_field() {
+    // The CCSDS length is the number of bytes after the 6-byte primary
+    // header, minus 1, so it follows the length of the reason string.
+    for (reason, len) in [("", 5u16), ("maint", 10)] {
+        let cmd = Reboot {
+            reason: reason.into(),
+            ..Default::default()
+        };
+        let bytes = cmd.to_bytes().unwrap();
+        assert_eq!(bytes.len(), 7 + len as usize);
+        assert_eq!(u16::from_be_bytes([bytes[4], bytes[5]]), len);
+        // Bytes after the packet are ignored.
+        let mut longer = bytes.clone();
+        longer.extend_from_slice(&[0xee, 0xee]);
+        assert_eq!(Reboot::decode(&longer).unwrap(), cmd);
+    }
+    let bytes = Reboot {
+        reason: "maint".into(),
+        ..Default::default()
+    }
+    .to_bytes()
+    .unwrap();
+    let with_length = |len: u16| {
+        let mut b = bytes.clone();
+        b[4..6].copy_from_slice(&len.to_be_bytes());
+        b
+    };
+    // A length beyond the data received.
+    let err = Reboot::decode(&with_length(11)).unwrap_err();
+    assert_eq!(
+        err,
+        PacketError::Truncated {
+            field: "PacketLength"
+        }
+    );
+    // A length that ends the packet inside the reason string.
+    let err = Reboot::decode(&with_length(9)).unwrap_err();
+    assert_eq!(err.kind(), "Truncated");
+    // A length that leaves bytes the entries don't use.
+    let mut padded = with_length(11);
+    padded.push(0);
+    let err = Reboot::decode(&padded).unwrap_err();
+    assert_eq!(
+        err,
+        PacketError::BadLength {
+            field: "PacketLength"
+        }
+    );
+    assert_eq!(err.kind(), "BadLength");
 }
 
 #[test]
@@ -313,8 +365,11 @@ fn calibrated_integers_and_the_rest_of_the_packet() {
     // Raw values: 25 = -100 + 125 and 2 = -4 + 12 / 2.
     assert_eq!(&b[6..], &[0x7d, 0x0c, 7, 8, 0xde, 0xad]);
     assert_eq!(Dump::decode(&b).unwrap(), d);
-    // The rest of the packet is whatever follows the records.
-    assert_eq!(Dump::decode(&b[..11]).unwrap().rest, vec![0xde]);
+    // The rest of the packet is whatever follows the records, up to the
+    // end that the packet length gives.
+    let mut short = b[..11].to_vec();
+    short[4..6].copy_from_slice(&4u16.to_be_bytes()); // 11 bytes
+    assert_eq!(Dump::decode(&short).unwrap().rest, vec![0xde]);
 
     let mut e = d.clone();
     e.record_count = 200; // raw 408 does not fit 8 bits
@@ -366,8 +421,11 @@ fn repeated_containers_and_container_sizes() {
     );
     assert_eq!(Log::decode(&b).unwrap(), l);
     // Padding must be there, though its value is ignored.
+    let mut short = b[..b.len() - 1].to_vec();
+    let len = u16::from_be_bytes([short[4], short[5]]) - 1;
+    short[4..6].copy_from_slice(&len.to_be_bytes());
     assert_eq!(
-        Log::decode(&b[..b.len() - 1]),
+        Log::decode(&short),
         Err(PacketError::Truncated { field: "/Demo/Log" })
     );
     let mut e = l.clone();

@@ -709,6 +709,41 @@ demo's ``SampleCount`` (``0..6``) makes ``Readings`` a
 ``demo_int16_list6``, where an 8-bit count without a range would allow
 255 elements, and a 32-bit one 32768 of them.
 
+**Packet length fields.** XTCE has no way to say that a field holds the
+length of its packet, so tcsxtce reads it from an ``AncillaryData``
+named ``tcsxtce.length`` on the parameter or argument. Its value is an
+integer that is added to the number of bytes after the field. The CCSDS
+packet length, the bytes after the 6-byte primary header minus 1, is:
+
+.. code-block:: xml
+
+   <Parameter name="PacketLength" parameterTypeRef="U16">
+     <AncillaryDataSet>
+       <AncillaryData name="tcsxtce.length">-1</AncillaryData>
+     </AncillaryDataSet>
+   </Parameter>
+
+Other tools ignore the ``AncillaryData``, so the document stays valid
+XTCE. A length field is not a field of the generated struct:
+
+* encoding writes the packet, then fills in the length from its size;
+  it fails with ``OutOfRange`` if the length doesn't fit the field;
+* decoding ends the packet where the length says. It fails with
+  ``Truncated`` if the data is shorter, and with ``BadLength`` if the
+  packet's entries end before that. Bytes after the end are ignored, so
+  packets that follow one another in a buffer can be decoded one at a
+  time.
+
+This matches cFS, whose ``CFE_MSG_SetSize`` sets the CCSDS length from a
+message's size and whose applications reject commands of the wrong
+length. Decoding a packet as its base container fails with ``BadLength``,
+as the base's entries end before the packet does; decode the ``Kind``
+instead. A length field must be an unsigned integer without a
+calibrator, and at most one per packet. It can't have an
+``IncludeCondition`` or ``RepeatEntry``, be compared by a criterion or
+set by an argument assignment, give a size or count, or be inside a
+repeated container.
+
 Integer field widths come from the *encoding*: an 11-bit unsigned field
 is a ``u16``, and a 12-bit sign-magnitude field is an ``i16``. Floats
 are always 64-bit in memory. 32-bit encodings round when written.
@@ -829,7 +864,7 @@ Rust:
        demo::CCSDSPacketKind::Housekeeping(hk) => println!("{hk}"),
        other => println!("{other}"),
    }
-   let cmd = demo::SetMode { seq_count: 5, packet_length: 1, mode: demo::ModeArgType::SCIENCE };
+   let cmd = demo::SetMode { seq_count: 5, mode: demo::ModeArgType::SCIENCE };
    let wire: &[u8] = codec.encode(&cmd)?;           // view of the output buffer
 
 Rust ``Codec`` methods: ``with_capacity(n)``, ``for_packet::<P>()``,
@@ -926,6 +961,8 @@ formats the message.
    * - ``BadSize``
      - A size or count that another field gives is invalid or above its
        bound, or an array or binary value doesn't have it
+   * - ``BadLength``
+     - The packet's entries end before the end its packet length field gives
    * - ``NoSpace``
      - C/C++ only: the output buffer is smaller than the packet
 
@@ -971,6 +1008,10 @@ return an error code and their result through a pointer. Examples:
    ``position()``, ``seek(start, offset, field)``, ``skip(offset, field)``;
    ``uint(bits, field)`` reads 1–64 bits, most significant bit first;
    ``uint_order(bits, little_endian, field)``; ``bytes(n, field)``.
+   ``limit(value, adjust, field)`` (``xtce_pk_read_limit``) ends the packet
+   where a packet length field that was just read says, and
+   ``finish(field)`` (``xtce_pk_read_finish``) checks that decoding
+   reached that end.
 
 ``BitWriter(buffer)``
    Clears the buffer, then ``uint(bits, value)``,
@@ -979,7 +1020,9 @@ return an error code and their result through a pointer. Examples:
    (``xtce_pk_write_zeros``) writes a run of zero bits. The buffer grows,
    zero filled, to cover the furthest bit written. Writing over earlier
    bits replaces them. Byte-aligned ``bytes`` and ``zeros`` copy or fill
-   whole bytes at once.
+   whole bytes at once. ``patch_length(at, bits, little_endian, adjust,
+   field)`` (``xtce_pk_patch_length``) fills in the packet length field at
+   bit ``at`` once the packet is written.
 
 Integers
    ``to_signed(raw, bits, encoding)`` and
@@ -1036,6 +1079,11 @@ Parameter and argument types
    Integer, Float, Enumerated, Boolean, String, Binary, AbsoluteTime,
    RelativeTime, Array and Aggregate. Types that use ``baseType`` are not
    supported.
+
+Ancillary data
+   ``tcsxtce.length`` on a parameter or argument marks a packet length
+   field, described under the generated packet types. Other ancillary
+   data is ignored.
 
 Aggregates
    Members of any supported type except the aggregate itself, values
@@ -1238,9 +1286,8 @@ Not supported
 Known limitations
 -----------------
 
-* Length fields (for example the CCSDS packet length) and checksums are
-  ordinary fields: the application computes them, because XTCE describes
-  them with algorithms that aren't supported.
+* A length field needs the ``tcsxtce.length`` ``AncillaryData``; without
+  it, it is an ordinary field that the application sets.
 * Decoding ignores bytes after the packet. Spare bits and gaps are
   written as zeros, so re-encoding a decoded packet can change them.
 * Binary fields default to empty and must be set to their exact size

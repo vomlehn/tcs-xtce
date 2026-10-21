@@ -2,26 +2,72 @@
 
 Each packet has a valid CCSDS header for one of the demo's packet types (or
 an unknown one) followed by random bytes, so decoding exercises valid
-packets as well as every kind of failure.  The output has the format of
+packets as well as every kind of failure.  The packet length mostly ends
+the packet where the generated Python codec stops decoding it, so the rest
+of the random bytes follow the packet; sometimes it covers them all, and
+sometimes it is wrong.  The output has the format of
 vectors.txt.
 
 Usage: python3 random_vectors.py SEED COUNT
+
+It needs the generated Python codec, which ``make packets`` writes.
 """
 
 import random
 import sys
+from pathlib import Path
+
+TOP = Path(__file__).resolve().parents[2]
+sys.path[:0] = [str(TOP / "python"), str(TOP / "python" / "tests" / "mission")]
+
+import demo  # noqa: E402
+from xtce.packet import PacketError  # noqa: E402
 
 
 def header(rng, packet_type, apid):
+    """A primary header; packet_length() fills in its length."""
     seq = rng.randrange(1 << 14)
-    length = rng.randrange(1 << 16)
     word0 = (packet_type << 12) | (rng.randrange(2) << 11) | apid
     if packet_type:
         word0 = (1 << 12) | apid  # commands carry fixed version and flags
         seq |= 3 << 14
     else:
         seq |= rng.randrange(4) << 14
-    return word0.to_bytes(2, "big") + seq.to_bytes(2, "big") + length.to_bytes(2, "big")
+    return word0.to_bytes(2, "big") + seq.to_bytes(2, "big") + bytes(2)
+
+
+def with_length(data: bytes, total: int) -> bytes:
+    """The first ``total`` bytes of ``data``, with the CCSDS packet length
+    (bytes after the header, minus 1) saying so."""
+    return data[:4] + ((total - 7) % (1 << 16)).to_bytes(2, "big") + data[6:total]
+
+
+def decoded_size(kind, data: bytes) -> int:
+    """The size at which the codec stops decoding ``data``: the shortest
+    packet that doesn't fail for being too short or too long."""
+    for total in range(7, len(data) + 1):
+        try:
+            kind.decode(with_length(data, total))
+            return total
+        except PacketError as e:
+            if e.kind not in ("Truncated", "BadLength"):
+                return total
+    return len(data)
+
+
+def packet_length(rng, kind, data: bytes) -> bytes:
+    """``data`` with a packet length that ends where decoding stops, covers
+    all of it, or is wrong."""
+    r = rng.random()
+    if r < 0.6:
+        n = decoded_size(kind, data)
+    elif r < 0.8:
+        n = len(data)
+    elif r < 0.9:
+        n = decoded_size(kind, data) + rng.choice([-2, -1, 1, 2])
+    else:
+        n = rng.randrange(1 << 16) + 7
+    return data[:4] + ((n - 7) % (1 << 16)).to_bytes(2, "big") + data[6:]
 
 
 def bits(fields) -> bytes:
@@ -193,6 +239,7 @@ def main() -> None:
                 data += bytes([rng.randrange(3), n]) + rng.randbytes(2 * min(n, 4))
             kind = "tc"
         data += rng.randbytes(rng.randrange(40))
+        data = packet_length(rng, demo.CCSDSPacketKind if kind == "tm" else demo.CCSDSCommandKind, data)
         if rng.random() < 0.1:
             data = data[: rng.randrange(len(data) + 1)]
         print(kind, data.hex() or "00")

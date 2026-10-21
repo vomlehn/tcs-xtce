@@ -36,7 +36,7 @@ class PacketError(ValueError):
     ``kind`` names the error and is the same in every runtime: ``Truncated``,
     ``BadPosition``, ``NoMatch``, ``Mismatch``, ``OutOfRange``,
     ``InvalidString``, ``TooLong``, ``Calibration``, ``NotInvertible``,
-    ``Missing`` or ``BadSize``.
+    ``Missing``, ``BadSize`` or ``BadLength``.
     """
 
     MESSAGES = {
@@ -51,6 +51,7 @@ class PacketError(ValueError):
         "NotInvertible": "the calibrator of {0} cannot be inverted for encoding",
         "Missing": "{0} is required by its include condition",
         "BadSize": "invalid size or count for {0}",
+        "BadLength": "{0} does not match the length of the packet",
     }
 
     def __init__(self, kind: str, *what: str) -> None:
@@ -155,21 +156,25 @@ def _position(base: int, offset: int, field: str) -> int:
 class BitReader:
     """Reads big-endian bit fields from a bytes-like object."""
 
-    __slots__ = ("data", "pos", "nbits")
+    __slots__ = ("data", "pos", "nbits", "end")
 
     def __init__(self, data) -> None:
         self.data = data
         self.pos = 0
         self.nbits = len(data) * 8
+        self.end = 0  # the furthest bit read
 
     def position(self) -> int:
         return self.pos
 
     def seek(self, start: int, offset: int, field: str) -> None:
+        """Move to ``offset`` bits from ``start``.  Bits skipped over count
+        as part of the packet, as the writer fills them."""
         self.pos = _position(start, offset, field)
+        self.end = max(self.end, self.pos)
 
     def skip(self, offset: int, field: str) -> None:
-        self.pos = _position(self.pos, offset, field)
+        self.seek(self.pos, offset, field)
 
     def uint(self, bits: int, field: str) -> int:
         end = self.pos + bits
@@ -178,6 +183,7 @@ class BitReader:
         first, last = self.pos >> 3, (end + 7) >> 3
         v = int.from_bytes(self.data[first:last], "big") >> (last * 8 - end)
         self.pos = end
+        self.end = max(self.end, end)
         return v & ((1 << bits) - 1)
 
     def uint_order(self, bits: int, le: bool, field: str) -> int:
@@ -189,6 +195,25 @@ class BitReader:
         if self.pos + bits > self.nbits:
             raise PacketError("Truncated", field)
         self.pos += bits
+        self.end = max(self.end, self.pos)
+
+    def limit(self, v: int, adjust: int, field: str) -> None:
+        """End the packet where the packet length field ``field``, whose
+        value ``v`` was just read, says: ``v - adjust`` bytes after the
+        field.  Raises ``Truncated`` if the data is shorter."""
+        after = v - adjust
+        if after < 0:
+            raise PacketError("BadLength", field)
+        total = (self.pos + 7) // 8 + after
+        if total * 8 > self.nbits:
+            raise PacketError("Truncated", field)
+        self.nbits = total * 8
+
+    def finish(self, field: str) -> None:
+        """Check that the packet's entries reach the end that the packet
+        length field ``field`` gave."""
+        if (self.end + 7) // 8 * 8 != self.nbits:
+            raise PacketError("BadLength", field)
 
     def rest_bytes(self, max_: int, field: str) -> int:
         """The bytes from the current position to the end of the packet, for
@@ -205,6 +230,7 @@ class BitReader:
         if self.pos % 8 == 0:
             start = self.pos >> 3
             self.pos += n * 8
+            self.end = max(self.end, self.pos)
             return bytes(self.data[start : start + n])
         return self.uint(n * 8, field).to_bytes(n, "big") if n else b""
 
@@ -249,6 +275,18 @@ class BitWriter:
         if le:
             v = int.from_bytes(v.to_bytes(bits // 8, "big"), "little")
         self.uint(bits, v)
+
+    def patch_length(self, at: int, bits: int, le: bool, adjust: int, field: str) -> None:
+        """Fill in the packet length field ``field`` of ``bits`` bits at bit
+        ``at``, once the whole packet is written: the number of bytes after
+        the field plus ``adjust``."""
+        v = len(self.buf) - (at + bits + 7) // 8 + adjust
+        if not 0 <= v < 1 << bits:
+            raise PacketError("OutOfRange", field)
+        end = self.pos
+        self.pos = at
+        self.uint_order(bits, le, v)
+        self.pos = end
 
     def zeros(self, bits: int) -> None:
         if bits:

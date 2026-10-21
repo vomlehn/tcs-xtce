@@ -392,6 +392,8 @@ class RustEmitter:
                     self.line(f"v{lc.id} = Some({expr});", depth)
                 else:
                     self.line(f"let v{lc.id} = {expr};", depth)
+                if lc.length is not None:
+                    self.line(f"r.limit(v{lc.id} as u64, {lc.length}, {rstr(lc.name)})?;", depth)
             elif isinstance(it, Cond):
                 if not assign:
                     for v in walk(it.items):
@@ -422,6 +424,10 @@ class RustEmitter:
                 self.line(f"if {conjunction(conds)} {{", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
                 self.line("}", depth)
+            elif it.local.length is not None:
+                lc = it.local
+                self.line(f"let l{lc.id} = w.position();", depth)
+                self.line(f"w.uint({lc.vtype.enc.bits}, 0);", depth)
             else:
                 lc = it.local
                 f = rstr(lc.name)
@@ -456,6 +462,12 @@ class RustEmitter:
     def mark(i: int) -> str:
         return "0" if i == 0 else f"m{i}"
 
+    def finish(self, n: Node, depth: int) -> None:
+        """Checks the packet length field when decoding ends."""
+        lc = n.length_field()
+        if lc is not None:
+            self.line(f"r.finish({rstr(lc.name)})?;", depth)
+
     def construct(self, n: Node) -> str:
         fields = ", ".join(f"{name}: v{lc.id}" for name, lc in n.fields)
         return f"{n.ident} {{ {fields} }}"
@@ -468,6 +480,10 @@ class RustEmitter:
         if fixed:
             self.line("///")
             self.line(f"/// Fixed by its inheritance: {', '.join(fixed)}.")
+        length = n.length_field()
+        if length is not None:
+            self.line("///")
+            self.line(f"/// `{length.name}` is the packet length: computed when encoding, checked when decoding.")
         self.line("#[derive(Debug, Clone, PartialEq, Default)]")
         self.line(f"pub struct {n.ident} {{")
         for name, lc in n.fields:
@@ -489,6 +505,7 @@ class RustEmitter:
                 self.line(f"return Err(PacketError::Mismatch {{ container: {rstr(node.key)}, criterion: {rstr(c.text)} }});", 3)
                 self.line("}", 2)
             self.read_items(node.items, 2, node.key)
+        self.finish(n, 2)
         self.line(f"Ok({self.construct(n)})", 2)
         self.line("}", 1)
         self.line()
@@ -513,6 +530,12 @@ class RustEmitter:
                     self.line("}", 2)
         for node in n.chain():
             self.write_items(n, node.items, 2, node.key, names)
+        if length is not None:
+            enc = length.vtype.enc
+            self.line(
+                f"w.patch_length(l{length.id}, {enc.bits}, {str(enc.little_endian).lower()}, {length.length}, {rstr(length.name)})?;",
+                2,
+            )
         self.line("Ok(())", 2)
         self.line("}", 1)
         self.line("}")
@@ -593,6 +616,7 @@ class RustEmitter:
         if n.abstract:
             self.line(f"return Err(PacketError::NoMatch {{ container: {rstr(n.key)} }});", depth)
         else:
+            self.finish(n, depth)
             self.line(f"return Ok(Self::{n.ident}({self.construct(n)}));", depth)
 
 

@@ -328,6 +328,8 @@ class PythonEmitter:
             elif isinstance(it, Value):
                 lc = it.local
                 self.line(f"v{lc.id} = {read_expr(lc.vtype, pstr(lc.name), self.read_ref)}", depth)
+                if lc.length is not None:
+                    self.line(f"r.limit(v{lc.id}, {lc.length}, {pstr(lc.name)})", depth)
             elif isinstance(it, Cond):
                 if not nested:
                     for v in walk(it.items):
@@ -357,6 +359,10 @@ class PythonEmitter:
                 cond = " and ".join(f"({term(c, lambda lc: self.place(n, lc, names))})" for c in it.criteria)
                 self.line(f"if {cond}:", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
+            elif it.local.length is not None:
+                lc = it.local
+                self.line(f"l{lc.id} = w.pos", depth)
+                self.line(f"w.uint({lc.vtype.enc.bits}, 0)", depth)
             else:
                 lc = it.local
                 x = self.place(n, lc, names)
@@ -409,6 +415,12 @@ class PythonEmitter:
     def mark(i: int) -> str:
         return "0" if i == 0 else f"m{i}"
 
+    def finish(self, n: Node, depth: int) -> None:
+        """Checks the packet length field when decoding ends."""
+        lc = n.length_field()
+        if lc is not None:
+            self.line(f"r.finish({pstr(lc.name)})", depth)
+
     @staticmethod
     def construct(n: Node) -> str:
         return f"{n.ident}(" + ", ".join(f"{name}=v{lc.id}" for name, lc in n.fields) + ")"
@@ -424,6 +436,10 @@ class PythonEmitter:
             self.line()
             fixed = ", ".join(f"``{lc.name}`` = {v!r}" for lc, v in n.fixed.items())
             self.line(f"Fixed by its inheritance: {fixed}.", 1)
+        length = n.length_field()
+        if length is not None:
+            self.line()
+            self.line(f"``{length.name}`` is the packet length: computed when encoding, checked when decoding.", 1)
         self.line('"""', 1)
         self.line()
         self.line(f"NAME: ClassVar[str] = {pstr(n.key)}", 1)
@@ -448,6 +464,7 @@ class PythonEmitter:
                 self.line(f"if not ({term(c, lambda lc: f'v{lc.id}')}):", 2)
                 self.line(f'raise pk.PacketError("Mismatch", {pstr(node.key)}, {pstr(c.text)})', 3)
             self.read_items(node.items, 2, node.key)
+        self.finish(n, 2)
         self.line(f"return {self.construct(n)}", 2)
         self.line()
         self.line("def encode_into(self, w: pk.BitWriter) -> None:", 1)
@@ -469,6 +486,9 @@ class PythonEmitter:
                     self.line(f'raise pk.PacketError("Mismatch", {pstr(node.key)}, {pstr(c.text)})', 3)
         for node in n.chain():
             self.write_items(n, node.items, 2, node.key, names)
+        if length is not None:
+            enc = length.vtype.enc
+            self.line(f"w.patch_length(l{length.id}, {enc.bits}, {enc.little_endian}, {length.length}, {pstr(length.name)})", 2)
         self.line()
         self.line("def describe(self) -> str:", 1)
         self.line('"""Canonical text form, identical in every generated language."""', 2)
@@ -518,6 +538,7 @@ class PythonEmitter:
         if n.abstract:
             self.line(f'raise pk.PacketError("NoMatch", {pstr(n.key)})', depth)
         else:
+            self.finish(n, depth)
             self.line(f"return {self.construct(n)}", depth)
 
 

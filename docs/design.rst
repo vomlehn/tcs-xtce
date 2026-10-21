@@ -518,6 +518,35 @@ as it does for a fixed container size. ``static_end`` works out that
 layout, and ``Pad`` covers the rest of a fixed-size container that is
 not repeated.
 
+Packet length fields
+--------------------
+
+XTCE 1.3 can say that a field's size comes from another value, but not
+that a value is the size of its packet. Its algorithms could compute
+one, but have no operand for the packet's size, and tools such as Yamcs
+fill in the CCSDS length with code written for that header. tcsxtce
+reads an ``AncillaryData`` named ``tcsxtce.length`` instead, the
+standard place for tool-specific notes, so the document stays valid
+XTCE. The CCSDS Electronic Data Sheets that cFS can use take the same
+approach with a ``LengthEntry``.
+
+The compiler sets ``Local.length`` to the adjustment, and
+``Node.length_field()`` finds the packet's length field. Its value
+depends on everything written after it, so encoding writes zeros in
+its place, remembers the position, and ``patch_length`` fills it in once
+the packet is written, from the size of the buffer. Decoding reads it
+like any field, then ``limit`` shortens the data to the packet, so a
+value that takes the rest of the packet gets the right size and bytes
+after the packet are never read. ``finish`` checks, just before the
+struct is built, that the furthest bit read reaches the end. The reader
+counts bits skipped by seeks as read, because the writer fills them.
+
+The length is left out of ``Node.fields``, like a value fixed by its
+inheritance, so it can't be set wrong. The checks in
+``check_length`` keep the code simple: it must be written once, from a
+known position, and nothing may depend on its value while the packet is
+being encoded.
+
 Runtime
 -------
 
@@ -607,5 +636,7 @@ Limitations and future work
   out on purpose: the packets travel over a link that already detects
   errors. Documents that use it are reported as unsupported.
 
-* **Computed fields:** length and checksum fields are left to the
-  application.
+* **Computed fields:** only packet length fields are computed, and
+  only when the document marks them. A size or count that another field
+  gives is still set by the application, which must make it agree with
+  the data.

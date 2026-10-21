@@ -329,6 +329,9 @@ class Local:
     key: str  # qualified name of the parameter or argument
     vtype: VType
     optional: bool = False  # inside an IncludeCondition
+    # A packet length field: the generated code computes it, as the number
+    # of bytes after it plus ``length``, and checks it when decoding.
+    length: Optional[int] = None
 
 
 @dataclass
@@ -488,6 +491,13 @@ class Node:
 
     def all_criteria(self) -> list[Criterion]:
         return [c for n in self.chain() for c in n.criteria]
+
+    def length_field(self) -> Optional[Local]:
+        """The packet length field, if the packet has one."""
+        return next(
+            (it.local for it in walk(self.all_items()) if isinstance(it, Value) and it.local.length is not None),
+            None,
+        )
 
     def descendants(self) -> list["Node"]:
         out = []

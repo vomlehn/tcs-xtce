@@ -430,7 +430,12 @@
       <Parameter name="APID" parameterTypeRef="U11"/>
       <Parameter name="SeqFlags" parameterTypeRef="SeqFlagsType"/>
       <Parameter name="SeqCount" parameterTypeRef="U14"/>
-      <Parameter name="PacketLength" parameterTypeRef="U16"/>
+      <Parameter name="PacketLength" parameterTypeRef="U16">
+        <!-- CCSDS: bytes in the packet data field, minus 1 -->
+        <AncillaryDataSet>
+          <AncillaryData name="tcsxtce.length">-1</AncillaryData>
+        </AncillaryDataSet>
+      </Parameter>
       <Parameter name="Mode" parameterTypeRef="ModeType"/>
       <Parameter name="Temperature" parameterTypeRef="TemperatureType"/>
       <Parameter name="Uptime" parameterTypeRef="U32LE"/>
@@ -1027,7 +1032,12 @@
         <ArgumentList>
           <Argument name="APID" argumentTypeRef="U11Arg"/>
           <Argument name="SeqCount" argumentTypeRef="U14Arg"/>
-          <Argument name="PacketLength" argumentTypeRef="U16Arg"/>
+          <Argument name="PacketLength" argumentTypeRef="U16Arg">
+            <!-- CCSDS: bytes in the packet data field, minus 1 -->
+            <AncillaryDataSet>
+              <AncillaryData name="tcsxtce.length">-1</AncillaryData>
+            </AncillaryDataSet>
+          </Argument>
           <Argument name="Opcode" argumentTypeRef="OpcodeType"/>
         </ArgumentList>
         <CommandContainer name="CCSDSCommandContainer">
