@@ -553,14 +553,14 @@ Limitations and future work
   * references to aggregate members by path, in sizes and criteria;
   * ``DynamicValue`` locations, ``DiscreteLookupList`` values and array
     subsets;
-  * ``BooleanExpression`` criteria;
-  * error detection (CRC and checksum generation).
+  * ``BooleanExpression`` criteria.
 
   The model has room for each of these: new ``Item`` kinds, and
   ``VType`` kinds for structured values, as arrays have.
 
+  Error detection (``ErrorDetectCorrect``: CRCs and checksums) is left
+  out on purpose: the packets travel over a link that already detects
+  errors. Documents that use it are reported as unsupported.
+
 * **Computed fields:** length and checksum fields are left to the
   application.
-
-* **C API:** generated packet types have no C interface yet. One could
-  be emitted as plain C structs, with functions that wrap the C++ code.
