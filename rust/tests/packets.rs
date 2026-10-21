@@ -256,3 +256,45 @@ fn arrays_and_sizes_from_other_fields() {
     up.gains.push(0.0);
     assert_eq!(up.to_bytes(), Err(PacketError::BadSize { field: "Gains" }));
 }
+
+#[test]
+fn aggregates() {
+    let mut t = Targets {
+        sec_hdr_flag: true,
+        start: PositionType { x: 1, y: -1 },
+        target_count: 1,
+        targets: vec![TargetType {
+            id_: 3,
+            mode: ModeType::SAFE,
+            name_: "a".into(),
+            where_: PositionType { x: 2, y: 3 },
+            weights: vec![1, 2],
+        }],
+        home: Some(PositionType { x: 4, y: 5 }),
+        ..Default::default()
+    };
+    assert_eq!(Targets::decode(&t.to_bytes().unwrap()).unwrap(), t);
+
+    // Members are checked like fields; errors name the parameter.
+    t.targets[0].id_ = 16;
+    assert_eq!(
+        t.to_bytes(),
+        Err(PacketError::OutOfRange { field: "Targets" })
+    );
+    t.targets[0].id_ = 3;
+    t.targets[0].weights.pop();
+    assert_eq!(t.to_bytes(), Err(PacketError::BadSize { field: "Targets" }));
+    t.targets[0].weights.push(2);
+    t.home = None;
+    assert_eq!(t.to_bytes(), Err(PacketError::Missing { field: "Home" }));
+
+    let g = Goto {
+        waypoint: WaypointType {
+            north: 1.5,
+            east: 2.0,
+            hold: true,
+        },
+        ..Default::default()
+    };
+    assert_eq!(Goto::decode(&g.to_bytes().unwrap()).unwrap(), g);
+}

@@ -10,7 +10,8 @@ from what the document says about its values:
 * an enumeration needs the bits for its smallest and largest listed values;
 * a boolean needs one bit;
 * an array or repeated entry needs its most elements times the need of
-  one element.
+  one element;
+* an aggregate needs the sum of its members' needs.
 
 Little-endian encodings must be whole bytes, so their need is rounded up.
 Integers without a ``ValidRange``, floats, and binary fields have no stated
@@ -26,7 +27,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .compile import item_bits, max_bits
-from .model import ArrayEnc, Fixed, IntEnc, Mark, Mission, Node, Seek, StringEnc, Value, VType, walk
+from .model import AggregateEnc, ArrayEnc, Fixed, IntEnc, Mark, Mission, Node, Seek, StringEnc, Value, VType, walk
 
 
 def nbytes(n: int) -> str:
@@ -62,6 +63,13 @@ class Row:
 def need(vt: VType) -> tuple[Optional[int], str]:
     """(bits the field needs, or None if the document doesn't say; why)."""
     e = vt.enc
+    if isinstance(e, AggregateEnc):
+        needs = [need(m.vtype)[0] for m in e.members]
+        what = f"aggregate of {len(needs)} members"
+        if None in needs:
+            unknown = [m.name for m, n in zip(e.members, needs) if n is None]
+            return None, f"{what}; no stated need for {', '.join(unknown)}"
+        return sum(needs), what
     if isinstance(e, ArrayEnc):
         n, why = need(e.elem)
         count = e.max_count

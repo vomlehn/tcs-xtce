@@ -16,6 +16,7 @@ from typing import Callable, Optional
 
 from .model import (
     MAX_FIELD_BITS,
+    AggregateEnc,
     ArrayEnc,
     BinaryEnc,
     Cond,
@@ -29,6 +30,7 @@ from .model import (
     Kind,
     Local,
     Mark,
+    Member,
     Mission,
     Node,
     Polynomial,
@@ -180,6 +182,7 @@ class Compiler:
         self.nodes: dict[Key, Node] = {}
         self.order: list[Node] = []
         self._ids = 0
+        self._aggregating: set = set()  # aggregates being compiled, to find cycles
         self._index(root, ())
 
     # -- indexing and name resolution --
@@ -266,6 +269,10 @@ class Compiler:
             return vt
         if base == "Array":
             vt = self.array_type(key, table, path, t, where)
+            self.vtypes[cache] = vt
+            return vt
+        if base == "Aggregate":
+            vt = self.aggregate_type(key, table, path, t, where, cache)
             self.vtypes[cache] = vt
             return vt
         if base not in ("Integer", "Float", "Enumerated", "Boolean", "String", "Binary"):
@@ -365,6 +372,26 @@ class Compiler:
             dyn.factor = fixed
         count = dyn if dyn is not None else fixed
         return VType(key=qname(key), name=t.name, kind="array", enc=ArrayEnc(elem, count))
+
+    def aggregate_type(self, key: Key, table: dict, path: Key, t, where: str, cache) -> VType:
+        """An aggregate type: its members, encoded one after another."""
+        if cache in self._aggregating:
+            raise Unsupported(f"{where}: aggregate contains itself")
+        if not t.member_list.member:
+            raise Unsupported(f"{where}: aggregate without members")
+        self._aggregating.add(cache)
+        try:
+            names = Namer()
+            members = []
+            for m in t.member_list.member:
+                mkey = self.resolve(m.type_ref, path, table, "member type")
+                mt = self.vtype(mkey, table)
+                if mt.dyn is not None:
+                    raise Unsupported(f"{where}: member {m.name} has a size that another value gives")
+                members.append(Member(m.name, names.take(snake(m.name)), mt))
+        finally:
+            self._aggregating.discard(cache)
+        return VType(key=qname(key), name=t.name, kind="aggregate", enc=AggregateEnc(members))
 
     def int_value(self, iv, path: Key, what: str, where: str):
         """An IntegerValueType: a number, or an unbound DynSize."""
@@ -507,6 +534,8 @@ class Compiler:
 
     def literal(self, vt: VType, text: str, raw: bool, where: str):
         s = text.strip()
+        if vt.kind in ("array", "aggregate"):
+            raise Unsupported(f"{where}: value {text!r} for {vt.kind} type {vt.key}")
         try:
             if raw or vt.kind == "int":
                 v = int(s, 0) if s.lower().startswith(("0x", "0b", "0o")) else int(s)
@@ -718,8 +747,8 @@ class Compiler:
                 raise Unsupported(f"{where}: criterion on {pkey}, which is not decoded before it")
             if local.optional:
                 raise Unsupported(f"{where}: criterion on {pkey}, which has an IncludeCondition")
-            if local.vtype.kind == "array":
-                raise Unsupported(f"{where}: criterion on {pkey}, which is an array")
+            if local.vtype.kind in ("array", "aggregate"):
+                raise Unsupported(f"{where}: criterion on {pkey}, which is an {local.vtype.kind}")
             if cmp.instance:
                 raise Unsupported(f"{where}: comparison of instance {cmp.instance}")
             raw = cmp.use_calibrated_value is False
@@ -883,13 +912,17 @@ class Compiler:
             if members:
                 kinds.append(Kind(names.take(camel(r.name) + "Kind", camel(r.key) + "Kind"), r, members, 0))
         concrete = [n for n in ok if not n.abstract]
-        used = {}
+        used, aggregates = {}, {}
         for n in concrete:
             self._finish(n)
             for it in walk(n.all_items()):
-                if isinstance(it, Value) and it.local.vtype.elem.kind == "enum":
-                    used[id(it.local.vtype.elem)] = it.local.vtype.elem
-        for vt in used.values():
+                if isinstance(it, Value):
+                    for vt in it.local.vtype.tree():
+                        if vt.kind == "enum":
+                            used[id(vt)] = vt
+                        elif vt.kind == "aggregate":
+                            aggregates[id(vt)] = vt
+        for vt in list(used.values()) + list(aggregates.values()):
             vt.ident = names.take(camel(vt.name), camel(vt.key))
         for k in kinds:
             k.max_bytes = max(m.max_bytes for m in k.members)
@@ -897,6 +930,7 @@ class Compiler:
             name=self.root.name,
             source="",
             types=list(used.values()),
+            aggregates=list(aggregates.values()),
             nodes=concrete,
             kinds=kinds,
             roots=roots,
@@ -934,6 +968,8 @@ def item_bits(vt: VType) -> int:
     if isinstance(e, ArrayEnc):
         n = e.max_count
         return n * item_bits(e.elem) + max(n - 1, 0) * e.gap
+    if isinstance(e, AggregateEnc):
+        return sum(item_bits(m.vtype) for m in e.members)
     if isinstance(e, StringEnc):
         return e.max_bits
     return e.bits

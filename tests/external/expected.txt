@@ -13,11 +13,9 @@ yamcs/array-arg.xml: schema valid; loaded by the binding
   1 packet, 0 not supported
 yamcs/array-in-array-arg.xml: schema valid; loaded by the binding
   0 packets, 1 not supported
-    unsupported: /ArrayInArrayArgTest/cmd1: type /ArrayInArrayArgTest/aggr_type: AggregateArgumentType is not supported
+    unsupported: /ArrayInArrayArgTest/cmd1: type /ArrayInArrayArgTest/aggr_type: member inner_array has a size that another value gives
 yamcs/array-tm.xml: schema valid; loaded by the binding
-  2 packets, 2 not supported
-    unsupported: /ArrayTmTest/packet3: type /ArrayTmTest/aggrtype: AggregateParameterType is not supported
-    unsupported: /ArrayTmTest/packet4: type /ArrayTmTest/aggrtype_enum: AggregateParameterType is not supported
+  4 packets, 0 not supported
 yamcs/b.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
 yamcs/booleans.xml: schema valid; loaded by the binding
@@ -30,7 +28,7 @@ yamcs/embedded-tc.xml: schema valid; loaded by the binding
   1 packet, 3 not supported
     unsupported: /EmbeddedTcTest/single: type /EmbeddedTcTest/EmbeddedTcType: binary size -1 is negative
     unsupported: /EmbeddedTcTest/plain: type /EmbeddedTcTest/PlainBinaryType: binary size -1 is negative
-    unsupported: /EmbeddedTcTest/list: type /EmbeddedTcTest/ActivityType: AggregateArgumentType is not supported
+    unsupported: /EmbeddedTcTest/list: type /EmbeddedTcTest/EmbeddedTcType: binary size -1 is negative
 yamcs/empty-match-criteria.xml: schema valid; loaded by the binding
   2 packets, 0 not supported
 yamcs/enum-arg.xml: schema valid; loaded by the binding

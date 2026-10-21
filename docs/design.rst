@@ -420,6 +420,22 @@ Deriving it from the data when encoding would make ``encode`` change its
 input, or need a second, derived struct. Instead the encoder checks that
 the data matches and fails with ``BadSize`` if not.
 
+Aggregates
+----------
+
+An aggregate is a ``VType`` of kind ``aggregate`` whose
+``AggregateEnc`` lists its members. Generated code reads and writes the
+members in place, recursing through member types, so aggregates nest in
+arrays and in each other without new runtime functions. Each language
+gets a named struct, so values can be built and compared as a unit.
+``Mission.aggregates`` lists them inner first, which is the order C
+needs to declare them in.
+
+Members can't take their size from other members. Yamcs reads an
+``ArgumentInstanceRef`` to a member's name that way, but XTCE resolves
+references to parameters and arguments, so such documents are reported
+as unsupported rather than guessed at.
+
 Runtime
 -------
 
@@ -468,6 +484,7 @@ Testing strategy
    * commands;
    * arrays, repeated entries and sizes from other fields, including
      data that doesn't match its count or size;
+   * aggregates, nested and in arrays;
    * that codec buffers keep their capacity over many packets.
 
    The C tests (``cpp/tests/packet_test.c``) are built and run both as
@@ -499,8 +516,7 @@ Limitations and future work
 
 * **Packet codecs** — the main missing XTCE features are:
 
-  * aggregate types (the most common unsupported construct in the
-    public documents), including arrays of aggregates;
+  * references to aggregate members, in sizes and criteria;
   * ``DynamicValue`` locations, ``DiscreteLookupList`` values, array
     subsets and repeated containers;
   * ``BooleanExpression`` criteria;

@@ -13,7 +13,7 @@ from typing import Optional
 
 from .common import flt, int_enc, invertible, le, string_spec
 from .compile import snake
-from .model import walk, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 ENC = {
     "Unsigned": "XTCE_PK_UNSIGNED",
@@ -101,6 +101,8 @@ class CEmitter:
         k = vt.kind
         if k == "array":
             return f"{self.p}{self.tname(vt.elem)}_list{vt.enc.max_count}"
+        if k == "aggregate":
+            return self.p + vt.ident
         if k == "binary" and vt.enc.dyn is not None:
             return f"{self.p}varbytes{vt.enc.bits // 8}"
         if k == "int":
@@ -122,7 +124,7 @@ class CEmitter:
         return t[:-2] if t.endswith("_t") else t
 
     def zero(self, vt: VType) -> str:
-        return "XTCE_PK_ZERO" if vt.kind in ("string", "binary", "array") else "0"
+        return "XTCE_PK_ZERO" if vt.kind in ("string", "binary", "array", "aggregate") else "0"
 
     def literal(self, vt: VType, v) -> str:
         k = vt.kind
@@ -137,14 +139,13 @@ class CEmitter:
         return cstr(v if k == "string" else bytes(v))
 
     def vtypes(self) -> list[VType]:
-        """Every type of a value, with the element types of arrays."""
+        """Every type of a value and the types inside it, inner ones first."""
         seen: dict[int, VType] = {}
         for n in self.m.nodes:
             for it in walk(n.all_items()):
                 if isinstance(it, Value):
-                    vt = it.local.vtype
-                    seen.setdefault(id(vt), vt)
-                    seen.setdefault(id(vt.elem), vt.elem)
+                    for vt in it.local.vtype.tree():
+                        seen.setdefault(id(vt), vt)
         return list(seen.values())
 
     def declare_buffers(self) -> None:
@@ -174,19 +175,27 @@ class CEmitter:
                 self.line("size_t len;", 1)
                 self.line(f"uint8_t data[{max(n, 1)}];", 1)
                 self.line(f"}} {self.p}varbytes{n};")
-        lists = {}
+
+    def declare_composites(self) -> None:
+        """Array and aggregate types, each after the types inside it."""
+        done = set()
         for vt in self.vtypes():
-            if vt.kind == "array":
-                lists.setdefault(self.ctype(vt), vt)
-        if lists:
+            name = self.ctype(vt)
+            if vt.kind not in ("array", "aggregate") or name in done:
+                continue
+            done.add(name)
             self.line()
-            self.line("/* Arrays and repeated entries: `len` values of `data`, in the order they are")
-            self.line(" * encoded. */")
-            for name, vt in lists.items():
+            if vt.kind == "array":
+                self.line(f"/* Arrays of {self.ctype(vt.elem)}: `len` values of `data`, in encoding order. */")
                 self.line(f"typedef struct {name} {{")
                 self.line("size_t len;", 1)
                 self.line(f"{self.ctype(vt.elem)} data[{max(vt.enc.max_count, 1)}];", 1)
-                self.line(f"}} {name};")
+            else:
+                self.line(f"/* Aggregate {vt.key}; its members are encoded in this order. */")
+                self.line(f"typedef struct {name} {{")
+                for m in vt.enc.members:
+                    self.line(f"{self.ctype(m.vtype)} {m.ident}; /* {m.name} ({m.vtype.key}) */", 1)
+            self.line(f"}} {name};")
 
     def declare_consts(self) -> None:
         seen = []
@@ -276,15 +285,21 @@ class CEmitter:
         """Reads into ``dst``; ``ref`` gives the expression for a value that
         gives a size or count."""
         e = vt.enc
-        if isinstance(e, ArrayEnc):
+        if isinstance(e, AggregateEnc):
+            for m in e.members:
+                self.read_value(m.vtype, f"{dst}.{m.ident}", f, depth, ref)
+        elif isinstance(e, ArrayEnc):
+            # Indexes are numbered by depth: an aggregate element may hold
+            # another array.
+            i = f"i{depth}"
             self.line("{", depth)
             d = depth + 1
             self.size(e.count, "r->err", f, ref, d)
             self.line(f"{dst}.len = n;", d)
-            self.line("for (size_t i = 0; i < n; ++i) {", d)
+            self.line(f"for (size_t {i} = 0; {i} < n; ++{i}) {{", d)
             if e.gap:
-                self.line(f"if (i) XTCE_PK_TRY(xtce_pk_read_skip(r, {e.gap}, {f}));", d + 1)
-            self.read_value(e.elem, f"{dst}.data[i]", f, d + 1, ref)
+                self.line(f"if ({i}) XTCE_PK_TRY(xtce_pk_read_skip(r, {e.gap}, {f}));", d + 1)
+            self.read_value(e.elem, f"{dst}.data[{i}]", f, d + 1, ref)
             self.line("}", d)
             self.line("}", depth)
         elif isinstance(e, BinaryEnc) and e.dyn is not None:
@@ -327,15 +342,20 @@ class CEmitter:
         is_lit = fixed is not None
         e = vt.enc
         bad = f"return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, {f}, NULL);"
+        if isinstance(e, AggregateEnc):
+            for m in e.members:
+                self.write_value(m.vtype, f"{x}.{m.ident}", f, depth, ref)
+            return
         if isinstance(e, ArrayEnc):
+            i = f"i{depth}"
             self.line("{", depth)
             d = depth + 1
             self.size(e.count, "w->err", f, ref, d)
             self.line(f"if ({x}.len != n) {bad}", d)
-            self.line("for (size_t i = 0; i < n; ++i) {", d)
+            self.line(f"for (size_t {i} = 0; {i} < n; ++{i}) {{", d)
             if e.gap:
-                self.line(f"if (i) XTCE_PK_TRY(xtce_pk_write_skip(w, {e.gap}, {f}));", d + 1)
-            self.write_value(e.elem, f"{x}.data[i]", f, d + 1, ref)
+                self.line(f"if ({i}) XTCE_PK_TRY(xtce_pk_write_skip(w, {e.gap}, {f}));", d + 1)
+            self.write_value(e.elem, f"{x}.data[{i}]", f, d + 1, ref)
             self.line("}", d)
             self.line("}", depth)
             return
@@ -434,6 +454,7 @@ class CEmitter:
         for vt in m.types:
             self.enum_type(vt)
         self.declare_buffers()
+        self.declare_composites()
         self.declare_consts()
         for n in m.nodes:
             self.declare(n)
@@ -688,13 +709,20 @@ class CEmitter:
 
     def describe_value(self, vt: VType, x: str, depth: int) -> None:
         k = vt.kind
-        if k == "array":
+        if k == "aggregate":
+            self.line("xtce_pk_text_putc(t, '{');", depth)
+            for j, m in enumerate(vt.enc.members):
+                self.line(f"xtce_pk_text_puts(t, {cstr((', ' if j else '') + m.ident + '=')});", depth)
+                self.describe_value(m.vtype, f"{x}.{m.ident}", depth)
+            self.line("xtce_pk_text_putc(t, '}');", depth)
+        elif k == "array":
+            i = f"i{depth}"
             self.line("xtce_pk_text_putc(t, '[');", depth)
             # `len` is checked against the storage, as callers may set it.
             cap = f"sizeof {x}.data / sizeof {x}.data[0]"
-            self.line(f"for (size_t i = 0; i < {x}.len && i < {cap}; ++i) {{", depth)
-            self.line('if (i) xtce_pk_text_puts(t, ", ");', depth + 1)
-            self.describe_value(vt.elem, f"{x}.data[i]", depth + 1)
+            self.line(f"for (size_t {i} = 0; {i} < {x}.len && {i} < {cap}; ++{i}) {{", depth)
+            self.line(f'if ({i}) xtce_pk_text_puts(t, ", ");', depth + 1)
+            self.describe_value(vt.elem, f"{x}.data[{i}]", depth + 1)
             self.line("}", depth)
             self.line("xtce_pk_text_putc(t, ']');", depth)
         elif k == "binary" and vt.enc.dyn is not None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .common import flt, invertible, le, string_spec
-from .model import walk, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, Value, VType
+from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Polynomial, Seek, Spline, Value, VType
 
 
 def pstr(s: str) -> str:
@@ -21,12 +21,16 @@ def pstr(s: str) -> str:
 def field_type(vt: VType) -> str:
     if vt.kind == "array":
         return f"list[{field_type(vt.elem)}]"
+    if vt.kind == "aggregate":
+        return vt.ident
     return {"int": "int", "float": "float", "bool": "bool", "string": "str", "binary": "bytes"}.get(vt.kind) or vt.ident
 
 
 def default(vt: VType) -> str:
     if vt.kind == "array":
         return "dataclasses.field(default_factory=list)"
+    if vt.kind == "aggregate":
+        return f"dataclasses.field(default_factory={vt.ident})"
     return {"int": "0", "float": "0.0", "bool": "False", "string": '""', "binary": 'b""'}.get(vt.kind) or f"pk.enum_value({vt.ident}, 0)"
 
 
@@ -89,6 +93,9 @@ def read_expr(vt: VType, f: str, ref) -> str:
     """Expression reading one value with BitReader ``r``; ``ref`` gives the
     expression for a value that gives a size or count."""
     e = vt.enc
+    if isinstance(e, AggregateEnc):
+        members = ", ".join(f"{m.ident}={read_expr(m.vtype, f, ref)}" for m in e.members)
+        return f"{vt.ident}({members})"
     if isinstance(e, ArrayEnc):
         return f"pk.read_list(r, {count(vt, ref, f)}, {e.gap}, {f}, lambda: {read_expr(e.elem, f, ref)})"
     if isinstance(e, IntEnc):
@@ -147,6 +154,9 @@ def describer(vt: VType) -> str:
     k = vt.kind
     if k == "array":
         return f"lambda v: pk.describe_list(v, {describer(vt.elem)})"
+    if k == "aggregate":
+        parts = ", ".join(f"{pstr(m.ident + '=')} + ({describer(m.vtype)})(v.{m.ident})" for m in vt.enc.members)
+        return f'lambda v: "{{" + ", ".join(({parts},)) + "}}"'
     if k == "float":
         return "pk.describe_float"
     if k == "string":
@@ -188,11 +198,13 @@ class PythonEmitter:
         self.line("def _describe_bool(v: bool) -> str:")
         self.line('return "true" if v else "false"', 1)
         self.line()
-        names = [vt.ident for vt in m.types] + [n.ident for n in m.nodes] + [k.ident for k in m.kinds]
+        names = [vt.ident for vt in m.types + m.aggregates] + [n.ident for n in m.nodes] + [k.ident for k in m.kinds]
         self.line()
         self.line("__all__ = [" + ", ".join(pstr(n) for n in names) + "]")
         for vt in m.types:
             self.enum_type(vt)
+        for vt in m.aggregates:
+            self.aggregate_type(vt)
         for n in m.nodes:
             self.node(n)
         for k in m.kinds:
@@ -223,6 +235,17 @@ class PythonEmitter:
         self.line()
         self.line(f"def _DESCRIBE_{vt.ident}(v) -> str:")
         self.line(f"return pk.describe_enum(v, _LABELS_{vt.ident})", 1)
+
+    def aggregate_type(self, vt: VType) -> None:
+        self.line()
+        self.line()
+        self.line("@dataclass(slots=True)")
+        self.line(f"class {vt.ident}:")
+        self.line(f'"""Aggregate ``{vt.key}``; its members are encoded in this order."""', 1)
+        self.line()
+        for m in vt.enc.members:
+            self.line(f"{m.ident}: {field_type(m.vtype)} = {default(m.vtype)}", 1)
+            self.line(f'"""``{m.name}`` ({m.vtype.key})"""', 1)
 
     def read_items(self, items, depth: int, where: str, nested: bool = False) -> None:
         for it in items:
@@ -272,13 +295,19 @@ class PythonEmitter:
 
     def write_value(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
         e = vt.enc
-        if isinstance(e, ArrayEnc):
+        if isinstance(e, AggregateEnc):
+            for m in e.members:
+                self.write_value(m.vtype, f"{x}.{m.ident}", f, ref, depth)
+        elif isinstance(e, ArrayEnc):
+            # Loop variables are numbered by depth: an aggregate element may
+            # hold another array.
+            i, el = f"_i{depth}", f"_e{depth}"
             self.line(f"pk.check_size({x}, {count(vt, ref, f)}, {f})", depth)
-            self.line(f"for _i, _e in enumerate({x}):", depth)
+            self.line(f"for {i}, {el} in enumerate({x}):", depth)
             if e.gap:
-                self.line("if _i:", depth + 1)
+                self.line(f"if {i}:", depth + 1)
                 self.line(f"w.skip({e.gap}, {f})", depth + 2)
-            self.line(write_stmt(e.elem, "_e", f, ref), depth + 1)
+            self.write_value(e.elem, el, f, ref, depth + 1)
         elif isinstance(e, BinaryEnc) and e.dyn is not None:
             self.line(f"pk.check_size({x}, {size(e.dyn, ref(e.dyn.local), f)}, {f})", depth)
             self.line(f"w.bytes({x})", depth)

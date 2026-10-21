@@ -29,3 +29,11 @@ Upload{seq_count=5, packet_length=9, word_count=0, words=[], gains=[1.0, 2.5], t
 error:BadSize | -
 error:BadSize | -
 error:TooLong | -
+Targets{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, start={x=100, y=-100}, target_count=2, targets=[{id_=1, mode=Science, name_="alpha", where_={x=10, y=-20}, weights=[3, 4]}, {id_=15, mode=40, name_="", where_={x=-1, y=1}, weights=[0, 15]}], home={x=7, y=-7}} | 0904c02a00120064ff9c02102616c70686100000affec34f2800ffff00010f0007fff9
+Targets{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, start={x=100, y=-100}, target_count=0, targets=[], home=none} | 0104c02a00120064ff9c00
+error:BadSize | -
+Targets{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, start={x=100, y=-100}, target_count=1, targets=[{id_=1, mode=Nominal, name_="xxxxxxxxxxxxxxx", where_={x=0, y=0}, weights=[1, 1]}], home={x=7, y=-7}} | 0904c02a00120064ff9c011017878787878787878787878787878780000000000110007fff90
+error:TooLong | -
+error:Truncated | -
+Goto{seq_count=6, packet_length=5, waypoint={north=12.5, east=6553.5, hold=true}} | 112ec006000505007dffff01
+Goto{seq_count=6, packet_length=5, waypoint={north=12.5, east=6553.5, hold=true}} | 112ec006000505007dffff01

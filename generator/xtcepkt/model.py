@@ -109,7 +109,24 @@ class ArrayEnc:
         return self.count if isinstance(self.count, int) else self.count.max_total
 
 
-Encoding = Union[IntEnc, FloatEnc, StringEnc, BinaryEnc, ArrayEnc]
+@dataclass
+class Member:
+    """One member of an aggregate: its XTCE name, its field name in
+    generated code, and its type."""
+
+    name: str
+    ident: str
+    vtype: "VType"
+
+
+@dataclass
+class AggregateEnc:
+    """The members of an aggregate, encoded one after another in order."""
+
+    members: list[Member]
+
+
+Encoding = Union[IntEnc, FloatEnc, StringEnc, BinaryEnc, ArrayEnc, AggregateEnc]
 
 # The most bits a field whose size or count another value gives may take on
 # the wire, unless the range of that value bounds it more tightly.  It keeps
@@ -172,10 +189,11 @@ class VType:
     """Engineering type of a parameter or argument plus its encoding.
 
     ``kind`` is one of ``int``, ``float``, ``enum``, ``bool``, ``string``,
-    ``binary`` and ``array``.  For ``int`` the generated field is ``width``
-    bits wide and signed when the encoding is.  An ``array`` (an array type
-    or a repeated entry) has an ArrayEnc and is a list of its elements, in
-    the order they are encoded.
+    ``binary``, ``array`` and ``aggregate``.  For ``int`` the generated
+    field is ``width`` bits wide and signed when the encoding is.  An
+    ``array`` (an array type or a repeated entry) has an ArrayEnc and is a
+    list of its elements, in the order they are encoded.  An ``aggregate``
+    has an AggregateEnc and is a generated struct named ``ident``.
     """
 
     key: str
@@ -186,7 +204,7 @@ class VType:
     labels: list[EnumLabel] = field(default_factory=list)
     one_string: str = "True"
     zero_string: str = "False"
-    ident: str = ""  # generated type name (enums only)
+    ident: str = ""  # generated type name (enums and aggregates)
     doc: str = ""  # extra description for generated documentation
     # Integers: the smallest and largest valid value from ValidRange (or the
     # union of an argument's ValidRangeSet), when the document gives both.
@@ -213,6 +231,13 @@ class VType:
     def elem(self) -> "VType":
         """The element type of an array, or the type itself."""
         return self.enc.elem if isinstance(self.enc, ArrayEnc) else self
+
+    def tree(self) -> list["VType"]:
+        """This type and every type inside it (array elements, aggregate
+        members), inner types first."""
+        e = self.enc
+        inner = [e.elem] if isinstance(e, ArrayEnc) else [m.vtype for m in e.members] if isinstance(e, AggregateEnc) else []
+        return [t for i in inner for t in i.tree()] + [self]
 
 
 # --- containers --------------------------------------------------------------
@@ -345,6 +370,7 @@ class Mission:
     name: str
     source: str
     types: list[VType]  # enumerations used by generated code
+    aggregates: list[VType]  # aggregates used by generated code, inner ones first
     nodes: list[Node]  # supported concrete nodes, document order
     kinds: list[Kind]
     roots: list[Node]  # roots of the trees behind ``kinds``

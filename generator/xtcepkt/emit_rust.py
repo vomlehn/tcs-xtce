@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from .common import flt, int_enc, invertible, le, string_spec
-from .model import walk, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 
 def rstr(s: str) -> str:
@@ -26,6 +26,8 @@ def field_type(vt: VType, optional: bool = False) -> str:
     k = vt.kind
     if k == "array":
         return f"Vec<{field_type(vt.elem)}>"
+    if k == "aggregate":
+        return vt.ident
     if k == "int":
         return f"{'i' if vt.signed else 'u'}{vt.width}"
     return {"float": "f64", "bool": "bool", "string": "String", "binary": "Vec<u8>"}.get(k) or vt.ident
@@ -95,6 +97,9 @@ def read_expr(vt: VType, f: str, ref) -> str:
     """Expression reading one value with BitReader ``r``; ``ref`` gives the
     expression for a value that gives a size or count."""
     e = vt.enc
+    if isinstance(e, AggregateEnc):
+        members = ", ".join(f"{m.ident}: {read_expr(m.vtype, f, ref)}" for m in e.members)
+        return f"{vt.ident} {{ {members} }}"
     if isinstance(e, ArrayEnc):
         gap = f"if i > 0 {{ r.skip({e.gap}, {f})?; }}" if e.gap else ""
         return (
@@ -129,6 +134,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     ``ref`` gives the expression for a value that gives a size or count."""
     e = vt.enc
     bad = f"return Err(PacketError::BadSize {{ field: {f} }});"
+    if isinstance(e, AggregateEnc):
+        return "{ " + " ".join(write_stmt(m.vtype, f"{x}.{m.ident}", f, ref) for m in e.members) + " }"
     if isinstance(e, ArrayEnc):
         gap = f"if i > 0 {{ w.skip({e.gap}, {f})?; }}" if e.gap else ""
         return (
@@ -164,12 +171,18 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
 def elem_pattern(vt: VType) -> str:
     """Pattern binding ``e`` to an element of a slice: by value when it is
     Copy, so that ``e`` can be used like a field."""
-    return "e" if vt.kind in ("string", "binary") else "&e"
+    return "e" if vt.kind in ("string", "binary", "aggregate") else "&e"
 
 
 def describe(vt: VType, x: str) -> str:
     """Expression appending the canonical text of ``x`` to ``s``."""
     k = vt.kind
+    if k == "aggregate":
+        parts = []
+        for i, m in enumerate(vt.enc.members):
+            parts.append(f"s.push_str({rstr((', ' if i else '') + m.ident + '=')});")
+            parts.append(describe(m.vtype, f"({x}).{m.ident}") + ";")
+        return "{ s.push('{'); " + " ".join(parts) + " s.push('}') }"
     if k == "array":
         el = describe(vt.elem, "e")
         pat = elem_pattern(vt.elem)
@@ -220,6 +233,8 @@ class RustEmitter:
         self.line("use xtce::packet::{self as pk, BitReader, BitWriter, IntEncoding, Packet, PacketError, Result, StringSpec};")
         for vt in m.types:
             self.enum_type(vt)
+        for vt in m.aggregates:
+            self.aggregate_type(vt)
         for n in m.nodes:
             self.node(n)
         for k in m.kinds:
@@ -254,6 +269,16 @@ class RustEmitter:
         self.line("None => write!(f, \"{}\", self.0),", 3)
         self.line("}", 2)
         self.line("}", 1)
+        self.line("}")
+
+    def aggregate_type(self, vt: VType) -> None:
+        self.line()
+        self.line(f"/// Aggregate `{vt.key}`; its members are encoded in this order.")
+        self.line("#[derive(Debug, Clone, PartialEq, Default)]")
+        self.line(f"pub struct {vt.ident} {{")
+        for m in vt.enc.members:
+            self.line(f"/// `{m.name}` ({m.vtype.key})", 1)
+            self.line(f"pub {m.ident}: {field_type(m.vtype)},", 1)
         self.line("}")
 
     # -- decoding --
@@ -309,7 +334,7 @@ class RustEmitter:
                         f"let o{lc.id} = self.{names[lc]}.as_ref().ok_or(PacketError::Missing {{ field: {f} }})?;",
                         depth,
                     )
-                    x = f"o{lc.id}" if lc.vtype.kind in ("string", "binary", "array") else f"*o{lc.id}"
+                    x = f"o{lc.id}" if lc.vtype.kind in ("string", "binary", "array", "aggregate") else f"*o{lc.id}"
                 else:
                     x = self.place(n, lc, names)
                 self.line(write_stmt(lc.vtype, x, f, lambda r: self.place(n, r, names)), depth)

@@ -597,6 +597,10 @@ Field types:
      - ``Vec<T>``
      - ``demo_<T>_listN``: ``size_t len`` and ``T data[N]``
      - ``list[T]``
+   * - aggregate
+     - generated struct
+     - generated struct
+     - generated dataclass
    * - with an ``IncludeCondition``
      - ``Option<T>``
      - ``bool has_<field>`` before the field
@@ -608,6 +612,18 @@ room for a terminating NUL, which decoding writes. Encoding uses ``len``,
 not the NUL. In the names of list types, ``<T>`` is the element's C type
 without the prefix and any ``_t`` (``demo_int16_list6``,
 ``demo_str8_list4``).
+
+**Aggregates.** An ``AggregateParameterType`` or
+``AggregateArgumentType`` becomes a struct named like the type
+(``PositionType``, ``demo_PositionType`` in C), with one field per
+member, named like packet fields (snake_case, with a trailing ``_`` for
+reserved names). Members are encoded one after another in the order of
+the ``MemberList`` and may have any supported type, including arrays
+and other aggregates. In Rust the struct derives ``Debug``, ``Clone``,
+``PartialEq`` and ``Default``. In Python it is a dataclass, and a field
+of an aggregate type defaults to a new instance. In C, each type is
+declared after the types it contains. Errors in a member name the
+packet field that holds it.
 
 **Arrays and repeated entries.** An ``ArrayParameterType`` or
 ``ArrayArgumentType``, and a parameter or argument entry with a
@@ -883,6 +899,8 @@ language. The cross-language tests compare it directly.
 * Binary values are written as ``0x`` followed by lowercase hex.
 * Arrays and repeated entries are written as ``[a, b, c]``, each element
   as above.
+* Aggregates are written as ``{x=1, y=-2}``, with the members' field
+  names.
 * Absent optional fields are written as ``none``.
 
 Runtime reference
@@ -957,8 +975,14 @@ unsupported, naming the construct and its location.
 
 Parameter and argument types
    Integer, Float, Enumerated, Boolean, String, Binary, AbsoluteTime,
-   RelativeTime and Array. Types that use ``baseType``, and Aggregate
-   types, are not supported.
+   RelativeTime, Array and Aggregate. Types that use ``baseType`` are not
+   supported.
+
+Aggregates
+   Members of any supported type except the aggregate itself and values
+   whose size another value gives (such as an array whose count is
+   another member). Restriction criteria, include conditions and sizes
+   can't refer to an aggregate or its members.
 
 Arrays
    Elements of any supported type except arrays and values whose size
@@ -1032,7 +1056,7 @@ Containers
    not have a ``BaseContainer``. ``BaseContainer`` inheritance uses
    ``RestrictionCriteria`` with ``Comparison`` or ``ComparisonList``,
    using the operators ``== != < <= > >=`` on calibrated or raw values,
-   on values that are not arrays.
+   on values that are not arrays or aggregates.
 
 Locations
    ``LocationInContainerInBits`` with a ``FixedValue`` relative to
@@ -1066,7 +1090,7 @@ Name references
    current SpaceSystem, then in each enclosing one.
 
 Not supported
-   aggregate types, array subsets (a ``DimensionList`` in an entry),
+   references to aggregate members, array subsets (a ``DimensionList`` in an entry),
    arrays of arrays, ``RepeatEntry`` on a ``ContainerRefEntry``,
    ``IndirectParameterRefEntry``, stream and segment entries,
    ``DynamicValue`` locations and offsets, other instances than 0,

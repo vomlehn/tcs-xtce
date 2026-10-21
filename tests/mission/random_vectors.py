@@ -47,6 +47,20 @@ def samples(rng, sec_hdr):
     return bits(f)
 
 
+def targets(rng, sec_hdr):
+    """A Targets body: a target count mostly in range, random targets."""
+    n = rng.choice([0, 1, 3, rng.randrange(5)])
+    f = [(16, rng.randrange(1 << 16)), (16, rng.randrange(1 << 16)), (8, n)]
+    for _ in range(min(n, 4)):
+        name = bytes(rng.choice(b"ab\xc3\xa9\xff") for _ in range(rng.choice([0, 3, 15, 16])))
+        f += [(4, rng.randrange(16)), (8, rng.choice([0, 2, 20, 200]))]
+        f += [(8, c) for c in name + b"\0"]
+        f += [(16, rng.randrange(1 << 16)) for _ in range(2)] + [(4, rng.randrange(16)) for _ in range(2)]
+    if sec_hdr:
+        f += [(16, rng.randrange(1 << 16)) for _ in range(2)]
+    return bits(f)
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -63,7 +77,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
-            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -75,10 +89,12 @@ def main() -> None:
                     data += bytes(rng.choice(b"xyz\x01") for _ in range(rng.randrange(17))) + b"\0"
             elif apid == 250 and rng.random() < 0.8:
                 data += samples(rng, data[0] & 0x08)
+            elif apid == 260 and rng.random() < 0.8:
+                data += targets(rng, data[0] & 0x08)
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
-            opcode = rng.choice([1, 2, 3, 4, 4, rng.randrange(256)])
+            opcode = rng.choice([1, 2, 3, 4, 4, 5, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)

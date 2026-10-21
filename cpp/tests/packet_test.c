@@ -252,6 +252,50 @@ int main(void) {
     CHECK(strcmp(ENCODE(demo_Upload, &up), "BadSize") == 0);
   }
 
+  /* Aggregates. */
+  {
+    demo_Targets t, t2;
+    demo_Goto g, g2;
+    demo_Targets_init(&t);
+    t.sec_hdr_flag = true;
+    t.start.x = 1;
+    t.start.y = -1;
+    t.target_count = 1;
+    t.targets.len = 1;
+    t.targets.data[0].id_ = 3;
+    t.targets.data[0].mode = demo_ModeType_SAFE;
+    SET_STR(t.targets.data[0].name_, "a");
+    t.targets.data[0].where_.x = 2;
+    t.targets.data[0].where_.y = 3;
+    t.targets.data[0].weights.len = 2;
+    t.targets.data[0].weights.data[0] = 1;
+    t.targets.data[0].weights.data[1] = 2;
+    t.has_home = true;
+    t.home.x = 4;
+    t.home.y = 5;
+    CHECK(strcmp(ENCODE(demo_Targets, &t), "Ok") == 0);
+    CHECK(demo_Targets_decode(&t2, buf, len, &err) == 0);
+    CHECK(t2.start.y == -1 && t2.targets.len == 1 && t2.targets.data[0].where_.y == 3);
+    CHECK(strcmp(t2.targets.data[0].name_.data, "a") == 0 && t2.targets.data[0].weights.data[1] == 2);
+    CHECK(t2.has_home && t2.home.x == 4);
+    /* Members are checked like fields. */
+    t.targets.data[0].id_ = 16;
+    CHECK(strcmp(ENCODE(demo_Targets, &t), "OutOfRange") == 0);
+    t.targets.data[0].id_ = 3;
+    t.targets.data[0].weights.len = 1;
+    CHECK(strcmp(ENCODE(demo_Targets, &t), "BadSize") == 0);
+    t.targets.data[0].weights.len = 2;
+    t.has_home = false;
+    CHECK(strcmp(ENCODE(demo_Targets, &t), "Missing") == 0);
+
+    demo_Goto_init(&g);
+    g.waypoint.north = 1.5;
+    g.waypoint.east = 2.0;
+    g.waypoint.hold = true;
+    CHECK(strcmp(ENCODE(demo_Goto, &g), "Ok") == 0);
+    CHECK(demo_Goto_decode(&g2, buf, len, &err) == 0 && g2.waypoint.north == 1.5 && g2.waypoint.hold);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

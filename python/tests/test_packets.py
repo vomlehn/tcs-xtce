@@ -149,6 +149,28 @@ class PacketTests(unittest.TestCase):
         # Lists are not shared between instances.
         self.assertIsNot(demo.Upload().words, demo.Upload().words)
 
+    def test_aggregates(self):
+        target = demo.TargetType(id_=3, mode=demo.ModeType.SAFE, name_="a", where_=demo.PositionType(2, 3), weights=[1, 2])
+        t = demo.Targets(
+            sec_hdr_flag=True,
+            start=demo.PositionType(1, -1),
+            target_count=1,
+            targets=[target],
+            home=demo.PositionType(4, 5),
+        )
+        self.assertEqual(demo.Targets.decode(t.to_bytes()), t)
+        # Members are checked like fields.
+        bad = dataclasses.replace(target, id_=16)
+        self.assertEqual(self.kind(dataclasses.replace(t, targets=[bad])), "OutOfRange")
+        bad = dataclasses.replace(target, weights=[1])
+        self.assertEqual(self.kind(dataclasses.replace(t, targets=[bad])), "BadSize")
+        self.assertEqual(self.kind(dataclasses.replace(t, home=None)), "Missing")
+        # Aggregates are not shared between instances.
+        self.assertIsNot(demo.Targets().start, demo.Targets().start)
+
+        g = demo.Goto(waypoint=demo.WaypointType(north=1.5, east=2.0, hold=True))
+        self.assertEqual(demo.Goto.decode(g.to_bytes()), g)
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

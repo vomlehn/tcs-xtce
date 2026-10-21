@@ -356,3 +356,68 @@ class ArrayTests(unittest.TestCase):
         header = emit_c.emit(m, "t.xml")
         self.assertIn("typedef struct sat_uint16_list5 {", header)
         self.assertIn("uint16_t data[5];", header)
+
+
+def aggregate_mission(types: str, entries: str = '<ParameterRefEntry parameterRef="Agg"/>') -> str:
+    """Telemetry with an aggregate parameter ``Agg`` of type ``A``."""
+    return mission(
+        tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+            <IntegerDataEncoding sizeInBits="8"/>
+          </IntegerParameterType>
+          {types}
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="N" parameterTypeRef="U8"/>
+          <Parameter name="Agg" parameterTypeRef="A"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="P"><EntryList>{entries}</EntryList></SequenceContainer>
+        </ContainerSet>""",
+    )
+
+
+def aggregate(name: str, *members: tuple[str, str]) -> str:
+    body = "".join(f'<Member name="{n}" typeRef="{t}"/>' for n, t in members)
+    return f'<AggregateParameterType name="{name}"><MemberList>{body}</MemberList></AggregateParameterType>'
+
+
+class AggregateTests(unittest.TestCase):
+    def test_nested_members(self):
+        types = aggregate("A", ("Count", "U8"), ("type", "U8"), ("Inner", "B")) + aggregate("B", ("X", "U8"))
+        m = compile_xml(aggregate_mission(types))
+        vt = m.nodes[0].fields[0][1].vtype
+        self.assertEqual([x.ident for x in vt.enc.members], ["count", "type_", "inner"])
+        # Inner aggregates come first, so that each is declared before use.
+        self.assertEqual([a.ident for a in m.aggregates], ["B", "A"])
+        self.assertEqual(m.nodes[0].max_bytes, 3)
+
+    def test_rejected(self):
+        cases = [
+            (aggregate("A", ("X", "B")) + aggregate("B", ("Y", "A")), "aggregate contains itself"),
+            (
+                aggregate("A", ("Bytes", "Blob"))
+                + '<BinaryParameterType name="Blob"><BinaryDataEncoding><SizeInBits>'
+                + dynamic("N")
+                + "</SizeInBits></BinaryDataEncoding></BinaryParameterType>",
+                "member Bytes has a size that another value gives",
+            ),
+        ]
+        for types, message in cases:
+            with self.subTest(message), self.assertRaises(Unsupported) as cm:
+                compile_xml(aggregate_mission(types, '<ParameterRefEntry parameterRef="N"/><ParameterRefEntry parameterRef="Agg"/>'))
+            self.assertIn(message, str(cm.exception))
+
+    def test_criterion_on_aggregate(self):
+        types = aggregate("A", ("X", "U8"))
+        text = aggregate_mission(types).replace(
+            '<SequenceContainer name="P"><EntryList><ParameterRefEntry parameterRef="Agg"/></EntryList></SequenceContainer>',
+            '<SequenceContainer name="B" abstract="true"><EntryList><ParameterRefEntry parameterRef="Agg"/></EntryList>'
+            "</SequenceContainer>"
+            '<SequenceContainer name="P"><EntryList/><BaseContainer containerRef="B"><RestrictionCriteria>'
+            '<Comparison parameterRef="Agg" value="1"/></RestrictionCriteria></BaseContainer></SequenceContainer>',
+        )
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("which is an aggregate", str(cm.exception))

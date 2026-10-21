@@ -3,7 +3,7 @@
      headers, container inheritance with restriction criteria, an included
      container from a nested SpaceSystem, every supported encoding, both
      calibrator kinds, commands with argument assignments, arrays, repeated
-     entries and sizes and counts given by other fields. -->
+     entries, sizes and counts given by other fields, and aggregates. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Demo">
   <TelemetryMetaData>
     <ParameterTypeSet>
@@ -192,6 +192,52 @@
           </SizeInBits>
         </BinaryDataEncoding>
       </BinaryParameterType>
+      <IntegerParameterType name="TargetCountType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="3"/>
+      </IntegerParameterType>
+      <AggregateParameterType name="PositionType">
+        <MemberList>
+          <Member name="X" typeRef="S16"/>
+          <Member name="Y" typeRef="S16"/>
+        </MemberList>
+      </AggregateParameterType>
+      <ArrayParameterType name="WeightsType" arrayTypeRef="U4">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>1</FixedValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <AggregateParameterType name="TargetType">
+        <MemberList>
+          <Member name="Id" typeRef="U4"/>
+          <Member name="Mode" typeRef="ModeType"/>
+          <Member name="Name" typeRef="CStringType"/>
+          <Member name="Where" typeRef="PositionType"/>
+          <Member name="Weights" typeRef="WeightsType"/>
+        </MemberList>
+      </AggregateParameterType>
+      <ArrayParameterType name="TargetsType" arrayTypeRef="TargetType">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <DynamicValue>
+                <ParameterInstanceRef parameterRef="TargetCount"/>
+                <LinearAdjustment intercept="-1"/>
+              </DynamicValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
       <BinaryParameterType name="Blob4Type">
         <BinaryDataEncoding>
           <SizeInBits>
@@ -232,6 +278,10 @@
       <Parameter name="Label" parameterTypeRef="LabelType"/>
       <Parameter name="PayloadSize" parameterTypeRef="PayloadSizeType"/>
       <Parameter name="Payload" parameterTypeRef="PayloadType"/>
+      <Parameter name="TargetCount" parameterTypeRef="TargetCountType"/>
+      <Parameter name="Start" parameterTypeRef="PositionType"/>
+      <Parameter name="Targets" parameterTypeRef="TargetsType"/>
+      <Parameter name="Home" parameterTypeRef="PositionType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -343,6 +393,23 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <SequenceContainer name="Targets">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Start"/>
+          <ParameterRefEntry parameterRef="TargetCount"/>
+          <ArrayParameterRefEntry parameterRef="Targets"/>
+          <ParameterRefEntry parameterRef="Home">
+            <IncludeCondition>
+              <Comparison parameterRef="SecHdrFlag" value="true"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="260"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="TimeStamp" abstract="true">
         <EntryList>
           <ParameterRefEntry parameterRef="CoarseTime"/>
@@ -436,6 +503,13 @@
           </Variable>
         </StringDataEncoding>
       </StringArgumentType>
+      <AggregateArgumentType name="WaypointType">
+        <MemberList>
+          <Member name="North" typeRef="DelayType"/>
+          <Member name="East" typeRef="DelayType"/>
+          <Member name="Hold" typeRef="ForceType"/>
+        </MemberList>
+      </AggregateArgumentType>
       <IntegerArgumentType name="AddressType" signed="false">
         <IntegerDataEncoding sizeInBits="32" byteOrder="leastSignificantByteFirst"/>
       </IntegerArgumentType>
@@ -549,6 +623,23 @@
             <ArrayArgumentRefEntry argumentRef="Gains"/>
             <ArgumentRefEntry argumentRef="TagSize"/>
             <ArgumentRefEntry argumentRef="Tag"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Goto">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="5"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Waypoint" argumentTypeRef="WaypointType"/>
+        </ArgumentList>
+        <CommandContainer name="GotoContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Waypoint"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>
