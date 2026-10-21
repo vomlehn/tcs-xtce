@@ -200,6 +200,16 @@ static inline int xtce_pk_read_uint(xtce_pk_reader* r, unsigned bits, bool le, c
   return 0;
 }
 
+/* The bytes from the current position to the end of the packet, for a field
+ * that takes the rest of it.  Fails with XTCE_PK_BAD_SIZE unless they are
+ * whole bytes, at most `max` of them. */
+static inline int xtce_pk_read_rest(const xtce_pk_reader* r, size_t max, const char* f, size_t* out) {
+  size_t bits = r->len * 8 > r->pos ? r->len * 8 - r->pos : 0;
+  if (bits % 8 || bits / 8 > max) return xtce_pk_fail(r->err, XTCE_PK_BAD_SIZE, f, NULL);
+  *out = bits / 8;
+  return 0;
+}
+
 static inline int xtce_pk_read_bytes(xtce_pk_reader* r, size_t n, const char* f, uint8_t* out) {
   size_t i;
   XTCE_PK_TRY(xtce_pk_read_need(r, n * 8, f));
@@ -389,6 +399,16 @@ static inline int xtce_pk_double_to_int(double x, unsigned bits, int enc, const 
     return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f, NULL);
   }
   return xtce_pk_from_signed((int64_t)r, bits, enc, f, err, out);
+}
+
+/* Rounds a calibrated value (half away from zero) to an integer from `lo` up
+ * to but not including `lim`; fails with XTCE_PK_OUT_OF_RANGE otherwise. */
+static inline int xtce_pk_round_to_int(double y, double lo, double lim, const char* f, xtce_pk_error* err,
+                                       double* out) {
+  double r = round(y);
+  if (!(r >= lo && r < lim)) return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+  *out = r;
+  return 0;
 }
 
 /* Three-way comparisons of integers of different signedness. */

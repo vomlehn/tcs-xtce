@@ -103,7 +103,7 @@ class CEmitter:
             return f"{self.p}{self.tname(vt.elem)}_list{vt.enc.max_count}"
         if k == "aggregate":
             return self.p + vt.ident
-        if k == "binary" and vt.enc.dyn is not None:
+        if k == "binary" and vt.enc.variable:
             return f"{self.p}varbytes{vt.enc.bits // 8}"
         if k == "int":
             return f"{'' if vt.signed else 'u'}int{vt.width}_t"
@@ -150,8 +150,8 @@ class CEmitter:
 
     def declare_buffers(self) -> None:
         strs = sorted({str_cap(vt) for vt in self.vtypes() if vt.kind == "string"})
-        bins = sorted({vt.enc.bits // 8 for vt in self.vtypes() if vt.kind == "binary" and vt.enc.dyn is None})
-        vbins = sorted({vt.enc.bits // 8 for vt in self.vtypes() if vt.kind == "binary" and vt.enc.dyn is not None})
+        bins = sorted({vt.enc.bits // 8 for vt in self.vtypes() if vt.kind == "binary" and not vt.enc.variable})
+        vbins = sorted({vt.enc.bits // 8 for vt in self.vtypes() if vt.kind == "binary" and vt.enc.variable})
         if strs:
             self.line()
             self.line("/* Strings of at most N bytes of UTF-8; `data` is always NUL-terminated. */")
@@ -302,9 +302,13 @@ class CEmitter:
             self.read_value(e.elem, f"{dst}.data[{i}]", f, d + 1, ref)
             self.line("}", d)
             self.line("}", depth)
-        elif isinstance(e, BinaryEnc) and e.dyn is not None:
+        elif isinstance(e, BinaryEnc) and e.variable:
             self.line("{", depth)
-            self.size(e.dyn, "r->err", f, ref, depth + 1)
+            if e.rest:
+                self.line("size_t n;", depth + 1)
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_rest(r, {e.bits // 8}, {f}, &n));", depth + 1)
+            else:
+                self.size(e.dyn, "r->err", f, ref, depth + 1)
             self.line(f"XTCE_PK_TRY(xtce_pk_read_bytes(r, n, {f}, {dst}.data));", depth + 1)
             self.line(f"{dst}.len = n;", depth + 1)
             self.line("}", depth)
@@ -318,7 +322,13 @@ class CEmitter:
             else:
                 enc = ENC[int_enc(vt)]
                 signed = f"xtce_pk_to_signed(raw, {e.bits}, {enc})"
-                if vt.kind == "int":
+                if vt.kind == "int" and vt.calibrator is not None:
+                    lo, lim = vt.eng_limits
+                    self.line("double y, v;", d)
+                    self.calibrate(vt, f"xtce_pk_int_to_double(raw, {e.bits}, {enc})", "y", f, d)
+                    self.line(f"XTCE_PK_TRY(xtce_pk_round_to_int(y, {flt(lo)}, {flt(lim)}, {f}, r->err, &v));", d)
+                    self.line(f"{dst} = ({self.ctype(vt)})v;", d)
+                elif vt.kind == "int":
                     self.line(f"{dst} = ({self.ctype(vt)})({signed if vt.signed else 'raw'});", d)
                 elif vt.kind == "enum":
                     self.line(f"{dst} = {signed if vt.signed else '(int64_t)raw'};", d)
@@ -359,6 +369,11 @@ class CEmitter:
             self.line("}", d)
             self.line("}", depth)
             return
+        if isinstance(e, BinaryEnc) and e.rest:
+            data, n = (f"(const uint8_t*){x}", str(len(fixed))) if is_lit else (f"{x}.data", f"{x}.len")
+            self.line(f"if ({n} > {e.bits // 8}) return xtce_pk_fail(w->err, XTCE_PK_TOO_LONG, {f}, NULL);", depth)
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_bytes(w, {data}, {n}));", depth)
+            return
         if isinstance(e, BinaryEnc) and e.dyn is not None:
             data, n = (f"(const uint8_t*){x}", str(len(fixed))) if is_lit else (f"{x}.data", f"{x}.len")
             self.line("{", depth)
@@ -367,7 +382,7 @@ class CEmitter:
             self.line(f"XTCE_PK_TRY(xtce_pk_write_bytes(w, {data}, n));", depth + 1)
             self.line("}", depth)
             return
-        if isinstance(e, (IntEnc, FloatEnc)) and vt.kind == "float" and not invertible(vt):
+        if isinstance(e, (IntEnc, FloatEnc)) and vt.kind in ("float", "int") and not invertible(vt):
             self.line(f"return xtce_pk_fail(w->err, XTCE_PK_NOT_INVERTIBLE, {f}, NULL);", depth)
             return
         if isinstance(e, FloatEnc):
@@ -381,7 +396,10 @@ class CEmitter:
             self.line("{", depth)
             d = depth + 1
             self.line("uint64_t raw;", d)
-            if vt.kind == "int" and vt.signed:
+            if vt.kind == "int" and vt.calibrator is not None:
+                self.uncalibrate(vt, f"(double)({x})", f, d)
+                self.line(f"XTCE_PK_TRY(xtce_pk_double_to_int(y, {bits}, {enc}, {f}, w->err, &raw));", d)
+            elif vt.kind == "int" and vt.signed:
                 self.line(f"XTCE_PK_TRY(xtce_pk_from_signed((int64_t)({x}), {bits}, {enc}, {f}, w->err, &raw));", d)
             elif vt.kind == "int":
                 self.line(f"XTCE_PK_TRY(xtce_pk_from_unsigned((uint64_t)({x}), {bits}, {f}, w->err, &raw));", d)
@@ -725,7 +743,7 @@ class CEmitter:
             self.describe_value(vt.elem, f"{x}.data[{i}]", depth + 1)
             self.line("}", depth)
             self.line("xtce_pk_text_putc(t, ']');", depth)
-        elif k == "binary" and vt.enc.dyn is not None:
+        elif k == "binary" and vt.enc.variable:
             n = f"({x}.len < sizeof {x}.data ? {x}.len : sizeof {x}.data)"
             self.line(f"xtce_pk_text_bytes(t, {x}.data, {n});", depth)
         elif k == "float":

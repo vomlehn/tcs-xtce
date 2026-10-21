@@ -95,10 +95,11 @@ def hex_bytes(text: str, where: str) -> bytes:
     return bytes.fromhex(text.zfill(len(text) + len(text) % 2))
 
 
-def integer_range(t) -> Optional[tuple[int, int]]:
+def integer_range(t, calibrated: bool = False) -> Optional[tuple[int, int]]:
     """(min, max) of an integer type's ValidRange, or of the union of an
-    argument type's ValidRangeSet; None unless every bound is given.  Integer
-    types have no calibrator, so the range applies to the raw value."""
+    argument type's ValidRangeSet; None unless every bound is given.  For a
+    type with a calibrator (``calibrated``) the range must apply to the
+    calibrated value, which is the value of the generated field."""
     if getattr(t, "valid_range", None) is not None:
         ranges = [t.valid_range]
     elif getattr(t, "valid_range_set", None) is not None:
@@ -106,6 +107,8 @@ def integer_range(t) -> Optional[tuple[int, int]]:
     else:
         return None
     if not ranges or any(r.min_inclusive is None or r.max_inclusive is None for r in ranges):
+        return None
+    if calibrated and any(getattr(r, "valid_range_applies_to_calibrated", None) is False for r in ranges):
         return None
     return min(r.min_inclusive for r in ranges), max(r.max_inclusive for r in ranges)
 
@@ -289,12 +292,19 @@ class Compiler:
         elif base in ("Integer", "Enumerated", "Boolean"):
             if not isinstance(enc, IntEnc):
                 raise Unsupported(f"{where}: {base.lower()} with {enc_name}")
-            if cal is not None:
+            if cal is not None and base != "Integer":
                 article = "an" if base[0] in "AEIOU" else "a"
                 raise Unsupported(f"{where}: calibrator on {article} {base.lower()} type")
             vt.kind = {"Integer": "int", "Enumerated": "enum", "Boolean": "bool"}[base]
             if base == "Integer":
-                vt.valid_range = integer_range(t)
+                if cal is not None:
+                    # The calibrated value is rounded to an integer of the
+                    # type's own size, not the encoding's.
+                    bits = t.size_in_bits if t.size_in_bits is not None else 32
+                    if not 1 <= bits <= 64:
+                        raise Unsupported(f"{where}: {bits}-bit integers")
+                    vt.eng = (bits, t.signed is not False)
+                vt.valid_range = integer_range(t, cal is not None)
         elif base == "String":
             if not isinstance(enc, StringEnc):
                 raise Unsupported(f"{where}: string with {enc_name}")
@@ -350,6 +360,8 @@ class Compiler:
         elem = self.vtype(ekey, table)
         if elem.dyn is not None:
             raise Unsupported(f"{where}: elements whose size another value gives")
+        if is_rest(elem):
+            raise Unsupported(f"{where}: elements that take the rest of the packet")
         dims = t.dimension_list.dimension
         if not dims:
             raise Unsupported(f"{where}: array without dimensions")
@@ -388,6 +400,8 @@ class Compiler:
                 mt = self.vtype(mkey, table)
                 if mt.dyn is not None:
                     raise Unsupported(f"{where}: member {m.name} has a size that another value gives")
+                if is_rest(mt):
+                    raise Unsupported(f"{where}: member {m.name} takes the rest of the packet")
                 members.append(Member(m.name, names.take(snake(m.name)), mt))
         finally:
             self._aggregating.discard(cache)
@@ -484,6 +498,10 @@ class Compiler:
                 return BinaryEnc(MAX_FIELD_BITS, dyn), None
             if c.name != "FixedValue":
                 raise Unsupported(f"{where}: binary size from {c.name}")
+            if c.value == -1:
+                # A Yamcs convention: the size of the value given.  Only the
+                # end of the packet can bound it when decoding.
+                return BinaryEnc(MAX_FIELD_BITS, rest=True), None
             bits = self._size(c.value, "binary", where)
             if bits % 8:
                 raise Unsupported(f"{where}: binary size {bits} is not whole bytes")
@@ -587,6 +605,8 @@ class Compiler:
             raise Unsupported(f"{where}: RepeatEntry on an array")
         if vt.dyn is not None:
             raise Unsupported(f"{where}: RepeatEntry on a value whose size another value gives")
+        if is_rest(vt):
+            raise Unsupported(f"{where}: RepeatEntry on a value that takes the rest of the packet")
         count = self.int_value(rp.count, path, "RepeatEntry Count", where)
         gap = 0
         if rp.offset is not None:
@@ -623,7 +643,7 @@ class Compiler:
             raise Unsupported(f"{where}: size or count from {name}, which has an IncludeCondition")
         if ref.vtype.kind != "int":
             raise Unsupported(f"{where}: size or count from {ref.vtype.kind} value {name}")
-        lo, hi = ref.vtype.valid_range or int_range(ref.vtype.enc)
+        lo, hi = ref.vtype.valid_range or value_range(ref.vtype)
         top = max(d.slope * lo, d.slope * hi) + d.intercept
         units = max(math.floor(top), 0) // d.unit if math.isfinite(top) else MAX_FIELD_BITS
         e = vt.enc
@@ -717,6 +737,7 @@ class Compiler:
             if sc.binary_encoding is not None:
                 raise Unsupported(f"container {node.key}: BinaryEncoding")
             node.items = self.tm_items(sc, path, [key], 0, scope)
+            self.check_rest(node, f"container {node.key}")
             if base is not None:
                 base.children.append(node)
         except Unsupported as e:
@@ -725,6 +746,14 @@ class Compiler:
         node._building = False
         self.order.append(node)
         return node
+
+    @staticmethod
+    def check_rest(node: Node, where: str) -> None:
+        """A value that takes the rest of the packet must come last."""
+        items = walk(node.all_items())
+        for i, it in enumerate(items[:-1]):
+            if isinstance(it, Value) and is_rest(it.local.vtype):
+                raise Unsupported(f"{where}: {it.local.name} takes the rest of the packet but is not last")
 
     @staticmethod
     def scope_of(node: Node) -> list[Local]:
@@ -753,7 +782,7 @@ class Compiler:
                 raise Unsupported(f"{where}: comparison of instance {cmp.instance}")
             raw = cmp.use_calibrated_value is False
             vt = local.vtype
-            if raw and (vt.kind not in ("int", "enum", "bool")):
+            if raw and (vt.kind not in ("int", "enum", "bool") or vt.calibrator is not None):
                 raise Unsupported(f"{where}: raw comparison on {vt.kind} parameter {pkey}")
             op = cmp.comparison_operator.value if cmp.comparison_operator else "=="
             if op not in ("==", "!=") and vt.kind in ("bool", "string", "binary"):
@@ -832,6 +861,7 @@ class Compiler:
                 elif base is not None and base.all_items():
                     raise Unsupported(f"{where}: CommandContainer does not extend its base's container")
                 node.items = self.tc_items(cc, scope, path, where, self.scope_of(base) if base else [])
+            self.check_rest(node, where)
             if base is not None:
                 base.children.append(node)
         except Unsupported as e:
@@ -960,6 +990,30 @@ def int_range(e: IntEnc) -> tuple[int, int]:
     if e.encoding == "twosComplement":
         return -(1 << (b - 1)), (1 << (b - 1)) - 1
     return -((1 << (b - 1)) - 1), (1 << (b - 1)) - 1
+
+
+def value_range(vt: VType) -> tuple[int, int]:
+    """The smallest and largest value of an integer type, from its encoding
+    and calibrator."""
+    lo, hi = int_range(vt.enc)
+    if vt.calibrator is None:
+        return lo, hi
+    elo, elim = vt.eng_limits
+    cal = vt.calibrator
+    if isinstance(cal, Polynomial) and cal.invertible:
+        ends = [cal.slope * x + cal.intercept for x in (lo, hi)]
+    elif isinstance(cal, Spline) and not cal.extrapolate:
+        ends = [c for _, c in cal.points]
+    else:
+        return elo, elim - 1
+    if not all(math.isfinite(x) for x in ends):
+        return elo, elim - 1
+    return max(math.floor(min(ends)), elo), min(math.ceil(max(ends)), elim - 1)
+
+
+def is_rest(vt: VType) -> bool:
+    """Whether the value takes the rest of the packet."""
+    return isinstance(vt.enc, BinaryEnc) and vt.enc.rest
 
 
 def item_bits(vt: VType) -> int:

@@ -61,6 +61,14 @@ def targets(rng, sec_hdr):
     return bits(f)
 
 
+def dump(rng) -> bytes:
+    """A Dump body: a calibrated record count mostly from 0 to 6."""
+    raw = rng.choice([8, 9, 10, 12, 20, rng.randrange(256)])  # -4 + raw / 2
+    n = max(round(-4 + raw / 2 + 1e-9), 0)
+    body = bytes([rng.randrange(256), raw]) + rng.randbytes(min(n, 8))
+    return body + rng.randbytes(rng.choice([0, 0, 1, 5]))
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -77,7 +85,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
-            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -91,10 +99,12 @@ def main() -> None:
                 data += samples(rng, data[0] & 0x08)
             elif apid == 260 and rng.random() < 0.8:
                 data += targets(rng, data[0] & 0x08)
+            elif apid == 270 and rng.random() < 0.8:
+                data += dump(rng)
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
-            opcode = rng.choice([1, 2, 3, 4, 4, 5, rng.randrange(256)])
+            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)

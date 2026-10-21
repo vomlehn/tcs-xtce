@@ -171,6 +171,22 @@ class PacketTests(unittest.TestCase):
         g = demo.Goto(waypoint=demo.WaypointType(north=1.5, east=2.0, hold=True))
         self.assertEqual(demo.Goto.decode(g.to_bytes()), g)
 
+    def test_calibrated_integers_and_the_rest_of_the_packet(self):
+        d = demo.Dump(sec_hdr_flag=True, board_temp=25, record_count=2, records=[7, 8], rest=b"\xde\xad")
+        b = d.to_bytes()
+        # Raw values: 25 = -100 + 125 and 2 = -4 + 12 / 2.
+        self.assertEqual(bytes(b[6:]), bytes([0x7D, 0x0C, 7, 8, 0xDE, 0xAD]))
+        self.assertEqual(demo.Dump.decode(b), d)
+        # The rest of the packet is whatever follows the records.
+        self.assertEqual(demo.Dump.decode(b[:11]).rest, b"\xde")
+        self.assertEqual(self.kind(dataclasses.replace(d, record_count=200)), "OutOfRange")
+        self.assertEqual(self.kind(dataclasses.replace(d, record_count=3)), "BadSize")
+        self.assertEqual(self.kind(dataclasses.replace(d, rest=bytes(65537))), "TooLong")
+
+        # 21 needs raw 5.5, which rounds to 6 and decodes as 22.
+        q = demo.Poke.decode(demo.Poke(level=21, data_=b"\xbe\xef").to_bytes())
+        self.assertEqual((q.level, q.data_), (22, b"\xbe\xef"))
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

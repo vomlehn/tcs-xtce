@@ -184,6 +184,15 @@ class BitReader:
         v = self.uint(bits, field)
         return int.from_bytes(v.to_bytes(bits // 8, "big"), "little") if le else v
 
+    def rest_bytes(self, max_: int, field: str) -> int:
+        """The bytes from the current position to the end of the packet, for
+        a field that takes the rest of it.  Raises ``BadSize`` unless they
+        are whole bytes, at most ``max_`` of them."""
+        bits = max(self.nbits - self.pos, 0)
+        if bits % 8 or bits // 8 > max_:
+            raise PacketError("BadSize", field)
+        return bits // 8
+
     def bytes(self, n: int, field: str) -> bytes:
         if self.pos + n * 8 > self.nbits:
             raise PacketError("Truncated", field)
@@ -306,6 +315,17 @@ def float_to_int(x: float, bits: int, enc: str, field: str) -> int:
     if abs(r) >= 1 << 64 or (enc != "unsigned" and not -(1 << 63) <= r < 1 << 63):
         raise PacketError("OutOfRange", field)
     return from_signed(r, bits, enc, field)
+
+
+def round_to_int(y: float, lo: float, lim: float, field: str) -> int:
+    """Round a calibrated value (half away from zero) to an integer from
+    ``lo`` up to but not including ``lim``; raises ``OutOfRange`` otherwise."""
+    if not math.isfinite(y):
+        raise PacketError("OutOfRange", field)
+    r = _round(y)
+    if not lo <= r < lim:
+        raise PacketError("OutOfRange", field)
+    return r
 
 
 # -- floats ---------------------------------------------------------------------
@@ -479,6 +499,14 @@ def write_string(w: BitWriter, spec: tuple, s: str, field: str) -> None:
 def write_binary(w: BitWriter, b: bytes, n: int, field: str) -> None:
     if len(b) != n:
         raise PacketError("TooLong" if len(b) > n else "OutOfRange", field)
+    w.bytes(b)
+
+
+def write_rest(w: BitWriter, b: bytes, max_: int, field: str) -> None:
+    """Write a binary field that takes the rest of the packet: all of ``b``,
+    which must be at most ``max_`` bytes."""
+    if len(b) > max_:
+        raise PacketError("TooLong", field)
     w.bytes(b)
 
 

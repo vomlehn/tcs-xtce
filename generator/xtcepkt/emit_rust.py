@@ -109,6 +109,10 @@ def read_expr(vt: VType, f: str, ref) -> str:
     if isinstance(e, IntEnc):
         raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
         enc = f"IntEncoding::{int_enc(vt)}"
+        if vt.kind == "int" and vt.calibrator is not None:
+            y = calibrate(vt, f"pk::int_to_f64({raw}, {e.bits}, {enc})", f)
+            lo, lim = vt.eng_limits
+            return f"pk::round_to_int({y}, {flt(lo)}, {flt(lim)}, {f})? as {field_type(vt)}"
         if vt.kind == "int":
             if vt.signed:
                 return f"pk::to_signed({raw}, {e.bits}, {enc}) as i{vt.width}"
@@ -124,6 +128,8 @@ def read_expr(vt: VType, f: str, ref) -> str:
         raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
         return calibrate(vt, f"pk::float_from_raw({raw}, {e.bits})", f)
     if isinstance(e, BinaryEnc):
+        if e.rest:
+            return f"{{ let n = r.rest_bytes({e.bits // 8}, {f})?; r.bytes(n, {f})? }}"
         n = size(e.dyn, ref(e.dyn.local), f) if e.dyn else e.bits // 8
         return f"r.bytes({n}, {f})?"
     return f"pk::read_string(&mut r, {spec(vt, ref, f)}, {f})?"
@@ -148,7 +154,11 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     if isinstance(e, IntEnc):
         bits, order = e.bits, str(le(vt)).lower()
         enc = f"IntEncoding::{int_enc(vt)}"
-        if vt.kind == "int":
+        if vt.kind == "int" and vt.calibrator is not None:
+            if not invertible(vt):
+                return f"return Err(PacketError::NotInvertible {{ field: {f} }});"
+            raw = f"pk::f64_to_int({uncalibrate(vt, f'{x} as f64', f)}, {bits}, {enc}, {f})?"
+        elif vt.kind == "int":
             raw = f"pk::from_signed({x} as i64, {bits}, {enc}, {f})?" if vt.signed else f"pk::from_unsigned({x} as u64, {bits}, {f})?"
         elif vt.kind == "enum":
             raw = f"pk::from_signed({x}.0, {bits}, {enc}, {f})?"
@@ -163,6 +173,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         if not invertible(vt):
             return f"return Err(PacketError::NotInvertible {{ field: {f} }});"
         return f"w.uint_order({e.bits}, {str(le(vt)).lower()}, pk::float_to_raw({uncalibrate(vt, x, f)}, {e.bits}));"
+    if isinstance(e, BinaryEnc) and e.rest:
+        return f"pk::write_rest(w, &{x}, {e.bits // 8}, {f})?;"
     if isinstance(e, BinaryEnc):
         return f"pk::write_binary(w, &{x}, {e.bits // 8}, {f})?;"
     return f"pk::write_string(w, {spec(vt, ref, f)}, &{x}, {f})?;"

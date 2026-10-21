@@ -298,3 +298,44 @@ fn aggregates() {
     };
     assert_eq!(Goto::decode(&g.to_bytes().unwrap()).unwrap(), g);
 }
+
+#[test]
+fn calibrated_integers_and_the_rest_of_the_packet() {
+    let d = Dump {
+        sec_hdr_flag: true,
+        board_temp: 25,
+        record_count: 2,
+        records: vec![7, 8],
+        rest: vec![0xde, 0xad],
+        ..Default::default()
+    };
+    let b = d.to_bytes().unwrap();
+    // Raw values: 25 = -100 + 125 and 2 = -4 + 12 / 2.
+    assert_eq!(&b[6..], &[0x7d, 0x0c, 7, 8, 0xde, 0xad]);
+    assert_eq!(Dump::decode(&b).unwrap(), d);
+    // The rest of the packet is whatever follows the records.
+    assert_eq!(Dump::decode(&b[..11]).unwrap().rest, vec![0xde]);
+
+    let mut e = d.clone();
+    e.record_count = 200; // raw 408 does not fit 8 bits
+    assert_eq!(
+        e.to_bytes(),
+        Err(PacketError::OutOfRange {
+            field: "RecordCount"
+        })
+    );
+    e.record_count = 3;
+    assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Records" }));
+    e.record_count = 2;
+    e.rest = vec![0; 65537];
+    assert_eq!(e.to_bytes(), Err(PacketError::TooLong { field: "Rest" }));
+
+    // 21 needs raw 5.5, which rounds to 6 and decodes as 22.
+    let p = Poke {
+        level: 21,
+        data_: vec![0xbe, 0xef],
+        ..Default::default()
+    };
+    let q = Poke::decode(&p.to_bytes().unwrap()).unwrap();
+    assert_eq!((q.level, q.data_), (22, vec![0xbe, 0xef]));
+}

@@ -260,6 +260,17 @@ impl<'a> BitReader<'a> {
         Ok(if le { swap_bytes(v, bits) } else { v })
     }
 
+    /// The bytes from the current position to the end of the packet, for a
+    /// field that takes the rest of it.  Fails with `BadSize` unless they
+    /// are whole bytes, at most `max` of them.
+    pub fn rest_bytes(&self, max: usize, field: &'static str) -> Result<usize> {
+        let bits = (self.data.len() * 8).saturating_sub(self.pos);
+        if bits % 8 != 0 || bits / 8 > max {
+            return Err(PacketError::BadSize { field });
+        }
+        Ok(bits / 8)
+    }
+
     /// Reads `n` whole bytes (which need not be byte aligned).
     pub fn bytes(&mut self, n: usize, field: &'static str) -> Result<Vec<u8>> {
         self.need(n.checked_mul(8).unwrap_or(usize::MAX), field)?;
@@ -487,6 +498,17 @@ pub fn f64_to_int(x: f64, bits: u32, enc: IntEncoding, field: &'static str) -> R
             return Err(PacketError::OutOfRange { field });
         }
         from_signed(r as i64, bits, enc, field)
+    }
+}
+
+/// Rounds a calibrated value (half away from zero) to an integer from `lo`
+/// up to but not including `lim`; fails with `OutOfRange` otherwise.
+pub fn round_to_int(y: f64, lo: f64, lim: f64, field: &'static str) -> Result<f64> {
+    let r = y.round();
+    if r >= lo && r < lim {
+        Ok(r)
+    } else {
+        Err(PacketError::OutOfRange { field })
     }
 }
 
@@ -749,6 +771,16 @@ pub fn write_binary(w: &mut BitWriter<'_>, b: &[u8], n: usize, field: &'static s
         } else {
             PacketError::OutOfRange { field }
         });
+    }
+    w.bytes(b);
+    Ok(())
+}
+
+/// Writes a binary field that takes the rest of the packet: all of `b`,
+/// which must be at most `max` bytes.
+pub fn write_rest(w: &mut BitWriter<'_>, b: &[u8], max: usize, field: &'static str) -> Result<()> {
+    if b.len() > max {
+        return Err(PacketError::TooLong { field });
     }
     w.bytes(b);
     Ok(())

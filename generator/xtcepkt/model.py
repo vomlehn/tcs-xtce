@@ -88,10 +88,18 @@ class StringEnc:
 @dataclass
 class BinaryEnc:
     """Bytes on the wire: exactly ``bits``, or with ``dyn`` the bits another
-    value gives, at most ``bits``."""
+    value gives, at most ``bits``.  With ``rest`` (an XTCE size of -1) the
+    value is the rest of the packet, at most ``bits``; nothing may follow it.
+    """
 
     bits: int
     dyn: Optional[DynSize] = None
+    rest: bool = False
+
+    @property
+    def variable(self) -> bool:
+        """Whether the number of bytes varies from packet to packet."""
+        return self.dyn is not None or self.rest
 
 
 @dataclass
@@ -209,15 +217,27 @@ class VType:
     # Integers: the smallest and largest valid value from ValidRange (or the
     # union of an argument's ValidRangeSet), when the document gives both.
     valid_range: Optional[tuple[int, int]] = None
+    # Integers with a calibrator: the type's sizeInBits and signed, which
+    # give the range of the calibrated value rather than the encoding.
+    eng: Optional[tuple[int, bool]] = None
 
     @property
     def width(self) -> int:
-        bits = self.enc.bits
+        bits = self.eng[0] if self.eng else self.enc.bits
         return next(w for w in (8, 16, 32, 64) if bits <= w)
 
     @property
     def signed(self) -> bool:
+        if self.eng:
+            return self.eng[1]
         return isinstance(self.enc, IntEnc) and self.enc.signed
+
+    @property
+    def eng_limits(self) -> tuple[int, int]:
+        """For a calibrated integer: the smallest value, and one more than
+        the largest, that its generated field holds."""
+        bits = self.width
+        return (-(1 << (bits - 1)), 1 << (bits - 1)) if self.signed else (0, 1 << bits)
 
     @property
     def dyn(self) -> Optional[DynSize]:

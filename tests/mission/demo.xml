@@ -128,6 +128,36 @@
       <IntegerParameterType name="U4" signed="false">
         <IntegerDataEncoding sizeInBits="4"/>
       </IntegerParameterType>
+      <IntegerParameterType name="U8" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="BoardTempType" sizeInBits="8">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <SplineCalibrator extrapolate="true">
+              <SplinePoint raw="0" calibrated="-100"/>
+              <SplinePoint raw="100" calibrated="0"/>
+            </SplineCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </IntegerParameterType>
+      <IntegerParameterType name="RecordCountType" sizeInBits="16">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="-4" exponent="0"/>
+              <Term coefficient="0.5" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </IntegerParameterType>
+      <BinaryParameterType name="RestType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <FixedValue>-1</FixedValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
       <IntegerParameterType name="LabelSizeType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
         <ValidRange minInclusive="0" maxInclusive="10"/>
@@ -282,6 +312,10 @@
       <Parameter name="Start" parameterTypeRef="PositionType"/>
       <Parameter name="Targets" parameterTypeRef="TargetsType"/>
       <Parameter name="Home" parameterTypeRef="PositionType"/>
+      <Parameter name="BoardTemp" parameterTypeRef="BoardTempType"/>
+      <Parameter name="RecordCount" parameterTypeRef="RecordCountType"/>
+      <Parameter name="Records" parameterTypeRef="U8"/>
+      <Parameter name="Rest" parameterTypeRef="RestType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -410,6 +444,27 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <SequenceContainer name="Dump">
+        <EntryList>
+          <ParameterRefEntry parameterRef="BoardTemp"/>
+          <ParameterRefEntry parameterRef="RecordCount"/>
+          <ParameterRefEntry parameterRef="Records">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="RecordCount"/>
+                </DynamicValue>
+              </Count>
+            </RepeatEntry>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="Rest"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="270"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="TimeStamp" abstract="true">
         <EntryList>
           <ParameterRefEntry parameterRef="CoarseTime"/>
@@ -440,6 +495,23 @@
       <IntegerArgumentType name="OpcodeType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
       </IntegerArgumentType>
+      <IntegerArgumentType name="LevelType" sizeInBits="16">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="10" exponent="0"/>
+              <Term coefficient="2" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </IntegerArgumentType>
+      <BinaryArgumentType name="RestArgType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <FixedValue>-1</FixedValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryArgumentType>
       <EnumeratedArgumentType name="ModeArgType">
         <IntegerDataEncoding sizeInBits="8"/>
         <EnumerationList>
@@ -640,6 +712,25 @@
         <CommandContainer name="GotoContainer">
           <EntryList>
             <ArgumentRefEntry argumentRef="Waypoint"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Poke">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="6"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Level" argumentTypeRef="LevelType"/>
+          <Argument name="Data" argumentTypeRef="RestArgType"/>
+        </ArgumentList>
+        <CommandContainer name="PokeContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Level"/>
+            <ArgumentRefEntry argumentRef="Data"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

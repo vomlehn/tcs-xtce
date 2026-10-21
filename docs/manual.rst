@@ -565,11 +565,12 @@ Field types:
      - Rust
      - C/C++
      - Python
-   * - integer (by encoded size and sign)
+   * - integer (by encoded size and sign; with a calibrator, by the
+       type's ``sizeInBits`` and ``signed``)
      - ``u8`` … ``u64``, ``i8`` … ``i64``
      - ``uint8_t`` … ``int64_t``
      - ``int``
-   * - float, calibrated integer, time
+   * - float (with any encoding), time
      - ``f64``
      - ``double``
      - ``float``
@@ -951,13 +952,18 @@ Calibrators
    ``polynomial(x, terms)``, ``polynomial_inverse(y, intercept, slope)``,
    ``spline(x, points, order, extrapolate, field)`` and
    ``spline_inverse(y, points, extrapolate, field)``.
+   ``round_to_int(y, lo, lim, field)`` rounds a calibrated value half away
+   from zero and fails with ``OutOfRange`` unless ``lo <= result < lim``.
 
 Strings and binary
    ``read_string``, ``write_string`` (with a ``StringSpec``: fixed bits,
    maximum bits, terminator, size-tag bits) and ``write_binary``.
    ``StringSpec::sized(bytes)`` (Rust), ``xtce_pk_string_spec_sized``
    (C/C++) and ``sized(spec, bytes)`` (Python) give the spec of a string
-   whose size another field gives.
+   whose size another field gives. The reader's ``rest_bytes(max, field)``
+   (``xtce_pk_read_rest`` in C/C++) gives the size of a binary value that
+   takes the rest of the packet, and ``write_rest`` writes one (C/C++
+   generates it inline).
 
 Sizes from other fields
    ``dynamic_size(x, slope, intercept, unit, max, field)`` computes
@@ -1019,12 +1025,24 @@ Float encoding
 Calibrators
    ``PolynomialCalibrator`` and ``SplineCalibrator`` of order 0 or 1, as
    the ``DefaultCalibrator`` of an integer or float encoding on a float
-   type. Encoding uses the inverse calibrator. This works for
+   type, or of an integer encoding on an integer type. Encoding uses the
+   inverse calibrator. This works for
    polynomials of degree 0 or 1 with a non-zero slope, and for linear
    splines whose calibrated values strictly increase or decrease. Other
    calibrators are decode-only: encoding them fails with
    ``NotInvertible``. Engineering values are rounded half away from zero
    to the nearest raw integer.
+
+   On an integer type the calibrated value is rounded half away from zero
+   to an integer of the type's ``sizeInBits`` (default 32) and ``signed``
+   (default true); decoding fails with ``OutOfRange`` if it doesn't fit.
+   Rounding means a value may not survive encoding: in the demo,
+   ``RecordCount`` is ``-4 + raw / 2``, so 1 encodes as raw 10 but raw 9
+   decodes as 1 too. The type's ``ValidRange`` applies to the calibrated
+   value; with ``validRangeAppliesToCalibrated="false"`` it is ignored. A
+   size or count taken from it is bounded through the calibrator.
+   Comparisons with ``useCalibratedValue="false"`` are not supported on
+   it, as the generated code keeps only the calibrated value.
 
 Strings
    UTF-8 or US-ASCII. The supported layouts are:
@@ -1043,6 +1061,15 @@ Strings
 Binary
    A fixed size in whole bytes, or a size another field gives. Values
    must have exactly that length.
+
+   A ``SizeInBits`` of ``-1`` (a Yamcs convention for "the size of the
+   value given") takes the rest of the packet, up to 64 KiB. It must be
+   the last entry of every packet that contains it, and can't be an array
+   element, an aggregate member or repeated. Decoding fails with
+   ``BadSize`` unless what is left is whole bytes, and encoding fails
+   with ``TooLong`` above 64 KiB. Yamcs also allows such values before
+   other entries, where only the sender knows their size; those packets
+   are not supported.
 
 Times
    The ``Encoding`` (integer or float, ``units="seconds"``) with

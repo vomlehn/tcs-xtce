@@ -37,3 +37,11 @@ tm 0904c02a00120064ff9c01101787878787878787878787878787878780000000000110007fff9
 tm 0904c02a00120064ff9c02102616c706  # targets truncated in a name
 tc 112ec006000505007dffff01  # goto
 tc 112ec006000505007dffff02  # goto, hold not 0 or 1
+tm 090ec02a00127d0e010203deadbeef  # dump
+tm 010ec02a00127d08  # dump, nothing left over
+tm 090ec02a00127d09aa  # dump, a calibrated count rounds away from zero
+tm 090ec02a00127d01  # dump, a calibrated count below zero
+tm 090ec02a0012ff08  # dump, a calibrated value beyond its type
+tm 090ec02a00127d140102  # dump truncated in the records
+tc 112ec00600040605beef  # poke
+tc 112ec006000406ff  # poke, nothing left over

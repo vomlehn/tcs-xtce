@@ -101,6 +101,10 @@ def read_expr(vt: VType, f: str, ref) -> str:
     if isinstance(e, IntEnc):
         raw = f"r.uint_order({e.bits}, {le(vt)}, {f})"
         enc = repr(e.encoding)
+        if vt.kind == "int" and vt.calibrator is not None:
+            y = calibrate(vt, f"pk.int_to_float({raw}, {e.bits}, {enc})", f)
+            lo, lim = vt.eng_limits
+            return f"pk.round_to_int({y}, {flt(lo)}, {flt(lim)}, {f})"
         if vt.kind == "int":
             return f"pk.to_signed({raw}, {e.bits}, {enc})" if vt.signed else raw
         if vt.kind == "enum":
@@ -112,6 +116,8 @@ def read_expr(vt: VType, f: str, ref) -> str:
     if isinstance(e, FloatEnc):
         return calibrate(vt, f"pk.float_from_raw(r.uint_order({e.bits}, {le(vt)}, {f}), {e.bits})", f)
     if isinstance(e, BinaryEnc):
+        if e.rest:
+            return f"r.bytes(r.rest_bytes({e.bits // 8}, {f}), {f})"
         n = size(e.dyn, ref(e.dyn.local), f) if e.dyn else e.bits // 8
         return f"r.bytes({n}, {f})"
     return f"pk.read_string(r, {spec(vt, ref, f)}, {f})"
@@ -123,7 +129,11 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     e = vt.enc
     if isinstance(e, IntEnc):
         bits, enc = e.bits, repr(e.encoding)
-        if vt.kind == "int":
+        if vt.kind == "int" and vt.calibrator is not None:
+            if not invertible(vt):
+                return f'raise pk.PacketError("NotInvertible", {f})'
+            raw = f"pk.float_to_int({uncalibrate(vt, f'float({x})', f)}, {bits}, {enc}, {f})"
+        elif vt.kind == "int":
             raw = f"pk.from_signed({x}, {bits}, {enc}, {f})"
         elif vt.kind == "enum":
             raw = f"pk.from_signed(int({x}), {bits}, {enc}, {f})"
@@ -138,6 +148,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         if not invertible(vt):
             return f'raise pk.PacketError("NotInvertible", {f})'
         return f"w.uint_order({e.bits}, {le(vt)}, pk.float_to_raw({uncalibrate(vt, x, f)}, {e.bits}))"
+    if isinstance(e, BinaryEnc) and e.rest:
+        return f"pk.write_rest(w, {x}, {e.bits // 8}, {f})"
     if isinstance(e, BinaryEnc):
         return f"pk.write_binary(w, {x}, {e.bits // 8}, {f})"
     return f"pk.write_string(w, {spec(vt, ref, f)}, {x}, {f})"

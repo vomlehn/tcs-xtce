@@ -280,6 +280,13 @@ into the model in ``model.py``:
      ``BinaryEnc``);
    * an optional calibrator (``Polynomial`` or ``Spline``).
 
+   A calibrated integer keeps the ``int`` kind; ``eng`` holds the type's
+   ``sizeInBits`` and ``signed``, which size the generated field instead
+   of the encoding. A binary value with an XTCE size of -1 has a
+   ``BinaryEnc`` with ``rest`` set and a bound of ``MAX_FIELD_BITS``.
+   The compiler checks that nothing follows it in any packet, so the end
+   of the packet gives its size.
+
    Schema defaults are filled in here: 8-bit unsigned integers, 32-bit
    IEEE floats, ``previousEntry`` locations, a ``00`` terminator and
    16-bit size tags. Time types become ``float`` seconds, with
@@ -400,7 +407,8 @@ means something inside a particular meta-command. When an entry is
 compiled, the size is bound to the value it reads, which must be decoded
 earlier in the packet, and given a bound:
 
-* from the referenced value's ``ValidRange``, or its encoding;
+* from the referenced value's ``ValidRange``, or its encoding (through
+  its calibrator, for a calibrated integer);
 * capped at ``MAX_FIELD_BITS`` (64 KiB on the wire).
 
 The bound becomes ``N`` in the C storage types and in ``MAX_BYTES``.

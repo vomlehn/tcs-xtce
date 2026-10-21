@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .compile import item_bits, max_bits
-from .model import AggregateEnc, ArrayEnc, Fixed, IntEnc, Mark, Mission, Node, Seek, StringEnc, Value, VType, walk
+from .model import AggregateEnc, ArrayEnc, BinaryEnc, Fixed, IntEnc, Mark, Mission, Node, Seek, StringEnc, Value, VType, walk
 
 
 def nbytes(n: int) -> str:
@@ -79,6 +79,10 @@ def need(vt: VType) -> tuple[Optional[int], str]:
         return n * count + e.gap * max(count - 1, 0), f"{what}, each {why}"
     if vt.dyn is not None:
         return None, f"size from {vt.dyn.local.name}, at most {nbytes(vt.dyn.max)}"
+    if isinstance(e, BinaryEnc) and e.rest:
+        return None, f"rest of the packet, at most {nbytes(e.bits // 8)}"
+    if vt.kind == "int" and vt.calibrator is not None:
+        return None, "calibrated, so its range does not bound the encoding"
     if vt.kind == "bool":
         n, why = 1, "boolean"
     elif vt.kind in ("int", "enum"):

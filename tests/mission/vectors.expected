@@ -37,3 +37,11 @@ error:TooLong | -
 error:Truncated | -
 Goto{seq_count=6, packet_length=5, waypoint={north=12.5, east=6553.5, hold=true}} | 112ec006000505007dffff01
 Goto{seq_count=6, packet_length=5, waypoint={north=12.5, east=6553.5, hold=true}} | 112ec006000505007dffff01
+Dump{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, board_temp=25, record_count=3, records=[1, 2, 3], rest=0xdeadbeef} | 090ec02a00127d0e010203deadbeef
+Dump{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, board_temp=25, record_count=0, records=[], rest=0x} | 010ec02a00127d08
+Dump{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, board_temp=25, record_count=1, records=[170], rest=0x} | 090ec02a00127d0aaa
+error:BadSize | -
+error:OutOfRange | -
+error:Truncated | -
+Poke{seq_count=6, packet_length=4, level=20, data_=0xbeef} | 112ec00600040605beef
+Poke{seq_count=6, packet_length=4, level=520, data_=0x} | 112ec006000406ff

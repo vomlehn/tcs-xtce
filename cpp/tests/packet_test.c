@@ -296,6 +296,46 @@ int main(void) {
     CHECK(demo_Goto_decode(&g2, buf, len, &err) == 0 && g2.waypoint.north == 1.5 && g2.waypoint.hold);
   }
 
+  /* Calibrated integers and the rest of the packet. */
+  {
+    static demo_Dump d, d2;
+    static demo_Poke p, p2;
+    static const uint8_t body[] = {0x7d, 0x0c, 7, 8, 0xde, 0xad};
+    demo_Dump_init(&d);
+    d.sec_hdr_flag = true;
+    d.board_temp = 25;
+    d.record_count = 2;
+    d.records.len = 2;
+    d.records.data[0] = 7;
+    d.records.data[1] = 8;
+    d.rest.len = 2;
+    d.rest.data[0] = 0xde;
+    d.rest.data[1] = 0xad;
+    CHECK(strcmp(ENCODE(demo_Dump, &d), "Ok") == 0);
+    /* Raw values: 25 = -100 + 125 and 2 = -4 + 12 / 2. */
+    CHECK(len == 12 && memcmp(buf + 6, body, sizeof body) == 0);
+    CHECK(demo_Dump_decode(&d2, buf, len, &err) == 0);
+    CHECK(d2.board_temp == 25 && d2.record_count == 2 && d2.records.data[1] == 8 && d2.rest.len == 2);
+    /* The rest of the packet is whatever follows the records. */
+    CHECK(demo_Dump_decode(&d2, buf, 11, &err) == 0 && d2.rest.len == 1 && d2.rest.data[0] == 0xde);
+    d.record_count = 200; /* raw 408 does not fit 8 bits */
+    CHECK(strcmp(ENCODE(demo_Dump, &d), "OutOfRange") == 0);
+    d.record_count = 3;
+    CHECK(strcmp(ENCODE(demo_Dump, &d), "BadSize") == 0);
+    d.record_count = 2;
+    d.rest.len = sizeof d.rest.data + 1;
+    CHECK(strcmp(ENCODE(demo_Dump, &d), "TooLong") == 0);
+
+    /* 21 needs raw 5.5, which rounds to 6 and decodes as 22. */
+    demo_Poke_init(&p);
+    p.level = 21;
+    p.data_.len = 2;
+    p.data_.data[0] = 0xbe;
+    p.data_.data[1] = 0xef;
+    CHECK(strcmp(ENCODE(demo_Poke, &p), "Ok") == 0);
+    CHECK(demo_Poke_decode(&p2, buf, len, &err) == 0 && p2.level == 22 && p2.data_.len == 2 && p2.data_.data[1] == 0xef);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 import xtce  # noqa: E402
 
 from xtcepkt import emit_c  # noqa: E402
-from xtcepkt.compile import compile_document, item_bits  # noqa: E402
+from xtcepkt.compile import compile_document, item_bits, value_range  # noqa: E402
 from xtcepkt.model import MAX_FIELD_BITS, Unsupported  # noqa: E402
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
@@ -177,12 +177,13 @@ class ErrorTests(unittest.TestCase):
 
 
     def test_negative_sizes(self):
-        # Yamcs writes <FixedValue>-1</FixedValue> for "no fixed size".
+        # -1 is a Yamcs convention for binary values (RestTests); other
+        # negative sizes are errors.
         for ptype, why in (
             (
                 "<BinaryParameterType name='T'><BinaryDataEncoding><SizeInBits>"
-                "<FixedValue>-1</FixedValue></SizeInBits></BinaryDataEncoding></BinaryParameterType>",
-                "binary size -1 is negative",
+                "<FixedValue>-8</FixedValue></SizeInBits></BinaryDataEncoding></BinaryParameterType>",
+                "binary size -8 is negative",
             ),
             (
                 "<StringParameterType name='T'><StringDataEncoding><SizeInBits><Fixed>"
@@ -208,6 +209,102 @@ class ErrorTests(unittest.TestCase):
                 </ContainerSet>"""
             )
             self.assertIn(why, self.unsupported(text))
+
+
+def calibrated_mission(itype: str, entries: str = '<ParameterRefEntry parameterRef="X"/>') -> str:
+    """Telemetry with parameter X of type ``itype`` and a binary Rest."""
+    return mission(
+        tm=f"""
+        <ParameterTypeSet>
+          {itype}
+          <BinaryParameterType name="R"><BinaryDataEncoding><SizeInBits>
+            <FixedValue>-1</FixedValue></SizeInBits></BinaryDataEncoding></BinaryParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="X" parameterTypeRef="T"/>
+          <Parameter name="Rest" parameterTypeRef="R"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="Status"><EntryList>{entries}</EntryList></SequenceContainer>
+        </ContainerSet>"""
+    )
+
+
+def calibrated(attrs: str = "", terms: str = '<Term coefficient="-4" exponent="0"/><Term coefficient="0.5" exponent="1"/>') -> str:
+    return (
+        f'<IntegerParameterType name="T" {attrs}><IntegerDataEncoding sizeInBits="8">'
+        f"<DefaultCalibrator><PolynomialCalibrator>{terms}</PolynomialCalibrator></DefaultCalibrator>"
+        "</IntegerDataEncoding></IntegerParameterType>"
+    )
+
+
+class CalibratedIntegerTests(unittest.TestCase):
+    def vtype(self, text: str):
+        return compile_xml(text).nodes[0].fields[0][1].vtype
+
+    def test_type_size_gives_the_field(self):
+        vt = self.vtype(calibrated_mission(calibrated()))
+        self.assertEqual((vt.kind, vt.width, vt.signed), ("int", 32, True))
+        self.assertEqual(vt.eng_limits, (-(1 << 31), 1 << 31))
+        vt = self.vtype(calibrated_mission(calibrated('sizeInBits="16" signed="false"')))
+        self.assertEqual((vt.width, vt.signed, vt.eng_limits), (16, False, (0, 1 << 16)))
+
+    def test_range_through_the_calibrator(self):
+        # Raw 0..255 calibrates to -4..123.5, which rounds to at most 124.
+        self.assertEqual(value_range(self.vtype(calibrated_mission(calibrated()))), (-4, 124))
+        # A ValidRange on the calibrated value takes precedence.
+        vr = '<ValidRange minInclusive="0" maxInclusive="9"/>'
+        vt = self.vtype(calibrated_mission(calibrated().replace("</IntegerDataEncoding>", "</IntegerDataEncoding>" + vr)))
+        self.assertEqual(vt.valid_range, (0, 9))
+        vr = '<ValidRange minInclusive="0" maxInclusive="9" validRangeAppliesToCalibrated="false"/>'
+        vt = self.vtype(calibrated_mission(calibrated().replace("</IntegerDataEncoding>", "</IntegerDataEncoding>" + vr)))
+        self.assertIsNone(vt.valid_range)
+
+    def test_raw_comparison_rejected(self):
+        text = mission(
+            tm=f"""
+            <ParameterTypeSet>{calibrated()}</ParameterTypeSet>
+            <ParameterSet><Parameter name="X" parameterTypeRef="T"/></ParameterSet>
+            <ContainerSet>
+              <SequenceContainer name="Base" abstract="true">
+                <EntryList><ParameterRefEntry parameterRef="X"/></EntryList>
+              </SequenceContainer>
+              <SequenceContainer name="Derived"><EntryList/>
+                <BaseContainer containerRef="Base"><RestrictionCriteria>
+                  <Comparison parameterRef="X" value="3" useCalibratedValue="false"/>
+                </RestrictionCriteria></BaseContainer>
+              </SequenceContainer>
+            </ContainerSet>"""
+        )
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("raw comparison on int parameter", str(cm.exception))
+
+
+class RestTests(unittest.TestCase):
+    def test_last_value_takes_the_rest(self):
+        m = compile_xml(calibrated_mission(calibrated(), '<ParameterRefEntry parameterRef="Rest"/>'))
+        vt = m.nodes[0].fields[0][1].vtype
+        self.assertTrue(vt.enc.rest)
+        self.assertEqual(vt.enc.bits, MAX_FIELD_BITS)
+
+    def test_must_be_last(self):
+        text = calibrated_mission(
+            calibrated(), '<ParameterRefEntry parameterRef="Rest"/><ParameterRefEntry parameterRef="X"/>'
+        )
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("Rest takes the rest of the packet but is not last", str(cm.exception))
+
+    def test_not_repeated(self):
+        text = calibrated_mission(
+            calibrated(),
+            '<ParameterRefEntry parameterRef="Rest"><RepeatEntry><Count><FixedValue>2</FixedValue></Count>'
+            "</RepeatEntry></ParameterRefEntry>",
+        )
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("RepeatEntry on a value that takes the rest of the packet", str(cm.exception))
 
 
 if __name__ == "__main__":
