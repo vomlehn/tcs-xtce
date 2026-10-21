@@ -28,6 +28,7 @@ from .model import (
     EnumLabel,
     FloatEnc,
     Fixed,
+    Index,
     IntEnc,
     Item,
     Kind,
@@ -45,6 +46,7 @@ from .model import (
     Unsupported,
     Value,
     VType,
+    ref_text,
     walk,
 )
 
@@ -100,28 +102,55 @@ def hex_bytes(text: str, where: str) -> bytes:
     return bytes.fromhex(text.zfill(len(text) + len(text) % 2))
 
 
+# One step of a reference after the parameter or argument name: ``.member``
+# or ``[index]``.  Names can't contain ``.``, ``[`` or ``]``.
+STEP = re.compile(r"\.([^.\[\]:/ \t]+)|\[(\d+)\]")
+
+
 def member_path(ref: str) -> tuple[str, tuple]:
-    """Splits a reference to an aggregate member (``P.a.b``, XTCE's dot
-    syntax) into the reference to its parameter or argument and the
-    member names.  Names can't contain dots, so only ``.`` and ``..``
-    path segments are not members."""
+    """Splits a reference to an aggregate member or array element
+    (``P.a.b``, ``P[2]``, ``P[1].a``) into the reference to its parameter
+    or argument and the steps: member names, and ints for indexes.  Only
+    the last path segment can have steps, and ``.`` and ``..`` are path
+    segments, not members."""
     head, sep, last = ref.strip().rpartition("/")
-    if last in (".", "..") or "." not in last:
+    name = re.match(r"[^.\[\]]*", last).group()
+    if last in (".", "..") or not name or name == last:
         return ref.strip(), ()
-    name, *members = last.split(".")
-    return head + sep + name, tuple(members)
+    steps, pos = [], len(name)
+    for m in STEP.finditer(last, pos):
+        if m.start() != pos:
+            break
+        steps.append(m.group(1) if m.group(1) is not None else int(m.group(2)))
+        pos = m.end()
+    if pos != len(last):
+        raise Unsupported(f"malformed reference {ref.strip()!r}")
+    return head + sep + name, tuple(steps)
 
 
 def walk_members(vt: VType, members: tuple, what: str) -> tuple[tuple, VType]:
-    """The field names of ``members`` inside type ``vt``, and the type of
-    the last one."""
+    """The path (field names, and Index for array elements) of the steps
+    ``members`` inside type ``vt``, and the type they reach."""
     path = []
-    for name in members:
+    for step in members:
+        if isinstance(step, int):
+            e = vt.enc
+            if vt.kind != "array":
+                raise Unsupported(f"{what}: {vt.kind} type {vt.key} is not an array")
+            if e.dims != 1:
+                raise Unsupported(f"{what}: element of a {e.dims}-dimensional array")
+            if not isinstance(e.count, int):
+                raise Unsupported(f"{what}: element of an array whose count varies")
+            if step >= e.count:
+                raise Unsupported(f"{what}: element {step} of an array of {e.count}")
+            path.append(Index(step, e.count))
+            vt = e.elem
+            continue
         if vt.kind != "aggregate":
-            raise Unsupported(f"{what}: {vt.kind} type {vt.key} has no member {name!r}")
-        m = next((m for m in vt.enc.members if m.name == name), None)
+            raise Unsupported(f"{what}: {vt.kind} type {vt.key} has no member {step!r}")
+        m = next((m for m in vt.enc.members if m.name == step), None)
         if m is None:
-            raise Unsupported(f"{what}: aggregate type {vt.key} has no member {name!r}")
+            raise Unsupported(f"{what}: aggregate type {vt.key} has no member {step!r}")
         path.append(m.ident)
         vt = m.vtype
     return tuple(path), vt
@@ -436,7 +465,7 @@ class Compiler:
         if dyn is not None:
             dyn.factor = fixed
         count = dyn if dyn is not None else fixed
-        return VType(key=qname(key), name=t.name, kind="array", enc=ArrayEnc(elem, count))
+        return VType(key=qname(key), name=t.name, kind="array", enc=ArrayEnc(elem, count, dims=len(dims)))
 
     def aggregate_type(self, key: Key, table: dict, path: Key, t, where: str, cache) -> VType:
         """An aggregate type: its members, encoded one after another."""
@@ -991,7 +1020,7 @@ class Compiler:
         if local.optional:
             raise Unsupported(f"{where}: criterion on {pkey}, which has an IncludeCondition")
         member, vt = walk_members(local.vtype, members, f"{where}: criterion on {pkey}")
-        pkey = ".".join((pkey,) + members)
+        pkey = ref_text(pkey, members)
         if vt.kind in ("array", "aggregate"):
             raise Unsupported(f"{where}: criterion on {pkey}, which is an {vt.kind}")
         if getattr(ref, "instance", None):

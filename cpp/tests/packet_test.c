@@ -504,6 +504,37 @@ int main(void) {
     CHECK(strcmp(ENCODE(demo_Open, &o), "BadSize") == 0);
   }
 
+  /* References to array elements. */
+  {
+    static demo_ProbeOne pr;
+    static demo_CCSDSPacketKind pk;
+    static const uint8_t body[] = {0x12, 0x35, 0x20, 0xab, 0xcd, 0x77};
+    demo_ProbeOne_init(&pr);
+    pr.sec_hdr_flag = true;
+    pr.probes.len = 2;
+    pr.probes.data[0].id_ = 1;
+    pr.probes.data[0].gains.len = 2;
+    pr.probes.data[0].gains.data[0] = 2;
+    pr.probes.data[0].gains.data[1] = 3;
+    pr.probes.data[1].id_ = 5;
+    pr.probes.data[1].gains.len = 2;
+    pr.probes.data[1].gains.data[0] = 2;
+    pr.probe_data.len = 2;
+    pr.probe_data.data[0] = 0xab;
+    pr.probe_data.data[1] = 0xcd;
+    pr.probe_note = 0x77;
+    CHECK(strcmp(ENCODE(demo_ProbeOne, &pr), "Ok") == 0);
+    CHECK(len == 12 && memcmp(buf + 6, body, sizeof body) == 0);
+    /* Probes[0].Id == 1 picks ProbeOne; Probes[1].Gains[0] sizes the data. */
+    CHECK(demo_CCSDSPacketKind_decode(&pk, buf, len, &err) == 0 && pk.tag == demo_CCSDSPacketKind_ProbeOne_tag);
+    CHECK(pk.u.ProbeOne.probe_note == 0x77 && pk.u.ProbeOne.probe_data.len == 2);
+    pr.probes.data[0].id_ = 4;
+    CHECK(strcmp(ENCODE(demo_ProbeOne, &pr), "Mismatch") == 0);
+    /* The criterion indexes Probes, so its length is checked first. */
+    pr.probes.len = 0;
+    CHECK(strcmp(ENCODE(demo_ProbeOne, &pr), "BadSize") == 0);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

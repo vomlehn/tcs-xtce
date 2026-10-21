@@ -271,6 +271,19 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(demo.Open.decode(o.to_bytes()), o)
         self.assertEqual(self.kind(dataclasses.replace(o, lo=2)), "BadSize")
 
+    def test_references_to_array_elements(self):
+        probes = [demo.ProbeType(id_=1, gains=[2, 3]), demo.ProbeType(id_=5, gains=[2, 0])]
+        p = demo.ProbeOne(sec_hdr_flag=True, probes=probes, probe_data=b"\xab\xcd", probe_note=0x77)
+        b = p.to_bytes()
+        self.assertEqual(bytes(b[6:]).hex(), "123520abcd77")
+        # Probes[0].Id == 1 picks ProbeOne; Probes[1].Gains[0] sizes the data.
+        self.assertEqual(demo.CCSDSPacketKind.decode(b), p)
+        other = [demo.ProbeType(id_=4, gains=[2, 3]), probes[1]]
+        self.assertEqual(self.kind(dataclasses.replace(p, probes=other)), "Mismatch")
+        # The criterion indexes Probes, so its length is checked first.
+        self.assertEqual(self.kind(dataclasses.replace(p, probes=[])), "BadSize")
+        self.assertEqual(self.kind(dataclasses.replace(p, probe_data=b"\xab")), "BadSize")
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from .common import flt, int_enc, invertible, le, string_spec
-from .model import term_locals, walk, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 
 def rstr(s: str) -> str:
@@ -87,7 +87,7 @@ def source(d: DynSize, place) -> str:
     first matching value of a DiscreteLookupList.  ``place`` gives the
     expression for a Local."""
     if d.lookup is None:
-        return place(d.local) + "".join("." + p for p in d.path)
+        return place(d.local) + access(d.path)
     x = f"{d.default}i64"
     for criteria, v in reversed(d.lookup):
         x = f"if {conjunction([term(c, place) for c in criteria])} {{ {v}i64 }} else {{ {x} }}"
@@ -269,6 +269,11 @@ def conjunction(conds: list) -> str:
     return conds[0] if len(conds) == 1 else " && ".join(f"({c})" for c in conds)
 
 
+def access(path) -> str:
+    """The expression suffix for a member and element path."""
+    return "".join(f"[{p.i}]" if isinstance(p, Index) else "." + p for p in path)
+
+
 def term(t, place) -> str:
     """Expression for a criterion or a tree of them; ``place`` gives the
     expression for a Local."""
@@ -281,9 +286,9 @@ def condition(c: Criterion, x: str, y=None) -> str:
     """``x`` is the expression for the criterion's local, and ``y`` for
     the value it compares with, if any."""
     vt = c.vtype
-    x += "".join("." + p for p in c.path)
+    x += access(c.path)
     if y is not None:
-        y += "".join("." + p for p in c.other_path)
+        y += access(c.other_path)
         if vt.kind == "int":
             return f"({x} as i128) {c.op} ({y} as i128)"
         if vt.kind == "enum":
@@ -489,6 +494,17 @@ class RustEmitter:
         self.line()
         self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> {", 1)
         names = {lc: name for name, lc in n.fields}
+        guards = {}
+        for node in n.chain():
+            for c in node.criteria:
+                for lc, prefix, count in term_indexes(c):
+                    if lc in names:
+                        guards[(f"self.{names[lc]}{access(prefix)}", count)] = lc.name
+        for (x, count), name in guards.items():
+            # Criteria are checked before the arrays they index are written.
+            self.line(f"if {x}.len() != {count} {{", 2)
+            self.line(f"return Err(PacketError::BadSize {{ field: {rstr(name)} }});", 3)
+            self.line("}", 2)
         for node in n.chain():
             for c in node.criteria:
                 if any(lc in names for lc in term_locals(c)):

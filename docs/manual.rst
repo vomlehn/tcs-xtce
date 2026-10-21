@@ -1038,6 +1038,16 @@ Aggregates
    syntax (``parameterRef="RouteHdr.Count"``, also nested, as in
    ``P.a.b``, and in ``argumentRef``), but not to a whole aggregate.
 
+Array elements
+   Criteria, lookups and sizes can refer to an element with XTCE's
+   bracket syntax, mixed with members (``Probes[1].Gains[0]``). The
+   array must have one dimension and a fixed count, and the index must
+   be below it. When encoding, criteria are checked before any field is
+   written, so arrays they index are first checked to have their count,
+   and encoding fails with ``BadSize`` (naming the field) otherwise. In
+   the demo, ``ProbeOne`` and ``ProbeOther`` are chosen by
+   ``Probes[0].Id``, and ``ProbeData`` is sized by ``Probes[1].Gains[0]``.
+
 Arrays
    Elements of any supported type except arrays and values whose size
    another field gives. Each dimension's ``StartingIndex`` is a
@@ -1206,7 +1216,8 @@ Name references
    current SpaceSystem, then in each enclosing one.
 
 Not supported
-   references to array elements (``P[2]``), array subsets (a ``DimensionList`` in an entry),
+   references to elements of arrays with several dimensions or a count
+   that varies, array subsets (a ``DimensionList`` in an entry),
    arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
    ``RepeatEntry`` offsets that other values give, other instances than 0,
    ``CustomAlgorithm`` criteria, ``NextContainer``, a container

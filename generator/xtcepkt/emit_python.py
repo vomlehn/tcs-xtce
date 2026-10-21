@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .common import flt, invertible, le, string_spec
-from .model import term_locals, walk, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType
+from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType
 
 
 def pstr(s: str) -> str:
@@ -77,7 +77,7 @@ def source(d: DynSize, place) -> str:
     first matching value of a DiscreteLookupList.  ``place`` gives the
     expression for a Local."""
     if d.lookup is None:
-        return place(d.local) + "".join("." + p for p in d.path)
+        return place(d.local) + access(d.path)
     x = str(d.default)
     for criteria, v in reversed(d.lookup):
         x = f"({v} if {' and '.join(f'({term(c, place)})' for c in criteria)} else {x})"
@@ -191,6 +191,11 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     return f"pk.write_string(w, {spec(vt, ref, f)}, {x}, {f})"
 
 
+def access(path) -> str:
+    """The expression suffix for a member and element path."""
+    return "".join(f"[{p.i}]" if isinstance(p, Index) else "." + p for p in path)
+
+
 def term(t, place) -> str:
     """Expression for a criterion or a tree of them; ``place`` gives the
     expression for a Local."""
@@ -203,9 +208,9 @@ def condition(c: Criterion, x: str, y=None) -> str:
     """``x`` is the expression for the criterion's local, and ``y`` for
     the value it compares with, if any."""
     vt = c.vtype
-    x += "".join("." + p for p in c.path)
+    x += access(c.path)
     if y is not None:
-        return f"{x} {c.op} {y}{''.join('.' + p for p in c.other_path)}"
+        return f"{x} {c.op} {y}{access(c.other_path)}"
     v = c.value if vt.kind in ("int", "enum") else literal(vt, c.value)
     return f"{x} {c.op} {v}"
 
@@ -447,6 +452,16 @@ class PythonEmitter:
         self.line()
         self.line("def encode_into(self, w: pk.BitWriter) -> None:", 1)
         names = {lc: name for name, lc in n.fields}
+        guards = {}
+        for node in n.chain():
+            for c in node.criteria:
+                for lc, prefix, count in term_indexes(c):
+                    if lc in names:
+                        guards[(f"self.{names[lc]}{access(prefix)}", count)] = lc.name
+        for (x, count), name in guards.items():
+            # Criteria are checked before the arrays they index are written.
+            self.line(f"if len({x}) != {count}:", 2)
+            self.line(f'raise pk.PacketError("BadSize", {pstr(name)})', 3)
         for node in n.chain():
             for c in node.criteria:
                 if any(lc in names for lc in term_locals(c)):

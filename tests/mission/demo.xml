@@ -218,6 +218,46 @@
           <Member name="Count" typeRef="BatchSizeType"/>
         </MemberList>
       </AggregateParameterType>
+      <ArrayParameterType name="ProbeGainsType" arrayTypeRef="U4">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>1</FixedValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <AggregateParameterType name="ProbeType">
+        <MemberList>
+          <Member name="Id" typeRef="U4"/>
+          <Member name="Gains" typeRef="ProbeGainsType"/>
+        </MemberList>
+      </AggregateParameterType>
+      <ArrayParameterType name="ProbesType" arrayTypeRef="ProbeType">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>1</FixedValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <BinaryParameterType name="ProbeDataType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="Probes[1].Gains[0]"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
       <IntegerParameterType name="BoardTempType" sizeInBits="8">
         <IntegerDataEncoding sizeInBits="8">
           <DefaultCalibrator>
@@ -406,6 +446,9 @@
       <Parameter name="LogCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="BatchCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="FrameKind" parameterTypeRef="U8"/>
+      <Parameter name="Probes" parameterTypeRef="ProbesType"/>
+      <Parameter name="ProbeData" parameterTypeRef="ProbeDataType"/>
+      <Parameter name="ProbeNote" parameterTypeRef="U8"/>
       <Parameter name="GateLo" parameterTypeRef="U8"/>
       <Parameter name="GateHi" parameterTypeRef="U8"/>
       <Parameter name="GateSpan" parameterTypeRef="U16"/>
@@ -671,6 +714,35 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="340"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="ProbeBase" abstract="true">
+        <EntryList>
+          <ArrayParameterRefEntry parameterRef="Probes"/>
+          <ParameterRefEntry parameterRef="ProbeData"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="350"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="ProbeOne">
+        <EntryList>
+          <ParameterRefEntry parameterRef="ProbeNote"/>
+        </EntryList>
+        <BaseContainer containerRef="ProbeBase">
+          <RestrictionCriteria>
+            <Comparison parameterRef="Probes[0].Id" value="1"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="ProbeOther">
+        <EntryList/>
+        <BaseContainer containerRef="ProbeBase">
+          <RestrictionCriteria>
+            <Comparison parameterRef="Probes[0].Id" value="1" comparisonOperator="!="/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

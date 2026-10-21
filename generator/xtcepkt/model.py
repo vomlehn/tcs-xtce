@@ -66,8 +66,9 @@ class DynSize:
     table: Optional[tuple] = None
     lookup: Optional[list] = None
     default: int = 0
-    # A reference to an aggregate member (``P.a.b``): ``members`` are its
-    # names, and binding sets ``path`` to their field names.
+    # A reference to an aggregate member or array element (``P.a[2]``):
+    # ``members`` are its steps (names and indexes), and binding sets
+    # ``path`` to field names and Index steps.
     members: tuple = ()
     path: tuple = ()
     slope: float = 1.0
@@ -87,7 +88,7 @@ class DynSize:
         if self.lookup is not None:
             return "a DiscreteLookupList"
         if self.local is not None:
-            return ".".join((self.local.name,) + tuple(self.members))
+            return ref_text(self.local.name, self.members)
         return self.name
 
 
@@ -135,10 +136,34 @@ class ArrayEnc:
     elem: "VType"
     count: Union[int, DynSize]
     gap: int = 0
+    dims: int = 1  # dimensions of an array type, flattened into ``count``
 
     @property
     def max_count(self) -> int:
         return self.count if isinstance(self.count, int) else self.count.max_total
+
+
+@dataclass(frozen=True)
+class Index:
+    """A step into element ``i`` of a one-dimensional array of ``count``
+    elements, in a reference such as ``P[2]``."""
+
+    i: int
+    count: int
+
+
+def ref_text(name: str, steps) -> str:
+    """A reference as XTCE writes it: ``name`` then ``.member`` and
+    ``[index]`` steps (names, or ints and Index for elements)."""
+    out = name
+    for s in steps:
+        if isinstance(s, Index):
+            out += f"[{s.i}]"
+        elif isinstance(s, int):
+            out += f"[{s}]"
+        else:
+            out += "." + s
+    return out
 
 
 @dataclass
@@ -368,9 +393,9 @@ def walk(items: list) -> list:
 @dataclass(eq=False)
 class Criterion:
     """``local <op> value``; ``value`` is an engineering value.  With a
-    ``path`` (field names of nested aggregate members, from a reference
-    such as ``P.a.b``) the criterion is on that member of ``local``, of
-    type ``target``.  With ``other`` (and ``other_path``) it compares two
+    ``path`` (field names of aggregate members and Index steps into
+    arrays, from a reference such as ``P.a[2]``) the criterion is on that
+    part of ``local``, of type ``target``.  With ``other`` (and ``other_path``) it compares two
     values of the packet instead, and ``value`` is unused."""
 
     local: Local
@@ -401,6 +426,19 @@ class AnyOf:
 
     terms: list
     text: str
+
+
+def term_indexes(t) -> list:
+    """(local, path before the step, count) for every array element that
+    a term reads, so that encoding can check those arrays' lengths before
+    it indexes them."""
+    if isinstance(t, Criterion):
+        out = []
+        for lc, path in ((t.local, t.path), (t.other, t.other_path)):
+            if lc is not None:
+                out += [(lc, path[:k], s.count) for k, s in enumerate(path) if isinstance(s, Index)]
+        return out
+    return [x for u in t.terms for x in term_indexes(u)]
 
 
 # A criterion, or a tree of them.  Lists of terms hold when all of them do.

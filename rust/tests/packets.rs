@@ -528,3 +528,49 @@ fn boolean_expressions() {
     o.lo = 2;
     assert_eq!(o.to_bytes(), Err(PacketError::BadSize { field: "Data" }));
 }
+
+#[test]
+fn references_to_array_elements() {
+    let probes = vec![
+        ProbeType {
+            id_: 1,
+            gains: vec![2, 3],
+        },
+        ProbeType {
+            id_: 5,
+            gains: vec![2, 0],
+        },
+    ];
+    let p = ProbeOne {
+        sec_hdr_flag: true,
+        probes: probes.clone(),
+        probe_data: vec![0xab, 0xcd],
+        probe_note: 0x77,
+        ..Default::default()
+    };
+    let b = p.to_bytes().unwrap();
+    assert_eq!(&b[6..], &[0x12, 0x35, 0x20, 0xab, 0xcd, 0x77]);
+    // Probes[0].Id == 1 picks ProbeOne; Probes[1].Gains[0] sizes the data.
+    assert_eq!(
+        CCSDSPacketKind::decode(&b).unwrap(),
+        CCSDSPacketKind::ProbeOne(p.clone())
+    );
+    let mut e = p.clone();
+    e.probes[0].id_ = 4;
+    assert_eq!(
+        e.to_bytes(),
+        Err(PacketError::Mismatch {
+            container: "/Demo/ProbeOne",
+            criterion: "/Demo/Probes[0].Id == 1"
+        })
+    );
+    // The criterion indexes Probes, so its length is checked first.
+    e.probes.clear();
+    assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Probes" }));
+    let mut e = p.clone();
+    e.probes[1].gains[0] = 1;
+    assert_eq!(
+        e.to_bytes(),
+        Err(PacketError::BadSize { field: "ProbeData" })
+    );
+}

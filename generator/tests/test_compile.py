@@ -11,7 +11,7 @@ import xtce  # noqa: E402
 
 from xtcepkt import emit_c  # noqa: E402
 from xtcepkt.compile import compile_document, item_bits, member_path, value_range  # noqa: E402
-from xtcepkt.model import MAX_FIELD_BITS, AnyOf, Pad, Seek, Unsupported  # noqa: E402
+from xtcepkt.model import MAX_FIELD_BITS, AnyOf, Index, Pad, Seek, Unsupported  # noqa: E402
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -806,6 +806,39 @@ class BooleanExpressionTests(unittest.TestCase):
         ):
             with self.subTest(why=why), self.assertRaises(Unsupported) as cm:
                 compile_xml(gate_mission(f"<BooleanExpression>{cond}</BooleanExpression>"))
+            self.assertIn(why, str(cm.exception))
+
+
+
+class ElementTests(unittest.TestCase):
+    def condition(self, dims: str, ref: str) -> str:
+        """Arr of type A with ``dims``, then F included when ``ref`` == 1."""
+        return array_mission(
+            dims,
+            '<ParameterRefEntry parameterRef="N"/><ParameterRefEntry parameterRef="Arr"/>'
+            f'<ParameterRefEntry parameterRef="F"><IncludeCondition><Comparison parameterRef="{ref}" value="1"/>'
+            "</IncludeCondition></ParameterRefEntry>",
+        )
+
+    def test_split(self):
+        self.assertEqual(member_path("P[1].a[0]"), ("P", (1, "a", 0)))
+        with self.assertRaises(Unsupported):
+            member_path("P[x]")
+
+    def test_criterion_on_an_element(self):
+        crit = compile_xml(self.condition(dim(fixed(0), fixed(2)), "Arr[2]")).nodes[0].items[2].criteria[0]
+        self.assertEqual((crit.path, crit.text), ((Index(2, 3),), "/Sat/Arr[2] == 1"))
+
+    def test_rejected(self):
+        for dims, ref, why in (
+            (dim(fixed(0), fixed(2)), "Arr[3]", "element 3 of an array of 3"),
+            (dim(fixed(0), dynamic("N")), "Arr[0]", "element of an array whose count varies"),
+            (dim(fixed(0), fixed(1)) + dim(fixed(0), fixed(1)), "Arr[0]", "element of a 2-dimensional array"),
+            (dim(fixed(0), fixed(1)), "N[0]", "int type /Sat/U8 is not an array"),
+            (dim(fixed(0), fixed(1)), "Arr[0", "malformed reference 'Arr[0'"),
+        ):
+            with self.subTest(why=why), self.assertRaises(Unsupported) as cm:
+                compile_xml(self.condition(dims, ref))
             self.assertIn(why, str(cm.exception))
 
 

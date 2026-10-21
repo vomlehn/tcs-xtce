@@ -13,7 +13,7 @@ from typing import Optional
 
 from .common import flt, int_enc, invertible, le, str_cap, string_spec
 from .compile import snake
-from .model import term_locals, walk, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 ENC = {
     "Unsigned": "XTCE_PK_UNSIGNED",
@@ -56,6 +56,11 @@ def ulit(v: int) -> str:
 
 def bool_lit(b: bool) -> str:
     return "true" if b else "false"
+
+
+def access(path) -> str:
+    """The expression suffix for a member and element path."""
+    return "".join(f".data[{p.i}]" if isinstance(p, Index) else "." + p for p in path)
 
 
 class Acc:
@@ -464,11 +469,11 @@ class CEmitter:
         return self.condition(t, place(t.local), place(t.other) if t.other is not None else None)
 
     def condition(self, c: Criterion, acc: Acc, other: Optional[Acc] = None) -> str:
-        vt, x, op, v = c.vtype, acc.expr + "".join("." + p for p in c.path), c.op, c.value
+        vt, x, op, v = c.vtype, acc.expr + access(c.path), c.op, c.value
         k = vt.kind
         if other is not None:
             # Both values are present: the compiler rejects optional ones.
-            y = other.expr + "".join("." + p for p in c.other_path)
+            y = other.expr + access(c.other_path)
             if k in ("int", "enum"):
                 return f"xtce_pk_cmp_{'i' if k == 'enum' or vt.signed else 'u'}({x}, {y}) {op} 0"
             if k == "string":
@@ -632,7 +637,7 @@ class CEmitter:
         first matching value of a DiscreteLookupList.  ``place`` gives the
         Acc of a Local."""
         if d.lookup is None:
-            return place(d.local).expr + "".join("." + p for p in d.path)
+            return place(d.local).expr + access(d.path)
         x = slit(d.default)
         for criteria, v in reversed(d.lookup):
             cond = " && ".join(f"({self.term(c, place)})" for c in criteria)
@@ -769,6 +774,15 @@ class CEmitter:
         self.line(f"static inline int {t}_encode_into(const {t}* p, xtce_pk_writer* w) {{")
         self.line("(void)p;", 1)
         names = {lc: Acc(f"p->{name}", f"p->has_{name}" if lc.optional else None) for name, lc in n.fields}
+        guards = {}
+        for node in n.chain():
+            for c in node.criteria:
+                for lc, prefix, count in term_indexes(c):
+                    if lc in names:
+                        guards[(names[lc].expr + access(prefix), count)] = lc.name
+        for (x, count), name in guards.items():
+            # Criteria are checked before the arrays they index are written.
+            self.line(f"if ({x}.len != {count}) return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, {cstr(name)}, NULL);", 1)
         for node in n.chain():
             for c in node.criteria:
                 if any(lc in names for lc in term_locals(c)):

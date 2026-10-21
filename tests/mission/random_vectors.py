@@ -112,6 +112,14 @@ def route(rng) -> bytes:
     return bytes([kind << 4 | n]) + rng.randbytes(min(n, 4) + (kind == 2))
 
 
+def probe(rng) -> bytes:
+    """A probe body: two probes, the first mostly with Id 1, and data
+    sized by the second probe's first gain."""
+    ident, size = rng.choice([1, 1, rng.randrange(16)]), rng.choice([0, 2, rng.randrange(16)])
+    head = bits([(4, ident), (8, rng.randrange(256)), (4, rng.randrange(16)), (4, size), (4, rng.randrange(16))])
+    return head + rng.randbytes(size) + rng.randbytes(rng.choice([0, 1]))
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -128,7 +136,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
-            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, 320, 330, 340, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, 320, 330, 340, 350, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -152,6 +160,8 @@ def main() -> None:
                 data += reply(rng)
             elif apid == 320 and rng.random() < 0.8:
                 data += frame(rng)
+            elif apid == 350 and rng.random() < 0.8:
+                data += probe(rng)
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
             elif apid == 340 and rng.random() < 0.8:

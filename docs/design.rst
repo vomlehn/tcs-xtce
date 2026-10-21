@@ -445,6 +445,16 @@ every language because generated aggregates are plain structs. An
 ``==`` criterion on a member doesn't fix the value, since there is no
 field that holds only the member.
 
+Array elements (``P[2]``) extend the same paths with ``Index`` steps,
+which emitters render as ``[i]`` (``.data[i]`` in C). Only fixed counts
+are allowed, so an index is checked against the count when compiling,
+and decoded arrays always have every element. Encoding indexes the
+caller's data, though, and restriction criteria run before anything is
+written. ``term_indexes`` lists the arrays a criterion indexes, and
+encoding checks their lengths first, failing with the same ``BadSize``
+that writing them would. Every other reference is to a value written
+earlier, whose length has already been checked.
+
 A ``DiscreteLookupList`` is a ``DynSize`` too: instead of a ``local``,
 binding compiles its comparisons into ``lookup`` (criteria and a value
 per case, plus ``default``), and that value is ``x``. The emitters
@@ -580,7 +590,8 @@ Limitations and future work
 
 * **Packet codecs** — the main missing XTCE features are:
 
-  * references to array elements, and array subsets.
+  * array subsets, and references to elements of arrays with several
+    dimensions or a count that varies.
 
   The model has room for each of these: new ``Item`` kinds, and
   ``VType`` kinds for structured values, as arrays have.
