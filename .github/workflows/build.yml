@@ -1,0 +1,41 @@
+# Build everything from a clean checkout and run every test, so anything
+# that only works because of files left over in a working tree is caught.
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+          rustup component add rustfmt
+
+      # The OMG documents change only with a new XTCE release; caching them
+      # keeps every run from downloading them.
+      - name: Cache XTCE references
+        uses: actions/cache@v4
+        with:
+          path: |
+            references/*
+            !references/Makefile
+          key: references-${{ hashFiles('references/Makefile') }}
+
+      - name: Cache public XTCE documents
+        uses: actions/cache@v4
+        with:
+          path: tests/external/files
+          key: external-${{ hashFiles('tests/external/sources.txt') }}
+
+      - name: Build and test
+        run: make
+
+      - name: Check public XTCE documents
+        run: make samples-check
