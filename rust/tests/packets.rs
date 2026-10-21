@@ -574,3 +574,32 @@ fn references_to_array_elements() {
         Err(PacketError::BadSize { field: "ProbeData" })
     );
 }
+
+#[test]
+fn array_subsets() {
+    // Rows 1..2 and columns 1..2 of the 3x4 Matrix; Matrix[1][2] is the
+    // second of them.
+    let m = MatrixMiddle {
+        sec_hdr_flag: true,
+        matrix: vec![1, 7, 2, 6],
+        matrix_note: Some(0xab),
+        ..Default::default()
+    };
+    let b = m.to_bytes().unwrap();
+    assert_eq!(&b[6..], &[0x17, 0x26, 0xab]);
+    assert_eq!(MatrixMiddle::decode(&b).unwrap(), m);
+    let mut e = m.clone();
+    e.matrix.push(0);
+    assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Matrix" }));
+
+    // Slots 2..Last.
+    let f = Fill {
+        last: 3,
+        slots: vec![0xaa, 0xbb],
+        ..Default::default()
+    };
+    assert_eq!(Fill::decode(&f.to_bytes().unwrap()).unwrap(), f);
+    let mut e = f.clone();
+    e.last = 4;
+    assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Slots" }));
+}

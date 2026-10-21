@@ -137,6 +137,10 @@ class ArrayEnc:
     count: Union[int, DynSize]
     gap: int = 0
     dims: int = 1  # dimensions of an array type, flattened into ``count``
+    # Each dimension's first index, and its size when every size is fixed
+    # (empty otherwise): what element references and subsets index.
+    starts: tuple = (0,)
+    shape: tuple = ()
 
     @property
     def max_count(self) -> int:

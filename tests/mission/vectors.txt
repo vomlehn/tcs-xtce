@@ -83,3 +83,9 @@ tm 095ec02a0012123520abcd77  # probe, chosen by Probes[0].Id == 1, data sized by
 tm 095ec02a0012423520abcd  # probe, any other Probes[0].Id
 tm 015ec02a001212350077  # probe, no data
 tm 095ec02a0012123520ab  # probe truncated in the data
+tm 0968c02a00121726ab  # matrix middle, a 2x2 subset; Matrix[1][2] == 7 includes the note
+tm 0168c02a00121236  # matrix middle without the note
+tm 0968c02a001217  # matrix middle truncated in the subset
+tc 112ec00600040a03aabb  # fill, Slots 2..3: a subset whose end another argument gives
+tc 112ec00600040a01  # fill, an empty subset
+tc 112ec00600040a05aabbccdd  # fill, an end beyond the ValidRangeSet

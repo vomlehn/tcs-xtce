@@ -829,11 +829,43 @@ class ElementTests(unittest.TestCase):
         crit = compile_xml(self.condition(dim(fixed(0), fixed(2)), "Arr[2]")).nodes[0].items[2].criteria[0]
         self.assertEqual((crit.path, crit.text), ((Index(2, 3),), "/Sat/Arr[2] == 1"))
 
+    def test_element_of_a_two_dimensional_array(self):
+        # Rows 1..2 of 3 elements: Arr[2][1] is the 5th.
+        text = self.condition(dim(fixed(1), fixed(2)) + dim(fixed(0), fixed(2)), "Arr[2][1]")
+        crit = compile_xml(text).nodes[0].items[2].criteria[0]
+        self.assertEqual((crit.path, crit.text), ((Index(4, 6),), "/Sat/Arr[2][1] == 1"))
+
+    def test_subset(self):
+        # Elements 1..3 of 0..4 in the entry, then 2 of them in another.
+        entries = (
+            f'<ParameterRefEntry parameterRef="N"/><ArrayParameterRefEntry parameterRef="Arr"><DimensionList>'
+            f"{dim(fixed(1), fixed(3))}</DimensionList></ArrayParameterRefEntry>"
+        )
+        m = compile_xml(array_mission(dim(fixed(0), fixed(4)), entries))
+        e = m.nodes[0].fields[1][1].vtype.enc
+        self.assertEqual((e.count, e.starts, e.shape), (3, (1,), (3,)))
+        self.assertEqual(m.nodes[0].max_bytes, 1 + 3 * 2)
+        dynamic_end = entries.replace(fixed(3), dynamic("N"))
+        e = compile_xml(array_mission(dim(fixed(0), fixed(4)), dynamic_end)).nodes[0].fields[1][1].vtype.enc
+        self.assertEqual((e.count.max, e.shape), (255, ()))
+
+    def test_subset_rejected(self):
+        for type_dims, subset, why in (
+            (dim(fixed(0), fixed(4)), dim(fixed(2), fixed(5)), "subset of Arr ends after its index 4"),
+            (dim(fixed(1), fixed(4)), dim(fixed(0), fixed(2)), "subset of Arr starts before its index 1"),
+            (dim(fixed(0), fixed(4)), dim(fixed(0), fixed(1)) * 2, "2 dimensions for 1-dimensional Arr"),
+        ):
+            entries = f'<ArrayParameterRefEntry parameterRef="Arr"><DimensionList>{subset}</DimensionList></ArrayParameterRefEntry>'
+            with self.subTest(why=why), self.assertRaises(Unsupported) as cm:
+                compile_xml(array_mission(type_dims, entries))
+            self.assertIn(why, str(cm.exception))
+
     def test_rejected(self):
         for dims, ref, why in (
-            (dim(fixed(0), fixed(2)), "Arr[3]", "element 3 of an array of 3"),
+            (dim(fixed(0), fixed(2)), "Arr[3]", "index 3 is outside 0..2"),
             (dim(fixed(0), dynamic("N")), "Arr[0]", "element of an array whose count varies"),
-            (dim(fixed(0), fixed(1)) + dim(fixed(0), fixed(1)), "Arr[0]", "element of a 2-dimensional array"),
+            (dim(fixed(0), fixed(1)) + dim(fixed(0), fixed(1)), "Arr[0]", "1 indexes for a 2-dimensional array"),
+            (dim(fixed(1), fixed(2)), "Arr[0]", "index 0 is outside 1..2"),
             (dim(fixed(0), fixed(1)), "N[0]", "int type /Sat/U8 is not an array"),
             (dim(fixed(0), fixed(1)), "Arr[0", "malformed reference 'Arr[0'"),
         ):

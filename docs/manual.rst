@@ -653,6 +653,13 @@ A ``RepeatEntry`` ``Offset`` puts that many bits between the elements
 has exactly the number of elements its type gives, including for a
 fixed count, which decoding always fills.
 
+An array entry with a ``DimensionList`` carries a subset of the array:
+the elements from each dimension's ``StartingIndex`` to its
+``EndingIndex``, in the type's index space, last dimension fastest. Its
+field holds just those elements. In the demo, ``MatrixMiddle``'s
+``Matrix`` is rows 1..2 and columns 1..2 of a 3×4 array, so 4 elements,
+and ``Fill``'s ``Slots`` are elements 2 to ``Last`` of 6.
+
 **Sizes and counts from other fields.** XTCE can take a size or count
 from another value of the packet with a ``DynamicValue``: an array
 dimension's ``EndingIndex``, a ``RepeatEntry`` ``Count``, a binary
@@ -1040,9 +1047,11 @@ Aggregates
 
 Array elements
    Criteria, lookups and sizes can refer to an element with XTCE's
-   bracket syntax, mixed with members (``Probes[1].Gains[0]``). The
-   array must have one dimension and a fixed count, and the index must
-   be below it. When encoding, criteria are checked before any field is
+   bracket syntax, mixed with members (``Probes[1].Gains[0]``), with
+   one index per dimension (``Matrix[1][2]``). Every dimension of the
+   array must have a fixed size, and each index must be within its
+   dimension, counting from its ``StartingIndex``; for a subset, the
+   indexes are the full array's, and must fall inside the subset. When encoding, criteria are checked before any field is
    written, so arrays they index are first checked to have their count,
    and encoding fails with ``BadSize`` (naming the field) otherwise. In
    the demo, ``ProbeOne`` and ``ProbeOther`` are chosen by
@@ -1052,10 +1061,11 @@ Arrays
    Elements of any supported type except arrays and values whose size
    another field gives. Each dimension's ``StartingIndex`` is a
    ``FixedValue``; its ``EndingIndex`` is a ``FixedValue`` or, in at most
-   one dimension, a ``DynamicValue``. Entries use the whole array:
-   ``ArrayParameterRefEntry`` and ``ArrayArgumentRefEntry`` (or a plain
-   ``ParameterRefEntry`` or ``ArgumentRefEntry``) without a
-   ``DimensionList``.
+   one dimension, a ``DynamicValue``. ``ArrayParameterRefEntry`` and
+   ``ArrayArgumentRefEntry`` (or a plain ``ParameterRefEntry`` or
+   ``ArgumentRefEntry``) use the whole array, or with a ``DimensionList``
+   a subset, with as many dimensions as the type and within its bounds
+   when they are fixed.
 
 Repeated entries
    ``RepeatEntry`` on parameter and argument entries, with a ``Count``
@@ -1216,9 +1226,7 @@ Name references
    current SpaceSystem, then in each enclosing one.
 
 Not supported
-   references to elements of arrays with several dimensions or a count
-   that varies, array subsets (a ``DimensionList`` in an entry),
-   arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
+   references to elements of arrays whose count varies, arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
    ``RepeatEntry`` offsets that other values give, other instances than 0,
    ``CustomAlgorithm`` criteria, ``NextContainer``, a container
    ``BinaryEncoding`` on command containers, with a size from a

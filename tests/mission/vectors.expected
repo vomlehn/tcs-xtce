@@ -83,3 +83,9 @@ ProbeOne{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, se
 ProbeOther{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, probes=[{id_=4, gains=[2, 3]}, {id_=5, gains=[2, 0]}], probe_data=0xabcd} | 095ec02a0012423520abcd
 ProbeOne{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, probes=[{id_=1, gains=[2, 3]}, {id_=5, gains=[0, 0]}], probe_data=0x, probe_note=119} | 015ec02a001212350077
 error:Truncated | -
+MatrixMiddle{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, matrix=[1, 7, 2, 6], matrix_note=171} | 0968c02a00121726ab
+MatrixMiddle{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, matrix=[1, 2, 3, 6], matrix_note=none} | 0168c02a00121236
+error:Truncated | -
+Fill{seq_count=6, packet_length=4, last=3, slots=[170, 187]} | 112ec00600040a03aabb
+Fill{seq_count=6, packet_length=4, last=1, slots=[]} | 112ec00600040a01
+error:BadSize | -

@@ -284,6 +284,20 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(self.kind(dataclasses.replace(p, probes=[])), "BadSize")
         self.assertEqual(self.kind(dataclasses.replace(p, probe_data=b"\xab")), "BadSize")
 
+    def test_array_subsets(self):
+        # Rows 1..2 and columns 1..2 of the 3x4 Matrix; Matrix[1][2] is the
+        # second of them.
+        m = demo.MatrixMiddle(sec_hdr_flag=True, matrix=[1, 7, 2, 6], matrix_note=0xAB)
+        b = m.to_bytes()
+        self.assertEqual(bytes(b[6:]).hex(), "1726ab")
+        self.assertEqual(demo.MatrixMiddle.decode(b), m)
+        self.assertEqual(self.kind(dataclasses.replace(m, matrix=[1, 7, 2, 6, 0])), "BadSize")
+
+        # Slots 2..Last.
+        f = demo.Fill(last=3, slots=[0xAA, 0xBB])
+        self.assertEqual(demo.Fill.decode(f.to_bytes()), f)
+        self.assertEqual(self.kind(dataclasses.replace(f, last=4)), "BadSize")
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

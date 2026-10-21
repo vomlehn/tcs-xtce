@@ -258,6 +258,26 @@
           </SizeInBits>
         </BinaryDataEncoding>
       </BinaryParameterType>
+      <ArrayParameterType name="MatrixType" arrayTypeRef="U4">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>2</FixedValue>
+            </EndingIndex>
+          </Dimension>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>3</FixedValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
       <IntegerParameterType name="BoardTempType" sizeInBits="8">
         <IntegerDataEncoding sizeInBits="8">
           <DefaultCalibrator>
@@ -446,6 +466,8 @@
       <Parameter name="LogCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="BatchCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="FrameKind" parameterTypeRef="U8"/>
+      <Parameter name="Matrix" parameterTypeRef="MatrixType"/>
+      <Parameter name="MatrixNote" parameterTypeRef="U8"/>
       <Parameter name="Probes" parameterTypeRef="ProbesType"/>
       <Parameter name="ProbeData" parameterTypeRef="ProbeDataType"/>
       <Parameter name="ProbeNote" parameterTypeRef="U8"/>
@@ -746,6 +768,40 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <SequenceContainer name="MatrixMiddle">
+        <EntryList>
+          <ArrayParameterRefEntry parameterRef="Matrix">
+            <DimensionList>
+              <Dimension>
+                <StartingIndex>
+                  <FixedValue>1</FixedValue>
+                </StartingIndex>
+                <EndingIndex>
+                  <FixedValue>2</FixedValue>
+                </EndingIndex>
+              </Dimension>
+              <Dimension>
+                <StartingIndex>
+                  <FixedValue>1</FixedValue>
+                </StartingIndex>
+                <EndingIndex>
+                  <FixedValue>2</FixedValue>
+                </EndingIndex>
+              </Dimension>
+            </DimensionList>
+          </ArrayParameterRefEntry>
+          <ParameterRefEntry parameterRef="MatrixNote">
+            <IncludeCondition>
+              <Comparison parameterRef="Matrix[1][2]" value="7"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="360"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="LogRecord" abstract="true">
         <BinaryEncoding>
           <SizeInBits>
@@ -922,6 +978,18 @@
             </StartingIndex>
             <EndingIndex>
               <FixedValue>1</FixedValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayArgumentType>
+      <ArrayArgumentType name="SlotsType" arrayTypeRef="OpcodeType">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>5</FixedValue>
             </EndingIndex>
           </Dimension>
         </DimensionList>
@@ -1147,6 +1215,38 @@
             <ArgumentRefEntry argumentRef="Lo"/>
             <ArgumentRefEntry argumentRef="Hi"/>
             <ArgumentRefEntry argumentRef="Data"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Fill">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="10"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Last" argumentTypeRef="WordCountType"/>
+          <Argument name="Slots" argumentTypeRef="SlotsType"/>
+        </ArgumentList>
+        <CommandContainer name="FillContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Last"/>
+            <ArrayArgumentRefEntry argumentRef="Slots">
+              <DimensionList>
+                <Dimension>
+                  <StartingIndex>
+                    <FixedValue>2</FixedValue>
+                  </StartingIndex>
+                  <EndingIndex>
+                    <DynamicValue>
+                      <ArgumentInstanceRef argumentRef="Last"/>
+                    </DynamicValue>
+                  </EndingIndex>
+                </Dimension>
+              </DimensionList>
+            </ArrayArgumentRefEntry>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

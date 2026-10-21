@@ -445,7 +445,15 @@ every language because generated aggregates are plain structs. An
 ``==`` criterion on a member doesn't fix the value, since there is no
 field that holds only the member.
 
-Array elements (``P[2]``) extend the same paths with ``Index`` steps,
+An ``ArrayEnc`` keeps each dimension's first index (``starts``) and,
+when all are fixed, its size (``shape``). An array entry with a
+``DimensionList`` replaces the value's type with one for the subset,
+built by the same code as array types, so the subset is just a shorter
+array to every later stage. Its ``starts`` stay in the full array's
+index space, so element references mean the same with or without one.
+
+Array elements (``P[2]``, ``P[1][2]``) extend the same paths with
+``Index`` steps, one per reference and flattened over the dimensions,
 which emitters render as ``[i]`` (``.data[i]`` in C). Only fixed counts
 are allowed, so an index is checked against the count when compiling,
 and decoded arrays always have every element. Encoding indexes the
@@ -590,8 +598,7 @@ Limitations and future work
 
 * **Packet codecs** — the main missing XTCE features are:
 
-  * array subsets, and references to elements of arrays with several
-    dimensions or a count that varies.
+  * references to elements of arrays whose count varies.
 
   The model has room for each of these: new ``Item`` kinds, and
   ``VType`` kinds for structured values, as arrays have.

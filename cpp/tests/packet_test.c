@@ -535,6 +535,38 @@ int main(void) {
     CHECK(strcmp(ENCODE(demo_ProbeOne, &pr), "BadSize") == 0);
   }
 
+  /* Array subsets. */
+  {
+    static demo_MatrixMiddle mm, mm2;
+    static demo_Fill fi, fi2;
+    static const uint8_t body[] = {0x17, 0x26, 0xab};
+    /* Rows 1..2 and columns 1..2 of the 3x4 Matrix; Matrix[1][2] is the
+     * second of them. */
+    demo_MatrixMiddle_init(&mm);
+    mm.sec_hdr_flag = true;
+    mm.matrix.len = 4;
+    mm.matrix.data[0] = 1;
+    mm.matrix.data[1] = 7;
+    mm.matrix.data[2] = 2;
+    mm.matrix.data[3] = 6;
+    mm.has_matrix_note = true;
+    mm.matrix_note = 0xab;
+    CHECK(strcmp(ENCODE(demo_MatrixMiddle, &mm), "Ok") == 0);
+    CHECK(len == 9 && memcmp(buf + 6, body, sizeof body) == 0);
+    CHECK(demo_MatrixMiddle_decode(&mm2, buf, len, &err) == 0 && mm2.has_matrix_note && mm2.matrix.data[3] == 6);
+
+    /* Slots 2..Last. */
+    demo_Fill_init(&fi);
+    fi.last = 3;
+    fi.slots.len = 2;
+    fi.slots.data[0] = 0xaa;
+    fi.slots.data[1] = 0xbb;
+    CHECK(strcmp(ENCODE(demo_Fill, &fi), "Ok") == 0);
+    CHECK(demo_Fill_decode(&fi2, buf, len, &err) == 0 && fi2.slots.len == 2 && fi2.slots.data[1] == 0xbb);
+    fi.last = 4;
+    CHECK(strcmp(ENCODE(demo_Fill, &fi), "BadSize") == 0);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

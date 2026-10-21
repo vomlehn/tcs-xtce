@@ -132,18 +132,27 @@ def walk_members(vt: VType, members: tuple, what: str) -> tuple[tuple, VType]:
     """The path (field names, and Index for array elements) of the steps
     ``members`` inside type ``vt``, and the type they reach."""
     path = []
-    for step in members:
+    steps = list(members)
+    while steps:
+        step = steps.pop(0)
         if isinstance(step, int):
             e = vt.enc
             if vt.kind != "array":
                 raise Unsupported(f"{what}: {vt.kind} type {vt.key} is not an array")
-            if e.dims != 1:
-                raise Unsupported(f"{what}: element of a {e.dims}-dimensional array")
-            if not isinstance(e.count, int):
+            if not e.shape:
                 raise Unsupported(f"{what}: element of an array whose count varies")
-            if step >= e.count:
-                raise Unsupported(f"{what}: element {step} of an array of {e.count}")
-            path.append(Index(step, e.count))
+            # One index per dimension, flattened with the last fastest.
+            index = [step]
+            while len(index) < e.dims and steps and isinstance(steps[0], int):
+                index.append(steps.pop(0))
+            if len(index) < e.dims:
+                raise Unsupported(f"{what}: {len(index)} indexes for a {e.dims}-dimensional array")
+            flat = 0
+            for i, start, size in zip(index, e.starts, e.shape):
+                if not start <= i < start + size:
+                    raise Unsupported(f"{what}: index {i} is outside {start}..{start + size - 1}")
+                flat = flat * size + i - start
+            path.append(Index(flat, e.count))
             vt = e.elem
             continue
         if vt.kind != "aggregate":
@@ -444,19 +453,26 @@ class Compiler:
             raise Unsupported(f"{where}: elements whose size another value gives")
         if is_rest(elem):
             raise Unsupported(f"{where}: elements that take the rest of the packet")
-        dims = t.dimension_list.dimension
+        return VType(key=qname(key), name=t.name, kind="array", enc=self.dimensions(elem, t.dimension_list, path, where))
+
+    def dimensions(self, elem: VType, dl, path: Key, where: str) -> ArrayEnc:
+        """The ArrayEnc of a DimensionList's elements, flattened with the
+        last dimension varying fastest."""
+        dims = dl.dimension if dl is not None else []
         if not dims:
             raise Unsupported(f"{where}: array without dimensions")
-        fixed, dyn = 1, None
+        fixed, dyn, starts, sizes = 1, None, [], []
         for d in dims:
             start = self.int_value(d.starting_index, path, "array StartingIndex", where)
             end = self.int_value(d.ending_index, path, "array EndingIndex", where)
             if isinstance(start, DynSize):
                 raise Unsupported(f"{where}: StartingIndex from DynamicValue")
+            starts.append(start)
             if isinstance(end, int):
                 if end < start - 1:
                     raise Unsupported(f"{where}: EndingIndex {end} is before StartingIndex {start}")
                 fixed *= end - start + 1
+                sizes.append(end - start + 1)
             elif dyn is not None:
                 raise Unsupported(f"{where}: more than one dimension from DynamicValue")
             else:
@@ -465,7 +481,30 @@ class Compiler:
         if dyn is not None:
             dyn.factor = fixed
         count = dyn if dyn is not None else fixed
-        return VType(key=qname(key), name=t.name, kind="array", enc=ArrayEnc(elem, count, dims=len(dims)))
+        shape = tuple(sizes) if dyn is None else ()
+        return ArrayEnc(elem, count, dims=len(dims), starts=tuple(starts), shape=shape)
+
+    def subset(self, local: Local, e, path: Key, where: str) -> Local:
+        """Turns the value of an array entry with a DimensionList into the
+        subset it gives: a list of just those elements."""
+        dl = getattr(e, "dimension_list", None)
+        if dl is None:
+            return local
+        vt = local.vtype
+        if vt.kind != "array":
+            raise Unsupported(f"{where}: DimensionList on {vt.kind} value {local.name}")
+        full = vt.enc
+        enc = self.dimensions(full.elem, dl, path, where)
+        if enc.dims != full.dims:
+            raise Unsupported(f"{where}: {enc.dims} dimensions for {full.dims}-dimensional {local.name}")
+        for k, start in enumerate(enc.starts):
+            if start < full.starts[k]:
+                raise Unsupported(f"{where}: subset of {local.name} starts before its index {full.starts[k]}")
+            if full.shape and enc.shape and start + enc.shape[k] > full.starts[k] + full.shape[k]:
+                raise Unsupported(f"{where}: subset of {local.name} ends after its index {full.starts[k] + full.shape[k] - 1}")
+        doc = f"a subset of {vt.key}" + (f"; {vt.doc}" if vt.doc else "")
+        local.vtype = VType(key=vt.key, name=vt.name, kind="array", enc=enc, doc=doc)
+        return local
 
     def aggregate_type(self, key: Key, table: dict, path: Key, t, where: str, cache) -> VType:
         """An aggregate type: its members, encoded one after another."""
@@ -738,7 +777,8 @@ class Compiler:
                 raise Unsupported(f"{where}: RepeatEntry Count {count} is not positive")
             if count == 1:
                 return local
-        local.vtype = VType(key=vt.key, name=vt.name, kind="array", enc=ArrayEnc(vt, count, gap), doc=vt.doc)
+        shape = (count,) if isinstance(count, int) else ()
+        local.vtype = VType(key=vt.key, name=vt.name, kind="array", enc=ArrayEnc(vt, count, gap, shape=shape), doc=vt.doc)
         return local
 
     def bind(self, local: Local, scope: list, where: str, arg_key: Optional[Callable] = None) -> Local:
@@ -792,15 +832,13 @@ class Compiler:
             where = f"container {qname(stack[-1])}"
             if ch.name not in ("ParameterRefEntry", "ContainerRefEntry", "ArrayParameterRefEntry"):
                 raise Unsupported(f"{where}: {ch.name}")
-            if getattr(e, "dimension_list", None) is not None:
-                raise Unsupported(f"{where}: array subsets (DimensionList in an array entry)")
             cond = None
             if e.include_condition is not None:
                 cond = self.match(e.include_condition, path, scope, where)
             out = items if cond is None else []
             out += self.location(e.location_in_container_in_bits, start, path, scope, where)
             if ch.name != "ContainerRefEntry":
-                local = self.param_local(e.parameter_ref, path)
+                local = self.subset(self.param_local(e.parameter_ref, path), e, path, where)
                 local = self.bind(self.repeat(local, e, path, where), scope, where)
                 out.append(Value(local))
                 scope.append(local)
@@ -1146,14 +1184,13 @@ class Compiler:
                 raise Unsupported(f"{where}: {ch.name} in a CommandContainer")
             if e.include_condition is not None:
                 raise Unsupported(f"{where}: IncludeCondition in a CommandContainer")
-            if getattr(e, "dimension_list", None) is not None:
-                raise Unsupported(f"{where}: array subsets (DimensionList in an array entry)")
             items += self.location(e.location_in_container_in_bits, 0, path, values, where, arg_key)
             if ch.name in entries:
                 if "Argument" in ch.name:
                     local = self.arg_local(scope, e.argument_ref, where)
                 else:
                     local = self.param_local(e.parameter_ref, path)
+                local = self.subset(local, e, path, where)
                 local = self.bind(self.repeat(local, e, path, where), values, where, arg_key)
                 items.append(Value(local))
                 values.append(local)
