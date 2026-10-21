@@ -473,6 +473,37 @@ int main(void) {
     CHECK(demo_Plan_decode(&pl2, buf, len, &err) == 0 && pl2.leg.count == 2 && pl2.points.data[1] == 20);
   }
 
+  /* Boolean expressions. */
+  {
+    static demo_Gate g, g2;
+    static demo_Open o, o2;
+    /* GateSpan is there when GateLo < GateHi, or both are zero. */
+    demo_Gate_init(&g);
+    g.sec_hdr_flag = true;
+    g.gate_lo = 1;
+    g.gate_hi = 2;
+    g.has_gate_span = true;
+    g.gate_span = 0xabcd;
+    CHECK(strcmp(ENCODE(demo_Gate, &g), "Ok") == 0 && len == 10);
+    CHECK(demo_Gate_decode(&g2, buf, len, &err) == 0 && g2.has_gate_span && g2.gate_span == 0xabcd);
+    g.gate_lo = 0;
+    g.gate_hi = 0;
+    CHECK(strcmp(ENCODE(demo_Gate, &g), "Ok") == 0 && len == 10);
+    g.gate_lo = 3;
+    CHECK(strcmp(ENCODE(demo_Gate, &g), "Ok") == 0 && len == 8);
+    CHECK(demo_Gate_decode(&g2, buf, len, &err) == 0 && !g2.has_gate_span);
+
+    /* Data is 2 bytes when Lo < Hi. */
+    demo_Open_init(&o);
+    o.lo = 1;
+    o.hi = 2;
+    o.data_.len = 2;
+    CHECK(strcmp(ENCODE(demo_Open, &o), "Ok") == 0);
+    CHECK(demo_Open_decode(&o2, buf, len, &err) == 0 && o2.data_.len == 2);
+    o.lo = 2;
+    CHECK(strcmp(ENCODE(demo_Open, &o), "BadSize") == 0);
+  }
+
   /* Decode errors carry a message. */
   {
     char msg[128];

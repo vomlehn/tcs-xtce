@@ -406,6 +406,9 @@
       <Parameter name="LogCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="BatchCount" parameterTypeRef="SampleCountType"/>
       <Parameter name="FrameKind" parameterTypeRef="U8"/>
+      <Parameter name="GateLo" parameterTypeRef="U8"/>
+      <Parameter name="GateHi" parameterTypeRef="U8"/>
+      <Parameter name="GateSpan" parameterTypeRef="U16"/>
       <Parameter name="RouteHdr" parameterTypeRef="RouteHeaderType"/>
       <Parameter name="Stops" parameterTypeRef="U8"/>
       <Parameter name="Detour" parameterTypeRef="U8"/>
@@ -635,6 +638,42 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <SequenceContainer name="Gate">
+        <EntryList>
+          <ParameterRefEntry parameterRef="GateLo"/>
+          <ParameterRefEntry parameterRef="GateHi"/>
+          <ParameterRefEntry parameterRef="GateSpan">
+            <IncludeCondition>
+              <BooleanExpression>
+                <ORedConditions>
+                  <Condition>
+                    <ParameterInstanceRef parameterRef="GateLo"/>
+                    <ComparisonOperator>&lt;</ComparisonOperator>
+                    <ParameterInstanceRef parameterRef="GateHi"/>
+                  </Condition>
+                  <ANDedConditions>
+                    <Condition>
+                      <ParameterInstanceRef parameterRef="GateLo"/>
+                      <ComparisonOperator>==</ComparisonOperator>
+                      <Value>0</Value>
+                    </Condition>
+                    <Condition>
+                      <ParameterInstanceRef parameterRef="GateHi"/>
+                      <ComparisonOperator>==</ComparisonOperator>
+                      <Value>0</Value>
+                    </Condition>
+                  </ANDedConditions>
+                </ORedConditions>
+              </BooleanExpression>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="340"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="LogRecord" abstract="true">
         <BinaryEncoding>
           <SizeInBits>
@@ -734,6 +773,23 @@
                 <Comparison value="Science">
                   <ArgumentInstanceRef argumentRef="Mode"/>
                 </Comparison>
+              </DiscreteLookup>
+            </DiscreteLookupList>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryArgumentType>
+      <BinaryArgumentType name="OpenDataType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DiscreteLookupList defaultValue="0">
+              <DiscreteLookup value="16">
+                <BooleanExpression>
+                  <Condition>
+                    <ArgumentInstanceRef argumentRef="Lo"/>
+                    <ComparisonOperator>&lt;</ComparisonOperator>
+                    <ArgumentInstanceRef argumentRef="Hi"/>
+                  </Condition>
+                </BooleanExpression>
               </DiscreteLookup>
             </DiscreteLookupList>
           </SizeInBits>
@@ -998,6 +1054,27 @@
                 </Count>
               </RepeatEntry>
             </ArgumentRefEntry>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Open">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="9"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Lo" argumentTypeRef="OpcodeType"/>
+          <Argument name="Hi" argumentTypeRef="OpcodeType"/>
+          <Argument name="Data" argumentTypeRef="OpenDataType"/>
+        </ArgumentList>
+        <CommandContainer name="OpenContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Lo"/>
+            <ArgumentRefEntry argumentRef="Hi"/>
+            <ArgumentRefEntry argumentRef="Data"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

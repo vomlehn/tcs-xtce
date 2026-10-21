@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from .common import flt, int_enc, invertible, le, string_spec
-from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .model import term_locals, walk, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 
 def rstr(s: str) -> str:
@@ -90,7 +90,7 @@ def source(d: DynSize, place) -> str:
         return place(d.local) + "".join("." + p for p in d.path)
     x = f"{d.default}i64"
     for criteria, v in reversed(d.lookup):
-        x = f"if {conjunction([condition(c, place(c.local)) for c in criteria])} {{ {v}i64 }} else {{ {x} }}"
+        x = f"if {conjunction([term(c, place) for c in criteria])} {{ {v}i64 }} else {{ {x} }}"
     return f"({x})"
 
 
@@ -269,10 +269,26 @@ def conjunction(conds: list) -> str:
     return conds[0] if len(conds) == 1 else " && ".join(f"({c})" for c in conds)
 
 
-def condition(c: Criterion, x: str) -> str:
-    """``x`` is the expression for the criterion's local."""
+def term(t, place) -> str:
+    """Expression for a criterion or a tree of them; ``place`` gives the
+    expression for a Local."""
+    if isinstance(t, (AllOf, AnyOf)):
+        return (" && " if isinstance(t, AllOf) else " || ").join(f"({term(x, place)})" for x in t.terms)
+    return condition(t, place(t.local), place(t.other) if t.other is not None else None)
+
+
+def condition(c: Criterion, x: str, y=None) -> str:
+    """``x`` is the expression for the criterion's local, and ``y`` for
+    the value it compares with, if any."""
     vt = c.vtype
     x += "".join("." + p for p in c.path)
+    if y is not None:
+        y += "".join("." + p for p in c.other_path)
+        if vt.kind == "int":
+            return f"({x} as i128) {c.op} ({y} as i128)"
+        if vt.kind == "enum":
+            return f"{x}.0 {c.op} {y}.0"
+        return f"{x} {c.op} {y}"
     if vt.kind == "int":
         return f"({x} as i128) {c.op} {c.value}"
     if vt.kind == "enum":
@@ -376,7 +392,7 @@ class RustEmitter:
                     for v in walk(it.items):
                         if isinstance(v, Value):
                             self.line(f"let mut v{v.local.id} = None;", depth)
-                self.line(f"if {conjunction([condition(c, f'v{c.local.id}') for c in it.criteria])} {{", depth)
+                self.line(f"if {conjunction([term(c, lambda lc: f'v{lc.id}') for c in it.criteria])} {{", depth)
                 self.read_items(it.items, depth + 1, where, True)
                 self.line("}", depth)
             else:
@@ -397,7 +413,7 @@ class RustEmitter:
             elif isinstance(it, Pad):
                 self.line(f"w.zeros({it.bits});", depth)
             elif isinstance(it, Cond):
-                conds = [condition(c, self.place(n, c.local, names)) for c in it.criteria]
+                conds = [term(c, lambda lc: self.place(n, lc, names)) for c in it.criteria]
                 self.line(f"if {conjunction(conds)} {{", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
                 self.line("}", depth)
@@ -464,7 +480,7 @@ class RustEmitter:
         self.line("let mut r = BitReader::new(data);", 2)
         for i, node in enumerate(n.chain()):
             for c in node.criteria:
-                self.line(f"if !({condition(c, f'v{c.local.id}')}) {{", 2)
+                self.line(f"if !({term(c, lambda lc: f'v{lc.id}')}) {{", 2)
                 self.line(f"return Err(PacketError::Mismatch {{ container: {rstr(node.key)}, criterion: {rstr(c.text)} }});", 3)
                 self.line("}", 2)
             self.read_items(node.items, 2, node.key)
@@ -475,8 +491,8 @@ class RustEmitter:
         names = {lc: name for name, lc in n.fields}
         for node in n.chain():
             for c in node.criteria:
-                if c.local in names:
-                    self.line(f"if !({condition(c, 'self.' + names[c.local])}) {{", 2)
+                if any(lc in names for lc in term_locals(c)):
+                    self.line(f"if !({term(c, lambda lc: self.place(n, lc, names))}) {{", 2)
                     self.line(f"return Err(PacketError::Mismatch {{ container: {rstr(node.key)}, criterion: {rstr(c.text)} }});", 3)
                     self.line("}", 2)
         for node in n.chain():
@@ -554,7 +570,7 @@ class RustEmitter:
         for c in n.children:
             if c.error:
                 continue
-            self.line(f"if {conjunction([condition(x, f'v{x.local.id}') for x in c.criteria])} {{", depth)
+            self.line(f"if {conjunction([term(x, lambda lc: f'v{lc.id}') for x in c.criteria])} {{", depth)
             self.read_items(c.items, depth + 1, c.key)
             self.dispatch(k, c, depth + 1)
             self.line("}", depth)

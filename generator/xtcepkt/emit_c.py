@@ -13,7 +13,7 @@ from typing import Optional
 
 from .common import flt, int_enc, invertible, le, str_cap, string_spec
 from .compile import snake
-from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .model import term_locals, walk, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 ENC = {
     "Unsigned": "XTCE_PK_UNSIGNED",
@@ -456,9 +456,24 @@ class CEmitter:
             self.line(f"XTCE_PK_TRY(xtce_pk_write_string(w, {spec}, {data}, {n}, {f}));", depth + 1)
             self.line("}", depth)
 
-    def condition(self, c: Criterion, acc: Acc) -> str:
+    def term(self, t, place) -> str:
+        """Expression for a criterion or a tree of them; ``place`` gives
+        the Acc of a Local."""
+        if isinstance(t, (AllOf, AnyOf)):
+            return (" && " if isinstance(t, AllOf) else " || ").join(f"({self.term(x, place)})" for x in t.terms)
+        return self.condition(t, place(t.local), place(t.other) if t.other is not None else None)
+
+    def condition(self, c: Criterion, acc: Acc, other: Optional[Acc] = None) -> str:
         vt, x, op, v = c.vtype, acc.expr + "".join("." + p for p in c.path), c.op, c.value
         k = vt.kind
+        if other is not None:
+            # Both values are present: the compiler rejects optional ones.
+            y = other.expr + "".join("." + p for p in c.other_path)
+            if k in ("int", "enum"):
+                return f"xtce_pk_cmp_{'i' if k == 'enum' or vt.signed else 'u'}({x}, {y}) {op} 0"
+            if k == "string":
+                return f"xtce_pk_bytes_cmp({x}.data, {x}.len, {y}.data, {y}.len) {op} 0"
+            return f"{x} {op} {y}"
         if k in ("int", "enum"):
             signed = k == "enum" or vt.signed
             lo, hi = (I64_MIN, I64_MAX) if signed else (0, U64_MAX)
@@ -620,7 +635,7 @@ class CEmitter:
             return place(d.local).expr + "".join("." + p for p in d.path)
         x = slit(d.default)
         for criteria, v in reversed(d.lookup):
-            cond = " && ".join(f"({self.condition(c, place(c.local))})" for c in criteria)
+            cond = " && ".join(f"({self.term(c, place)})" for c in criteria)
             x = f"({cond}) ? {slit(v)} : {x}"
         return f"({x})"
 
@@ -671,7 +686,7 @@ class CEmitter:
                         if isinstance(v, Value):
                             self.line(f"bool h{v.local.id} = false;", depth)
                             self.local(v.local.vtype, f"v{v.local.id}", depth)
-                cond = " && ".join(f"({self.condition(c, self.local_acc(c))})" for c in it.criteria)
+                cond = " && ".join(f"({self.term(c, self.read_acc)})" for c in it.criteria)
                 self.line(f"if ({cond}) {{", depth)
                 self.read_items(it.items, depth + 1, where, True)
                 self.line("}", depth)
@@ -686,8 +701,8 @@ class CEmitter:
         self.line(f"(void){name};", depth)
 
     @staticmethod
-    def local_acc(c: Criterion) -> Acc:
-        lc = c.local
+    def read_acc(lc) -> Acc:
+        """How decoding code reaches a value."""
         return Acc(f"v{lc.id}", f"h{lc.id}" if lc.optional else None)
 
     def write_items(self, n: Node, items, depth: int, where: str, names: dict) -> None:
@@ -702,7 +717,7 @@ class CEmitter:
             elif isinstance(it, Pad):
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {it.bits}));", depth)
             elif isinstance(it, Cond):
-                cond = " && ".join(f"({self.condition(c, self.place(n, c.local, names))})" for c in it.criteria)
+                cond = " && ".join(f"({self.term(c, lambda lc: self.place(n, lc, names))})" for c in it.criteria)
                 self.line(f"if ({cond}) {{", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
                 self.line("}", depth)
@@ -743,7 +758,7 @@ class CEmitter:
         self.line("(void)out;", 1)
         for node in n.chain():
             for c in node.criteria:
-                self.line(f"if (!({self.condition(c, self.local_acc(c))})) {{", 1)
+                self.line(f"if (!({self.term(c, self.read_acc)})) {{", 1)
                 self.line(f"return xtce_pk_fail(err, XTCE_PK_MISMATCH, {cstr(node.key)}, {cstr(c.text)});", 2)
                 self.line("}", 1)
             self.read_items(node.items, 1, node.key)
@@ -756,8 +771,8 @@ class CEmitter:
         names = {lc: Acc(f"p->{name}", f"p->has_{name}" if lc.optional else None) for name, lc in n.fields}
         for node in n.chain():
             for c in node.criteria:
-                if c.local in names:
-                    self.line(f"if (!({self.condition(c, names[c.local])})) {{", 1)
+                if any(lc in names for lc in term_locals(c)):
+                    self.line(f"if (!({self.term(c, lambda lc: self.place(n, lc, names))})) {{", 1)
                     self.line(f"return xtce_pk_fail(w->err, XTCE_PK_MISMATCH, {cstr(node.key)}, {cstr(c.text)});", 2)
                     self.line("}", 1)
         for node in n.chain():
@@ -863,7 +878,7 @@ class CEmitter:
         for c in n.children:
             if c.error:
                 continue
-            conds = [self.condition(x, self.local_acc(x)) for x in c.criteria]
+            conds = [self.term(x, self.read_acc) for x in c.criteria]
             cond = " && ".join(f"({x})" for x in conds) if len(conds) > 1 else (conds or ["1"])[0]
             self.line(f"if ({cond}) {{", depth)
             self.read_items(c.items, depth + 1, c.key)

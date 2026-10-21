@@ -425,6 +425,16 @@ fold into the intercept and factor, so one runtime function,
 language, so the three runtimes accept and reject exactly the same
 values.
 
+Criteria are lists of terms that must all hold. A term is a
+``Criterion`` (one comparison) or, from a ``BooleanExpression``, an
+``AllOf`` or ``AnyOf`` of further terms, so ``ComparisonList`` and the
+expression trees share one representation. A ``Criterion`` compares a
+value with a constant or, with ``other``, with a second value. Each
+emitter renders a term recursively with a callback that gives the
+expression for a value: the decoded local, the struct field, or the
+fixed constant when encoding. Only a top-level ``==`` against a
+constant fixes a field, since nothing else pins down one value.
+
 A reference to an aggregate member (XTCE's ``P.a.b``) is split into the
 parameter or argument and the member names; names can't contain dots,
 so that is unambiguous. Binding a ``DynSize``, or compiling a
@@ -570,8 +580,7 @@ Limitations and future work
 
 * **Packet codecs** — the main missing XTCE features are:
 
-  * references to array elements, and array subsets;
-  * ``BooleanExpression`` criteria.
+  * references to array elements, and array subsets.
 
   The model has room for each of these: new ``Item`` kinds, and
   ``VType`` kinds for structured values, as arrays have.

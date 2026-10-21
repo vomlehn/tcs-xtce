@@ -128,7 +128,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
-            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, 320, 330, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, 320, 330, 340, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -154,10 +154,12 @@ def main() -> None:
                 data += frame(rng)
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
+            elif apid == 340 and rng.random() < 0.8:
+                data += rng.choice([bytes([1, 2]), bytes([0, 0]), bytes([2, 1]), rng.randbytes(2)]) + rng.randbytes(rng.choice([0, 1, 2]))
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
-            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, rng.randrange(256)])
+            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
@@ -167,6 +169,9 @@ def main() -> None:
             elif opcode == 7 and rng.random() < 0.8:
                 mode = rng.choice([0, 1, 2, rng.randrange(256)])
                 data += bytes([mode]) + rng.randbytes({0: 0, 2: 3}.get(mode, 1))
+            elif opcode == 9 and rng.random() < 0.8:
+                lo, hi = rng.randrange(4), rng.randrange(4)
+                data += bytes([lo, hi]) + rng.randbytes(2 if lo < hi else 0)
             elif opcode == 8 and rng.random() < 0.8:
                 n = rng.choice([1, 2, 4, rng.randrange(6)])
                 data += bytes([rng.randrange(3), n]) + rng.randbytes(2 * min(n, 4))

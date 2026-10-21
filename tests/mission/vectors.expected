@@ -73,3 +73,9 @@ error:BadSize | -
 error:Truncated | -
 Plan{seq_count=6, packet_length=4, leg={mode=Nominal, count=2}, points=[10, 20]} | 112ec0060004080102000a0014
 error:BadSize | -
+Gate{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, gate_lo=1, gate_hi=2, gate_span=43981} | 0954c02a00120102abcd
+Gate{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, packet_length=18, gate_lo=0, gate_hi=0, gate_span=43981} | 0954c02a00120000abcd
+Gate{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, packet_length=18, gate_lo=2, gate_hi=1, gate_span=none} | 0154c02a00120201
+error:Truncated | -
+Open{seq_count=6, packet_length=4, lo=1, hi=2, data_=0x1234} | 112ec00600040901021234
+Open{seq_count=6, packet_length=4, lo=2, hi=1, data_=0x} | 112ec0060004090201

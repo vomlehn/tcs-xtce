@@ -11,7 +11,7 @@ import xtce  # noqa: E402
 
 from xtcepkt import emit_c  # noqa: E402
 from xtcepkt.compile import compile_document, item_bits, member_path, value_range  # noqa: E402
-from xtcepkt.model import MAX_FIELD_BITS, Pad, Seek, Unsupported  # noqa: E402
+from xtcepkt.model import MAX_FIELD_BITS, AnyOf, Pad, Seek, Unsupported  # noqa: E402
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -750,6 +750,62 @@ class MemberPathTests(unittest.TestCase):
             )
             with self.subTest(ref), self.assertRaises(Unsupported) as cm:
                 compile_xml(text)
+            self.assertIn(why, str(cm.exception))
+
+
+
+def gate_mission(criteria: str, types: str = "") -> str:
+    """Telemetry with U8 parameters A and B, a float F, and a derived
+    container chosen by ``criteria`` (the inside of RestrictionCriteria)."""
+    return mission(
+        tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false"><IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <IntegerParameterType name="S8"><IntegerDataEncoding sizeInBits="8" encoding="twosComplement"/></IntegerParameterType>
+          <FloatParameterType name="F"><FloatDataEncoding sizeInBits="32"/></FloatParameterType>
+          {types}
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="A" parameterTypeRef="U8"/><Parameter name="B" parameterTypeRef="U8"/>
+          <Parameter name="S" parameterTypeRef="S8"/><Parameter name="X" parameterTypeRef="F"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="Base" abstract="true"><EntryList>
+            <ParameterRefEntry parameterRef="A"/><ParameterRefEntry parameterRef="B"/>
+            <ParameterRefEntry parameterRef="S"/><ParameterRefEntry parameterRef="X"/>
+          </EntryList></SequenceContainer>
+          <SequenceContainer name="Derived"><EntryList/>
+            <BaseContainer containerRef="Base"><RestrictionCriteria>{criteria}</RestrictionCriteria></BaseContainer>
+          </SequenceContainer>
+        </ContainerSet>"""
+    )
+
+
+def check(lhs: str, op: str, rhs: str) -> str:
+    """A BooleanExpression Condition; ``rhs`` is a parameter name or =value."""
+    right = f"<Value>{rhs[1:]}</Value>" if rhs.startswith("=") else f'<ParameterInstanceRef parameterRef="{rhs}"/>'
+    op = op.replace("<", "&lt;").replace(">", "&gt;")
+    return f'<Condition><ParameterInstanceRef parameterRef="{lhs}"/><ComparisonOperator>{op}</ComparisonOperator>{right}</Condition>'
+
+
+class BooleanExpressionTests(unittest.TestCase):
+    def test_tree(self):
+        be = f"<BooleanExpression><ORedConditions>{check('A', '<', 'B')}<ANDedConditions>{check('A', '==', '=0')}{check('B', '==', '=0')}</ANDedConditions></ORedConditions></BooleanExpression>"
+        n = compile_xml(gate_mission(be)).nodes[0]
+        (t,) = n.criteria
+        self.assertIsInstance(t, AnyOf)
+        self.assertEqual(t.text, "(/Sat/A < /Sat/B or (/Sat/A == 0 and /Sat/B == 0))")
+        self.assertEqual(t.terms[0].other.name, "B")
+        # Only plain comparisons fix a field's value.
+        self.assertEqual(n.fixed, {})
+
+    def test_rejected(self):
+        for cond, why in (
+            (check("A", "<", "S"), "comparison of signed and unsigned values /Sat/A and /Sat/S"),
+            (check("A", "==", "X"), "comparison of int /Sat/A and float /Sat/X"),
+        ):
+            with self.subTest(why=why), self.assertRaises(Unsupported) as cm:
+                compile_xml(gate_mission(f"<BooleanExpression>{cond}</BooleanExpression>"))
             self.assertIn(why, str(cm.exception))
 
 

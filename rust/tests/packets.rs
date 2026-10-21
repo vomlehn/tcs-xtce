@@ -496,3 +496,35 @@ fn references_to_aggregate_members() {
     };
     assert_eq!(Plan::decode(&p.to_bytes().unwrap()).unwrap(), p);
 }
+
+#[test]
+fn boolean_expressions() {
+    // GateSpan is there when GateLo < GateHi, or both are zero.
+    let mut g = Gate {
+        sec_hdr_flag: true,
+        gate_lo: 1,
+        gate_hi: 2,
+        gate_span: Some(0xabcd),
+        ..Default::default()
+    };
+    assert_eq!(&g.to_bytes().unwrap()[6..], &[1, 2, 0xab, 0xcd]);
+    assert_eq!(Gate::decode(&g.to_bytes().unwrap()).unwrap(), g);
+    g.gate_lo = 0;
+    g.gate_hi = 0;
+    assert_eq!(Gate::decode(&g.to_bytes().unwrap()).unwrap(), g);
+    g.gate_lo = 3;
+    assert_eq!(g.to_bytes().unwrap().len(), 8);
+    g.gate_span = None;
+    assert_eq!(Gate::decode(&g.to_bytes().unwrap()).unwrap(), g);
+
+    // Data is 2 bytes when Lo < Hi.
+    let mut o = Open {
+        lo: 1,
+        hi: 2,
+        data_: vec![0x12, 0x34],
+        ..Default::default()
+    };
+    assert_eq!(Open::decode(&o.to_bytes().unwrap()).unwrap(), o);
+    o.lo = 2;
+    assert_eq!(o.to_bytes(), Err(PacketError::BadSize { field: "Data" }));
+}

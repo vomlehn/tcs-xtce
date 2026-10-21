@@ -347,7 +347,7 @@ class Fixed:
 class Cond:
     """Entries present only when all ``criteria`` hold (IncludeCondition)."""
 
-    criteria: list["Criterion"]
+    criteria: list["Term"]
     items: list["Item"]
 
 
@@ -370,7 +370,8 @@ class Criterion:
     """``local <op> value``; ``value`` is an engineering value.  With a
     ``path`` (field names of nested aggregate members, from a reference
     such as ``P.a.b``) the criterion is on that member of ``local``, of
-    type ``target``."""
+    type ``target``.  With ``other`` (and ``other_path``) it compares two
+    values of the packet instead, and ``value`` is unused."""
 
     local: Local
     op: str
@@ -378,10 +379,39 @@ class Criterion:
     text: str  # as written in the XTCE file, for error messages
     path: tuple = ()
     target: Optional["VType"] = None
+    other: Optional[Local] = None
+    other_path: tuple = ()
 
     @property
     def vtype(self) -> "VType":
         return self.target if self.target is not None else self.local.vtype
+
+
+@dataclass(eq=False)
+class AllOf:
+    """Holds when every term holds (a BooleanExpression ANDedConditions)."""
+
+    terms: list
+    text: str
+
+
+@dataclass(eq=False)
+class AnyOf:
+    """Holds when any term holds (a BooleanExpression ORedConditions)."""
+
+    terms: list
+    text: str
+
+
+# A criterion, or a tree of them.  Lists of terms hold when all of them do.
+Term = Union[Criterion, AllOf, AnyOf]
+
+
+def term_locals(t: Term) -> list:
+    """The values a term reads."""
+    if isinstance(t, Criterion):
+        return [t.local] + ([t.other] if t.other is not None else [])
+    return [lc for x in t.terms for lc in term_locals(x)]
 
 
 @dataclass(eq=False)

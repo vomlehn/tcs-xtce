@@ -73,3 +73,9 @@ tm 094ac02a00122401020304  # route, a member count beyond its ValidRange
 tm 094ac02a00122105  # route truncated before its detour
 tc 112ec0060004080102000a0014  # plan, a count from an argument's member
 tc 112ec0060004080205000100020003000400050006  # plan, a member count beyond its ValidRangeSet
+tm 0954c02a00120102abcd  # gate, GateLo < GateHi includes the span
+tm 0954c02a00120000abcd  # gate, both zero includes the span
+tm 0154c02a00120201  # gate, neither: no span
+tm 0954c02a00120102ab  # gate truncated in the span
+tc 112ec00600040901021234  # open, Lo < Hi: 2 bytes of data
+tc 112ec006000409020100  # open, Lo > Hi: no data

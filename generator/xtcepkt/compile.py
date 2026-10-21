@@ -18,6 +18,8 @@ from .common import str_cap
 from .model import (
     MAX_FIELD_BITS,
     AggregateEnc,
+    AllOf,
+    AnyOf,
     ArrayEnc,
     BinaryEnc,
     Cond,
@@ -39,6 +41,7 @@ from .model import (
     Seek,
     Spline,
     StringEnc,
+    Term,
     Unsupported,
     Value,
     VType,
@@ -928,11 +931,13 @@ class Compiler:
     def scope_of(node: Node) -> list[Local]:
         return [it.local for it in walk(node.all_items()) if isinstance(it, Value)]
 
-    def match(self, mc, path: Key, scope: list, where: str, arg_key: Optional[Callable] = None) -> list[Criterion]:
-        """Criteria of a RestrictionCriteria, IncludeCondition or
+    def match(self, mc, path: Key, scope: list, where: str, arg_key: Optional[Callable] = None) -> list:
+        """Terms of a RestrictionCriteria, IncludeCondition or
         DiscreteLookup, on values in ``scope``; ``arg_key`` resolves
         argument names in commands."""
         c = mc.choice
+        if c.name == "BooleanExpression":
+            return [self.boolean(c.value.choice, path, scope, where, arg_key)]
         if c.name == "Comparison":
             comps = [c.value]
         elif c.name == "ComparisonList":
@@ -941,42 +946,79 @@ class Compiler:
             raise Unsupported(f"{where}: {c.name} criteria")
         out = []
         for cmp in comps:
-            instance, raw = None, False
+            op = cmp.comparison_operator.value if cmp.comparison_operator else "=="
             if hasattr(cmp, "choice"):  # an ArgumentComparison
                 ref = cmp.choice.value
-                if cmp.choice.name == "ArgumentInstanceRef":
-                    if arg_key is None:
-                        raise Unsupported(f"{where}: comparison of argument {ref.argument_ref!r} outside a command")
-                    base, members = member_path(ref.argument_ref)
-                    pkey = arg_key(base)
-                else:
-                    base, members = member_path(ref.parameter_ref)
-                    pkey = qname(self.resolve(base, path, self.params, "parameter"))
-                    instance = ref.instance
+                out.append(self.comparison(cmp.choice.name, ref, op, cmp.value, path, scope, where, arg_key))
             else:
-                base, members = member_path(cmp.parameter_ref)
-                pkey = qname(self.resolve(base, path, self.params, "parameter"))
-                instance, raw = cmp.instance, cmp.use_calibrated_value is False
-            local = next((lc for lc in reversed(scope) if lc.key == pkey), None)
-            if local is None:
-                raise Unsupported(f"{where}: criterion on {pkey}, which is not decoded before it")
-            if local.optional:
-                raise Unsupported(f"{where}: criterion on {pkey}, which has an IncludeCondition")
-            member, vt = walk_members(local.vtype, members, f"{where}: criterion on {pkey}")
-            pkey = ".".join((pkey,) + members)
-            if vt.kind in ("array", "aggregate"):
-                raise Unsupported(f"{where}: criterion on {pkey}, which is an {vt.kind}")
-            if instance:
-                raise Unsupported(f"{where}: comparison of instance {instance}")
-            if raw and (vt.kind not in ("int", "enum", "bool") or vt.calibrator is not None or isinstance(vt.enc, StringEnc)):
-                raise Unsupported(f"{where}: raw comparison on {vt.kind} parameter {pkey}")
-            op = cmp.comparison_operator.value if cmp.comparison_operator else "=="
-            if op not in ("==", "!=") and vt.kind in ("bool", "string", "binary"):
-                raise Unsupported(f"{where}: {op} on {vt.kind} parameter {pkey}")
-            value = self.literal(vt, cmp.value, raw, where)
-            target = vt if members else None
-            out.append(Criterion(local, op, value, f"{pkey} {op} {cmp.value}", member, target))
+                out.append(self.comparison("ParameterInstanceRef", cmp, op, cmp.value, path, scope, where, arg_key))
         return out
+
+    def boolean(self, c, path: Key, scope: list, where: str, arg_key) -> Term:
+        """A term from one alternative of a BooleanExpression (or of its
+        ANDedConditions or ORedConditions)."""
+        if c.name == "Condition":
+            cc = c.value
+            if hasattr(cc, "parameter_instance_ref"):
+                lhs, ref, rhs = "ParameterInstanceRef", cc.parameter_instance_ref, cc.choice
+            else:  # an ArgumentComparisonCheck
+                lhs, ref, rhs = cc.choice1.name, cc.choice1.value, cc.choice2
+            op = cc.comparison_operator.value
+            if rhs.name == "Value":
+                return self.comparison(lhs, ref, op, rhs.value, path, scope, where, arg_key)
+            return self.comparison(lhs, ref, op, None, path, scope, where, arg_key, (rhs.name, rhs.value))
+        if c.name not in ("ANDedConditions", "ORedConditions"):
+            raise Unsupported(f"{where}: {c.name} in a BooleanExpression")
+        terms = [self.boolean(x, path, scope, where, arg_key) for x in c.value.items]
+        joiner = " and " if c.name == "ANDedConditions" else " or "
+        text = "(" + joiner.join(t.text for t in terms) + ")"
+        return AllOf(terms, text) if c.name == "ANDedConditions" else AnyOf(terms, text)
+
+    def value_ref(self, kind: str, ref, path: Key, scope: list, where: str, arg_key):
+        """(local, member path, type, name) of the value that a
+        ParameterInstanceRef, ArgumentInstanceRef or Comparison names."""
+        if kind == "ArgumentInstanceRef":
+            if arg_key is None:
+                raise Unsupported(f"{where}: comparison of argument {ref.argument_ref!r} outside a command")
+            base, members = member_path(ref.argument_ref)
+            pkey = arg_key(base)
+        else:
+            base, members = member_path(ref.parameter_ref)
+            pkey = qname(self.resolve(base, path, self.params, "parameter"))
+        local = next((lc for lc in reversed(scope) if lc.key == pkey), None)
+        if local is None:
+            raise Unsupported(f"{where}: criterion on {pkey}, which is not decoded before it")
+        if local.optional:
+            raise Unsupported(f"{where}: criterion on {pkey}, which has an IncludeCondition")
+        member, vt = walk_members(local.vtype, members, f"{where}: criterion on {pkey}")
+        pkey = ".".join((pkey,) + members)
+        if vt.kind in ("array", "aggregate"):
+            raise Unsupported(f"{where}: criterion on {pkey}, which is an {vt.kind}")
+        if getattr(ref, "instance", None):
+            raise Unsupported(f"{where}: comparison of instance {ref.instance}")
+        return local, member, vt, pkey
+
+    def comparison(self, kind: str, ref, op: str, text, path: Key, scope: list, where: str, arg_key, other=None):
+        """``ref <op> text`` (a value as written), or with ``other`` (the
+        kind and reference of a second value) ``ref <op> other``."""
+        local, member, vt, pkey = self.value_ref(kind, ref, path, scope, where, arg_key)
+        raw = getattr(ref, "use_calibrated_value", None) is False
+        if op not in ("==", "!=") and vt.kind in ("bool", "string", "binary"):
+            raise Unsupported(f"{where}: {op} on {vt.kind} parameter {pkey}")
+        target = vt if member else None
+        if other is not None:
+            olocal, opath, ovt, okey = self.value_ref(other[0], other[1], path, scope, where, arg_key)
+            if raw or getattr(other[1], "use_calibrated_value", None) is False:
+                raise Unsupported(f"{where}: raw comparison of {pkey} and {okey}")
+            if vt.kind != ovt.kind or vt.kind not in ("int", "enum", "float", "bool", "string"):
+                raise Unsupported(f"{where}: comparison of {vt.kind} {pkey} and {ovt.kind} {okey}")
+            if vt.kind == "int" and vt.signed != ovt.signed:
+                raise Unsupported(f"{where}: comparison of signed and unsigned values {pkey} and {okey}")
+            return Criterion(local, op, None, f"{pkey} {op} {okey}", member, target, olocal, opath)
+        if raw and (vt.kind not in ("int", "enum", "bool") or vt.calibrator is not None or isinstance(vt.enc, StringEnc)):
+            raise Unsupported(f"{where}: raw comparison on {vt.kind} parameter {pkey}")
+        value = self.literal(vt, text, raw, where)
+        return Criterion(local, op, value, f"{pkey} {op} {text}", member, target)
 
     # -- commands --
 
@@ -1160,7 +1202,8 @@ class Compiler:
     def _finish(self, n: Node) -> None:
         fixed = {}
         for c in n.all_criteria():
-            if c.op == "==" and not c.path and c.local not in fixed:
+            fixes = isinstance(c, Criterion) and c.op == "==" and not c.path and c.other is None
+            if fixes and c.local not in fixed:
                 fixed[c.local] = c.value
         n.fixed = fixed
         names = Namer()

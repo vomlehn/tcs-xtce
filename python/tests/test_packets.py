@@ -255,6 +255,22 @@ class PacketTests(unittest.TestCase):
         p = demo.Plan(leg=demo.LegType(mode=demo.ModeArgType.NOMINAL, count=2), points=[10, 20])
         self.assertEqual(demo.Plan.decode(p.to_bytes()), p)
 
+    def test_boolean_expressions(self):
+        # GateSpan is there when GateLo < GateHi, or both are zero.
+        g = demo.Gate(sec_hdr_flag=True, gate_lo=1, gate_hi=2, gate_span=0xABCD)
+        self.assertEqual(bytes(g.to_bytes()[6:]).hex(), "0102abcd")
+        for lo, hi in ((1, 2), (0, 0)):
+            x = dataclasses.replace(g, gate_lo=lo, gate_hi=hi)
+            self.assertEqual(demo.Gate.decode(x.to_bytes()), x)
+        x = dataclasses.replace(g, gate_lo=3, gate_span=None)
+        self.assertEqual(demo.Gate.decode(x.to_bytes()), x)
+        self.assertEqual(self.kind(dataclasses.replace(g, gate_span=None)), "Missing")
+
+        # Data is 2 bytes when Lo < Hi.
+        o = demo.Open(lo=1, hi=2, data_=b"\x12\x34")
+        self.assertEqual(demo.Open.decode(o.to_bytes()), o)
+        self.assertEqual(self.kind(dataclasses.replace(o, lo=2)), "BadSize")
+
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)
         housekeeping().encode(buf)

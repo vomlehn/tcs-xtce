@@ -666,8 +666,8 @@ outside any ``IncludeCondition``.
 
 A ``DiscreteLookupList`` can stand in for the ``DynamicValue`` (or, in
 a binary or string encoding, for its ``DynamicValue``): ``x`` is then
-the ``value`` of the first ``DiscreteLookup`` whose ``Comparison`` or
-``ComparisonList`` holds, or ``defaultValue`` if none does. Its
+the ``value`` of the first ``DiscreteLookup`` whose criteria hold, or
+``defaultValue`` if none do. Its
 comparisons follow the rules of restriction criteria, and in commands
 may name arguments (``ArgumentInstanceRef``). In the demo, ``Frame``'s
 ``FrameBody`` is 2 bytes when ``FrameKind`` is 1, 4 when it is 2 and
@@ -1152,9 +1152,23 @@ Containers
    a ``RepeatEntry`` become a list, and may not have a ``BaseContainer``.
    A ``BinaryEncoding`` with a fixed ``SizeInBits`` pads a telemetry
    container to that size. ``BaseContainer`` inheritance uses
-   ``RestrictionCriteria`` with ``Comparison`` or ``ComparisonList``,
-   using the operators ``== != < <= > >=`` on calibrated or raw values,
-   on values that are not arrays or aggregates.
+   ``RestrictionCriteria``.
+
+Criteria
+   ``RestrictionCriteria``, ``IncludeCondition`` and ``DiscreteLookup``
+   take a ``Comparison``, a ``ComparisonList`` (all must hold) or a
+   ``BooleanExpression``: a ``Condition``, or ``ANDedConditions`` and
+   ``ORedConditions`` nested to any depth. Comparisons use the operators
+   ``== != < <= > >=`` on calibrated or raw values (only ``==`` and ``!=``
+   for booleans, strings and binary), on values that are not arrays or
+   aggregates. A ``Condition`` may compare two values of the packet
+   instead of a value and a constant: both of the same kind (integer,
+   enumeration, float, boolean or string), calibrated, and for integers
+   both signed or both unsigned. In the demo, ``Gate``'s ``GateSpan`` is
+   included when ``GateLo < GateHi`` or both are zero, and ``Open``'s
+   ``Data`` is 2 bytes when its ``Lo < Hi``. Only a plain ``==``
+   comparison with a constant fixes a field's value, so derived packets
+   chosen by other criteria keep those fields, and encoding checks them.
 
 Locations
    ``LocationInContainerInBits`` relative to ``previousEntry`` (the
@@ -1168,7 +1182,7 @@ Locations
    body. Repeated and fixed-size containers need fixed offsets.
 
 Include conditions
-   ``IncludeCondition`` (``Comparison`` or ``ComparisonList``) on
+   ``IncludeCondition`` (see Criteria) on
    ``ParameterRefEntry`` and ``ContainerRefEntry``, on values decoded
    earlier that are not themselves conditional. The affected fields
    become optional. They are decoded when the condition holds, and
@@ -1195,7 +1209,6 @@ Not supported
    references to array elements (``P[2]``), array subsets (a ``DimensionList`` in an entry),
    arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
    ``RepeatEntry`` offsets that other values give, other instances than 0,
-   ``BooleanExpression`` and
    ``CustomAlgorithm`` criteria, ``NextContainer``, a container
    ``BinaryEncoding`` on command containers, with a size from a
    ``DynamicValue`` or with transform algorithms, ``ErrorDetectCorrect``, context calibrators,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .common import flt, invertible, le, string_spec
-from .model import walk, AggregateEnc, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType
+from .model import term_locals, walk, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType
 
 
 def pstr(s: str) -> str:
@@ -80,7 +80,7 @@ def source(d: DynSize, place) -> str:
         return place(d.local) + "".join("." + p for p in d.path)
     x = str(d.default)
     for criteria, v in reversed(d.lookup):
-        x = f"({v} if {' and '.join(f'({condition(c, place(c.local))})' for c in criteria)} else {x})"
+        x = f"({v} if {' and '.join(f'({term(c, place)})' for c in criteria)} else {x})"
     return x
 
 
@@ -191,10 +191,21 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     return f"pk.write_string(w, {spec(vt, ref, f)}, {x}, {f})"
 
 
-def condition(c: Criterion, x: str) -> str:
-    """``x`` is the expression for the criterion's local."""
+def term(t, place) -> str:
+    """Expression for a criterion or a tree of them; ``place`` gives the
+    expression for a Local."""
+    if isinstance(t, (AllOf, AnyOf)):
+        return (" and " if isinstance(t, AllOf) else " or ").join(f"({term(x, place)})" for x in t.terms)
+    return condition(t, place(t.local), place(t.other) if t.other is not None else None)
+
+
+def condition(c: Criterion, x: str, y=None) -> str:
+    """``x`` is the expression for the criterion's local, and ``y`` for
+    the value it compares with, if any."""
     vt = c.vtype
     x += "".join("." + p for p in c.path)
+    if y is not None:
+        return f"{x} {c.op} {y}{''.join('.' + p for p in c.other_path)}"
     v = c.value if vt.kind in ("int", "enum") else literal(vt, c.value)
     return f"{x} {c.op} {v}"
 
@@ -317,7 +328,7 @@ class PythonEmitter:
                     for v in walk(it.items):
                         if isinstance(v, Value):
                             self.line(f"v{v.local.id} = None", depth)
-                cond = " and ".join(f"({condition(c, f'v{c.local.id}')})" for c in it.criteria)
+                cond = " and ".join(f"({term(c, lambda lc: f'v{lc.id}')})" for c in it.criteria)
                 self.line(f"if {cond}:", depth)
                 self.read_items(it.items, depth + 1, where, True)
             else:
@@ -338,7 +349,7 @@ class PythonEmitter:
             elif isinstance(it, Pad):
                 self.line(f"w.zeros({it.bits})", depth)
             elif isinstance(it, Cond):
-                cond = " and ".join(f"({condition(c, self.place(n, c.local, names))})" for c in it.criteria)
+                cond = " and ".join(f"({term(c, lambda lc: self.place(n, lc, names))})" for c in it.criteria)
                 self.line(f"if {cond}:", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
             else:
@@ -429,7 +440,7 @@ class PythonEmitter:
         self.line("r = pk.BitReader(data)", 2)
         for node in n.chain():
             for c in node.criteria:
-                self.line(f"if not ({condition(c, f'v{c.local.id}')}):", 2)
+                self.line(f"if not ({term(c, lambda lc: f'v{lc.id}')}):", 2)
                 self.line(f'raise pk.PacketError("Mismatch", {pstr(node.key)}, {pstr(c.text)})', 3)
             self.read_items(node.items, 2, node.key)
         self.line(f"return {self.construct(n)}", 2)
@@ -438,8 +449,8 @@ class PythonEmitter:
         names = {lc: name for name, lc in n.fields}
         for node in n.chain():
             for c in node.criteria:
-                if c.local in names:
-                    self.line(f"if not ({condition(c, 'self.' + names[c.local])}):", 2)
+                if any(lc in names for lc in term_locals(c)):
+                    self.line(f"if not ({term(c, lambda lc: self.place(n, lc, names))}):", 2)
                     self.line(f'raise pk.PacketError("Mismatch", {pstr(node.key)}, {pstr(c.text)})', 3)
         for node in n.chain():
             self.write_items(n, node.items, 2, node.key, names)
@@ -485,7 +496,7 @@ class PythonEmitter:
         for c in n.children:
             if c.error:
                 continue
-            cond = " and ".join(f"({condition(x, f'v{x.local.id}')})" for x in c.criteria) or "True"
+            cond = " and ".join(f"({term(x, lambda lc: f'v{lc.id}')})" for x in c.criteria) or "True"
             self.line(f"if {cond}:", depth)
             self.read_items(c.items, depth + 1, c.key)
             self.dispatch(c, depth + 1)
