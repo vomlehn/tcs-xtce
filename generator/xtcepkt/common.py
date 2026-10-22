@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+from xtcegen import REPOSITORY
+
 from .model import BinaryEnc, Criterion, FloatEnc, IntEnc, Node, Polynomial, Spline, StringEnc, Value, VType
 
 ENCODINGS = {
@@ -67,9 +69,6 @@ def criteria_by_node(node: Node) -> list[tuple[Node, list[Criterion]]]:
 
 def values(node: Node) -> list:
     return [it.local for it in node.all_items() if isinstance(it, Value)]
-
-
-REPOSITORY = "https://github.com/vomlehn/tcs-xtce"
 
 
 def header_lines(mission, source: str) -> list:
