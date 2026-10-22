@@ -1,6 +1,6 @@
 /* Runtime for packet codecs generated from a mission's XTCE document.
  *
- * tcsxtce (in generator/) turns the containers and meta-commands of a mission
+ * tcs-xtce (in generator/) turns the containers and meta-commands of a mission
  * database into C structs and functions.  The generated code reads packets
  * with an xtce_pk_reader and writes them with an xtce_pk_writer into a buffer
  * the caller owns; this header provides those and the integer, float, string

@@ -433,7 +433,7 @@
       <Parameter name="PacketLength" parameterTypeRef="U16">
         <!-- CCSDS: bytes in the packet data field, minus 1 -->
         <AncillaryDataSet>
-          <AncillaryData name="tcsxtce.length">-1</AncillaryData>
+          <AncillaryData name="tcs-xtce.length">-1</AncillaryData>
         </AncillaryDataSet>
       </Parameter>
       <Parameter name="Mode" parameterTypeRef="ModeType"/>
@@ -1035,7 +1035,7 @@
           <Argument name="PacketLength" argumentTypeRef="U16Arg">
             <!-- CCSDS: bytes in the packet data field, minus 1 -->
             <AncillaryDataSet>
-              <AncillaryData name="tcsxtce.length">-1</AncillaryData>
+              <AncillaryData name="tcs-xtce.length">-1</AncillaryData>
             </AncillaryDataSet>
           </Argument>
           <Argument name="Opcode" argumentTypeRef="OpcodeType"/>

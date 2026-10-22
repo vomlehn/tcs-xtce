@@ -1,5 +1,5 @@
 =================
-tcsxtce Design
+tcs-xtce Design
 =================
 
 .. contents:: Contents
@@ -9,7 +9,7 @@ tcsxtce Design
 Goals
 =====
 
-tcsxtce is flight software, and these goals are set with that in mind.
+tcs-xtce is flight software, and these goals are set with that in mind.
 
 1. Libraries in Rust, C/C++ and Python that serialize and deserialize
    XTCE data, with data structures and functions in each language.
@@ -44,7 +44,7 @@ Overview
                     + hand-written runtimes: buffer, xml reader/writer, document
                                         │
                                         │  mission.xml (any XTCE 1.3 document)
-      tcsxtce (generator/xtcepkt)  ▼  (uses python/xtce to read it)
+     tcs-xtce (generator/xtcepkt)  ▼  (uses python/xtce to read it)
             <mission>.rs            <mission>.h (C and C++)         <mission>.py
                     + hand-written runtimes: xtce::packet / xtce/packet.h / xtce.packet
 
@@ -194,8 +194,8 @@ repeated loads and serializations. One such test found that Python's
 allocation first.
 
 
-The packet codecs (tcsxtce)
-===========================
+The packet codecs (tcs-xtce)
+============================
 
 Code generation or interpretation
 ---------------------------------
@@ -205,7 +205,7 @@ There were two ways to build a packet codec:
 * **Interpret** a mission database at run time in each language.
 * **Compile** it once into code.
 
-``tcsxtce`` compiles, for three reasons:
+``tcs-xtce`` compiles, for three reasons:
 
 * **The difficult part is written once.** Name resolution, container
   inheritance, include flattening, criteria analysis and size bounds are
@@ -222,8 +222,8 @@ There were two ways to build a packet codec:
 The cost is that a database change requires regenerating the code, as
 for the XML binding.
 
-The command line, ``generator/tcsxtce``, writes one language per run
-(``tcsxtce INPUT OUTPUT --lang LANG``). The compiler and the emitters it
+The command line, ``generator/tcs_xtce``, writes one language per run
+(``tcs-xtce INPUT OUTPUT --lang LANG``). The compiler and the emitters it
 calls live in ``generator/xtcepkt``.
 
 One header for C and C++
@@ -524,8 +524,8 @@ Packet length fields
 XTCE 1.3 can say that a field's size comes from another value, but not
 that a value is the size of its packet. Its algorithms could compute
 one, but have no operand for the packet's size, and tools such as Yamcs
-fill in the CCSDS length with code written for that header. tcsxtce
-reads an ``AncillaryData`` named ``tcsxtce.length`` instead, the
+fill in the CCSDS length with code written for that header. tcs-xtce
+reads an ``AncillaryData`` named ``tcs-xtce.length`` instead, the
 standard place for tool-specific notes, so the document stays valid
 XTCE. The CCSDS Electronic Data Sheets that cFS can use take the same
 approach with a ``LengthEntry``.
@@ -616,7 +616,7 @@ Testing strategy
    as it is written, and rejects the edit if formatting differs.
 
 Limitations and future work
-===========================
+============================
 
 * **XML binding:**
 

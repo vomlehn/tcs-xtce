@@ -879,7 +879,7 @@ if __name__ == "__main__":
 
 
 def length_tag(adjust: str = "-1") -> str:
-    return f'<AncillaryDataSet><AncillaryData name="tcsxtce.length">{adjust}</AncillaryData></AncillaryDataSet>'
+    return f'<AncillaryDataSet><AncillaryData name="tcs-xtce.length">{adjust}</AncillaryData></AncillaryDataSet>'
 
 
 def length_mission(entries: str, len_type: str = "U16", tag: str = length_tag(), containers: str = "") -> str:
@@ -952,14 +952,14 @@ class LengthTests(unittest.TestCase):
         )
         for kw, why in (
             (dict(entries=LEN, len_type="S16"), "must be an uncalibrated unsigned integer"),
-            (dict(entries=LEN, tag=length_tag("one")), "tcsxtce.length 'one' is not an integer"),
+            (dict(entries=LEN, tag=length_tag("one")), "tcs-xtce.length 'one' is not an integer"),
             (
                 dict(
                     entries=LEN,
-                    tag='<AncillaryDataSet><AncillaryData name="tcsxtce.length">-1</AncillaryData>'
-                    '<AncillaryData name="tcsxtce.length">0</AncillaryData></AncillaryDataSet>',
+                    tag='<AncillaryDataSet><AncillaryData name="tcs-xtce.length">-1</AncillaryData>'
+                    '<AncillaryData name="tcs-xtce.length">0</AncillaryData></AncillaryDataSet>',
                 ),
-                "more than one tcsxtce.length",
+                "more than one tcs-xtce.length",
             ),
             (dict(entries=LEN + '<ParameterRefEntry parameterRef="Len2"/>'), "more than one packet length field"),
             (

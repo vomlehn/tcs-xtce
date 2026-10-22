@@ -8,7 +8,7 @@ Every example exists in all supported languages: C/C++, Rust and Python 3.
 Each example is a self-contained directory holding:
 
 * an XTCE file describing some data;
-* a small program in each language that uses the code ``tcsxtce``
+* a small program in each language that uses the code ``tcs-xtce``
   generates from it.
 
 The generated code isn't kept in git; building an example generates it.

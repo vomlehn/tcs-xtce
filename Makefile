@@ -7,7 +7,7 @@
 #   make packets         regenerate the demo mission's packet codecs
 #   make rust|cpp|python build one library
 #   make test            run every language's tests and the cross-language checks
-#   make samples-check   check tcsxtce against public XTCE documents (downloads them)
+#   make samples-check   check tcs-xtce against public XTCE documents (downloads them)
 #   make examples        build and run every example in examples/
 #   make fmt             format Rust code;  make fmt-check  verify it
 #   make clean           remove build products (keeps generated sources)
@@ -29,11 +29,11 @@ SAMPLES  := tests/samples/COVERAGE.txt
 RUST_TOOL := rust/target/release/examples/xtce_roundtrip
 CPP_TOOL  := cpp/build/xtce_roundtrip
 
-# Packet codecs generated from a mission's XTCE document by tcsxtce; the demo
+# Packet codecs generated from a mission's XTCE document by tcs-xtce; the demo
 # mission exercises them in every language.
 MISSION  := tests/mission/demo.xml
-PKT      := $(PYTHON) -m tcsxtce ../$(MISSION) --source-name $(MISSION)
-PKT_SRC  := $(wildcard generator/xtcepkt/*.py generator/tcsxtce/*.py)
+PKT      := $(PYTHON) -m tcs_xtce ../$(MISSION) --source-name $(MISSION)
+PKT_SRC  := $(wildcard generator/xtcepkt/*.py generator/tcs_xtce/*.py)
 PKT_RUST := rust/tests/mission/demo.rs
 PKT_CPP  := cpp/tests/mission/demo.h
 PKT_PY   := python/tests/mission/demo.py
@@ -76,7 +76,7 @@ $(SAMPLES): $(XSD) $(GEN_SRC)
 
 samples: $(SAMPLES)
 
-# tcsxtce reads the mission with the generated Python binding and writes one
+# tcs-xtce reads the mission with the generated Python binding and writes one
 # language per run.
 $(PKT_GEN) &: $(MISSION) $(PKT_SRC) $(PY_GEN)
 	cd generator && $(PKT) ../$(PKT_RUST) --lang rust

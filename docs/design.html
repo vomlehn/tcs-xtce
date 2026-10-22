@@ -4,7 +4,7 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="Docutils 0.22.4: https://docutils.sourceforge.io/" />
-<title>tcsxtce Design</title>
+<title>tcs-xtce Design</title>
 <style type="text/css">
 
 /*
@@ -361,8 +361,8 @@ ul.auto-toc {
 </style>
 </head>
 <body>
-<div class="document" id="tcsxtce-design">
-<h1 class="title">tcsxtce Design</h1>
+<div class="document" id="tcs-xtce-design">
+<h1 class="title">tcs-xtce Design</h1>
 
 <div class="contents local topic" id="contents">
 <p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
@@ -377,7 +377,7 @@ ul.auto-toc {
 </ul>
 </li>
 <li><a class="reference internal" href="#managed-buffers" id="toc-entry-8">Managed buffers</a></li>
-<li><a class="reference internal" href="#the-packet-codecs-tcsxtce" id="toc-entry-9">The packet codecs (tcsxtce)</a><ul>
+<li><a class="reference internal" href="#the-packet-codecs-tcs-xtce" id="toc-entry-9">The packet codecs (tcs-xtce)</a><ul>
 <li><a class="reference internal" href="#code-generation-or-interpretation" id="toc-entry-10">Code generation or interpretation</a></li>
 <li><a class="reference internal" href="#one-header-for-c-and-c" id="toc-entry-11">One header for C and C++</a></li>
 <li><a class="reference internal" href="#compiler-pipeline" id="toc-entry-12">Compiler pipeline</a></li>
@@ -385,16 +385,17 @@ ul.auto-toc {
 <li><a class="reference internal" href="#determinism-across-languages" id="toc-entry-14">Determinism across languages</a></li>
 <li><a class="reference internal" href="#arrays-and-sizes-from-other-fields" id="toc-entry-15">Arrays and sizes from other fields</a></li>
 <li><a class="reference internal" href="#aggregates" id="toc-entry-16">Aggregates</a></li>
-<li><a class="reference internal" href="#runtime" id="toc-entry-17">Runtime</a></li>
+<li><a class="reference internal" href="#packet-length-fields" id="toc-entry-17">Packet length fields</a></li>
+<li><a class="reference internal" href="#runtime" id="toc-entry-18">Runtime</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing-strategy" id="toc-entry-18">Testing strategy</a></li>
-<li><a class="reference internal" href="#limitations-and-future-work" id="toc-entry-19">Limitations and future work</a></li>
+<li><a class="reference internal" href="#testing-strategy" id="toc-entry-19">Testing strategy</a></li>
+<li><a class="reference internal" href="#limitations-and-future-work" id="toc-entry-20">Limitations and future work</a></li>
 </ul>
 </div>
 <div class="section" id="goals">
 <h1><a class="toc-backref" href="#toc-entry-1">Goals</a></h1>
-<p>tcsxtce is flight software, and these goals are set with that in mind.</p>
+<p>tcs-xtce is flight software, and these goals are set with that in mind.</p>
 <ol class="arabic simple">
 <li>Libraries in Rust, C/C++ and Python that serialize and deserialize
 XTCE data, with data structures and functions in each language.</li>
@@ -428,7 +429,7 @@ references/Makefile ── curl ──&gt; SpaceSystem.xsd, XTCE.pdf, xml.xsd, c
                  + hand-written runtimes: buffer, xml reader/writer, document
                                      │
                                      │  mission.xml (any XTCE 1.3 document)
-   tcsxtce (generator/xtcepkt)  ▼  (uses python/xtce to read it)
+  tcs-xtce (generator/xtcepkt)  ▼  (uses python/xtce to read it)
          &lt;mission&gt;.rs            &lt;mission&gt;.h (C and C++)         &lt;mission&gt;.py
                  + hand-written runtimes: xtce::packet / xtce/packet.h / xtce.packet
 </pre>
@@ -569,8 +570,8 @@ repeated loads and serializations. One such test found that Python's
 <tt class="docutils literal">load_from</tt> grew the buffer on every reload; it now fills the existing
 allocation first.</p>
 </div>
-<div class="section" id="the-packet-codecs-tcsxtce">
-<h1><a class="toc-backref" href="#toc-entry-9">The packet codecs (tcsxtce)</a></h1>
+<div class="section" id="the-packet-codecs-tcs-xtce">
+<h1><a class="toc-backref" href="#toc-entry-9">The packet codecs (tcs-xtce)</a></h1>
 <div class="section" id="code-generation-or-interpretation">
 <h2><a class="toc-backref" href="#toc-entry-10">Code generation or interpretation</a></h2>
 <p>There were two ways to build a packet codec:</p>
@@ -578,7 +579,7 @@ allocation first.</p>
 <li><strong>Interpret</strong> a mission database at run time in each language.</li>
 <li><strong>Compile</strong> it once into code.</li>
 </ul>
-<p><tt class="docutils literal">tcsxtce</tt> compiles, for three reasons:</p>
+<p><tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> compiles, for three reasons:</p>
 <ul class="simple">
 <li><strong>The difficult part is written once.</strong> Name resolution, container
 inheritance, include flattening, criteria analysis and size bounds are
@@ -594,8 +595,8 @@ XML at run time.</li>
 </ul>
 <p>The cost is that a database change requires regenerating the code, as
 for the XML binding.</p>
-<p>The command line, <tt class="docutils literal">generator/tcsxtce</tt>, writes one language per run
-(<tt class="docutils literal">tcsxtce INPUT OUTPUT <span class="pre">--lang</span> LANG</tt>). The compiler and the emitters it
+<p>The command line, <tt class="docutils literal">generator/tcs_xtce</tt>, writes one language per run
+(<tt class="docutils literal"><span class="pre">tcs-xtce</span> INPUT OUTPUT <span class="pre">--lang</span> LANG</tt>). The compiler and the emitters it
 calls live in <tt class="docutils literal">generator/xtcepkt</tt>.</p>
 </div>
 <div class="section" id="one-header-for-c-and-c">
@@ -808,7 +809,14 @@ members' field names (<tt class="docutils literal">path</tt>) and the member's t
 every language because generated aggregates are plain structs. An
 <tt class="docutils literal">==</tt> criterion on a member doesn't fix the value, since there is no
 field that holds only the member.</p>
-<p>Array elements (<tt class="docutils literal">P[2]</tt>) extend the same paths with <tt class="docutils literal">Index</tt> steps,
+<p>An <tt class="docutils literal">ArrayEnc</tt> keeps each dimension's first index (<tt class="docutils literal">starts</tt>) and,
+when all are fixed, its size (<tt class="docutils literal">shape</tt>). An array entry with a
+<tt class="docutils literal">DimensionList</tt> replaces the value's type with one for the subset,
+built by the same code as array types, so the subset is just a shorter
+array to every later stage. Its <tt class="docutils literal">starts</tt> stay in the full array's
+index space, so element references mean the same with or without one.</p>
+<p>Array elements (<tt class="docutils literal">P[2]</tt>, <tt class="docutils literal"><span class="pre">P[1][2]</span></tt>) extend the same paths with
+<tt class="docutils literal">Index</tt> steps, one per reference and flattened over the dimensions,
 which emitters render as <tt class="docutils literal">[i]</tt> (<tt class="docutils literal">.data[i]</tt> in C). Only fixed counts
 are allowed, so an index is checked against the count when compiling,
 and decoded arrays always have every element. Encoding indexes the
@@ -867,8 +875,34 @@ as it does for a fixed container size. <tt class="docutils literal">static_end</
 layout, and <tt class="docutils literal">Pad</tt> covers the rest of a fixed-size container that is
 not repeated.</p>
 </div>
+<div class="section" id="packet-length-fields">
+<h2><a class="toc-backref" href="#toc-entry-17">Packet length fields</a></h2>
+<p>XTCE 1.3 can say that a field's size comes from another value, but not
+that a value is the size of its packet. Its algorithms could compute
+one, but have no operand for the packet's size, and tools such as Yamcs
+fill in the CCSDS length with code written for that header. tcs-xtce
+reads an <tt class="docutils literal">AncillaryData</tt> named <tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> instead, the
+standard place for tool-specific notes, so the document stays valid
+XTCE. The CCSDS Electronic Data Sheets that cFS can use take the same
+approach with a <tt class="docutils literal">LengthEntry</tt>.</p>
+<p>The compiler sets <tt class="docutils literal">Local.length</tt> to the adjustment, and
+<tt class="docutils literal">Node.length_field()</tt> finds the packet's length field. Its value
+depends on everything written after it, so encoding writes zeros in
+its place, remembers the position, and <tt class="docutils literal">patch_length</tt> fills it in once
+the packet is written, from the size of the buffer. Decoding reads it
+like any field, then <tt class="docutils literal">limit</tt> shortens the data to the packet, so a
+value that takes the rest of the packet gets the right size and bytes
+after the packet are never read. <tt class="docutils literal">finish</tt> checks, just before the
+struct is built, that the furthest bit read reaches the end. The reader
+counts bits skipped by seeks as read, because the writer fills them.</p>
+<p>The length is left out of <tt class="docutils literal">Node.fields</tt>, like a value fixed by its
+inheritance, so it can't be set wrong. The checks in
+<tt class="docutils literal">check_length</tt> keep the code simple: it must be written once, from a
+known position, and nothing may depend on its value while the packet is
+being encoded.</p>
+</div>
 <div class="section" id="runtime">
-<h2><a class="toc-backref" href="#toc-entry-17">Runtime</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-18">Runtime</a></h2>
 <p><tt class="docutils literal">BitReader</tt> and <tt class="docutils literal">BitWriter</tt> handle fields of 1–64 bits, most
 significant bit first, at any bit position:</p>
 <ul class="simple">
@@ -884,7 +918,7 @@ own. In C the writer fills a caller-owned array and fails with
 </div>
 </div>
 <div class="section" id="testing-strategy">
-<h1><a class="toc-backref" href="#toc-entry-18">Testing strategy</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-19">Testing strategy</a></h1>
 <dl class="docutils">
 <dt><strong>Schema coverage</strong></dt>
 <dd>21 generated sample documents cover every element slot and every
@@ -934,7 +968,7 @@ as it is written, and rejects the edit if formatting differs.</dd>
 </dl>
 </div>
 <div class="section" id="limitations-and-future-work">
-<h1><a class="toc-backref" href="#toc-entry-19">Limitations and future work</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-20">Limitations and future work</a></h1>
 <ul>
 <li><p class="first"><strong>XML binding:</strong></p>
 <ul class="simple">
@@ -946,8 +980,7 @@ version-tolerant reading mode or one binding per schema version.</li>
 </li>
 <li><p class="first"><strong>Packet codecs</strong> — the main missing XTCE features are:</p>
 <ul class="simple">
-<li>array subsets, and references to elements of arrays with several
-dimensions or a count that varies.</li>
+<li>references to elements of arrays whose count varies.</li>
 </ul>
 <p>The model has room for each of these: new <tt class="docutils literal">Item</tt> kinds, and
 <tt class="docutils literal">VType</tt> kinds for structured values, as arrays have.</p>
@@ -955,8 +988,10 @@ dimensions or a count that varies.</li>
 out on purpose: the packets travel over a link that already detects
 errors. Documents that use it are reported as unsupported.</p>
 </li>
-<li><p class="first"><strong>Computed fields:</strong> length and checksum fields are left to the
-application.</p>
+<li><p class="first"><strong>Computed fields:</strong> only packet length fields are computed, and
+only when the document marks them. A size or count that another field
+gives is still set by the application, which must make it agree with
+the data.</p>
 </li>
 </ul>
 </div>

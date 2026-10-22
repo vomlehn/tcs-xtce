@@ -1,4 +1,4 @@
-"""Serialization and deserialization of OMG XTCE documents: part of tcsxtce,
+"""Serialization and deserialization of OMG XTCE documents: part of tcs-xtce,
 which is flight software.
 
 The data classes in :mod:`xtce.generated` are produced from the XTCE schema

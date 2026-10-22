@@ -1,4 +1,4 @@
-"""Check tcsxtce against public XTCE documents.
+"""Check tcs-xtce against public XTCE documents.
 
 ``make samples-check`` downloads the documents listed in
 tests/external/sources.txt into tests/external/files/ and runs this script,

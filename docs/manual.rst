@@ -1,5 +1,5 @@
 =======================
-tcsxtce User Manual
+tcs-xtce User Manual
 =======================
 
 .. contents:: Contents
@@ -9,7 +9,7 @@ tcsxtce User Manual
 Introduction
 ============
 
-tcsxtce is flight software. It provides libraries in Rust, C/C++ and Python
+tcs-xtce is flight software. It provides libraries in Rust, C/C++ and Python
 for working with OMG **XTCE** (XML Telemetric and Command Exchange) in two
 layers:
 
@@ -19,7 +19,7 @@ layers:
    validate and write a mission database.
 
 **The packet codecs**
-   ``tcsxtce`` compiles one mission's XTCE document into typed packet
+   ``tcs-xtce`` compiles one mission's XTCE document into typed packet
    structures with encode and decode functions. Use it to read
    telemetry and build commands in the binary formats that the mission
    database describes.
@@ -41,8 +41,8 @@ byte-identical output. The test suite checks this on every build.
      - Downloaded XTCE documents (``SpaceSystem.xsd``, ``XTCE.pdf``, ``VERSION``) plus ``xml.xsd`` and ``catalog.xml`` for offline validation
    * - ``generator/xtcegen/``
      - Generates the XML binding from the schema
-   * - ``generator/tcsxtce/``, ``generator/xtcepkt/``
-     - The ``tcsxtce`` command, and the compiler behind it that turns a mission's XTCE document into packet codecs
+   * - ``generator/tcs_xtce/``, ``generator/xtcepkt/``
+     - The ``tcs-xtce`` command, and the compiler behind it that turns a mission's XTCE document into packet codecs
    * - ``rust/``
      - The ``xtce`` Rust crate
    * - ``cpp/``
@@ -405,7 +405,7 @@ Packet codecs
 Overview
 --------
 
-``tcsxtce`` reads a mission's XTCE document and generates, for one
+``tcs-xtce`` reads a mission's XTCE document and generates, for one
 language:
 
 * a **struct per concrete container or meta-command** with one field
@@ -425,11 +425,11 @@ Running the compiler
 .. code-block:: sh
 
    cd generator
-   python3 -m tcsxtce INPUT OUTPUT --lang LANG
+   python3 -m tcs_xtce INPUT OUTPUT --lang LANG
 
-   python3 -m tcsxtce demo.xml demo.rs --lang rust
-   python3 -m tcsxtce demo.xml demo.h  --lang c
-   python3 -m tcsxtce demo.xml demo.py --lang python
+   python3 -m tcs_xtce demo.xml demo.rs --lang rust
+   python3 -m tcs_xtce demo.xml demo.h  --lang c
+   python3 -m tcs_xtce demo.xml demo.py --lang python
 
 Each run writes one language. Run it once per language you need.
 
@@ -463,7 +463,7 @@ unsupported construct, and lists every such construct with its cause.
 Size report
 -----------
 
-``python3 -m tcsxtce INPUT --size-report`` writes no code. For each
+``python3 -m tcs_xtce INPUT --size-report`` writes no code. For each
 packet it lists every field with the bits it takes on the wire and the
 bits the XTCE document says its values need, to show where the mission
 database could make packets smaller. It changes nothing: the codecs
@@ -710,8 +710,8 @@ demo's ``SampleCount`` (``0..6``) makes ``Readings`` a
 255 elements, and a 32-bit one 32768 of them.
 
 **Packet length fields.** XTCE has no way to say that a field holds the
-length of its packet, so tcsxtce reads it from an ``AncillaryData``
-named ``tcsxtce.length`` on the parameter or argument. Its value is an
+length of its packet, so tcs-xtce reads it from an ``AncillaryData``
+named ``tcs-xtce.length`` on the parameter or argument. Its value is an
 integer that is added to the number of bytes after the field. The CCSDS
 packet length, the bytes after the 6-byte primary header minus 1, is:
 
@@ -719,7 +719,7 @@ packet length, the bytes after the 6-byte primary header minus 1, is:
 
    <Parameter name="PacketLength" parameterTypeRef="U16">
      <AncillaryDataSet>
-       <AncillaryData name="tcsxtce.length">-1</AncillaryData>
+       <AncillaryData name="tcs-xtce.length">-1</AncillaryData>
      </AncillaryDataSet>
    </Parameter>
 
@@ -1081,7 +1081,7 @@ Parameter and argument types
    supported.
 
 Ancillary data
-   ``tcsxtce.length`` on a parameter or argument marks a packet length
+   ``tcs-xtce.length`` on a parameter or argument marks a packet length
    field, described under the generated packet types. Other ancillary
    data is ignored.
 
@@ -1286,7 +1286,7 @@ Not supported
 Known limitations
 -----------------
 
-* A length field needs the ``tcsxtce.length`` ``AncillaryData``; without
+* A length field needs the ``tcs-xtce.length`` ``AncillaryData``; without
   it, it is an ordinary field that the application sets.
 * Decoding ignores bytes after the packet. Spare bits and gaps are
   written as zeros, so re-encoding a decoded packet can change them.
@@ -1304,7 +1304,7 @@ Examples
 ``examples/`` holds self-contained examples. Every example exists in all
 supported languages: C/C++, Rust and Python 3. ``make examples`` fails if
 an example is missing one. Each has an XTCE file and a program per
-language that uses the code ``tcsxtce`` generates from it. ``make`` in an
+language that uses the code ``tcs-xtce`` generates from it. ``make`` in an
 example's directory, or ``make examples`` at the top level:
 
 * regenerates the code if the XTCE file or the generator changed;
@@ -1334,7 +1334,7 @@ that always occupies 64 bits and ends at a NUL byte, so it holds up to
      </StringDataEncoding>
    </StringParameterType>
 
-``tcsxtce`` generates a ``SimpleString`` structure in each language:
+``tcs-xtce`` generates a ``SimpleString`` structure in each language:
 
 * Rust: ``struct SimpleString { pub text: String }``
   (``rust/src/simple_string.rs``)
@@ -1394,7 +1394,7 @@ The ``packet_tool`` programs (``rust/examples``, ``cpp/tests``, built as
    rust/target/release/examples/packet_tool tests/mission/vectors.txt
 
 ``make samples-check`` is not part of ``make test``, because it
-downloads files. It checks ``tcsxtce`` against 34 public XTCE documents:
+downloads files. It checks ``tcs-xtce`` against 34 public XTCE documents:
 the test documents of `Yamcs <https://github.com/yamcs/yamcs>`_ and the
 test documents and examples of the `XTCE Toolkit
 <https://github.com/CesarCoelho/xtcetools>`_.
@@ -1422,7 +1422,7 @@ diff.
 License
 =======
 
-tcsxtce -- the generator, the Rust crate, the C/C++ library and the Python
+tcs-xtce -- the generator, the Rust crate, the C/C++ library and the Python
 package -- is licensed under either of the Apache License, Version 2.0
 (``LICENSE-APACHE``, or http://www.apache.org/licenses/LICENSE-2.0) or the MIT
 license (``LICENSE-MIT``, or http://opensource.org/licenses/MIT), at your

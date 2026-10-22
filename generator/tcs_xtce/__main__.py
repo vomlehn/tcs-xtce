@@ -1,10 +1,10 @@
-"""Command line: ``python3 -m tcsxtce INPUT OUTPUT --lang {c,c++,rust,python}``.
+"""Command line: ``python3 -m tcs_xtce INPUT OUTPUT --lang {c,c++,rust,python}``.
 
 Reads the mission's XTCE document INPUT and writes its packet codecs to
 OUTPUT in one language.  ``c`` and ``c++`` write the same header, which
 compiles both as C11 and as C++.
 
-``python3 -m tcsxtce INPUT [OUTPUT] --size-report`` instead reports, for each
+``python3 -m tcs_xtce INPUT [OUTPUT] --size-report`` instead reports, for each
 packet, the bits every field uses on the wire and the bits the document says
 it needs; OUTPUT defaults to standard output.
 """
@@ -37,7 +37,7 @@ def write(path: str, text: str) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        prog="tcsxtce", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="tcs-xtce", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("input", help="the mission's XTCE document")
     ap.add_argument("output", nargs="?", help="the file to write (with --size-report, default: standard output)")
@@ -76,11 +76,11 @@ def main(argv=None) -> int:
         root = xtce.Document.from_file(args.input).root
         mission = compile_document(root, args.skip_unsupported or args.size_report)
     except (Unsupported, xtce.XtceError) as e:
-        print(f"tcsxtce: {args.input}: {e}", file=sys.stderr)
+        print(f"tcs-xtce: {args.input}: {e}", file=sys.stderr)
         return 1
     if not args.size_report:  # the report lists them itself
         for msg in mission.skipped:
-            print(f"tcsxtce: warning: skipped {msg}", file=sys.stderr)
+            print(f"tcs-xtce: warning: skipped {msg}", file=sys.stderr)
     source = args.source_name or Path(args.input).name
     if args.size_report:
         text = report.report(mission)

@@ -5,7 +5,7 @@
 #   make clean      remove the HTML
 #
 # The HTML is committed beside its source, and GitHub Pages serves it at
-# https://vomlehn.github.io/tcsxtce/docs/, which the README's See also links.
+# https://vomlehn.github.io/tcs-xtce/docs/, which the README's See also links.
 # Remake it before committing a change to either document.
 
 RST2HTML ?= rst2html

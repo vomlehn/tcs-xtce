@@ -25,11 +25,11 @@ XML_CATALOG_FILES=../../references/catalog.xml \
 
 ```sh
 cd ../../generator
-python3 -m tcsxtce ../examples/simple-string/simple_string.xml \
+python3 -m tcs_xtce ../examples/simple-string/simple_string.xml \
     ../examples/simple-string/rust/src/simple_string.rs --lang rust
-python3 -m tcsxtce ../examples/simple-string/simple_string.xml \
+python3 -m tcs_xtce ../examples/simple-string/simple_string.xml \
     ../examples/simple-string/c/simple_string.h --lang c
-python3 -m tcsxtce ../examples/simple-string/simple_string.xml \
+python3 -m tcs_xtce ../examples/simple-string/simple_string.xml \
     ../examples/simple-string/python/simple_string.py --lang python
 ```
 

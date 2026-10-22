@@ -1,6 +1,6 @@
 """Runtime for packet codecs generated from a mission's XTCE document.
 
-``tcsxtce`` (in ``generator/``) turns the containers and meta-commands of a
+``tcs-xtce`` (in ``generator/``) turns the containers and meta-commands of a
 mission database into Python dataclasses derived from :class:`Packet`.  The
 generated code reads packets with a :class:`BitReader` and writes them with a
 :class:`BitWriter` into a :class:`~xtce.ManagedBuffer`; this module provides

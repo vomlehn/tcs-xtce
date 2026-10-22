@@ -1,5 +1,5 @@
 """Serialize and deserialize the SimpleString structure described by
-simple_string.xml, using the code tcsxtce generated into simple_string.py.
+simple_string.xml, using the code tcs-xtce generated into simple_string.py.
 
 The Rust and C/C++ versions of this program print identical output.
 """

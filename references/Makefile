@@ -12,7 +12,7 @@
 #                       XML_CATALOG_FILES=references/catalog.xml xmllint --nonet
 
 XTCE_SPEC_URL ?= https://www.omg.org/spec/XTCE/
-CURL          ?= curl -fsSL --retry 3 --retry-delay 2 -A "Mozilla/5.0 (tcsxtce)"
+CURL          ?= curl -fsSL --retry 3 --retry-delay 2 -A "Mozilla/5.0 (tcs-xtce)"
 LANDING       := .landing.html
 
 .PHONY: all fetch check clean distclean

@@ -3,7 +3,7 @@
 #
 #   make            generate the code, build and run every program and check
 #                   that they print the same thing
-#   make generate   rerun tcsxtce on simple_string.xml
+#   make generate   rerun tcs-xtce on simple_string.xml
 #   make clean      remove build products (keeps the generated code)
 
 TOP     := ../..
@@ -15,9 +15,9 @@ BUILD   := build
 
 XML     := simple_string.xml
 GEN     := rust/src/simple_string.rs c/simple_string.h python/simple_string.py
-GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py $(TOP)/generator/tcsxtce/*.py)
+GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py $(TOP)/generator/tcs_xtce/*.py)
 PKT_H   := $(TOP)/cpp/include/xtce/packet.h
-TCSXTCE := cd $(TOP)/generator && $(PYTHON) -m tcsxtce ../examples/simple-string/$(XML) \
+TCS_XTCE := cd $(TOP)/generator && $(PYTHON) -m tcs_xtce ../examples/simple-string/$(XML) \
            --source-name examples/simple-string/$(XML)
 
 .PHONY: all generate rust c python run clean
@@ -26,12 +26,12 @@ all: run
 
 generate: $(GEN)
 
-# tcsxtce reads the XTCE file and writes one language per run.  The C header
+# tcs-xtce reads the XTCE file and writes one language per run.  The C header
 # serves both C and C++ (--lang c++ writes the same file).
 $(GEN) &: $(XML) $(GEN_SRC)
-	$(TCSXTCE) ../examples/simple-string/rust/src/simple_string.rs --lang rust
-	$(TCSXTCE) ../examples/simple-string/c/simple_string.h --lang c
-	$(TCSXTCE) ../examples/simple-string/python/simple_string.py --lang python
+	$(TCS_XTCE) ../examples/simple-string/rust/src/simple_string.rs --lang rust
+	$(TCS_XTCE) ../examples/simple-string/c/simple_string.h --lang c
+	$(TCS_XTCE) ../examples/simple-string/python/simple_string.py --lang python
 	@touch $(GEN)
 
 rust: $(GEN)

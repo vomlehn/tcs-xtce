@@ -1,6 +1,6 @@
 //! Runtime for packet codecs generated from a mission's XTCE document.
 //!
-//! `tcsxtce` (in `generator/`) turns the containers and meta-commands of a
+//! `tcs-xtce` (in `generator/`) turns the containers and meta-commands of a
 //! mission database into Rust structs that implement [`Packet`].  The
 //! generated code reads packets with a [`BitReader`] and writes them with a
 //! [`BitWriter`] into a managed [`Buffer`]; this module provides those and

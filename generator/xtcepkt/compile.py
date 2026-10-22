@@ -239,7 +239,7 @@ RUNTIME_NAMES = {
 
 # The AncillaryData that marks a parameter or argument as a packet length
 # field; its value is the number to add to the bytes after the field.
-LENGTH_TAG = "tcsxtce.length"
+LENGTH_TAG = "tcs-xtce.length"
 
 
 def length_adjust(item, vt: VType, where: str) -> Optional[int]:

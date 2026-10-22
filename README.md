@@ -1,4 +1,4 @@
-# tcsxtce: XTCE serialization libraries for Rust, C/C++ and Python
+# tcs-xtce: XTCE serialization libraries for Rust, C/C++ and Python
 Flight software: a parser that takes XTCE (XML Telemetric and Command Exchange) definitions of commands and telemetry and produces data structures and methods for packing and unpacking data into and from buffers. It is a standard for space applications,equally useful for terrestrial applications, such as drones. Supports C/C++, Rust, and Python.
 
 Includes libraries that serialize and deserialize OMG **XTCE** (XML Telemetric and
@@ -8,7 +8,7 @@ Command Exchange) data into managed, preallocated buffers, in two layers:
   code that reads and writes XTCE documents. The code for all three
   languages is generated from the official schema, which is downloaded
   into `references/`.
-* **Packet codecs**: `tcsxtce` compiles one mission's XTCE document into
+* **Packet codecs**: `tcs-xtce` compiles one mission's XTCE document into
   typed telemetry and command structs, with binary encoders and decoders
   for the packets it describes.
 
@@ -17,7 +17,7 @@ manual, including every data structure and method) and
 [`docs/design.rst`](docs/design.rst) (design and rationale), each rendered
 to HTML beside it by `make html`: see [See also](#see-also).
 
-Work is under way on integrating tcsxtce with NASA's core Flight System (cFS)
+Work is under way on integrating tcs-xtce with NASA's core Flight System (cFS)
 and JPL's F´ (F Prime): generating cFS messages and F´ FPP from XTCE, or
 reading their definitions into it, and dictionaries for their ground systems.
 The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
@@ -30,7 +30,7 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | Directory     | Contents |
 |---------------|----------|
 | `references/` | Downloaded XTCE documents: `SpaceSystem.xsd`, `XTCE.pdf`, `VERSION`, plus `xml.xsd` and `catalog.xml` for offline validation |
-| `generator/`  | `xtcegen` (generates the XML binding from the XSD) and `tcsxtce` (compiles a mission's XTCE into packet codecs; compiler in `xtcepkt`) |
+| `generator/`  | `xtcegen` (generates the XML binding from the XSD) and `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `xtcepkt`) |
 | `rust/`       | `xtce` Rust crate |
 | `cpp/`        | C++20 library (`libxtce.a`, `libxtce.so`) with a C API (`xtce/xtce.h`), and the header-only C/C++ packet runtime (`xtce/packet.h`) |
 | `python/`     | `xtce` Python package (3.10+, standard library only) |
@@ -166,9 +166,9 @@ with doc.serialize() as view:             # memoryview of the managed buffer
 
 ```sh
 cd generator
-python3 -m tcsxtce mission.xml mission.rs --lang rust
-python3 -m tcsxtce mission.xml mission.h  --lang c        # or --lang c++: same file
-python3 -m tcsxtce mission.xml mission.py --lang python
+python3 -m tcs_xtce mission.xml mission.rs --lang rust
+python3 -m tcs_xtce mission.xml mission.h  --lang c        # or --lang c++: same file
+python3 -m tcs_xtce mission.xml mission.py --lang python
 ```
 
 `--lang c` and `--lang c++` write the same header, which compiles both as C11
@@ -227,18 +227,18 @@ packets.
 
 ## See also
 
-* [The tcsxtce manual](https://vomlehn.github.io/tcsxtce/docs/manual.html):
+* [The tcs-xtce manual](https://vomlehn.github.io/tcs-xtce/docs/manual.html):
   every data structure and method, and the packet codecs.
-* [The tcsxtce design](https://vomlehn.github.io/tcsxtce/docs/design.html):
+* [The tcs-xtce design](https://vomlehn.github.io/tcs-xtce/docs/design.html):
   the design and its rationale.
-* [The examples](https://vomlehn.github.io/tcsxtce/examples/README.html):
+* [The examples](https://vomlehn.github.io/tcs-xtce/examples/README.html):
   what each example shows, and how to build and run it.
 
 ## License
 
-Licensed under either of the Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/vomlehn/tcsxtce/blob/main/LICENSE-APACHE)
+Licensed under either of the Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/vomlehn/tcs-xtce/blob/main/LICENSE-APACHE)
 or <http://www.apache.org/licenses/LICENSE-2.0>) or the MIT license
-([LICENSE-MIT](https://github.com/vomlehn/tcsxtce/blob/main/LICENSE-MIT) or <http://opensource.org/licenses/MIT>), at your option.
+([LICENSE-MIT](https://github.com/vomlehn/tcs-xtce/blob/main/LICENSE-MIT) or <http://opensource.org/licenses/MIT>), at your option.
 This covers all of it: the generator, the Rust crate, the C/C++ library and
 the Python package.
 

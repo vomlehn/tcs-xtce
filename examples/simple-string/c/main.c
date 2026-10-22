@@ -1,5 +1,5 @@
 /* Serializes and deserializes the SimpleString structure described by
- * simple_string.xml, using the code tcsxtce generated into simple_string.h.
+ * simple_string.xml, using the code tcs-xtce generated into simple_string.h.
  *
  * The same file is built as C and as C++; both, and the Rust and Python
  * versions of this program, print identical output.

@@ -4,7 +4,7 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="Docutils 0.22.4: https://docutils.sourceforge.io/" />
-<title>tcsxtce User Manual</title>
+<title>tcs-xtce User Manual</title>
 <style type="text/css">
 
 /*
@@ -361,8 +361,8 @@ ul.auto-toc {
 </style>
 </head>
 <body>
-<div class="document" id="tcsxtce-user-manual">
-<h1 class="title">tcsxtce User Manual</h1>
+<div class="document" id="tcs-xtce-user-manual">
+<h1 class="title">tcs-xtce User Manual</h1>
 
 <div class="contents local topic" id="contents">
 <p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
@@ -405,7 +405,7 @@ ul.auto-toc {
 </div>
 <div class="section" id="introduction">
 <h1><a class="toc-backref" href="#toc-entry-1">Introduction</a></h1>
-<p>tcsxtce is flight software. It provides libraries in Rust, C/C++ and Python
+<p>tcs-xtce is flight software. It provides libraries in Rust, C/C++ and Python
 for working with OMG <strong>XTCE</strong> (XML Telemetric and Command Exchange) in two
 layers:</p>
 <dl class="docutils">
@@ -414,7 +414,7 @@ layers:</p>
 reads and writes XTCE documents. Use it to load, inspect, edit,
 validate and write a mission database.</dd>
 <dt><strong>The packet codecs</strong></dt>
-<dd><tt class="docutils literal">tcsxtce</tt> compiles one mission's XTCE document into typed packet
+<dd><tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> compiles one mission's XTCE document into typed packet
 structures with encode and decode functions. Use it to read
 telemetry and build commands in the binary formats that the mission
 database describes.</dd>
@@ -437,8 +437,8 @@ byte-identical output. The test suite checks this on every build.</p>
 <tr><td><tt class="docutils literal">generator/xtcegen/</tt></td>
 <td>Generates the XML binding from the schema</td>
 </tr>
-<tr><td><tt class="docutils literal">generator/tcsxtce/</tt>, <tt class="docutils literal">generator/xtcepkt/</tt></td>
-<td>The <tt class="docutils literal">tcsxtce</tt> command, and the compiler behind it that turns a mission's XTCE document into packet codecs</td>
+<tr><td><tt class="docutils literal">generator/tcs_xtce/</tt>, <tt class="docutils literal">generator/xtcepkt/</tt></td>
+<td>The <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> command, and the compiler behind it that turns a mission's XTCE document into packet codecs</td>
 </tr>
 <tr><td><tt class="docutils literal">rust/</tt></td>
 <td>The <tt class="docutils literal">xtce</tt> Rust crate</td>
@@ -863,7 +863,7 @@ style), identically in every language.</li>
 <h1><a class="toc-backref" href="#toc-entry-11">Packet codecs</a></h1>
 <div class="section" id="overview">
 <h2><a class="toc-backref" href="#toc-entry-12">Overview</a></h2>
-<p><tt class="docutils literal">tcsxtce</tt> reads a mission's XTCE document and generates, for one
+<p><tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> reads a mission's XTCE document and generates, for one
 language:</p>
 <ul class="simple">
 <li>a <strong>struct per concrete container or meta-command</strong> with one field
@@ -881,11 +881,11 @@ use.</li>
 <h2><a class="toc-backref" href="#toc-entry-13">Running the compiler</a></h2>
 <pre class="code sh literal-block">
 <span class="name builtin">cd</span><span class="whitespace"> </span>generator<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcsxtce<span class="whitespace"> </span>INPUT<span class="whitespace"> </span>OUTPUT<span class="whitespace"> </span>--lang<span class="whitespace"> </span>LANG<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>INPUT<span class="whitespace"> </span>OUTPUT<span class="whitespace"> </span>--lang<span class="whitespace"> </span>LANG<span class="whitespace">
 
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcsxtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcsxtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.h<span class="whitespace">  </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcsxtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.h<span class="whitespace">  </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python
 </pre>
 <p>Each run writes one language. Run it once per language you need.</p>
 <table border="1" class="docutils">
@@ -924,7 +924,7 @@ unsupported construct, and lists every such construct with its cause.</p>
 </div>
 <div class="section" id="size-report">
 <h2><a class="toc-backref" href="#toc-entry-14">Size report</a></h2>
-<p><tt class="docutils literal">python3 <span class="pre">-m</span> tcsxtce INPUT <span class="pre">--size-report</span></tt> writes no code. For each
+<p><tt class="docutils literal">python3 <span class="pre">-m</span> tcs_xtce INPUT <span class="pre">--size-report</span></tt> writes no code. For each
 packet it lists every field with the bits it takes on the wire and the
 bits the XTCE document says its values need, to show where the mission
 database could make packets smaller. It changes nothing: the codecs
@@ -1114,6 +1114,12 @@ A <tt class="docutils literal">RepeatEntry</tt> <tt class="docutils literal">Off
 (not after the last one). Encoding fails with <tt class="docutils literal">BadSize</tt> unless the list
 has exactly the number of elements its type gives, including for a
 fixed count, which decoding always fills.</p>
+<p>An array entry with a <tt class="docutils literal">DimensionList</tt> carries a subset of the array:
+the elements from each dimension's <tt class="docutils literal">StartingIndex</tt> to its
+<tt class="docutils literal">EndingIndex</tt>, in the type's index space, last dimension fastest. Its
+field holds just those elements. In the demo, <tt class="docutils literal">MatrixMiddle</tt>'s
+<tt class="docutils literal">Matrix</tt> is rows 1..2 and columns 1..2 of a 3×4 array, so 4 elements,
+and <tt class="docutils literal">Fill</tt>'s <tt class="docutils literal">Slots</tt> are elements 2 to <tt class="docutils literal">Last</tt> of 6.</p>
 <p><strong>Sizes and counts from other fields.</strong> XTCE can take a size or count
 from another value of the packet with a <tt class="docutils literal">DynamicValue</tt>: an array
 dimension's <tt class="docutils literal">EndingIndex</tt>, a <tt class="docutils literal">RepeatEntry</tt> <tt class="docutils literal">Count</tt>, a binary
@@ -1157,6 +1163,38 @@ allows, or, without one, its encoding, or the largest of a
 demo's <tt class="docutils literal">SampleCount</tt> (<tt class="docutils literal"><span class="pre">0..6</span></tt>) makes <tt class="docutils literal">Readings</tt> a
 <tt class="docutils literal">demo_int16_list6</tt>, where an 8-bit count without a range would allow
 255 elements, and a 32-bit one 32768 of them.</p>
+<p><strong>Packet length fields.</strong> XTCE has no way to say that a field holds the
+length of its packet, so tcs-xtce reads it from an <tt class="docutils literal">AncillaryData</tt>
+named <tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> on the parameter or argument. Its value is an
+integer that is added to the number of bytes after the field. The CCSDS
+packet length, the bytes after the 6-byte primary header minus 1, is:</p>
+<pre class="code xml literal-block">
+<span class="name tag">&lt;Parameter</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;PacketLength&quot;</span><span class="whitespace"> </span><span class="name attribute">parameterTypeRef=</span><span class="literal string">&quot;U16&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;AncillaryDataSet&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;AncillaryData</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;tcs-xtce.length&quot;</span><span class="name tag">&gt;</span>-1<span class="name tag">&lt;/AncillaryData&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/AncillaryDataSet&gt;</span><span class="whitespace">
+</span><span class="name tag">&lt;/Parameter&gt;</span>
+</pre>
+<p>Other tools ignore the <tt class="docutils literal">AncillaryData</tt>, so the document stays valid
+XTCE. A length field is not a field of the generated struct:</p>
+<ul class="simple">
+<li>encoding writes the packet, then fills in the length from its size;
+it fails with <tt class="docutils literal">OutOfRange</tt> if the length doesn't fit the field;</li>
+<li>decoding ends the packet where the length says. It fails with
+<tt class="docutils literal">Truncated</tt> if the data is shorter, and with <tt class="docutils literal">BadLength</tt> if the
+packet's entries end before that. Bytes after the end are ignored, so
+packets that follow one another in a buffer can be decoded one at a
+time.</li>
+</ul>
+<p>This matches cFS, whose <tt class="docutils literal">CFE_MSG_SetSize</tt> sets the CCSDS length from a
+message's size and whose applications reject commands of the wrong
+length. Decoding a packet as its base container fails with <tt class="docutils literal">BadLength</tt>,
+as the base's entries end before the packet does; decode the <tt class="docutils literal">Kind</tt>
+instead. A length field must be an unsigned integer without a
+calibrator, and at most one per packet. It can't have an
+<tt class="docutils literal">IncludeCondition</tt> or <tt class="docutils literal">RepeatEntry</tt>, be compared by a criterion or
+set by an argument assignment, give a size or count, or be inside a
+repeated container.</p>
 <p>Integer field widths come from the <em>encoding</em>: an 11-bit unsigned field
 is a <tt class="docutils literal">u16</tt>, and a 12-bit sign-magnitude field is an <tt class="docutils literal">i16</tt>. Floats
 are always 64-bit in memory. 32-bit encodings round when written.
@@ -1279,7 +1317,7 @@ packet of its type. It reuses them for every packet until it is dropped.</p>
     </span><span class="name">demo</span><span class="punctuation">::</span><span class="name">CCSDSPacketKind</span><span class="punctuation">::</span><span class="name">Housekeeping</span><span class="punctuation">(</span><span class="name">hk</span><span class="punctuation">)</span><span class="whitespace"> </span><span class="operator">=&gt;</span><span class="whitespace"> </span><span class="name function magic">println!</span><span class="punctuation">(</span><span class="literal string">&quot;{hk}&quot;</span><span class="punctuation">),</span><span class="whitespace">
     </span><span class="name">other</span><span class="whitespace"> </span><span class="operator">=&gt;</span><span class="whitespace"> </span><span class="name function magic">println!</span><span class="punctuation">(</span><span class="literal string">&quot;{other}&quot;</span><span class="punctuation">),</span><span class="whitespace">
 </span><span class="punctuation">}</span><span class="whitespace">
-</span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="name">cmd</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">demo</span><span class="punctuation">::</span><span class="name">SetMode</span><span class="whitespace"> </span><span class="punctuation">{</span><span class="whitespace"> </span><span class="name">seq_count</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="literal number integer">5</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">packet_length</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="literal number integer">1</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">mode</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="name class">demo</span><span class="punctuation">::</span><span class="name">ModeArgType</span><span class="punctuation">::</span><span class="name">SCIENCE</span><span class="whitespace"> </span><span class="punctuation">};</span><span class="whitespace">
+</span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="name">cmd</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">demo</span><span class="punctuation">::</span><span class="name">SetMode</span><span class="whitespace"> </span><span class="punctuation">{</span><span class="whitespace"> </span><span class="name">seq_count</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="literal number integer">5</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">mode</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="name class">demo</span><span class="punctuation">::</span><span class="name">ModeArgType</span><span class="punctuation">::</span><span class="name">SCIENCE</span><span class="whitespace"> </span><span class="punctuation">};</span><span class="whitespace">
 </span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="name">wire</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="keyword pseudo">&amp;</span><span class="punctuation">[</span><span class="keyword type">u8</span><span class="punctuation">]</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">codec</span><span class="punctuation">.</span><span class="name">encode</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">cmd</span><span class="punctuation">)</span><span class="operator">?</span><span class="punctuation">;</span><span class="whitespace">           </span><span class="comment single">// view of the output buffer</span>
 </pre>
 <p>Rust <tt class="docutils literal">Codec</tt> methods: <tt class="docutils literal">with_capacity(n)</tt>, <tt class="docutils literal"><span class="pre">for_packet::&lt;P&gt;()</span></tt>,
@@ -1381,6 +1419,9 @@ formats the message.</p>
 <td>A size or count that another field gives is invalid or above its
 bound, or an array or binary value doesn't have it</td>
 </tr>
+<tr><td><tt class="docutils literal">BadLength</tt></td>
+<td>The packet's entries end before the end its packet length field gives</td>
+</tr>
 <tr><td><tt class="docutils literal">NoSpace</tt></td>
 <td>C/C++ only: the output buffer is smaller than the packet</td>
 </tr>
@@ -1425,7 +1466,11 @@ return an error code and their result through a pointer. Examples:
 <dt><tt class="docutils literal">BitReader(data)</tt></dt>
 <dd><tt class="docutils literal">position()</tt>, <tt class="docutils literal">seek(start, offset, field)</tt>, <tt class="docutils literal">skip(offset, field)</tt>;
 <tt class="docutils literal">uint(bits, field)</tt> reads 1–64 bits, most significant bit first;
-<tt class="docutils literal">uint_order(bits, little_endian, field)</tt>; <tt class="docutils literal">bytes(n, field)</tt>.</dd>
+<tt class="docutils literal">uint_order(bits, little_endian, field)</tt>; <tt class="docutils literal">bytes(n, field)</tt>.
+<tt class="docutils literal">limit(value, adjust, field)</tt> (<tt class="docutils literal">xtce_pk_read_limit</tt>) ends the packet
+where a packet length field that was just read says, and
+<tt class="docutils literal">finish(field)</tt> (<tt class="docutils literal">xtce_pk_read_finish</tt>) checks that decoding
+reached that end.</dd>
 <dt><tt class="docutils literal">BitWriter(buffer)</tt></dt>
 <dd>Clears the buffer, then <tt class="docutils literal">uint(bits, value)</tt>,
 <tt class="docutils literal">uint_order(bits, little_endian, value)</tt>, <tt class="docutils literal">bytes(data)</tt>, <tt class="docutils literal">seek</tt>
@@ -1433,7 +1478,9 @@ and <tt class="docutils literal">skip</tt>. In Rust and C/C++, <tt class="docuti
 (<tt class="docutils literal">xtce_pk_write_zeros</tt>) writes a run of zero bits. The buffer grows,
 zero filled, to cover the furthest bit written. Writing over earlier
 bits replaces them. Byte-aligned <tt class="docutils literal">bytes</tt> and <tt class="docutils literal">zeros</tt> copy or fill
-whole bytes at once.</dd>
+whole bytes at once. <tt class="docutils literal">patch_length(at, bits, little_endian, adjust,
+field)</tt> (<tt class="docutils literal">xtce_pk_patch_length</tt>) fills in the packet length field at
+bit <tt class="docutils literal">at</tt> once the packet is written.</dd>
 <dt>Integers</dt>
 <dd><tt class="docutils literal">to_signed(raw, bits, encoding)</tt> and
 <tt class="docutils literal">from_signed(value, bits, encoding, field)</tt> handle the unsigned,
@@ -1485,6 +1532,10 @@ unsupported, naming the construct and its location.</p>
 <dd>Integer, Float, Enumerated, Boolean, String, Binary, AbsoluteTime,
 RelativeTime, Array and Aggregate. Types that use <tt class="docutils literal">baseType</tt> are not
 supported.</dd>
+<dt>Ancillary data</dt>
+<dd><tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> on a parameter or argument marks a packet length
+field, described under the generated packet types. Other ancillary
+data is ignored.</dd>
 <dt>Aggregates</dt>
 <dd>Members of any supported type except the aggregate itself, values
 that take the rest of the packet, and values whose size another value
@@ -1494,9 +1545,11 @@ syntax (<tt class="docutils literal"><span class="pre">parameterRef=&quot;RouteH
 <tt class="docutils literal">P.a.b</tt>, and in <tt class="docutils literal">argumentRef</tt>), but not to a whole aggregate.</dd>
 <dt>Array elements</dt>
 <dd>Criteria, lookups and sizes can refer to an element with XTCE's
-bracket syntax, mixed with members (<tt class="docutils literal"><span class="pre">Probes[1].Gains[0]</span></tt>). The
-array must have one dimension and a fixed count, and the index must
-be below it. When encoding, criteria are checked before any field is
+bracket syntax, mixed with members (<tt class="docutils literal"><span class="pre">Probes[1].Gains[0]</span></tt>), with
+one index per dimension (<tt class="docutils literal"><span class="pre">Matrix[1][2]</span></tt>). Every dimension of the
+array must have a fixed size, and each index must be within its
+dimension, counting from its <tt class="docutils literal">StartingIndex</tt>; for a subset, the
+indexes are the full array's, and must fall inside the subset. When encoding, criteria are checked before any field is
 written, so arrays they index are first checked to have their count,
 and encoding fails with <tt class="docutils literal">BadSize</tt> (naming the field) otherwise. In
 the demo, <tt class="docutils literal">ProbeOne</tt> and <tt class="docutils literal">ProbeOther</tt> are chosen by
@@ -1505,10 +1558,11 @@ the demo, <tt class="docutils literal">ProbeOne</tt> and <tt class="docutils lit
 <dd>Elements of any supported type except arrays and values whose size
 another field gives. Each dimension's <tt class="docutils literal">StartingIndex</tt> is a
 <tt class="docutils literal">FixedValue</tt>; its <tt class="docutils literal">EndingIndex</tt> is a <tt class="docutils literal">FixedValue</tt> or, in at most
-one dimension, a <tt class="docutils literal">DynamicValue</tt>. Entries use the whole array:
-<tt class="docutils literal">ArrayParameterRefEntry</tt> and <tt class="docutils literal">ArrayArgumentRefEntry</tt> (or a plain
-<tt class="docutils literal">ParameterRefEntry</tt> or <tt class="docutils literal">ArgumentRefEntry</tt>) without a
-<tt class="docutils literal">DimensionList</tt>.</dd>
+one dimension, a <tt class="docutils literal">DynamicValue</tt>. <tt class="docutils literal">ArrayParameterRefEntry</tt> and
+<tt class="docutils literal">ArrayArgumentRefEntry</tt> (or a plain <tt class="docutils literal">ParameterRefEntry</tt> or
+<tt class="docutils literal">ArgumentRefEntry</tt>) use the whole array, or with a <tt class="docutils literal">DimensionList</tt>
+a subset, with as many dimensions as the type and within its bounds
+when they are fixed.</dd>
 <dt>Repeated entries</dt>
 <dd><tt class="docutils literal">RepeatEntry</tt> on parameter and argument entries, with a <tt class="docutils literal">Count</tt>
 that is a positive <tt class="docutils literal">FixedValue</tt> or a <tt class="docutils literal">DynamicValue</tt>, and an
@@ -1653,9 +1707,7 @@ select the command when decoding.</dd>
 and unqualified names. An unqualified name is looked up in the
 current SpaceSystem, then in each enclosing one.</dd>
 <dt>Not supported</dt>
-<dd>references to elements of arrays with several dimensions or a count
-that varies, array subsets (a <tt class="docutils literal">DimensionList</tt> in an entry),
-arrays of arrays, <tt class="docutils literal">IndirectParameterRefEntry</tt>, stream and segment entries,
+<dd>references to elements of arrays whose count varies, arrays of arrays, <tt class="docutils literal">IndirectParameterRefEntry</tt>, stream and segment entries,
 <tt class="docutils literal">RepeatEntry</tt> offsets that other values give, other instances than 0,
 <tt class="docutils literal">CustomAlgorithm</tt> criteria, <tt class="docutils literal">NextContainer</tt>, a container
 <tt class="docutils literal">BinaryEncoding</tt> on command containers, with a size from a
@@ -1668,9 +1720,8 @@ bit order, and include conditions in command containers.</dd>
 <div class="section" id="known-limitations">
 <h2><a class="toc-backref" href="#toc-entry-22">Known limitations</a></h2>
 <ul class="simple">
-<li>Length fields (for example the CCSDS packet length) and checksums are
-ordinary fields: the application computes them, because XTCE describes
-them with algorithms that aren't supported.</li>
+<li>A length field needs the <tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> <tt class="docutils literal">AncillaryData</tt>; without
+it, it is an ordinary field that the application sets.</li>
 <li>Decoding ignores bytes after the packet. Spare bits and gaps are
 written as zeros, so re-encoding a decoded packet can change them.</li>
 <li>Binary fields default to empty and must be set to their exact size
@@ -1687,7 +1738,7 @@ encoding: set the field and the data to agree.</li>
 <p><tt class="docutils literal">examples/</tt> holds self-contained examples. Every example exists in all
 supported languages: C/C++, Rust and Python 3. <tt class="docutils literal">make examples</tt> fails if
 an example is missing one. Each has an XTCE file and a program per
-language that uses the code <tt class="docutils literal">tcsxtce</tt> generates from it. <tt class="docutils literal">make</tt> in an
+language that uses the code <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> generates from it. <tt class="docutils literal">make</tt> in an
 example's directory, or <tt class="docutils literal">make examples</tt> at the top level:</p>
 <ul class="simple">
 <li>regenerates the code if the XTCE file or the generator changed;</li>
@@ -1713,7 +1764,7 @@ that always occupies 64 bits and ends at a NUL byte, so it holds up to
   </span><span class="name tag">&lt;/StringDataEncoding&gt;</span><span class="whitespace">
 </span><span class="name tag">&lt;/StringParameterType&gt;</span>
 </pre>
-<p><tt class="docutils literal">tcsxtce</tt> generates a <tt class="docutils literal">SimpleString</tt> structure in each language:</p>
+<p><tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> generates a <tt class="docutils literal">SimpleString</tt> structure in each language:</p>
 <ul class="simple">
 <li>Rust: <tt class="docutils literal">struct SimpleString { pub text: String }</tt>
 (<tt class="docutils literal">rust/src/simple_string.rs</tt>)</li>
@@ -1770,7 +1821,7 @@ bytes.</li>
 rust/target/release/examples/packet_tool<span class="whitespace"> </span>tests/mission/vectors.txt
 </pre>
 <p><tt class="docutils literal">make <span class="pre">samples-check</span></tt> is not part of <tt class="docutils literal">make test</tt>, because it
-downloads files. It checks <tt class="docutils literal">tcsxtce</tt> against 34 public XTCE documents:
+downloads files. It checks <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> against 34 public XTCE documents:
 the test documents of <a class="reference external" href="https://github.com/yamcs/yamcs">Yamcs</a> and the
 test documents and examples of the <a class="reference external" href="https://github.com/CesarCoelho/xtcetools">XTCE Toolkit</a>.
 <tt class="docutils literal">tests/external/sources.txt</tt> lists them, pinned to commits with a
@@ -1796,7 +1847,7 @@ diff.</p>
 </div>
 <div class="section" id="license">
 <h1><a class="toc-backref" href="#toc-entry-26">License</a></h1>
-<p>tcsxtce -- the generator, the Rust crate, the C/C++ library and the Python
+<p>tcs-xtce -- the generator, the Rust crate, the C/C++ library and the Python
 package -- is licensed under either of the Apache License, Version 2.0
 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT
 license (<tt class="docutils literal"><span class="pre">LICENSE-MIT</span></tt>, or <a class="reference external" href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>), at your
