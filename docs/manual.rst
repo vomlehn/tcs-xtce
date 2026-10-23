@@ -13,7 +13,10 @@ Summary
 
    This is a very early release of tcs-xtce. Comments are very welcome,
    as are people interested in collaborating on it. Please open an issue
-   or a pull request at https://github.com/vomlehn/tcs-xtce.
+   or a pull request at https://github.com/vomlehn/tcs-xtce; the
+   contributing guide,
+   https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md, says
+   how.
 
 **XTCE** (XML Telemetric and Command Exchange) is a standard for
 describing the telemetry and command messages that a spacecraft,

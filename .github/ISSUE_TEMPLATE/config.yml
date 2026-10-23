@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: tcs-xtce manual
+    url: https://vomlehn.github.io/tcs-xtce/docs/manual.html
+    about: Every data structure, method and supported XTCE construct.
+  - name: Contributing guide
+    url: https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md
+    about: How to build, test and send changes.

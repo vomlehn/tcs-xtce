@@ -236,6 +236,13 @@ packets.
 * [The Rust crate on crates.io](https://crates.io/crates/tcs-xtce):
   `cargo add tcs-xtce`.
 
+## Contributing
+
+This is a very early release, and comments and collaborators are very
+welcome. See [CONTRIBUTING.md](https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md)
+for how to report problems, ask for XTCE features, and build, test and send
+changes.
+
 ## License
 
 Licensed under either of the Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/vomlehn/tcs-xtce/blob/main/LICENSE-APACHE)
