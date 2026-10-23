@@ -10,7 +10,7 @@
 mod demo;
 
 use std::fmt::Display;
-use xtce::packet::{Codec, Packet};
+use tcs_xtce::packet::{Codec, Packet};
 
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()

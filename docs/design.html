@@ -431,7 +431,7 @@ references/Makefile ── curl ──&gt; SpaceSystem.xsd, XTCE.pdf, xml.xsd, c
                                      │  mission.xml (any XTCE 1.3 document)
   tcs-xtce (generator/xtcepkt)  ▼  (uses python/xtce to read it)
          &lt;mission&gt;.rs            &lt;mission&gt;.h (C and C++)         &lt;mission&gt;.py
-                 + hand-written runtimes: xtce::packet / xtce/packet.h / xtce.packet
+                 + hand-written runtimes: tcs_xtce::packet / xtce/packet.h / xtce.packet
 </pre>
 <p>Each language has two parts:</p>
 <ul class="simple">
@@ -533,7 +533,7 @@ random doubles now gives identical output in all three languages.</p>
 </div>
 <div class="section" id="error-handling">
 <h2><a class="toc-backref" href="#toc-entry-7">Error handling</a></h2>
-<p>Malformed or schema-invalid input raises <tt class="docutils literal"><span class="pre">xtce::Error</span></tt> (Rust and C++)
+<p>Malformed or schema-invalid input raises <tt class="docutils literal"><span class="pre">tcs_xtce::Error</span></tt> (Rust), <tt class="docutils literal"><span class="pre">xtce::Error</span></tt> (C++)
 or <tt class="docutils literal">xtce.XtceError</tt> (Python), with a 1-based line number. The C API
 turns exceptions into status codes and keeps the message in the
 document.</p>

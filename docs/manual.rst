@@ -83,7 +83,7 @@ byte-identical output. The test suite checks this on every build.
    * - ``generator/tcs_xtce/``, ``generator/xtcepkt/``
      - The ``tcs-xtce`` command, and the compiler behind it that turns a mission's XTCE document into packet codecs
    * - ``rust/``
-     - The ``xtce`` Rust crate
+     - The ``tcs-xtce`` Rust crate (imported as ``tcs_xtce``)
    * - ``cpp/``
      - The C++20 library (``libxtce.a``, ``libxtce.so``) and its C API
    * - ``python/``
@@ -141,8 +141,8 @@ buffer:
 * It is owned by a ``Document`` or ``Codec`` and is freed with that
   object.
 
-Rust: ``xtce::Buffer``
-----------------------
+Rust: ``tcs_xtce::Buffer``
+--------------------------
 
 .. list-table::
    :widths: auto
@@ -228,7 +228,7 @@ Documents
 A ``Document`` holds a root ``SpaceSystemType`` together with an input
 buffer and an output buffer.
 
-Rust (``xtce::Document``):
+Rust (``tcs_xtce::Document``):
 
 .. list-table::
    :widths: auto
@@ -254,11 +254,11 @@ Rust (``xtce::Document``):
    * - ``input()``, ``output() -> &Buffer``
      - The managed buffers
 
-``xtce::to_xml(&value, tag, &mut buf, indent)`` and
-``xtce::from_xml::<T>(bytes, tag)`` read and write any generated type as
+``tcs_xtce::to_xml(&value, tag, &mut buf, indent)`` and
+``tcs_xtce::from_xml::<T>(bytes, tag)`` read and write any generated type as
 a stand-alone element.
 
-Errors are ``xtce::Error { message, line, column }``. ``line`` is 1-based,
+Errors are ``tcs_xtce::Error { message, line, column }``. ``line`` is 1-based,
 or 0 when the error is not tied to a position in the input.
 
 C++ (``xtce::Document``, ``#include "xtce/document.hpp"``):
@@ -415,7 +415,7 @@ Example (Rust):
 
 .. code-block:: rust
 
-   use xtce::{Document, SpaceSystemType};
+   use tcs_xtce::{Document, SpaceSystemType};
 
    let mut doc = Document::from_bytes(&std::fs::read("sat.xml")?)?;
    println!("{}", doc.root.name);
@@ -455,7 +455,7 @@ language:
 * an **enumeration type** per enumerated parameter or argument type in
   use.
 
-The generated code uses a small runtime: ``xtce::packet`` in Rust,
+The generated code uses a small runtime: ``tcs_xtce::packet`` in Rust,
 ``xtce/packet.h`` in C and C++, and ``xtce.packet`` in Python.
 
 Running the compiler
@@ -512,8 +512,8 @@ allocates nothing after initialization.
 
 Rust
    Arrays, strings and binary fields become ``FixedVec<T, N>``,
-   ``FixedString<N>`` and ``FixedBytes<N>`` (from ``xtce::fixed``, also
-   exported by ``xtce::packet``). These hold up to ``N`` elements inline
+   ``FixedString<N>`` and ``FixedBytes<N>`` (from ``tcs_xtce::fixed``, also
+   exported by ``tcs_xtce::packet``). These hold up to ``N`` elements inline
    and dereference to ``[T]``, ``str`` and ``[u8]``. Build them with
    ``try_from`` or ``push``, which fail instead of growing.
    ``Packet::decode``, ``encode`` and ``Display`` then never allocate.
@@ -857,7 +857,7 @@ Methods
 -------
 
 Every packet struct and kind has the members below. Rust implements the
-``xtce::packet::Packet`` trait. Python classes derive from
+``tcs_xtce::packet::Packet`` trait. Python classes derive from
 ``xtce.packet.Packet`` (structs) or ``xtce.packet.PacketKind`` (kinds).
 In C/C++ they are macros and ``static inline`` functions named after the
 type, shown here for ``T`` = ``demo_Housekeeping``.
@@ -933,7 +933,7 @@ Rust:
 
 .. code-block:: rust
 
-   use xtce::packet::{Codec, Packet};
+   use tcs_xtce::packet::{Codec, Packet};
 
    let mut codec = Codec::for_packet::<demo::CCSDSPacketKind>();
    codec.load(&frame_bytes);                       // copy into the input buffer
@@ -1000,7 +1000,7 @@ and the properties ``input``, ``output``, ``input_capacity`` and
 Errors
 ------
 
-Errors are ``xtce::packet::PacketError`` (a Rust enum) and
+Errors are ``tcs_xtce::packet::PacketError`` (a Rust enum) and
 ``xtce.packet.PacketError`` (a Python ``ValueError``). In C and C++
 they are the code a function returns, plus the ``xtce_pk_error`` it
 fills in: ``code``, the ``field`` involved and, for ``Mismatch``, the
@@ -1489,7 +1489,7 @@ for each document:
 * the compiler, the size report and every emitter produce output or
   report unsupported constructs, and never crash;
 * the generated code compiles, without warnings: the C header as C11 and
-  as C++, the Rust module against the ``xtce`` crate, and the Python
+  as C++, the Rust module against the ``tcs-xtce`` crate, and the Python
   module.
 
 It prints a summary per document, with the constructs it found

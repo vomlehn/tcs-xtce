@@ -6,9 +6,9 @@ version = 4
 name = "simple-string"
 version = "0.1.0"
 dependencies = [
- "xtce",
+ "tcs-xtce",
 ]
 
 [[package]]
-name = "xtce"
+name = "tcs-xtce"
 version = "0.1.0"

@@ -7,7 +7,7 @@
 mod simple_string;
 
 use simple_string::SimpleString;
-use xtce::packet::{describe_str, Codec};
+use tcs_xtce::packet::{describe_str, Codec};
 
 fn quoted(s: &str) -> String {
     let mut out = String::new();

@@ -7,7 +7,7 @@
 mod demo;
 
 use demo::*;
-use xtce::packet::{Codec, Packet, PacketError};
+use tcs_xtce::packet::{Codec, Packet, PacketError};
 
 fn housekeeping() -> Housekeeping {
     Housekeeping {

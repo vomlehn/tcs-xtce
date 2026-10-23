@@ -1,5 +1,5 @@
 [package]
-name = "xtce"
+name = "tcs-xtce"
 version = "0.1.0"
 edition = "2021"
 description = "Flight software: serialization and deserialization of OMG XTCE documents into managed, preallocated buffers, being integrated with NASA's cFS and JPL's F Prime"
@@ -7,6 +7,13 @@ license = "MIT OR Apache-2.0"
 # The repository's README, which is the crate's page on crates.io.
 readme = "../README.md"
 repository = "https://github.com/vomlehn/tcs-xtce"
+keywords = ["xtce", "ccsds", "telemetry", "telecommand", "spacecraft"]
+categories = ["aerospace::space-protocols", "encoding", "parser-implementations"]
+# What crates.io gets. Listing the files also packages src/generated.rs,
+# which .gitignore leaves out because `make generate` writes it, so run
+# `make generate` before `cargo publish`. The tests and the other examples
+# need files from outside this directory, so they stay in the repository.
+include = ["src/**/*.rs", "examples/xtce_roundtrip.rs", "LICENSE-APACHE", "LICENSE-MIT"]
 
 [dependencies]
 

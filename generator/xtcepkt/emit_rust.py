@@ -1,4 +1,4 @@
-"""Emit a Rust module of packet codecs (uses ``xtce::packet``)."""
+"""Emit a Rust module of packet codecs (uses ``tcs_xtce::packet``)."""
 
 from __future__ import annotations
 
@@ -343,7 +343,7 @@ class RustEmitter:
         self.line("#![allow(dead_code, unused_imports, unused_variables, unreachable_code, clippy::all)]")
         self.line()
         self.line("use std::fmt::{self, Write as _};")
-        self.line("use xtce::packet::{self as pk, BitReader, BitWriter, IntEncoding, Packet, PacketError, Result, StringSpec};")
+        self.line("use tcs_xtce::packet::{self as pk, BitReader, BitWriter, IntEncoding, Packet, PacketError, Result, StringSpec};")
         for vt in m.types:
             self.enum_type(vt)
         for vt in m.aggregates:

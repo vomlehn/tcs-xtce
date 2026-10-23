@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use xtce::{Buffer, Document, SpaceSystemType};
+use tcs_xtce::{Buffer, Document, SpaceSystemType};
 
 fn samples() -> Vec<PathBuf> {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/samples");

@@ -12,9 +12,9 @@ Command Exchange) data into managed, preallocated buffers, in two layers:
   typed telemetry and command structs, with binary encoders and decoders
   for the packets it describes.
 
-The full documentation is in [`docs/manual.rst`](docs/manual.rst) (user
+The full documentation is in [`docs/manual.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/manual.rst) (user
 manual, including every data structure and method) and
-[`docs/design.rst`](docs/design.rst) (design and rationale), each rendered
+[`docs/design.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/design.rst) (design and rationale), each rendered
 to HTML beside it by `make html`: see [See also](#see-also).
 
 Work is under way on integrating tcs-xtce with NASA's core Flight System (cFS)
@@ -31,7 +31,7 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 |---------------|----------|
 | `references/` | Downloaded XTCE documents: `SpaceSystem.xsd`, `XTCE.pdf`, `VERSION`, plus `xml.xsd` and `catalog.xml` for offline validation |
 | `generator/`  | `xtcegen` (generates the XML binding from the XSD) and `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `xtcepkt`) |
-| `rust/`       | `xtce` Rust crate |
+| `rust/`       | `tcs-xtce` Rust crate |
 | `cpp/`        | C++20 library (`libxtce.a`, `libxtce.so`) with a C API (`xtce/xtce.h`), and the header-only C/C++ packet runtime (`xtce/packet.h`) |
 | `python/`     | `xtce` Python package (3.10+, standard library only) |
 | `tests/`      | The demo mission, packet vectors and the cross-language checks; `make` generates the schema-coverage samples into `tests/samples/` |
@@ -102,7 +102,7 @@ and field names are the snake_case form of the XML names.
 
 ### Managed buffers
 
-Each library has a buffer type (`xtce::Buffer` in Rust and C++,
+Each library has a buffer type (`tcs_xtce::Buffer` in Rust, `xtce::Buffer` in C++,
 `xtce.ManagedBuffer` in Python) that is preallocated (64 KiB by default) and
 keeps its allocation between uses. A `Document` owns one input buffer and one
 output buffer alongside the root `SpaceSystemType`:
@@ -120,7 +120,7 @@ output buffer alongside the root `SpaceSystemType`:
 Rust:
 
 ```rust
-use xtce::{Document, SpaceSystemType};
+use tcs_xtce::{Document, SpaceSystemType};
 
 let mut doc = Document::from_bytes(&std::fs::read("sat.xml")?)?;
 println!("{}", doc.root.name);

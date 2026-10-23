@@ -46,7 +46,7 @@ Overview
                                         │  mission.xml (any XTCE 1.3 document)
      tcs-xtce (generator/xtcepkt)  ▼  (uses python/xtce to read it)
             <mission>.rs            <mission>.h (C and C++)         <mission>.py
-                    + hand-written runtimes: xtce::packet / xtce/packet.h / xtce.packet
+                    + hand-written runtimes: tcs_xtce::packet / xtce/packet.h / xtce.packet
 
 Each language has two parts:
 
@@ -153,7 +153,7 @@ random doubles now gives identical output in all three languages.
 Error handling
 --------------
 
-Malformed or schema-invalid input raises ``xtce::Error`` (Rust and C++)
+Malformed or schema-invalid input raises ``tcs_xtce::Error`` (Rust), ``xtce::Error`` (C++)
 or ``xtce.XtceError`` (Python), with a 1-based line number. The C API
 turns exceptions into status codes and keeps the message in the
 document.

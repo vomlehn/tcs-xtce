@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{self, BufWriter};
 use std::process::ExitCode;
 
-use xtce::Document;
+use tcs_xtce::Document;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -16,11 +16,11 @@ fn main() -> ExitCode {
     }
     let mut doc = Document::default();
     let result = File::open(&args[0])
-        .map_err(|e| xtce::Error::new(format!("{}: {e}", args[0])))
+        .map_err(|e| tcs_xtce::Error::new(format!("{}: {e}", args[0])))
         .and_then(|f| doc.read_from(f))
         .and_then(|()| match args.get(1) {
             Some(path) => File::create(path)
-                .map_err(|e| xtce::Error::new(format!("{path}: {e}")))
+                .map_err(|e| tcs_xtce::Error::new(format!("{path}: {e}")))
                 .and_then(|f| doc.write_to(BufWriter::new(f))),
             None => doc.write_to(io::stdout().lock()),
         });

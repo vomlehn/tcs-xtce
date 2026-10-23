@@ -5,7 +5,7 @@ mission database into Python dataclasses derived from :class:`Packet`.  The
 generated code reads packets with a :class:`BitReader` and writes them with a
 :class:`BitWriter` into a :class:`~xtce.ManagedBuffer`; this module provides
 those and the integer, float, string and calibration helpers they call.  It
-mirrors ``xtce::packet`` in Rust and ``xtce/packet.h`` in C and C++.
+mirrors ``tcs_xtce::packet`` in Rust and ``xtce/packet.h`` in C and C++.
 
 A :class:`Codec` owns one input and one output buffer, preallocated for the
 largest packet it will see and reused until the codec is discarded.

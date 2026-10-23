@@ -10,7 +10,7 @@ which for each document checks that
 3. the packet compiler, the size report and the three emitters never crash:
    they either produce output or report an unsupported construct;
 4. the generated code compiles: the C header as C11 and as C++, the Rust
-   module against the xtce crate, and the Python module;
+   module against the tcs-xtce crate, and the Python module;
 
 and prints one summary per document, which must equal
 tests/external/expected.txt.  ``--update`` rewrites expected.txt instead.
@@ -44,7 +44,7 @@ XSD = TOP / "references" / "SpaceSystem.xsd"
 CATALOG = TOP / "references" / "catalog.xml"
 NS13 = b"http://www.omg.org/spec/XTCE/20250214"
 OLD_NS = re.compile(rb"http://www\.omg\.org/(space/xtce|spec/XTCE/\d{8})")
-RLIB = TOP / "rust" / "target" / "release" / "libxtce.rlib"
+RLIB = TOP / "rust" / "target" / "release" / "libtcs_xtce.rlib"
 
 
 def sources() -> list[tuple[str, str]]:
@@ -96,7 +96,7 @@ def build(mission, stem: str, out: Path) -> list[str]:
     module = out / f"{stem}.rs"
     module.write_text(rustfmt(emit_rust.emit(mission, stem)))
     cmd = ["rustc", "--edition", "2021", "--crate-type", "lib", "--crate-name", "sample", "-D", "warnings"]
-    cmd += ["--extern", f"xtce={RLIB}", "-L", f"dependency={RLIB.parent / 'deps'}"]
+    cmd += ["--extern", f"tcs_xtce={RLIB}", "-L", f"dependency={RLIB.parent / 'deps'}"]
     cmd += ["--emit", "metadata", "-o", str(out / f"lib{stem}.rmeta"), str(module)]
     err = run(cmd)
     if err:
