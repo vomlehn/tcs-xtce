@@ -44,3 +44,8 @@ jobs:
 
       - name: Check public XTCE documents
         run: make samples-check
+
+      # The crate packages src/generated.rs, which make wrote above and git
+      # ignores, so cargo counts it as uncommitted: hence --allow-dirty.
+      - name: Check that the Rust crate packages and builds
+        run: cd rust && cargo publish --dry-run --allow-dirty
