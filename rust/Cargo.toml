@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 # The repository's README, which is the crate's page on crates.io.
 readme = "../README.md"
 repository = "https://github.com/vomlehn/tcs-xtce"
-keywords = ["xtce", "ccsds", "telemetry", "telecommand", "spacecraft"]
+keywords = ["xtce", "ccsds", "telemetry", "omg", "spacecraft"]
 categories = ["aerospace::space-protocols", "encoding", "parser-implementations"]
 # What crates.io gets. Listing the files also packages src/generated.rs,
 # which .gitignore leaves out because `make generate` writes it, so run
