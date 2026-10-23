@@ -6,18 +6,21 @@
 #      tests/mission/vectors.txt; the output must equal vectors.expected.
 #   3. Each language decodes and re-encodes random packets; the outputs must
 #      be byte-identical.  The C tool is the generated header compiled as C,
-#      the C++ tool the same header compiled as C++.
+#      the C++ tool the same header compiled as C++.  The second Rust tool
+#      uses codecs generated with --dynamic-allocations false and also
+#      fails if decoding, encoding or describing a packet allocates.
 #   4. Re-encoding is a fixed point: decoding a re-encoded packet gives the
 #      same values and re-encodes to the same bytes.
 #
-# Usage: tests/packet_check.sh RUST_TOOL C_TOOL CXX_TOOL [COUNT]
+# Usage: tests/packet_check.sh RUST_TOOL RUST_FIXED_TOOL C_TOOL CXX_TOOL [COUNT]
 set -eu
 
 top=$(cd "$(dirname "$0")/.." && pwd)
 rust_tool=$1
-c_tool=$2
-cxx_tool=$3
-count=${4:-3000}
+rust_fixed_tool=$2
+c_tool=$3
+cxx_tool=$4
+count=${5:-3000}
 mission=$top/tests/mission
 
 out=$(mktemp -d)
@@ -36,10 +39,11 @@ XML_CATALOG_FILES="$top/references/catalog.xml" \
 status=0
 run_all() { # vectors-file name
     "$rust_tool" "$1" >"$out/$2.rust"
+    "$rust_fixed_tool" "$1" >"$out/$2.rust-fixed"
     "$c_tool" "$1" >"$out/$2.c"
     "$cxx_tool" "$1" >"$out/$2.cxx"
     py_tool "$1" >"$out/$2.py"
-    for lang in c cxx py; do
+    for lang in rust-fixed c cxx py; do
         if ! cmp -s "$out/$2.rust" "$out/$2.$lang"; then
             echo "MISMATCH: $2: rust vs $lang" >&2
             diff "$out/$2.rust" "$out/$2.$lang" | head -10 >&2
@@ -72,6 +76,7 @@ fi
 
 if [ $status -eq 0 ]; then
     echo "packet_check: $(wc -l <"$out/vectors.rust") vectors match vectors.expected;" \
-        "$count random and $(wc -l <"$out/again.txt") re-encoded packets identical across Rust, C, C++ and Python"
+        "$count random and $(wc -l <"$out/again.txt") re-encoded packets identical across Rust" \
+        "(with and without dynamic allocation), C, C++ and Python"
 fi
 exit $status

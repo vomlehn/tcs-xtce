@@ -34,11 +34,12 @@ CPP_TOOL  := cpp/build/xtce_roundtrip
 MISSION  := tests/mission/demo.xml
 PKT      := $(PYTHON) -m tcs_xtce ../$(MISSION) --source-name $(MISSION)
 PKT_SRC  := $(wildcard generator/xtcepkt/*.py generator/tcs_xtce/*.py)
-PKT_RUST := rust/tests/mission/demo.rs
+PKT_RUST := rust/tests/mission/demo.rs rust/tests/mission/demo_fixed.rs
 PKT_CPP  := cpp/tests/mission/demo.h
 PKT_PY   := python/tests/mission/demo.py
 PKT_GEN  := $(PKT_RUST) $(PKT_CPP) $(PKT_PY)
 RUST_PKT_TOOL := rust/target/release/examples/packet_tool
+RUST_FIXED_PKT_TOOL := rust/target/release/examples/packet_tool_fixed
 C_PKT_TOOL    := cpp/build/packet_tool
 CXX_PKT_TOOL  := cpp/build/packet_tool_cxx
 
@@ -79,7 +80,8 @@ samples: $(SAMPLES)
 # tcs-xtce reads the mission with the generated Python binding and writes one
 # language per run.
 $(PKT_GEN) &: $(MISSION) $(PKT_SRC) $(PY_GEN)
-	cd generator && $(PKT) ../$(PKT_RUST) --lang rust
+	cd generator && $(PKT) ../rust/tests/mission/demo.rs --lang rust
+	cd generator && $(PKT) ../rust/tests/mission/demo_fixed.rs --lang rust --dynamic-allocations false
 	cd generator && $(PKT) ../$(PKT_CPP) --lang c
 	cd generator && $(PKT) ../$(PKT_PY) --lang python
 	@touch $(PKT_GEN)
@@ -118,7 +120,7 @@ cross-check: rust cpp python $(SAMPLES)
 	sh tests/cross_check.sh $(RUST_TOOL) $(CPP_TOOL)
 
 packet-check: rust cpp python
-	sh tests/packet_check.sh $(RUST_PKT_TOOL) $(C_PKT_TOOL) $(CXX_PKT_TOOL)
+	sh tests/packet_check.sh $(RUST_PKT_TOOL) $(RUST_FIXED_PKT_TOOL) $(C_PKT_TOOL) $(CXX_PKT_TOOL)
 
 # Public XTCE documents, pinned to commits in tests/external/sources.txt and
 # downloaded on demand; not part of `make test`, which needs no network.

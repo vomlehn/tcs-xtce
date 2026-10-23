@@ -3,6 +3,9 @@
 //! The formats are identical in the Rust, C++ and Python libraries so that
 //! all three serialize a given document to the same bytes.
 
+use crate::fixed::FixedString;
+use std::fmt::{self, Write as _};
+
 /// A value that appears as attribute text or simple element content.
 pub trait Value: Sized {
     /// Parses the XML lexical form.
@@ -83,19 +86,25 @@ impl Value for f64 {
 /// Python's `repr`: fixed notation for exponents in [-4, 16), otherwise
 /// scientific notation with a signed, at least two digit exponent.
 pub fn format_double(x: f64, out: &mut String) {
+    // Writing to a String cannot fail.
+    let _ = write_double(x, out);
+}
+
+/// [`format_double`] for any [`fmt::Write`]; it allocates nothing.
+pub fn write_double<W: fmt::Write + ?Sized>(x: f64, out: &mut W) -> fmt::Result {
     if x.is_nan() {
-        out.push_str("NaN");
-        return;
+        return out.write_str("NaN");
     }
     if x.is_infinite() {
-        out.push_str(if x > 0.0 { "INF" } else { "-INF" });
-        return;
+        return out.write_str(if x > 0.0 { "INF" } else { "-INF" });
     }
     // `{:e}` yields the shortest round-trip digit count, e.g. "-1.25e-7", but
     // when two candidates of that length are equally close it may pick
     // either.  Reformatting at that precision rounds the exact value half to
     // even, which is what Python's `repr` and C++'s `to_chars` produce.
-    let shortest = format!("{x:e}");
+    // Both fit easily in 32 bytes ("-1.7976931348623157e308" is the longest).
+    let mut shortest = FixedString::<32>::new();
+    write!(shortest, "{x:e}")?;
     let digits = shortest
         .split('e')
         .next()
@@ -103,52 +112,54 @@ pub fn format_double(x: f64, out: &mut String) {
         .chars()
         .filter(char::is_ascii_digit)
         .count();
-    let sci = format!("{:.*e}", digits.saturating_sub(1), x);
+    let mut sci = FixedString::<32>::new();
+    write!(sci, "{:.*e}", digits.saturating_sub(1), x)?;
     let (mantissa, exp) = sci.split_once('e').unwrap_or((&sci, "0"));
     let exp: i32 = exp.parse().unwrap_or(0);
     let (neg, mantissa) = match mantissa.strip_prefix('-') {
         Some(m) => (true, m),
         None => (false, mantissa),
     };
-    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
+    let mut digits = FixedString::<32>::new();
+    for c in mantissa.chars().filter(|c| *c != '.') {
+        digits.write_char(c)?;
+    }
+    let digits = digits.as_str();
     if neg {
-        out.push('-');
+        out.write_char('-')?;
     }
     if (-4..16).contains(&exp) {
         if exp < 0 {
-            out.push_str("0.");
+            out.write_str("0.")?;
             for _ in 0..(-exp - 1) {
-                out.push('0');
+                out.write_char('0')?;
             }
-            out.push_str(&digits);
+            out.write_str(digits)?;
         } else {
             let point = exp as usize + 1;
             if digits.len() <= point {
-                out.push_str(&digits);
+                out.write_str(digits)?;
                 for _ in digits.len()..point {
-                    out.push('0');
+                    out.write_char('0')?;
                 }
-                out.push_str(".0");
+                out.write_str(".0")?;
             } else {
-                out.push_str(&digits[..point]);
-                out.push('.');
-                out.push_str(&digits[point..]);
+                out.write_str(&digits[..point])?;
+                out.write_char('.')?;
+                out.write_str(&digits[point..])?;
             }
         }
     } else {
-        out.push_str(&digits[..1]);
+        out.write_str(&digits[..1])?;
         if digits.len() > 1 {
-            out.push('.');
-            out.push_str(&digits[1..]);
+            out.write_char('.')?;
+            out.write_str(&digits[1..])?;
         }
-        out.push('e');
-        out.push(if exp < 0 { '-' } else { '+' });
-        let e = exp.unsigned_abs();
-        if e < 10 {
-            out.push('0');
-        }
-        out.push_str(&e.to_string());
+        out.write_char('e')?;
+        out.write_char(if exp < 0 { '-' } else { '+' })?;
+        write!(out, "{:02}", exp.unsigned_abs())?;
     }
+    Ok(())
 }
 
 #[cfg(test)]

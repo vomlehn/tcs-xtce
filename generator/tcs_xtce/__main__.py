@@ -4,6 +4,11 @@ Reads the mission's XTCE document INPUT and writes its packet codecs to
 OUTPUT in one language.  ``c`` and ``c++`` write the same header, which
 compiles both as C11 and as C++.
 
+``--dynamic-allocations false`` generates code that allocates no heap memory
+after initialization: Rust gets fixed-capacity arrays, strings and binary
+fields, and C and C++ never allocate either way.  Python allocates every
+object on the heap, so it accepts only ``true``.
+
 ``python3 -m tcs_xtce INPUT [OUTPUT] --size-report`` instead reports, for each
 packet, the bits every field uses on the wire and the bits the document says
 it needs; OUTPUT defaults to standard output.
@@ -60,6 +65,13 @@ def main(argv=None) -> int:
         action="store_true",
         help="instead of code, report the bits each packet field uses and the bits the document says it needs",
     )
+    ap.add_argument(
+        "--dynamic-allocations",
+        choices=("true", "false"),
+        default="true",
+        help="whether the generated code may allocate heap memory at any time (true, the default) "
+        "or only during initialization (false)",
+    )
     ap.add_argument("--source-name", help="name of the input file recorded in the generated header comment")
     # Before Python 3.13, parse_args() can't place the optional OUTPUT when an
     # option separates it from INPUT.
@@ -71,6 +83,9 @@ def main(argv=None) -> int:
         ap.error("OUTPUT and --lang are required unless --size-report is given")
     if args.prefix is not None and args.lang not in ("c", "c++"):
         ap.error("--prefix only applies to --lang c and --lang c++")
+    alloc = args.dynamic_allocations == "true"
+    if not alloc and args.lang == "python":
+        ap.error("--dynamic-allocations false is not available for --lang python, which allocates every object on the heap")
 
     try:
         root = xtce.Document.from_file(args.input).root
@@ -91,7 +106,7 @@ def main(argv=None) -> int:
         return 0
     if args.lang == "rust":
         # Generated Rust must follow standard formatting, like all Rust here.
-        text = rustfmt(emit_rust.emit(mission, source))
+        text = rustfmt(emit_rust.emit(mission, source, alloc))
     elif args.lang == "python":
         text = emit_python.emit(mission, source)
     else:

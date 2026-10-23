@@ -9,9 +9,16 @@
 //! A [`Codec`] owns one input and one output buffer, preallocated for the
 //! largest packet it will see and reused for every packet until the codec is
 //! dropped.
+//!
+//! Code generated with `--dynamic-allocations false` uses the
+//! fixed-capacity types of [`crate::fixed`] for arrays, strings and binary
+//! fields, and the `fixed_*` readers here, so it never allocates.  Encode it
+//! with a `Codec` made by [`Codec::for_packet`], whose output buffer never
+//! grows, and decode it from a slice with [`Packet::decode`].
 
 use crate::buffer::Buffer;
-use crate::value::format_double;
+pub use crate::fixed::{CapacityError, FixedBytes, FixedString, FixedVec};
+use crate::value::write_double;
 use std::fmt;
 use std::io::Read;
 
@@ -320,16 +327,84 @@ impl<'a> BitReader<'a> {
 
     /// Reads `n` whole bytes (which need not be byte aligned).
     pub fn bytes(&mut self, n: usize, field: &'static str) -> Result<Vec<u8>> {
+        let mut out = Vec::new();
+        self.bytes_into(n, &mut out, field)?;
+        Ok(out)
+    }
+
+    /// Reads `n` whole bytes into a fixed-capacity vector; fails with
+    /// `TooLong` if they do not fit.
+    pub fn fixed_bytes<const N: usize>(
+        &mut self,
+        n: usize,
+        field: &'static str,
+    ) -> Result<FixedBytes<N>> {
+        let mut out = FixedBytes::new();
+        self.bytes_into(n, &mut out, field)?;
+        Ok(out)
+    }
+
+    /// Appends `n` whole bytes to `out`.
+    fn bytes_into<S: ByteSink>(
+        &mut self,
+        n: usize,
+        out: &mut S,
+        field: &'static str,
+    ) -> Result<()> {
         self.need(n.checked_mul(8).unwrap_or(usize::MAX), field)?;
         if self.pos % 8 == 0 {
             let start = self.pos / 8;
+            out.append(&self.data[start..start + n], field)?;
             self.pos += n * 8;
             self.end = self.end.max(self.pos);
-            return Ok(self.data[start..start + n].to_vec());
+            return Ok(());
         }
-        (0..n)
-            .map(|_| self.uint(8, field).map(|b| b as u8))
-            .collect()
+        for _ in 0..n {
+            let b = self.uint(8, field)? as u8;
+            out.append(&[b], field)?;
+        }
+        Ok(())
+    }
+}
+
+/// Where [`BitReader`] puts the bytes it reads: a `Vec`, or a
+/// [`FixedBytes`] that never allocates.
+trait ByteSink {
+    fn append(&mut self, bytes: &[u8], field: &'static str) -> Result<()>;
+    fn len(&self) -> usize;
+    fn truncate(&mut self, len: usize);
+    fn bytes(&self) -> &[u8];
+}
+
+impl ByteSink for Vec<u8> {
+    fn append(&mut self, bytes: &[u8], _field: &'static str) -> Result<()> {
+        self.extend_from_slice(bytes);
+        Ok(())
+    }
+    fn len(&self) -> usize {
+        Vec::len(self)
+    }
+    fn truncate(&mut self, len: usize) {
+        Vec::truncate(self, len);
+    }
+    fn bytes(&self) -> &[u8] {
+        self
+    }
+}
+
+impl<const N: usize> ByteSink for FixedBytes<N> {
+    fn append(&mut self, bytes: &[u8], field: &'static str) -> Result<()> {
+        self.extend_from_slice(bytes)
+            .map_err(|_| PacketError::TooLong { field })
+    }
+    fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+    fn truncate(&mut self, len: usize) {
+        FixedVec::truncate(self, len);
+    }
+    fn bytes(&self) -> &[u8] {
+        self
     }
 }
 
@@ -746,46 +821,64 @@ pub fn read_string(
     spec: &StringSpec,
     field: &'static str,
 ) -> Result<String> {
+    let mut b = Vec::new();
+    read_string_into(r, spec, &mut b, field)?;
+    String::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
+}
+
+/// [`read_string`] into a string of at most `N` bytes; fails with
+/// `TooLong` if it does not fit.
+pub fn read_fixed_string<const N: usize>(
+    r: &mut BitReader<'_>,
+    spec: &StringSpec,
+    field: &'static str,
+) -> Result<FixedString<N>> {
+    let mut b = FixedBytes::new();
+    read_string_into(r, spec, &mut b, field)?;
+    FixedString::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
+}
+
+fn read_string_into<S: ByteSink>(
+    r: &mut BitReader<'_>,
+    spec: &StringSpec,
+    b: &mut S,
+    field: &'static str,
+) -> Result<()> {
     let start = r.position();
-    let bytes = match (spec.fixed_bits, spec.terminator) {
+    match (spec.fixed_bits, spec.terminator) {
         (Some(bits), Some(term)) => {
-            let mut b = r.bytes(bits / 8, field)?;
-            if let Some(i) = b.iter().position(|&c| c == term) {
+            r.bytes_into(bits / 8, b, field)?;
+            if let Some(i) = b.bytes().iter().position(|&c| c == term) {
                 b.truncate(i);
             }
-            b
         }
         (Some(bits), None) => {
             let n = r.uint(spec.size_tag_bits, field)?;
             if !fits(n, spec.size_tag_bits, bits) {
                 return Err(PacketError::TooLong { field });
             }
-            let b = r.bytes(n as usize, field)?;
+            r.bytes_into(n as usize, b, field)?;
             r.seek(start, bits as i64, field)?;
-            b
         }
-        (None, Some(term)) => {
-            let mut b = Vec::new();
-            loop {
-                if (b.len() + 1) * 8 > spec.max_bits {
-                    return Err(PacketError::TooLong { field });
-                }
-                let c = r.uint(8, field)? as u8;
-                if c == term {
-                    break b;
-                }
-                b.push(c);
+        (None, Some(term)) => loop {
+            if (b.len() + 1) * 8 > spec.max_bits {
+                return Err(PacketError::TooLong { field });
             }
-        }
+            let c = r.uint(8, field)? as u8;
+            if c == term {
+                break;
+            }
+            b.append(&[c], field)?;
+        },
         (None, None) => {
             let n = r.uint(spec.size_tag_bits, field)?;
             if !fits(n, spec.size_tag_bits, spec.max_bits) {
                 return Err(PacketError::TooLong { field });
             }
-            r.bytes(n as usize, field)?
+            r.bytes_into(n as usize, b, field)?;
         }
-    };
-    String::from_utf8(bytes).map_err(|_| PacketError::InvalidString { field })
+    }
+    Ok(())
 }
 
 pub fn write_string(
@@ -839,6 +932,14 @@ pub fn string_from_bytes(b: Vec<u8>, field: &'static str) -> Result<String> {
     String::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
 }
 
+/// [`string_from_bytes`] for a string of at most `N` bytes.
+pub fn fixed_string_from_bytes<const N: usize>(
+    b: FixedBytes<N>,
+    field: &'static str,
+) -> Result<FixedString<N>> {
+    FixedString::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
+}
+
 /// Writes a fixed-size binary field.
 pub fn write_binary(w: &mut BitWriter<'_>, b: &[u8], n: usize, field: &'static str) -> Result<()> {
     if b.len() != n {
@@ -867,33 +968,32 @@ pub fn write_rest(w: &mut BitWriter<'_>, b: &[u8], max: usize, field: &'static s
 // `describe` output is identical in every language so that the runtimes can be
 // compared byte for byte.
 
-pub fn describe_f64(x: f64, out: &mut String) {
-    format_double(x, out);
+pub fn describe_f64<W: fmt::Write + ?Sized>(x: f64, out: &mut W) -> fmt::Result {
+    write_double(x, out)
 }
 
-pub fn describe_str(s: &str, out: &mut String) {
-    out.push('"');
+pub fn describe_str<W: fmt::Write + ?Sized>(s: &str, out: &mut W) -> fmt::Result {
+    out.write_char('"')?;
     for c in s.chars() {
         match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
-                out.push_str(&format!("\\x{:02x}", c as u32));
-            }
-            c => out.push(c),
+            '"' => out.write_str("\\\"")?,
+            '\\' => out.write_str("\\\\")?,
+            c if (c as u32) < 0x20 || c as u32 == 0x7f => write!(out, "\\x{:02x}", c as u32)?,
+            c => out.write_char(c)?,
         }
     }
-    out.push('"');
+    out.write_char('"')
 }
 
 /// Text for an optional field that is absent.
 pub const DESCRIBE_NONE: &str = "none";
 
-pub fn describe_bytes(b: &[u8], out: &mut String) {
-    out.push_str("0x");
+pub fn describe_bytes<W: fmt::Write + ?Sized>(b: &[u8], out: &mut W) -> fmt::Result {
+    out.write_str("0x")?;
     for x in b {
-        out.push_str(&format!("{x:02x}"));
+        write!(out, "{x:02x}")?;
     }
+    Ok(())
 }
 
 #[cfg(test)]

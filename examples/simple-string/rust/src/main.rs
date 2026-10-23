@@ -11,7 +11,8 @@ use xtce::packet::{describe_str, Codec};
 
 fn quoted(s: &str) -> String {
     let mut out = String::new();
-    describe_str(s, &mut out);
+    // Writing to a String cannot fail.
+    let _ = describe_str(s, &mut out);
     out
 }
 

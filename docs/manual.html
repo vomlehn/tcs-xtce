@@ -367,44 +367,82 @@ ul.auto-toc {
 <div class="contents local topic" id="contents">
 <p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
 <ul class="simple">
-<li><a class="reference internal" href="#introduction" id="toc-entry-1">Introduction</a></li>
-<li><a class="reference internal" href="#building-and-testing" id="toc-entry-2">Building and testing</a></li>
-<li><a class="reference internal" href="#managed-buffers" id="toc-entry-3">Managed buffers</a><ul>
-<li><a class="reference internal" href="#rust-xtce-buffer" id="toc-entry-4">Rust: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt></a></li>
-<li><a class="reference internal" href="#c-xtce-buffer-xtce-buffer-hpp" id="toc-entry-5">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal">xtce/buffer.hpp</tt>)</a></li>
-<li><a class="reference internal" href="#python-xtce-managedbuffer" id="toc-entry-6">Python: <tt class="docutils literal">xtce.ManagedBuffer</tt></a></li>
+<li><a class="reference internal" href="#summary" id="toc-entry-1">Summary</a></li>
+<li><a class="reference internal" href="#introduction" id="toc-entry-2">Introduction</a></li>
+<li><a class="reference internal" href="#building-and-testing" id="toc-entry-3">Building and testing</a></li>
+<li><a class="reference internal" href="#managed-buffers" id="toc-entry-4">Managed buffers</a><ul>
+<li><a class="reference internal" href="#rust-xtce-buffer" id="toc-entry-5">Rust: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt></a></li>
+<li><a class="reference internal" href="#c-xtce-buffer-xtce-buffer-hpp" id="toc-entry-6">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal">xtce/buffer.hpp</tt>)</a></li>
+<li><a class="reference internal" href="#python-xtce-managedbuffer" id="toc-entry-7">Python: <tt class="docutils literal">xtce.ManagedBuffer</tt></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#the-xml-binding" id="toc-entry-7">The XML binding</a><ul>
-<li><a class="reference internal" href="#documents" id="toc-entry-8">Documents</a></li>
-<li><a class="reference internal" href="#generated-data-structures" id="toc-entry-9">Generated data structures</a></li>
-<li><a class="reference internal" href="#behaviour" id="toc-entry-10">Behaviour</a></li>
+<li><a class="reference internal" href="#the-xml-binding" id="toc-entry-8">The XML binding</a><ul>
+<li><a class="reference internal" href="#documents" id="toc-entry-9">Documents</a></li>
+<li><a class="reference internal" href="#generated-data-structures" id="toc-entry-10">Generated data structures</a></li>
+<li><a class="reference internal" href="#behaviour" id="toc-entry-11">Behaviour</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#packet-codecs" id="toc-entry-11">Packet codecs</a><ul>
-<li><a class="reference internal" href="#overview" id="toc-entry-12">Overview</a></li>
-<li><a class="reference internal" href="#running-the-compiler" id="toc-entry-13">Running the compiler</a></li>
-<li><a class="reference internal" href="#size-report" id="toc-entry-14">Size report</a></li>
-<li><a class="reference internal" href="#generated-packet-types" id="toc-entry-15">Generated packet types</a></li>
-<li><a class="reference internal" href="#methods" id="toc-entry-16">Methods</a></li>
-<li><a class="reference internal" href="#the-codec" id="toc-entry-17">The codec</a></li>
-<li><a class="reference internal" href="#errors" id="toc-entry-18">Errors</a></li>
-<li><a class="reference internal" href="#canonical-text" id="toc-entry-19">Canonical text</a></li>
-<li><a class="reference internal" href="#runtime-reference" id="toc-entry-20">Runtime reference</a></li>
-<li><a class="reference internal" href="#supported-xtce" id="toc-entry-21">Supported XTCE</a></li>
-<li><a class="reference internal" href="#known-limitations" id="toc-entry-22">Known limitations</a></li>
+<li><a class="reference internal" href="#packet-codecs" id="toc-entry-12">Packet codecs</a><ul>
+<li><a class="reference internal" href="#overview" id="toc-entry-13">Overview</a></li>
+<li><a class="reference internal" href="#running-the-compiler" id="toc-entry-14">Running the compiler</a></li>
+<li><a class="reference internal" href="#code-without-dynamic-allocation" id="toc-entry-15">Code without dynamic allocation</a></li>
+<li><a class="reference internal" href="#size-report" id="toc-entry-16">Size report</a></li>
+<li><a class="reference internal" href="#generated-packet-types" id="toc-entry-17">Generated packet types</a></li>
+<li><a class="reference internal" href="#methods" id="toc-entry-18">Methods</a></li>
+<li><a class="reference internal" href="#the-codec" id="toc-entry-19">The codec</a></li>
+<li><a class="reference internal" href="#errors" id="toc-entry-20">Errors</a></li>
+<li><a class="reference internal" href="#canonical-text" id="toc-entry-21">Canonical text</a></li>
+<li><a class="reference internal" href="#runtime-reference" id="toc-entry-22">Runtime reference</a></li>
+<li><a class="reference internal" href="#supported-xtce" id="toc-entry-23">Supported XTCE</a></li>
+<li><a class="reference internal" href="#known-limitations" id="toc-entry-24">Known limitations</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#examples" id="toc-entry-23">Examples</a><ul>
-<li><a class="reference internal" href="#simple-string" id="toc-entry-24"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
+<li><a class="reference internal" href="#examples" id="toc-entry-25">Examples</a><ul>
+<li><a class="reference internal" href="#simple-string" id="toc-entry-26"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing" id="toc-entry-25">Testing</a></li>
-<li><a class="reference internal" href="#license" id="toc-entry-26">License</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-27">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-28">License</a></li>
 </ul>
 </div>
+<div class="section" id="summary">
+<h1><a class="toc-backref" href="#toc-entry-1">Summary</a></h1>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This is a very early release of tcs-xtce. Comments are very welcome,
+as are people interested in collaborating on it. Please open an issue
+or a pull request at <a class="reference external" href="https://github.com/vomlehn/tcs-xtce">https://github.com/vomlehn/tcs-xtce</a>.</p>
+</div>
+<p><strong>XTCE</strong> (XML Telemetric and Command Exchange) is a standard for
+describing the telemetry and command messages that a spacecraft,
+instrument or ground system exchanges. It is published both by the
+Object Management Group (OMG), at <a class="reference external" href="https://www.omg.org/spec/XTCE/">https://www.omg.org/spec/XTCE/</a>, and
+by the Consultative Committee for Space Data Systems (CCSDS), as
+CCSDS 660.0-B-2, at <a class="reference external" href="https://ccsds.org/Pubs/660x0b2.pdf">https://ccsds.org/Pubs/660x0b2.pdf</a>. The CCSDS
+Blue Book adopts XTCE 1.2; tcs-xtce follows the latest OMG version,
+currently 1.3. An
+XTCE document is a mission database. It describes each message's
+parameters, their types, units and encodings, and how they are laid
+out in packets. XTCE describes the messages, not the code that handles
+them, so the same specification can be used from any programming
+language and shared between organizations and tools.</p>
+<p>tcs-xtce turns an XTCE document into code. From a mission's XTCE
+document it generates data structures for every packet, along with
+methods that encode them to the bytes that go on the wire and decode
+them from those bytes. It presently generates code for C/C++, Rust and
+Python 3.</p>
+<p>The generated code is written for flight software, where dynamic
+memory allocation is often not allowed. tcs-xtce has a flag,
+<tt class="docutils literal"><span class="pre">--dynamic-allocations</span> false</tt>, that leaves out code that allocates
+heap memory after initialization: Rust then gets fixed-capacity arrays,
+strings and binary fields. The C/C++ code never allocates memory: the
+caller provides the buffers, and the generated constants give the
+largest size each packet can need. Python allocates every object on the
+heap, so it always needs dynamic allocation. See
+<a class="reference internal" href="#code-without-dynamic-allocation">Code without dynamic allocation</a>.</p>
+</div>
 <div class="section" id="introduction">
-<h1><a class="toc-backref" href="#toc-entry-1">Introduction</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-2">Introduction</a></h1>
 <p>tcs-xtce is flight software. It provides libraries in Rust, C/C++ and Python
 for working with OMG <strong>XTCE</strong> (XML Telemetric and Command Exchange) in two
 layers:</p>
@@ -462,7 +500,7 @@ byte-identical output. The test suite checks this on every build.</p>
 </table>
 </div>
 <div class="section" id="building-and-testing">
-<h1><a class="toc-backref" href="#toc-entry-2">Building and testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-3">Building and testing</a></h1>
 <p>Requirements: <tt class="docutils literal">curl</tt>, <tt class="docutils literal">xmllint</tt>, Python 3.10 or later, a Rust
 toolchain with <tt class="docutils literal">rustfmt</tt>, a C11 compiler, and a C++20 compiler.</p>
 <pre class="code sh literal-block">
@@ -488,7 +526,7 @@ In Claude Code sessions, a hook in <tt class="docutils literal">.claude/settings
 <tt class="docutils literal">.rs</tt> file as it is edited.</p>
 </div>
 <div class="section" id="managed-buffers">
-<h1><a class="toc-backref" href="#toc-entry-3">Managed buffers</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-4">Managed buffers</a></h1>
 <p>Every buffer the libraries serialize into, or parse from, is a managed
 buffer:</p>
 <ul class="simple">
@@ -501,7 +539,7 @@ operations reuse the same memory.</li>
 object.</li>
 </ul>
 <div class="section" id="rust-xtce-buffer">
-<h2><a class="toc-backref" href="#toc-entry-4">Rust: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-5">Rust: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt></a></h2>
 <table border="1" class="docutils">
 <tbody valign="top">
 <tr><td><tt class="docutils literal"><span class="pre">Buffer::new()</span></tt></td>
@@ -541,7 +579,7 @@ object.</li>
 </table>
 </div>
 <div class="section" id="c-xtce-buffer-xtce-buffer-hpp">
-<h2><a class="toc-backref" href="#toc-entry-5">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal">xtce/buffer.hpp</tt>)</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-6">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal">xtce/buffer.hpp</tt>)</a></h2>
 <table border="1" class="docutils">
 <tbody valign="top">
 <tr><td><tt class="docutils literal"><span class="pre">Buffer(std::size_t</span> capacity = kDefaultCapacity)</tt></td>
@@ -575,7 +613,7 @@ object.</li>
 </table>
 </div>
 <div class="section" id="python-xtce-managedbuffer">
-<h2><a class="toc-backref" href="#toc-entry-6">Python: <tt class="docutils literal">xtce.ManagedBuffer</tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-7">Python: <tt class="docutils literal">xtce.ManagedBuffer</tt></a></h2>
 <table border="1" class="docutils">
 <tbody valign="top">
 <tr><td><tt class="docutils literal">ManagedBuffer(capacity=DEFAULT_CAPACITY)</tt></td>
@@ -607,9 +645,9 @@ object.</li>
 </div>
 </div>
 <div class="section" id="the-xml-binding">
-<h1><a class="toc-backref" href="#toc-entry-7">The XML binding</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-8">The XML binding</a></h1>
 <div class="section" id="documents">
-<h2><a class="toc-backref" href="#toc-entry-8">Documents</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-9">Documents</a></h2>
 <p>A <tt class="docutils literal">Document</tt> holds a root <tt class="docutils literal">SpaceSystemType</tt> together with an input
 buffer and an output buffer.</p>
 <p>Rust (<tt class="docutils literal"><span class="pre">xtce::Document</span></tt>):</p>
@@ -750,7 +788,7 @@ counterparts. Errors are raised as <tt class="docutils literal">xtce.XtceError</
 with <tt class="docutils literal">message</tt> and <tt class="docutils literal">line</tt> attributes.</p>
 </div>
 <div class="section" id="generated-data-structures">
-<h2><a class="toc-backref" href="#toc-entry-9">Generated data structures</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-10">Generated data structures</a></h2>
 <p>Every complex type in <tt class="docutils literal">SpaceSystem.xsd</tt> becomes a record. Type names
 match the schema (<tt class="docutils literal">SpaceSystemType</tt>, <tt class="docutils literal">IntegerParameterType</tt>, ...).
 Field names are the snake_case form of the XML names. Inherited content
@@ -843,7 +881,7 @@ Usually you don't call these directly.</p>
 </pre>
 </div>
 <div class="section" id="behaviour">
-<h2><a class="toc-backref" href="#toc-entry-10">Behaviour</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-11">Behaviour</a></h2>
 <ul class="simple">
 <li>The binding follows XTCE 1.3 strictly. Documents written for older
 versions are rejected wherever the schema changed, and errors give the
@@ -860,9 +898,9 @@ style), identically in every language.</li>
 </div>
 </div>
 <div class="section" id="packet-codecs">
-<h1><a class="toc-backref" href="#toc-entry-11">Packet codecs</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-12">Packet codecs</a></h1>
 <div class="section" id="overview">
-<h2><a class="toc-backref" href="#toc-entry-12">Overview</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-13">Overview</a></h2>
 <p><tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> reads a mission's XTCE document and generates, for one
 language:</p>
 <ul class="simple">
@@ -878,7 +916,7 @@ use.</li>
 <tt class="docutils literal">xtce/packet.h</tt> in C and C++, and <tt class="docutils literal">xtce.packet</tt> in Python.</p>
 </div>
 <div class="section" id="running-the-compiler">
-<h2><a class="toc-backref" href="#toc-entry-13">Running the compiler</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-14">Running the compiler</a></h2>
 <pre class="code sh literal-block">
 <span class="name builtin">cd</span><span class="whitespace"> </span>generator<span class="whitespace">
 </span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>INPUT<span class="whitespace"> </span>OUTPUT<span class="whitespace"> </span>--lang<span class="whitespace"> </span>LANG<span class="whitespace">
@@ -914,6 +952,11 @@ root SpaceSystem name in snake_case followed by <tt class="docutils literal">_</
 <td>Write a size report instead of code (see <a class="reference internal" href="#size-report">Size report</a>), to
 <tt class="docutils literal">OUTPUT</tt> or standard output</td>
 </tr>
+<tr><td><tt class="docutils literal"><span class="pre">--dynamic-allocations</span> true|false</tt></td>
+<td>Whether the generated code may allocate heap memory at any time
+(<tt class="docutils literal">true</tt>, the default) or only during initialization (<tt class="docutils literal">false</tt>).
+See <a class="reference internal" href="#code-without-dynamic-allocation">Code without dynamic allocation</a></td>
+</tr>
 <tr><td><tt class="docutils literal"><span class="pre">--source-name</span> NAME</tt></td>
 <td>Mission file name recorded in the generated headers</td>
 </tr>
@@ -922,8 +965,39 @@ root SpaceSystem name in snake_case followed by <tt class="docutils literal">_</
 <p>By default the compiler stops if any container or meta-command uses an
 unsupported construct, and lists every such construct with its cause.</p>
 </div>
+<div class="section" id="code-without-dynamic-allocation">
+<h2><a class="toc-backref" href="#toc-entry-15">Code without dynamic allocation</a></h2>
+<p>Flight software often may not allocate heap memory once it has started.
+<tt class="docutils literal"><span class="pre">--dynamic-allocations</span> false</tt> generates code for those programs: it
+allocates nothing after initialization.</p>
+<dl class="docutils">
+<dt>Rust</dt>
+<dd>Arrays, strings and binary fields become <tt class="docutils literal">FixedVec&lt;T, N&gt;</tt>,
+<tt class="docutils literal">FixedString&lt;N&gt;</tt> and <tt class="docutils literal">FixedBytes&lt;N&gt;</tt> (from <tt class="docutils literal"><span class="pre">xtce::fixed</span></tt>, also
+exported by <tt class="docutils literal"><span class="pre">xtce::packet</span></tt>). These hold up to <tt class="docutils literal">N</tt> elements inline
+and dereference to <tt class="docutils literal">[T]</tt>, <tt class="docutils literal">str</tt> and <tt class="docutils literal">[u8]</tt>. Build them with
+<tt class="docutils literal">try_from</tt> or <tt class="docutils literal">push</tt>, which fail instead of growing.
+<tt class="docutils literal"><span class="pre">Packet::decode</span></tt>, <tt class="docutils literal">encode</tt> and <tt class="docutils literal">Display</tt> then never allocate.
+During initialization, create a <tt class="docutils literal">Codec</tt> with
+<tt class="docutils literal"><span class="pre">Codec::for_packet::&lt;P&gt;()</span></tt>: its output buffer already fits the
+largest packet, so encoding never grows it. Decode with
+<tt class="docutils literal"><span class="pre">P::decode(&amp;bytes)</span></tt> rather than <tt class="docutils literal"><span class="pre">Codec::load</span></tt>, which grows the
+input buffer for input longer than it, and avoid
+<tt class="docutils literal"><span class="pre">Packet::to_bytes</span></tt>, which returns a new <tt class="docutils literal">Vec</tt>.</dd>
+<dt>C and C++</dt>
+<dd>The generated code never allocates, so both values produce the same
+header.</dd>
+<dt>Python</dt>
+<dd>Every Python object lives on the heap, so <tt class="docutils literal">false</tt> is rejected for
+<tt class="docutils literal"><span class="pre">--lang</span> python</tt>.</dd>
+</dl>
+<p><tt class="docutils literal">tests/packet_check.sh</tt> runs the demo mission's codecs generated both
+ways and checks that they give identical results. The check fails if the
+code generated with <tt class="docutils literal">false</tt> allocates while decoding, encoding or
+describing a packet.</p>
+</div>
 <div class="section" id="size-report">
-<h2><a class="toc-backref" href="#toc-entry-14">Size report</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-16">Size report</a></h2>
 <p><tt class="docutils literal">python3 <span class="pre">-m</span> tcs_xtce INPUT <span class="pre">--size-report</span></tt> writes no code. For each
 packet it lists every field with the bits it takes on the wire and the
 bits the XTCE document says its values need, to show where the mission
@@ -980,7 +1054,7 @@ and need no library. In C, link with <tt class="docutils literal"><span class="p
 <tt class="docutils literal">cpp/tests/mission/demo.h</tt> and <tt class="docutils literal">python/tests/mission/demo.py</tt>.</p>
 </div>
 <div class="section" id="generated-packet-types">
-<h2><a class="toc-backref" href="#toc-entry-15">Generated packet types</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-17">Generated packet types</a></h2>
 <p>Names are derived from XTCE names, and are the same in every language.
 In C and C++, every name the header defines also starts with the
 prefix (<tt class="docutils literal">demo_Housekeeping</tt>, <tt class="docutils literal">demo_Housekeeping_decode</tt>), because C
@@ -1042,22 +1116,22 @@ type's <tt class="docutils literal">sizeInBits</tt> and <tt class="docutils lite
 <td><tt class="docutils literal">bool</tt></td>
 </tr>
 <tr><td>string</td>
-<td><tt class="docutils literal">String</tt></td>
+<td><tt class="docutils literal">String</tt> (<tt class="docutils literal">FixedString&lt;N&gt;</tt>)</td>
 <td><tt class="docutils literal">demo_strN</tt>: <tt class="docutils literal">size_t len</tt> and <tt class="docutils literal">char data[N + 1]</tt></td>
 <td><tt class="docutils literal">str</tt></td>
 </tr>
 <tr><td>binary</td>
-<td><tt class="docutils literal">Vec&lt;u8&gt;</tt></td>
+<td><tt class="docutils literal">Vec&lt;u8&gt;</tt> (<tt class="docutils literal">FixedBytes&lt;N&gt;</tt>)</td>
 <td><tt class="docutils literal">demo_bytesN</tt>: <tt class="docutils literal">uint8_t data[N]</tt></td>
 <td><tt class="docutils literal">bytes</tt></td>
 </tr>
 <tr><td>binary whose size another field gives</td>
-<td><tt class="docutils literal">Vec&lt;u8&gt;</tt></td>
+<td><tt class="docutils literal">Vec&lt;u8&gt;</tt> (<tt class="docutils literal">FixedBytes&lt;N&gt;</tt>)</td>
 <td><tt class="docutils literal">demo_varbytesN</tt>: <tt class="docutils literal">size_t len</tt> and <tt class="docutils literal">uint8_t data[N]</tt></td>
 <td><tt class="docutils literal">bytes</tt></td>
 </tr>
 <tr><td>array, or entry with a <tt class="docutils literal">RepeatEntry</tt>, of element type <tt class="docutils literal">T</tt></td>
-<td><tt class="docutils literal">Vec&lt;T&gt;</tt></td>
+<td><tt class="docutils literal">Vec&lt;T&gt;</tt> (<tt class="docutils literal">FixedVec&lt;T, N&gt;</tt>)</td>
 <td><tt class="docutils literal">demo_&lt;T&gt;_listN</tt>: <tt class="docutils literal">size_t len</tt> and <tt class="docutils literal">T data[N]</tt></td>
 <td><tt class="docutils literal">list[T]</tt></td>
 </tr>
@@ -1073,8 +1147,10 @@ type's <tt class="docutils literal">sizeInBits</tt> and <tt class="docutils lite
 </tr>
 </tbody>
 </table>
-<p>In C/C++, <tt class="docutils literal">N</tt> is the most bytes (or elements) the field's encoding
-can hold, so fields need no allocation. A string's <tt class="docutils literal">data</tt> always has
+<p>The Rust types in parentheses are those generated with
+<tt class="docutils literal"><span class="pre">--dynamic-allocations</span> false</tt>. In them, and in C/C++, <tt class="docutils literal">N</tt> is the most
+bytes (or elements) the field's encoding can hold, so fields need no
+allocation. A string's <tt class="docutils literal">data</tt> always has
 room for a terminating NUL, which decoding writes. Encoding uses <tt class="docutils literal">len</tt>,
 not the NUL. In the names of list types, <tt class="docutils literal">&lt;T&gt;</tt> is the element's C type
 without the prefix and any <tt class="docutils literal">_t</tt> (<tt class="docutils literal">demo_int16_list6</tt>,
@@ -1227,7 +1303,7 @@ returns an instance of the matching member class.</li>
 </ul>
 </div>
 <div class="section" id="methods">
-<h2><a class="toc-backref" href="#toc-entry-16">Methods</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-18">Methods</a></h2>
 <p>Every packet struct and kind has the members below. Rust implements the
 <tt class="docutils literal"><span class="pre">xtce::packet::Packet</span></tt> trait. Python classes derive from
 <tt class="docutils literal">xtce.packet.Packet</tt> (structs) or <tt class="docutils literal">xtce.packet.PacketKind</tt> (kinds).
@@ -1304,7 +1380,7 @@ demo's <tt class="docutils literal">Temperature &lt; 40</tt> for <tt class="docu
 fixed values and fails with <tt class="docutils literal">Mismatch</tt> if a criterion doesn't hold.</p>
 </div>
 <div class="section" id="the-codec">
-<h2><a class="toc-backref" href="#toc-entry-17">The codec</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-19">The codec</a></h2>
 <p>A <tt class="docutils literal">Codec</tt> owns one input and one output buffer, sized for the largest
 packet of its type. It reuses them for every packet until it is dropped.</p>
 <p>Rust:</p>
@@ -1369,7 +1445,7 @@ and the properties <tt class="docutils literal">input</tt>, <tt class="docutils 
 <tt class="docutils literal">output_capacity</tt>.</p>
 </div>
 <div class="section" id="errors">
-<h2><a class="toc-backref" href="#toc-entry-18">Errors</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-20">Errors</a></h2>
 <p>Errors are <tt class="docutils literal"><span class="pre">xtce::packet::PacketError</span></tt> (a Rust enum) and
 <tt class="docutils literal">xtce.packet.PacketError</tt> (a Python <tt class="docutils literal">ValueError</tt>). In C and C++
 they are the code a function returns, plus the <tt class="docutils literal">xtce_pk_error</tt> it
@@ -1429,7 +1505,7 @@ bound, or an array or binary value doesn't have it</td>
 </table>
 </div>
 <div class="section" id="canonical-text">
-<h2><a class="toc-backref" href="#toc-entry-19">Canonical text</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-21">Canonical text</a></h2>
 <p><tt class="docutils literal">describe()</tt> / <tt class="docutils literal">Display</tt> produce text that is identical in every
 language. The cross-language tests compare it directly.</p>
 <pre class="literal-block">
@@ -1450,7 +1526,7 @@ names.</li>
 </ul>
 </div>
 <div class="section" id="runtime-reference">
-<h2><a class="toc-backref" href="#toc-entry-20">Runtime reference</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-22">Runtime reference</a></h2>
 <p>Generated code calls these, and they are also available for hand-written
 codecs. The names are the same in every language unless noted.</p>
 <p>In C/C++ (<tt class="docutils literal">xtce/packet.h</tt>) every name has the prefix <tt class="docutils literal">xtce_pk_</tt>,
@@ -1524,7 +1600,7 @@ describe)</tt>, which the other languages generate inline.</dd>
 </dl>
 </div>
 <div class="section" id="supported-xtce">
-<h2><a class="toc-backref" href="#toc-entry-21">Supported XTCE</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-23">Supported XTCE</a></h2>
 <p>The compiler supports the subset below. Anything else is reported as
 unsupported, naming the construct and its location.</p>
 <dl class="docutils">
@@ -1718,7 +1794,7 @@ bit order, and include conditions in command containers.</dd>
 </dl>
 </div>
 <div class="section" id="known-limitations">
-<h2><a class="toc-backref" href="#toc-entry-22">Known limitations</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-24">Known limitations</a></h2>
 <ul class="simple">
 <li>A length field needs the <tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> <tt class="docutils literal">AncillaryData</tt>; without
 it, it is an ordinary field that the application sets.</li>
@@ -1734,7 +1810,7 @@ encoding: set the field and the data to agree.</li>
 </div>
 </div>
 <div class="section" id="examples">
-<h1><a class="toc-backref" href="#toc-entry-23">Examples</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-25">Examples</a></h1>
 <p><tt class="docutils literal">examples/</tt> holds self-contained examples. Every example exists in all
 supported languages: C/C++, Rust and Python 3. <tt class="docutils literal">make examples</tt> fails if
 an example is missing one. Each has an XTCE file and a program per
@@ -1749,7 +1825,7 @@ again compiled as C++;</li>
 <p><tt class="docutils literal">make</tt> in <tt class="docutils literal">examples/</tt> itself converts <tt class="docutils literal">examples/README.rst</tt>, the
 index of examples, into <tt class="docutils literal">README.html</tt>.</p>
 <div class="section" id="simple-string">
-<h2><a class="toc-backref" href="#toc-entry-24"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-26"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xml</span></tt> describes a container,
 <tt class="docutils literal">SimpleString</tt>, holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string
 that always occupies 64 bits and ends at a NUL byte, so it holds up to
@@ -1789,7 +1865,7 @@ buffers reused without reallocation: true
 </div>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-25">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-27">Testing</a></h1>
 <p><tt class="docutils literal">make test</tt> runs:</p>
 <ul class="simple">
 <li>the unit tests of every language (<tt class="docutils literal">cargo test</tt>, <tt class="docutils literal">cpp/tests</tt>,
@@ -1807,8 +1883,11 @@ language, with byte-identical output that also validates.</li>
 <li>every language turns the hand-built packets in
 <tt class="docutils literal">tests/mission/vectors.txt</tt> into exactly
 <tt class="docutils literal">tests/mission/vectors.expected</tt>;</li>
-<li>3000 random packets give byte-identical results in Rust, Python,
-and the C tool compiled both as C and as C++;</li>
+<li>3000 random packets give byte-identical results in Rust (generated
+both with and without dynamic allocation), Python, and the C tool
+compiled both as C and as C++;</li>
+<li>the Rust codecs generated with <tt class="docutils literal"><span class="pre">--dynamic-allocations</span> false</tt>
+allocate nothing while decoding, encoding or describing a packet;</li>
 <li>decoding a re-encoded packet gives the same values and the same
 bytes.</li>
 </ul>
@@ -1846,7 +1925,7 @@ tests/samples_check.py <span class="pre">--update</span></tt> rewrites <tt class
 diff.</p>
 </div>
 <div class="section" id="license">
-<h1><a class="toc-backref" href="#toc-entry-26">License</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-28">License</a></h1>
 <p>tcs-xtce -- the generator, the Rust crate, the C/C++ library and the Python
 package -- is licensed under either of the Apache License, Version 2.0
 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT

@@ -6,6 +6,45 @@ tcs-xtce User Manual
    :depth: 2
    :local:
 
+Summary
+=======
+
+.. note::
+
+   This is a very early release of tcs-xtce. Comments are very welcome,
+   as are people interested in collaborating on it. Please open an issue
+   or a pull request at https://github.com/vomlehn/tcs-xtce.
+
+**XTCE** (XML Telemetric and Command Exchange) is a standard for
+describing the telemetry and command messages that a spacecraft,
+instrument or ground system exchanges. It is published both by the
+Object Management Group (OMG), at https://www.omg.org/spec/XTCE/, and
+by the Consultative Committee for Space Data Systems (CCSDS), as
+CCSDS 660.0-B-2, at https://ccsds.org/Pubs/660x0b2.pdf. The CCSDS
+Blue Book adopts XTCE 1.2; tcs-xtce follows the latest OMG version,
+currently 1.3. An
+XTCE document is a mission database. It describes each message's
+parameters, their types, units and encodings, and how they are laid
+out in packets. XTCE describes the messages, not the code that handles
+them, so the same specification can be used from any programming
+language and shared between organizations and tools.
+
+tcs-xtce turns an XTCE document into code. From a mission's XTCE
+document it generates data structures for every packet, along with
+methods that encode them to the bytes that go on the wire and decode
+them from those bytes. It presently generates code for C/C++, Rust and
+Python 3.
+
+The generated code is written for flight software, where dynamic
+memory allocation is often not allowed. tcs-xtce has a flag,
+``--dynamic-allocations false``, that leaves out code that allocates
+heap memory after initialization: Rust then gets fixed-capacity arrays,
+strings and binary fields. The C/C++ code never allocates memory: the
+caller provides the buffers, and the generated constants give the
+largest size each packet can need. Python allocates every object on the
+heap, so it always needs dynamic allocation. See
+`Code without dynamic allocation`_.
+
 Introduction
 ============
 
@@ -454,11 +493,47 @@ Each run writes one language. Run it once per language you need.
    * - ``--size-report``
      - Write a size report instead of code (see `Size report`_), to
        ``OUTPUT`` or standard output
+   * - ``--dynamic-allocations true|false``
+     - Whether the generated code may allocate heap memory at any time
+       (``true``, the default) or only during initialization (``false``).
+       See `Code without dynamic allocation`_
    * - ``--source-name NAME``
      - Mission file name recorded in the generated headers
 
 By default the compiler stops if any container or meta-command uses an
 unsupported construct, and lists every such construct with its cause.
+
+Code without dynamic allocation
+-------------------------------
+
+Flight software often may not allocate heap memory once it has started.
+``--dynamic-allocations false`` generates code for those programs: it
+allocates nothing after initialization.
+
+Rust
+   Arrays, strings and binary fields become ``FixedVec<T, N>``,
+   ``FixedString<N>`` and ``FixedBytes<N>`` (from ``xtce::fixed``, also
+   exported by ``xtce::packet``). These hold up to ``N`` elements inline
+   and dereference to ``[T]``, ``str`` and ``[u8]``. Build them with
+   ``try_from`` or ``push``, which fail instead of growing.
+   ``Packet::decode``, ``encode`` and ``Display`` then never allocate.
+   During initialization, create a ``Codec`` with
+   ``Codec::for_packet::<P>()``: its output buffer already fits the
+   largest packet, so encoding never grows it. Decode with
+   ``P::decode(&bytes)`` rather than ``Codec::load``, which grows the
+   input buffer for input longer than it, and avoid
+   ``Packet::to_bytes``, which returns a new ``Vec``.
+C and C++
+   The generated code never allocates, so both values produce the same
+   header.
+Python
+   Every Python object lives on the heap, so ``false`` is rejected for
+   ``--lang python``.
+
+``tests/packet_check.sh`` runs the demo mission's codecs generated both
+ways and checks that they give identical results. The check fails if the
+code generated with ``false`` allocates while decoding, encoding or
+describing a packet.
 
 Size report
 -----------
@@ -583,19 +658,19 @@ Field types:
      - ``bool``
      - ``bool``
    * - string
-     - ``String``
+     - ``String`` (``FixedString<N>``)
      - ``demo_strN``: ``size_t len`` and ``char data[N + 1]``
      - ``str``
    * - binary
-     - ``Vec<u8>``
+     - ``Vec<u8>`` (``FixedBytes<N>``)
      - ``demo_bytesN``: ``uint8_t data[N]``
      - ``bytes``
    * - binary whose size another field gives
-     - ``Vec<u8>``
+     - ``Vec<u8>`` (``FixedBytes<N>``)
      - ``demo_varbytesN``: ``size_t len`` and ``uint8_t data[N]``
      - ``bytes``
    * - array, or entry with a ``RepeatEntry``, of element type ``T``
-     - ``Vec<T>``
+     - ``Vec<T>`` (``FixedVec<T, N>``)
      - ``demo_<T>_listN``: ``size_t len`` and ``T data[N]``
      - ``list[T]``
    * - aggregate
@@ -607,8 +682,10 @@ Field types:
      - ``bool has_<field>`` before the field
      - ``Optional[T]``
 
-In C/C++, ``N`` is the most bytes (or elements) the field's encoding
-can hold, so fields need no allocation. A string's ``data`` always has
+The Rust types in parentheses are those generated with
+``--dynamic-allocations false``. In them, and in C/C++, ``N`` is the most
+bytes (or elements) the field's encoding can hold, so fields need no
+allocation. A string's ``data`` always has
 room for a terminating NUL, which decoding writes. Encoding uses ``len``,
 not the NUL. In the names of list types, ``<T>`` is the element's C type
 without the prefix and any ``_t`` (``demo_int16_list6``,
@@ -1380,8 +1457,11 @@ Testing
   * every language turns the hand-built packets in
     ``tests/mission/vectors.txt`` into exactly
     ``tests/mission/vectors.expected``;
-  * 3000 random packets give byte-identical results in Rust, Python,
-    and the C tool compiled both as C and as C++;
+  * 3000 random packets give byte-identical results in Rust (generated
+    both with and without dynamic allocation), Python, and the C tool
+    compiled both as C and as C++;
+  * the Rust codecs generated with ``--dynamic-allocations false``
+    allocate nothing while decoding, encoding or describing a packet;
   * decoding a re-encoded packet gives the same values and the same
     bytes.
 

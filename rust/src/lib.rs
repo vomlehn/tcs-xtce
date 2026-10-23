@@ -24,6 +24,7 @@
 
 pub mod buffer;
 pub mod document;
+pub mod fixed;
 pub mod generated;
 pub mod packet;
 pub mod value;

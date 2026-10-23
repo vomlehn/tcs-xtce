@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from .common import flt, header_lines, int_enc, invertible, le, string_spec
+from .common import flt, header_lines, int_enc, invertible, le, str_cap, string_spec
 from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 
@@ -20,17 +20,24 @@ def rstr(s: str) -> str:
     return '"' + "".join(out) + '"'
 
 
-def field_type(vt: VType, optional: bool = False) -> str:
+def field_type(vt: VType, alloc: bool, optional: bool = False) -> str:
+    """The Rust type of a value; without ``alloc``, arrays, strings and
+    binary values have fixed capacities, so they need no heap."""
     if optional:
-        return f"Option<{field_type(vt)}>"
+        return f"Option<{field_type(vt, alloc)}>"
     k = vt.kind
     if k == "array":
-        return f"Vec<{field_type(vt.elem)}>"
+        elem = field_type(vt.elem, alloc)
+        return f"Vec<{elem}>" if alloc else f"pk::FixedVec<{elem}, {vt.enc.max_count}>"
     if k == "aggregate":
         return vt.ident
     if k == "int":
         return f"{'i' if vt.signed else 'u'}{vt.width}"
-    return {"float": "f64", "bool": "bool", "string": "String", "binary": "Vec<u8>"}.get(k) or vt.ident
+    if k == "string":
+        return "String" if alloc else f"pk::FixedString<{str_cap(vt)}>"
+    if k == "binary":
+        return "Vec<u8>" if alloc else f"pk::FixedBytes<{vt.enc.bits // 8}>"
+    return {"float": "f64", "bool": "bool"}.get(k) or vt.ident
 
 
 def literal(vt: VType, v) -> str:
@@ -118,17 +125,18 @@ def member_sizes(e: AggregateEnc) -> set:
     return {m.vtype.dyn.member for m in e.members if m.vtype.dyn is not None}
 
 
-def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
+def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
     """Expression reading one value with BitReader ``r``; ``ref`` gives the
     expression for the value that gives a size or count (a DynSize).
-    ``depth`` numbers the locals of nested aggregates."""
+    ``alloc`` is whether it may allocate.  ``depth`` numbers the locals of
+    nested aggregates."""
     e = vt.enc
     if isinstance(e, AggregateEnc):
         a = f"a{depth}_"
         inner = lambda d: a + d.member if d.member else ref(d)  # noqa: E731
         reads = []
         for m in e.members:
-            x = read_expr(m.vtype, f, inner, depth + 1)
+            x = read_expr(m.vtype, f, inner, alloc, depth + 1)
             reads.append((m.ident, f"{{ r.pad({m.skip}, {f})?; {x} }}" if m.skip else x))
         if member_sizes(e):
             # Read members into locals, in order, so later ones can use them.
@@ -140,9 +148,13 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         return f"{{ let a = {agg}; r.pad({e.pad}, {f})?; a }}" if e.pad else agg
     if isinstance(e, ArrayEnc):
         gap = f"if i > 0 {{ r.skip({e.gap}, {f})?; }}" if e.gap else ""
+        elem = read_expr(e.elem, f, ref, alloc, depth + 1)
+        if alloc:
+            return f"{{ let n = {count(vt, ref, f)}; let mut a = Vec::with_capacity(n); for i in 0..n {{ {gap} a.push({elem}); }} a }}"
+        full = f"return Err(PacketError::BadSize {{ field: {f} }})"
         return (
-            f"{{ let n = {count(vt, ref, f)}; let mut a = Vec::with_capacity(n); "
-            f"for i in 0..n {{ {gap} a.push({read_expr(e.elem, f, ref, depth + 1)}); }} a }}"
+            f"{{ let n = {count(vt, ref, f)}; let mut a = pk::FixedVec::<{field_type(e.elem, alloc)}, {e.max_count}>::new(); "
+            f"for i in 0..n {{ {gap} if a.push({elem}).is_err() {{ {full} }} }} a }}"
         )
     if isinstance(e, IntEnc):
         raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
@@ -150,7 +162,7 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         if vt.kind == "int" and vt.calibrator is not None:
             y = calibrate(vt, f"pk::int_to_f64({raw}, {e.bits}, {enc})", f)
             lo, lim = vt.eng_limits
-            return f"pk::round_to_int({y}, {flt(lo)}, {flt(lim)}, {f})? as {field_type(vt)}"
+            return f"pk::round_to_int({y}, {flt(lo)}, {flt(lim)}, {f})? as {field_type(vt, alloc)}"
         if vt.kind == "int":
             if vt.signed:
                 return f"pk::to_signed({raw}, {e.bits}, {enc}) as i{vt.width}"
@@ -166,12 +178,16 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
         return calibrate(vt, f"pk::float_from_raw({raw}, {e.bits})", f)
     if isinstance(e, BinaryEnc):
+        read = "bytes" if alloc else f"fixed_bytes::<{e.bits // 8}>"
         if e.rest:
-            return f"{{ let n = r.rest_bytes({e.bits // 8}, {f})?; r.bytes(n, {f})? }}"
+            return f"{{ let n = r.rest_bytes({e.bits // 8}, {f})?; r.{read}(n, {f})? }}"
         n = size(e.dyn, ref(e.dyn), f) if e.dyn else e.bits // 8
-        b = f"r.bytes({n}, {f})?"
-        return f"pk::string_from_bytes({b}, {f})?" if vt.kind == "string" else b
-    s = f"pk::read_string(&mut r, {spec(vt, ref, f)}, {f})?"
+        b = f"r.{read}({n}, {f})?"
+        if vt.kind != "string":
+            return b
+        return f"pk::{'' if alloc else 'fixed_'}string_from_bytes({b}, {f})?"
+    read = "read_string" if alloc else f"read_fixed_string::<{str_cap(vt)}>"
+    s = f"pk::{read}(&mut r, {spec(vt, ref, f)}, {f})?"
     if vt.kind == "bool":
         bad = f"return Err(PacketError::OutOfRange {{ field: {f} }})"
         return f"match {s}.as_str() {{ {rstr(vt.one_string)} => true, {rstr(vt.zero_string)} => false, _ => {bad} }}"
@@ -242,25 +258,26 @@ def elem_pattern(vt: VType) -> str:
 
 
 def describe(vt: VType, x: str) -> str:
-    """Expression appending the canonical text of ``x`` to ``s``."""
+    """Expression writing the canonical text of ``x`` to the formatter
+    ``f``, without allocating."""
     k = vt.kind
     if k == "aggregate":
         parts = []
         for i, m in enumerate(vt.enc.members):
-            parts.append(f"s.push_str({rstr((', ' if i else '') + m.ident + '=')});")
+            parts.append(f"f.write_str({rstr((', ' if i else '') + m.ident + '=')})?;")
             parts.append(describe(m.vtype, f"({x}).{m.ident}") + ";")
-        return "{ s.push('{'); " + " ".join(parts) + " s.push('}') }"
+        return "{ f.write_char('{')?; " + " ".join(parts) + " f.write_char('}')? }"
     if k == "array":
         el = describe(vt.elem, "e")
         pat = elem_pattern(vt.elem)
-        return f"{{ s.push('['); for (i, {pat}) in ({x}).iter().enumerate() {{ if i > 0 {{ s.push_str(\", \"); }} {el}; }} s.push(']') }}"
+        return f"{{ f.write_char('[')?; for (i, {pat}) in ({x}).iter().enumerate() {{ if i > 0 {{ f.write_str(\", \")?; }} {el}; }} f.write_char(']')? }}"
     if k == "float":
-        return f"pk::describe_f64({x}, &mut s)"
+        return f"pk::describe_f64({x}, f)?"
     if k == "string":
-        return f"pk::describe_str(&{x}, &mut s)"
+        return f"pk::describe_str(&{x}, f)?"
     if k == "binary":
-        return f"pk::describe_bytes(&{x}, &mut s)"
-    return f"s.push_str(&{x}.to_string())"
+        return f"pk::describe_bytes(&{x}, f)?"
+    return f"write!(f, \"{{}}\", {x})?"
 
 
 def conjunction(conds: list) -> str:
@@ -304,9 +321,10 @@ def condition(c: Criterion, x: str, y=None) -> str:
 
 
 class RustEmitter:
-    def __init__(self, mission: Mission, source: str):
+    def __init__(self, mission: Mission, source: str, alloc: bool):
         self.m = mission
         self.source = source
+        self.alloc = alloc
         self.out: list[str] = []
 
     def line(self, s: str = "", depth: int = 0) -> None:
@@ -317,9 +335,14 @@ class RustEmitter:
         for h in header_lines(m, self.source):
             self.line("// " + h)
         self.line(f"//! Packet codecs for the `{m.name}` mission.")
+        if not self.alloc:
+            self.line("//!")
+            self.line("//! Generated with `--dynamic-allocations false`: arrays, strings and binary")
+            self.line("//! fields have fixed capacities, and decoding, encoding and describing a")
+            self.line("//! packet never allocate.")
         self.line("#![allow(dead_code, unused_imports, unused_variables, unreachable_code, clippy::all)]")
         self.line()
-        self.line("use std::fmt;")
+        self.line("use std::fmt::{self, Write as _};")
         self.line("use xtce::packet::{self as pk, BitReader, BitWriter, IntEncoding, Packet, PacketError, Result, StringSpec};")
         for vt in m.types:
             self.enum_type(vt)
@@ -368,7 +391,7 @@ class RustEmitter:
         self.line(f"pub struct {vt.ident} {{")
         for m in vt.enc.members:
             self.line(f"/// `{m.name}` ({m.vtype.key})", 1)
-            self.line(f"pub {m.ident}: {field_type(m.vtype)},", 1)
+            self.line(f"pub {m.ident}: {field_type(m.vtype, self.alloc)},", 1)
         self.line("}")
 
     # -- decoding --
@@ -387,7 +410,7 @@ class RustEmitter:
                 self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
             elif isinstance(it, Value):
                 lc = it.local
-                expr = read_expr(lc.vtype, rstr(lc.name), self.read_ref)
+                expr = read_expr(lc.vtype, rstr(lc.name), self.read_ref, self.alloc)
                 if assign:
                     self.line(f"v{lc.id} = Some({expr});", depth)
                 else:
@@ -490,7 +513,7 @@ class RustEmitter:
             doc = f"; {lc.vtype.doc}" if lc.vtype.doc else ""
             cond = "; present only when its include condition holds" if lc.optional else ""
             self.line(f"/// `{lc.key}` ({lc.vtype.key}{doc}{cond})", 1)
-            self.line(f"pub {name}: {field_type(lc.vtype, lc.optional)},", 1)
+            self.line(f"pub {name}: {field_type(lc.vtype, self.alloc, lc.optional)},", 1)
         self.line("}")
         self.line()
         self.line(f"impl Packet for {n.ident} {{")
@@ -542,19 +565,18 @@ class RustEmitter:
         self.line()
         self.line(f"impl fmt::Display for {n.ident} {{")
         self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {", 1)
-        self.line(f"let mut s = String::from({rstr(n.ident + '{')});", 2)
+        self.line(f"f.write_str({rstr(n.ident + '{')})?;", 2)
         for i, (name, lc) in enumerate(n.fields):
             sep = ", " if i else ""
-            self.line(f"s.push_str({rstr(sep + name + '=')});", 2)
+            self.line(f"f.write_str({rstr(sep + name + '=')})?;", 2)
             if lc.optional:
                 self.line(f"match &self.{name} {{", 2)
                 self.line(f"Some(v) => {describe(lc.vtype, '*v')},", 3)
-                self.line("None => s.push_str(pk::DESCRIBE_NONE),", 3)
+                self.line("None => f.write_str(pk::DESCRIBE_NONE)?,", 3)
                 self.line("}", 2)
             else:
                 self.line(describe(lc.vtype, f"self.{name}") + ";", 2)
-        self.line("s.push('}');", 2)
-        self.line("f.write_str(&s)", 2)
+        self.line("f.write_char('}')", 2)
         self.line("}", 1)
         self.line("}")
 
@@ -620,5 +642,6 @@ class RustEmitter:
             self.line(f"return Ok(Self::{n.ident}({self.construct(n)}));", depth)
 
 
-def emit(mission: Mission, source: str) -> str:
-    return RustEmitter(mission, source).emit()
+def emit(mission: Mission, source: str, alloc: bool = True) -> str:
+    """The Rust module; without ``alloc`` its code never allocates."""
+    return RustEmitter(mission, source, alloc).emit()
