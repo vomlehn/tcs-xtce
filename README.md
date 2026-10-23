@@ -233,6 +233,8 @@ packets.
   the design and its rationale.
 * [The examples](https://vomlehn.github.io/tcs-xtce/examples/README.html):
   what each example shows, and how to build and run it.
+* [The Rust crate on crates.io](https://crates.io/crates/tcs-xtce):
+  `cargo add tcs-xtce`.
 
 ## License
 

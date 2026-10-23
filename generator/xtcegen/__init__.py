@@ -1,6 +1,8 @@
 """xtcegen: generates the XTCE XML binding from the XTCE schema."""
 
 REPOSITORY = "https://github.com/vomlehn/tcs-xtce"
+# The Rust crate on crates.io.
+CRATE = "https://crates.io/crates/tcs-xtce"
 
 
 def header_lines() -> list:
@@ -10,4 +12,5 @@ def header_lines() -> list:
         "Any changes made to this file will be lost when it is regenerated;",
         "change generator/xtcegen instead and run `make generate`.",
         f"tcs-xtce: {REPOSITORY}",
+        f"Rust crate: {CRATE}",
     ]

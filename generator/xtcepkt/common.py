@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from xtcegen import REPOSITORY
+from xtcegen import CRATE, REPOSITORY
 
 from .model import BinaryEnc, Criterion, FloatEnc, IntEnc, Node, Polynomial, Spline, StringEnc, Value, VType
 
@@ -78,6 +78,7 @@ def header_lines(mission, source: str) -> list:
         "Any changes made to this file will be lost when it is regenerated;",
         "change the XTCE document instead and rerun `python3 -m tcs_xtce`.",
         f"tcs-xtce: {REPOSITORY}",
+        f"Rust crate: {CRATE}",
     ]
 
 
