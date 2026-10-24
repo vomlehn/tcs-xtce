@@ -985,11 +985,11 @@ and as C++:
    demo_CCSDSPacketKind packet;
    xtce_pk_error err;
    if (demo_CCSDSPacketKind_decode(&packet, frame, frame_len, &err) != 0) {
-       char msg[128];
-       xtce_pk_error_message(&err, msg, sizeof msg);
-       fprintf(stderr, "%s: %s\n", xtce_pk_error_kind(err.code), msg);
+           char msg[128];
+           xtce_pk_error_message(&err, msg, sizeof msg);
+           fprintf(stderr, "%s: %s\n", xtce_pk_error_kind(err.code), msg);
    } else if (packet.tag == demo_CCSDSPacketKind_Housekeeping_tag) {
-       printf("%f\n", packet.u.Housekeeping.temperature);
+           printf("%f\n", packet.u.Housekeeping.temperature);
    }
 
    demo_SetMode cmd;
@@ -998,7 +998,7 @@ and as C++:
    cmd.seq_count = 5;
    cmd.mode = demo_ModeArgType_SCIENCE;
    if (demo_SetMode_encode(&cmd, out, sizeof out, &len, &err) == 0) {
-       send(sock, out, len, 0);
+           send(sock, out, len, 0);
    }
 
 Python (``xtce.packet.Codec``):

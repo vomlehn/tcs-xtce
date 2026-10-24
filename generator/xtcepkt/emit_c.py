@@ -15,6 +15,9 @@ from .common import field_range, flt, header_lines, int_enc, invertible, le, siz
 from .compile import snake
 from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
+# One level of indentation in the generated C.
+INDENT = " " * 8
+
 ENC = {
     "Unsigned": "XTCE_PK_UNSIGNED",
     "TwosComplement": "XTCE_PK_TWOS_COMPLEMENT",
@@ -84,7 +87,7 @@ class CEmitter:
         self.counts: dict[int, int] = {}  # vtype -> calibrator table length
 
     def line(self, s: str = "", depth: int = 0) -> None:
-        self.out.append("  " * depth + s if s else "")
+        self.out.append(INDENT * depth + s if s else "")
 
     # -- types and constants --
 

@@ -22,9 +22,10 @@ typedef struct xtce_document xtce_document;
 
 /* Status codes. */
 enum {
-  XTCE_OK = 0,
-  XTCE_ERROR = 1,     /* malformed or schema-invalid data; see xtce_document_error() */
-  XTCE_NO_MEMORY = 2, /* allocation failed */
+        XTCE_OK = 0,
+        XTCE_ERROR = 1,     /* malformed or schema-invalid data; see
+                               xtce_document_error() */
+        XTCE_NO_MEMORY = 2, /* allocation failed */
 };
 
 /* XTCE version and XML namespace of the bundled schema. */
@@ -41,7 +42,8 @@ int xtce_document_load(xtce_document* doc, const void* data, size_t len);
 
 /* Serializes into the document's output buffer.  On success *out and *out_len
  * describe the bytes (not NUL-terminated). */
-int xtce_document_serialize(xtce_document* doc, const uint8_t** out, size_t* out_len);
+int xtce_document_serialize(xtce_document* doc, const uint8_t** out,
+                            size_t* out_len);
 
 /* Pretty-print serialized output (default 1). */
 void xtce_document_set_indent(xtce_document* doc, int indent);

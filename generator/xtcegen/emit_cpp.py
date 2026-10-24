@@ -145,7 +145,7 @@ class CppEmitter:
         h += comment(e.doc, "")
         h.append(f"enum class {name} {{")
         for i, v in zip(ids, e.values):
-            h.append(f"  {i},  // {v}")
+            h.append(f"        {i},  // {v}")
         h.append("};")
         h.append(f"// The XML lexical value of `v`.")
         h.append(f"const char* to_string({name} v);")
@@ -153,24 +153,24 @@ class CppEmitter:
         h.append(f"void parse_value(std::string_view s, {name}& v);")
         h.append("")
         c.append(f"const char* to_string({name} v) {{")
-        c.append("  switch (v) {")
+        c.append("        switch (v) {")
         for i, v in zip(ids, e.values):
-            c.append(f"    case {name}::{i}:")
-            c.append(f"      return {lit(v)};")
-        c.append("  }")
-        c.append('  return "";')
+            c.append(f"                case {name}::{i}:")
+            c.append(f"                        return {lit(v)};")
+        c.append("        }")
+        c.append('        return "";')
         c.append("}")
         c.append("")
         c.append(f"void format_value(std::string& out, {name} v) {{ out += to_string(v); }}")
         c.append("")
         c.append(f"void parse_value(std::string_view s, {name}& v) {{")
-        c.append("  std::string_view t = trim(s);")
+        c.append("        std::string_view t = trim(s);")
         for i, v in zip(ids, e.values):
-            c.append(f"  if (t == {lit(v.strip())}) {{")
-            c.append(f"    v = {name}::{i};")
-            c.append("    return;")
-            c.append("  }")
-        c.append(f'  throw std::invalid_argument("invalid {name} \\"" + std::string(s) + "\\"");')
+            c.append(f"        if (t == {lit(v.strip())}) {{")
+            c.append(f"                v = {name}::{i};")
+            c.append("                return;")
+            c.append("        }")
+        c.append(f'        throw std::invalid_argument("invalid {name} \\"" + std::string(s) + "\\"");')
         c.append("}")
         c.append("")
 
@@ -181,35 +181,35 @@ class CppEmitter:
         h += comment(r.doc, "")
         h.append(f"struct {r.name} {{")
         for a in r.attrs:
-            h += comment(a.doc or f"Attribute `{a.xml}`.", "  ")
+            h += comment(a.doc or f"Attribute `{a.xml}`.", "        ")
             if a.default is not None:
-                h.append(f"  // Schema default: `{a.default}`.")
+                h.append(f"        // Schema default: `{a.default}`.")
             t = base_type(a.type)
             if a.required:
                 init = ZERO[a.type.kind] if isinstance(a.type, ScalarRef) else self.enum_init(a.type)
-                h.append(f"  {t} {ident(a.ident)}{init};")
+                h.append(f"        {t} {ident(a.ident)}{init};")
             else:
-                h.append(f"  std::optional<{t}> {ident(a.ident)};")
+                h.append(f"        std::optional<{t}> {ident(a.ident)};")
         if r.text is not None:
-            h.append("  // Text content.")
-            h.append(f"  {base_type(r.text.type)} {ident(r.text.ident)}{ZERO[r.text.type.kind]};")
+            h.append("        // Text content.")
+            h.append(f"        {base_type(r.text.type)} {ident(r.text.ident)}{ZERO[r.text.type.kind]};")
         for f in r.content:
             if isinstance(f, ElemField):
-                h += comment(f.doc or f"Element `{f.xml}`.", "  ")
+                h += comment(f.doc or f"Element `{f.xml}`.", "        ")
                 init = ""
                 if f.card == ONE and not f.boxed:
                     if isinstance(f.type, ScalarRef):
                         init = ZERO[f.type.kind]
                     elif isinstance(f.type, EnumRef):
                         init = self.enum_init(f.type)
-                h.append(f"  {field_type(base_type(f.type), f.card, f.boxed)} {ident(f.ident)}{init};")
+                h.append(f"        {field_type(base_type(f.type), f.card, f.boxed)} {ident(f.ident)}{init};")
             else:
-                h.append(f"  // One of: {', '.join(v.xml for v in f.choice.variants)}.")
-                h.append(f"  {field_type(f.choice.name, f.card, f.boxed)} {ident(f.ident)};")
+                h.append(f"        // One of: {', '.join(v.xml for v in f.choice.variants)}.")
+                h.append(f"        {field_type(f.choice.name, f.card, f.boxed)} {ident(f.ident)};")
         h.append("")
-        h.append("  void write_xml(Writer& w, std::string_view tag) const;")
-        h.append(f"  static {r.name} read_xml(Reader& r, const Tag& tag);")
-        h.append(f"  bool operator==(const {r.name}&) const = default;")
+        h.append("        void write_xml(Writer& w, std::string_view tag) const;")
+        h.append(f"        static {r.name} read_xml(Reader& r, const Tag& tag);")
+        h.append(f"        bool operator==(const {r.name}&) const = default;")
         h.append("};")
         h.append("")
         self.write_fn(r)
@@ -227,46 +227,46 @@ class CppEmitter:
     def count_check(self, r: Record, f, what: str) -> None:
         if f.min == 0 and f.max == UNBOUNDED:
             return
-        self.c.append(f"  check_count(v.{ident(f.ident)}.size(), {f.min}, {f.max}, {lit(r.name + '.' + what)});")
+        self.c.append(f"        check_count(v.{ident(f.ident)}.size(), {f.min}, {f.max}, {lit(r.name + '.' + what)});")
 
     def write_fn(self, r: Record) -> None:
         c = self.c
         c.append(f"void {r.name}::write_xml(Writer& w, std::string_view tag) const {{")
         if r.content:
-            c.append("  const auto& v = *this;")
-        c.append("  w.start(tag);")
+            c.append("        const auto& v = *this;")
+        c.append("        w.start(tag);")
         for a in r.attrs:
             f = ident(a.ident)
             if a.required:
-                c.append(f"  w.attr({lit(a.xml)}, {f});")
+                c.append(f"        w.attr({lit(a.xml)}, {f});")
             else:
-                c.append(f"  if ({f}) w.attr({lit(a.xml)}, *{f});")
+                c.append(f"        if ({f}) w.attr({lit(a.xml)}, *{f});")
         if r.text is not None:
-            c.append(f"  w.text({ident(r.text.ident)});")
+            c.append(f"        w.text({ident(r.text.ident)});")
         for f in r.content:
             name = ident(f.ident)
             unbox = ".get()" if f.boxed else ""
             if isinstance(f, ElemField):
                 if f.card == ONE:
-                    self.write_value(f.type, f.xml, f"v.{name}{unbox}", "  ")
+                    self.write_value(f.type, f.xml, f"v.{name}{unbox}", "        ")
                 elif f.card == OPT:
-                    c.append(f"  if (v.{name}) {{")
-                    self.write_value(f.type, f.xml, f"(*v.{name}){unbox}", "    ")
-                    c.append("  }")
+                    c.append(f"        if (v.{name}) {{")
+                    self.write_value(f.type, f.xml, f"(*v.{name}){unbox}", "                ")
+                    c.append("        }")
                 else:
                     self.count_check(r, f, f.xml)
-                    c.append(f"  for (const auto& e : v.{name}) {{")
-                    self.write_value(f.type, f.xml, "e", "    ")
-                    c.append("  }")
+                    c.append(f"        for (const auto& e : v.{name}) {{")
+                    self.write_value(f.type, f.xml, "e", "                ")
+                    c.append("        }")
             else:
                 if f.card == ONE:
-                    c.append(f"  v.{name}{unbox}.write_xml(w);")
+                    c.append(f"        v.{name}{unbox}.write_xml(w);")
                 elif f.card == OPT:
-                    c.append(f"  if (v.{name}) (*v.{name}){unbox}.write_xml(w);")
+                    c.append(f"        if (v.{name}) (*v.{name}){unbox}.write_xml(w);")
                 else:
                     self.count_check(r, f, f.choice.name)
-                    c.append(f"  for (const auto& e : v.{name}) e.write_xml(w);")
-        c.append("  w.end(tag);")
+                    c.append(f"        for (const auto& e : v.{name}) e.write_xml(w);")
+        c.append("        w.end(tag);")
         c.append("}")
         c.append("")
 
@@ -278,35 +278,35 @@ class CppEmitter:
     def read_fn(self, r: Record) -> None:
         c = self.c
         c.append(f"{r.name} {r.name}::read_xml(Reader& r, const Tag& tag) {{")
-        c.append(f"  {r.name} v;")
+        c.append(f"        {r.name} v;")
         required = [a for a in r.attrs if a.required]
         for a in required:
-            c.append(f"  bool seen_{a.ident} = false;")
-        c.append("  for (AttrIter it(tag); it.next(r);) {")
-        c.append("    std::string_view k = it.name();")
+            c.append(f"        bool seen_{a.ident} = false;")
+        c.append("        for (AttrIter it(tag); it.next(r);) {")
+        c.append("                std::string_view k = it.name();")
         first = True
         for a in r.attrs:
             kw = "if" if first else "} else if"
             first = False
             f = ident(a.ident)
-            c.append(f"    {kw} (k == {lit(a.xml)}) {{")
+            c.append(f"                {kw} (k == {lit(a.xml)}) {{")
             if a.required:
-                c.append(f"      r.attr_value(tag, it.value(), v.{f});")
-                c.append(f"      seen_{a.ident} = true;")
+                c.append(f"                        r.attr_value(tag, it.value(), v.{f});")
+                c.append(f"                        seen_{a.ident} = true;")
             else:
-                c.append(f"      r.attr_value(tag, it.value(), v.{f}.emplace());")
+                c.append(f"                        r.attr_value(tag, it.value(), v.{f}.emplace());")
         if r.attrs:
-            c.append("    } else {")
-            c.append("      r.unknown_attr(tag, k);")
-            c.append("    }")
+            c.append("                } else {")
+            c.append("                        r.unknown_attr(tag, k);")
+            c.append("                }")
         else:
-            c.append("    r.unknown_attr(tag, k);")
-        c.append("  }")
+            c.append("                r.unknown_attr(tag, k);")
+        c.append("        }")
         for a in required:
-            c.append(f"  if (!seen_{a.ident}) r.missing_attr(tag, {lit(a.xml)});")
+            c.append(f"        if (!seen_{a.ident}) r.missing_attr(tag, {lit(a.xml)});")
         if r.text is not None:
-            c.append(f"  v.{ident(r.text.ident)} = r.read_value<{base_type(r.text.type)}>();")
-            c.append("  return v;")
+            c.append(f"        v.{ident(r.text.ident)} = r.read_value<{base_type(r.text.type)}>();")
+            c.append("        return v;")
             c.append("}")
             c.append("")
             return
@@ -315,39 +315,39 @@ class CppEmitter:
             if isinstance(f, ElemField):
                 x = lit(f.xml)
                 if f.card == ONE:
-                    c.append(f"  if (r.peek_child() != {x}) throw r.expected({x});")
-                    c.append(f"  v.{name} = {self.read_expr(f.type)};")
+                    c.append(f"        if (r.peek_child() != {x}) throw r.expected({x});")
+                    c.append(f"        v.{name} = {self.read_expr(f.type)};")
                 elif f.card == OPT:
-                    c.append(f"  if (r.peek_child() == {x}) v.{name} = {self.read_expr(f.type)};")
+                    c.append(f"        if (r.peek_child() == {x}) v.{name} = {self.read_expr(f.type)};")
                 else:
                     cond = f"r.peek_child() == {x}"
                     if f.max != UNBOUNDED:
                         cond = f"v.{name}.size() < {f.max} && {cond}"
-                    c.append(f"  while ({cond}) v.{name}.push_back({self.read_expr(f.type)});")
+                    c.append(f"        while ({cond}) v.{name}.push_back({self.read_expr(f.type)});")
                     if f.min > 0:
-                        c.append(f"  if (v.{name}.size() < {f.min}) throw r.too_few({x}, {f.min}, v.{name}.size());")
+                        c.append(f"        if (v.{name}.size() < {f.min}) throw r.too_few({x}, {f.min}, v.{name}.size());")
             else:
                 cn = f.choice.name
                 if f.card == ONE:
-                    c.append(f"  v.{name} = {cn}::read_xml(r);")
+                    c.append(f"        v.{name} = {cn}::read_xml(r);")
                 elif f.card == OPT:
-                    c.append("  {")
-                    c.append("    auto n = r.peek_child();")
-                    c.append(f"    if (n && {cn}::accepts(*n)) v.{name} = {cn}::read_xml(r);")
-                    c.append("  }")
+                    c.append("        {")
+                    c.append("                auto n = r.peek_child();")
+                    c.append(f"                if (n && {cn}::accepts(*n)) v.{name} = {cn}::read_xml(r);")
+                    c.append("        }")
                 else:
-                    c.append("  for (;;) {")
+                    c.append("        for (;;) {")
                     if f.max != UNBOUNDED:
-                        c.append(f"    if (v.{name}.size() >= {f.max}) break;")
-                    c.append("    auto n = r.peek_child();")
-                    c.append(f"    if (!n || !{cn}::accepts(*n)) break;")
-                    c.append(f"    v.{name}.push_back({cn}::read_xml(r));")
-                    c.append("  }")
+                        c.append(f"                if (v.{name}.size() >= {f.max}) break;")
+                    c.append("                auto n = r.peek_child();")
+                    c.append(f"                if (!n || !{cn}::accepts(*n)) break;")
+                    c.append(f"                v.{name}.push_back({cn}::read_xml(r));")
+                    c.append("        }")
                     if f.min > 0:
                         what = lit("|".join(v.xml for v in f.choice.variants))
-                        c.append(f"  if (v.{name}.size() < {f.min}) throw r.too_few({what}, {f.min}, v.{name}.size());")
-        c.append("  r.close();")
-        c.append("  return v;")
+                        c.append(f"        if (v.{name}.size() < {f.min}) throw r.too_few({what}, {f.min}, v.{name}.size());")
+        c.append("        r.close();")
+        c.append("        return v;")
         c.append("}")
         c.append("")
 
@@ -361,75 +361,75 @@ class CppEmitter:
             alts.append(f"Box<{t}>" if v.boxed else t)
         h.append(f"// Alternatives of a <choice> in {ch.owner}; the variant index is the Kind.")
         h.append(f"struct {ch.name} {{")
-        h.append(f"  enum class Kind {{ {', '.join(v.ident for v in ch.variants)} }};")
+        h.append(f"        enum class Kind {{ {', '.join(v.ident for v in ch.variants)} }};")
         init = "" if ch.default_variant == 0 else f"{{std::in_place_index<{ch.default_variant}>}}"
-        h.append(f"  std::variant<{', '.join(alts)}> value{init};")
+        h.append(f"        std::variant<{', '.join(alts)}> value{init};")
         h.append("")
-        h.append("  Kind kind() const { return static_cast<Kind>(value.index()); }")
-        h.append("  // The element name of the selected alternative.")
-        h.append("  std::string_view xml_name() const;")
-        h.append("  // Whether `name` starts one of the alternatives.")
-        h.append("  static bool accepts(std::string_view name);")
+        h.append("        Kind kind() const { return static_cast<Kind>(value.index()); }")
+        h.append("        // The element name of the selected alternative.")
+        h.append("        std::string_view xml_name() const;")
+        h.append("        // Whether `name` starts one of the alternatives.")
+        h.append("        static bool accepts(std::string_view name);")
         for v in ch.variants:
             t = base_type(v.type)
-            h.append(f"  static {ch.name} make_{v.ident}({t} v);")
-            h.append(f"  {t}* as_{v.ident}();")
-            h.append(f"  const {t}* as_{v.ident}() const;")
-        h.append("  void write_xml(Writer& w) const;")
-        h.append(f"  static {ch.name} read_xml(Reader& r);")
-        h.append(f"  bool operator==(const {ch.name}&) const = default;")
+            h.append(f"        static {ch.name} make_{v.ident}({t} v);")
+            h.append(f"        {t}* as_{v.ident}();")
+            h.append(f"        const {t}* as_{v.ident}() const;")
+        h.append("        void write_xml(Writer& w) const;")
+        h.append(f"        static {ch.name} read_xml(Reader& r);")
+        h.append(f"        bool operator==(const {ch.name}&) const = default;")
         h.append("};")
         h.append("")
 
         c.append(f"std::string_view {ch.name}::xml_name() const {{")
-        c.append("  switch (value.index()) {")
+        c.append("        switch (value.index()) {")
         for k, v in enumerate(ch.variants):
-            c.append(f"    case {k}:")
-            c.append(f"      return {lit(v.xml)};")
-        c.append("  }")
-        c.append('  return "";')
+            c.append(f"                case {k}:")
+            c.append(f"                        return {lit(v.xml)};")
+        c.append("        }")
+        c.append('        return "";')
         c.append("}")
         c.append("")
         c.append(f"bool {ch.name}::accepts(std::string_view name) {{")
-        c.append(f"  return {' || '.join(f'name == {lit(v.xml)}' for v in ch.variants)};")
+        c.append(f"        return {' || '.join(f'name == {lit(v.xml)}' for v in ch.variants)};")
         c.append("}")
         c.append("")
         for k, v in enumerate(ch.variants):
             t = base_type(v.type)
             c.append(f"{ch.name} {ch.name}::make_{v.ident}({t} v) {{")
-            c.append(f"  {ch.name} c;")
-            c.append(f"  c.value.emplace<{k}>(std::move(v));")
-            c.append("  return c;")
+            c.append(f"        {ch.name} c;")
+            c.append(f"        c.value.emplace<{k}>(std::move(v));")
+            c.append("        return c;")
             c.append("}")
             c.append("")
             get = "&p->get()" if v.boxed else "p"
             for const in ("", "const "):
                 c.append(f"{const}{t}* {ch.name}::as_{v.ident}() {const}{{")
-                c.append(f"  auto* p = std::get_if<{k}>(&value);")
-                c.append(f"  return p ? {get} : nullptr;")
+                c.append(f"        auto* p = std::get_if<{k}>(&value);")
+                c.append(f"        return p ? {get} : nullptr;")
                 c.append("}")
                 c.append("")
         c.append(f"void {ch.name}::write_xml(Writer& w) const {{")
-        c.append("  switch (value.index()) {")
+        c.append("        switch (value.index()) {")
         for k, v in enumerate(ch.variants):
-            c.append(f"    case {k}:")
+            c.append(f"                case {k}:")
             expr = f"std::get<{k}>(value)" + (".get()" if v.boxed else "")
-            self.write_value(v.type, v.xml, expr, "      ")
-            c.append("      break;")
-        c.append("  }")
+            self.write_value(v.type, v.xml, expr, "                        ")
+            c.append("                        break;")
+        c.append("        }")
         c.append("}")
         c.append("")
         c.append(f"{ch.name} {ch.name}::read_xml(Reader& r) {{")
-        c.append("  auto n = r.peek_child();")
-        c.append(f"  {ch.name} c;")
+        c.append("        auto n = r.peek_child();")
+        c.append(f"        {ch.name} c;")
         for k, v in enumerate(ch.variants):
             kw = "if" if k == 0 else "} else if"
-            c.append(f"  {kw} (n == {lit(v.xml)}) {{")
-            c.append(f"    c.value.emplace<{k}>({self.read_expr(v.type)});")
-        c.append("  } else {")
-        c.append(f"    throw r.expected({lit('|'.join(v.xml for v in ch.variants))});")
-        c.append("  }")
-        c.append("  return c;")
+            c.append(f"        {kw} (n == {lit(v.xml)}) {{")
+            c.append(f"                c.value.emplace<{k}>({self.read_expr(v.type)});")
+        c.append("        } else {")
+        c.append(f"                throw r.expected({lit('|'.join(v.xml for v in ch.variants))});")
+        c.append("        }")
+        c.append("        return c;")
         c.append("}")
         c.append("")
 

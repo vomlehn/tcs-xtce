@@ -145,7 +145,8 @@ C:
 
 xtce_document* doc = xtce_document_new(0, 0);
 if (xtce_document_load(doc, data, len) != XTCE_OK)
-    fprintf(stderr, "line %zu: %s\n", xtce_document_error_line(doc), xtce_document_error(doc));
+        fprintf(stderr, "line %zu: %s\n", xtce_document_error_line(doc),
+                xtce_document_error(doc));
 const uint8_t* out; size_t n;
 xtce_document_serialize(doc, &out, &n);
 xtce_document_free(doc);

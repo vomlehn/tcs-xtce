@@ -19,68 +19,71 @@ static uint8_t output[4096];
 static char text[8192];
 
 static void print_hex(const uint8_t* b, size_t n) {
-  size_t i;
-  for (i = 0; i < n; ++i) printf("%02x", b[i]);
+        size_t i;
+        for (i = 0; i < n; ++i) printf("%02x", b[i]);
 }
 
 /* Prints one result line; `decode`, `encode` and `describe` are the
  * generated functions for one packet type, `packet` a value of that type. */
-#define RUN(type, len)                                                        \
-  do {                                                                        \
-    type packet;                                                              \
-    xtce_pk_error err;                                                        \
-    size_t out_len;                                                           \
-    type##_init(&packet);                                                     \
-    if (type##_decode(&packet, input, (len), &err)) {                         \
-      printf("error:%s | -\n", xtce_pk_error_kind(err.code));                 \
-      break;                                                                  \
-    }                                                                         \
-    if (type##_describe(&packet, text, sizeof text) >= sizeof text) {         \
-      fprintf(stderr, "description too long\n");                              \
-      exit(1);                                                                \
-    }                                                                         \
-    printf("%s | ", text);                                                    \
-    if (type##_encode(&packet, output, sizeof output, &out_len, &err)) {      \
-      printf("error:%s\n", xtce_pk_error_kind(err.code));                     \
-    } else {                                                                  \
-      print_hex(output, out_len);                                             \
-      printf("\n");                                                           \
-    }                                                                         \
-  } while (0)
+#define RUN(type, len)                                                      \
+        do {                                                                \
+                type packet;                                                \
+                xtce_pk_error err;                                          \
+                size_t out_len;                                             \
+                type##_init(&packet);                                       \
+                if (type##_decode(&packet, input, (len), &err)) {           \
+                        printf("error:%s | -\n",                            \
+                               xtce_pk_error_kind(err.code));               \
+                        break;                                              \
+                }                                                           \
+                if (type##_describe(&packet, text, sizeof text) >=          \
+                    sizeof text) {                                          \
+                        fprintf(stderr, "description too long\n");          \
+                        exit(1);                                            \
+                }                                                           \
+                printf("%s | ", text);                                      \
+                if (type##_encode(&packet, output, sizeof output, &out_len, \
+                                  &err)) {                                  \
+                        printf("error:%s\n", xtce_pk_error_kind(err.code)); \
+                } else {                                                    \
+                        print_hex(output, out_len);                         \
+                        printf("\n");                                       \
+                }                                                           \
+        } while (0)
 
 int main(int argc, char** argv) {
-  FILE* in;
-  static char line[16384];
-  if (argc != 2) {
-    fprintf(stderr, "usage: packet_tool VECTORS\n");
-    return 2;
-  }
-  in = fopen(argv[1], "r");
-  if (!in) {
-    perror(argv[1]);
-    return 1;
-  }
-  while (fgets(line, sizeof line, in)) {
-    char kind[16], hex[sizeof line];
-    size_t n = 0, i;
-    char* hash = strchr(line, '#');
-    if (hash) *hash = 0;
-    if (sscanf(line, "%15s %s", kind, hex) != 2) continue;
-    for (i = 0; hex[i] && hex[i + 1] && n < sizeof input; i += 2) {
-      char byte[3] = {hex[i], hex[i + 1], 0};
-      input[n++] = (uint8_t)strtoul(byte, NULL, 16);
-    }
-    if (strcmp(kind, "tm") == 0) {
-      RUN(demo_CCSDSPacketKind, n);
-    } else if (strcmp(kind, "tc") == 0) {
-      RUN(demo_CCSDSCommandKind, n);
-    } else if (strcmp(kind, "hk") == 0) {
-      RUN(demo_Housekeeping, n);
-    } else {
-      fprintf(stderr, "unknown vector kind %s\n", kind);
-      return 1;
-    }
-  }
-  fclose(in);
-  return 0;
+        FILE* in;
+        static char line[16384];
+        if (argc != 2) {
+                fprintf(stderr, "usage: packet_tool VECTORS\n");
+                return 2;
+        }
+        in = fopen(argv[1], "r");
+        if (!in) {
+                perror(argv[1]);
+                return 1;
+        }
+        while (fgets(line, sizeof line, in)) {
+                char kind[16], hex[sizeof line];
+                size_t n = 0, i;
+                char* hash = strchr(line, '#');
+                if (hash) *hash = 0;
+                if (sscanf(line, "%15s %s", kind, hex) != 2) continue;
+                for (i = 0; hex[i] && hex[i + 1] && n < sizeof input; i += 2) {
+                        char byte[3] = {hex[i], hex[i + 1], 0};
+                        input[n++] = (uint8_t)strtoul(byte, NULL, 16);
+                }
+                if (strcmp(kind, "tm") == 0) {
+                        RUN(demo_CCSDSPacketKind, n);
+                } else if (strcmp(kind, "tc") == 0) {
+                        RUN(demo_CCSDSCommandKind, n);
+                } else if (strcmp(kind, "hk") == 0) {
+                        RUN(demo_Housekeeping, n);
+                } else {
+                        fprintf(stderr, "unknown vector kind %s\n", kind);
+                        return 1;
+                }
+        }
+        fclose(in);
+        return 0;
 }
