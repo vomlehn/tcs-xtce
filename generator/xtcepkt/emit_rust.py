@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from .common import flt, header_lines, int_enc, invertible, le, str_cap, string_spec
+from .common import field_range, flt, header_lines, int_enc, invertible, le, size_args, str_cap, string_spec
 from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
 
@@ -475,9 +475,12 @@ class RustEmitter:
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:
-        """Expression for a value when encoding: a field or a fixed constant."""
+        """Expression for a value when encoding: a field, a computed size or
+        count, or a fixed constant."""
         if lc in names:
             return f"self.{names[lc]}"
+        if lc in n.derived:
+            return f"d{lc.id}"
         x = literal(lc.vtype, n.fixed[lc])
         return f"({x})" if lc.vtype.kind == "binary" else x
 
@@ -507,6 +510,9 @@ class RustEmitter:
         if length is not None:
             self.line("///")
             self.line(f"/// `{length.name}` is the packet length: computed when encoding, checked when decoding.")
+        for lc, (c, _) in n.derived.items():
+            self.line("///")
+            self.line(f"/// `{lc.name}` gives the size of `{c.name}`: computed from its length when encoding.")
         self.line("#[derive(Debug, Clone, PartialEq, Default)]")
         self.line(f"pub struct {n.ident} {{")
         for name, lc in n.fields:
@@ -534,6 +540,11 @@ class RustEmitter:
         self.line()
         self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> {", 1)
         names = {lc: name for name, lc in n.fields}
+        for lc, (c, d) in n.derived.items():
+            # Sizes and counts come from the lengths of what they size.
+            x = f"pk::size_source(self.{names[c]}.len(), {size_args(d)}, {rstr(c.name)})?"
+            self.line(f"let d{lc.id} = {field_type(lc.vtype, self.alloc)}::try_from({x})", 2)
+            self.line(f".map_err(|_| PacketError::OutOfRange {{ field: {rstr(lc.name)} }})?;", 3)
         guards = {}
         for node in n.chain():
             for c in node.criteria:

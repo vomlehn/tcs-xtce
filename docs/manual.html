@@ -397,12 +397,13 @@ ul.auto-toc {
 <li><a class="reference internal" href="#known-limitations" id="toc-entry-24">Known limitations</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#examples" id="toc-entry-25">Examples</a><ul>
-<li><a class="reference internal" href="#simple-string" id="toc-entry-26"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
+<li><a class="reference internal" href="#xtce-digest" id="toc-entry-25">xtce-digest</a></li>
+<li><a class="reference internal" href="#examples" id="toc-entry-26">Examples</a><ul>
+<li><a class="reference internal" href="#simple-string" id="toc-entry-27"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing" id="toc-entry-27">Testing</a></li>
-<li><a class="reference internal" href="#license" id="toc-entry-28">License</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-28">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-29">License</a></li>
 </ul>
 </div>
 <div class="section" id="summary">
@@ -480,6 +481,9 @@ byte-identical output. The test suite checks this on every build.</p>
 </tr>
 <tr><td><tt class="docutils literal">generator/tcs_xtce/</tt>, <tt class="docutils literal">generator/xtcepkt/</tt></td>
 <td>The <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> command, and the compiler behind it that turns a mission's XTCE document into packet codecs</td>
+</tr>
+<tr><td><tt class="docutils literal">generator/xtce_digest/</tt></td>
+<td>The <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> command, which prints a digest of what an XTCE document means (see <a class="reference internal" href="#xtce-digest">xtce-digest</a>)</td>
 </tr>
 <tr><td><tt class="docutils literal">rust/</tt></td>
 <td>The <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> Rust crate (imported as <tt class="docutils literal">tcs_xtce</tt>)</td>
@@ -1228,12 +1232,28 @@ uses its own member: in the demo, each <tt class="docutils literal">BatchType</t
 a <tt class="docutils literal">Size</tt> that counts its <tt class="docutils literal">Values</tt>. The member's name wins over a
 parameter or argument with the same name, and other references from
 inside an aggregate are not supported.</p>
-<p>The referenced value stays an ordinary field. When encoding, the
-generated code computes the size or count from it and fails with
-<tt class="docutils literal">BadSize</tt> if the data doesn't match: set both. When decoding, a size
-or count that is negative, not whole, not a whole number of bytes (for
-sizes in bits of strings and binary), or above the field's bound fails
-with <tt class="docutils literal">BadSize</tt>.</p>
+<p>When the referenced value does nothing but count an array or give the
+size of a binary value, encoding computes it from that data's length,
+and it is not a field of the generated struct. In the demo,
+<tt class="docutils literal">SampleCount</tt>, <tt class="docutils literal">PayloadSize</tt>, <tt class="docutils literal">TargetCount</tt>, <tt class="docutils literal">LogCount</tt>,
+<tt class="docutils literal">BatchCount</tt>, <tt class="docutils literal">WordCount</tt> and <tt class="docutils literal">Fill</tt>'s <tt class="docutils literal">Last</tt> are computed this
+way: set <tt class="docutils literal">Readings</tt> to three values and <tt class="docutils literal">SampleCount</tt> is written as
+3. The value must be an integer without a calibrator, outside any
+<tt class="docutils literal">IncludeCondition</tt>, and it must give the size of a whole field (not a
+member, element or part of one) that is also outside any
+<tt class="docutils literal">IncludeCondition</tt>. Encoding fails with <tt class="docutils literal">BadSize</tt> if no value of the
+field gives the data's length, or if that length is above the field's
+bound (below), and with <tt class="docutils literal">OutOfRange</tt> if the value doesn't fit the
+field.</p>
+<p>Otherwise the referenced value stays an ordinary field: when it is also
+compared by a criterion, gives a location, picks a
+<tt class="docutils literal">DiscreteLookupList</tt> value or sizes a string, or when it is an
+aggregate member such as <tt class="docutils literal">RouteHdr.Count</tt>. Encoding then computes the
+size or count from the field and fails with <tt class="docutils literal">BadSize</tt> if the data
+doesn't match: set both. When decoding, a size or count that is
+negative, not whole, not a whole number of bytes (for sizes in bits of
+strings and binary), or above the field's bound fails with
+<tt class="docutils literal">BadSize</tt>.</p>
 <p>The bound is the largest value the referenced field's <tt class="docutils literal">ValidRange</tt>
 allows, or, without one, its encoding, or the largest of a
 <tt class="docutils literal">DiscreteLookupList</tt>'s values. It is limited to what fits in
@@ -1597,7 +1617,11 @@ languages generate it inline.</dd>
 <dd><tt class="docutils literal">dynamic_size(x, slope, intercept, unit, max, field)</tt> computes
 <tt class="docutils literal">(slope * x + intercept) / unit</tt> and fails with <tt class="docutils literal">BadSize</tt> unless it
 is a whole number from 0 to <tt class="docutils literal">max</tt>; <tt class="docutils literal">unit</tt> is 8 for a size in bits
-used in whole bytes. Python also has <tt class="docutils literal">read_list(r, n, gap, field,
+used in whole bytes. <tt class="docutils literal">size_source(n, slope, intercept, unit, factor,
+field)</tt> (<tt class="docutils literal">xtce_pk_size_source</tt>) is its inverse, for a field that
+encoding computes: the value that gives a size or count of <tt class="docutils literal">n</tt>,
+failing with <tt class="docutils literal">BadSize</tt> if there is none. Python also has
+<tt class="docutils literal">read_list(r, n, gap, field,
 read)</tt>, <tt class="docutils literal">check_size(value, n, field)</tt> and <tt class="docutils literal">describe_list(values,
 describe)</tt>, which the other languages generate inline.</dd>
 </dl>
@@ -1806,14 +1830,67 @@ written as zeros, so re-encoding a decoded packet can change them.</li>
 <li>Binary fields default to empty and must be set to their exact size
 before encoding. Arrays default to empty, and must have the number of
 elements their type gives, even when it is fixed.</li>
-<li>A size or count that another field gives is not filled in when
-encoding: set the field and the data to agree.</li>
+<li>A field that gives a size or count is computed when encoding only in
+the cases described under <a class="reference internal" href="#generated-packet-types">Generated packet types</a>; otherwise set the
+field and the data to agree.</li>
 <li>Enumerated values must fit in a signed 64-bit integer.</li>
 </ul>
 </div>
 </div>
+<div class="section" id="xtce-digest">
+<h1><a class="toc-backref" href="#toc-entry-25">xtce-digest</a></h1>
+<p><tt class="docutils literal"><span class="pre">xtce-digest</span></tt> prints an MD5 digest of what each XTCE document given to
+it means, so that a change to a mission database that would change the
+generated data structures and methods can be noticed, and an edit that
+only rearranges the document can be told apart from one that doesn't.</p>
+<pre class="code sh literal-block">
+<span class="name builtin">cd</span><span class="whitespace"> </span>generator<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>xtce_digest<span class="whitespace"> </span>FILE...<span class="whitespace">
+
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>xtce_digest<span class="whitespace"> </span>../tests/mission/demo.xml<span class="whitespace"> </span>../examples/simple-string/simple_string.xml
+</pre>
+<p>It reads the files in the order given. For each one it prints the file
+name as given, a colon, a space and the digest, in hex:</p>
+<pre class="code text literal-block">
+../tests/mission/demo.xml: 4c4a919fe4ac21b2dadf9c03ba547347
+</pre>
+<p>Each file gets its own digest, computed afresh, so a file gives the same
+digest wherever it appears in the list. A file that can't be read, isn't
+well-formed XML or isn't valid XTCE is reported on standard error and
+ends the command with status 1; the files before it have been printed,
+and the ones after it are not read. Status 0 means every file was
+digested.</p>
+<p>The digest covers every element, attribute and piece of text, but not
+what leaves the document meaning the same:</p>
+<ul class="simple">
+<li>comments and processing instructions;</li>
+<li>whitespace between elements, and at the start and end of text;</li>
+<li>the order of attributes, and the namespace prefixes used;</li>
+<li>the order of the children of an element that holds an unordered
+collection: the nested <tt class="docutils literal">SpaceSystem</tt> elements of a
+<tt class="docutils literal">SpaceSystem</tt>, the <tt class="docutils literal">…Set</tt> elements (<tt class="docutils literal">ParameterTypeSet</tt>,
+<tt class="docutils literal">ParameterSet</tt>, <tt class="docutils literal">ContainerSet</tt>, <tt class="docutils literal">MetaCommandSet</tt>,
+<tt class="docutils literal">ArgumentTypeSet</tt>, <tt class="docutils literal">AncillaryDataSet</tt>, <tt class="docutils literal">ValidRangeSet</tt> and the
+others whose members are named or independent), and
+<tt class="docutils literal">ANDedConditions</tt>, <tt class="docutils literal">ORedConditions</tt>, <tt class="docutils literal">ComparisonList</tt>,
+<tt class="docutils literal">ArgumentAssignmentList</tt>, <tt class="docutils literal">EnumerationList</tt>,
+<tt class="docutils literal">EnumerationAlarmList</tt> and <tt class="docutils literal">PolynomialCalibrator</tt>. Their children
+are taken in a fixed (sorted) order instead.</li>
+</ul>
+<p>The children of every other element keep their order, as it carries
+meaning: the entries of an <tt class="docutils literal">EntryList</tt>, the members of a
+<tt class="docutils literal">MemberList</tt>, the dimensions of a <tt class="docutils literal">DimensionList</tt>, the arguments of
+an <tt class="docutils literal">ArgumentList</tt>, spline points, and the cases of a
+<tt class="docutils literal">DiscreteLookupList</tt>, <tt class="docutils literal">ContextCalibratorList</tt> or <tt class="docutils literal">ContextAlarmList</tt>,
+where the first match wins. The full list is <tt class="docutils literal">UNORDERED</tt> in
+<tt class="docutils literal">generator/xtce_digest/__init__.py</tt>.</p>
+<p>The digest errs on the side of changing: anything a document says is
+covered, including descriptions, aliases and ancillary data, even where
+tcs-xtce ignores them. An attribute given its default value explicitly
+also changes the digest, though the meaning is the same.</p>
+</div>
 <div class="section" id="examples">
-<h1><a class="toc-backref" href="#toc-entry-25">Examples</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-26">Examples</a></h1>
 <p><tt class="docutils literal">examples/</tt> holds self-contained examples. Every example exists in all
 supported languages: C/C++, Rust and Python 3. <tt class="docutils literal">make examples</tt> fails if
 an example is missing one. Each has an XTCE file and a program per
@@ -1828,7 +1905,7 @@ again compiled as C++;</li>
 <p><tt class="docutils literal">make</tt> in <tt class="docutils literal">examples/</tt> itself converts <tt class="docutils literal">examples/README.rst</tt>, the
 index of examples, into <tt class="docutils literal">README.html</tt>.</p>
 <div class="section" id="simple-string">
-<h2><a class="toc-backref" href="#toc-entry-26"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-27"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xml</span></tt> describes a container,
 <tt class="docutils literal">SimpleString</tt>, holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string
 that always occupies 64 bits and ends at a NUL byte, so it holds up to
@@ -1868,7 +1945,7 @@ buffers reused without reallocation: true
 </div>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-27">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-28">Testing</a></h1>
 <p><tt class="docutils literal">make test</tt> runs:</p>
 <ul class="simple">
 <li>the unit tests of every language (<tt class="docutils literal">cargo test</tt>, <tt class="docutils literal">cpp/tests</tt>,
@@ -1928,7 +2005,7 @@ tests/samples_check.py <span class="pre">--update</span></tt> rewrites <tt class
 diff.</p>
 </div>
 <div class="section" id="license">
-<h1><a class="toc-backref" href="#toc-entry-28">License</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-29">License</a></h1>
 <p>tcs-xtce -- the generator, the Rust crate, the C/C++ library and the Python
 package -- is licensed under either of the Apache License, Version 2.0
 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .common import flt, header_lines, int_enc, invertible, le, str_cap, string_spec
+from .common import field_range, flt, header_lines, int_enc, invertible, le, size_args, str_cap, string_spec
 from .compile import snake
 from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
 
@@ -584,6 +584,8 @@ class CEmitter:
         length = n.length_field()
         if length is not None:
             self.line(f" * {length.name} is the packet length: computed when encoding, checked when decoding.")
+        for lc, (c, _) in n.derived.items():
+            self.line(f" * {lc.name} gives the size of {c.name}: computed from its length when encoding.")
         self.line(" */")
         self.line(f"#define {t}_NAME {cstr(n.key)}")
         self.line(f"#define {t}_MAX_BYTES {n.max_bytes}")
@@ -747,11 +749,19 @@ class CEmitter:
                     if acc.present:
                         self.line(f"if (!{acc.present}) return xtce_pk_fail(w->err, XTCE_PK_MISSING, {f}, NULL);", depth)
                     self.write_value(lc.vtype, acc.expr, f, depth, ref)
+                elif lc in n.derived:
+                    self.write_value(lc.vtype, f"d{lc.id}", f, depth, ref)
                 else:
                     self.write_value(lc.vtype, self.literal(lc.vtype, n.fixed[lc]), f, depth, ref, n.fixed[lc])
 
     def place(self, n: Node, lc, names: dict) -> Acc:
-        return names[lc] if lc in names else Acc(self.literal(lc.vtype, n.fixed[lc]))
+        """How encoding code reaches a value: a field, a computed size or
+        count, or a fixed constant."""
+        if lc in names:
+            return names[lc]
+        if lc in n.derived:
+            return Acc(f"d{lc.id}")
+        return Acc(self.literal(lc.vtype, n.fixed[lc]))
 
     @staticmethod
     def mark(i: int) -> str:
@@ -793,6 +803,17 @@ class CEmitter:
         self.line(f"static inline int {t}_encode_into(const {t}* p, xtce_pk_writer* w) {{")
         self.line("(void)p;", 1)
         names = {lc: Acc(f"p->{name}", f"p->has_{name}" if lc.optional else None) for name, lc in n.fields}
+        for lc, (c, d) in n.derived.items():
+            # Sizes and counts come from the lengths of what they size.
+            s, f = f"s{lc.id}", cstr(lc.name)
+            self.line(f"int64_t {s};", 1)
+            args = f"{names[c].expr}.len, {size_args(d)}, {cstr(c.name)}, w->err, &{s}"
+            self.line(f"XTCE_PK_TRY(xtce_pk_size_source({args}));", 1)
+            lo, hi = field_range(lc.vtype)
+            checks = ([f"{s} < {slit(lo)}"] if lo > I64_MIN else []) + ([f"{s} > {slit(hi)}"] if hi < I64_MAX else [])
+            if checks:
+                self.line(f"if ({' || '.join(checks)}) return xtce_pk_fail(w->err, XTCE_PK_OUT_OF_RANGE, {f}, NULL);", 1)
+            self.line(f"{self.ctype(lc.vtype)} d{lc.id} = ({self.ctype(lc.vtype)}){s};", 1)
         guards = {}
         for node in n.chain():
             for c in node.criteria:

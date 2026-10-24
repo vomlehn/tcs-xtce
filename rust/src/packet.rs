@@ -783,6 +783,36 @@ pub fn dynamic_size(
     Ok((y / unit) as usize)
 }
 
+/// The value of the field that gives a size or count of `n` (the inverse of
+/// [`dynamic_size`] followed by multiplying by `factor`), for encoding a
+/// field computed from the length of the value it sizes.  Fails with
+/// `BadSize`, naming `field` (the sized value), when no whole number gives
+/// exactly `n`.
+pub fn size_source(
+    n: usize,
+    slope: f64,
+    intercept: f64,
+    unit: u32,
+    factor: usize,
+    field: &'static str,
+) -> Result<i64> {
+    let bad = PacketError::BadSize { field };
+    if n % factor != 0 {
+        return Err(bad);
+    }
+    let y = ((n / factor) as f64) * unit as f64;
+    let v = (y - intercept) / slope;
+    if !(v.abs() < 9.2e18) {
+        return Err(bad);
+    }
+    let x = (v + 0.5).floor();
+    // Accept only a value that decoding maps back to exactly `n`.
+    if slope * x + intercept != y {
+        return Err(bad);
+    }
+    Ok(x as i64)
+}
+
 // --- strings ----------------------------------------------------------------------
 
 /// Layout of a string field.  Exactly one of `terminator` and `size_tag_bits`

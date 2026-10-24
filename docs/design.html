@@ -834,10 +834,24 @@ is a <tt class="docutils literal">Seek</tt> whose <tt class="docutils literal">o
 number, with <tt class="docutils literal">unit</tt> 1 and a bound that <tt class="docutils literal">max_bits</tt> uses. Layouts that
 must be known when compiling (repeated and fixed-size containers) reject
 it.</p>
-<p>The referenced field stays an ordinary field that the caller sets.
-Deriving it from the data when encoding would make <tt class="docutils literal">encode</tt> change its
-input, or need a second, derived struct. Instead the encoder checks that
-the data matches and fails with <tt class="docutils literal">BadSize</tt> if not.</p>
+<p>A referenced field that does nothing but count an array or size a
+binary value is computed when encoding and left out of <tt class="docutils literal">Node.fields</tt>,
+like a packet length, so it can't disagree with the data and <tt class="docutils literal">encode</tt>
+never changes its input. <tt class="docutils literal">derived_sizes</tt> finds these: an uncalibrated
+integer outside any include condition, every use of which is the
+<tt class="docutils literal">DynSize</tt> of a whole array or binary field, also unconditional. Any
+other use (a criterion, a location, a lookup, a string's size, a member
+or element path, a size inside another type) keeps it a field, since the
+encoder could not tell what value the application wants there.
+<tt class="docutils literal">Node.derived</tt> maps each to the field it sizes. Encoding first computes
+it with <tt class="docutils literal">size_source</tt>, the inverse of <tt class="docutils literal">dynamic_size</tt>: it rounds
+<tt class="docutils literal">((n / factor) * unit - intercept) / slope</tt> to an integer and accepts
+it only if the forward formula gives <tt class="docutils literal">n</tt> back exactly, so a decoded
+value always round-trips. The emitters then use the result wherever they
+would use the field, including when writing it, and the size check that
+follows catches data above the field's bound.</p>
+<p>A referenced field that stays a field is set by the caller. The encoder
+checks that the data matches it and fails with <tt class="docutils literal">BadSize</tt> if not.</p>
 </div>
 <div class="section" id="aggregates">
 <h2><a class="toc-backref" href="#toc-entry-16">Aggregates</a></h2>
@@ -988,10 +1002,10 @@ version-tolerant reading mode or one binding per schema version.</li>
 out on purpose: the packets travel over a link that already detects
 errors. Documents that use it are reported as unsupported.</p>
 </li>
-<li><p class="first"><strong>Computed fields:</strong> only packet length fields are computed, and
-only when the document marks them. A size or count that another field
-gives is still set by the application, which must make it agree with
-the data.</p>
+<li><p class="first"><strong>Computed fields:</strong> packet length fields are computed when the
+document marks them, and sizes and counts when nothing else uses the
+field that gives them. A size or count with other uses is still set by
+the application, which must make it agree with the data.</p>
 </li>
 </ul>
 </div>

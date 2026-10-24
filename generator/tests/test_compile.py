@@ -423,7 +423,7 @@ class ArrayTests(unittest.TestCase):
             "</RepeatEntry></ParameterRefEntry>"
         )
         m = compile_xml(array_mission(dim(fixed(0), fixed(0)), entries, "Small"))
-        rep = m.nodes[0].fields[1][1].vtype
+        rep = m.nodes[0].fields[0][1].vtype
         self.assertEqual((rep.kind, rep.enc.gap, rep.enc.count.max), ("array", 2, 5))
         self.assertEqual(m.nodes[0].max_bytes, (8 + 5 * 8 + 4 * 2 + 7) // 8)
         once = '<ParameterRefEntry parameterRef="N"><RepeatEntry><Count><FixedValue>1</FixedValue></Count></RepeatEntry></ParameterRefEntry>'
@@ -585,7 +585,7 @@ class ContainerTests(unittest.TestCase):
     def test_repeated_container_is_a_list_of_aggregates(self):
         record = entries(ref("A"), ref("B", "previousEntry:3"))
         m = compile_xml(container_mission(size(24) + record, REPEAT))
-        vt = m.nodes[0].fields[1][1].vtype
+        vt = m.nodes[0].fields[0][1].vtype
         self.assertEqual(vt.kind, "array")
         agg = vt.elem.enc
         self.assertEqual([(x.ident, x.skip) for x in agg.members], [("a", 0), ("b", 3)])
@@ -595,7 +595,7 @@ class ContainerTests(unittest.TestCase):
 
     def test_container_start_locations(self):
         record = entries(ref("A"), ref("B", "containerStart:8"))
-        agg = compile_xml(container_mission(record, REPEAT)).nodes[0].fields[1][1].vtype.elem.enc
+        agg = compile_xml(container_mission(record, REPEAT)).nodes[0].fields[0][1].vtype.elem.enc
         self.assertEqual(([x.skip for x in agg.members], agg.pad), ([0, 4], 0))
 
     def test_fixed_size_pads_an_included_container(self):
@@ -810,6 +810,37 @@ class BooleanExpressionTests(unittest.TestCase):
 
 
 
+class DerivedSizeTests(unittest.TestCase):
+    """Which counts and sizes encoding computes, leaving them out of the
+    generated struct."""
+
+    COUNTED = dim(fixed(0), dynamic("N", intercept="-1"))
+
+    def node(self, entries: str, count_type: str = "U8"):
+        return compile_xml(array_mission(self.COUNTED, entries, count_type)).nodes[0]
+
+    def test_count_only_used_for_a_count_is_computed(self):
+        n = self.node(COUNT_THEN_ARRAY)
+        self.assertEqual([name for name, _ in n.fields], ["arr"])
+        ((lc, (consumer, _)),) = n.derived.items()
+        self.assertEqual((lc.name, consumer.name), ("N", "Arr"))
+
+    def test_count_with_other_uses_stays_a_field(self):
+        located = (
+            '<ParameterRefEntry parameterRef="N"/><ArrayParameterRefEntry parameterRef="Arr">'
+            f'<LocationInContainerInBits referenceLocation="previousEntry">{dynamic("N")}'
+            "</LocationInContainerInBits></ArrayParameterRefEntry>"
+        )
+        conditional = (
+            '<ParameterRefEntry parameterRef="N"/><ArrayParameterRefEntry parameterRef="Arr"><IncludeCondition>'
+            '<Comparison parameterRef="N" value="0" comparisonOperator="!="/></IncludeCondition>'
+            "</ArrayParameterRefEntry>"
+        )
+        for entries in (located, conditional):
+            n = self.node(entries)
+            self.assertEqual(n.derived, {})
+            self.assertEqual([name for name, _ in n.fields], ["n", "arr"])
+
 class ElementTests(unittest.TestCase):
     def condition(self, dims: str, ref: str) -> str:
         """Arr of type A with ``dims``, then F included when ``ref`` == 1."""
@@ -846,7 +877,7 @@ class ElementTests(unittest.TestCase):
         self.assertEqual((e.count, e.starts, e.shape), (3, (1,), (3,)))
         self.assertEqual(m.nodes[0].max_bytes, 1 + 3 * 2)
         dynamic_end = entries.replace(fixed(3), dynamic("N"))
-        e = compile_xml(array_mission(dim(fixed(0), fixed(4)), dynamic_end)).nodes[0].fields[1][1].vtype.enc
+        e = compile_xml(array_mission(dim(fixed(0), fixed(4)), dynamic_end)).nodes[0].fields[0][1].vtype.enc
         self.assertEqual((e.count.max, e.shape), (255, ()))
 
     def test_subset_rejected(self):

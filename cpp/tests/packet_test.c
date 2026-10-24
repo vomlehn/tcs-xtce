@@ -228,7 +228,6 @@ int main(void) {
     char msg[128];
     demo_Samples_init(&s);
     s.sec_hdr_flag = true;
-    s.sample_count = 2;
     s.readings.len = 2;
     s.readings.data[0] = -1;
     s.readings.data[1] = 7;
@@ -239,7 +238,6 @@ int main(void) {
     s.valid.data[0] = s.valid.data[3] = true;
     s.label_size = 4;
     SET_STR(s.label_, "abc");
-    s.payload_size = 1;
     s.payload.len = 1;
     s.payload.data[0] = 0x5a;
     CHECK(strcmp(ENCODE(demo_Samples, &s), "Ok") == 0);
@@ -248,15 +246,25 @@ int main(void) {
     CHECK(s2.has_grid && s2.grid.len == 6 && s2.grid.data[5] == 6);
     CHECK(s2.valid.len == 4 && s2.valid.data[0] && !s2.valid.data[1] && s2.valid.data[3]);
     CHECK(strcmp(s2.label_.data, "abc") == 0 && s2.payload.len == 1 && s2.payload.data[0] == 0x5a);
-    /* The data must have the count or size that its field gives. */
+    /* SampleCount and PayloadSize come from the data, which must fit them. */
+    CHECK(buf[6] == 2);
     s.readings.len = 3;
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "Ok") == 0);
+    CHECK(demo_Samples_decode(&s2, buf, len, &err) == 0 && s2.readings.len == 3);
+    s.readings.len = 7; /* SampleCount's ValidRange allows 6 */
     CHECK(strcmp(ENCODE(demo_Samples, &s), "BadSize") == 0);
     xtce_pk_error_message(&err, msg, sizeof msg);
     CHECK(strcmp(msg, "invalid size or count for Readings") == 0);
     s.readings.len = 2;
     s.payload.len = 0;
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "Ok") == 0);
+    s.payload.len = 9; /* PayloadSize's ValidRange allows 8 */
     CHECK(strcmp(ENCODE(demo_Samples, &s), "BadSize") == 0);
     s.payload.len = 1;
+    /* A count that the application sets must still match its data. */
+    s.valid.len = 1;
+    CHECK(strcmp(ENCODE(demo_Samples, &s), "BadSize") == 0);
+    s.valid.len = 4;
     s.label_size = 11; /* beyond the ValidRange that bounds the label */
     CHECK(strcmp(ENCODE(demo_Samples, &s), "BadSize") == 0);
     s.label_size = 4;
@@ -271,7 +279,6 @@ int main(void) {
   {
     demo_Upload up, up2;
     demo_Upload_init(&up);
-    up.word_count = 3;
     up.words.len = 3;
     up.words.data[0] = 1;
     up.words.data[2] = 3;
@@ -296,7 +303,6 @@ int main(void) {
     t.sec_hdr_flag = true;
     t.start.x = 1;
     t.start.y = -1;
-    t.target_count = 1;
     t.targets.len = 1;
     t.targets.data[0].id_ = 3;
     t.targets.data[0].mode = demo_ModeType_SAFE;
@@ -383,7 +389,6 @@ int main(void) {
     static const uint8_t body[] = {0x02, 0x30, 0x48, 0xd0, 0x00, 0xf3, 0xff, 0xfc, 0x00, 0x80, 0x00};
     demo_Log_init(&l);
     l.sec_hdr_flag = true;
-    l.log_count = 2;
     l.log_record.len = 2;
     l.log_record.data[0].channel = 3;
     l.log_record.data[0].reading = 0x1234;
@@ -401,7 +406,7 @@ int main(void) {
       with_length(pk, len - 1, (unsigned)(len - 1 - 7));
       CHECK(demo_Log_decode(&l2, pk, len - 1, &err) == XTCE_PK_TRUNCATED);
     }
-    l.log_count = 1;
+    l.log_record.len = 7; /* LogCount's ValidRange allows 6 */
     CHECK(strcmp(ENCODE(demo_Log, &l), "BadSize") == 0);
   }
 
@@ -411,7 +416,6 @@ int main(void) {
     static const uint8_t body[] = {0x02, 0x2a, 0xab, 0xb0};
     demo_Batches_init(&b);
     b.sec_hdr_flag = true;
-    b.batch_count = 2;
     b.batches.len = 2;
     b.batches.data[0].size = 2;
     b.batches.data[0].values.len = 2;
@@ -600,15 +604,14 @@ int main(void) {
     CHECK(len == 9 && memcmp(buf + 6, body, sizeof body) == 0);
     CHECK(demo_MatrixMiddle_decode(&mm2, buf, len, &err) == 0 && mm2.has_matrix_note && mm2.matrix.data[3] == 6);
 
-    /* Slots 2..Last. */
+    /* Slots 2..Last: encoding sets Last to the last index. */
     demo_Fill_init(&fi);
-    fi.last = 3;
     fi.slots.len = 2;
     fi.slots.data[0] = 0xaa;
     fi.slots.data[1] = 0xbb;
     CHECK(strcmp(ENCODE(demo_Fill, &fi), "Ok") == 0);
     CHECK(demo_Fill_decode(&fi2, buf, len, &err) == 0 && fi2.slots.len == 2 && fi2.slots.data[1] == 0xbb);
-    fi.last = 4;
+    fi.slots.len = 4; /* Last's ValidRange allows 4, three slots */
     CHECK(strcmp(ENCODE(demo_Fill, &fi), "BadSize") == 0);
   }
 

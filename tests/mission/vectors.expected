@@ -21,23 +21,23 @@ error:Truncated | -
 Patch{seq_count=7, address=536875008, bytes_=0xdeadbeef0001, checksum=48879} | 112dc007000d03001000200fdeadbeef0001beef
 error:NoMatch | -
 error:NoMatch | -
-Samples{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, sample_count=3, readings=[1, -2, 32767], grid=[1, 2, 3, 4, 5, 6], valid=[true, false, true, true], label_size=5, label_="hi", payload_size=2, payload=0xdead} | 08fac02a0013030001fffe7fff1234568a0ad0d200000005bd5a
-Samples{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, sample_count=3, readings=[1, -2, 32767], grid=none, valid=[true, false, true, true], label_size=5, label_="hi", payload_size=2, payload=0xdead} | 00fac02a0010030001fffe7fff8a0ad0d200000005bd5a
-Samples{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, sample_count=0, readings=[], grid=[1, 2, 3, 4, 5, 6], valid=[true, false, true, true], label_size=0, label_="", payload_size=0, payload=0x} | 08fac02a0006001234568a0000
-Samples{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, sample_count=3, readings=[1, -2, 32767], grid=[1, 2, 3, 4, 5, 6], valid=[true, false, true, true], label_size=5, label_="hello", payload_size=2, payload=0xdead} | 08fac02a0013030001fffe7fff1234568a0ad0cad8d8de05bd5a
+Samples{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, readings=[1, -2, 32767], grid=[1, 2, 3, 4, 5, 6], valid=[true, false, true, true], label_size=5, label_="hi", payload=0xdead} | 08fac02a0013030001fffe7fff1234568a0ad0d200000005bd5a
+Samples{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, readings=[1, -2, 32767], grid=none, valid=[true, false, true, true], label_size=5, label_="hi", payload=0xdead} | 00fac02a0010030001fffe7fff8a0ad0d200000005bd5a
+Samples{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, readings=[], grid=[1, 2, 3, 4, 5, 6], valid=[true, false, true, true], label_size=0, label_="", payload=0x} | 08fac02a0006001234568a0000
+Samples{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, readings=[1, -2, 32767], grid=[1, 2, 3, 4, 5, 6], valid=[true, false, true, true], label_size=5, label_="hello", payload=0xdead} | 08fac02a0013030001fffe7fff1234568a0ad0cad8d8de05bd5a
 error:BadSize | -
 error:BadSize | -
 error:InvalidString | -
 error:Truncated | -
-Upload{seq_count=5, word_count=2, words=[4660, 43981], gains=[1.0, 2.5], tag_size=4, tag="abc"} | 112ec005000e04021234abcd000a00190403616263
-Upload{seq_count=5, word_count=0, words=[], gains=[1.0, 2.5], tag_size=4, tag="abc"} | 112ec005000a0400000a00190403616263
+Upload{seq_count=5, words=[4660, 43981], gains=[1.0, 2.5], tag_size=4, tag="abc"} | 112ec005000e04021234abcd000a00190403616263
+Upload{seq_count=5, words=[], gains=[1.0, 2.5], tag_size=4, tag="abc"} | 112ec005000a0400000a00190403616263
 error:BadSize | -
 error:BadSize | -
 error:TooLong | -
-Targets{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, start={x=100, y=-100}, target_count=2, targets=[{id_=1, mode=Science, name_="alpha", where_={x=10, y=-20}, weights=[3, 4]}, {id_=15, mode=40, name_="", where_={x=-1, y=1}, weights=[0, 15]}], home={x=7, y=-7}} | 0904c02a001c0064ff9c02102616c70686100000affec34f2800ffff00010f0007fff9
-Targets{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, start={x=100, y=-100}, target_count=0, targets=[], home=none} | 0104c02a00040064ff9c00
+Targets{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, start={x=100, y=-100}, targets=[{id_=1, mode=Science, name_="alpha", where_={x=10, y=-20}, weights=[3, 4]}, {id_=15, mode=40, name_="", where_={x=-1, y=1}, weights=[0, 15]}], home={x=7, y=-7}} | 0904c02a001c0064ff9c02102616c70686100000affec34f2800ffff00010f0007fff9
+Targets{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, start={x=100, y=-100}, targets=[], home=none} | 0104c02a00040064ff9c00
 error:BadSize | -
-Targets{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, start={x=100, y=-100}, target_count=1, targets=[{id_=1, mode=Nominal, name_="xxxxxxxxxxxxxxx", where_={x=0, y=0}, weights=[1, 1]}], home={x=7, y=-7}} | 0904c02a001f0064ff9c011017878787878787878787878787878780000000000110007fff90
+Targets{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, start={x=100, y=-100}, targets=[{id_=1, mode=Nominal, name_="xxxxxxxxxxxxxxx", where_={x=0, y=0}, weights=[1, 1]}], home={x=7, y=-7}} | 0904c02a001f0064ff9c011017878787878787878787878787878780000000000110007fff90
 error:TooLong | -
 error:Truncated | -
 Goto{seq_count=6, waypoint={north=12.5, east=6553.5, hold=true}} | 112ec006000505007dffff01
@@ -50,13 +50,13 @@ error:OutOfRange | -
 error:Truncated | -
 Poke{seq_count=6, level=20, data_=0xbeef} | 112ec00600030605beef
 Poke{seq_count=6, level=520, data_=0x} | 112ec006000106ff
-Log{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, log_count=2, log_record=[{channel=3, reading=4660}, {channel=15, reading=-1}], closed=true} | 0918c02a000a023048d000f3fffc008000
-Log{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, log_count=0, log_record=[], closed=false} | 0118c02a0002000000
-Log{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, log_count=1, log_record=[{channel=3, reading=-1}], closed=true} | 0918c02a00060133fffc008000
+Log{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, log_record=[{channel=3, reading=4660}, {channel=15, reading=-1}], closed=true} | 0918c02a000a023048d000f3fffc008000
+Log{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, log_record=[], closed=false} | 0118c02a0002000000
+Log{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, log_record=[{channel=3, reading=-1}], closed=true} | 0918c02a00060133fffc008000
 error:Truncated | -
 error:Truncated | -
-Batches{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, batch_count=2, batches=[{size=2, values=[170, 187]}, {size=0, values=[]}]} | 0922c02a0003022aabb0
-Batches{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, batch_count=0, batches=[]} | 0122c02a000000
+Batches{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, batches=[{size=2, values=[170, 187]}, {size=0, values=[]}]} | 0922c02a0003022aabb0
+Batches{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, batches=[]} | 0122c02a000000
 error:BadSize | -
 error:Truncated | -
 Reply{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, answer=true, code="ABC", note_size=2, note="é"} | 0936c02a00097965730041424302c3a9
@@ -91,6 +91,6 @@ error:Truncated | -
 MatrixMiddle{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, matrix=[1, 7, 2, 6], matrix_note=171} | 0968c02a00021726ab
 MatrixMiddle{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, matrix=[1, 2, 3, 6], matrix_note=none} | 0168c02a00011236
 error:Truncated | -
-Fill{seq_count=6, last=3, slots=[170, 187]} | 112ec00600030a03aabb
-Fill{seq_count=6, last=1, slots=[]} | 112ec00600010a01
+Fill{seq_count=6, slots=[170, 187]} | 112ec00600030a03aabb
+Fill{seq_count=6, slots=[]} | 112ec00600010a01
 error:BadSize | -

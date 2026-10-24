@@ -62,6 +62,18 @@ def str_cap(vt: VType) -> int:
     return max(min((mx - tag) // 8, (1 << tag) - 1), 0)
 
 
+def field_range(vt: VType) -> tuple[int, int]:
+    """The smallest and largest value of an integer's generated field."""
+    bits = vt.width
+    return (-(1 << (bits - 1)), (1 << (bits - 1)) - 1) if vt.signed else (0, (1 << bits) - 1)
+
+
+def size_args(d) -> str:
+    """The arguments after the length that size_source takes for a
+    DynSize, in every language."""
+    return f"{flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.factor}"
+
+
 def criteria_by_node(node: Node) -> list[tuple[Node, list[Criterion]]]:
     """(node, criteria) for every node of the chain below the root."""
     return [(n, n.criteria) for n in node.chain()[1:]]
@@ -90,6 +102,8 @@ __all__ = [
     "Spline",
     "StringEnc",
     "criteria_by_node",
+    "field_range",
+    "size_args",
     "header_lines",
     "flt",
     "int_enc",

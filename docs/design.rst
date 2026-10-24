@@ -473,10 +473,25 @@ number, with ``unit`` 1 and a bound that ``max_bits`` uses. Layouts that
 must be known when compiling (repeated and fixed-size containers) reject
 it.
 
-The referenced field stays an ordinary field that the caller sets.
-Deriving it from the data when encoding would make ``encode`` change its
-input, or need a second, derived struct. Instead the encoder checks that
-the data matches and fails with ``BadSize`` if not.
+A referenced field that does nothing but count an array or size a
+binary value is computed when encoding and left out of ``Node.fields``,
+like a packet length, so it can't disagree with the data and ``encode``
+never changes its input. ``derived_sizes`` finds these: an uncalibrated
+integer outside any include condition, every use of which is the
+``DynSize`` of a whole array or binary field, also unconditional. Any
+other use (a criterion, a location, a lookup, a string's size, a member
+or element path, a size inside another type) keeps it a field, since the
+encoder could not tell what value the application wants there.
+``Node.derived`` maps each to the field it sizes. Encoding first computes
+it with ``size_source``, the inverse of ``dynamic_size``: it rounds
+``((n / factor) * unit - intercept) / slope`` to an integer and accepts
+it only if the forward formula gives ``n`` back exactly, so a decoded
+value always round-trips. The emitters then use the result wherever they
+would use the field, including when writing it, and the size check that
+follows catches data above the field's bound.
+
+A referenced field that stays a field is set by the caller. The encoder
+checks that the data matches it and fails with ``BadSize`` if not.
 
 Aggregates
 ----------
@@ -636,7 +651,7 @@ Limitations and future work
   out on purpose: the packets travel over a link that already detects
   errors. Documents that use it are reported as unsupported.
 
-* **Computed fields:** only packet length fields are computed, and
-  only when the document marks them. A size or count that another field
-  gives is still set by the application, which must make it agree with
-  the data.
+* **Computed fields:** packet length fields are computed when the
+  document marks them, and sizes and counts when nothing else uses the
+  field that gives them. A size or count with other uses is still set by
+  the application, which must make it agree with the data.

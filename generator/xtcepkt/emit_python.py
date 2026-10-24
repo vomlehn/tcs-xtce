@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .common import flt, header_lines, invertible, le, string_spec
+from .common import field_range, flt, header_lines, invertible, le, size_args, string_spec
 from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType
 
 
@@ -409,7 +409,13 @@ class PythonEmitter:
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:
-        return f"self.{names[lc]}" if lc in names else literal(lc.vtype, n.fixed[lc])
+        """Expression for a value when encoding: a field, a computed size or
+        count, or a fixed constant."""
+        if lc in names:
+            return f"self.{names[lc]}"
+        if lc in n.derived:
+            return f"d{lc.id}"
+        return literal(lc.vtype, n.fixed[lc])
 
     @staticmethod
     def mark(i: int) -> str:
@@ -440,6 +446,9 @@ class PythonEmitter:
         if length is not None:
             self.line()
             self.line(f"``{length.name}`` is the packet length: computed when encoding, checked when decoding.", 1)
+        for lc, (c, _) in n.derived.items():
+            self.line()
+            self.line(f"``{lc.name}`` gives the size of ``{c.name}``: computed from its length when encoding.", 1)
         self.line('"""', 1)
         self.line()
         self.line(f"NAME: ClassVar[str] = {pstr(n.key)}", 1)
@@ -469,6 +478,12 @@ class PythonEmitter:
         self.line()
         self.line("def encode_into(self, w: pk.BitWriter) -> None:", 1)
         names = {lc: name for name, lc in n.fields}
+        for lc, (c, d) in n.derived.items():
+            # Sizes and counts come from the lengths of what they size.
+            self.line(f"d{lc.id} = pk.size_source(len(self.{names[c]}), {size_args(d)}, {pstr(c.name)})", 2)
+            lo, hi = field_range(lc.vtype)
+            self.line(f"if not {lo} <= d{lc.id} <= {hi}:", 2)
+            self.line(f'raise pk.PacketError("OutOfRange", {pstr(lc.name)})', 3)
         guards = {}
         for node in n.chain():
             for c in node.criteria:

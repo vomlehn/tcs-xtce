@@ -30,7 +30,7 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | Directory     | Contents |
 |---------------|----------|
 | `references/` | Downloaded XTCE documents: `SpaceSystem.xsd`, `XTCE.pdf`, `VERSION`, plus `xml.xsd` and `catalog.xml` for offline validation |
-| `generator/`  | `xtcegen` (generates the XML binding from the XSD) and `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `xtcepkt`) |
+| `generator/`  | `xtcegen` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `xtcepkt`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
 | `rust/`       | `tcs-xtce` Rust crate |
 | `cpp/`        | C++20 library (`libxtce.a`, `libxtce.so`) with a C API (`xtce/xtce.h`), and the header-only C/C++ packet runtime (`xtce/packet.h`) |
 | `python/`     | `xtce` Python package (3.10+, standard library only) |

@@ -153,19 +153,22 @@ class PacketTests(unittest.TestCase):
     def test_arrays_and_sizes_from_other_fields(self):
         s = demo.Samples(
             sec_hdr_flag=True,
-            sample_count=2,
             readings=[-1, 7],
             grid=[1, 2, 3, 4, 5, 6],
             valid=[True, False, False, True],
             label_size=4,
             label_="abc",
-            payload_size=1,
             payload=b"\x5a",
         )
         self.assertEqual(demo.Samples.decode(s.to_bytes()), s)
-        # The data must have the count or size that its field gives.
-        self.assertEqual(self.kind(dataclasses.replace(s, readings=[-1, 7, 3])), "BadSize")
-        self.assertEqual(self.kind(dataclasses.replace(s, payload=b"")), "BadSize")
+        # SampleCount and PayloadSize come from the data, which must fit them.
+        self.assertEqual(s.to_bytes()[6], 2)
+        for more in (dataclasses.replace(s, readings=[-1, 7, 3]), dataclasses.replace(s, payload=b"")):
+            self.assertEqual(demo.Samples.decode(more.to_bytes()), more)
+        # Their ValidRanges allow 6 readings and 8 bytes.
+        self.assertEqual(self.kind(dataclasses.replace(s, readings=[0] * 7)), "BadSize")
+        self.assertEqual(self.kind(dataclasses.replace(s, payload=bytes(9))), "BadSize")
+        # A count that the application sets must still match its data.
         self.assertEqual(self.kind(dataclasses.replace(s, valid=[True])), "BadSize")
         self.assertEqual(self.kind(dataclasses.replace(s, label_size=11)), "BadSize")
         self.assertEqual(self.kind(dataclasses.replace(s, label_="abcde")), "TooLong")
@@ -173,7 +176,7 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(demo.Samples.decode(full.to_bytes()), full)
         self.assertEqual(self.kind(dataclasses.replace(s, grid=None)), "Missing")
 
-        up = demo.Upload(word_count=3, words=[1, 2, 3], gains=[1.0, 2.5], tag_size=4, tag="ab")
+        up = demo.Upload(words=[1, 2, 3], gains=[1.0, 2.5], tag_size=4, tag="ab")
         self.assertEqual(demo.Upload.decode(up.to_bytes()), up)
         self.assertEqual(self.kind(dataclasses.replace(up, gains=[1.0])), "BadSize")
         # Lists are not shared between instances.
@@ -184,7 +187,6 @@ class PacketTests(unittest.TestCase):
         t = demo.Targets(
             sec_hdr_flag=True,
             start=demo.PositionType(1, -1),
-            target_count=1,
             targets=[target],
             home=demo.PositionType(4, 5),
         )
@@ -221,7 +223,6 @@ class PacketTests(unittest.TestCase):
     def test_repeated_containers_and_container_sizes(self):
         log = demo.Log(
             sec_hdr_flag=True,
-            log_count=2,
             log_record=[demo.LogRecord(channel=3, reading=0x1234), demo.LogRecord(channel=15, reading=-1)],
             closed=True,
         )
@@ -233,12 +234,12 @@ class PacketTests(unittest.TestCase):
         with self.assertRaises(PacketError) as cm:
             demo.Log.decode(with_length(b[:-1], len(b) - 1 - 7))
         self.assertEqual((cm.exception.kind, cm.exception.what), ("Truncated", ("/Demo/Log",)))
-        self.assertEqual(self.kind(dataclasses.replace(log, log_count=1)), "BadSize")
+        # LogCount's ValidRange allows 6 records.
+        self.assertEqual(self.kind(dataclasses.replace(log, log_record=[demo.LogRecord()] * 7)), "BadSize")
 
     def test_sizes_from_aggregate_members(self):
         b = demo.Batches(
             sec_hdr_flag=True,
-            batch_count=2,
             batches=[demo.BatchType(size=2, values=[0xAA, 0xBB]), demo.BatchType(size=0, values=[])],
         )
         data = b.to_bytes()
@@ -324,10 +325,11 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(demo.MatrixMiddle.decode(b), m)
         self.assertEqual(self.kind(dataclasses.replace(m, matrix=[1, 7, 2, 6, 0])), "BadSize")
 
-        # Slots 2..Last.
-        f = demo.Fill(last=3, slots=[0xAA, 0xBB])
+        # Slots 2..Last: encoding sets Last to the last index, which its
+        # ValidRange limits to 4, three slots.
+        f = demo.Fill(slots=[0xAA, 0xBB])
         self.assertEqual(demo.Fill.decode(f.to_bytes()), f)
-        self.assertEqual(self.kind(dataclasses.replace(f, last=4)), "BadSize")
+        self.assertEqual(self.kind(dataclasses.replace(f, slots=[1, 2, 3, 4])), "BadSize")
 
     def test_encode_into_existing_buffer(self):
         buf = ManagedBuffer(64)

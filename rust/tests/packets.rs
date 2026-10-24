@@ -263,27 +263,31 @@ fn include_condition() {
 fn arrays_and_sizes_from_other_fields() {
     let mut s = Samples {
         sec_hdr_flag: true,
-        sample_count: 2,
         readings: vec![-1, 7],
         grid: Some(vec![1, 2, 3, 4, 5, 6]),
         valid: vec![true, false, false, true],
         label_size: 4,
         label_: "abc".into(),
-        payload_size: 1,
         payload: vec![0x5a],
         ..Default::default()
     };
     let bytes = s.to_bytes().unwrap();
     assert_eq!(Samples::decode(&bytes).unwrap(), s);
 
-    // The data must have the count or size that its field gives.
+    // SampleCount and PayloadSize come from the data, which must fit them.
+    assert_eq!(bytes[6], 2);
     let bad = |s: &Samples| s.to_bytes().map_err(|e| e.to_string());
     s.readings.push(3);
+    assert_eq!(Samples::decode(&s.to_bytes().unwrap()).unwrap(), s);
+    s.readings.resize(7, 0); // SampleCount's ValidRange allows 6
     assert_eq!(bad(&s), Err("invalid size or count for Readings".into()));
-    s.readings.pop();
+    s.readings.truncate(2);
     s.payload.clear();
+    assert_eq!(Samples::decode(&s.to_bytes().unwrap()).unwrap(), s);
+    s.payload.resize(9, 0); // PayloadSize's ValidRange allows 8
     assert_eq!(bad(&s), Err("invalid size or count for Payload".into()));
-    s.payload.push(0x5a);
+    s.payload = vec![0x5a];
+    // A count that the application sets must still match its data.
     s.valid.pop();
     assert_eq!(bad(&s), Err("invalid size or count for Valid".into()));
     s.valid.push(true);
@@ -296,7 +300,6 @@ fn arrays_and_sizes_from_other_fields() {
     assert_eq!(Samples::decode(&s.to_bytes().unwrap()).unwrap(), s);
 
     let mut up = Upload {
-        word_count: 3,
         words: vec![1, 2, 3],
         gains: vec![1.0, 2.5],
         tag_size: 4,
@@ -314,7 +317,6 @@ fn aggregates() {
     let mut t = Targets {
         sec_hdr_flag: true,
         start: PositionType { x: 1, y: -1 },
-        target_count: 1,
         targets: vec![TargetType {
             id_: 3,
             mode: ModeType::SAFE,
@@ -399,7 +401,6 @@ fn calibrated_integers_and_the_rest_of_the_packet() {
 fn repeated_containers_and_container_sizes() {
     let l = Log {
         sec_hdr_flag: true,
-        log_count: 2,
         log_record: vec![
             LogRecord {
                 channel: 3,
@@ -429,7 +430,7 @@ fn repeated_containers_and_container_sizes() {
         Err(PacketError::Truncated { field: "/Demo/Log" })
     );
     let mut e = l.clone();
-    e.log_count = 1;
+    e.log_record.resize(7, LogRecord::default()); // LogCount allows 6
     assert_eq!(
         e.to_bytes(),
         Err(PacketError::BadSize { field: "LogRecord" })
@@ -440,7 +441,6 @@ fn repeated_containers_and_container_sizes() {
 fn sizes_from_aggregate_members() {
     let b = Batches {
         sec_hdr_flag: true,
-        batch_count: 2,
         batches: vec![
             BatchType {
                 size: 2,
@@ -650,14 +650,15 @@ fn array_subsets() {
     e.matrix.push(0);
     assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Matrix" }));
 
-    // Slots 2..Last.
+    // Slots 2..Last: encoding sets Last to the last index.
     let f = Fill {
-        last: 3,
         slots: vec![0xaa, 0xbb],
         ..Default::default()
     };
-    assert_eq!(Fill::decode(&f.to_bytes().unwrap()).unwrap(), f);
+    let b = f.to_bytes().unwrap();
+    assert_eq!(Fill::decode(&b).unwrap(), f);
     let mut e = f.clone();
-    e.last = 4;
+    e.slots.push(0xcc);
+    e.slots.push(0xdd); // Last's ValidRange allows 4, three slots
     assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Slots" }));
 }

@@ -474,6 +474,10 @@ class Node:
     ident: str = ""  # generated struct name
     fields: list[tuple[str, Local]] = field(default_factory=list)  # concrete only
     fixed: dict = field(default_factory=dict)  # Local -> engineering value
+    # Values that only give the size or count of another value: Local ->
+    # (the value whose size it gives, its DynSize).  They are not fields;
+    # encoding computes them from the other value's length.
+    derived: dict = field(default_factory=dict)
     max_bytes: int = 0
     error: Optional[str] = None
 

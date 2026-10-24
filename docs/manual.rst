@@ -85,6 +85,8 @@ byte-identical output. The test suite checks this on every build.
      - Generates the XML binding from the schema
    * - ``generator/tcs_xtce/``, ``generator/xtcepkt/``
      - The ``tcs-xtce`` command, and the compiler behind it that turns a mission's XTCE document into packet codecs
+   * - ``generator/xtce_digest/``
+     - The ``xtce-digest`` command, which prints a digest of what an XTCE document means (see `xtce-digest`_)
    * - ``rust/``
      - The ``tcs-xtce`` Rust crate (imported as ``tcs_xtce``)
    * - ``cpp/``
@@ -773,12 +775,29 @@ a ``Size`` that counts its ``Values``. The member's name wins over a
 parameter or argument with the same name, and other references from
 inside an aggregate are not supported.
 
-The referenced value stays an ordinary field. When encoding, the
-generated code computes the size or count from it and fails with
-``BadSize`` if the data doesn't match: set both. When decoding, a size
-or count that is negative, not whole, not a whole number of bytes (for
-sizes in bits of strings and binary), or above the field's bound fails
-with ``BadSize``.
+When the referenced value does nothing but count an array or give the
+size of a binary value, encoding computes it from that data's length,
+and it is not a field of the generated struct. In the demo,
+``SampleCount``, ``PayloadSize``, ``TargetCount``, ``LogCount``,
+``BatchCount``, ``WordCount`` and ``Fill``'s ``Last`` are computed this
+way: set ``Readings`` to three values and ``SampleCount`` is written as
+3. The value must be an integer without a calibrator, outside any
+``IncludeCondition``, and it must give the size of a whole field (not a
+member, element or part of one) that is also outside any
+``IncludeCondition``. Encoding fails with ``BadSize`` if no value of the
+field gives the data's length, or if that length is above the field's
+bound (below), and with ``OutOfRange`` if the value doesn't fit the
+field.
+
+Otherwise the referenced value stays an ordinary field: when it is also
+compared by a criterion, gives a location, picks a
+``DiscreteLookupList`` value or sizes a string, or when it is an
+aggregate member such as ``RouteHdr.Count``. Encoding then computes the
+size or count from the field and fails with ``BadSize`` if the data
+doesn't match: set both. When decoding, a size or count that is
+negative, not whole, not a whole number of bytes (for sizes in bits of
+strings and binary), or above the field's bound fails with
+``BadSize``.
 
 The bound is the largest value the referenced field's ``ValidRange``
 allows, or, without one, its encoding, or the largest of a
@@ -1145,7 +1164,11 @@ Sizes from other fields
    ``dynamic_size(x, slope, intercept, unit, max, field)`` computes
    ``(slope * x + intercept) / unit`` and fails with ``BadSize`` unless it
    is a whole number from 0 to ``max``; ``unit`` is 8 for a size in bits
-   used in whole bytes. Python also has ``read_list(r, n, gap, field,
+   used in whole bytes. ``size_source(n, slope, intercept, unit, factor,
+   field)`` (``xtce_pk_size_source``) is its inverse, for a field that
+   encoding computes: the value that gives a size or count of ``n``,
+   failing with ``BadSize`` if there is none. Python also has
+   ``read_list(r, n, gap, field,
    read)``, ``check_size(value, n, field)`` and ``describe_list(values,
    describe)``, which the other languages generate inline.
 
@@ -1373,9 +1396,70 @@ Known limitations
 * Binary fields default to empty and must be set to their exact size
   before encoding. Arrays default to empty, and must have the number of
   elements their type gives, even when it is fixed.
-* A size or count that another field gives is not filled in when
-  encoding: set the field and the data to agree.
+* A field that gives a size or count is computed when encoding only in
+  the cases described under `Generated packet types`_; otherwise set the
+  field and the data to agree.
 * Enumerated values must fit in a signed 64-bit integer.
+
+
+xtce-digest
+===========
+
+``xtce-digest`` prints an MD5 digest of what each XTCE document given to
+it means, so that a change to a mission database that would change the
+generated data structures and methods can be noticed, and an edit that
+only rearranges the document can be told apart from one that doesn't.
+
+.. code-block:: sh
+
+   cd generator
+   python3 -m xtce_digest FILE...
+
+   python3 -m xtce_digest ../tests/mission/demo.xml ../examples/simple-string/simple_string.xml
+
+It reads the files in the order given. For each one it prints the file
+name as given, a colon, a space and the digest, in hex:
+
+.. code-block:: text
+
+   ../tests/mission/demo.xml: 4c4a919fe4ac21b2dadf9c03ba547347
+
+Each file gets its own digest, computed afresh, so a file gives the same
+digest wherever it appears in the list. A file that can't be read, isn't
+well-formed XML or isn't valid XTCE is reported on standard error and
+ends the command with status 1; the files before it have been printed,
+and the ones after it are not read. Status 0 means every file was
+digested.
+
+The digest covers every element, attribute and piece of text, but not
+what leaves the document meaning the same:
+
+* comments and processing instructions;
+* whitespace between elements, and at the start and end of text;
+* the order of attributes, and the namespace prefixes used;
+* the order of the children of an element that holds an unordered
+  collection: the nested ``SpaceSystem`` elements of a
+  ``SpaceSystem``, the ``…Set`` elements (``ParameterTypeSet``,
+  ``ParameterSet``, ``ContainerSet``, ``MetaCommandSet``,
+  ``ArgumentTypeSet``, ``AncillaryDataSet``, ``ValidRangeSet`` and the
+  others whose members are named or independent), and
+  ``ANDedConditions``, ``ORedConditions``, ``ComparisonList``,
+  ``ArgumentAssignmentList``, ``EnumerationList``,
+  ``EnumerationAlarmList`` and ``PolynomialCalibrator``. Their children
+  are taken in a fixed (sorted) order instead.
+
+The children of every other element keep their order, as it carries
+meaning: the entries of an ``EntryList``, the members of a
+``MemberList``, the dimensions of a ``DimensionList``, the arguments of
+an ``ArgumentList``, spline points, and the cases of a
+``DiscreteLookupList``, ``ContextCalibratorList`` or ``ContextAlarmList``,
+where the first match wins. The full list is ``UNORDERED`` in
+``generator/xtce_digest/__init__.py``.
+
+The digest errs on the side of changing: anything a document says is
+covered, including descriptions, aliases and ancillary data, even where
+tcs-xtce ignores them. An attribute given its default value explicitly
+also changes the digest, though the meaning is the same.
 
 
 Examples

@@ -1329,11 +1329,12 @@ class Compiler:
             if fixes and c.local not in fixed:
                 fixed[c.local] = c.value
         n.fixed = fixed
+        n.derived = derived_sizes(n)
         names = Namer()
         n.fields = [
             (names.take(snake(it.local.name)), it.local)
             for it in walk(n.all_items())
-            if isinstance(it, Value) and it.local not in fixed and it.local.length is None
+            if isinstance(it, Value) and it.local not in fixed and it.local.length is None and it.local not in n.derived
         ]
         n.max_bytes = (max_bits(n.all_items()) + 7) // 8
 
@@ -1438,6 +1439,57 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
             pos += bits
         extent = max(extent, pos)
     return pos, extent
+
+
+def derived_sizes(n: Node) -> dict:
+    """The values of ``n`` that encoding computes: Local -> (the value whose
+    size or count it gives, that DynSize).  Such a value is an uncalibrated
+    integer, always present, and used for nothing but the count of an array
+    or the size of a binary value, both always present, so that it can be
+    worked out from their lengths.  Anything else that reads it (a
+    criterion, a location, a lookup, a string's size, an aggregate's or
+    element's size) leaves it a field that the application sets."""
+    items = walk(n.all_items())
+    uses: dict = {}  # Local -> [(consumer, DynSize) or None for any other use]
+
+    def use(lc, what=None) -> None:
+        uses.setdefault(lc, []).append(what)
+
+    def dyn_uses(d: DynSize, consumer=None) -> None:
+        if d.lookup is not None:
+            for crit, _ in d.lookup:
+                for lc in (x for c in crit for x in term_locals(c)):
+                    use(lc)
+        elif d.local is not None:
+            plain = consumer is not None and not d.path
+            use(d.local, (consumer, d) if plain else None)
+
+    for c in n.all_criteria() + [c for it in n.all_items() for c in conds(it)]:
+        for lc in term_locals(c):
+            use(lc)
+    for it in items:
+        if isinstance(it, Seek) and isinstance(it.offset, DynSize):
+            dyn_uses(it.offset)
+        elif isinstance(it, Value):
+            vt = it.local.vtype
+            for t in vt.tree():
+                if t.dyn is None:
+                    continue
+                top = t is vt and t.kind in ("array", "binary") and not is_rest(t)
+                consumer = it.local if top and not it.local.optional and it.local not in n.fixed else None
+                dyn_uses(t.dyn, consumer)
+    derived = {}
+    for it in items:
+        if not isinstance(it, Value):
+            continue
+        lc = it.local
+        vt = lc.vtype
+        if lc.optional or lc in n.fixed or lc.length is not None or vt.kind != "int" or vt.calibrator is not None:
+            continue
+        found = uses.get(lc, [])
+        if found and all(u is not None for u in found):
+            derived[lc] = found[0]
+    return derived
 
 
 def conds(it: Item) -> list[Term]:

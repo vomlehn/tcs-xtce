@@ -456,6 +456,25 @@ def dynamic_size(x, slope: float, intercept: float, unit: int, max_: int, field:
     return int(y / unit)
 
 
+def size_source(n: int, slope: float, intercept: float, unit: int, factor: int, field: str) -> int:
+    """The value of the field that gives a size or count of ``n`` (the
+    inverse of ``dynamic_size`` followed by multiplying by ``factor``), for
+    encoding a field computed from the length of the value it sizes.  Raises
+    ``BadSize``, naming ``field`` (the sized value), when no whole number
+    gives exactly ``n``."""
+    if n % factor:
+        raise PacketError("BadSize", field)
+    y = float(n // factor) * unit
+    v = (y - intercept) / slope if slope else math.nan
+    if not abs(v) < 9.2e18:
+        raise PacketError("BadSize", field)
+    x = math.floor(v + 0.5)
+    # Accept only a value that decoding maps back to exactly ``n``.
+    if slope * x + intercept != y:
+        raise PacketError("BadSize", field)
+    return x
+
+
 def read_list(r: "BitReader", n: int, gap: int, field: str, read) -> list:
     """``n`` values read by ``read()``, with ``gap`` bits between them."""
     out = []

@@ -621,6 +621,30 @@ static inline int xtce_pk_dynamic_size(double x, double slope, double intercept,
   return 0;
 }
 
+/* The value of the field that gives a size or count of `n` (the inverse of
+ * xtce_pk_dynamic_size followed by multiplying by `factor`), for encoding a
+ * field computed from the length of the value it sizes.  Fails with
+ * BAD_SIZE, naming `f` (the sized value), when no whole number gives
+ * exactly `n`. */
+static inline int xtce_pk_size_source(size_t n, double slope, double intercept, unsigned unit, size_t factor,
+                                      const char* f, xtce_pk_error* err, int64_t* out) {
+  if (n % factor != 0) {
+    return xtce_pk_fail(err, XTCE_PK_BAD_SIZE, f, NULL);
+  }
+  double y = (double)(n / factor) * unit;
+  double v = (y - intercept) / slope;
+  if (!(fabs(v) < 9.2e18)) {
+    return xtce_pk_fail(err, XTCE_PK_BAD_SIZE, f, NULL);
+  }
+  double x = floor(v + 0.5);
+  /* Accept only a value that decoding maps back to exactly `n`. */
+  if (slope * x + intercept != y) {
+    return xtce_pk_fail(err, XTCE_PK_BAD_SIZE, f, NULL);
+  }
+  *out = (int64_t)x;
+  return 0;
+}
+
 /* --- strings and binary --------------------------------------------------------------- */
 
 /* Layout of a string field; exactly one of terminator and size_tag_bits is used. */
