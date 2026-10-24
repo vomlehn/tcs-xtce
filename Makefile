@@ -6,8 +6,10 @@
 #   make samples         regenerate the schema-covering test documents
 #   make packets         regenerate the demo mission's packet codecs
 #   make rust|cpp|python build one library
-#   make test            run every language's tests and the cross-language checks
-#   make samples-check   check tcs-xtce against public XTCE documents (downloads them)
+#   make test            run every language's tests and the cross-language
+#                        checks
+#   make samples-check   check tcs-xtce against public XTCE documents
+#                        (downloads them)
 #   make examples        build and run every example in examples/
 #   make fmt             format Rust code;  make fmt-check  verify it
 #   make clean           remove build products (keeps generated sources)
@@ -63,7 +65,8 @@ $(RUST_GEN): $(XSD) $(GEN_SRC)
 	@touch $@
 
 $(CPP_GEN) &: $(XSD) $(GEN_SRC)
-	cd generator && $(GEN) --cpp-header ../cpp/include/xtce/generated.hpp --cpp-source ../cpp/src/generated.cpp
+	cd generator && $(GEN) --cpp-header ../cpp/include/xtce/generated.hpp \
+		--cpp-source ../cpp/src/generated.cpp
 	@touch $(CPP_GEN)
 
 $(PY_GEN): $(XSD) $(GEN_SRC)
@@ -81,7 +84,8 @@ samples: $(SAMPLES)
 # language per run.
 $(PKT_GEN) &: $(MISSION) $(PKT_SRC) $(PY_GEN)
 	cd generator && $(PKT) ../rust/tests/mission/demo.rs --lang rust
-	cd generator && $(PKT) ../rust/tests/mission/demo_fixed.rs --lang rust --dynamic-allocations false
+	cd generator && $(PKT) ../rust/tests/mission/demo_fixed.rs --lang rust \
+		--dynamic-allocations false
 	cd generator && $(PKT) ../$(PKT_CPP) --lang c
 	cd generator && $(PKT) ../$(PKT_PY) --lang python
 	@touch $(PKT_GEN)
@@ -106,7 +110,8 @@ python: $(PY_GEN) $(PKT_PY)
 EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
 .PHONY: test
-test: test-generator test-rust test-cpp test-python cross-check packet-check examples
+test: test-generator test-rust test-cpp test-python cross-check packet-check \
+      examples
 
 # The packet compiler reads XTCE with the generated Python binding.
 .PHONY: test-generator
@@ -131,7 +136,8 @@ cross-check: rust cpp python $(SAMPLES)
 
 .PHONY: packet-check
 packet-check: rust cpp python
-	sh tests/packet_check.sh $(RUST_PKT_TOOL) $(RUST_FIXED_PKT_TOOL) $(C_PKT_TOOL) $(CXX_PKT_TOOL)
+	sh tests/packet_check.sh $(RUST_PKT_TOOL) $(RUST_FIXED_PKT_TOOL) \
+		$(C_PKT_TOOL) $(CXX_PKT_TOOL)
 
 # Public XTCE documents, pinned to commits in tests/external/sources.txt and
 # downloaded on demand; not part of `make test`, which needs no network.
@@ -140,12 +146,14 @@ EXTERNAL := tests/external/files
 .PHONY: samples-check
 samples-check: rust $(PY_GEN)
 	@mkdir -p $(EXTERNAL)
-	@grep -v '^#' tests/external/sources.txt | while read -r name sha url; do \
+	@grep -v '^#' tests/external/sources.txt | \
+	while read -r name sha url; do \
 	    [ -n "$$name" ] || continue; \
 	    [ -f $(EXTERNAL)/$$name ] && continue; \
 	    mkdir -p $$(dirname $(EXTERNAL)/$$name); \
 	    echo "fetch $$name"; \
-	    $(CURL) -o $(EXTERNAL)/$$name.tmp "$$url" && mv $(EXTERNAL)/$$name.tmp $(EXTERNAL)/$$name || exit 1; \
+	    $(CURL) -o $(EXTERNAL)/$$name.tmp "$$url" && \
+	        mv $(EXTERNAL)/$$name.tmp $(EXTERNAL)/$$name || exit 1; \
 	done
 	$(PYTHON) -I tests/samples_check.py
 
@@ -153,11 +161,18 @@ samples-check: rust $(PY_GEN)
 # C, C++ and Python, and checks that the outputs match.
 # Every example must exist in all supported languages: C/C++, Rust and
 # Python 3, and have a README.rst.
+EXAMPLE_FILES := rust/Cargo.toml rust/src/main.rs c/main.c python/main.py \
+                 README.rst
+
 .PHONY: examples
 examples: cpp python
 	@for d in $(EXAMPLES); do \
-	    for f in rust/Cargo.toml rust/src/main.rs c/main.c python/main.py README.rst; do \
-	        [ -f $$d/$$f ] || { echo "$$d: missing $$f (examples need C/C++, Rust and Python versions and a README.rst)" >&2; exit 1; }; \
+	    for f in $(EXAMPLE_FILES); do \
+	        [ -f $$d/$$f ] || { \
+	            echo "$$d: missing $$f (examples need C/C++, Rust" \
+	                "and Python versions and a README.rst)" >&2; \
+	            exit 1; \
+	        }; \
 	    done; \
 	done
 	for d in $(EXAMPLES); do $(MAKE) -C $$d || exit 1; done
@@ -167,12 +182,18 @@ examples: cpp python
 .PHONY: fmt
 fmt:
 	cd rust && $(CARGO) fmt
-	for d in $(EXAMPLES); do $(MAKE) -C $$d generate && (cd $$d/rust && $(CARGO) fmt) || exit 1; done
+	for d in $(EXAMPLES); do \
+	    $(MAKE) -C $$d generate && \
+	        (cd $$d/rust && $(CARGO) fmt) || exit 1; \
+	done
 
 .PHONY: fmt-check
 fmt-check:
 	cd rust && $(CARGO) fmt --check
-	for d in $(EXAMPLES); do $(MAKE) -C $$d generate && (cd $$d/rust && $(CARGO) fmt --check) || exit 1; done
+	for d in $(EXAMPLES); do \
+	    $(MAKE) -C $$d generate && \
+	        (cd $$d/rust && $(CARGO) fmt --check) || exit 1; \
+	done
 
 # The documents as HTML: docs/ and the examples' READMEs. Committed beside
 # their sources and served by GitHub Pages, so remade before a commit that

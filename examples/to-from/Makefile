@@ -23,9 +23,11 @@ RST2HTML ?= rst2html
 XML     := to_from.xml
 GEN     := rust/src/to_from.rs c/to_from.h cxx/to_from.h \
            python/to_from.py
-GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py $(TOP)/generator/tcs_xtce/*.py)
+GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py \
+                     $(TOP)/generator/tcs_xtce/*.py)
 PKT_H   := $(TOP)/cpp/include/xtce/packet.h
-TCS_XTCE := cd $(TOP)/generator && $(PYTHON) -m tcs_xtce ../examples/to-from/$(XML) \
+TCS_XTCE := cd $(TOP)/generator && \
+            $(PYTHON) -m tcs_xtce ../examples/to-from/$(XML) \
            --source-name examples/to-from/$(XML)
 
 .PHONY: all
@@ -59,7 +61,8 @@ $(BUILD)/to_from_c: c/main.c c/to_from.h $(PKT_H)
 
 $(BUILD)/to_from_cxx: c/main.c cxx/to_from.h $(PKT_H)
 	@mkdir -p $(@D)
-	$(CXX) -std=c++20 -O2 -Wall -Wextra -I$(TOP)/cpp/include -Icxx -x c++ $< -o $@
+	$(CXX) -std=c++20 -O2 -Wall -Wextra -I$(TOP)/cpp/include -Icxx -x c++ \
+		$< -o $@
 
 .PHONY: c
 c: $(BUILD)/to_from_c $(BUILD)/to_from_cxx
@@ -80,8 +83,11 @@ run: build
 	rust/target/release/to-from write >$(BUILD)/rust.bin
 	$(BUILD)/to_from_c write >$(BUILD)/c.bin
 	$(BUILD)/to_from_cxx write >$(BUILD)/c++.bin
-	PYTHONPATH=$(TOP)/python:python $(PYTHON) python/main.py write >$(BUILD)/python.bin
-	for lang in c c++ python; do cmp $(BUILD)/rust.bin $(BUILD)/$$lang.bin || exit 1; done
+	PYTHONPATH=$(TOP)/python:python $(PYTHON) python/main.py write \
+		>$(BUILD)/python.bin
+	for lang in c c++ python; do \
+	    cmp $(BUILD)/rust.bin $(BUILD)/$$lang.bin || exit 1; \
+	done
 	@for to in $(LANGS); do \
 	    for from in $(LANGS); do \
 	        ./to-from $$to $$from >$(BUILD)/out.txt || exit 1; \
@@ -91,11 +97,12 @@ run: build
 	    done; \
 	done
 	cat $(BUILD)/c-c.txt
-	@echo "to-from: the 4 writers wrote the same bytes, and the 16 reader/writer pairs printed the same words"
+	@echo "to-from: the 4 writers wrote the same bytes, and the 16" \
+		"reader/writer pairs printed the same words"
 
 # README.html is committed beside README.rst, like the other documents.
-# --halt=warning turns docutils warnings into errors, so a malformed README fails
-# the build instead of producing a damaged page.
+# --halt=warning turns docutils warnings into errors, so a malformed README
+# fails the build instead of producing a damaged page.
 .PHONY: html
 html: README.html
 

@@ -63,7 +63,12 @@ impl<T: XmlElement> XmlElement for Box<T> {
 }
 
 /// Checks the number of occurrences of a repeated element before writing.
-pub fn check_count(len: usize, min: usize, max: Option<usize>, what: &str) -> Result<()> {
+pub fn check_count(
+    len: usize,
+    min: usize,
+    max: Option<usize>,
+    what: &str,
+) -> Result<()> {
     if len < min || max.is_some_and(|m| len > m) {
         let max = max.map_or("unbounded".to_owned(), |m| m.to_string());
         return Err(Error::new(format!(
@@ -288,12 +293,16 @@ impl<'a> Iterator for Attrs<'a> {
             Some(q @ ('"' | '\'')) => q,
             _ => {
                 self.rest = "";
-                return Some(Err(Error::new(format!("unquoted attribute {name}"))));
+                return Some(Err(Error::new(format!(
+                    "unquoted attribute {name}"
+                ))));
             }
         };
         let Some(close) = after[1..].find(quote) else {
             self.rest = "";
-            return Some(Err(Error::new(format!("unterminated attribute {name}"))));
+            return Some(Err(Error::new(format!(
+                "unterminated attribute {name}"
+            ))));
         };
         self.rest = &after[close + 2..];
         Some(Ok((name, &after[1..close + 1])))
@@ -320,8 +329,8 @@ pub struct Reader<'a> {
 
 impl<'a> Reader<'a> {
     pub fn new(src: &'a [u8]) -> Result<Self> {
-        let src =
-            std::str::from_utf8(src).map_err(|e| Error::new(format!("input is not UTF-8: {e}")))?;
+        let src = std::str::from_utf8(src)
+            .map_err(|e| Error::new(format!("input is not UTF-8: {e}")))?;
         let src = src.strip_prefix('\u{feff}').unwrap_or(src);
         Ok(Self {
             src,
@@ -353,7 +362,10 @@ impl<'a> Reader<'a> {
     fn skip_past(&mut self, from: usize, pat: &str) -> Result<usize> {
         match self.src[from..].find(pat) {
             Some(i) => Ok(from + i + pat.len()),
-            None => Err(self.error_at(from, format!("unterminated construct, expected {pat:?}"))),
+            None => Err(self.error_at(
+                from,
+                format!("unterminated construct, expected {pat:?}"),
+            )),
         }
     }
 
@@ -376,7 +388,10 @@ impl<'a> Reader<'a> {
             } else if rest.starts_with("<![CDATA[") {
                 let end = self.skip_past(start, "]]>")?;
                 self.pos = end;
-                return Ok((start, Token::CData(&self.src[start + 9..end - 3])));
+                return Ok((
+                    start,
+                    Token::CData(&self.src[start + 9..end - 3]),
+                ));
             } else if rest.starts_with("<!") {
                 // DOCTYPE, possibly with an internal subset.
                 let mut depth = 0usize;
@@ -392,11 +407,12 @@ impl<'a> Reader<'a> {
                         _ => {}
                     }
                 }
-                self.pos = end.ok_or_else(|| self.error_at(start, "unterminated <!"))?;
+                self.pos =
+                    end.ok_or_else(|| self.error_at(start, "unterminated <!"))?;
             } else if let Some(r) = rest.strip_prefix("</") {
-                let close = r
-                    .find('>')
-                    .ok_or_else(|| self.error_at(start, "unterminated end tag"))?;
+                let close = r.find('>').ok_or_else(|| {
+                    self.error_at(start, "unterminated end tag")
+                })?;
                 self.pos = start + 2 + close + 1;
                 return Ok((start, Token::End(r[..close].trim_end())));
             } else {
@@ -416,7 +432,9 @@ impl<'a> Reader<'a> {
                         break;
                     }
                 }
-                let close = close.ok_or_else(|| self.error_at(start, "unterminated start tag"))?;
+                let close = close.ok_or_else(|| {
+                    self.error_at(start, "unterminated start tag")
+                })?;
                 let mut inner = &rest[1..close];
                 let empty = inner.ends_with('/');
                 if empty {
@@ -502,7 +520,9 @@ impl<'a> Reader<'a> {
                     self.peeked = None;
                 }
                 Token::Eof => return Err(self.error("unexpected end of input")),
-                _ => return Err(self.error("unexpected text in element content")),
+                _ => {
+                    return Err(self.error("unexpected text in element content"))
+                }
             }
         }
     }
@@ -525,7 +545,9 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         match self.peek_child()? {
-            Some(name) => Err(self.error(format!("unexpected element <{name}>"))),
+            Some(name) => {
+                Err(self.error(format!("unexpected element <{name}>")))
+            }
             None => self.consume_end(),
         }
     }
@@ -535,7 +557,10 @@ impl<'a> Reader<'a> {
         match self.take_token()? {
             Token::End(name) => match self.stack.pop() {
                 Some(open) if open == name => Ok(()),
-                Some(open) => Err(self.error_at(at, format!("</{name}> does not match <{open}>"))),
+                Some(open) => Err(self.error_at(
+                    at,
+                    format!("</{name}> does not match <{open}>"),
+                )),
                 None => Err(self.error_at(at, format!("unbalanced </{name}>"))),
             },
             _ => Err(self.error_at(at, "expected an end tag")),
@@ -553,14 +578,21 @@ impl<'a> Reader<'a> {
         loop {
             let at = self.peeked.as_ref().map_or(self.pos, |(o, _)| *o);
             let piece = match self.peek_token()? {
-                Token::Text(t) => unescape(t, false).map_err(|m| self.error_at(at, m))?,
+                Token::Text(t) => {
+                    unescape(t, false).map_err(|m| self.error_at(at, m))?
+                }
                 Token::CData(t) => Cow::Borrowed(*t),
                 Token::End(_) => break,
                 Token::Start(t) => {
-                    let msg = format!("unexpected element <{}> in text content", t.name);
+                    let msg = format!(
+                        "unexpected element <{}> in text content",
+                        t.name
+                    );
                     return Err(self.error_at(at, msg));
                 }
-                Token::Eof => return Err(self.error_at(at, "unexpected end of input")),
+                Token::Eof => {
+                    return Err(self.error_at(at, "unexpected end of input"))
+                }
             };
             self.peeked = None;
             match single.take() {
@@ -611,8 +643,13 @@ impl<'a> Reader<'a> {
     }
 
     /// Parses an attribute's raw value.
-    pub fn attr_value<V: Value>(&self, tag: &Tag<'a>, raw: &'a str) -> Result<V> {
-        let s = unescape(raw, true).map_err(|m| self.error_at(tag.offset, m))?;
+    pub fn attr_value<V: Value>(
+        &self,
+        tag: &Tag<'a>,
+        raw: &'a str,
+    ) -> Result<V> {
+        let s =
+            unescape(raw, true).map_err(|m| self.error_at(tag.offset, m))?;
         V::parse_xml(&s).map_err(|m| self.error_at(tag.offset, m))
     }
 
@@ -638,7 +675,9 @@ impl<'a> Reader<'a> {
     /// Error for a missing or unexpected child element.
     pub fn expected(&mut self, what: &str) -> Error {
         match self.peek_child() {
-            Ok(Some(found)) => self.error(format!("expected <{what}>, found <{found}>")),
+            Ok(Some(found)) => {
+                self.error(format!("expected <{what}>, found <{found}>"))
+            }
             Ok(None) => self.error(format!("expected <{what}>")),
             Err(e) => e,
         }
@@ -654,8 +693,12 @@ impl<'a> Reader<'a> {
 
 /// Replaces entity and character references and normalizes line endings.
 /// In attribute values, literal whitespace characters become spaces.
-pub fn unescape(raw: &str, attr: bool) -> std::result::Result<Cow<'_, str>, String> {
-    let needs = |b: u8| b == b'&' || b == b'\r' || (attr && (b == b'\n' || b == b'\t'));
+pub fn unescape(
+    raw: &str,
+    attr: bool,
+) -> std::result::Result<Cow<'_, str>, String> {
+    let needs =
+        |b: u8| b == b'&' || b == b'\r' || (attr && (b == b'\n' || b == b'\t'));
     if !raw.bytes().any(needs) {
         return Ok(Cow::Borrowed(raw));
     }
@@ -735,7 +778,8 @@ mod tests {
 
     #[test]
     fn reader_walks_children() {
-        let src = b"<?xml version='1.0'?><!-- c --><x:A xmlns:x='u' a=\"1 &gt; 0\">\
+        let src =
+            b"<?xml version='1.0'?><!-- c --><x:A xmlns:x='u' a=\"1 &gt; 0\">\
                     <B>t<![CDATA[<raw>]]></B><C/></x:A>";
         let mut r = Reader::new(src).unwrap();
         let root = r.root().unwrap();

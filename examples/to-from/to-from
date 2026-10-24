@@ -29,7 +29,8 @@ PROGRAMS = {
 
 
 def usage() -> None:
-    sys.stderr.write(f"usage: to-from TO FROM   (each one of: {', '.join(PROGRAMS)})\n")
+    langs = ", ".join(PROGRAMS)
+    sys.stderr.write(f"usage: to-from TO FROM   (each one of: {langs})\n")
     sys.exit(2)
 
 
@@ -51,8 +52,12 @@ def main() -> None:
         + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])
     )
 
-    writer = subprocess.Popen(PROGRAMS[from_] + ["write"], stdout=subprocess.PIPE, env=env)
-    reader = subprocess.Popen(PROGRAMS[to] + ["read"], stdin=writer.stdout, env=env)
+    writer = subprocess.Popen(
+        PROGRAMS[from_] + ["write"], stdout=subprocess.PIPE, env=env
+    )
+    reader = subprocess.Popen(
+        PROGRAMS[to] + ["read"], stdin=writer.stdout, env=env
+    )
     # Only the reader holds the pipe now, so it sees the end of the input
     # when the writer exits.
     writer.stdout.close()

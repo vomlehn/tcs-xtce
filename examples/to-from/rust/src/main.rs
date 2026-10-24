@@ -87,7 +87,8 @@ fn read() {
         let mut tag = [0u8; TAG_BYTES];
         tag.copy_from_slice(&packet[..TAG_BYTES]);
         let size = u32::from_be_bytes(tag);
-        let len = TAG_BYTES + usize::try_from(size).unwrap_or(usize::MAX - TAG_BYTES);
+        let len =
+            TAG_BYTES + usize::try_from(size).unwrap_or(usize::MAX - TAG_BYTES);
         if len > Word::MAX_BYTES {
             fail(&format!("size tag {size} is too large"));
         }

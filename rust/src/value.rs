@@ -91,7 +91,10 @@ pub fn format_double(x: f64, out: &mut String) {
 }
 
 /// [`format_double`] for any [`fmt::Write`]; it allocates nothing.
-pub fn write_double<W: fmt::Write + ?Sized>(x: f64, out: &mut W) -> fmt::Result {
+pub fn write_double<W: fmt::Write + ?Sized>(
+    x: f64,
+    out: &mut W,
+) -> fmt::Result {
     if x.is_nan() {
         return out.write_str("NaN");
     }

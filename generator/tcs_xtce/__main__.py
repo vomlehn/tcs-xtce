@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 import xtce  # noqa: E402
 
 from xtcegen.__main__ import rustfmt  # noqa: E402
+from xtcegen.wrap import wrap  # noqa: E402
 from xtcepkt import emit_c, emit_python, emit_rust, report  # noqa: E402
 from xtcepkt.compile import compile_document  # noqa: E402
 from xtcepkt.model import Unsupported  # noqa: E402
@@ -108,9 +109,9 @@ def main(argv=None) -> int:
         # Generated Rust must follow standard formatting, like all Rust here.
         text = rustfmt(emit_rust.emit(mission, source, alloc))
     elif args.lang == "python":
-        text = emit_python.emit(mission, source)
+        text = wrap(emit_python.emit(mission, source), "python")
     else:
-        text = emit_c.emit(mission, source, args.prefix)
+        text = wrap(emit_c.emit(mission, source, args.prefix), "c")
     write(args.output, text)
     return 0
 

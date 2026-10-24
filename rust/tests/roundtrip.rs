@@ -5,9 +5,12 @@ use std::path::PathBuf;
 use tcs_xtce::{Buffer, Document, SpaceSystemType};
 
 fn samples() -> Vec<PathBuf> {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/samples");
+    let dir =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/samples");
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .unwrap_or_else(|e| panic!("{}: {e} (run `make samples`)", dir.display()))
+        .unwrap_or_else(|e| {
+            panic!("{}: {e} (run `make samples`)", dir.display())
+        })
         .map(|e| e.unwrap().path())
         .filter(|p| p.extension().is_some_and(|x| x == "xml"))
         .collect();
@@ -20,11 +23,12 @@ fn samples() -> Vec<PathBuf> {
 fn samples_round_trip() {
     for path in samples() {
         let bytes = std::fs::read(&path).unwrap();
-        let mut doc =
-            Document::from_bytes(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let mut doc = Document::from_bytes(&bytes)
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         let first = doc.serialize().unwrap().to_vec();
-        let again = Document::from_bytes(&first)
-            .unwrap_or_else(|e| panic!("{} (reserialized): {e}", path.display()));
+        let again = Document::from_bytes(&first).unwrap_or_else(|e| {
+            panic!("{} (reserialized): {e}", path.display())
+        });
         assert_eq!(again.root, doc.root, "{}", path.display());
         let mut again = again;
         assert_eq!(again.serialize().unwrap(), &first[..]);
@@ -58,8 +62,10 @@ fn buffers_are_retained() {
 
 #[test]
 fn reports_errors_with_positions() {
-    let err = Document::from_bytes(b"<SpaceSystem xmlns='x' name='a'>\n<Bogus/></SpaceSystem>")
-        .unwrap_err();
+    let err = Document::from_bytes(
+        b"<SpaceSystem xmlns='x' name='a'>\n<Bogus/></SpaceSystem>",
+    )
+    .unwrap_err();
     assert_eq!(err.line, 2);
     assert!(err.message.contains("Bogus"), "{err}");
 

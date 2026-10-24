@@ -5,7 +5,12 @@ use crate::generated::{SpaceSystemType, NAMESPACE, ROOT_ELEMENT};
 use crate::xml::{Error, Reader, Result, Writer, XmlElement};
 
 /// Serializes `value` as the element `tag` into `buf`, replacing its contents.
-pub fn to_xml<T: XmlElement>(value: &T, tag: &str, buf: &mut Buffer, indent: bool) -> Result<()> {
+pub fn to_xml<T: XmlElement>(
+    value: &T,
+    tag: &str,
+    buf: &mut Buffer,
+    indent: bool,
+) -> Result<()> {
     buf.clear();
     let mut w = Writer::new(buf, indent);
     w.declaration();
@@ -58,7 +63,11 @@ impl Document {
     }
 
     /// Wraps `root` with explicitly sized input and output buffers.
-    pub fn with_capacity(root: SpaceSystemType, input: usize, output: usize) -> Self {
+    pub fn with_capacity(
+        root: SpaceSystemType,
+        input: usize,
+        output: usize,
+    ) -> Self {
         Self {
             root,
             input: Buffer::with_capacity(input),

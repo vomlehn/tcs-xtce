@@ -15,10 +15,12 @@ all: html
 
 .PHONY: html
 html: README.html
-	for d in $(EXAMPLES); do $(MAKE) -C $$d html RST2HTML="$(RST2HTML)" || exit 1; done
+	for d in $(EXAMPLES); do \
+	    $(MAKE) -C $$d html RST2HTML="$(RST2HTML)" || exit 1; \
+	done
 
-# --halt=warning turns docutils warnings into errors, so a malformed README fails
-# the build instead of producing a damaged page.
+# --halt=warning turns docutils warnings into errors, so a malformed README
+# fails the build instead of producing a damaged page.
 README.html: README.rst
 	$(RST2HTML) --halt=warning $< $@
 

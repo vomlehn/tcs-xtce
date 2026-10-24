@@ -19,9 +19,11 @@ RST2HTML ?= rst2html
 XML     := simple_string.xml
 GEN     := rust/src/simple_string.rs c/simple_string.h cxx/simple_string.h \
            python/simple_string.py
-GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py $(TOP)/generator/tcs_xtce/*.py)
+GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py \
+                     $(TOP)/generator/tcs_xtce/*.py)
 PKT_H   := $(TOP)/cpp/include/xtce/packet.h
-TCS_XTCE := cd $(TOP)/generator && $(PYTHON) -m tcs_xtce ../examples/simple-string/$(XML) \
+TCS_XTCE := cd $(TOP)/generator && \
+            $(PYTHON) -m tcs_xtce ../examples/simple-string/$(XML) \
            --source-name examples/simple-string/$(XML)
 
 .PHONY: all
@@ -33,10 +35,12 @@ generate: $(GEN)
 # tcs-xtce reads the XTCE file and writes one language per run.
 $(GEN) &: $(XML) $(GEN_SRC)
 	@mkdir -p cxx
-	$(TCS_XTCE) ../examples/simple-string/rust/src/simple_string.rs --lang rust
+	$(TCS_XTCE) ../examples/simple-string/rust/src/simple_string.rs \
+		--lang rust
 	$(TCS_XTCE) ../examples/simple-string/c/simple_string.h --lang c
 	$(TCS_XTCE) ../examples/simple-string/cxx/simple_string.h --lang c++
-	$(TCS_XTCE) ../examples/simple-string/python/simple_string.py --lang python
+	$(TCS_XTCE) ../examples/simple-string/python/simple_string.py \
+		--lang python
 	@touch $(GEN)
 
 .PHONY: rust
@@ -50,7 +54,8 @@ $(BUILD)/simple_string_c: c/main.c c/simple_string.h $(PKT_H) | $(BUILD)
 	$(CC) -std=c11 -O2 -Wall -Wextra -I$(TOP)/cpp/include -Ic $< -lm -o $@
 
 $(BUILD)/simple_string_cxx: c/main.c cxx/simple_string.h $(PKT_H) | $(BUILD)
-	$(CXX) -std=c++20 -O2 -Wall -Wextra -I$(TOP)/cpp/include -Icxx -x c++ $< -o $@
+	$(CXX) -std=c++20 -O2 -Wall -Wextra -I$(TOP)/cpp/include -Icxx -x c++ \
+		$< -o $@
 
 .PHONY: c
 c: $(BUILD)/simple_string_c $(BUILD)/simple_string_cxx
@@ -63,7 +68,8 @@ run: rust c python | $(BUILD)
 	rust/target/release/simple-string >$(BUILD)/rust.txt
 	$(BUILD)/simple_string_c >$(BUILD)/c.txt
 	$(BUILD)/simple_string_cxx >$(BUILD)/cxx.txt
-	PYTHONPATH=$(TOP)/python:python $(PYTHON) python/main.py >$(BUILD)/python.txt
+	PYTHONPATH=$(TOP)/python:python $(PYTHON) python/main.py \
+		>$(BUILD)/python.txt
 	cat $(BUILD)/rust.txt
 	cmp $(BUILD)/rust.txt $(BUILD)/c.txt
 	cmp $(BUILD)/rust.txt $(BUILD)/cxx.txt
@@ -74,8 +80,8 @@ $(BUILD):
 	mkdir -p $@
 
 # README.html is committed beside README.rst, like the other documents.
-# --halt=warning turns docutils warnings into errors, so a malformed README fails
-# the build instead of producing a damaged page.
+# --halt=warning turns docutils warnings into errors, so a malformed README
+# fails the build instead of producing a damaged page.
 .PHONY: html
 html: README.html
 

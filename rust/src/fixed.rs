@@ -73,7 +73,10 @@ impl<T, const N: usize> FixedVec<T, N> {
 
 impl<T: Clone, const N: usize> FixedVec<T, N> {
     /// Appends a copy of each of `values`; on failure the vector is unchanged.
-    pub fn extend_from_slice(&mut self, values: &[T]) -> Result<(), CapacityError> {
+    pub fn extend_from_slice(
+        &mut self,
+        values: &[T],
+    ) -> Result<(), CapacityError> {
         if values.len() > N - self.len {
             return Err(CapacityError);
         }
@@ -122,7 +125,9 @@ impl<T, const N: usize> DerefMut for FixedVec<T, N> {
     }
 }
 
-impl<T: PartialEq, const N: usize, const M: usize> PartialEq<FixedVec<T, M>> for FixedVec<T, N> {
+impl<T: PartialEq, const N: usize, const M: usize> PartialEq<FixedVec<T, M>>
+    for FixedVec<T, N>
+{
     fn eq(&self, other: &FixedVec<T, M>) -> bool {
         self.as_slice() == other.as_slice()
     }
@@ -151,7 +156,9 @@ impl<const N: usize> FixedString<N> {
     }
 
     /// The string whose UTF-8 encoding is `bytes`.
-    pub fn from_utf8(bytes: FixedBytes<N>) -> Result<Self, std::str::Utf8Error> {
+    pub fn from_utf8(
+        bytes: FixedBytes<N>,
+    ) -> Result<Self, std::str::Utf8Error> {
         std::str::from_utf8(&bytes)?;
         Ok(Self { bytes })
     }
@@ -195,7 +202,9 @@ impl<const N: usize> fmt::Write for FixedString<N> {
     }
 }
 
-impl<const N: usize, const M: usize> PartialEq<FixedString<M>> for FixedString<N> {
+impl<const N: usize, const M: usize> PartialEq<FixedString<M>>
+    for FixedString<N>
+{
     fn eq(&self, other: &FixedString<M>) -> bool {
         self.as_str() == other.as_str()
     }
@@ -215,8 +224,13 @@ impl<const N: usize> PartialEq<&str> for FixedString<N> {
     }
 }
 
-impl<const N: usize, const M: usize> PartialOrd<FixedString<M>> for FixedString<N> {
-    fn partial_cmp(&self, other: &FixedString<M>) -> Option<std::cmp::Ordering> {
+impl<const N: usize, const M: usize> PartialOrd<FixedString<M>>
+    for FixedString<N>
+{
+    fn partial_cmp(
+        &self,
+        other: &FixedString<M>,
+    ) -> Option<std::cmp::Ordering> {
         self.as_str().partial_cmp(other.as_str())
     }
 }

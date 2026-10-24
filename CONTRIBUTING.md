@@ -46,9 +46,12 @@ three emitters (`generator/xtcepkt/emit_rust.py`, `emit_c.py`,
 `examples/` has a Rust, C/C++ and Python version, a `README.rst`, and a
 `Makefile` that runs it and, with `make html`, makes `README.html`.
 
-**C and C++ style.** C and C++ indent with 8 spaces and keep lines within
-80 columns. `.clang-format` at the top level sets this; format hand-written
-C and C++ with `clang-format -i`. The generators emit the same indentation.
+**Line width and C and C++ style.** Code keeps lines within 80 columns.
+C and C++ indent with 8 spaces; `.clang-format` at the top level sets this,
+so format hand-written C and C++ with `clang-format -i`. Rust is formatted
+by `make fmt` with `max_width = 80`. The generators emit the same
+indentation and wrap their output at 80 columns
+(`generator/xtcegen/wrap.py`).
 
 **Don't edit generated files.** Files that start with `@generated` are
 rewritten by `make generate` (the XML binding, from `generator/xtcegen`) or

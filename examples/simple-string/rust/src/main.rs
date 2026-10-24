@@ -33,7 +33,11 @@ fn main() {
         let bytes = match codec.encode(&value) {
             Ok(bytes) => bytes.to_vec(),
             Err(e) => {
-                println!("serialize {} -> error:{} ({e})", quoted(text), e.kind());
+                println!(
+                    "serialize {} -> error:{} ({e})",
+                    quoted(text),
+                    e.kind()
+                );
                 continue;
             }
         };
@@ -46,6 +50,7 @@ fn main() {
         assert_eq!(back, value);
     }
 
-    let unchanged = capacity == (codec.input_capacity(), codec.output_capacity());
+    let unchanged =
+        capacity == (codec.input_capacity(), codec.output_capacity());
     println!("buffers reused without reallocation: {unchanged}");
 }

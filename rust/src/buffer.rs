@@ -51,7 +51,10 @@ impl Buffer {
     }
 
     /// Fills the buffer from a reader, reusing the allocation.
-    pub fn load_from<R: std::io::Read>(&mut self, mut reader: R) -> std::io::Result<usize> {
+    pub fn load_from<R: std::io::Read>(
+        &mut self,
+        mut reader: R,
+    ) -> std::io::Result<usize> {
         self.data.clear();
         reader.read_to_end(&mut self.data)
     }

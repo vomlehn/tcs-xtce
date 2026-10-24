@@ -46,9 +46,11 @@ fn paragraph(p: usize) -> Paragraph {
     let lines = PARAGRAPHS[p]
         .iter()
         .map(|line| {
-            let words: Vec<String> = line.split(' ').map(String::from).collect();
+            let words: Vec<String> =
+                line.split(' ').map(String::from).collect();
             // WordCount precedes Words and gives their number.
-            let word_count = u8::try_from(words.len()).unwrap_or_else(|_| fail("too many words"));
+            let word_count = u8::try_from(words.len())
+                .unwrap_or_else(|_| fail("too many words"));
             Line { word_count, words }
         })
         .collect();
@@ -89,17 +91,19 @@ fn difference(got: &Paragraph, want: &Paragraph) -> Option<String> {
 /// Connects to `addr` and sends each array: a `Length` packet, then the
 /// `Paragraph` packet in a single write. Then closes the connection.
 fn send(addr: SocketAddr) {
-    let mut stream = TcpStream::connect(addr).unwrap_or_else(|e| fail(&format!("connect: {e}")));
+    let mut stream = TcpStream::connect(addr)
+        .unwrap_or_else(|e| fail(&format!("connect: {e}")));
     // The codecs' output buffers are preallocated to Paragraph::MAX_BYTES
     // and Length::MAX_BYTES (4) and reused for both arrays.
     let mut codec = Codec::for_packet::<Paragraph>();
     let mut length_codec = Codec::for_packet::<Length>();
     for p in 0..PARAGRAPHS.len() {
-        let bytes = codec
-            .encode(&paragraph(p))
-            .unwrap_or_else(|e| fail(&format!("serialize array {}: {e}", p + 1)));
+        let bytes = codec.encode(&paragraph(p)).unwrap_or_else(|e| {
+            fail(&format!("serialize array {}: {e}", p + 1))
+        });
         let length = Length {
-            byte_count: u32::try_from(bytes.len()).unwrap_or_else(|_| fail("packet too long")),
+            byte_count: u32::try_from(bytes.len())
+                .unwrap_or_else(|_| fail("packet too long")),
         };
         let length_bytes = length_codec
             .encode(&length)
@@ -170,9 +174,9 @@ fn receive(listener: TcpListener) {
 
         // Deserialize from the managed input buffer.
         codec.load(&packet[..len]);
-        let got: Paragraph = codec
-            .decode()
-            .unwrap_or_else(|e| fail(&format!("deserialize array {}: {e}", p + 1)));
+        let got: Paragraph = codec.decode().unwrap_or_else(|e| {
+            fail(&format!("deserialize array {}: {e}", p + 1))
+        });
         if let Some(diff) = difference(&got, &paragraph(p)) {
             fail(&format!("array {}: {diff}", p + 1));
         }
@@ -193,8 +197,8 @@ fn receive(listener: TcpListener) {
 
 fn main() {
     // Listen on a port the system chooses, on the loopback interface only.
-    let listener =
-        TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| fail(&format!("listen: {e}")));
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|e| fail(&format!("listen: {e}")));
     let addr = listener
         .local_addr()
         .unwrap_or_else(|e| fail(&format!("listen: {e}")));

@@ -79,8 +79,12 @@ impl PacketError {
 impl fmt::Display for PacketError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Truncated { field } => write!(f, "packet too short for {field}"),
-            Self::BadPosition { field } => write!(f, "{field} is placed before the packet start"),
+            Self::Truncated { field } => {
+                write!(f, "packet too short for {field}")
+            }
+            Self::BadPosition { field } => {
+                write!(f, "{field} is placed before the packet start")
+            }
             Self::NoMatch { container } => {
                 write!(f, "no container derived from {container} matches")
             }
@@ -88,10 +92,18 @@ impl fmt::Display for PacketError {
                 container,
                 criterion,
             } => write!(f, "{container} requires {criterion}"),
-            Self::OutOfRange { field } => write!(f, "value of {field} does not fit its encoding"),
-            Self::InvalidString { field } => write!(f, "invalid string in {field}"),
-            Self::TooLong { field } => write!(f, "{field} is too long for its encoding"),
-            Self::Calibration { field } => write!(f, "{field} is outside its calibration range"),
+            Self::OutOfRange { field } => {
+                write!(f, "value of {field} does not fit its encoding")
+            }
+            Self::InvalidString { field } => {
+                write!(f, "invalid string in {field}")
+            }
+            Self::TooLong { field } => {
+                write!(f, "{field} is too long for its encoding")
+            }
+            Self::Calibration { field } => {
+                write!(f, "{field} is outside its calibration range")
+            }
             Self::NotInvertible { field } => {
                 write!(
                     f,
@@ -101,7 +113,9 @@ impl fmt::Display for PacketError {
             Self::Missing { field } => {
                 write!(f, "{field} is required by its include condition")
             }
-            Self::BadSize { field } => write!(f, "invalid size or count for {field}"),
+            Self::BadSize { field } => {
+                write!(f, "invalid size or count for {field}")
+            }
             Self::BadLength { field } => {
                 write!(f, "{field} does not match the length of the packet")
             }
@@ -238,7 +252,12 @@ impl<'a> BitReader<'a> {
 
     /// Moves to `offset` bits from `start`.  Bits skipped over count as
     /// part of the packet, as the writer fills them.
-    pub fn seek(&mut self, start: usize, offset: i64, field: &'static str) -> Result<()> {
+    pub fn seek(
+        &mut self,
+        start: usize,
+        offset: i64,
+        field: &'static str,
+    ) -> Result<()> {
         self.pos = position(start, offset, field)?;
         self.end = self.end.max(self.pos);
         Ok(())
@@ -276,7 +295,12 @@ impl<'a> BitReader<'a> {
     }
 
     /// Reads an unsigned field, little endian when `le` (whole bytes only).
-    pub fn uint_order(&mut self, bits: u32, le: bool, field: &'static str) -> Result<u64> {
+    pub fn uint_order(
+        &mut self,
+        bits: u32,
+        le: bool,
+        field: &'static str,
+    ) -> Result<u64> {
         let v = self.uint(bits, field)?;
         Ok(if le { swap_bytes(v, bits) } else { v })
     }
@@ -292,7 +316,12 @@ impl<'a> BitReader<'a> {
     /// Ends the packet where the packet length field `field`, whose value
     /// `v` was just read, says: `v - adjust` bytes after the field.  Fails
     /// with `Truncated` if `data` is shorter.
-    pub fn limit(&mut self, v: u64, adjust: i64, field: &'static str) -> Result<()> {
+    pub fn limit(
+        &mut self,
+        v: u64,
+        adjust: i64,
+        field: &'static str,
+    ) -> Result<()> {
         let after = v as i128 - adjust as i128;
         if after < 0 {
             return Err(PacketError::BadLength { field });
@@ -428,7 +457,12 @@ impl<'a> BitWriter<'a> {
         self.pos
     }
 
-    pub fn seek(&mut self, start: usize, offset: i64, field: &'static str) -> Result<()> {
+    pub fn seek(
+        &mut self,
+        start: usize,
+        offset: i64,
+        field: &'static str,
+    ) -> Result<()> {
         self.pos = position(start, offset, field)?;
         Ok(())
     }
@@ -489,7 +523,9 @@ impl<'a> BitWriter<'a> {
         adjust: i64,
         field: &'static str,
     ) -> Result<()> {
-        let v = self.buf.len() as i128 - (at + bits as usize).div_ceil(8) as i128 + adjust as i128;
+        let v = self.buf.len() as i128
+            - (at + bits as usize).div_ceil(8) as i128
+            + adjust as i128;
         if v < 0 || v > mask(bits) as i128 {
             return Err(PacketError::OutOfRange { field });
         }
@@ -547,7 +583,8 @@ pub enum IntEncoding {
 
 /// Converts a raw field to its signed value.
 pub fn to_signed(raw: u64, bits: u32, enc: IntEncoding) -> i64 {
-    let sign = bits < 64 && (raw >> (bits - 1)) & 1 == 1 || bits == 64 && (raw >> 63) == 1;
+    let sign = bits < 64 && (raw >> (bits - 1)) & 1 == 1
+        || bits == 64 && (raw >> 63) == 1;
     let magnitude = raw & mask(bits - 1);
     match enc {
         IntEncoding::Unsigned => raw as i64,
@@ -576,7 +613,12 @@ pub fn to_signed(raw: u64, bits: u32, enc: IntEncoding) -> i64 {
 }
 
 /// Converts a signed value to its raw field, checking that it fits.
-pub fn from_signed(v: i64, bits: u32, enc: IntEncoding, field: &'static str) -> Result<u64> {
+pub fn from_signed(
+    v: i64,
+    bits: u32,
+    enc: IntEncoding,
+    field: &'static str,
+) -> Result<u64> {
     let out = Err(PacketError::OutOfRange { field });
     let limit = mask(bits - 1);
     match enc {
@@ -628,7 +670,12 @@ pub fn int_to_f64(raw: u64, bits: u32, enc: IntEncoding) -> f64 {
 }
 
 /// Rounds an engineering value (half away from zero) to a raw integer field.
-pub fn f64_to_int(x: f64, bits: u32, enc: IntEncoding, field: &'static str) -> Result<u64> {
+pub fn f64_to_int(
+    x: f64,
+    bits: u32,
+    enc: IntEncoding,
+    field: &'static str,
+) -> Result<u64> {
     let r = x.round();
     if !r.is_finite() || r.abs() >= 18446744073709551616.0 {
         return Err(PacketError::OutOfRange { field });
@@ -648,7 +695,12 @@ pub fn f64_to_int(x: f64, bits: u32, enc: IntEncoding, field: &'static str) -> R
 
 /// Rounds a calibrated value (half away from zero) to an integer from `lo`
 /// up to but not including `lim`; fails with `OutOfRange` otherwise.
-pub fn round_to_int(y: f64, lo: f64, lim: f64, field: &'static str) -> Result<f64> {
+pub fn round_to_int(
+    y: f64,
+    lo: f64,
+    lim: f64,
+    field: &'static str,
+) -> Result<f64> {
     let r = y.round();
     if r >= lo && r < lim {
         Ok(r)
@@ -777,7 +829,11 @@ pub fn dynamic_size(
 ) -> Result<usize> {
     let y = slope * x + intercept;
     let unit = unit as f64;
-    if !(y >= 0.0) || y.fract() != 0.0 || (y / unit).fract() != 0.0 || y / unit > max as f64 {
+    if !(y >= 0.0)
+        || y.fract() != 0.0
+        || (y / unit).fract() != 0.0
+        || y / unit > max as f64
+    {
         return Err(PacketError::BadSize { field });
     }
     Ok((y / unit) as usize)
@@ -943,7 +999,9 @@ pub fn write_string(
         }
         None => {
             let room = spec.fixed_bits.unwrap_or(spec.max_bits);
-            if b.len() * 8 + tag > room || b.len() as u64 > mask(spec.size_tag_bits) {
+            if b.len() * 8 + tag > room
+                || b.len() as u64 > mask(spec.size_tag_bits)
+            {
                 return Err(PacketError::TooLong { field });
             }
             w.uint(spec.size_tag_bits, b.len() as u64);
@@ -971,7 +1029,12 @@ pub fn fixed_string_from_bytes<const N: usize>(
 }
 
 /// Writes a fixed-size binary field.
-pub fn write_binary(w: &mut BitWriter<'_>, b: &[u8], n: usize, field: &'static str) -> Result<()> {
+pub fn write_binary(
+    w: &mut BitWriter<'_>,
+    b: &[u8],
+    n: usize,
+    field: &'static str,
+) -> Result<()> {
     if b.len() != n {
         return Err(if b.len() > n {
             PacketError::TooLong { field }
@@ -985,7 +1048,12 @@ pub fn write_binary(w: &mut BitWriter<'_>, b: &[u8], n: usize, field: &'static s
 
 /// Writes a binary field that takes the rest of the packet: all of `b`,
 /// which must be at most `max` bytes.
-pub fn write_rest(w: &mut BitWriter<'_>, b: &[u8], max: usize, field: &'static str) -> Result<()> {
+pub fn write_rest(
+    w: &mut BitWriter<'_>,
+    b: &[u8],
+    max: usize,
+    field: &'static str,
+) -> Result<()> {
     if b.len() > max {
         return Err(PacketError::TooLong { field });
     }
@@ -998,17 +1066,25 @@ pub fn write_rest(w: &mut BitWriter<'_>, b: &[u8], max: usize, field: &'static s
 // `describe` output is identical in every language so that the runtimes can be
 // compared byte for byte.
 
-pub fn describe_f64<W: fmt::Write + ?Sized>(x: f64, out: &mut W) -> fmt::Result {
+pub fn describe_f64<W: fmt::Write + ?Sized>(
+    x: f64,
+    out: &mut W,
+) -> fmt::Result {
     write_double(x, out)
 }
 
-pub fn describe_str<W: fmt::Write + ?Sized>(s: &str, out: &mut W) -> fmt::Result {
+pub fn describe_str<W: fmt::Write + ?Sized>(
+    s: &str,
+    out: &mut W,
+) -> fmt::Result {
     out.write_char('"')?;
     for c in s.chars() {
         match c {
             '"' => out.write_str("\\\"")?,
             '\\' => out.write_str("\\\\")?,
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => write!(out, "\\x{:02x}", c as u32)?,
+            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
+                write!(out, "\\x{:02x}", c as u32)?
+            }
             c => out.write_char(c)?,
         }
     }
@@ -1018,7 +1094,10 @@ pub fn describe_str<W: fmt::Write + ?Sized>(s: &str, out: &mut W) -> fmt::Result
 /// Text for an optional field that is absent.
 pub const DESCRIBE_NONE: &str = "none";
 
-pub fn describe_bytes<W: fmt::Write + ?Sized>(b: &[u8], out: &mut W) -> fmt::Result {
+pub fn describe_bytes<W: fmt::Write + ?Sized>(
+    b: &[u8],
+    out: &mut W,
+) -> fmt::Result {
     out.write_str("0x")?;
     for x in b {
         write!(out, "{x:02x}")?;
