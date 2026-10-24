@@ -400,10 +400,12 @@ ul.auto-toc {
 <li><a class="reference internal" href="#xtce-digest" id="toc-entry-25">xtce-digest</a></li>
 <li><a class="reference internal" href="#examples" id="toc-entry-26">Examples</a><ul>
 <li><a class="reference internal" href="#simple-string" id="toc-entry-27"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
+<li><a class="reference internal" href="#to-from" id="toc-entry-28"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></li>
+<li><a class="reference internal" href="#variable-array" id="toc-entry-29"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing" id="toc-entry-28">Testing</a></li>
-<li><a class="reference internal" href="#license" id="toc-entry-29">License</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-30">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-31">License</a></li>
 </ul>
 </div>
 <div class="section" id="summary">
@@ -1891,19 +1893,39 @@ also changes the digest, though the meaning is the same.</p>
 </div>
 <div class="section" id="examples">
 <h1><a class="toc-backref" href="#toc-entry-26">Examples</a></h1>
-<p><tt class="docutils literal">examples/</tt> holds self-contained examples. Every example exists in all
-supported languages: C/C++, Rust and Python 3. <tt class="docutils literal">make examples</tt> fails if
-an example is missing one. Each has an XTCE file and a program per
-language that uses the code <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> generates from it. <tt class="docutils literal">make</tt> in an
-example's directory, or <tt class="docutils literal">make examples</tt> at the top level:</p>
+<p><tt class="docutils literal">examples/</tt> holds self-contained examples. Every example supports all
+four languages <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> generates: C, C++, Rust and Python 3, one for
+each <tt class="docutils literal"><span class="pre">--lang</span></tt> value. <tt class="docutils literal">make examples</tt> fails if an example is missing
+one. Each has an XTCE file, a program per language that uses the code
+<tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> generates from it, a <tt class="docutils literal">README.rst</tt> that explains the example
+and how to run each program, and a <tt class="docutils literal">Makefile</tt>. The C and C++ programs share one source
+file, which is compiled once as C11 against the <tt class="docutils literal"><span class="pre">--lang</span> c</tt> header and once
+as C++20 against the <tt class="docutils literal"><span class="pre">--lang</span> c++</tt> header. <tt class="docutils literal">make</tt> in an example's
+directory, or <tt class="docutils literal">make examples</tt> at the top level:</p>
 <ul class="simple">
-<li>regenerates the code if the XTCE file or the generator changed;</li>
-<li>builds and runs the Rust, C and Python programs, and the C program
-again compiled as C++;</li>
+<li>regenerates the code for all four languages if the XTCE file or the
+generator changed;</li>
+<li>builds and runs the C, C++, Rust and Python programs;</li>
 <li>checks that their output is identical.</li>
 </ul>
-<p><tt class="docutils literal">make</tt> in <tt class="docutils literal">examples/</tt> itself converts <tt class="docutils literal">examples/README.rst</tt>, the
-index of examples, into <tt class="docutils literal">README.html</tt>.</p>
+<p><tt class="docutils literal">make html</tt> in an example's directory converts its <tt class="docutils literal">README.rst</tt> into
+<tt class="docutils literal">README.html</tt>. <tt class="docutils literal">make</tt> in <tt class="docutils literal">examples/</tt> itself does that for every
+example and for <tt class="docutils literal">examples/README.rst</tt>, the <a class="reference external" href="../examples/README.html">index of examples</a>.</p>
+<p>The examples are:</p>
+<ul class="simple">
+<li><a class="reference external" href="../examples/simple-string/README.html">simple-string</a>: a structure
+holding one string of up to 8 bytes, serialized into and deserialized
+from managed buffers.</li>
+<li><a class="reference external" href="../examples/to-from/README.html">to-from</a>: words of varying
+length, with a leading size tag, written by the program in one language
+and read by the program in another, for any pair of C, C++, Rust and
+Python.</li>
+<li><a class="reference external" href="../examples/variable-array/README.html">variable-array</a>: two
+two-dimensional arrays whose dimensions both vary, the lines and words of
+a paragraph, sent one after the other over one TCP connection from one
+thread to another, each after its length.</li>
+</ul>
+<p>Each is summarized below; its README has the details.</p>
 <div class="section" id="simple-string">
 <h2><a class="toc-backref" href="#toc-entry-27"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xml</span></tt> describes a container,
@@ -1925,7 +1947,8 @@ that always occupies 64 bits and ends at a NUL byte, so it holds up to
 <li>Rust: <tt class="docutils literal">struct SimpleString { pub text: String }</tt>
 (<tt class="docutils literal">rust/src/simple_string.rs</tt>)</li>
 <li>C/C++: <tt class="docutils literal">simple_string_SimpleString</tt>, whose <tt class="docutils literal">text</tt> is a
-<tt class="docutils literal">simple_string_str8</tt> (<tt class="docutils literal">c/simple_string.h</tt>)</li>
+<tt class="docutils literal">simple_string_str8</tt> (<tt class="docutils literal">c/simple_string.h</tt> for C,
+<tt class="docutils literal">cxx/simple_string.h</tt> for C++)</li>
 <li>Python: <tt class="docutils literal">&#64;dataclass class SimpleString</tt> with <tt class="docutils literal">text: str</tt>
 (<tt class="docutils literal">python/simple_string.py</tt>)</li>
 </ul>
@@ -1942,10 +1965,111 @@ deserialize 4869000000000000 -&gt; SimpleString{text=&quot;Hi&quot;}
 serialize &quot;ABCDEFGHI&quot; -&gt; error:TooLong (Text is too long for its encoding)
 buffers reused without reallocation: true
 </pre>
+<p>See the <a class="reference external" href="../examples/simple-string/README.html">simple-string README</a>
+for more.</p>
+</div>
+<div class="section" id="to-from">
+<h2><a class="toc-backref" href="#toc-entry-28"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
+<p><tt class="docutils literal"><span class="pre">examples/to-from/to_from.xml</span></tt> describes a container, <tt class="docutils literal">Word</tt>,
+holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string of varying length
+with a 32-bit size tag before it. The tag and the string together occupy
+at most 288 bits, so a word holds up to 32 bytes:</p>
+<pre class="code xml literal-block">
+<span class="name tag">&lt;StringParameterType</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;WordType&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;StringDataEncoding</span><span class="whitespace"> </span><span class="name attribute">encoding=</span><span class="literal string">&quot;UTF-8&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;Variable</span><span class="whitespace"> </span><span class="name attribute">maxSizeInBits=</span><span class="literal string">&quot;288&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+      </span><span class="name tag">&lt;LeadingSize</span><span class="whitespace"> </span><span class="name attribute">sizeInBitsOfSizeTag=</span><span class="literal string">&quot;32&quot;</span><span class="name tag">/&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;/Variable&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/StringDataEncoding&gt;</span><span class="whitespace">
+</span><span class="name tag">&lt;/StringParameterType&gt;</span>
+</pre>
+<p>The example shows that code generated for one language reads what code
+generated for another wrote. Each language's program takes one argument.
+With <tt class="docutils literal">write</tt>, it serializes each of the 69 words of the lorem ipsum
+paragraph into a <tt class="docutils literal">Word</tt> packet and writes the packets to standard output.
+With <tt class="docutils literal">read</tt>, it reads packets from standard input, using each packet's
+size tag to find where it ends, and deserializes them. It prints each word
+as it arrives, with a space before every word but the first, and a newline
+when the input ends. It checks that every word arrives intact and in
+order, and exits with status 1 if one doesn't.</p>
+<p>The script <tt class="docutils literal"><span class="pre">examples/to-from/to-from</span></tt> takes two arguments, each <tt class="docutils literal">c</tt>,
+<tt class="docutils literal">c++</tt>, <tt class="docutils literal">rust</tt> or <tt class="docutils literal">python</tt>: the language that reads (to), then the
+language that writes (from). It prints them back on one line, then pipes
+the writer's output to the reader:</p>
+<pre class="literal-block">
+$ ./to-from python c
+to: python from: c
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ...
+</pre>
+<p><tt class="docutils literal">make</tt> in the example's directory checks that the four writers write the
+same bytes, and runs all 16 pairs of reader and writer.</p>
+<p>See the <a class="reference external" href="../examples/to-from/README.html">to-from README</a> for more.</p>
+</div>
+<div class="section" id="variable-array">
+<h2><a class="toc-backref" href="#toc-entry-29"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
+<p><tt class="docutils literal"><span class="pre">examples/variable-array/variable_array.xml</span></tt> describes a container,
+<tt class="docutils literal">Paragraph</tt>, holding a two-dimensional array whose dimensions both vary:
+an array of lines, each an array of words. A count before each array gives
+its number of elements, so every line can have its own number of words:</p>
+<pre class="literal-block">
+LineCount               8 bits, 0 to 8
+Lines[LineCount]
+  WordCount             8 bits, 0 to 20
+  Words[WordCount]      strings of up to 15 bytes, each after a 32-bit size tag
+</pre>
+<p>An array type can have only one dimension whose size varies (see
+&quot;Arrays&quot; under <a class="reference internal" href="#supported-xtce">Supported XTCE</a>), so the inner array is a member of an
+aggregate, <tt class="docutils literal">Line</tt>, after its count, <tt class="docutils literal">WordCount</tt>, and the outer array is
+an array of <tt class="docutils literal">Line</tt>:</p>
+<pre class="code xml literal-block">
+<span class="name tag">&lt;AggregateParameterType</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;Line&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;MemberList&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;Member</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;WordCount&quot;</span><span class="whitespace"> </span><span class="name attribute">typeRef=</span><span class="literal string">&quot;WordCountType&quot;</span><span class="name tag">/&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;Member</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;Words&quot;</span><span class="whitespace"> </span><span class="name attribute">typeRef=</span><span class="literal string">&quot;WordsType&quot;</span><span class="name tag">/&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/MemberList&gt;</span><span class="whitespace">
+</span><span class="name tag">&lt;/AggregateParameterType&gt;</span><span class="whitespace">
+</span><span class="name tag">&lt;ArrayParameterType</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;LinesType&quot;</span><span class="whitespace"> </span><span class="name attribute">arrayTypeRef=</span><span class="literal string">&quot;Line&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;DimensionList&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;Dimension&gt;</span><span class="whitespace">
+      </span><span class="name tag">&lt;StartingIndex&gt;&lt;FixedValue&gt;</span>0<span class="name tag">&lt;/FixedValue&gt;&lt;/StartingIndex&gt;</span><span class="whitespace">
+      </span><span class="name tag">&lt;EndingIndex&gt;</span><span class="whitespace">
+        </span><span class="name tag">&lt;DynamicValue&gt;</span><span class="whitespace">
+          </span><span class="name tag">&lt;ParameterInstanceRef</span><span class="whitespace"> </span><span class="name attribute">parameterRef=</span><span class="literal string">&quot;LineCount&quot;</span><span class="name tag">/&gt;</span><span class="whitespace">
+          </span><span class="name tag">&lt;LinearAdjustment</span><span class="whitespace"> </span><span class="name attribute">intercept=</span><span class="literal string">&quot;-1&quot;</span><span class="name tag">/&gt;</span><span class="whitespace">
+        </span><span class="name tag">&lt;/DynamicValue&gt;</span><span class="whitespace">
+      </span><span class="name tag">&lt;/EndingIndex&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;/Dimension&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/DimensionList&gt;</span><span class="whitespace">
+</span><span class="name tag">&lt;/ArrayParameterType&gt;</span>
+</pre>
+<p><tt class="docutils literal">WordsType</tt> is sized by <tt class="docutils literal">WordCount</tt> in the same way. <tt class="docutils literal">ValidRange</tt>s
+on the two counts bound the arrays, and so <tt class="docutils literal">MAX_BYTES</tt> (3049) and the
+size of the C structures.</p>
+<p>Each program builds two <tt class="docutils literal">Paragraph</tt>s from the lorem ipsum paragraph
+in five lines, one word per element: the first three lines, then the last
+two. One thread opens a TCP connection on the loopback interface and, for
+each array, writes its length, then the whole <tt class="docutils literal">Paragraph</tt> in a single
+write. The length is a second container in the same XTCE file, <tt class="docutils literal">Length</tt>,
+holding a 32-bit <tt class="docutils literal">ByteCount</tt>, so it too is encoded and decoded with the
+generated code. Another thread reads and decodes each 4-byte <tt class="docutils literal">Length</tt>,
+then reads that many bytes, deserializes the <tt class="docutils literal">Paragraph</tt> and checks
+every line and word.
+It then prints each inner array as a line, with spaces between the words,
+or exits with status 1 if anything differs. The lengths let the receiver
+find where each packet ends, since a TCP stream doesn't keep writes apart:</p>
+<pre class="literal-block">
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
+labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
+laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
+voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat
+cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+</pre>
+<p>See the <a class="reference external" href="../examples/variable-array/README.html">variable-array README</a>
+for more.</p>
 </div>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-28">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-30">Testing</a></h1>
 <p><tt class="docutils literal">make test</tt> runs:</p>
 <ul class="simple">
 <li>the unit tests of every language (<tt class="docutils literal">cargo test</tt>, <tt class="docutils literal">cpp/tests</tt>,
@@ -2005,7 +2129,7 @@ tests/samples_check.py <span class="pre">--update</span></tt> rewrites <tt class
 diff.</p>
 </div>
 <div class="section" id="license">
-<h1><a class="toc-backref" href="#toc-entry-29">License</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-31">License</a></h1>
 <p>tcs-xtce -- the generator, the Rust crate, the C/C++ library and the Python
 package -- is licensed under either of the Apache License, Version 2.0
 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT

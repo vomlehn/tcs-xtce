@@ -1,0 +1,12 @@
+[package]
+name = "variable-array"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Sends a paragraph, described in XTCE as an array of arrays of words, between threads over TCP"
+
+[dependencies]
+tcs-xtce = { path = "../../../rust" }
+
+# A stand-alone crate, not part of any enclosing workspace.
+[workspace]

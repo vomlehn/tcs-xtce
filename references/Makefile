@@ -15,11 +15,11 @@ XTCE_SPEC_URL ?= https://www.omg.org/spec/XTCE/
 CURL          ?= curl -fsSL --retry 3 --retry-delay 2 -A "Mozilla/5.0 (tcs-xtce)"
 LANDING       := .landing.html
 
-.PHONY: all fetch check clean distclean
-
+.PHONY: all
 all: fetch
 
 # Always re-check the landing page so that "latest" really is the latest.
+.PHONY: fetch
 fetch:
 	@$(CURL) -o $(LANDING).tmp "$(XTCE_SPEC_URL)"
 	@mv $(LANDING).tmp $(LANDING)
@@ -47,13 +47,16 @@ fetch:
 	@$(MAKE) --no-print-directory check
 
 # Sanity-check the downloads.
+.PHONY: check
 check:
 	@xmllint --noout SpaceSystem.xsd xml.xsd catalog.xml
 	@head -c 5 XTCE.pdf | grep -q '%PDF-' || { echo "error: XTCE.pdf is not a PDF" >&2; exit 1; }
 	@echo "references OK: $$(tr '\n' ' ' < VERSION)"
 
+.PHONY: clean
 clean:
 	rm -f $(LANDING) *.tmp
 
+.PHONY: distclean
 distclean: clean
 	rm -f SpaceSystem.xsd XTCE.pdf VERSION xml.xsd catalog.xml

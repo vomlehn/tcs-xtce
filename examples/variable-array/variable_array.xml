@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A paragraph of text: a two-dimensional array whose dimensions both vary,
+     and the length that is sent before it.
+
+     The paragraph is an array of lines, and each line is an array of words.
+     A count before each array gives its number of elements, so the number of
+     lines and the number of words in each line can both change from one
+     paragraph to the next:
+
+       LineCount               8 bits, 0 to 8
+       Lines[LineCount]
+         WordCount             8 bits, 0 to 20
+         Words[WordCount]
+           size tag            32 bits: the word's length in bytes
+           text                the word's UTF-8 bytes, at most 15
+
+     The ValidRanges bound the counts, and so the size of the structures the
+     generated C code declares.
+
+     A Length packet, a 32-bit ByteCount, goes before each Paragraph when
+     several are sent over one stream: it gives the Paragraph's size in
+     bytes, so the receiver knows how much of the stream to read. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="VariableArray">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="LineCountType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="8"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WordCountType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="20"/>
+      </IntegerParameterType>
+      <!-- The length, in bytes, of the Paragraph packet that follows. -->
+      <IntegerParameterType name="ByteCountType" signed="false">
+        <IntegerDataEncoding sizeInBits="32"/>
+      </IntegerParameterType>
+      <StringParameterType name="WordType">
+        <StringDataEncoding encoding="UTF-8">
+          <Variable maxSizeInBits="152">
+            <LeadingSize sizeInBitsOfSizeTag="32"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+      <!-- The inner dimension: the words of one line. -->
+      <ArrayParameterType name="WordsType" arrayTypeRef="WordType">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex><FixedValue>0</FixedValue></StartingIndex>
+            <EndingIndex>
+              <DynamicValue>
+                <ParameterInstanceRef parameterRef="WordCount"/>
+                <LinearAdjustment intercept="-1"/>
+              </DynamicValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <AggregateParameterType name="Line">
+        <MemberList>
+          <Member name="WordCount" typeRef="WordCountType"/>
+          <Member name="Words" typeRef="WordsType"/>
+        </MemberList>
+      </AggregateParameterType>
+      <!-- The outer dimension: the lines of the paragraph. -->
+      <ArrayParameterType name="LinesType" arrayTypeRef="Line">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex><FixedValue>0</FixedValue></StartingIndex>
+            <EndingIndex>
+              <DynamicValue>
+                <ParameterInstanceRef parameterRef="LineCount"/>
+                <LinearAdjustment intercept="-1"/>
+              </DynamicValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="ByteCount" parameterTypeRef="ByteCountType"/>
+      <Parameter name="LineCount" parameterTypeRef="LineCountType"/>
+      <Parameter name="Lines" parameterTypeRef="LinesType"/>
+    </ParameterSet>
+    <ContainerSet>
+      <!-- Sent before each Paragraph, so that the receiver knows how many
+           bytes to read. -->
+      <SequenceContainer name="Length">
+        <EntryList>
+          <ParameterRefEntry parameterRef="ByteCount"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="Paragraph">
+        <EntryList>
+          <ParameterRefEntry parameterRef="LineCount"/>
+          <ParameterRefEntry parameterRef="Lines"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

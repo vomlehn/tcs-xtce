@@ -364,20 +364,29 @@ ul.auto-toc {
 <div class="document" id="examples">
 <h1 class="title">Examples</h1>
 
-<p>Every example exists in all supported languages: C/C++, Rust and Python 3.
-<tt class="docutils literal">make examples</tt> fails if an example is missing one of them.</p>
+<p>Every example supports all four languages <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> generates: C, C++,
+Rust and Python 3. The C and C++ versions share one source file.
+<tt class="docutils literal">make examples</tt> fails if an example is missing a version, or its
+<tt class="docutils literal">README.rst</tt>.</p>
 <p>Each example is a self-contained directory holding:</p>
 <ul class="simple">
 <li>an XTCE file describing some data;</li>
 <li>a small program in each language that uses the code <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt>
-generates from it.</li>
+generates from it;</li>
+<li>a <tt class="docutils literal">README.rst</tt> explaining what the example shows and how to run each
+program, and the <tt class="docutils literal">README.html</tt> made from it;</li>
+<li>a <tt class="docutils literal">Makefile</tt> that builds and runs the programs and makes
+<tt class="docutils literal">README.html</tt>.</li>
 </ul>
 <p>The generated code isn't kept in git; building an example generates it.</p>
 <p>Run <tt class="docutils literal">make</tt> in an example's directory, or <tt class="docutils literal">make examples</tt> at the top
 level. This generates the code, or regenerates it if the XTCE file or
-the generator changed, builds and runs the programs (the C one both as C
-and as C++), and checks that their output is identical.</p>
-<p>Run <tt class="docutils literal">make</tt> in this directory to turn this file into <tt class="docutils literal">README.html</tt>.</p>
+the generator changed, builds and runs the programs (the C one both as C,
+against the <tt class="docutils literal"><span class="pre">--lang</span> c</tt> header, and as C++, against the <tt class="docutils literal"><span class="pre">--lang</span> c++</tt>
+header), and checks that their output is identical.</p>
+<p>Run <tt class="docutils literal">make html</tt> in an example's directory to turn its <tt class="docutils literal">README.rst</tt>
+into <tt class="docutils literal">README.html</tt>. Run <tt class="docutils literal">make</tt> in this directory to do that for this
+file and every example's.</p>
 <table border="1" class="docutils">
 <thead valign="bottom">
 <tr><th class="head">Example</th>
@@ -385,9 +394,19 @@ and as C++), and checks that their output is identical.</p>
 </tr>
 </thead>
 <tbody valign="top">
-<tr><td><a class="reference external" href="simple-string/README.md">simple-string</a></td>
+<tr><td><a class="reference external" href="simple-string/README.html">simple-string</a></td>
 <td>A structure holding one string of up to 8 bytes, serialized into
 and deserialized from managed buffers</td>
+</tr>
+<tr><td><a class="reference external" href="to-from/README.html">to-from</a></td>
+<td>Words of varying length, with a leading size tag, written by the
+program in one language and read by the program in another, for
+any pair of C, C++, Rust and Python</td>
+</tr>
+<tr><td><a class="reference external" href="variable-array/README.html">variable-array</a></td>
+<td>Two two-dimensional arrays whose dimensions both vary, the lines
+and words of a paragraph, sent one after the other over one TCP
+connection from one thread to another, each after its length</td>
 </tr>
 </tbody>
 </table>

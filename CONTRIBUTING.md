@@ -43,7 +43,8 @@ from the same model and must give byte-identical results; the tests compare
 them on every build. A change to what the generated code does goes into all
 three emitters (`generator/xtcepkt/emit_rust.py`, `emit_c.py`,
 `emit_python.py`) and their runtimes, with tests. Every example in
-`examples/` has a Rust, C/C++ and Python version.
+`examples/` has a Rust, C/C++ and Python version, a `README.rst`, and a
+`Makefile` that runs it and, with `make html`, makes `README.html`.
 
 **Don't edit generated files.** Files that start with `@generated` are
 rewritten by `make generate` (the XML binding, from `generator/xtcegen`) or

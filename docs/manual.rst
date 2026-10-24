@@ -1465,19 +1465,41 @@ also changes the digest, though the meaning is the same.
 Examples
 ========
 
-``examples/`` holds self-contained examples. Every example exists in all
-supported languages: C/C++, Rust and Python 3. ``make examples`` fails if
-an example is missing one. Each has an XTCE file and a program per
-language that uses the code ``tcs-xtce`` generates from it. ``make`` in an
-example's directory, or ``make examples`` at the top level:
+``examples/`` holds self-contained examples. Every example supports all
+four languages ``tcs-xtce`` generates: C, C++, Rust and Python 3, one for
+each ``--lang`` value. ``make examples`` fails if an example is missing
+one. Each has an XTCE file, a program per language that uses the code
+``tcs-xtce`` generates from it, a ``README.rst`` that explains the example
+and how to run each program, and a ``Makefile``. The C and C++ programs share one source
+file, which is compiled once as C11 against the ``--lang c`` header and once
+as C++20 against the ``--lang c++`` header. ``make`` in an example's
+directory, or ``make examples`` at the top level:
 
-* regenerates the code if the XTCE file or the generator changed;
-* builds and runs the Rust, C and Python programs, and the C program
-  again compiled as C++;
+* regenerates the code for all four languages if the XTCE file or the
+  generator changed;
+* builds and runs the C, C++, Rust and Python programs;
 * checks that their output is identical.
 
-``make`` in ``examples/`` itself converts ``examples/README.rst``, the
-index of examples, into ``README.html``.
+``make html`` in an example's directory converts its ``README.rst`` into
+``README.html``. ``make`` in ``examples/`` itself does that for every
+example and for ``examples/README.rst``, the `index of examples
+<../examples/README.html>`__.
+
+The examples are:
+
+* `simple-string <../examples/simple-string/README.html>`__: a structure
+  holding one string of up to 8 bytes, serialized into and deserialized
+  from managed buffers.
+* `to-from <../examples/to-from/README.html>`__: words of varying
+  length, with a leading size tag, written by the program in one language
+  and read by the program in another, for any pair of C, C++, Rust and
+  Python.
+* `variable-array <../examples/variable-array/README.html>`__: two
+  two-dimensional arrays whose dimensions both vary, the lines and words of
+  a paragraph, sent one after the other over one TCP connection from one
+  thread to another, each after its length.
+
+Each is summarized below; its README has the details.
 
 ``simple-string``
 -----------------
@@ -1503,7 +1525,8 @@ that always occupies 64 bits and ends at a NUL byte, so it holds up to
 * Rust: ``struct SimpleString { pub text: String }``
   (``rust/src/simple_string.rs``)
 * C/C++: ``simple_string_SimpleString``, whose ``text`` is a
-  ``simple_string_str8`` (``c/simple_string.h``)
+  ``simple_string_str8`` (``c/simple_string.h`` for C,
+  ``cxx/simple_string.h`` for C++)
 * Python: ``@dataclass class SimpleString`` with ``text: str``
   (``python/simple_string.py``)
 
@@ -1521,6 +1544,123 @@ fails with ``TooLong``, and that the buffers were never reallocated:
    deserialize 4869000000000000 -> SimpleString{text="Hi"}
    serialize "ABCDEFGHI" -> error:TooLong (Text is too long for its encoding)
    buffers reused without reallocation: true
+
+See the `simple-string README <../examples/simple-string/README.html>`__
+for more.
+
+``to-from``
+-----------
+
+``examples/to-from/to_from.xml`` describes a container, ``Word``,
+holding one parameter, ``Text``. ``Text`` is a string of varying length
+with a 32-bit size tag before it. The tag and the string together occupy
+at most 288 bits, so a word holds up to 32 bytes:
+
+.. code-block:: xml
+
+   <StringParameterType name="WordType">
+     <StringDataEncoding encoding="UTF-8">
+       <Variable maxSizeInBits="288">
+         <LeadingSize sizeInBitsOfSizeTag="32"/>
+       </Variable>
+     </StringDataEncoding>
+   </StringParameterType>
+
+The example shows that code generated for one language reads what code
+generated for another wrote. Each language's program takes one argument.
+With ``write``, it serializes each of the 69 words of the lorem ipsum
+paragraph into a ``Word`` packet and writes the packets to standard output.
+With ``read``, it reads packets from standard input, using each packet's
+size tag to find where it ends, and deserializes them. It prints each word
+as it arrives, with a space before every word but the first, and a newline
+when the input ends. It checks that every word arrives intact and in
+order, and exits with status 1 if one doesn't.
+
+The script ``examples/to-from/to-from`` takes two arguments, each ``c``,
+``c++``, ``rust`` or ``python``: the language that reads (to), then the
+language that writes (from). It prints them back on one line, then pipes
+the writer's output to the reader:
+
+::
+
+   $ ./to-from python c
+   to: python from: c
+   Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ...
+
+``make`` in the example's directory checks that the four writers write the
+same bytes, and runs all 16 pairs of reader and writer.
+
+See the `to-from README <../examples/to-from/README.html>`__ for more.
+
+``variable-array``
+------------------
+
+``examples/variable-array/variable_array.xml`` describes a container,
+``Paragraph``, holding a two-dimensional array whose dimensions both vary:
+an array of lines, each an array of words. A count before each array gives
+its number of elements, so every line can have its own number of words:
+
+::
+
+   LineCount               8 bits, 0 to 8
+   Lines[LineCount]
+     WordCount             8 bits, 0 to 20
+     Words[WordCount]      strings of up to 15 bytes, each after a 32-bit size tag
+
+An array type can have only one dimension whose size varies (see
+"Arrays" under `Supported XTCE`_), so the inner array is a member of an
+aggregate, ``Line``, after its count, ``WordCount``, and the outer array is
+an array of ``Line``:
+
+.. code-block:: xml
+
+   <AggregateParameterType name="Line">
+     <MemberList>
+       <Member name="WordCount" typeRef="WordCountType"/>
+       <Member name="Words" typeRef="WordsType"/>
+     </MemberList>
+   </AggregateParameterType>
+   <ArrayParameterType name="LinesType" arrayTypeRef="Line">
+     <DimensionList>
+       <Dimension>
+         <StartingIndex><FixedValue>0</FixedValue></StartingIndex>
+         <EndingIndex>
+           <DynamicValue>
+             <ParameterInstanceRef parameterRef="LineCount"/>
+             <LinearAdjustment intercept="-1"/>
+           </DynamicValue>
+         </EndingIndex>
+       </Dimension>
+     </DimensionList>
+   </ArrayParameterType>
+
+``WordsType`` is sized by ``WordCount`` in the same way. ``ValidRange``\ s
+on the two counts bound the arrays, and so ``MAX_BYTES`` (3049) and the
+size of the C structures.
+
+Each program builds two ``Paragraph``\ s from the lorem ipsum paragraph
+in five lines, one word per element: the first three lines, then the last
+two. One thread opens a TCP connection on the loopback interface and, for
+each array, writes its length, then the whole ``Paragraph`` in a single
+write. The length is a second container in the same XTCE file, ``Length``,
+holding a 32-bit ``ByteCount``, so it too is encoded and decoded with the
+generated code. Another thread reads and decodes each 4-byte ``Length``,
+then reads that many bytes, deserializes the ``Paragraph`` and checks
+every line and word.
+It then prints each inner array as a line, with spaces between the words,
+or exits with status 1 if anything differs. The lengths let the receiver
+find where each packet ends, since a TCP stream doesn't keep writes apart:
+
+::
+
+   Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
+   labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
+   laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
+   voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat
+   cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+See the `variable-array README <../examples/variable-array/README.html>`__
+for more.
 
 
 Testing

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A data structure holding one word: a string whose length varies.
+
+     A 32-bit size tag gives the length of the string in bytes, and the
+     string's bytes follow, with no terminator or padding.  The size tag and
+     the string together occupy at most 288 bits (36 bytes), so a word holds
+     up to 32 bytes. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="ToFrom">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <StringParameterType name="WordType">
+        <StringDataEncoding encoding="UTF-8">
+          <Variable maxSizeInBits="288">
+            <LeadingSize sizeInBitsOfSizeTag="32"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="Text" parameterTypeRef="WordType"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="Word">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Text"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

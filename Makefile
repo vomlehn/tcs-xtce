@@ -43,13 +43,11 @@ RUST_FIXED_PKT_TOOL := rust/target/release/examples/packet_tool_fixed
 C_PKT_TOOL    := cpp/build/packet_tool
 CXX_PKT_TOOL  := cpp/build/packet_tool_cxx
 
-.PHONY: all references generate samples packets rust cpp python test test-generator test-rust \
-        test-cpp test-python cross-check packet-check samples-check examples fmt fmt-check clean \
-        distclean
-
+.PHONY: all
 all: generate rust cpp python test
 
 # Always re-checks OMG for the latest published version.
+.PHONY: references
 references:
 	$(MAKE) -C references
 
@@ -57,6 +55,7 @@ references:
 $(XSD):
 	$(MAKE) -C references
 
+.PHONY: generate
 generate: $(RUST_GEN) $(CPP_GEN) $(PY_GEN) $(SAMPLES) $(PKT_GEN)
 
 $(RUST_GEN): $(XSD) $(GEN_SRC)
@@ -75,6 +74,7 @@ $(SAMPLES): $(XSD) $(GEN_SRC)
 	cd generator && $(GEN) --sample ../tests/samples
 	@touch $@
 
+.PHONY: samples
 samples: $(SAMPLES)
 
 # tcs-xtce reads the mission with the generated Python binding and writes one
@@ -86,39 +86,50 @@ $(PKT_GEN) &: $(MISSION) $(PKT_SRC) $(PY_GEN)
 	cd generator && $(PKT) ../$(PKT_PY) --lang python
 	@touch $(PKT_GEN)
 
+.PHONY: packets
 packets: $(PKT_GEN)
 
 # Rust formatting is checked on every build so unformatted code is caught as
 # soon as it is added.
+.PHONY: rust
 rust: $(RUST_GEN) $(PKT_RUST) fmt-check
 	cd rust && $(CARGO) build --release --all-targets
 
+.PHONY: cpp
 cpp: $(CPP_GEN) $(PKT_CPP)
 	$(MAKE) -C cpp
 
+.PHONY: python
 python: $(PY_GEN) $(PKT_PY)
 	$(PYTHON) -m compileall -q python/xtce
 
 EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
+.PHONY: test
 test: test-generator test-rust test-cpp test-python cross-check packet-check examples
 
 # The packet compiler reads XTCE with the generated Python binding.
+.PHONY: test-generator
 test-generator: $(PY_GEN)
 	cd generator && $(PYTHON) -m unittest discover -s tests -t .
 
+.PHONY: test-rust
 test-rust: rust $(SAMPLES)
 	cd rust && $(CARGO) test --release
 
+.PHONY: test-cpp
 test-cpp: cpp $(SAMPLES)
 	$(MAKE) -C cpp test
 
+.PHONY: test-python
 test-python: python $(SAMPLES)
 	cd python && $(PYTHON) -m unittest discover -s tests -t .
 
+.PHONY: cross-check
 cross-check: rust cpp python $(SAMPLES)
 	sh tests/cross_check.sh $(RUST_TOOL) $(CPP_TOOL)
 
+.PHONY: packet-check
 packet-check: rust cpp python
 	sh tests/packet_check.sh $(RUST_PKT_TOOL) $(RUST_FIXED_PKT_TOOL) $(C_PKT_TOOL) $(CXX_PKT_TOOL)
 
@@ -126,6 +137,7 @@ packet-check: rust cpp python
 # downloaded on demand; not part of `make test`, which needs no network.
 EXTERNAL := tests/external/files
 
+.PHONY: samples-check
 samples-check: rust $(PY_GEN)
 	@mkdir -p $(EXTERNAL)
 	@grep -v '^#' tests/external/sources.txt | while read -r name sha url; do \
@@ -140,26 +152,29 @@ samples-check: rust $(PY_GEN)
 # Each example regenerates its code if needed, builds and runs it in Rust,
 # C, C++ and Python, and checks that the outputs match.
 # Every example must exist in all supported languages: C/C++, Rust and
-# Python 3.
+# Python 3, and have a README.rst.
+.PHONY: examples
 examples: cpp python
 	@for d in $(EXAMPLES); do \
-	    for f in rust/Cargo.toml rust/src/main.rs c/main.c python/main.py; do \
-	        [ -f $$d/$$f ] || { echo "$$d: missing $$f (examples need C/C++, Rust and Python versions)" >&2; exit 1; }; \
+	    for f in rust/Cargo.toml rust/src/main.rs c/main.c python/main.py README.rst; do \
+	        [ -f $$d/$$f ] || { echo "$$d: missing $$f (examples need C/C++, Rust and Python versions and a README.rst)" >&2; exit 1; }; \
 	    done; \
 	done
 	for d in $(EXAMPLES); do $(MAKE) -C $$d || exit 1; done
 
 # The examples' Rust code includes their generated codecs, so generate them
 # first.
+.PHONY: fmt
 fmt:
 	cd rust && $(CARGO) fmt
 	for d in $(EXAMPLES); do $(MAKE) -C $$d generate && (cd $$d/rust && $(CARGO) fmt) || exit 1; done
 
+.PHONY: fmt-check
 fmt-check:
 	cd rust && $(CARGO) fmt --check
 	for d in $(EXAMPLES); do $(MAKE) -C $$d generate && (cd $$d/rust && $(CARGO) fmt --check) || exit 1; done
 
-# The documents as HTML: docs/ and the examples' README. Committed beside
+# The documents as HTML: docs/ and the examples' READMEs. Committed beside
 # their sources and served by GitHub Pages, so remade before a commit that
 # changes one, and left alone by clean.
 .PHONY: html
@@ -167,6 +182,7 @@ html:
 	$(MAKE) -C docs html
 	$(MAKE) -C examples html
 
+.PHONY: clean
 clean:
 	cd rust && $(CARGO) clean
 	$(MAKE) -C cpp clean
@@ -174,5 +190,6 @@ clean:
 	$(MAKE) -C references clean
 	find python generator -name __pycache__ -type d -prune -exec rm -rf {} +
 
+.PHONY: distclean
 distclean: clean
 	$(MAKE) -C references distclean

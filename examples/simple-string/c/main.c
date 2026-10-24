@@ -3,11 +3,15 @@
  *
  * The same file is built as C and as C++; both, and the Rust and Python
  * versions of this program, print identical output.
+ *
+ * The C build finds simple_string.h in c/ (--lang c) and the C++ build in
+ * cxx/ (--lang c++), so it is included with <> rather than "": a quoted
+ * include would always find the copy next to this file.
  */
 #include <stdio.h>
 #include <string.h>
 
-#include "simple_string.h"
+#include <simple_string.h>
 
 /* Writes `s` quoted and escaped, as the generated describe functions do. */
 static const char* quoted(const char* s, char* buf, size_t cap) {

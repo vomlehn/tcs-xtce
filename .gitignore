@@ -46,7 +46,16 @@ __pycache__/
 /python/tests/mission/demo*.py
 /examples/simple-string/rust/src/simple_string.rs
 /examples/simple-string/c/simple_string.h
+/examples/simple-string/cxx/simple_string.h
 /examples/simple-string/python/simple_string.py
+/examples/to-from/rust/src/to_from.rs
+/examples/to-from/c/to_from.h
+/examples/to-from/cxx/to_from.h
+/examples/to-from/python/to_from.py
+/examples/variable-array/rust/src/variable_array.rs
+/examples/variable-array/c/variable_array.h
+/examples/variable-array/cxx/variable_array.h
+/examples/variable-array/python/variable_array.py
 
 # Downloaded by make references
 /references/*

@@ -1,0 +1,499 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.22.4: https://docutils.sourceforge.io/" />
+<title>simple-string</title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 9511 2024-01-13 09:50:07Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+Despite the name, some widely supported CSS2 features are used.
+
+See https://docutils.sourceforge.io/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+.subscript {
+  vertical-align: sub;
+  font-size: smaller }
+
+.superscript {
+  vertical-align: super;
+  font-size: smaller }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
+}
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left, table.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right, table.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+table.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+.align-top    {
+  vertical-align: top }
+
+.align-middle {
+  vertical-align: middle }
+
+.align-bottom {
+  vertical-align: bottom }
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: gray; } /* line numbers */
+pre.code, code { background-color: #eeeeee }
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic, pre.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+</style>
+</head>
+<body>
+<div class="document" id="simple-string">
+<h1 class="title">simple-string</h1>
+
+<p>A data structure holding a single string of up to 8 bytes, described in XTCE
+and serialized and deserialized from Rust, C, C++ and Python.</p>
+<div class="section" id="the-xtce-description">
+<h1>The XTCE description</h1>
+<p><a class="reference external" href="simple_string.xml">simple_string.xml</a> defines:</p>
+<ul class="simple">
+<li>a string type, <tt class="docutils literal">String8Type</tt>, whose encoding always occupies 64 bits (8 bytes)
+and ends at a NUL byte (<tt class="docutils literal">TerminationChar 00</tt>);</li>
+<li>a parameter, <tt class="docutils literal">Text</tt>, of that type;</li>
+<li>a container, <tt class="docutils literal">SimpleString</tt>, holding <tt class="docutils literal">Text</tt>.</li>
+</ul>
+<p>The file validates against the XTCE 1.3 schema:</p>
+<pre class="code sh literal-block">
+<span class="name variable">XML_CATALOG_FILES</span><span class="operator">=</span>../../references/catalog.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>simple_string.xml
+</pre>
+</div>
+<div class="section" id="generating-the-code">
+<h1>Generating the code</h1>
+<p><tt class="docutils literal">make generate</tt> runs the generator once per language:</p>
+<pre class="code sh literal-block">
+<span class="name builtin">cd</span><span class="whitespace"> </span>../../generator<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>../examples/simple-string/rust/src/simple_string.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>../examples/simple-string/c/simple_string.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>../examples/simple-string/cxx/simple_string.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c++<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>../examples/simple-string/python/simple_string.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python
+</pre>
+<p>The generated files aren't kept in git; <tt class="docutils literal">make</tt> runs <tt class="docutils literal">make generate</tt> first.</p>
+<p><tt class="docutils literal"><span class="pre">--lang</span> c++</tt> writes the same header as <tt class="docutils literal"><span class="pre">--lang</span> c</tt>; the example generates both
+so that the C program uses <tt class="docutils literal">c/simple_string.h</tt> and the C++ program uses
+<tt class="docutils literal">cxx/simple_string.h</tt>.</p>
+<p>Each language gets a <tt class="docutils literal">SimpleString</tt> structure with a <tt class="docutils literal">text</tt> string field. In
+C/C++ every name starts with <tt class="docutils literal">simple_string_</tt>, the mission's prefix.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="11%" />
+<col width="31%" />
+<col width="28%" />
+<col width="31%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">&nbsp;</th>
+<th class="head">Rust</th>
+<th class="head">C/C++</th>
+<th class="head">Python</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Structure</td>
+<td><tt class="docutils literal">struct SimpleString { pub text: String }</tt></td>
+<td><tt class="docutils literal">simple_string_SimpleString</tt>, with
+<tt class="docutils literal">simple_string_str8 text</tt>
+(<tt class="docutils literal">size_t len; char data[9];</tt>)</td>
+<td><tt class="docutils literal">&#64;dataclass class SimpleString: text: str</tt></td>
+</tr>
+<tr><td>Serialize into
+a buffer</td>
+<td><tt class="docutils literal"><span class="pre">encode(&amp;mut</span> Buffer)</tt>,
+<tt class="docutils literal"><span class="pre">encode_into(&amp;mut</span> BitWriter)</tt>,
+<tt class="docutils literal">to_bytes()</tt></td>
+<td><tt class="docutils literal">_encode(p, buf, cap, &amp;len, &amp;err)</tt>,
+<tt class="docutils literal">_encode_into(p, &amp;writer)</tt></td>
+<td><tt class="docutils literal">encode(ManagedBuffer)</tt>,
+<tt class="docutils literal">encode_into(BitWriter)</tt>, <tt class="docutils literal">to_bytes()</tt></td>
+</tr>
+<tr><td>Deserialize
+from a buffer</td>
+<td><tt class="docutils literal"><span class="pre">SimpleString::decode(&amp;[u8])</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">_decode(&amp;out,</span> data, len, &amp;err)</tt></td>
+<td><tt class="docutils literal">SimpleString.decode(data)</tt></td>
+</tr>
+<tr><td>Size</td>
+<td><tt class="docutils literal">MAX_BYTES</tt> = 8</td>
+<td><tt class="docutils literal">simple_string_SimpleString_MAX_BYTES</tt>
+= 8</td>
+<td><tt class="docutils literal">MAX_BYTES</tt> = 8</td>
+</tr>
+<tr><td>Text form</td>
+<td><tt class="docutils literal">Display</tt></td>
+<td><tt class="docutils literal">_describe(p, buf, cap)</tt></td>
+<td><tt class="docutils literal">describe()</tt></td>
+</tr>
+</tbody>
+</table>
+<p>On the wire:</p>
+<ul class="simple">
+<li>A string shorter than 8 bytes is followed by a NUL and zero padding.</li>
+<li>An 8-byte string fills the field with no terminator.</li>
+<li>A longer string, or one containing a NUL, can't be serialized; the error
+kinds are <tt class="docutils literal">TooLong</tt> and <tt class="docutils literal">InvalidString</tt>.</li>
+</ul>
+</div>
+<div class="section" id="the-programs">
+<h1>The programs</h1>
+<p><a class="reference external" href="rust/src/main.rs">rust/src/main.rs</a>, <a class="reference external" href="c/main.c">c/main.c</a> and
+<a class="reference external" href="python/main.py">python/main.py</a> each do the following. <tt class="docutils literal">c/main.c</tt> is
+compiled twice, once as C and once as C++.</p>
+<ol class="arabic simple">
+<li>Set up an input buffer and an output buffer of 8 bytes. In Rust and
+Python a <tt class="docutils literal">Codec</tt> owns them. In C they are plain arrays.</li>
+<li>For each test string, serialize a <tt class="docutils literal">SimpleString</tt> into the output buffer,
+copy the bytes into the input buffer, deserialize them, and check that
+the result equals the original.</li>
+<li>Show that a 9-byte string is rejected.</li>
+<li>Check that neither buffer was reallocated.</li>
+</ol>
+<pre class="literal-block">
+$ make
+...
+serialize &quot;ABCDEFGH&quot; -&gt; 4142434445464748
+deserialize 4142434445464748 -&gt; SimpleString{text=&quot;ABCDEFGH&quot;}
+serialize &quot;Hi&quot; -&gt; 4869000000000000
+deserialize 4869000000000000 -&gt; SimpleString{text=&quot;Hi&quot;}
+serialize &quot;&quot; -&gt; 0000000000000000
+deserialize 0000000000000000 -&gt; SimpleString{text=&quot;&quot;}
+serialize &quot;héllo&quot; -&gt; 68c3a96c6c6f0000
+deserialize 68c3a96c6c6f0000 -&gt; SimpleString{text=&quot;héllo&quot;}
+serialize &quot;ABCDEFGHI&quot; -&gt; error:TooLong (Text is too long for its encoding)
+buffers reused without reallocation: true
+simple-string: Rust, C, C++ and Python output identical
+</pre>
+<p><tt class="docutils literal">make html</tt> turns this file into <tt class="docutils literal">README.html</tt>.</p>
+<p>Building needs what the top-level build needs: Rust with <tt class="docutils literal">rustfmt</tt>, a C11
+compiler, a C++20 compiler, and Python 3.10 or later. The C/C++ program needs
+only the header <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt>; it links with no library.</p>
+</div>
+</div>
+</body>
+</html>

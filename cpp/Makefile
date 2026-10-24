@@ -16,10 +16,10 @@ LIB_SRCS := src/xml.cpp src/generated.cpp src/c_api.cpp
 LIB_OBJS := $(LIB_SRCS:src/%.cpp=$(BUILD)/%.o)
 HEADERS  := $(wildcard include/xtce/*.hpp include/xtce/*.h)
 
-.PHONY: all lib test clean
-
+.PHONY: all
 all: lib $(BUILD)/xtce_roundtrip $(BUILD)/packet_tool $(BUILD)/packet_tool_cxx
 
+.PHONY: lib
 lib: $(BUILD)/libxtce.a $(BUILD)/libxtce.so
 
 $(BUILD)/%.o: src/%.cpp $(HEADERS) | $(BUILD)
@@ -59,6 +59,7 @@ $(BUILD)/c_api_test: tests/c_api_test.c $(BUILD)/libxtce.a
 	$(CC) -std=c11 -D_GNU_SOURCE $(CFLAGS) $(WARN) -Iinclude -c $< -o $(BUILD)/c_api_test.o
 	$(CXX) $(BUILD)/c_api_test.o $(BUILD)/libxtce.a -o $@
 
+.PHONY: test
 test: $(BUILD)/roundtrip_test $(BUILD)/c_api_test $(BUILD)/packet_test $(BUILD)/packet_test_cxx
 	$(BUILD)/roundtrip_test $(SAMPLES)
 	$(BUILD)/c_api_test
@@ -68,5 +69,6 @@ test: $(BUILD)/roundtrip_test $(BUILD)/c_api_test $(BUILD)/packet_test $(BUILD)/
 $(BUILD):
 	mkdir -p $@
 
+.PHONY: clean
 clean:
 	rm -rf $(BUILD)
