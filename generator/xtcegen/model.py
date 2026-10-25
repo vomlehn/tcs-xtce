@@ -22,22 +22,11 @@ DOUBLE = "double"
 
 # XSD builtin name -> scalar kind.  Lexical-only types (dates, durations,
 # hexBinary, URIs, tokens) are kept as strings so they round-trip exactly.
-BUILTINS = {
-    "string": STRING,
-    "normalizedString": STRING,
-    "token": STRING,
-    "anyURI": STRING,
-    "dateTime": STRING,
-    "date": STRING,
-    "duration": STRING,
-    "hexBinary": STRING,
-    "boolean": BOOL,
-    "int": INT,
-    "long": LONG,
-    "integer": LONG,
-    "unsignedShort": USHORT,
-    "double": DOUBLE,
-}
+BUILTINS = {"string": STRING, "normalizedString": STRING, "token": STRING,
+            "anyURI": STRING, "dateTime": STRING, "date": STRING,
+            "duration": STRING, "hexBinary": STRING, "boolean": BOOL,
+            "int": INT, "long": LONG, "integer": LONG, "unsignedShort": USHORT,
+            "double": DOUBLE}
 
 
 @dataclass

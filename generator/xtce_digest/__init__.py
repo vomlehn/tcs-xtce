@@ -32,45 +32,42 @@ import xml.etree.ElementTree as ET
 # position matters (EntryList, MemberList, DimensionList, ArgumentList,
 # SplineCalibrator points, and the first-match DiscreteLookupList,
 # ContextCalibratorList and ContextAlarmList) are not here.
-UNORDERED = frozenset(
-    {
-        # A SpaceSystem's nested SpaceSystems.
-        "SpaceSystem",
-        # Sets.
-        "AlgorithmSet",
-        "AliasSet",
-        "AncillaryDataSet",
-        "ArgumentTypeSet",
-        "AuthorSet",
-        "CommandContainerSet",
-        "ContainerRefSet",
-        "ContainerSet",
-        "ExternalAlgorithmSet",
-        "HistorySet",
-        "MessageRefSet",
-        "MessageSet",
-        "MetaCommandSet",
-        "NoteSet",
-        "ParameterSet",
-        "ParameterTypeSet",
-        "ParametersToSuspendAlarmsOnSet",
-        "RateInStreamSet",
-        "ServiceSet",
-        "StreamSet",
-        "TriggerSet",
-        "UnitSet",
-        "ValidRangeSet",
-        "VerifierSet",
-        # Lists whose items combine without regard to order.
-        "ANDedConditions",
-        "ArgumentAssignmentList",
-        "ComparisonList",
-        "EnumerationAlarmList",
-        "EnumerationList",
-        "ORedConditions",
-        "PolynomialCalibrator",
-    }
-)
+UNORDERED = frozenset({
+    # A SpaceSystem's nested SpaceSystems.
+    "SpaceSystem",
+    # Sets.
+    "AlgorithmSet",
+    "AliasSet",
+    "AncillaryDataSet",
+    "ArgumentTypeSet",
+    "AuthorSet",
+    "CommandContainerSet",
+    "ContainerRefSet",
+    "ContainerSet",
+    "ExternalAlgorithmSet",
+    "HistorySet",
+    "MessageRefSet",
+    "MessageSet",
+    "MetaCommandSet",
+    "NoteSet",
+    "ParameterSet",
+    "ParameterTypeSet",
+    "ParametersToSuspendAlarmsOnSet",
+    "RateInStreamSet",
+    "ServiceSet",
+    "StreamSet",
+    "TriggerSet",
+    "UnitSet",
+    "ValidRangeSet",
+    "VerifierSet",
+    # Lists whose items combine without regard to order.
+    "ANDedConditions",
+    "ArgumentAssignmentList",
+    "ComparisonList",
+    "EnumerationAlarmList",
+    "EnumerationList",
+    "ORedConditions",
+    "PolynomialCalibrator"})
 
 
 def local_name(tag: str) -> str:

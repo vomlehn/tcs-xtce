@@ -20,12 +20,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.join(HERE, "..", "..")
 
 # The command that runs each language's program, before its argument.
-PROGRAMS = {
-    "c": [os.path.join(HERE, "build", "to_from_c")],
-    "c++": [os.path.join(HERE, "build", "to_from_cxx")],
-    "rust": [os.path.join(HERE, "rust", "target", "release", "to-from")],
-    "python": [sys.executable, os.path.join(HERE, "python", "main.py")],
-}
+PROGRAMS = {"c": [os.path.join(HERE, "build", "to_from_c")],
+            "c++": [os.path.join(HERE, "build", "to_from_cxx")],
+            "rust": [os.path.join(HERE, "rust", "target", "release",
+                                  "to-from")],
+            "python": [sys.executable, os.path.join(HERE, "python", "main.py")]}
 
 
 def usage() -> None:
@@ -49,15 +48,12 @@ def main() -> None:
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
         [os.path.join(TOP, "python"), os.path.join(HERE, "python")]
-        + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])
-    )
+        + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
 
-    writer = subprocess.Popen(
-        PROGRAMS[from_] + ["write"], stdout=subprocess.PIPE, env=env
-    )
-    reader = subprocess.Popen(
-        PROGRAMS[to] + ["read"], stdin=writer.stdout, env=env
-    )
+    writer = subprocess.Popen(PROGRAMS[from_] + ["write"],
+                              stdout=subprocess.PIPE, env=env)
+    reader = subprocess.Popen(PROGRAMS[to] + ["read"], stdin=writer.stdout,
+                              env=env)
     # Only the reader holds the pipe now, so it sees the end of the input
     # when the writer exits.
     writer.stdout.close()

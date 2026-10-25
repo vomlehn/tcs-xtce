@@ -41,14 +41,10 @@ class Document:
     the document (or explicitly with :meth:`close` / a ``with`` block).
     """
 
-    def __init__(
-        self,
-        root: Optional[SpaceSystemType] = None,
-        *,
-        input_capacity: int = DEFAULT_CAPACITY,
-        output_capacity: int = DEFAULT_CAPACITY,
-        indent: bool = True,
-    ) -> None:
+    def __init__(self, root: Optional[SpaceSystemType] = None, *,
+                 input_capacity: int = DEFAULT_CAPACITY,
+                 output_capacity: int = DEFAULT_CAPACITY,
+                 indent: bool = True) -> None:
         self.root = root if root is not None else SpaceSystemType()
         self.indent = indent
         self._input = ManagedBuffer(input_capacity)

@@ -19,21 +19,10 @@ def with_length(data, length: int) -> bytes:
 
 
 def housekeeping(**kw) -> demo.Housekeeping:
-    args = dict(
-        sec_hdr_flag=True,
-        seq_flags=demo.SeqFlagsType.UNSEGMENTED,
-        seq_count=42,
-        mode=demo.ModeType.NOMINAL,
-        temperature=25.0,
-        battery_voltage=12.0,
-        charging=True,
-        bus_current=1.5,
-        uptime=0x01020304,
-        attitude=1.5,
-        delta=-2,
-        offset=-5,
-        trim=-3,
-    )
+    args = dict(sec_hdr_flag=True, seq_flags=demo.SeqFlagsType.UNSEGMENTED,
+                seq_count=42, mode=demo.ModeType.NOMINAL, temperature=25.0,
+                battery_voltage=12.0, charging=True, bus_current=1.5,
+                uptime=0x01020304, attitude=1.5, delta=-2, offset=-5, trim=-3)
     args.update(kw)
     return demo.Housekeeping(**args)
 
@@ -46,14 +35,10 @@ class PacketTests(unittest.TestCase):
 
     def test_binary32_rounding(self):
         # The Rust and C runtimes must give the same bits.
-        for x, raw in (
-            (3.4028235e38, 0x7F7FFFFF),
-            (-3.4028235e38, 0xFF7FFFFF),
-            (3.4028235677973362e38, 0x7F7FFFFF),
-            (3.4028235677973366e38, 0x7F800000),
-            (1e39, 0x7F800000),
-            (-1e39, 0xFF800000),
-        ):
+        for x, raw in ((3.4028235e38, 0x7F7FFFFF), (-3.4028235e38, 0xFF7FFFFF),
+                       (3.4028235677973362e38, 0x7F7FFFFF),
+                       (3.4028235677973366e38, 0x7F800000), (1e39, 0x7F800000),
+                       (-1e39, 0xFF800000)):
             self.assertEqual(float_to_raw(x, 32), raw, x)
 
     def test_inherited_constants(self):
@@ -91,12 +76,10 @@ class PacketTests(unittest.TestCase):
         ev = demo.Event(origin="ORBIT", message="x" * 32, source="abc",
                         data_=b"\x01\x02\x03\x04")
         self.assertEqual(demo.Event.decode(ev.to_bytes()), ev)
-        for change, kind in [
-            (dict(message="x" * 33), "TooLong"),
-            (dict(origin="NINE BYTE"), "TooLong"),
-            (dict(origin="a\0b"), "InvalidString"),
-            (dict(data_=b"\x01\x02\x03"), "OutOfRange"),
-        ]:
+        for change, kind in [(dict(message="x" * 33), "TooLong"),
+                             (dict(origin="NINE BYTE"), "TooLong"),
+                             (dict(origin="a\0b"), "InvalidString"),
+                             (dict(data_=b"\x01\x02\x03"), "OutOfRange")]:
             self.assertEqual(self.kind(dataclasses.replace(ev, **change)), kind,
                              change)
 
@@ -165,15 +148,10 @@ class PacketTests(unittest.TestCase):
                          "Missing")
 
     def test_arrays_and_sizes_from_other_fields(self):
-        s = demo.Samples(
-            sec_hdr_flag=True,
-            readings=[-1, 7],
-            grid=[1, 2, 3, 4, 5, 6],
-            valid=[True, False, False, True],
-            label_size=4,
-            label_="abc",
-            payload=b"\x5a",
-        )
+        s = demo.Samples(sec_hdr_flag=True, readings=[-1, 7],
+                         grid=[1, 2, 3, 4, 5, 6],
+                         valid=[True, False, False, True], label_size=4,
+                         label_="abc", payload=b"\x5a")
         self.assertEqual(demo.Samples.decode(s.to_bytes()), s)
         # SampleCount and PayloadSize come from the data, which must fit them.
         self.assertEqual(s.to_bytes()[6], 2)
@@ -208,12 +186,8 @@ class PacketTests(unittest.TestCase):
     def test_aggregates(self):
         target = demo.TargetType(id_=3, mode=demo.ModeType.SAFE, name_="a",
                                  where_=demo.PositionType(2, 3), weights=[1, 2])
-        t = demo.Targets(
-            sec_hdr_flag=True,
-            start=demo.PositionType(1, -1),
-            targets=[target],
-            home=demo.PositionType(4, 5),
-        )
+        t = demo.Targets(sec_hdr_flag=True, start=demo.PositionType(1, -1),
+                         targets=[target], home=demo.PositionType(4, 5))
         self.assertEqual(demo.Targets.decode(t.to_bytes()), t)
         # Members are checked like fields.
         bad = dataclasses.replace(target, id_=16)
@@ -389,13 +363,12 @@ class PacketTests(unittest.TestCase):
                          "BadSize")
         # TallyCount is computed from the length of Tallies, and TallyCount
         # >= 3 includes TallyMore.
-        three = demo.Tally(sec_hdr_flag=True, tallies=[0, 7, 1],
-                           tally_data=b"", tally_extra=0x55, tally_more=0x66)
+        three = demo.Tally(sec_hdr_flag=True, tallies=[0, 7, 1], tally_data=b"",
+                           tally_extra=0x55, tally_more=0x66)
         b = three.to_bytes()
         self.assertEqual(bytes(b[6:]).hex(), "030007015566")
         self.assertEqual(demo.Tally.decode(b), three)
-        self.assertEqual(self.kind(dataclasses.replace(three,
-                                                       tally_more=None)),
+        self.assertEqual(self.kind(dataclasses.replace(three, tally_more=None)),
                          "Missing")
         # Decoding fails the same way.
         for body in ("0100", "00"):

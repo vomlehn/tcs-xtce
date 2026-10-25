@@ -20,14 +20,8 @@ from typing import Optional
 from ._buffer import ManagedBuffer
 from ._xml import f_double
 
-__all__ = [
-    "BitReader",
-    "BitWriter",
-    "Codec",
-    "Packet",
-    "PacketError",
-    "PacketKind",
-]
+__all__ = ["BitReader", "BitWriter", "Codec", "Packet", "PacketError",
+           "PacketKind"]
 
 
 class PacketError(ValueError):
@@ -463,8 +457,8 @@ def dynamic_size(x, slope: float, intercept: float, unit: int, max_: int,
     ``unit`` is 8 for a size in bits used in whole bytes.  Raises ``BadSize``
     unless the result is a whole number from 0 to ``max_``."""
     y = slope * float(x) + intercept
-    if (not (y >= 0.0) or not y.is_integer() or not (y / unit).is_integer() or y
-            / unit > max_):
+    if (not (y >= 0.0) or not y.is_integer() or not (y / unit).is_integer()
+            or y / unit > max_):
         raise PacketError("BadSize", field)
     return int(y / unit)
 

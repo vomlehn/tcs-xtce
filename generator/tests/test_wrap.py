@@ -31,22 +31,18 @@ class PythonTest(unittest.TestCase):
 
     def test_conditional_expression_is_parenthesized(self):
         # Nothing here is in brackets, so the value must be put in some.
-        src = (
-            "def f():\n"
-            "    value = first_alternative_with_a_long_name"
-            " if some_condition_that_is_long else second_alternative\n"
-        )
+        src = ("def f():\n"
+               "    value = first_alternative_with_a_long_name if "
+               "some_condition_that_is_long else second_alternative\n")
         out = self.same_code(src)
         self.assertLessEqual(widest(out), WIDTH)
         self.assertIn("value = (", out)
 
     def test_def_breaks_before_return_annotation(self):
-        src = (
-            "class C:\n"
-            "    def dynamic_value(cls, value: ArgumentDynamicValueType)"
-            " -> ArgumentLocationInContainerInBitsChoice:\n"
-            "        pass\n"
-        )
+        src = ("class C:\n"
+               "    def dynamic_value(cls, value: ArgumentDynamicValueType) -> "
+               "ArgumentLocationInContainerInBitsChoice:\n"
+               "        pass\n")
         out = self.same_code(src)
         self.assertLessEqual(widest(out), WIDTH)
 
@@ -56,16 +52,12 @@ class PythonTest(unittest.TestCase):
         out = self.same_code(src.replace("x = f(", "x = g("))
         self.assertLessEqual(widest(out), WIDTH)
         y = 1
-        self.assertEqual(
-            eval(src.split(" = ", 1)[1].replace("f(", "(", 1)),
-            eval(out.split(" = ", 1)[1].replace("g(", "(", 1)),
-        )
+        self.assertEqual(eval(src.split(" = ", 1)[1].replace("f(", "(", 1)),
+                         eval(out.split(" = ", 1)[1].replace("g(", "(", 1)))
 
     def test_trailing_comment_moves_above(self):
-        src = (
-            "    range_form: Optional[RangeFormType] = None"
-            "  # attribute 'rangeForm', schema default 'outside'\n"
-        )
+        src = ("    range_form: Optional[RangeFormType] = None  # attribute "
+               "'rangeForm', schema default 'outside'\n")
         out = wrap(src, "python")
         self.assertLessEqual(widest(out), WIDTH)
         self.assertTrue(out.lstrip().startswith("# attribute"))
@@ -81,10 +73,8 @@ class PythonTest(unittest.TestCase):
 
 class CTest(unittest.TestCase):
     def test_if_statement_breaks_after_condition(self):
-        src = (
-            '        if (r.peek_child() == "AncillaryDataSet") '
-            "v.ancillary_data_set = r.read_child<AncillaryDataSetType>();"
-        )
+        src = ('        if (r.peek_child() == "AncillaryDataSet") '
+               'v.ancillary_data_set = r.read_child<AncillaryDataSetType>();')
         out = wrap(src, "c")
         self.assertLessEqual(widest(out), WIDTH)
         self.assertEqual(out.split("\n")[0].strip()[-1], ")")
@@ -92,22 +82,18 @@ class CTest(unittest.TestCase):
     def test_string_split_into_adjacent_literals(self):
         src = (
             "        check_count(v.parameter_to_suspend_alarms_on.size(), 1, "
-            '-1, "ParametersToSuspendAlarmsOnSetType.ParameterToSuspend'
-            'AlarmsOn");'
-        )
+            '-1, '
+            '"ParametersToSuspendAlarmsOnSetType.ParameterToSuspendAlarmsOn");')
         out = wrap(src, "c")
         self.assertLessEqual(widest(out), WIDTH)
         literals = [s for s in out.split('"')[1::2]]
         self.assertEqual(
             "".join(literals),
-            "ParametersToSuspendAlarmsOnSetType.ParameterToSuspendAlarmsOn",
-        )
+            "ParametersToSuspendAlarmsOnSetType.ParameterToSuspendAlarmsOn")
 
     def test_trailing_block_comment_moves_above(self):
-        src = (
-            "        demo_PacketTypeType packet_type; "
-            "/* /Demo/PacketType (/Demo/PacketTypeType) and more words */"
-        )
+        src = ("        demo_PacketTypeType packet_type; /* /Demo/PacketType "
+               "(/Demo/PacketTypeType) and more words */")
         out = wrap(src, "c").split("\n")
         self.assertTrue(out[0].lstrip().startswith("/*"))
         self.assertEqual(out[-1].strip(), "demo_PacketTypeType packet_type;")
@@ -128,9 +114,8 @@ class RustTest(unittest.TestCase):
         words = " ".join(["Reference to the parameter."] * 6)
         out = wrap(f"    /// {words}", "rust")
         self.assertLessEqual(widest(out), WIDTH)
-        self.assertTrue(
-            all(line.startswith("    /// ") for line in out.split("\n"))
-        )
+        self.assertTrue(all(line.startswith("    /// ")
+                            for line in out.split("\n")))
 
     def test_split_strings_keep_their_value(self):
         text = "BinaryDataEncoding|FloatDataEncoding|IntegerDataEncoding|Str"
@@ -144,28 +129,17 @@ class RustTest(unittest.TestCase):
     @unittest.skipIf(shutil.which("rustfmt") is None, "needs rustfmt")
     def test_rustfmt_keeps_split_strings(self):
         text = "BinaryDataEncoding|FloatDataEncoding|IntegerDataEncoding|Str"
-        src = (
-            "fn f(r: &mut R) -> Result<(), E> {\n"
-            f'    match r.peek() {{ _ => return Err(r.expected("{text}")), }}\n'
-            "}\n"
-        )
+        src = ("fn f(r: &mut R) -> Result<(), E> {\n"
+               f'    match r.peek() {{ _ => return Err(r.expected("{text}")), '
+               '}\n'
+               "}\n")
         from xtcegen.__main__ import rustfmt
 
         out = rustfmt(src)
         self.assertLessEqual(widest(out), WIDTH)
-        res = subprocess.run(
-            [
-                "rustfmt",
-                "--edition",
-                "2021",
-                "--config",
-                "max_width=80",
-                "--check",
-            ],
-            input=out,
-            capture_output=True,
-            text=True,
-        )
+        res = subprocess.run(["rustfmt", "--edition", "2021", "--config",
+                              "max_width=80", "--check"], input=out,
+                             capture_output=True, text=True)
         self.assertEqual(res.returncode, 0, res.stdout)
 
 

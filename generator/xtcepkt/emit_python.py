@@ -556,8 +556,7 @@ class PythonEmitter:
                 for lc, prefix, count in term_indexes(c):
                     if lc in names:
                         guards[(reach(f"self.{names[lc]}", prefix,
-                                      pstr(lc.name)),
-                                count)] = (lc.name)
+                                      pstr(lc.name)), count)] = (lc.name)
         for (x, count), name in guards.items():
             # Criteria are checked before the arrays they index are written.
             self.line(f"if len({x}) != {count}:", 2)

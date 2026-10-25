@@ -19,11 +19,5 @@ from .document import Document, from_xml, to_xml
 from .generated import *  # noqa: F401,F403
 from .generated import __all__ as _generated_all
 
-__all__ = [
-    "DEFAULT_CAPACITY",
-    "Document",
-    "ManagedBuffer",
-    "XtceError",
-    "from_xml",
-    "to_xml",
-] + list(_generated_all)
+__all__ = (["DEFAULT_CAPACITY", "Document", "ManagedBuffer", "XtceError",
+            "from_xml", "to_xml"] + list(_generated_all))

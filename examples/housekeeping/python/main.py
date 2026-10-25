@@ -31,18 +31,14 @@ class Reading(NamedTuple):
     heater_power: Optional[float]
 
 
-READINGS = [
-    Reading(Status(heater_on=False, temperature=21.53, bus_voltage=28.3),
-            21.5, 28.25, None),
-    Reading(Status(heater_on=True, temperature=-12.25, bus_voltage=27.5,
-                   heater_power=4.5),
-            -12.25, 27.5, 4.5),
-    Reading(Status(heater_on=True, temperature=-20.01, bus_voltage=26.9,
-                   heater_power=12.74),
-            -20.0, 26.875, 12.734375),
-    Reading(Status(heater_on=False, temperature=5.0, bus_voltage=28.0),
-            5.0, 28.0, None),
-]
+READINGS = [Reading(Status(heater_on=False, temperature=21.53,
+                           bus_voltage=28.3), 21.5, 28.25, None),
+            Reading(Status(heater_on=True, temperature=-12.25, bus_voltage=27.5,
+                           heater_power=4.5), -12.25, 27.5, 4.5),
+            Reading(Status(heater_on=True, temperature=-20.01, bus_voltage=26.9,
+                           heater_power=12.74), -20.0, 26.875, 12.734375),
+            Reading(Status(heater_on=False, temperature=5.0, bus_voltage=28.0),
+                    5.0, 28.0, None)]
 
 
 def fail(msg: str) -> None:
@@ -94,9 +90,8 @@ def main() -> None:
         codec.load(packet)
         status = codec.decode(Status)
         print(f"decode at {at}: {size} bytes -> {status.describe()}")
-        want = Status(heater_on=r.status.heater_on,
-                      temperature=r.temperature, bus_voltage=r.bus_voltage,
-                      heater_power=r.heater_power)
+        want = Status(heater_on=r.status.heater_on, temperature=r.temperature,
+                      bus_voltage=r.bus_voltage, heater_power=r.heater_power)
         if status != want:
             fail(f"decoded {status.describe()}, expected {want.describe()}")
         with codec.encode(status) as view:
@@ -108,10 +103,10 @@ def main() -> None:
         fail(f"{len(stream) - at} bytes after the last packet")
 
     # What the generated code rejects.
-    try_encode(codec, Status(heater_on=True, temperature=20.0,
-                             bus_voltage=28.0))
-    try_encode(codec, Status(heater_on=False, temperature=300.0,
-                             bus_voltage=28.0))
+    try_encode(codec,
+               Status(heater_on=True, temperature=20.0, bus_voltage=28.0))
+    try_encode(codec,
+               Status(heater_on=False, temperature=300.0, bus_voltage=28.0))
     on = bytes(stream[5:12])
     try_decode(codec, on[:4], "cut short")
     off = bytearray(stream[0:5])

@@ -41,10 +41,9 @@ class ManagedBuffer:
             try:
                 self._data.extend(bytes(grow))
             except BufferError as e:
-                raise BufferError(
-                    "cannot grow a ManagedBuffer while a view of it is held; "
-                    "release views returned by view() first"
-                ) from e
+                raise BufferError("cannot grow a ManagedBuffer while a view of "
+                                  "it is held; release views returned by "
+                                  "view() first") from e
 
     def resize(self, n: int) -> None:
         """Set the length to ``n`` bytes, zero filling any new bytes."""

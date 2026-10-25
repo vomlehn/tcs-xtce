@@ -9,12 +9,9 @@ from xtcegen import CRATE, REPOSITORY
 from .model import (BinaryEnc, Criterion, FloatEnc, IntEnc, Node, Polynomial,
                     Spline, StringEnc, Value, VType)
 
-ENCODINGS = {
-    "unsigned": "Unsigned",
-    "twosComplement": "TwosComplement",
-    "signMagnitude": "SignMagnitude",
-    "onesComplement": "OnesComplement",
-}
+ENCODINGS = {"unsigned": "Unsigned", "twosComplement": "TwosComplement",
+             "signMagnitude": "SignMagnitude",
+             "onesComplement": "OnesComplement"}
 
 
 def flt(x: float) -> str:
@@ -96,23 +93,7 @@ def header_lines(mission, source: str) -> list:
             f"tcs-xtce: {REPOSITORY}", f"Rust crate: {CRATE}"]
 
 
-__all__ = [
-    "Criterion",
-    "FloatEnc",
-    "IntEnc",
-    "Polynomial",
-    "Spline",
-    "StringEnc",
-    "criteria_by_node",
-    "field_range",
-    "size_args",
-    "header_lines",
-    "flt",
-    "int_enc",
-    "invertible",
-    "le",
-    "raw_is_int",
-    "str_cap",
-    "string_spec",
-    "values",
-]
+__all__ = ["Criterion", "FloatEnc", "IntEnc", "Polynomial", "Spline",
+           "StringEnc", "criteria_by_node", "field_range", "size_args",
+           "header_lines", "flt", "int_enc", "invertible", "le", "raw_is_int",
+           "str_cap", "string_spec", "values"]

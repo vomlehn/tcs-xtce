@@ -16,29 +16,21 @@ from .model import ComplexRef, EnumRef, ScalarRef, TypeRef
 MAX_SAMPLES = 64
 EXPANSIONS_PER_TYPE = 2  # full expansions of a type per sample
 
-PATTERN_VALUES = {
-    "BinaryType": ["0b101"],
-    "HexadecimalType": ["0x1F"],
-    "OctalType": ["0o17"],
-    "ByteOrderArbitraryType": ["0,1", "1,0"],
-    "ByteOrderType": ["mostSignificantByteFirst", "1,0"],
-    "EpochType": ["TAI", "2024-01-02", "1970-01-01T00:00:00Z"],
-    "FixedIntegerValueType": ["42", "0x2A", "0o52", "0b101010"],
-}
+PATTERN_VALUES = {"BinaryType": ["0b101"], "HexadecimalType": ["0x1F"],
+                  "OctalType": ["0o17"],
+                  "ByteOrderArbitraryType": ["0,1", "1,0"],
+                  "ByteOrderType": ["mostSignificantByteFirst", "1,0"],
+                  "EpochType": ["TAI", "2024-01-02", "1970-01-01T00:00:00Z"],
+                  "FixedIntegerValueType": ["42", "0x2A", "0o52", "0b101010"]}
 
-LEXICAL = {
-    "dateTime": ["2024-01-02T03:04:05Z", "2024-06-30T23:59:59.5+01:00"],
-    "date": ["2024-01-02"],
-    "duration": ["PT1.5S", "P1DT2H"],
-    "hexBinary": ["0A1B", "ff00"],
-    "anyURI": ["http://example.com/xtce", "urn:x:y"],
-    "boolean": ["true", "false"],
-    "int": ["7", "-3"],
-    "long": ["42", "-9000000000"],
-    "integer": ["17"],
-    "unsignedShort": ["65535", "8"],
-    "double": ["1.5", "0.25", "42.0", "1e-05", "2.5e+20"],
-}
+LEXICAL = {"dateTime": ["2024-01-02T03:04:05Z", "2024-06-30T23:59:59.5+01:00"],
+           "date": ["2024-01-02"], "duration": ["PT1.5S", "P1DT2H"],
+           "hexBinary": ["0A1B", "ff00"],
+           "anyURI": ["http://example.com/xtce", "urn:x:y"],
+           "boolean": ["true", "false"], "int": ["7", "-3"],
+           "long": ["42", "-9000000000"], "integer": ["17"],
+           "unsignedShort": ["65535", "8"],
+           "double": ["1.5", "0.25", "42.0", "1e-05", "2.5e+20"]}
 
 # Sets whose children are all selected by an xs:key on @name ("Set/*"), so
 # children without a name attribute make an instance invalid.
@@ -147,8 +139,8 @@ class _Gen:
             v = c.variants[c.default_variant]
         else:
             # Prefer alternatives no earlier sample has covered yet.
-            fresh = [v for v in c.variants if (c.name, v.xml) not in self.done
-                     | self.covered]
+            fresh = [v for v in c.variants
+                     if (c.name, v.xml) not in self.done | self.covered]
             if fresh:
                 v = fresh[0]
             else:

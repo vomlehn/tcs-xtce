@@ -23,12 +23,10 @@ from .model import (term_indexes, term_locals, term_paths, walk, Index,
 # One level of indentation in the generated C.
 INDENT = " " * 8
 
-ENC = {
-    "Unsigned": "XTCE_PK_UNSIGNED",
-    "TwosComplement": "XTCE_PK_TWOS_COMPLEMENT",
-    "SignMagnitude": "XTCE_PK_SIGN_MAGNITUDE",
-    "OnesComplement": "XTCE_PK_ONES_COMPLEMENT",
-}
+ENC = {"Unsigned": "XTCE_PK_UNSIGNED",
+       "TwosComplement": "XTCE_PK_TWOS_COMPLEMENT",
+       "SignMagnitude": "XTCE_PK_SIGN_MAGNITUDE",
+       "OnesComplement": "XTCE_PK_ONES_COMPLEMENT"}
 
 I64_MIN, I64_MAX, U64_MAX = -(2**63), 2**63 - 1, 2**64 - 1
 
@@ -250,16 +248,9 @@ class CEmitter:
                           "*/")
             else:
                 fixed, mx, term, tag = string_spec(vt)
-                spec = ", ".join(
-                    [
-                        bool_lit(fixed is not None),
-                        str(fixed or 0),
-                        str(mx),
-                        bool_lit(term is not None),
-                        str(term or 0),
-                        str(tag),
-                    ]
-                )
+                spec = ", ".join([bool_lit(fixed is not None), str(fixed or 0),
+                                  str(mx), bool_lit(term is not None),
+                                  str(term or 0), str(tag)])
                 self.line(f"static const xtce_pk_string_spec {name} = "
                           f"{{{spec}}}; /* {vt.key} */")
 
@@ -346,8 +337,8 @@ class CEmitter:
         gives a size or count."""
         e = vt.enc
         if isinstance(e, AggregateEnc):
-            inner = Ref(lambda d: f"{dst}.{d.member}" if d.member
-                        else ref(d), ref.place)
+            inner = Ref(lambda d: f"{dst}.{d.member}" if d.member else ref(d),
+                        ref.place)
             for m in e.members:
                 if m.skip:
                     self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {m.skip}, "
@@ -800,8 +791,7 @@ class CEmitter:
     @property
     def read_ref(self) -> Ref:
         """The value a size or location uses, when decoding."""
-        return Ref(lambda d: self.size_source(d, self.read_acc),
-                   self.read_acc)
+        return Ref(lambda d: self.size_source(d, self.read_acc), self.read_acc)
 
     def write_ref(self, n: Node, names: dict) -> Ref:
         """The value a size or location uses, when encoding."""
@@ -896,10 +886,9 @@ class CEmitter:
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {it.bits}));",
                           depth)
             elif isinstance(it, Cond):
-                self.element_guards([p for c in it.criteria
-                                     for p in term_paths(c)],
-                                    lambda lc: self.place(n, lc, names),
-                                    "w->err", depth)
+                self.element_guards(
+                    [p for c in it.criteria for p in term_paths(c)],
+                    lambda lc: self.place(n, lc, names), "w->err", depth)
                 cond = " && ".join(
                     f"({self.term(c, lambda lc: self.place(n, lc, names))})"
                     for c in it.criteria)
@@ -1150,9 +1139,8 @@ class CEmitter:
         for c in n.children:
             if c.error:
                 continue
-            self.element_guards([p for x in c.criteria
-                                 for p in term_paths(x)], self.read_acc,
-                                "r->err", depth)
+            self.element_guards([p for x in c.criteria for p in term_paths(x)],
+                                self.read_acc, "r->err", depth)
             conds = [self.term(x, self.read_acc) for x in c.criteria]
             cond = (" && ".join(f"({x})" for x in conds) if len(conds) > 1
                     else (conds or ["1"])[0])

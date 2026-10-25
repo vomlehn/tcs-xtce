@@ -16,40 +16,10 @@ from typing import Callable, Optional
 
 from .common import str_cap
 from .model import (
-    MAX_FIELD_BITS,
-    AggregateEnc,
-    AllOf,
-    AnyOf,
-    ArrayEnc,
-    BinaryEnc,
-    Cond,
-    Criterion,
-    DynSize,
-    EnumLabel,
-    FloatEnc,
-    Fixed,
-    Index,
-    IntEnc,
-    Item,
-    Kind,
-    Local,
-    Mark,
-    Member,
-    Mission,
-    Node,
-    Pad,
-    Polynomial,
-    Seek,
-    Spline,
-    StringEnc,
-    Term,
-    Unsupported,
-    Value,
-    VType,
-    ref_text,
-    term_locals,
-    walk,
-)
+    MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
+    Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index, IntEnc, Item, Kind,
+    Local, Mark, Member, Mission, Node, Pad, Polynomial, Seek, Spline,
+    StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -275,8 +245,7 @@ def walk_members(vt: VType, members: tuple, what: str) -> tuple[tuple, VType]:
             varies = isinstance(e.count, DynSize)
             if varies and None in e.sizes[1:]:
                 raise Unsupported(f"{what}: element of an array whose count "
-                                  "varies in a dimension other than the "
-                                  "first")
+                                  "varies in a dimension other than the first")
             # One index per dimension, flattened with the last fastest.
             index = [step]
             while len(index) < e.dims and steps and isinstance(steps[0], int):
@@ -382,11 +351,10 @@ class Namer:
 
 
 # Type names the runtimes or the generated modules define.
-RUNTIME_NAMES = {
-    "Packet", "PacketError", "Codec", "BitReader", "BitWriter", "Buffer",
-    "Result", "Error", "ManagedBuffer", "Optional", "Union", "Any", "String",
-    "Vec", "Self", "Option", "Box", "Ok", "Err", "Some", "None",
-}
+RUNTIME_NAMES = {"Packet", "PacketError", "Codec", "BitReader", "BitWriter",
+                 "Buffer", "Result", "Error", "ManagedBuffer", "Optional",
+                 "Union", "Any", "String", "Vec", "Self", "Option", "Box", "Ok",
+                 "Err", "Some", "None"}
 
 
 # The AncillaryData that marks a parameter or argument as a packet length
@@ -537,8 +505,8 @@ class Compiler:
             vt = self.aggregate_type(key, table, path, t, where, cache)
             self.vtypes[cache] = vt
             return vt
-        if base not in ("Integer", "Float", "Enumerated", "Boolean", "String",
-                        "Binary"):
+        if (base not in ("Integer", "Float", "Enumerated", "Boolean", "String",
+                         "Binary")):
             raise Unsupported(f"{where}: {kind} is not supported")
         if t.choice is None:
             raise Unsupported(f"{where}: no data encoding")
@@ -715,8 +683,8 @@ class Compiler:
             if start < full.starts[k]:
                 raise Unsupported(f"{where}: subset of {local.name} starts "
                                   f"before its index {full.starts[k]}")
-            if (full.shape and enc.shape and start
-                    + enc.shape[k] > full.starts[k] + full.shape[k]):
+            if (full.shape and enc.shape
+                    and start + enc.shape[k] > full.starts[k] + full.shape[k]):
                 raise Unsupported(f"{where}: subset of {local.name} ends after "
                                   "its index "
                                   f"{full.starts[k] + full.shape[k] - 1}")
@@ -819,8 +787,8 @@ class Compiler:
         if name == "IntegerDataEncoding":
             bits = e.size_in_bits if e.size_in_bits is not None else 8
             kind = e.encoding.value if e.encoding else "unsigned"
-            if kind not in ("unsigned", "twosComplement", "signMagnitude",
-                            "onesComplement"):
+            if (kind not in ("unsigned", "twosComplement", "signMagnitude",
+                             "onesComplement")):
                 raise Unsupported(f"{where}: integer encoding {kind}")
             if not 1 <= bits <= 64:
                 raise Unsupported(f"{where}: {bits}-bit integers")
@@ -1037,8 +1005,7 @@ class Compiler:
         size = count if isinstance(count, int) else None
         local.vtype = VType(key=vt.key, name=vt.name, kind="array",
                             enc=ArrayEnc(vt, count, gap, shape=shape,
-                                         sizes=(size,)),
-                            doc=vt.doc)
+                                         sizes=(size,)), doc=vt.doc)
         return local
 
     def bind(self, local: Local, scope: list, where: str,
@@ -1113,8 +1080,8 @@ class Compiler:
         for ch in sc.entry_list.items:
             e = ch.value
             where = f"container {qname(stack[-1])}"
-            if ch.name not in ("ParameterRefEntry", "ContainerRefEntry",
-                               "ArrayParameterRefEntry"):
+            if (ch.name not in ("ParameterRefEntry", "ContainerRefEntry",
+                                "ArrayParameterRefEntry")):
                 raise Unsupported(f"{where}: {ch.name}")
             cond = None
             if e.include_condition is not None:
@@ -1533,10 +1500,9 @@ class Compiler:
                                       self.mc_containers, "command container")
                     owner = self.mc_containers[bc]
                     if base is None or self.nodes.get(owner) is not base:
-                        raise Unsupported(
-                            f"{where}: CommandContainer extends {qname(bc)}, "
-                            "which is not the container of its BaseMetaCommand"
-                        )
+                        raise Unsupported(f"{where}: CommandContainer extends "
+                                          f"{qname(bc)}, which is not the "
+                                          "container of its BaseMetaCommand")
                     if cc.base_container.restriction_criteria is not None:
                         raise Unsupported(f"{where}: RestrictionCriteria on a "
                                           "CommandContainer")
@@ -1657,16 +1623,10 @@ class Compiler:
                                   camel(vt.key))
         for k in kinds:
             k.max_bytes = max(m.max_bytes for m in k.members)
-        return Mission(
-            name=self.root.name,
-            source="",
-            types=list(used.values()),
-            aggregates=list(aggregates.values()),
-            nodes=concrete,
-            kinds=kinds,
-            roots=roots,
-            skipped=msgs,
-        )
+        return Mission(name=self.root.name, source="",
+                       types=list(used.values()),
+                       aggregates=list(aggregates.values()), nodes=concrete,
+                       kinds=kinds, roots=roots, skipped=msgs)
 
     def _finish(self, n: Node) -> None:
         fixed = {}
@@ -1755,8 +1715,8 @@ def fixed_bits(vt: VType) -> Optional[int]:
         return e.count * b + max(e.count - 1, 0) * e.gap
     if isinstance(e, AggregateEnc):
         bs = [fixed_bits(m.vtype) for m in e.members]
-        return (None if None in bs else sum(bs) + sum(m.skip for m in e.members)
-                + e.pad)
+        return (None if None in bs
+                else sum(bs) + sum(m.skip for m in e.members) + e.pad)
     if isinstance(e, StringEnc):
         return e.fixed_bits if e.dyn is None else None
     if isinstance(e, BinaryEnc):

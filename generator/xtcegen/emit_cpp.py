@@ -8,14 +8,8 @@ from .binding import (MANY, ONE, OPT, Binding, ChoiceType, ElemField, Record,
 from .model import (BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED,
                     ComplexRef, EnumRef, ScalarRef, TypeRef)
 
-SCALARS = {
-    STRING: "std::string",
-    BOOL: "bool",
-    INT: "std::int32_t",
-    LONG: "std::int64_t",
-    USHORT: "std::uint16_t",
-    DOUBLE: "double",
-}
+SCALARS = {STRING: "std::string", BOOL: "bool", INT: "std::int32_t",
+           LONG: "std::int64_t", USHORT: "std::uint16_t", DOUBLE: "double"}
 ZERO = {BOOL: " = false", INT: " = 0", LONG: " = 0", USHORT: " = 0",
         DOUBLE: " = 0.0", STRING: ""}
 
@@ -109,12 +103,8 @@ class CppEmitter:
             f"{lit(s.version)};", "// Name of the document root element.",
             "inline constexpr std::string_view kRootElement = "
             f"{lit(root_tag)};", ""]
-        self.c += header + [
-            '#include "xtce/generated.hpp"',
-            "",
-            "namespace xtce {",
-            "",
-        ]
+        self.c += header + ['#include "xtce/generated.hpp"', "",
+                            "namespace xtce {", ""]
         for name in sorted(s.enums):
             self.enum(name)
         h.append("// Forward declarations.")
@@ -126,12 +116,8 @@ class CppEmitter:
                 self.record(self.b.records[name])
             else:
                 self.choice(self.b.choices[name])
-        h += [
-            f"// The type of the document root element <{root_tag}>.",
-            f"using RootType = {root_type};",
-            "",
-            "}  // namespace xtce",
-        ]
+        h += [f"// The type of the document root element <{root_tag}>.",
+              f"using RootType = {root_type};", "", "}  // namespace xtce"]
         self.c.append("}  // namespace xtce")
         return "\n".join(self.h) + "\n", "\n".join(self.c) + "\n"
 

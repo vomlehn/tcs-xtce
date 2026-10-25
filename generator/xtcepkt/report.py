@@ -169,17 +169,9 @@ def gap_bits(n: Node) -> int:
 
 def table(rs: list[Row]) -> list[str]:
     head = ("field", "type", "bits", "needs", "saves", "")
-    body = [
-        (
-            r.name + (" =" if r.fixed else ""),
-            r.vtype,
-            str(r.bits),
-            str(r.need) if r.need is not None else "-",
-            str(r.saving) if r.saving else "",
-            r.note,
-        )
-        for r in rs
-    ]
+    body = [(r.name + (" =" if r.fixed else ""), r.vtype, str(r.bits),
+             str(r.need) if r.need is not None else "-",
+             str(r.saving) if r.saving else "", r.note) for r in rs]
     widths = [max(len(row[i]) for row in [head] + body) for i in range(5)]
     out = []
     for row in [head] + body:
@@ -239,12 +231,10 @@ def summary(mission: Mission) -> list[str]:
 
 
 def report(mission: Mission) -> str:
-    out = [
-        f"Size report for SpaceSystem {mission.name!r}",
-        "",
-        "bits: on the wire now; needs: what the document says the values need;",
-        "'=' marks constants (fixed by a criterion or a FixedValueEntry).",
-    ]
+    out = [f"Size report for SpaceSystem {mission.name!r}", "",
+           "bits: on the wire now; needs: what the document says the values "
+           "need;",
+           "'=' marks constants (fixed by a criterion or a FixedValueEntry)."]
     for n in mission.nodes:
         out.append("")
         out += node_report(n)

@@ -144,13 +144,10 @@ class ErrorTests(unittest.TestCase):
 
 
     def test_reports_root_causes(self):
-        derived = "".join(
-            f'''<SequenceContainer name="D{i}">
+        derived = "".join(f'''<SequenceContainer name="D{i}">
                   <EntryList/>
                   <BaseContainer containerRef="Base"/>
-                </SequenceContainer>'''
-            for i in range(3)
-        )
+                </SequenceContainer>''' for i in range(3))
         text = mission(tm=f"""
             <ParameterTypeSet>
               <IntegerParameterType name="U3LE" signed="false">
@@ -442,12 +439,10 @@ class ArrayTests(unittest.TestCase):
                                  message)
 
     def test_repeat_entry(self):
-        entries = (
-            '<ParameterRefEntry parameterRef="N"/>'
-            '<ParameterRefEntry parameterRef="N"><RepeatEntry>'
-            f'<Count>{dynamic("N")}</Count><Offset>{fixed(2)}</Offset>'
-            "</RepeatEntry></ParameterRefEntry>"
-        )
+        entries = ('<ParameterRefEntry parameterRef="N"/><ParameterRefEntry '
+                   f'parameterRef="N"><RepeatEntry><Count>{dynamic("N")}'
+                   f'</Count><Offset>{fixed(2)}</Offset></RepeatEntry>'
+                   '</ParameterRefEntry>')
         m = compile_xml(array_mission(dim(fixed(0), fixed(0)), entries,
                                       "Small"))
         rep = m.nodes[0].fields[0][1].vtype
@@ -474,9 +469,8 @@ class ArrayTests(unittest.TestCase):
             'parameterRef="Arr"/></EntryList>',
             '<SequenceContainer name="B" abstract="true"><EntryList>'
             '<ArrayParameterRefEntry parameterRef="Arr"/></EntryList>'
-            '</SequenceContainer>'
-            '<SequenceContainer name="P"><EntryList/><BaseContainer '
-            'containerRef="B"><RestrictionCriteria><Comparison '
+            '</SequenceContainer><SequenceContainer name="P"><EntryList/>'
+            '<BaseContainer containerRef="B"><RestrictionCriteria><Comparison '
             'parameterRef="Arr" value="1"/></RestrictionCriteria>'
             '</BaseContainer>')
         self.unsupported(text, "which is an array")
@@ -572,9 +566,8 @@ class AggregateTests(unittest.TestCase):
             'parameterRef="Agg"/></EntryList>',
             '<SequenceContainer name="B" abstract="true"><EntryList>'
             '<ParameterRefEntry parameterRef="Agg"/></EntryList>'
-            '</SequenceContainer>'
-            '<SequenceContainer name="P"><EntryList/><BaseContainer '
-            'containerRef="B"><RestrictionCriteria><Comparison '
+            '</SequenceContainer><SequenceContainer name="P"><EntryList/>'
+            '<BaseContainer containerRef="B"><RestrictionCriteria><Comparison '
             'parameterRef="Agg" value="1"/></RestrictionCriteria>'
             '</BaseContainer>')
         with self.assertRaises(Unsupported) as cm:
@@ -816,11 +809,10 @@ class MemberPathTests(unittest.TestCase):
                          (("inner", "m"), "/Sat/U8", "/Sat/Agg.Inner.M == 1"))
 
     def test_rejected(self):
-        for ref, why in (
-            ("Agg.Nope", "aggregate type /Sat/A has no member 'Nope'"),
-            ("Agg.N.x", "int type /Sat/U8 has no member 'x'"),
-            ("N.x", "int type /Sat/U8 has no member 'x'"),
-        ):
+        for ref, why in (("Agg.Nope",
+                          "aggregate type /Sat/A has no member 'Nope'"),
+                         ("Agg.N.x", "int type /Sat/U8 has no member 'x'"),
+                         ("N.x", "int type /Sat/U8 has no member 'x'")):
             text = aggregate_mission(
                 aggregate("A", ("N", "U8")),
                 '<ParameterRefEntry parameterRef="N"/><ParameterRefEntry '
@@ -928,10 +920,11 @@ class DerivedSizeTests(unittest.TestCase):
                    '<LocationInContainerInBits '
                    f'referenceLocation="previousEntry">{dynamic("N")}'
                    '</LocationInContainerInBits></ArrayParameterRefEntry>')
-        read = (COUNT_THEN_ARRAY + '<ParameterRefEntry parameterRef="F">'
-                '<IncludeCondition><Comparison parameterRef="N" value="2" '
-                'comparisonOperator="&gt;="/></IncludeCondition>'
-                '</ParameterRefEntry>')
+        read = (COUNT_THEN_ARRAY
+                + '<ParameterRefEntry parameterRef="F"><IncludeCondition>'
+                  '<Comparison parameterRef="N" value="2" '
+                  'comparisonOperator="&gt;="/></IncludeCondition>'
+                  '</ParameterRefEntry>')
         for entries in (located, read):
             n = self.node(entries)
             self.assertEqual([lc.name for lc in n.derived], ["N"])
@@ -1023,8 +1016,9 @@ class ElementTests(unittest.TestCase):
         for dims, ref, why in (
                 (dim(fixed(0), fixed(2)), "Arr[3]", "index 3 is outside 0..2"),
                 (dim(fixed(0), fixed(1)) + dim(fixed(0), dynamic("N")),
-                 "Arr[0][0]", "element of an array whose count varies in a "
-                 "dimension other than the first"),
+                 "Arr[0][0]",
+                 "element of an array whose count varies in a dimension other "
+                 "than the first"),
                 (dim(fixed(1), dynamic("N")), "Arr[0]", "index 0 is before 1"),
                 (dim(fixed(0), fixed(1)) + dim(fixed(0), fixed(1)), "Arr[0]",
                  "1 indexes for a 2-dimensional array"),

@@ -623,8 +623,7 @@ class RustEmitter:
                 for lc, prefix, count in term_indexes(c):
                     if lc in names:
                         guards[(reach(f"self.{names[lc]}", prefix,
-                                      rstr(lc.name)),
-                                count)] = (lc.name)
+                                      rstr(lc.name)), count)] = (lc.name)
         for (x, count), name in guards.items():
             # Criteria are checked before the arrays they index are written.
             self.line(f"if {x}.len() != {count} {{", 2)

@@ -116,7 +116,7 @@ class CommandLineTests(unittest.TestCase):
         bad = [
             "<SpaceSystem",  # not well-formed
             "<other/>",  # not XTCE
-            Path("/nonexistent/x.xml"),  # can't be read
+            Path("/nonexistent/x.xml")  # can't be read
         ]
         for b in bad:
             status, out, err, names = self.run_main(doc(), b, doc())

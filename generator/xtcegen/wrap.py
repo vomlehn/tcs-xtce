@@ -132,16 +132,14 @@ class _Wrapper:
 
     # -- comments --
 
-    def _comment(
-        self, line: str, indent: str, marker: str, text: str
-    ) -> list[str]:
+    def _comment(self, line: str, indent: str, marker: str,
+                 text: str) -> list[str]:
         if len(line) <= self.width:
             return [line]
         return _fill(text.strip(), indent + marker, indent + marker, self.width)
 
-    def _c_block_start(
-        self, line: str, indent: str, stripped: str
-    ) -> list[str]:
+    def _c_block_start(self, line: str, indent: str,
+                       stripped: str) -> list[str]:
         """A line that starts a block comment: `/* ... */` or `/* ...`."""
         end = stripped.find("*/", 2)
         if end >= 0 and stripped[end + 2 :].strip():
@@ -175,9 +173,8 @@ class _Wrapper:
             lines = _close(lines, " */", indent, self.width)
         return lines
 
-    def _docstring_start(
-        self, line: str, indent: str, stripped: str, m: re.Match
-    ) -> list[str]:
+    def _docstring_start(self, line: str, indent: str, stripped: str,
+                         m: re.Match) -> list[str]:
         quote = m.group(1)
         rest = stripped[m.end() :]
         end = rest.find(quote)
@@ -231,9 +228,8 @@ class _Wrapper:
             else:
                 marker = "// " if self.lang == "c" else "# "
                 text = comment[2:] if self.lang == "c" else comment[1:]
-                lines += _fill(
-                    text.strip(), indent + marker, indent + marker, self.width
-                )
+                lines += _fill(text.strip(), indent + marker, indent + marker,
+                               self.width)
             line = code
             self.depth = start_depth
             scan = self._scan(line)
@@ -243,16 +239,14 @@ class _Wrapper:
         broken = self._break(line, indent, start_depth, scan)
         if self.lang == "python" and max(map(len, broken)) > self.width:
             wrapped = self._parenthesize(line, indent, start_depth)
-            if wrapped is not None and max(map(len, wrapped)) < max(
-                map(len, broken)
-            ):
+            if (wrapped is not None
+                    and max(map(len, wrapped)) < max(map(len, broken))):
                 broken = wrapped
         self.depth = end_depth
         return lines + broken
 
-    def _break(
-        self, line: str, indent: str, start_depth: int, scan: _Scan
-    ) -> list[str]:
+    def _break(self, line: str, indent: str, start_depth: int,
+               scan: _Scan) -> list[str]:
         """Break code ``line`` into pieces that fit, where it can."""
         cont = len(indent) + CONTINUATION
         need_depth = 1 if self.lang == "python" else 0
@@ -265,17 +259,11 @@ class _Wrapper:
             if lead + len(line[s:].rstrip()) <= self.width:
                 out.append(" " * lead + line[s:].rstrip())
                 return out
-            fit = [
-                p
-                for p in breaks
-                if p > s and lead + len(line[s:p].rstrip()) <= self.width
-            ]
+            fit = [p for p in breaks if p > s
+                   and lead + len(line[s:p].rstrip()) <= self.width]
             if not fit:
-                fit = [
-                    p
-                    for p in fallbacks
-                    if p > s and lead + len(line[s:p].rstrip()) <= self.width
-                ]
+                fit = [p for p in fallbacks if p > s
+                       and lead + len(line[s:p].rstrip()) <= self.width]
             preferred = [p for p in fit if p in scan.statements]
             if preferred:
                 p = preferred[-1]
@@ -292,9 +280,8 @@ class _Wrapper:
                     line = head + _split_resume(scan, split) + rest
                     scan = self._rescan(line, start_depth)
                     breaks = [b for b, d in scan.breaks if d >= need_depth]
-                    fallbacks = [
-                        b for b, d in scan.fallbacks if d >= need_depth
-                    ]
+                    fallbacks = [b for b, d in scan.fallbacks
+                                 if d >= need_depth]
                     continue
                 later = [b for b in breaks + fallbacks if b > s]
                 if not later:
@@ -317,9 +304,8 @@ class _Wrapper:
         self.depth = start_depth
         return self._scan(line)
 
-    def _split_string(
-        self, line: str, s: int, lead: int, scan: _Scan, need_depth: int
-    ) -> int | None:
+    def _split_string(self, line: str, s: int, lead: int, scan: _Scan,
+                      need_depth: int) -> int | None:
         """Where to split a string literal that runs past the width in the
         piece starting at ``s``, or None."""
         limit = s + self.width - lead - 1  # room for the closing quote
@@ -328,16 +314,13 @@ class _Wrapper:
                 continue
             # The literal, with what follows it up to the next break, must
             # overflow.
-            nxt = min(
-                [p for p, _ in scan.breaks + scan.fallbacks if p > end]
-                + [len(line)]
-            )
+            nxt = min([p for p, _ in scan.breaks + scan.fallbacks if p > end]
+                      + [len(line)])
             if lead + len(line[s:nxt].rstrip()) <= self.width:
                 continue
-            if len(quote) == 3 or (
-                self.lang == "python"
-                and self._depth_at(scan, start) < need_depth
-            ):
+            if (len(quote) == 3
+                    or (self.lang == "python"
+                        and self._depth_at(scan, start) < need_depth)):
                 return None
             content = start + len(prefix) + len(quote)
             if limit - content < 8:
@@ -350,10 +333,9 @@ class _Wrapper:
                     break
             k = min(k, end - len(quote) - 1)
             # Don't split an escape sequence or, in an f-string, a field.
-            while k > content and (
-                _in_escape(line, content, k)
-                or ("f" in prefix.lower() and _in_field(line, content, k))
-            ):
+            while k > content and (_in_escape(line, content, k)
+                                   or ("f" in prefix.lower()
+                                       and _in_field(line, content, k))):
                 k -= 1
             if k - content < 8:
                 return None
@@ -368,9 +350,8 @@ class _Wrapper:
             depth = d
         return depth
 
-    def _parenthesize(
-        self, line: str, indent: str, start_depth: int
-    ) -> list[str] | None:
+    def _parenthesize(self, line: str, indent: str,
+                      start_depth: int) -> list[str] | None:
         """Put the value of a Python assignment or return in parentheses, so
         that it can break, or None if the line is neither."""
         if start_depth:
@@ -440,11 +421,8 @@ class _Wrapper:
                     scan.breaks.append((i + 1, self.depth))
             elif c in _OPEN:
                 self.depth += 1
-                if (
-                    i + 1 < n
-                    and line[i + 1] not in _CLOSE
-                    and line[i + 1] != " "
-                ):
+                if (i + 1 < n and line[i + 1] not in _CLOSE
+                        and line[i + 1] != " "):
                     scan.breaks.append((i + 1, self.depth))
             elif c in _CLOSE:
                 if py and self.depth > 0 and i > 0 and line[i - 1] != " ":
@@ -453,12 +431,8 @@ class _Wrapper:
                     scan.fallbacks.append((i, self.depth))
                 self.depth = max(0, self.depth - 1)
                 # The statement after `if (...)` and the like.
-                if (
-                    not py
-                    and self.depth == 0
-                    and line[i + 1 : i + 2] == " "
-                    and line[i + 2 : i + 3] not in ("", "{", ";")
-                ):
+                if (not py and self.depth == 0 and line[i + 1 : i + 2] == " "
+                        and line[i + 2 : i + 3] not in ("", "{", ";")):
                     scan.breaks.append((i + 2, 0))
                     scan.statements.append(i + 2)
             elif c == "," or (c == ";" and self.depth > 0):
@@ -470,30 +444,16 @@ class _Wrapper:
                     scan.breaks.append((i + 1, self.depth))
                 elif not py and line.startswith(" = ", i) and i + 3 < n:
                     scan.breaks.append((i + 3, self.depth))
-                elif (
-                    not py
-                    and i > 0
-                    and line[i - 1] != " "
-                    and i + 1 < n
-                    and line[i + 1] != " "
-                ):
+                elif (not py and i > 0 and line[i - 1] != " " and i + 1 < n
+                      and line[i + 1] != " "):
                     scan.fallbacks.append((i + 1, self.depth))
-            elif (
-                py
-                and c == ":"
-                and line[i + 1 : i + 2] == " "
-                and self.depth > 0
-            ):
+            elif (py and c == ":" and line[i + 1 : i + 2] == " "
+                  and self.depth > 0):
                 scan.fallbacks.append((i + 2, self.depth))
-            elif (
-                not py
-                and (c == "." or line.startswith("->", i))
-                and i > 0
-                and (line[i - 1].isalnum() or line[i - 1] in "_)]")
-                and line[
-                    i + (2 if c == "-" else 1) : i + (3 if c == "-" else 2)
-                ].isidentifier()
-            ):
+            elif (not py and (c == "." or line.startswith("->", i)) and i > 0
+                  and (line[i - 1].isalnum() or line[i - 1] in "_)]")
+                  and line[i + (2 if c == "-" else 1) : i
+                           + (3 if c == "-" else 2)].isidentifier()):
                 # A member access, as a last resort.
                 scan.fallbacks.append((i, self.depth))
             i += 1
@@ -537,11 +497,8 @@ def _string_start(line: str, i: int, py: bool) -> tuple[str, str] | None:
         m = re.match(r'([rRbBuUfF]{0,2})("""|\'\'\'|"|\')', line[i:])
         if m is None:
             return None
-        if (
-            m.group(1)
-            and i > 0
-            and (line[i - 1].isalnum() or line[i - 1] == "_")
-        ):
+        if (m.group(1) and i > 0
+                and (line[i - 1].isalnum() or line[i - 1] == "_")):
             return None  # the end of a name, not a prefix
         return m.group(1), m.group(2)
     if line[i] == '"':
@@ -590,10 +547,8 @@ def _in_escape(line: str, start: int, k: int) -> bool:
     if slashes % 2:
         return True
     # \x.., \u...., and octal escapes: don't split their digits.
-    m = re.search(
-        r"\\(x[0-9a-fA-F]*|u[0-9a-fA-F]*|U[0-9a-fA-F]*|[0-7]{1,3})$",
-        line[start:k],
-    )
+    m = re.search(r"\\(x[0-9a-fA-F]*|u[0-9a-fA-F]*|U[0-9a-fA-F]*|[0-7]{1,3})$",
+                  line[start:k])
     return m is not None and line[k : k + 1].isalnum()
 
 
@@ -713,20 +668,15 @@ def _split_rust_line(line: str) -> str:
         c = line[i]
         if line.startswith("//", i):
             break
-        if (
-            c == "'"
-            and i + 2 < n
-            and (
-                line[i + 2] == "'"
-                or (line[i + 1] == "\\" and "'" in line[i + 3 : i + 12])
-            )
-        ):
+        if (c == "'" and i + 2 < n
+                and (line[i + 2] == "'"
+                     or (line[i + 1] == "\\" and "'" in line[i + 3 : i + 12]))):
             # A char literal, such as '"'.
             i = line.index("'", i + 2) + 1
             continue
-        if c == '"' and not (
-            i > 0 and (line[i - 1].isalnum() or line[i - 1] in "#_")
-        ):
+        if (c == '"'
+                and not (i > 0
+                         and (line[i - 1].isalnum() or line[i - 1] in "#_"))):
             end = _string_end(line, i + 1, '"')
             if end < 0:
                 break
@@ -749,11 +699,8 @@ def _rust_pieces(content: str) -> str:
     while len(content) - start > _RUST_PIECE:
         k = -1
         for j in range(start + _RUST_PIECE, start + 8, -1):
-            if (
-                content[j - 1] in "| "
-                and not content[j].isspace()
-                and not _in_escape(content, start, j)
-            ):
+            if (content[j - 1] in "| " and not content[j].isspace()
+                    and not _in_escape(content, start, j)):
                 k = j
                 break
         if k < 0:

@@ -11,22 +11,9 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Optional
 
-from .model import (
-    BUILTINS,
-    STRING,
-    UNBOUNDED,
-    Attribute,
-    Choice,
-    ComplexRef,
-    ComplexType,
-    Element,
-    EnumRef,
-    EnumType,
-    Schema,
-    ScalarRef,
-    Sequence,
-    TypeRef,
-)
+from .model import (BUILTINS, STRING, UNBOUNDED, Attribute, Choice, ComplexRef,
+                    ComplexType, Element, EnumRef, EnumType, Schema, ScalarRef,
+                    Sequence, TypeRef)
 
 XS = "{http://www.w3.org/2001/XMLSchema}"
 
@@ -140,12 +127,8 @@ class _Parser:
     def unique(self, name: str) -> str:
         base, n = name, 2
         taken = lambda s: (  # noqa: E731
-            s in self.complex_nodes
-            or s in self.simple_nodes
-            or s in self.raw
-            or s in self.schema.enums
-            or s in self.schema.simple
-        )
+            s in self.complex_nodes or s in self.simple_nodes or s in self.raw
+            or s in self.schema.enums or s in self.schema.simple)
         while taken(name):
             name = f"{base}{n}"
             n += 1
@@ -162,13 +145,9 @@ class _Parser:
         name = node.get("name")
         if name is None:
             raise XsdError(f"attribute without name in {owner}")
-        return Attribute(
-            name=name,
-            type=self.type_of(node, owner),
-            required=node.get("use") == "required",
-            default=node.get("default"),
-            doc=_doc(node),
-        )
+        return Attribute(name=name, type=self.type_of(node, owner),
+                         required=node.get("use") == "required",
+                         default=node.get("default"), doc=_doc(node))
 
     def parse_particle(self, node: ET.Element, owner: str):
         lo, hi = _occurs(node)
@@ -180,20 +159,11 @@ class _Parser:
                 target = self.element_nodes[local]
                 return Element(local, self.type_of(target, owner), lo, hi,
                                doc=_doc(node))
-            return Element(
-                node.get("name", ""),
-                self.type_of(node, owner),
-                lo,
-                hi,
-                fixed=node.get("fixed"),
-                doc=_doc(node),
-            )
+            return Element(node.get("name", ""), self.type_of(node, owner), lo,
+                           hi, fixed=node.get("fixed"), doc=_doc(node))
         if tag in (f"{XS}sequence", f"{XS}choice"):
-            items = [
-                self.parse_particle(c, owner)
-                for c in node
-                if c.tag not in (f"{XS}annotation",)
-            ]
+            items = [self.parse_particle(c, owner) for c in node
+                     if c.tag not in (f"{XS}annotation",)]
             cls = Sequence if tag == f"{XS}sequence" else Choice
             return cls(items, lo, hi)
         raise XsdError(f"unsupported particle {tag} in {owner}")
@@ -209,18 +179,14 @@ class _Parser:
                               and p.min == p.max == 1 else Sequence([p]))
             elif child.tag == f"{XS}annotation":
                 pass
-            elif child.tag in (f"{XS}anyAttribute", f"{XS}group",
-                               f"{XS}attributeGroup"):
+            elif (child.tag in (f"{XS}anyAttribute", f"{XS}group",
+                                f"{XS}attributeGroup")):
                 raise XsdError(f"unsupported {child.tag} in {ct.name}")
 
     def parse_complex(self, name: str, node: ET.Element,
                       anonymous: bool = False) -> ComplexType:
-        ct = ComplexType(
-            name=name,
-            abstract=node.get("abstract") == "true",
-            doc=_doc(node),
-            anonymous=anonymous,
-        )
+        ct = ComplexType(name=name, abstract=node.get("abstract") == "true",
+                         doc=_doc(node), anonymous=anonymous)
         cc = node.find(f"{XS}complexContent")
         sc = node.find(f"{XS}simpleContent")
         if cc is not None:
@@ -288,16 +254,11 @@ class _Parser:
             items.extend(base.content.items)
         if ct.content is not None:
             items.extend(ct.content.items)
-        return ComplexType(
-            name=ct.name,
-            abstract=ct.abstract,
-            base=ct.base,
-            attributes=base.attributes + ct.attributes,
-            content=Sequence(items) if items else None,
-            text=ct.text or base.text,
-            doc=ct.doc,
-            anonymous=ct.anonymous,
-        )
+        return ComplexType(name=ct.name, abstract=ct.abstract, base=ct.base,
+                           attributes=base.attributes + ct.attributes,
+                           content=Sequence(items) if items else None,
+                           text=ct.text or base.text, doc=ct.doc,
+                           anonymous=ct.anonymous)
 
 
 def parse(path: str) -> Schema:

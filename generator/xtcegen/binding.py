@@ -20,18 +20,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional, Union
 
-from .model import (
-    UNBOUNDED,
-    Choice,
-    ComplexRef,
-    ComplexType,
-    Element,
-    EnumRef,
-    Schema,
-    ScalarRef,
-    Sequence,
-    TypeRef,
-)
+from .model import (UNBOUNDED, Choice, ComplexRef, ComplexType, Element,
+                    EnumRef, Schema, ScalarRef, Sequence, TypeRef)
 
 ONE, OPT, MANY = "one", "opt", "many"
 
@@ -236,18 +226,10 @@ class _Builder:
         for item in content.items:
             if isinstance(item, Element):
                 card = cardinality(item.min, item.max)
-                rec.content.append(
-                    ElemField(
-                        ident(snake(item.name)),
-                        item.name,
-                        item.type,
-                        card,
-                        item.min,
-                        item.max,
-                        doc=item.doc,
-                        fixed=item.fixed,
-                    )
-                )
+                rec.content.append(ElemField(ident(snake(item.name)), item.name,
+                                             item.type, card, item.min,
+                                             item.max, doc=item.doc,
+                                             fixed=item.fixed))
             elif isinstance(item, Choice):
                 cindex += 1
                 suffix = "" if nchoices == 1 else str(cindex)
@@ -263,14 +245,9 @@ class _Builder:
                         raise BindingError(f"{ct.name}: duplicate choice "
                                            f"alternative {v.name}")
                     vused.add(v.name)
-                    ch.variants.append(Variant(
-                            v.name[0].upper() + v.name[1:],
-                            snake(v.name),
-                            v.name,
-                            v.type,
-                            doc=v.doc,
-                            fixed=v.fixed,
-                        ))
+                    ch.variants.append(Variant(v.name[0].upper() + v.name[1:],
+                                               snake(v.name), v.name, v.type,
+                                               doc=v.doc, fixed=v.fixed))
                 self.choices[ch.name] = ch
                 card = cardinality(item.min, item.max)
                 base = ("items" if card == MANY else "choice") + suffix
