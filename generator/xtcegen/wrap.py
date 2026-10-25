@@ -18,12 +18,15 @@ For Rust, rustfmt lays out the code; ``wrap`` rewraps the comments and
 breaks only code lines that rustfmt left too long.
 
 A line that can't be broken, such as one holding a single long word, is
-left as it is.
+left as it is.  Python is then laid out in the compact aligned style of the
+hand-written code (see ``pyalign``).
 """
 
 from __future__ import annotations
 
 import re
+
+from . import pyalign
 
 WIDTH = 80
 
@@ -45,7 +48,12 @@ def wrap(text: str, lang: str, width: int = WIDTH) -> str:
     out: list[str] = []
     for line in text.split("\n"):
         out.extend(w.line(line))
-    return "\n".join(out)
+    text = "\n".join(out)
+    if lang == "python" and width == pyalign.WIDTH:
+        # Lay out the statements that now span lines as hand-written
+        # Python is: continuation lines under the brackets they continue.
+        text = pyalign.align(text)
+    return text
 
 
 class _Scan:

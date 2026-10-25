@@ -81,7 +81,7 @@ class CTest(unittest.TestCase):
 
     def test_string_split_into_adjacent_literals(self):
         src = (
-            "        check_count(v.parameter_to_suspend_alarms_on.size(), 1, "
+            '        check_count(v.parameter_to_suspend_alarms_on.size(), 1, '
             '-1, '
             '"ParametersToSuspendAlarmsOnSetType.ParameterToSuspendAlarmsOn");')
         out = wrap(src, "c")
@@ -137,9 +137,9 @@ class RustTest(unittest.TestCase):
 
         out = rustfmt(src)
         self.assertLessEqual(widest(out), WIDTH)
-        res = subprocess.run(["rustfmt", "--edition", "2021", "--config",
-                              "max_width=80", "--check"], input=out,
-                             capture_output=True, text=True)
+        res = subprocess.run(
+            ["rustfmt", "--edition", "2021", "--config", "max_width=80",
+             "--check"], input=out, capture_output=True, text=True)
         self.assertEqual(res.returncode, 0, res.stdout)
 
 

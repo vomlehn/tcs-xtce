@@ -507,6 +507,17 @@ brackets, splits string literals into adjacent literals (Rust: with
 backslash-newline continuations, which <tt class="docutils literal">rustfmt</tt> keeps), moves
 trailing comments above their line and rewraps comments and
 docstrings. <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> uses it too, for the packet codecs.</dd>
+<dt><tt class="docutils literal">pyalign.py</tt> — lay out Python</dt>
+<dd>Lays out the Python that <tt class="docutils literal">wrap.py</tt> has broken, and the hand-written
+Python, in one compact aligned style: continuation lines under the
+bracket they continue, packed items, and closers at the end of the last
+line. It is a pretty-printer in the style of Wadler's: each statement
+becomes a document of text, places to break and groups, and each
+bracket offers two layouts, aligned and hanging. It keeps the aligned
+one unless the hanging one fits where it doesn't or avoids a staircase
+of nested breaks. It also puts long values and conditions in
+parentheses and splits long strings, and it checks that the code's AST
+is unchanged.</dd>
 <dt><tt class="docutils literal">sample.py</tt> — sample</dt>
 <dd>Generates test documents from the model. Together they use every
 element slot of every type reachable from <tt class="docutils literal">&lt;SpaceSystem&gt;</tt> (834 of
@@ -1050,9 +1061,11 @@ any editor or terminal and side by side in a diff:</p>
 hand where <tt class="docutils literal">rustfmt</tt> leaves a line long, such as string literals
 and macro bodies.</li>
 <li>C and C++: 8-space indents and 80 columns, set by <tt class="docutils literal"><span class="pre">.clang-format</span></tt>.</li>
-<li>Python: wrapped by hand, with continuation lines lined up under the
-bracket they continue. No formatter is used, since black and
-<tt class="docutils literal">ruff format</tt> would put every item on its own line.</li>
+<li>Python: laid out by <tt class="docutils literal">generator/xtcegen/pyalign.py</tt>, with
+continuation lines lined up under the bracket they continue, by
+<tt class="docutils literal">make fmt</tt> and checked by <tt class="docutils literal">make <span class="pre">fmt-check</span></tt>. Black and
+<tt class="docutils literal">ruff format</tt> aren't used, since they would put every item on its
+own line.</li>
 <li>Makefiles and scripts: wrapped by hand.</li>
 <li>Generated code: wrapped by <tt class="docutils literal">wrap.py</tt> after the emitters run, so
 that it needs no formatting. <tt class="docutils literal">generator/tests/test_wrap.py</tt> checks

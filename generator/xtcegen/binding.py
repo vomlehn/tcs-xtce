@@ -210,9 +210,9 @@ class _Builder:
 
         for a in ct.attributes:
             xml = a.name
-            rec.attrs.append(AttrField(ident(snake(xml.replace("xml:",
-                                                               "xml_"))), xml,
-                                       a.type, a.required, a.default, a.doc))
+            rec.attrs.append(
+                AttrField(ident(snake(xml.replace("xml:", "xml_"))), xml,
+                          a.type, a.required, a.default, a.doc))
         if ct.text is not None:
             rec.text = TextField(ident("value"), ct.text)
         if ct.content is None:

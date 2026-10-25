@@ -847,9 +847,9 @@ class CEmitter:
                         if isinstance(v, Value):
                             self.line(f"bool h{v.local.id} = false;", depth)
                             self.local(v.local.vtype, f"v{v.local.id}", depth)
-                self.element_guards([p for c in it.criteria
-                                     for p in term_paths(c)], self.read_acc,
-                                    "r->err", depth)
+                self.element_guards(
+                    [p for c in it.criteria for p in term_paths(c)],
+                    self.read_acc, "r->err", depth)
                 cond = " && ".join(f"({self.term(c, self.read_acc)})"
                                    for c in it.criteria)
                 self.line(f"if ({cond}) {{", depth)
@@ -972,9 +972,9 @@ class CEmitter:
         self.line(f"static inline int {t}_encode_into(const {t}* p, "
                   "xtce_pk_writer* w) {")
         self.line("(void)p;", 1)
-        names = {lc: Acc(f"p->{name}",
-                         f"p->has_{name}" if lc.optional else None)
-                 for name, lc in n.fields}
+        names = {
+            lc: Acc(f"p->{name}", f"p->has_{name}" if lc.optional else None)
+            for name, lc in n.fields}
         for lc, (c, d) in n.derived.items():
             # Sizes and counts come from the lengths of what they size.
             s, f = f"s{lc.id}", cstr(lc.name)

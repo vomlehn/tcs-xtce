@@ -173,8 +173,8 @@ toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
    make rust | cpp | python
    make test            # every language's tests and both cross-language checks
    make samples-check   # check against public XTCE documents (downloads them)
-   make fmt             # format Rust code
-   make fmt-check       # verify Rust formatting (run by every `make rust`)
+   make fmt             # format Rust and Python code
+   make fmt-check       # verify it (Rust is also checked by every `make rust`)
    make clean           # remove build products
    make distclean       # also remove the downloaded references
 

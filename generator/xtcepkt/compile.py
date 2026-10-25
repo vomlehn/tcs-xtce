@@ -1601,9 +1601,9 @@ class Compiler:
         for r in roots:
             members = [m for m in [r] + r.descendants() if not m.abstract]
             if members:
-                kinds.append(Kind(names.take(camel(r.name) + "Kind",
-                                             camel(r.key) + "Kind"), r, members,
-                                  0))
+                kinds.append(
+                    Kind(names.take(camel(r.name) + "Kind",
+                                    camel(r.key) + "Kind"), r, members, 0))
         concrete = [n for n in ok if not n.abstract]
         used, aggregates = {}, {}
         for n in concrete:

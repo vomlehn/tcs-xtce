@@ -576,8 +576,8 @@ make<span class="whitespace">                 </span><span class="comment single
 </span>make<span class="whitespace"> </span>rust<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>cpp<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>python<span class="whitespace">
 </span>make<span class="whitespace"> </span><span class="name builtin">test</span><span class="whitespace">            </span><span class="comment single"># every language's tests and both cross-language checks
 </span>make<span class="whitespace"> </span>samples-check<span class="whitespace">   </span><span class="comment single"># check against public XTCE documents (downloads them)
-</span>make<span class="whitespace"> </span>fmt<span class="whitespace">             </span><span class="comment single"># format Rust code
-</span>make<span class="whitespace"> </span>fmt-check<span class="whitespace">       </span><span class="comment single"># verify Rust formatting (run by every `make rust`)
+</span>make<span class="whitespace"> </span>fmt<span class="whitespace">             </span><span class="comment single"># format Rust and Python code
+</span>make<span class="whitespace"> </span>fmt-check<span class="whitespace">       </span><span class="comment single"># verify it (Rust is also checked by every `make rust`)
 </span>make<span class="whitespace"> </span>clean<span class="whitespace">           </span><span class="comment single"># remove build products
 </span>make<span class="whitespace"> </span>distclean<span class="whitespace">       </span><span class="comment single"># also remove the downloaded references</span>
 </pre>

@@ -70,10 +70,10 @@ def schema_valid(path: Path) -> bool:
     with tempfile.NamedTemporaryFile(suffix=".xml") as t:
         t.write(data)
         t.flush()
-        r = subprocess.run(["xmllint", "--noout", "--nonet", "--schema",
-                            str(XSD), t.name], capture_output=True,
-                           env={**os.environ,
-                                "XML_CATALOG_FILES": str(CATALOG)})
+        r = subprocess.run(
+            ["xmllint", "--noout", "--nonet", "--schema", str(XSD), t.name],
+            capture_output=True,
+            env={**os.environ, "XML_CATALOG_FILES": str(CATALOG)})
     return r.returncode == 0
 
 
@@ -124,8 +124,7 @@ def digests(paths: list[Path]) -> dict:
     disagree about it."""
     results = [subprocess.run([str(t)] + [str(p) for p in paths],
                               capture_output=True, text=True,
-                              check=True).stdout.split()
-               for t in DIGEST_TOOLS]
+                              check=True).stdout.split() for t in DIGEST_TOOLS]
     out = {}
     for i, p in enumerate(paths):
         try:

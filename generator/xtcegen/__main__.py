@@ -39,9 +39,9 @@ def _rustfmt(text: str) -> str:
     exe = shutil.which("rustfmt")
     if exe is None:
         sys.exit("error: rustfmt is required to generate Rust code")
-    res = subprocess.run([exe, "--edition", "2021", "--config",
-                          f"max_width={WIDTH}", "--emit", "stdout"], input=text,
-                         capture_output=True, text=True)
+    res = subprocess.run(
+        [exe, "--edition", "2021", "--config", f"max_width={WIDTH}", "--emit",
+         "stdout"], input=text, capture_output=True, text=True)
     if res.returncode != 0:
         sys.exit(f"error: rustfmt failed:\n{res.stderr}")
     return res.stdout

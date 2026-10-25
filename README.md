@@ -61,7 +61,8 @@ make packets      # regenerate the demo mission's packet codecs
 make test         # per-language tests, both cross-language checks, the examples
                   # and the 80-column check
 make examples     # build and run the examples in examples/
-make fmt-check    # verify Rust formatting (also run by every `make rust`)
+make fmt-check    # verify Rust and Python formatting (Rust is also checked by
+                  # every `make rust`)
 ```
 
 Requirements: `curl`, `xmllint`, Python 3.10+, a Rust toolchain with

@@ -13,7 +13,8 @@
 #   make samples-check   check tcs-xtce against public XTCE documents
 #                        (downloads them)
 #   make examples        build and run every example in examples/
-#   make fmt             format Rust code;  make fmt-check  verify it
+#   make fmt             format Rust and Python code;  make fmt-check
+#                        verify it
 #   make clean           remove build products (keeps generated sources)
 #   make distclean       also remove downloaded references
 
@@ -192,6 +193,11 @@ examples: cpp python
 	done
 	for d in $(EXAMPLES); do $(MAKE) -C $$d || exit 1; done
 
+# Hand-written Python in git, laid out by xtcegen.pyalign as the generated
+# Python is.
+PY_FILES = $$(git -C .. ls-files '*.py' | sed 's|^|../|') \
+           ../examples/to-from/to-from
+
 # The examples' Rust code includes their generated codecs, so generate them
 # first.
 .PHONY: fmt
@@ -201,6 +207,7 @@ fmt:
 	    $(MAKE) -C $$d generate && \
 	        (cd $$d/rust && $(CARGO) fmt) || exit 1; \
 	done
+	cd generator && $(PYTHON) -m xtcegen.pyalign $(PY_FILES)
 
 .PHONY: fmt-check
 fmt-check:
@@ -209,6 +216,7 @@ fmt-check:
 	    $(MAKE) -C $$d generate && \
 	        (cd $$d/rust && $(CARGO) fmt --check) || exit 1; \
 	done
+	cd generator && $(PYTHON) -m xtcegen.pyalign --check $(PY_FILES)
 
 # The documents as HTML: docs/ and the examples' READMEs. Committed beside
 # their sources and served by GitHub Pages, so remade before a commit that

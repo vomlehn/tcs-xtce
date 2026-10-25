@@ -127,6 +127,18 @@ Pipeline
    trailing comments above their line and rewraps comments and
    docstrings. ``tcs-xtce`` uses it too, for the packet codecs.
 
+``pyalign.py`` — lay out Python
+   Lays out the Python that ``wrap.py`` has broken, and the hand-written
+   Python, in one compact aligned style: continuation lines under the
+   bracket they continue, packed items, and closers at the end of the last
+   line. It is a pretty-printer in the style of Wadler's: each statement
+   becomes a document of text, places to break and groups, and each
+   bracket offers two layouts, aligned and hanging. It keeps the aligned
+   one unless the hanging one fits where it doesn't or avoids a staircase
+   of nested breaks. It also puts long values and conditions in
+   parentheses and splits long strings, and it checks that the code's AST
+   is unchanged.
+
 ``sample.py`` — sample
    Generates test documents from the model. Together they use every
    element slot of every type reachable from ``<SpaceSystem>`` (834 of
@@ -706,9 +718,11 @@ Testing strategy
      hand where ``rustfmt`` leaves a line long, such as string literals
      and macro bodies.
    * C and C++: 8-space indents and 80 columns, set by ``.clang-format``.
-   * Python: wrapped by hand, with continuation lines lined up under the
-     bracket they continue. No formatter is used, since black and
-     ``ruff format`` would put every item on its own line.
+   * Python: laid out by ``generator/xtcegen/pyalign.py``, with
+     continuation lines lined up under the bracket they continue, by
+     ``make fmt`` and checked by ``make fmt-check``. Black and
+     ``ruff format`` aren't used, since they would put every item on its
+     own line.
    * Makefiles and scripts: wrapped by hand.
    * Generated code: wrapped by ``wrap.py`` after the emitters run, so
      that it needs no formatting. ``generator/tests/test_wrap.py`` checks

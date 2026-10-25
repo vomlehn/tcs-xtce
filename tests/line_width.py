@@ -21,9 +21,8 @@ SOURCE = {".py", ".rs", ".c", ".h", ".cpp", ".hpp", ".sh"}
 GENERATED = ["rust/src/generated.rs", "cpp/include/xtce/generated.hpp",
              "cpp/src/generated.cpp", "python/xtce/generated.py",
              "rust/tests/mission/demo*.rs", "cpp/tests/mission/demo*.h",
-             "python/tests/mission/demo*.py",
-             "examples/*/rust/src/*.rs", "examples/*/c/*.h",
-             "examples/*/cxx/*.h", "examples/*/python/*.py"]
+             "python/tests/mission/demo*.py", "examples/*/rust/src/*.rs",
+             "examples/*/c/*.h", "examples/*/cxx/*.h", "examples/*/python/*.py"]
 
 
 def is_script(path: Path) -> bool:

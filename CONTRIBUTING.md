@@ -57,20 +57,24 @@ counting a tab as 8 columns, and names each line that is too wide.
   Wrap by hand what rustfmt leaves long: comments, string literals (split
   them with a backslash at the end of the line, which keeps their value),
   and code inside `macro_rules!` bodies and macros such as `matches!`.
-* Python indents 4 spaces. Wrap a long line inside brackets, lining the
-  continuation up under the opening bracket, packing items, and keeping
-  the closing bracket at the end of the last line:
+* Python indents 4 spaces. `make fmt` lays it out
+  (`generator/xtcegen/pyalign.py`, the same code that lays out the generated
+  Python) and `make fmt-check` checks it: a long line breaks inside
+  brackets, with the continuation lined up under the opening bracket, items
+  packed, and the closing bracket at the end of the last line:
 
   ```python
   self.line(f"XTCE_PK_TRY(xtce_pk_read_utf8(r, n, {f}, "
             f"{dst}.data, &{dst}.len));", depth + 1)
   ```
 
-  When the bracket is too far right for that, or holds comments, use a
-  hanging indent of 4 instead, still with the closer on the last line. Put
-  a long value after `=` or `return` in parentheses so it can break. Don't
-  run black or `ruff format`, which would rewrite this style. Keep `# noqa`
-  and `# pragma` comments on the line they apply to.
+  When the bracket is too far right for that, when lining up would make a
+  staircase of nested brackets, or when the bracket holds comments, it uses
+  a hanging indent of 4 instead, still with the closer on the last line. A
+  long value after `=` or `return`, or a long `if` condition, goes in
+  parentheses so it can break. Don't run black or `ruff format`, which
+  would rewrite this style. Keep `# noqa` and `# pragma` comments on the
+  line they apply to.
 * The generators emit the same indentation and wrap their output at 80
   columns (`generator/xtcegen/wrap.py`), so generated code needs no
   formatting.
@@ -105,7 +109,7 @@ change to them.
 
 **Match the code around you.** Rust is formatted with `rustfmt`
 (`make fmt`, checked by `make rust`), C and C++ with `clang-format`, and
-Python by hand in the style above. Commit messages have a short summary
+Python with `make fmt` in the style above. Commit messages have a short summary
 line and a body that says why the change was made.
 
 ## License

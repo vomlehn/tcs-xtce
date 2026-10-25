@@ -16,8 +16,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 
 from xtce import Document, XtceError  # noqa: E402,F401
-from xtce.digest import (UNORDERED, digest, digest_file,  # noqa: E402,F401
-                         digest_string, encoding)
+from xtce.digest import (  # noqa: E402,F401
+    UNORDERED, digest, digest_file, digest_string, encoding)
 
 
 def checked_digest(data: bytes) -> str:

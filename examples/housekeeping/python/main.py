@@ -98,8 +98,8 @@ def main() -> None:
     # The stream's digest must be the digest of this program's XTCE file:
     # then it reads the packets as they were written.
     if bytes(stream[:DIGEST_BYTES]) != digest:
-        fail(f"the stream's XTCE digest {stream[:DIGEST_BYTES].hex()} is "
-             f"not {digest.hex()}, the digest of {XTCE}")
+        fail(f"the stream's XTCE digest {stream[:DIGEST_BYTES].hex()} is not "
+             f"{digest.hex()}, the digest of {XTCE}")
     print(f"XTCE digest: {digest.hex()}, the same on both sides")
 
     # Walk the packets. Each starts with PacketLength, the number of bytes

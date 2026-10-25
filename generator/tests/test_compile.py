@@ -393,9 +393,9 @@ class ArrayTests(unittest.TestCase):
         self.assertEqual(m.nodes[0].max_bytes, 12)
 
     def test_count_bounded_by_valid_range(self):
-        m = compile_xml(array_mission(dim(fixed(0),
-                                          dynamic("N", intercept="-1")),
-                                      COUNT_THEN_ARRAY, "Small"))
+        m = compile_xml(
+            array_mission(dim(fixed(0), dynamic("N", intercept="-1")),
+                          COUNT_THEN_ARRAY, "Small"))
         d = self.array(m).enc.count
         self.assertEqual((d.slope, d.intercept, d.max, d.local.name),
                          (1.0, 0.0, 5, "N"))
@@ -476,9 +476,9 @@ class ArrayTests(unittest.TestCase):
         self.unsupported(text, "which is an array")
 
     def test_c_storage(self):
-        m = compile_xml(array_mission(dim(fixed(0),
-                                          dynamic("N", intercept="-1")),
-                                      COUNT_THEN_ARRAY, "Small"))
+        m = compile_xml(
+            array_mission(dim(fixed(0), dynamic("N", intercept="-1")),
+                          COUNT_THEN_ARRAY, "Small"))
         header = emit_c.emit(m, "t.xml")
         self.assertIn("typedef struct sat_uint16_list5 {", header)
         self.assertIn("uint16_t data[5];", header)
@@ -748,10 +748,10 @@ def lookup(*cases: tuple[str, int], default: int = 0) -> str:
 
 class LookupAndLocationTests(unittest.TestCase):
     def test_count_from_a_lookup(self):
-        text = array_mission(dim(fixed(0),
-                                 lookup(("1", 2), ("2", 5), default=-1)),
-                             '<ParameterRefEntry parameterRef="N"/>'
-                             '<ParameterRefEntry parameterRef="Arr"/>')
+        text = array_mission(
+            dim(fixed(0), lookup(("1", 2), ("2", 5), default=-1)),
+            '<ParameterRefEntry parameterRef="N"/><ParameterRefEntry '
+            'parameterRef="Arr"/>')
         vt = compile_xml(text).nodes[0].fields[1][1].vtype
         d = vt.enc.count
         self.assertEqual([(c[0].value, v) for c, v in d.lookup],
@@ -809,10 +809,10 @@ class MemberPathTests(unittest.TestCase):
                          (("inner", "m"), "/Sat/U8", "/Sat/Agg.Inner.M == 1"))
 
     def test_rejected(self):
-        for ref, why in (("Agg.Nope",
-                          "aggregate type /Sat/A has no member 'Nope'"),
-                         ("Agg.N.x", "int type /Sat/U8 has no member 'x'"),
-                         ("N.x", "int type /Sat/U8 has no member 'x'")):
+        for ref, why in (
+                ("Agg.Nope", "aggregate type /Sat/A has no member 'Nope'"),
+                ("Agg.N.x", "int type /Sat/U8 has no member 'x'"),
+                ("N.x", "int type /Sat/U8 has no member 'x'")):
             text = aggregate_mission(
                 aggregate("A", ("N", "U8")),
                 '<ParameterRefEntry parameterRef="N"/><ParameterRefEntry '
@@ -885,11 +885,11 @@ class BooleanExpressionTests(unittest.TestCase):
         self.assertEqual(n.fixed, {})
 
     def test_rejected(self):
-        for cond, why in ((check("A", "<", "S"),
-                           "comparison of signed and unsigned values /Sat/A "
-                           "and /Sat/S"),
-                          (check("A", "==", "X"),
-                           "comparison of int /Sat/A and float /Sat/X")):
+        for cond, why in (
+                (check("A", "<", "S"),
+                 "comparison of signed and unsigned values /Sat/A and /Sat/S"),
+                (check("A", "==", "X"),
+                 "comparison of int /Sat/A and float /Sat/X")):
             with self.subTest(why=why), self.assertRaises(Unsupported) as cm:
                 compile_xml(gate_mission(f"<BooleanExpression>{cond}"
                                          "</BooleanExpression>"))

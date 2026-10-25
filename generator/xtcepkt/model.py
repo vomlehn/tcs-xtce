@@ -523,9 +523,9 @@ class Node:
 
     def length_field(self) -> Optional[Local]:
         """The packet length field, if the packet has one."""
-        return next((it.local for it in walk(self.all_items())
-                     if isinstance(it, Value) and it.local.length is not None),
-                    None)
+        return next(
+            (it.local for it in walk(self.all_items()) if isinstance(it, Value)
+             and it.local.length is not None), None)
 
     def descendants(self) -> list["Node"]:
         out = []

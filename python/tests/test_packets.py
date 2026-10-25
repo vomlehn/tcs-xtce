@@ -386,9 +386,9 @@ class PacketTests(unittest.TestCase):
         b = m.to_bytes()
         self.assertEqual(bytes(b[6:]).hex(), "1726ab")
         self.assertEqual(demo.MatrixMiddle.decode(b), m)
-        self.assertEqual(self.kind(dataclasses.replace(m,
-                                                       matrix=[1, 7, 2, 6, 0])),
-                         "BadSize")
+        self.assertEqual(
+            self.kind(dataclasses.replace(m, matrix=[1, 7, 2, 6, 0])),
+            "BadSize")
 
         # Slots 2..Last: encoding sets Last to the last index, which its
         # ValidRange limits to 4, three slots.
