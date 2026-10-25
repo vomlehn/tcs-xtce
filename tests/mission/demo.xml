@@ -822,6 +822,22 @@
       <BooleanParameterType name="Flag8Type">
         <IntegerDataEncoding sizeInBits="8"/>
       </BooleanParameterType>
+      <EnumeratedParameterType name="DwellSelType">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <EnumerationList>
+          <Enumeration value="0" label="NONE"/>
+          <Enumeration value="1" label="DwellTemp"/>
+          <Enumeration value="2" label="DwellVolt"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+      <EnumeratedParameterType name="DwellAliasSelType">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <EnumerationList>
+          <Enumeration value="0" label="OFF"/>
+          <Enumeration value="1" label="T1"/>
+          <Enumeration value="2" label="V1"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -978,6 +994,15 @@
       <Parameter name="SegFloat" parameterTypeRef="F32"/>
       <Parameter name="SegPart" parameterTypeRef="U16"/>
       <Parameter name="SegFlag" parameterTypeRef="U8"/>
+      <Parameter name="DwellSel" parameterTypeRef="DwellSelType"/>
+      <Parameter name="DwellAliasSel" parameterTypeRef="DwellAliasSelType"/>
+      <Parameter name="DwellTemp" parameterTypeRef="S16">
+        <AliasSet><Alias nameSpace="dwell" alias="T1"/></AliasSet>
+      </Parameter>
+      <Parameter name="DwellVolt" parameterTypeRef="U8">
+        <AliasSet><Alias nameSpace="dwell" alias="V1"/></AliasSet>
+      </Parameter>
+      <Parameter name="DwellEnd" parameterTypeRef="U8"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1669,6 +1694,26 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="460"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Dwell telemetry: DwellSel names the parameter that follows it,
+           and DwellAliasSel names one by its alias. -->
+      <SequenceContainer name="Dwell">
+        <EntryList>
+          <ParameterRefEntry parameterRef="DwellSel"/>
+          <IndirectParameterRefEntry>
+            <ParameterInstance parameterRef="DwellSel"/>
+          </IndirectParameterRefEntry>
+          <ParameterRefEntry parameterRef="DwellAliasSel"/>
+          <IndirectParameterRefEntry aliasNameSpace="dwell">
+            <ParameterInstance parameterRef="DwellAliasSel"/>
+          </IndirectParameterRefEntry>
+          <ParameterRefEntry parameterRef="DwellEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="470"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

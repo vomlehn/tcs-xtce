@@ -1340,7 +1340,8 @@ class Compiler:
             e = ch.value
             where = f"container {qname(stack[-1])}"
             if (ch.name not in ("ParameterRefEntry", "ContainerRefEntry",
-                                "ArrayParameterRefEntry") + SEGMENTS):
+                                "ArrayParameterRefEntry",
+                                "IndirectParameterRefEntry") + SEGMENTS):
                 raise Unsupported(f"{where}: {ch.name}")
             if (ch.name == "ContainerRefEntry"
                     and e.location_in_container_in_bits is not None
@@ -1361,6 +1362,8 @@ class Compiler:
                                             e.size_in_bits)
                 out += self.segment(ch.name, e, path, where, segs,
                                     cond is not None, scope)
+            elif ch.name == "IndirectParameterRefEntry":
+                out += self.indirect(e, path, scope, where)
             elif ch.name != "ContainerRefEntry":
                 local = self.subset(self.param_local(e.parameter_ref, path), e,
                                     path, where)
@@ -1469,6 +1472,68 @@ class Compiler:
         lc = self.raw_segment(ref, k, bits, where)
         scope.append(lc)
         return [Value(lc)]
+
+    def indirect(self, e, path: Key, scope: list, where: str,
+                 arg_key=None) -> list[Item]:
+        """An IndirectParameterRefEntry: the parameter that the value of
+        its ParameterInstance names.  Each parameter it can name becomes a
+        field, present when the value names it.  The value is an
+        enumeration whose labels name parameters, or with an
+        aliasNameSpace, an enumeration, integer or string that gives an
+        alias in that name space, as Yamcs reads it.  Values that name no
+        parameter select nothing."""
+        if e.repeat_entry is not None:
+            raise Unsupported(f"{where}: a repeated IndirectParameterRefEntry")
+        sel = e.parameter_instance
+        _, _, vt, pkey = self.value_ref("ParameterInstanceRef", sel, path,
+                                        scope, where, arg_key)
+        aliases = (self.aliases(e.alias_name_space)
+                   if e.alias_name_space is not None else None)
+        if vt.kind == "enum":
+            choices = []
+            for lab in vt.labels:
+                if aliases is not None:
+                    key = aliases.get(lab.label)
+                else:
+                    try:
+                        key = self.resolve(lab.label, path, self.params,
+                                           "parameter")
+                    except Unsupported:
+                        key = None
+                if key is not None:
+                    choices.append((lab.label, key))
+        elif aliases is not None and vt.kind in ("int", "string"):
+            choices = [(a, key) for a, key in aliases.items()
+                       if vt.kind == "string" or re.fullmatch(r"-?\d+", a)]
+        else:
+            why = (" without an aliasNameSpace" if vt.kind in ("int", "string")
+                   else "")
+            raise Unsupported(f"{where}: an IndirectParameterRefEntry chosen "
+                              f"by {vt.kind} value {pkey}{why}")
+        out: list[Item] = []
+        for text, key in choices:
+            crit = self.comparison("ParameterInstanceRef", sel, "==", text,
+                                   path, scope, where, arg_key)
+            lc = self.bind(self.param_local("/" + "/".join(key), ()), scope,
+                           where, arg_key)
+            lc.optional = True
+            if lc.computed:
+                raise Unsupported(f"{where}: an IndirectParameterRefEntry "
+                                  f"selects length field {lc.name}")
+            out.append(Cond([crit], [Value(lc)]))
+            scope.append(lc)
+        if not out:
+            raise Unsupported(f"{where}: no label of {pkey} names a parameter")
+        return out
+
+    def aliases(self, space: str) -> dict:
+        """Alias -> parameter, for the aliases in name space ``space``."""
+        out = {}
+        for key, (_, p) in self.params.items():
+            for a in p.alias_set.alias if p.alias_set else []:
+                if a.name_space == space:
+                    out.setdefault(a.alias, key)
+        return out
 
     @staticmethod
     def assemble(parts: list, where: str, ref: str) -> None:
@@ -2114,7 +2179,8 @@ class Compiler:
             entries = ("ArgumentRefEntry", "ArrayArgumentRefEntry",
                        "ParameterRefEntry", "ArrayParameterRefEntry")
             if (ch.name not in entries
-                    + ("FixedValueEntry", "ContainerRefEntry") + SEGMENTS):
+                    + ("FixedValueEntry", "ContainerRefEntry",
+                       "IndirectParameterRefEntry") + SEGMENTS):
                 raise Unsupported(f"{where}: {ch.name} in a CommandContainer")
             cond = None
             if e.include_condition is not None:
@@ -2126,6 +2192,8 @@ class Compiler:
             if ch.name in SEGMENTS:
                 out += self.segment(ch.name, e, path, where, segs,
                                     cond is not None, values)
+            elif ch.name == "IndirectParameterRefEntry":
+                out += self.indirect(e, path, values, where, arg_key)
             elif ch.name == "ContainerRefEntry":
                 if e.repeat_entry is not None:
                     raise Unsupported(f"{where}: a repeated container in a "

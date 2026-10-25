@@ -2210,6 +2210,20 @@ that thing's segments in the entry list: <tt class="docutils literal">SegPartSeg
 sends a float's halves low half first; <tt class="docutils literal">Split</tt> sends a command
 parameter's bytes the same way.</p>
 </dd>
+<dt>Indirect entries</dt>
+<dd><tt class="docutils literal">IndirectParameterRefEntry</tt>, which dwell telemetry uses: the entry
+is the parameter that the value of its <tt class="docutils literal">ParameterInstance</tt> names.
+That value may be an enumeration whose labels are parameter names.
+With an <tt class="docutils literal">aliasNameSpace</tt>, it may instead be an enumeration whose
+labels, or an integer or string whose values, are aliases in that name
+space, as Yamcs reads it. Each parameter the value can name gives an
+optional field, present when the value names it; other values select
+nothing. In the demo's <tt class="docutils literal">Dwell</tt> packet, <tt class="docutils literal">DwellSel</tt> chooses
+<tt class="docutils literal">DwellTemp</tt> or <tt class="docutils literal">DwellVolt</tt>, and <tt class="docutils literal">DwellAliasSel</tt> chooses them
+again by their <tt class="docutils literal">dwell</tt> aliases, as <tt class="docutils literal">dwell_temp2</tt> and
+<tt class="docutils literal">dwell_volt2</tt>. Without an <tt class="docutils literal">aliasNameSpace</tt>, an integer or string
+selector is not supported, since the parameters it may name can't be
+known.</dd>
 <dt>Name references</dt>
 <dd>Absolute (<tt class="docutils literal">/Root/Sub/name</tt>), relative (<tt class="docutils literal">Sub/name</tt>, <tt class="docutils literal"><span class="pre">../name</span></tt>),
 and unqualified names. An unqualified name, or a relative one that
@@ -2218,8 +2232,8 @@ SpaceSystem, then from each enclosing one. References may cross
 documents (see <a class="reference internal" href="#missions-in-several-documents">Missions in several documents</a>).</dd>
 <dt>Not supported</dt>
 <dd>references to elements of arrays whose count varies in a dimension
-other than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt>, other instances
-than 0, repeated segment entries, repeated containers in commands,
+other than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an
+integer or string without an <tt class="docutils literal">aliasNameSpace</tt>, other instances than 0, repeated segment entries, repeated containers in commands,
 commands that include another meta-command's container,
 <tt class="docutils literal">CustomAlgorithm</tt> criteria, transform algorithms, custom
 checksum algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which

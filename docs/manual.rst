@@ -1783,6 +1783,21 @@ Segments
    sends a float's halves low half first; ``Split`` sends a command
    parameter's bytes the same way.
 
+Indirect entries
+   ``IndirectParameterRefEntry``, which dwell telemetry uses: the entry
+   is the parameter that the value of its ``ParameterInstance`` names.
+   That value may be an enumeration whose labels are parameter names.
+   With an ``aliasNameSpace``, it may instead be an enumeration whose
+   labels, or an integer or string whose values, are aliases in that name
+   space, as Yamcs reads it. Each parameter the value can name gives an
+   optional field, present when the value names it; other values select
+   nothing. In the demo's ``Dwell`` packet, ``DwellSel`` chooses
+   ``DwellTemp`` or ``DwellVolt``, and ``DwellAliasSel`` chooses them
+   again by their ``dwell`` aliases, as ``dwell_temp2`` and
+   ``dwell_volt2``. Without an ``aliasNameSpace``, an integer or string
+   selector is not supported, since the parameters it may name can't be
+   known.
+
 Name references
    Absolute (``/Root/Sub/name``), relative (``Sub/name``, ``../name``),
    and unqualified names. An unqualified name, or a relative one that
@@ -1792,8 +1807,8 @@ Name references
 
 Not supported
    references to elements of arrays whose count varies in a dimension
-   other than the first, ``IndirectParameterRefEntry``, other instances
-   than 0, repeated segment entries, repeated containers in commands,
+   other than the first, ``IndirectParameterRefEntry`` chosen by an
+   integer or string without an ``aliasNameSpace``, other instances than 0, repeated segment entries, repeated containers in commands,
    commands that include another meta-command's container,
    ``CustomAlgorithm`` criteria, transform algorithms, custom
    checksum algorithms, ``ErrorDetectCorrect`` in a data encoding (which

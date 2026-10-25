@@ -13,8 +13,8 @@ from xtcepkt import emit_c  # noqa: E402
 from xtcepkt.compile import (  # noqa: E402
     compile_document, compile_documents, item_bits, member_path, value_range)
 from xtcepkt.model import (  # noqa: E402
-    MAX_FIELD_BITS, AnyOf, ContextCal, Fill, Fixed, Index, MathOp, Pad, Require,
-    Seek, Segment, Spline, Unsupported, Value, walk)
+    MAX_FIELD_BITS, AnyOf, Cond, ContextCal, Fill, Fixed, Index, MathOp, Pad,
+    Require, Seek, Segment, Spline, Unsupported, Value, walk)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -1965,3 +1965,55 @@ class CommandContainerSetTests(unittest.TestCase):
                 c = compile_xml(text, skip_unsupported=True)
                 self.assertFalse(any(n.name == "C" for n in c.nodes))
                 self.assertTrue(any(why in m for m in c.skipped), c.skipped)
+
+
+def indirect_mission(selector: str, labels: str = "A") -> str:
+    """Telemetry with parameter A, an integer I and an enumeration E with
+    ``labels``, and a container whose IndirectParameterRefEntry is chosen
+    by ``selector``."""
+    enums = "".join(f'<Enumeration value="{i}" label="{lab}"/>'
+                    for i, lab in enumerate(labels.split()))
+    return mission(tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+          <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <EnumeratedParameterType name="ET">
+          <IntegerDataEncoding sizeInBits="8"/>
+          <EnumerationList>{enums}</EnumerationList>
+          </EnumeratedParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="A" parameterTypeRef="U8"/>
+          <Parameter name="I" parameterTypeRef="U8"/>
+          <Parameter name="E" parameterTypeRef="ET"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="P"><EntryList>
+            <ParameterRefEntry parameterRef="I"/>
+            <ParameterRefEntry parameterRef="E"/>
+            <IndirectParameterRefEntry>
+            <ParameterInstance parameterRef="{selector}"/>
+            </IndirectParameterRefEntry>
+          </EntryList></SequenceContainer>
+        </ContainerSet>""")
+
+
+class IndirectTests(unittest.TestCase):
+    def test_choices(self):
+        n = compile_xml(indirect_mission("E", "NONE A I")).nodes[0]
+        conds = [it for it in n.items if isinstance(it, Cond)]
+        self.assertEqual([c.criteria[0].text for c in conds],
+                         ["/Sat/E == A", "/Sat/E == I"])
+        self.assertEqual([c.items[0].local.name for c in conds], ["A", "I"])
+        self.assertTrue(all(c.items[0].local.optional for c in conds))
+
+    def test_rejected(self):
+        for text, why in ((indirect_mission("I"),
+                           "an IndirectParameterRefEntry chosen by int value "
+                           "/Sat/I without an aliasNameSpace"),
+                          (indirect_mission("E", "X Y"),
+                           "no label of /Sat/E names a parameter")):
+            with self.subTest(why=why):
+                with self.assertRaises(Unsupported) as cm:
+                    compile_xml(text)
+                self.assertIn(why, str(cm.exception))

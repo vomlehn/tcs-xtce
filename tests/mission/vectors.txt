@@ -156,5 +156,8 @@ tm 09ccc02a0009001fff10000bf8002003  # segmented: word 0x0fff, part 1, -1.0, no 
 tc 112ec00500040e34beef12  # split: word 0x1234, low byte first, around 0xbeef
 tc 112ec00500090f010207abcd00000000  # stamp: count 0x0102, trailer kind 7, tag 0xabcd, padded to 16 bytes
 tc 112ec00500090f010208abcd00000000  # stamp, a trailer kind that isn't 7
+tm 09d6c02a000501fffe023344  # dwell: temperature -2, then volts 0x33 by alias
+tm 09d6c02a00040001010055  # dwell: nothing, then temperature 256 by alias
+tm 09d6c02a0002030066  # dwell: an unlisted selector, then nothing
 tc 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: forced, level 7
 tc 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: not forced, so no level

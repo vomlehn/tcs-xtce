@@ -240,9 +240,7 @@ yamcs-examples/packet-viewer.xml: schema valid; loaded by the binding
 yamcs-xtce/basetype.xml: schema invalid; rejected by the binding
   digest e7216dc80a4195a72bcc72ffb1d11903
 yamcs-xtce/indirect-param.xml: schema valid; loaded by the binding
-  0 packets, 2 not supported
-    unsupported: /Example/id_value_pair: container /Example/id_value_pair: IndirectParameterRefEntry
-    unsupported: /Example/id_value_pair2: container /Example/id_value_pair2: IndirectParameterRefEntry
+  2 packets, 0 not supported
   digest 72c94a8769bc8c804cb911ac5d46a1cf
 yamcs-xtce/ipre-no-instance.xml: schema invalid; rejected by the binding
   digest c694f5c4c30b645ad36a93ac037bfcb1

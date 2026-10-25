@@ -1018,6 +1018,11 @@ allocating. Either way the value is encoded at a byte boundary, as
 decoding reads it. Segments the entry list doesn't complete, and
 container and stream segments, are replaced by <tt class="docutils literal">Value</tt>s of raw
 fields, since the rest is in other packets.</p>
+<p>An <tt class="docutils literal">IndirectParameterRefEntry</tt> needs no item of its own: each
+parameter its selector can name (by an enumeration label, or by an alias
+in its <tt class="docutils literal">aliasNameSpace</tt>) becomes a <tt class="docutils literal">Cond</tt> on <tt class="docutils literal">selector == name</tt>
+holding that parameter, so the generated code is an optional field per
+choice, as for an <tt class="docutils literal">IncludeCondition</tt>.</p>
 <p>An <tt class="docutils literal">ArrayEnc</tt> keeps each dimension's first index (<tt class="docutils literal">starts</tt>) and,
 when all are fixed, its size (<tt class="docutils literal">shape</tt>). An array entry with a
 <tt class="docutils literal">DimensionList</tt> replaces the value's type with one for the subset,

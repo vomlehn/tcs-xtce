@@ -664,6 +664,12 @@ decoding reads it. Segments the entry list doesn't complete, and
 container and stream segments, are replaced by ``Value``\ s of raw
 fields, since the rest is in other packets.
 
+An ``IndirectParameterRefEntry`` needs no item of its own: each
+parameter its selector can name (by an enumeration label, or by an alias
+in its ``aliasNameSpace``) becomes a ``Cond`` on ``selector == name``
+holding that parameter, so the generated code is an optional field per
+choice, as for an ``IncludeCondition``.
+
 An ``ArrayEnc`` keeps each dimension's first index (``starts``) and,
 when all are fixed, its size (``shape``). An array entry with a
 ``DimensionList`` replaces the value's type with one for the subset,
