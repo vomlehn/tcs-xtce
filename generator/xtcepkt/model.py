@@ -605,6 +605,9 @@ class Stream:
     # The most bits a variable stream's frame holds: the largest packet the
     # container can be.
     max_bits: int = 0
+    # A frame that is any of a Service's containers: ``container`` names the
+    # service, and these are its containers' qualified names.
+    service: list = field(default_factory=list)
 
 
 # --- containers --------------------------------------------------------------

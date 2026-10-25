@@ -441,6 +441,7 @@ class Compiler:
         self.messages: dict[Key, tuple] = {}
         self.algorithms: dict[Key, tuple] = {}
         self.streams: dict[Key, tuple] = {}
+        self.services: dict[Key, tuple] = {}
         # (kind, name) -> Hook, for the custom algorithms used
         self.hooks: dict[tuple, Hook] = {}
         self.mcs: dict[Key, tuple] = {}
@@ -476,6 +477,9 @@ class Compiler:
 
     def _index(self, ss, parent: Key) -> None:
         path = parent + (ss.name,)
+        if ss.service_set:
+            for sv in ss.service_set.service:
+                self.services[path + (sv.name,)] = (path, sv)
         tm, tc = ss.telemetry_meta_data, ss.command_meta_data
         for md in (tm, tc):
             if md is None:
@@ -2588,8 +2592,9 @@ class Compiler:
         for k in kinds:
             k.max_bytes = max(m.max_bytes for m in k.members)
         for st in streams:
-            sizes = ([k.max_bytes for k in kinds if k.root.key == st.container]
-                     + [n.max_bytes for n in concrete if n.key == st.container])
+            keys = st.service or [st.container]
+            sizes = ([k.max_bytes for k in kinds if k.root.key in keys]
+                     + [n.max_bytes for n in concrete if n.key in keys])
             st.max_bits = 8 * max(sizes, default=MAX_FIELD_BITS // 8)
         mnames = Namer()
         hnames = Namer()
@@ -2613,20 +2618,37 @@ class Compiler:
         where = f"stream {qname(key)}"
         if kind == "CustomStream":
             raise Unsupported(f"{where}: CustomStream")
-        if st.choice.name != "ContainerRef":
-            raise Unsupported(f"{where}: frames from a ServiceRef")
         if st.stream_ref is not None:
             raise Unsupported(f"{where}: a StreamRef")
         pcm = st.pcm_type.value if st.pcm_type else "NRZL"
         if pcm not in ("NRZL", "NRZM", "NRZS"):
             raise Unsupported(f"{where}: pcmType {pcm}")
-        ckey = qname(self.resolve(st.choice.value.container_ref, path,
-                                  self.containers, "container"))
+        service = []
+        if st.choice.name == "ServiceRef":
+            skey = self.resolve(st.choice.value.service_ref, path,
+                                self.services, "service")
+            spath, sv = self.services[skey]
+            ckey = qname(skey)
+            if sv.choice.name == "ContainerRefSet":
+                refs = [(spath, c.container_ref)
+                        for c in sv.choice.value.container_ref]
+            else:
+                refs = []
+                for m in sv.choice.value.message_ref:
+                    mpath, msg = self.messages[
+                        self.resolve(m.message_ref, spath, self.messages,
+                                     "message")]
+                    refs.append((mpath, msg.container_ref.container_ref))
+            service = [qname(self.resolve(ref, rpath, self.containers,
+                                          "container")) for rpath, ref in refs]
+        else:
+            ckey = qname(self.resolve(st.choice.value.container_ref, path,
+                                      self.containers, "container"))
         ss = st.sync_strategy
         if ss.auto_invert is not None and ss.auto_invert.invert_algorithm:
             raise Unsupported(f"{where}: an InvertAlgorithm")
         out = Stream(qname(key), "", ckey, kind == "FixedFrameStream", pcm,
-                     bool(st.inverted))
+                     bool(st.inverted), service=service)
         if not out.fixed:
             flag = ss.flag
             out.flag_bits = flag.flag_size_in_bits or 6

@@ -1984,9 +1984,10 @@ Streams
    that find frames in a stream of bytes: ``push`` takes the next bytes,
    in pieces of any size, and gives each frame they complete, as bytes
    (padded with zeros to whole bytes), to decode as the stream's
-   ``ContainerRef`` (``CONTAINER``). In Rust ``push(&data, |frame|
-   ...)``; in C ``P_DownlinkStream_init(&s)`` then
-   ``P_DownlinkStream_push(&s, data, len, fn, ctx)``; in Python
+   ``ContainerRef`` (``CONTAINER``), or as one of the containers of its
+   ``ServiceRef``'s service (``CONTAINER`` then names the service). In
+   Rust ``push(&data, |frame| ...)``; in C ``P_DownlinkStream_init(&s)``
+   then ``P_DownlinkStream_push(&s, data, len, fn, ctx)``; in Python
    ``s.push(data)`` returns the frames. Neither allocates.
 
    Both read the bits most significant first, invert them when
@@ -2024,8 +2025,7 @@ Streams
    ``tests/stream_check.sh`` checks that every runtime finds the same
    frames, in ``tests/mission/streams.txt`` and in random streams with
    slips, bit errors, inversions and aborts. Not supported: a
-   ``ServiceRef`` or ``StreamRef`` in place of the container, a
-   ``CustomStream``, an ``InvertAlgorithm``, the biphase ``pcmType``\ s,
+   ``StreamRef`` from a stream it connects to, a ``CustomStream``, an ``InvertAlgorithm``, the biphase ``pcmType``\ s,
    sync patterns longer than 64 bits, and a ``syncApertureInBits`` of
    half a frame or more.
 

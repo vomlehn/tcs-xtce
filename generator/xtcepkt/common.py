@@ -213,6 +213,9 @@ def stream_capacity(st) -> tuple[int, int]:
 def stream_doc(st) -> str:
     """What a stream type's documentation says it is."""
     what = "Fixed" if st.fixed else "Variable"
+    if st.service:
+        return (f"{what} frame stream {st.key}: finds its frames, each a "
+                f"packet of service {st.container}: {', '.join(st.service)}.")
     return (f"{what} frame stream {st.key}: finds its frames, each a "
             f"{st.container} packet.")
 

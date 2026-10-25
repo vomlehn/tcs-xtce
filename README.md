@@ -211,18 +211,27 @@ let wire = codec.encode(&demo::SetMode { mode: demo::ModeArgType::SCIENCE, ..Def
 
 Supported features:
 
-* integer (four signed encodings, either byte order), IEEE float,
-  enumerated, boolean, string, binary and time types;
-* polynomial and spline calibrators;
-* container inheritance with comparison criteria;
-* included containers;
-* fixed locations;
-* include conditions;
-* commands with argument assignments and fixed values.
+* every XTCE data type: integers (any size up to 64 bits, every signed
+  encoding and BCD), floats (IEEE 754 16 to 128 bits, MIL-STD-1750A, DEC,
+  IBM, TI), strings in every character set, binary, enumerations,
+  booleans, times, arrays and aggregates, in any bit and byte order, with
+  valid ranges checked when encoding;
+* polynomial, spline, math operation and context calibrators;
+* container inheritance with comparisons and boolean expressions,
+  included and repeated containers, locations, include conditions,
+  container sizes, parameter segments, indirect entries and messages;
+* packet length fields, sizes and counts from other values, and error
+  detection: CRCs, checksums, XOR and parity;
+* commands, including containers from a `CommandContainerSet`;
+* missions split across several documents, with one digest for the set;
+* alarms, including the ones that depend on earlier samples, and
+  `MathAlgorithm`s;
+* fixed and variable frame streams, with frame synchronization;
+* custom algorithms, which the application supplies as functions.
 
 See the manual for the exact list. `tests/packet_check.sh` checks that
-Rust, C++ and Python produce identical results on hand-built and random
-packets.
+Rust, C, C++ and Python produce identical results on hand-built and
+random packets.
 
 ## Behaviour and limitations
 

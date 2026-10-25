@@ -2416,9 +2416,10 @@ become stream types (<tt class="docutils literal">DownlinkStream</tt> for a stre
 that find frames in a stream of bytes: <tt class="docutils literal">push</tt> takes the next bytes,
 in pieces of any size, and gives each frame they complete, as bytes
 (padded with zeros to whole bytes), to decode as the stream's
-<tt class="docutils literal">ContainerRef</tt> (<tt class="docutils literal">CONTAINER</tt>). In Rust <tt class="docutils literal"><span class="pre">push(&amp;data,</span> |frame|
-<span class="pre">...)</span></tt>; in C <tt class="docutils literal"><span class="pre">P_DownlinkStream_init(&amp;s)</span></tt> then
-<tt class="docutils literal"><span class="pre">P_DownlinkStream_push(&amp;s,</span> data, len, fn, ctx)</tt>; in Python
+<tt class="docutils literal">ContainerRef</tt> (<tt class="docutils literal">CONTAINER</tt>), or as one of the containers of its
+<tt class="docutils literal">ServiceRef</tt>'s service (<tt class="docutils literal">CONTAINER</tt> then names the service). In
+Rust <tt class="docutils literal"><span class="pre">push(&amp;data,</span> |frame| <span class="pre">...)</span></tt>; in C <tt class="docutils literal"><span class="pre">P_DownlinkStream_init(&amp;s)</span></tt>
+then <tt class="docutils literal"><span class="pre">P_DownlinkStream_push(&amp;s,</span> data, len, fn, ctx)</tt>; in Python
 <tt class="docutils literal">s.push(data)</tt> returns the frames. Neither allocates.</p>
 <p>Both read the bits most significant first, invert them when
 <tt class="docutils literal">inverted</tt> says to, and decode the <tt class="docutils literal">pcmType</tt>: <tt class="docutils literal">NRZL</tt> (the
@@ -2452,8 +2453,7 @@ between flags, NRZ-M coded.</p>
 <p class="last"><tt class="docutils literal">tests/stream_check.sh</tt> checks that every runtime finds the same
 frames, in <tt class="docutils literal">tests/mission/streams.txt</tt> and in random streams with
 slips, bit errors, inversions and aborts. Not supported: a
-<tt class="docutils literal">ServiceRef</tt> or <tt class="docutils literal">StreamRef</tt> in place of the container, a
-<tt class="docutils literal">CustomStream</tt>, an <tt class="docutils literal">InvertAlgorithm</tt>, the biphase <tt class="docutils literal">pcmType</tt>s,
+<tt class="docutils literal">StreamRef</tt> from a stream it connects to, a <tt class="docutils literal">CustomStream</tt>, an <tt class="docutils literal">InvertAlgorithm</tt>, the biphase <tt class="docutils literal">pcmType</tt>s,
 sync patterns longer than 64 bits, and a <tt class="docutils literal">syncApertureInBits</tt> of
 half a frame or more.</p>
 </dd>

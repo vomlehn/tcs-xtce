@@ -55,6 +55,19 @@ class StreamTests(unittest.TestCase):
         self.assertEqual((st.fixed, st.flag_bits, st.flag_ones, st.max_bits),
                          (False, 7, False, 8))
 
+    def test_service(self):
+        text = stream_mission('<VariableFrameStream name="V"><ServiceRef '
+                              'serviceRef="Svc"/><SyncStrategy><Flag/>'
+                              '</SyncStrategy></VariableFrameStream>')
+        text = text.replace("</TelemetryMetaData>",
+                            "</TelemetryMetaData>"
+                            '<ServiceSet><Service name="Svc"><ContainerRefSet>'
+                            '<ContainerRef containerRef="F"/></ContainerRefSet>'
+                            '</Service></ServiceSet>')
+        (st,) = compile_xml(text).streams
+        self.assertEqual((st.container, st.service, st.max_bits),
+                         ("/Sat/Svc", ["/Sat/F"], 8))
+
     def test_unsupported(self):
         for stream, why in (
                 (fixed('pattern="1ACF" patternLengthInBits="16"', "",

@@ -105,7 +105,7 @@ int main(void) {
         /* One status in each mode but SAFE, which is a SafeStatus: its
          * restriction fixes the mode, so the structure has no mode field. */
         for (i = 0; i < 4; ++i) memset(&kinds[i], 0, sizeof kinds[i]);
-        kinds[0].tag = kinds[1].tag = kinds[2].tag = probe_StatusKind_Status_tag;
+        for (i = 0; i < 3; ++i) kinds[i].tag = probe_StatusKind_Status_tag;
         probe_Status_init(&kinds[0].u.Status);
         kinds[0].u.Status.mode = probe_ModeType_IDLE;
         kinds[0].u.Status.battery = 80;
