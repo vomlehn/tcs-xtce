@@ -3,11 +3,13 @@
      that is present only when the heater is on.
 
      PacketLength    16 bits   bytes after this field; computed when encoding
-     HeaterMode       4 bits   Off or On
+     HeaterOn         4 bits   0 for false, anything else for true
      Temperature     12 bits   raw / 16 - 50 degrees C
      BusVoltage       8 bits   raw / 8 volts
-     HeaterPower     16 bits   raw / 64 watts, only when HeaterMode is On
+     HeaterPower     16 bits   raw / 64 watts, only when HeaterOn is true
 
+     HeaterOn takes 4 bits, though 1 would do, so that it and Temperature
+     fill two bytes and the fields after them start on byte boundaries.
      The slopes are powers of two, so every calibrated value is exact in
      binary and prints the same way in every language. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Housekeeping">
@@ -16,13 +18,9 @@
       <IntegerParameterType name="LengthType" signed="false">
         <IntegerDataEncoding sizeInBits="16"/>
       </IntegerParameterType>
-      <EnumeratedParameterType name="HeaterModeType">
+      <BooleanParameterType name="HeaterOnType">
         <IntegerDataEncoding sizeInBits="4"/>
-        <EnumerationList>
-          <Enumeration value="0" label="Off"/>
-          <Enumeration value="1" label="On"/>
-        </EnumerationList>
-      </EnumeratedParameterType>
+      </BooleanParameterType>
       <FloatParameterType name="TemperatureType">
         <UnitSet>
           <Unit>degC</Unit>
@@ -68,7 +66,7 @@
           <AncillaryData name="tcs-xtce.length">0</AncillaryData>
         </AncillaryDataSet>
       </Parameter>
-      <Parameter name="HeaterMode" parameterTypeRef="HeaterModeType"/>
+      <Parameter name="HeaterOn" parameterTypeRef="HeaterOnType"/>
       <Parameter name="Temperature" parameterTypeRef="TemperatureType"/>
       <Parameter name="BusVoltage" parameterTypeRef="VoltageType"/>
       <Parameter name="HeaterPower" parameterTypeRef="PowerType"/>
@@ -77,12 +75,12 @@
       <SequenceContainer name="Status">
         <EntryList>
           <ParameterRefEntry parameterRef="PacketLength"/>
-          <ParameterRefEntry parameterRef="HeaterMode"/>
+          <ParameterRefEntry parameterRef="HeaterOn"/>
           <ParameterRefEntry parameterRef="Temperature"/>
           <ParameterRefEntry parameterRef="BusVoltage"/>
           <ParameterRefEntry parameterRef="HeaterPower">
             <IncludeCondition>
-              <Comparison parameterRef="HeaterMode" value="On"/>
+              <Comparison parameterRef="HeaterOn" value="true"/>
             </IncludeCondition>
           </ParameterRefEntry>
         </EntryList>

@@ -30,17 +30,16 @@
  * calibrators can represent.  The heater powers are ignored when the heater
  * is off. */
 struct reading {
-        housekeeping_HeaterModeType heater_mode;
+        bool heater_on;
         double temperature, bus_voltage, heater_power;
         double want_temperature, want_bus_voltage, want_heater_power;
 };
 
 static const struct reading READINGS[N_READINGS] = {
-        {housekeeping_HeaterModeType_OFF, 21.53, 28.3, 0, 21.5, 28.25, 0},
-        {housekeeping_HeaterModeType_ON, -12.25, 27.5, 4.5, -12.25, 27.5, 4.5},
-        {housekeeping_HeaterModeType_ON, -20.01, 26.9, 12.74, -20.0, 26.875,
-         12.734375},
-        {housekeeping_HeaterModeType_OFF, 5.0, 28.0, 0, 5.0, 28.0, 0},
+        {false, 21.53, 28.3, 0, 21.5, 28.25, 0},
+        {true, -12.25, 27.5, 4.5, -12.25, 27.5, 4.5},
+        {true, -20.01, 26.9, 12.74, -20.0, 26.875, 12.734375},
+        {false, 5.0, 28.0, 0, 5.0, 28.0, 0},
 };
 
 static void fail(const char* fmt, ...) {
@@ -64,19 +63,18 @@ static const char* text(const housekeeping_Status* s, char* buf, size_t cap) {
         return buf;
 }
 
-static void status(housekeeping_Status* s, housekeeping_HeaterModeType mode,
-                   double temperature, double bus_voltage,
-                   double heater_power) {
+static void status(housekeeping_Status* s, bool heater_on, double temperature,
+                   double bus_voltage, double heater_power) {
         housekeeping_Status_init(s);
-        s->heater_mode = mode;
+        s->heater_on = heater_on;
         s->temperature = temperature;
         s->bus_voltage = bus_voltage;
-        s->has_heater_power = mode == housekeeping_HeaterModeType_ON;
+        s->has_heater_power = heater_on;
         s->heater_power = s->has_heater_power ? heater_power : 0;
 }
 
 static int same(const housekeeping_Status* a, const housekeeping_Status* b) {
-        return a->heater_mode == b->heater_mode &&
+        return a->heater_on == b->heater_on &&
                a->temperature == b->temperature &&
                a->bus_voltage == b->bus_voltage &&
                a->has_heater_power == b->has_heater_power &&
@@ -127,7 +125,7 @@ int main(void) {
          * them. */
         for (i = 0; i < N_READINGS; ++i) {
                 const struct reading* r = &READINGS[i];
-                status(&s, r->heater_mode, r->temperature, r->bus_voltage,
+                status(&s, r->heater_on, r->temperature, r->bus_voltage,
                        r->heater_power);
                 if (housekeeping_Status_encode(&s, out, sizeof out, &len, &err))
                         fail("encoding %s failed", text(&s, t, sizeof t));
@@ -152,7 +150,7 @@ int main(void) {
                         fail("decoding at %zu failed", at);
                 printf("decode at %zu: %zu bytes -> %s\n", at, size,
                        text(&s, t, sizeof t));
-                status(&want, r->heater_mode, r->want_temperature,
+                status(&want, r->heater_on, r->want_temperature,
                        r->want_bus_voltage, r->want_heater_power);
                 if (!same(&s, &want)) {
                         char w[256];
@@ -170,10 +168,10 @@ int main(void) {
         if (at != n) fail("%zu bytes after the last packet", n - at);
 
         /* What the generated code rejects. */
-        status(&s, housekeeping_HeaterModeType_ON, 20.0, 28.0, 0);
+        status(&s, true, 20.0, 28.0, 0);
         s.has_heater_power = false;
         try_encode(&s);
-        status(&s, housekeeping_HeaterModeType_OFF, 300.0, 28.0, 0);
+        status(&s, false, 300.0, 28.0, 0);
         try_encode(&s);
         try_decode(stream + 5, 4, "cut short");
         memcpy(bad, stream, 5);

@@ -1514,10 +1514,10 @@ Each is summarized below; its README has the details.
 ::
 
    PacketLength    16 bits   bytes after this field; computed when encoding
-   HeaterMode       4 bits   Off (0) or On (1)
+   HeaterOn         4 bits   0 for false, anything else for true
    Temperature     12 bits   raw / 16 - 50 degrees C
    BusVoltage       8 bits   raw / 8 volts
-   HeaterPower     16 bits   raw / 64 watts, only when HeaterMode is On
+   HeaterPower     16 bits   raw / 64 watts, only when HeaterOn is true
 
 ``PacketLength`` is a packet length field (see `Generated packet types`_):
 its ``tcs-xtce.length`` ``AncillaryData`` makes the generated code compute
@@ -1525,7 +1525,7 @@ it when encoding and check it when decoding, and it isn't a field of the
 structure. ``Temperature``, ``BusVoltage`` and ``HeaterPower`` have
 ``PolynomialCalibrator``\ s, so the structure holds degrees, volts and
 watts while the packet holds raw counts. ``HeaterPower`` has an
-``IncludeCondition`` on ``HeaterMode``, so it is optional: ``Option<f64>``
+``IncludeCondition`` on the boolean ``HeaterOn``, so it is optional: ``Option<f64>``
 in Rust, ``has_heater_power`` and ``heater_power`` in C/C++, and
 ``Optional[float]`` in Python.
 
@@ -1538,9 +1538,9 @@ and a wrong ``PacketLength``:
 
 ::
 
-   decode at 5: 7 bytes -> Status{heater_mode=On, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
-   decode at 12: 7 bytes -> Status{heater_mode=On, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
-   encode Status{heater_mode=On, temperature=20.0, bus_voltage=28.0, heater_power=none} -> error:Missing (HeaterPower is required by its include condition)
+   decode at 5: 7 bytes -> Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+   decode at 12: 7 bytes -> Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+   encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=none} -> error:Missing (HeaterPower is required by its include condition)
 
 See the `housekeeping README <../examples/housekeeping/README.html>`__ for
 more.

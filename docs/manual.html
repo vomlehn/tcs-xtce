@@ -1937,10 +1937,10 @@ thread to another, each after its length.</li>
 <tt class="docutils literal">Status</tt>:</p>
 <pre class="literal-block">
 PacketLength    16 bits   bytes after this field; computed when encoding
-HeaterMode       4 bits   Off (0) or On (1)
+HeaterOn         4 bits   0 for false, anything else for true
 Temperature     12 bits   raw / 16 - 50 degrees C
 BusVoltage       8 bits   raw / 8 volts
-HeaterPower     16 bits   raw / 64 watts, only when HeaterMode is On
+HeaterPower     16 bits   raw / 64 watts, only when HeaterOn is true
 </pre>
 <p><tt class="docutils literal">PacketLength</tt> is a packet length field (see <a class="reference internal" href="#generated-packet-types">Generated packet types</a>):
 its <tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> <tt class="docutils literal">AncillaryData</tt> makes the generated code compute
@@ -1948,7 +1948,7 @@ it when encoding and check it when decoding, and it isn't a field of the
 structure. <tt class="docutils literal">Temperature</tt>, <tt class="docutils literal">BusVoltage</tt> and <tt class="docutils literal">HeaterPower</tt> have
 <tt class="docutils literal">PolynomialCalibrator</tt>s, so the structure holds degrees, volts and
 watts while the packet holds raw counts. <tt class="docutils literal">HeaterPower</tt> has an
-<tt class="docutils literal">IncludeCondition</tt> on <tt class="docutils literal">HeaterMode</tt>, so it is optional: <tt class="docutils literal">Option&lt;f64&gt;</tt>
+<tt class="docutils literal">IncludeCondition</tt> on the boolean <tt class="docutils literal">HeaterOn</tt>, so it is optional: <tt class="docutils literal">Option&lt;f64&gt;</tt>
 in Rust, <tt class="docutils literal">has_heater_power</tt> and <tt class="docutils literal">heater_power</tt> in C/C++, and
 <tt class="docutils literal">Optional[float]</tt> in Python.</p>
 <p>Each program encodes four readings into one stream, one packet after
@@ -1958,9 +1958,9 @@ rounded to the nearest step of each calibrator. It then shows the errors
 for a missing heater power, a temperature out of range, a packet cut short
 and a wrong <tt class="docutils literal">PacketLength</tt>:</p>
 <pre class="literal-block">
-decode at 5: 7 bytes -&gt; Status{heater_mode=On, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
-decode at 12: 7 bytes -&gt; Status{heater_mode=On, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
-encode Status{heater_mode=On, temperature=20.0, bus_voltage=28.0, heater_power=none} -&gt; error:Missing (HeaterPower is required by its include condition)
+decode at 5: 7 bytes -&gt; Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+decode at 12: 7 bytes -&gt; Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=none} -&gt; error:Missing (HeaterPower is required by its include condition)
 </pre>
 <p>See the <a class="reference external" href="../examples/housekeeping/README.html">housekeeping README</a> for
 more.</p>

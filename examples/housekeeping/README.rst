@@ -16,7 +16,7 @@ does for you:
   watts. The packet holds raw counts, which the calibrators in the XTCE
   file convert to and from those units.
 * **An optional field.** ``HeaterPower`` is in the packet only when
-  ``HeaterMode`` is ``On``, as its include condition says. Packets with the
+  ``HeaterOn`` is true, as its include condition says. Packets with the
   heater on are two bytes longer.
 
 Each program does the same thing:
@@ -45,10 +45,16 @@ The XTCE description
 ::
 
    PacketLength    16 bits   bytes after this field; computed when encoding
-   HeaterMode       4 bits   Off (0) or On (1)
+   HeaterOn         4 bits   0 for false, anything else for true
    Temperature     12 bits   raw / 16 - 50 degrees C
    BusVoltage       8 bits   raw / 8 volts
-   HeaterPower     16 bits   raw / 64 watts, only when HeaterMode is On
+   HeaterPower     16 bits   raw / 64 watts, only when HeaterOn is true
+
+``HeaterOn`` is a ``BooleanParameterType`` with a 4-bit
+``IntegerDataEncoding``. One bit would do, but with 4, ``HeaterOn`` and the
+12-bit ``Temperature`` fill two bytes, so the fields after them start on
+byte boundaries and are easy to pick out in a hex dump. Encoding writes 1
+for true; decoding reads any value other than 0 as true.
 
 **The length field.** XTCE has no way to say that a field holds the length
 of its packet, so tcs-xtce reads it from an ``AncillaryData`` named
@@ -96,13 +102,13 @@ every language. A value between two steps comes back as the nearest one:
 outside the range can't be encoded.
 
 **The include condition.** The entry for ``HeaterPower`` has an
-``IncludeCondition`` on ``HeaterMode``, compared by its label:
+``IncludeCondition`` on ``HeaterOn``:
 
 .. code-block:: xml
 
    <ParameterRefEntry parameterRef="HeaterPower">
      <IncludeCondition>
-       <Comparison parameterRef="HeaterMode" value="On"/>
+       <Comparison parameterRef="HeaterOn" value="true"/>
      </IncludeCondition>
    </ParameterRefEntry>
 
@@ -113,7 +119,7 @@ with it on (``PacketLength`` 5). The heater-on reading -12.25 °C, 27.5 V,
 ::
 
    0005        PacketLength: 5 bytes follow
-   1           HeaterMode: On
+   1           HeaterOn: true
    25c         Temperature: raw 604, 604 / 16 - 50 = -12.25
    dc          BusVoltage: raw 220, 220 / 8 = 27.5
    0120        HeaterPower: raw 288, 288 / 64 = 4.5
@@ -147,8 +153,7 @@ first. ``--lang c++`` writes the same header as ``--lang c``. The example
 generates both, so that the C program uses ``c/housekeeping.h`` and the C++
 program uses ``cxx/housekeeping.h``.
 
-Each language gets a ``Status`` structure and a ``HeaterModeType``
-enumeration. ``PacketLength`` is not a field: the generated code computes
+Each language gets a ``Status`` structure. ``PacketLength`` is not a field: the generated code computes
 and checks it. In C/C++ every name starts with ``housekeeping_``, the
 mission's prefix.
 
@@ -161,21 +166,15 @@ mission's prefix.
      - C/C++
      - Python
    * - Status
-     - ``struct Status`` with ``heater_mode: HeaterModeType``,
+     - ``struct Status`` with ``heater_on: bool``,
        ``temperature: f64``, ``bus_voltage: f64`` and
        ``heater_power: Option<f64>``
-     - ``housekeeping_Status`` with ``heater_mode``, ``double
+     - ``housekeeping_Status`` with ``bool heater_on``, ``double
        temperature``, ``double bus_voltage``, ``bool has_heater_power``
        and ``double heater_power``
-     - ``@dataclass class Status`` with ``heater_mode``,
+     - ``@dataclass class Status`` with ``heater_on: bool``,
        ``temperature: float``, ``bus_voltage: float`` and
        ``heater_power: Optional[float]``
-   * - HeaterModeType
-     - ``struct HeaterModeType(pub i64)``, with ``HeaterModeType::OFF``
-       and ``HeaterModeType::ON``
-     - ``int64_t``, with ``housekeeping_HeaterModeType_OFF`` and
-       ``housekeeping_HeaterModeType_ON``
-     - ``IntEnum``, with ``HeaterModeType.OFF`` and ``HeaterModeType.ON``
    * - Serialize
      - ``Codec::encode(&status)``
      - ``housekeeping_Status_encode(p, buf, cap, &len, &err)``
@@ -190,7 +189,7 @@ mission's prefix.
      - ``Status.MAX_BYTES`` = 7
 
 When encoding, ``heater_power`` must be present exactly when the heater is
-on: if ``heater_mode`` is ``On`` and it is absent, encoding fails with
+on: if ``heater_on`` is true and it is absent, encoding fails with
 ``Missing``. When the heater is off it isn't encoded, and decoding leaves it
 absent (``None``, or ``has_heater_power`` false).
 
@@ -208,17 +207,17 @@ that they print the same thing:
 
    $ make
    ...
-   encode Status{heater_mode=Off, temperature=21.53, bus_voltage=28.3, heater_power=none} -> 00030478e2
-   encode Status{heater_mode=On, temperature=-12.25, bus_voltage=27.5, heater_power=4.5} -> 0005125cdc0120
-   encode Status{heater_mode=On, temperature=-20.01, bus_voltage=26.9, heater_power=12.74} -> 000511e0d7032f
-   encode Status{heater_mode=Off, temperature=5.0, bus_voltage=28.0, heater_power=none} -> 00030370e0
+   encode Status{heater_on=false, temperature=21.53, bus_voltage=28.3, heater_power=none} -> 00030478e2
+   encode Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5} -> 0005125cdc0120
+   encode Status{heater_on=true, temperature=-20.01, bus_voltage=26.9, heater_power=12.74} -> 000511e0d7032f
+   encode Status{heater_on=false, temperature=5.0, bus_voltage=28.0, heater_power=none} -> 00030370e0
    stream: 4 packets, 24 bytes
-   decode at 0: 5 bytes -> Status{heater_mode=Off, temperature=21.5, bus_voltage=28.25, heater_power=none}
-   decode at 5: 7 bytes -> Status{heater_mode=On, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
-   decode at 12: 7 bytes -> Status{heater_mode=On, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
-   decode at 19: 5 bytes -> Status{heater_mode=Off, temperature=5.0, bus_voltage=28.0, heater_power=none}
-   encode Status{heater_mode=On, temperature=20.0, bus_voltage=28.0, heater_power=none} -> error:Missing (HeaterPower is required by its include condition)
-   encode Status{heater_mode=Off, temperature=300.0, bus_voltage=28.0, heater_power=none} -> error:OutOfRange (value of Temperature does not fit its encoding)
+   decode at 0: 5 bytes -> Status{heater_on=false, temperature=21.5, bus_voltage=28.25, heater_power=none}
+   decode at 5: 7 bytes -> Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+   decode at 12: 7 bytes -> Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+   decode at 19: 5 bytes -> Status{heater_on=false, temperature=5.0, bus_voltage=28.0, heater_power=none}
+   encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=none} -> error:Missing (HeaterPower is required by its include condition)
+   encode Status{heater_on=false, temperature=300.0, bus_voltage=28.0, heater_power=none} -> error:OutOfRange (value of Temperature does not fit its encoding)
    decode 0005125c (cut short) -> error:Truncated (packet too short for PacketLength)
    decode 00040478e200 (PacketLength one too many) -> error:BadLength (PacketLength does not match the length of the packet)
    housekeeping: Rust, C, C++ and Python output identical

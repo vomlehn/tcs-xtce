@@ -19,9 +19,7 @@ from typing import NamedTuple, Optional
 
 from xtce.packet import Codec, PacketError
 
-from housekeeping import HeaterModeType, Status
-
-OFF, ON = HeaterModeType.OFF, HeaterModeType.ON
+from housekeeping import Status
 
 
 class Reading(NamedTuple):
@@ -34,15 +32,15 @@ class Reading(NamedTuple):
 
 
 READINGS = [
-    Reading(Status(heater_mode=OFF, temperature=21.53, bus_voltage=28.3),
+    Reading(Status(heater_on=False, temperature=21.53, bus_voltage=28.3),
             21.5, 28.25, None),
-    Reading(Status(heater_mode=ON, temperature=-12.25, bus_voltage=27.5,
+    Reading(Status(heater_on=True, temperature=-12.25, bus_voltage=27.5,
                    heater_power=4.5),
             -12.25, 27.5, 4.5),
-    Reading(Status(heater_mode=ON, temperature=-20.01, bus_voltage=26.9,
+    Reading(Status(heater_on=True, temperature=-20.01, bus_voltage=26.9,
                    heater_power=12.74),
             -20.0, 26.875, 12.734375),
-    Reading(Status(heater_mode=OFF, temperature=5.0, bus_voltage=28.0),
+    Reading(Status(heater_on=False, temperature=5.0, bus_voltage=28.0),
             5.0, 28.0, None),
 ]
 
@@ -96,7 +94,7 @@ def main() -> None:
         codec.load(packet)
         status = codec.decode(Status)
         print(f"decode at {at}: {size} bytes -> {status.describe()}")
-        want = Status(heater_mode=r.status.heater_mode,
+        want = Status(heater_on=r.status.heater_on,
                       temperature=r.temperature, bus_voltage=r.bus_voltage,
                       heater_power=r.heater_power)
         if status != want:
@@ -110,9 +108,9 @@ def main() -> None:
         fail(f"{len(stream) - at} bytes after the last packet")
 
     # What the generated code rejects.
-    try_encode(codec, Status(heater_mode=ON, temperature=20.0,
+    try_encode(codec, Status(heater_on=True, temperature=20.0,
                              bus_voltage=28.0))
-    try_encode(codec, Status(heater_mode=OFF, temperature=300.0,
+    try_encode(codec, Status(heater_on=False, temperature=300.0,
                              bus_voltage=28.0))
     on = bytes(stream[5:12])
     try_decode(codec, on[:4], "cut short")

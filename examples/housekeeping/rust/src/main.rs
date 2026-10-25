@@ -18,11 +18,8 @@ mod housekeeping;
 
 use std::process;
 
-use housekeeping::{HeaterModeType, Status};
+use housekeeping::Status;
 use tcs_xtce::packet::Codec;
-
-const OFF: HeaterModeType = HeaterModeType::OFF;
-const ON: HeaterModeType = HeaterModeType::ON;
 
 /// A `Status` to encode, and the values decoding it must give: the nearest
 /// the calibrators can represent.
@@ -34,33 +31,33 @@ struct Reading {
 }
 
 fn readings() -> [Reading; 4] {
-    let status = |heater_mode, temperature, bus_voltage, heater_power| Status {
-        heater_mode,
+    let status = |heater_on, temperature, bus_voltage, heater_power| Status {
+        heater_on,
         temperature,
         bus_voltage,
         heater_power,
     };
     [
         Reading {
-            status: status(OFF, 21.53, 28.3, None),
+            status: status(false, 21.53, 28.3, None),
             temperature: 21.5,
             bus_voltage: 28.25,
             heater_power: None,
         },
         Reading {
-            status: status(ON, -12.25, 27.5, Some(4.5)),
+            status: status(true, -12.25, 27.5, Some(4.5)),
             temperature: -12.25,
             bus_voltage: 27.5,
             heater_power: Some(4.5),
         },
         Reading {
-            status: status(ON, -20.01, 26.9, Some(12.74)),
+            status: status(true, -20.01, 26.9, Some(12.74)),
             temperature: -20.0,
             bus_voltage: 26.875,
             heater_power: Some(12.734375),
         },
         Reading {
-            status: status(OFF, 5.0, 28.0, None),
+            status: status(false, 5.0, 28.0, None),
             temperature: 5.0,
             bus_voltage: 28.0,
             heater_power: None,
@@ -130,7 +127,7 @@ fn main() {
             .unwrap_or_else(|e| fail(&format!("decoding at {at}: {e}")));
         println!("decode at {at}: {size} bytes -> {status}");
         let want = Status {
-            heater_mode: r.status.heater_mode,
+            heater_on: r.status.heater_on,
             temperature: r.temperature,
             bus_voltage: r.bus_voltage,
             heater_power: r.heater_power,
@@ -160,7 +157,7 @@ fn main() {
     try_encode(
         &mut codec,
         &Status {
-            heater_mode: ON,
+            heater_on: true,
             temperature: 20.0,
             bus_voltage: 28.0,
             heater_power: None,
@@ -169,7 +166,7 @@ fn main() {
     try_encode(
         &mut codec,
         &Status {
-            heater_mode: OFF,
+            heater_on: false,
             temperature: 300.0,
             bus_voltage: 28.0,
             heater_power: None,
