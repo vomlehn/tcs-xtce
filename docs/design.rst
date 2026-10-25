@@ -515,6 +515,13 @@ but it must be in the declaring container or below: marking a field of a
 base container computed would take it out of sibling packets that don't
 have the check.
 
+A check in a container that is included only when an ``IncludeCondition``
+holds can't wait for the end of the packet: the marks that bound it are
+set inside the conditional block, and in Rust and C they don't outlive
+it. Its bits all lie in the container, though, so the compiler puts a
+``Verify`` item where the container ends, inside the block: decoding
+checks it there and encoding patches it there.
+
 XTCE names the checksum algorithms without defining them. The names
 (``sum8``, ``unix_sum``, ``fletcher16``, ``luhn`` and the rest) are
 Jacksum's, so tcs-xtce uses Jacksum's definitions where it has them: a
@@ -980,10 +987,6 @@ Limitations and future work
   read it through ``element()``, which fails with ``BadSize``; C, which
   has no way to leave an expression early, checks with
   ``xtce_pk_element()`` before each statement that reads it.
-
-  Error detection (``ErrorDetectCorrect``: CRCs and checksums) is left
-  out on purpose: the packets travel over a link that already detects
-  errors. Documents that use it are reported as unsupported.
 
 * **Computed fields:** packet length fields are computed when the
   document marks them, and sizes and counts when what they size is a

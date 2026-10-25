@@ -11,7 +11,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
-                    Value, VType, Require, Fill, Segment)
+                    Value, VType, Require, Fill, Segment, Verify)
 
 
 def rstr(s: str) -> str:
@@ -533,7 +533,8 @@ class RustEmitter:
                       "encoding and describing a")
             self.line("//! packet never allocate.")
         self.line("#![allow(dead_code, unused_imports, unused_variables, "
-                  "unreachable_code, unused_parens, clippy::all)]")
+                  "unused_assignments, unreachable_code, unused_parens, "
+                  "clippy::all)]")
         self.line()
         self.line("use std::fmt::{self, Write as _};")
         self.line("use tcs_xtce::packet::{self as pk, BitReader, BitWriter, "
@@ -611,6 +612,11 @@ class RustEmitter:
                 self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: f"v{lc.id}", depth)
+            elif isinstance(it, Verify):
+                lc = it.check.local
+                self.verify(it.check,
+                            f"v{lc.id}.unwrap_or_default()" if assign
+                            else f"v{lc.id}", depth)
             elif isinstance(it, Fill):
                 self.fill(it, "r", self.read_ref, depth)
             elif isinstance(it, Segment):
@@ -671,6 +677,8 @@ class RustEmitter:
                 self.line(f"w.zeros({it.bits});", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: self.place(n, lc, names), depth)
+            elif isinstance(it, Verify):
+                self.patch(it.check, depth)
             elif isinstance(it, Fill):
                 self.fill(it, "w", self.write_ref(n, names), depth)
             elif isinstance(it, Cond):
@@ -771,15 +779,28 @@ class RustEmitter:
         if lc is not None:
             self.line(f"r.finish({rstr(lc.name)})?;", depth)
         for c in n.checks:
-            f = rstr(c.local.name)
-            start, end = self.region(c, "r")
-            self.line(f"if r.checksum(&{checksum_spec(c.spec)}, {start}, "
-                      f"{end}, {f})? & "
-                      f"{hex((1 << c.local.vtype.enc.bits) - 1)} != "
-                      f"v{c.local.id} as u64 {{", depth)
-            self.line(f"return Err(PacketError::BadChecksum {{ field: {f} }});",
-                      depth + 1)
-            self.line("}", depth)
+            self.verify(c, f"v{c.local.id}", depth)
+
+    def verify(self, c, value: str, depth: int) -> None:
+        """Fails with BadChecksum unless check ``c`` holds; ``value`` is the
+        expression for its field's value."""
+        f = rstr(c.local.name)
+        start, end = self.region(c, "r")
+        self.line(f"if r.checksum(&{checksum_spec(c.spec)}, {start}, {end}, "
+                  f"{f})? & {hex((1 << c.local.vtype.enc.bits) - 1)} != "
+                  f"{value} as u64 {{", depth)
+        self.line(f"return Err(PacketError::BadChecksum {{ field: {f} }});",
+                  depth + 1)
+        self.line("}", depth)
+
+    def patch(self, c, depth: int) -> None:
+        """Writes the value of check ``c`` into its field."""
+        enc = c.local.vtype.enc
+        start, end = self.region(c, "w")
+        self.line(f"w.patch_checksum(&{checksum_spec(c.spec)}, {start}, {end}, "
+                  f"l{c.local.id}, {enc.bits}, "
+                  f"{str(enc.little_endian).lower()}, {rstr(c.local.name)})?;",
+                  depth)
 
     def region(self, c, rw: str) -> tuple:
         """The start and end of the bits a check covers, with reader or
@@ -895,12 +916,7 @@ class RustEmitter:
                       f"{str(enc.little_endian).lower()}, {length.length}, "
                       f"{rstr(length.name)})?;", 2)
         for c in n.checks:
-            enc = c.local.vtype.enc
-            start, end = self.region(c, "w")
-            self.line(f"w.patch_checksum(&{checksum_spec(c.spec)}, {start}, "
-                      f"{end}, l{c.local.id}, {enc.bits}, "
-                      f"{str(enc.little_endian).lower()}, "
-                      f"{rstr(c.local.name)})?;", 2)
+            self.patch(c, 2)
         if empty:
             self.line("let _ = w;", 2)
         self.line("Ok(())", 2)

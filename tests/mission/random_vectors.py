@@ -257,6 +257,22 @@ def checked(rng, header: bytes):
     return bytes(data), True
 
 
+def guarded(rng, header: bytes) -> bytes:
+    """A whole Guarded packet, encoded by the codec, sometimes with a bit
+    wrong."""
+    on = rng.random() < 0.7
+    p = demo.Guarded(sec_hdr_flag=bool(header[0] & 0x08),
+                     seq_flags=demo.SeqFlagsType.UNSEGMENTED,
+                     seq_count=rng.randrange(1 << 14), guard_on=on,
+                     block_data=rng.randrange(1 << 16) if on else None,
+                     block_data2=rng.randrange(1 << 16) if on else None,
+                     guard_end=rng.randrange(256))
+    data = bytearray(p.to_bytes())
+    if rng.random() < 0.2:  # one bit wrong
+        data[rng.randrange(len(data))] ^= 1 << rng.randrange(8)
+    return bytes(data)
+
+
 def nested(rng) -> bytes:
     """A Nested body: rows, a row count and gap, extra rows, and words of a
     size mostly in range."""
@@ -304,7 +320,8 @@ def main() -> None:
             apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
-                               430, 440, 450, 460, 470, rng.randrange(1 << 11)])
+                               430, 440, 450, 460, 470, 480,
+                               rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -356,6 +373,8 @@ def main() -> None:
                 data += nested(rng)
             elif apid == 430 and rng.random() < 0.9:
                 data += framed(rng)
+            elif apid == 480 and rng.random() < 0.9:
+                data, keep = guarded(rng, data), True
             elif apid == 400 and rng.random() < 0.9:
                 body, whole = checked(rng, data)
                 data = body if whole else data + body

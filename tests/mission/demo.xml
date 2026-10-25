@@ -1003,6 +1003,8 @@
         <AliasSet><Alias nameSpace="dwell" alias="V1"/></AliasSet>
       </Parameter>
       <Parameter name="DwellEnd" parameterTypeRef="U8"/>
+      <Parameter name="GuardOn" parameterTypeRef="Flag8Type"/>
+      <Parameter name="GuardEnd" parameterTypeRef="U8"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1714,6 +1716,34 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="470"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Block, with its Fletcher checksum, included only when GuardOn
+           is true: directly, and inside BlockWrap. -->
+      <SequenceContainer name="BlockWrap">
+        <EntryList>
+          <ContainerRefEntry containerRef="Block"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="Guarded">
+        <EntryList>
+          <ParameterRefEntry parameterRef="GuardOn"/>
+          <ContainerRefEntry containerRef="Block">
+            <IncludeCondition>
+              <Comparison parameterRef="GuardOn" value="true"/>
+            </IncludeCondition>
+          </ContainerRefEntry>
+          <ContainerRefEntry containerRef="BlockWrap">
+            <IncludeCondition>
+              <Comparison parameterRef="GuardOn" value="true"/>
+            </IncludeCondition>
+          </ContainerRefEntry>
+          <ParameterRefEntry parameterRef="GuardEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="480"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

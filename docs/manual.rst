@@ -1659,6 +1659,13 @@ Error detection
    Values are computed in the order of their fields, so a value may cover
    the fields of those before it, as in the demo's ``Checked``.
 
+   A check in an included container that is there only when an
+   ``IncludeCondition`` holds (its own or that of a container including
+   it) is checked where the container ends, and computed there when
+   encoding, if the container is present: its bits all lie inside it. The
+   demo's ``Guarded`` includes ``Block`` that way, directly and inside
+   ``BlockWrap``.
+
    The algorithms, all over the covered bits taken most significant bit
    first, with a last partial word padded with zero bits:
 
@@ -1811,17 +1818,16 @@ Name references
 
 Not supported
    references to elements of arrays whose count varies in a dimension
-   other than the first, ``IndirectParameterRefEntry`` chosen by an
-   integer or string without an ``aliasNameSpace``, other instances than 0, repeated segment entries, repeated containers in commands,
-   commands that include another meta-command's container,
-   ``CustomAlgorithm`` criteria, transform algorithms, custom
-   checksum algorithms, ``ErrorDetectCorrect`` in a data encoding (which
-   XTCE deprecates) and in included containers with an
-   ``IncludeCondition``, calibrators inside aggregate types that use other
-   values, least-significant-bit-first strings and binary data that may
-   not start on a byte boundary, integers
-   of more than 64 bits, ``nextEntry`` locations, and a ``containerEnd``
-   location in a container without a fixed size.
+   other than the first, ``IndirectParameterRefEntry`` chosen by an integer
+   or string without an ``aliasNameSpace``, other instances than 0,
+   repeated segment entries, repeated containers in commands, commands that
+   include another meta-command's container, ``CustomAlgorithm`` criteria,
+   transform algorithms, custom checksum algorithms, ``ErrorDetectCorrect``
+   in a data encoding (which XTCE deprecates), calibrators inside aggregate
+   types that use other values, least-significant-bit-first strings and
+   binary data that may not start on a byte boundary, integers of more than
+   64 bits, ``nextEntry`` locations, and a ``containerEnd`` location in a
+   container without a fixed size.
 
 Known limitations
 -----------------

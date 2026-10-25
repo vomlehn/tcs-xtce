@@ -159,5 +159,9 @@ error:Mismatch | -
 Dwell{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, dwell_sel=DwellTemp, dwell_temp=-2, dwell_volt=none, dwell_alias_sel=V1, dwell_temp2=none, dwell_volt2=51, dwell_end=68} | 09d6c02a000501fffe023344
 Dwell{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, dwell_sel=NONE, dwell_temp=none, dwell_volt=none, dwell_alias_sel=T1, dwell_temp2=256, dwell_volt2=none, dwell_end=85} | 09d6c02a00040001010055
 Dwell{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, dwell_sel=3, dwell_temp=none, dwell_volt=none, dwell_alias_sel=OFF, dwell_temp2=none, dwell_volt2=none, dwell_end=102} | 09d6c02a0002030066
+Guarded{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, guard_on=true, block_data=4660, block_data2=4660, guard_end=119} | 09e0c02a00070112345a12345a77
+Guarded{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, guard_on=false, block_data=none, block_data2=none, guard_end=119} | 09e0c02a00010077
+error:BadChecksum | -
+error:BadChecksum | -
 Arm{seq_count=5, force=true, level=7} | 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50
 Arm{seq_count=5, force=false, level=none} | 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50

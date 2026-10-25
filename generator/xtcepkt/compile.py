@@ -26,7 +26,7 @@ from .model import (MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc,
                     Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
                     Term, Unsupported, Value, VType, ref_text, term_locals,
                     walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp,
-                    Require, ValueRef, needs_binding, Fill, Segment)
+                    Require, ValueRef, needs_binding, Fill, Segment, Verify)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -1332,10 +1332,12 @@ class Compiler:
         local.length = length_adjust(p, local.vtype, f"parameter {qname(pkey)}")
         return local
 
-    def tm_items(self, sc, path: Key, stack: list, start: int,
-                 scope: list) -> list[Item]:
+    def tm_items(self, sc, path: Key, stack: list, start: int, scope: list,
+                 conditional: bool = False) -> list[Item]:
         """Items for a container's entries.  ``scope`` lists the values read
-        so far (base containers first) and grows as entries are added."""
+        so far (base containers first) and grows as entries are added;
+        ``conditional`` says whether the container is inside an
+        IncludeCondition."""
         items: list[Item] = []
         segs: dict = {}
         for ch in sc.entry_list.items:
@@ -1399,7 +1401,8 @@ class Compiler:
                     # A derived container is its bases' entries, then its own.
                     for k, (kp, kc, kkey) in enumerate(
                             self.include_chain(ckey, stack, where)):
-                        inner += self.tm_items(kc, kp, stack + [kkey], m, scope)
+                        inner += self.tm_items(kc, kp, stack + [kkey], m, scope,
+                                               conditional or cond is not None)
                         rc = (kc.base_container.restriction_criteria
                               if kc.base_container is not None else None)
                         if rc is not None:
@@ -1410,14 +1413,18 @@ class Compiler:
                     out += (inner
                             + self.size_pad(inc, inner, m, where, scope, cpath))
                     if edc_items(inc):
-                        if cond is not None:
-                            raise Unsupported(f"{where}: ErrorDetectCorrect in "
-                                              "an included container with an "
-                                              "IncludeCondition")
                         end = self._id()
                         out.append(Mark(end))
-                        self.included_checks.append((inc, cpath, m, end,
-                                                     list(scope), qname(ckey)))
+                        if conditional or cond is not None:
+                            # Checked where the container ends, when it is
+                            # there.
+                            out += [
+                                Verify(self.check(name, v, cpath, list(scope),
+                                                  m, end, qname(ckey), where))
+                                for name, v in edc_items(inc)]
+                        else:
+                            self.included_checks.append(
+                                (inc, cpath, m, end, list(scope), qname(ckey)))
             if cond is not None:
                 for it in walk(out):
                     if isinstance(it, Value):
@@ -1807,7 +1814,9 @@ class Compiler:
                                           where))
         criteria = (node.all_criteria()
                     + [c for it in node.all_items() for c in conds(it)])
-        for c in out:
+        verified = [it.check for it in walk(node.all_items())
+                    if isinstance(it, Verify)]
+        for c in out + verified:
             if any(x is c.local for t in criteria for x in term_locals(t)):
                 raise Unsupported(f"{where}: a criterion or assignment on "
                                   f"checksum field {c.local.name}")

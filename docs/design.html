@@ -878,6 +878,12 @@ up per concrete packet, so that each derived container may have its own,
 but it must be in the declaring container or below: marking a field of a
 base container computed would take it out of sibling packets that don't
 have the check.</p>
+<p>A check in a container that is included only when an <tt class="docutils literal">IncludeCondition</tt>
+holds can't wait for the end of the packet: the marks that bound it are
+set inside the conditional block, and in Rust and C they don't outlive
+it. Its bits all lie in the container, though, so the compiler puts a
+<tt class="docutils literal">Verify</tt> item where the container ends, inside the block: decoding
+checks it there and encoding patches it there.</p>
 <p>XTCE names the checksum algorithms without defining them. The names
 (<tt class="docutils literal">sum8</tt>, <tt class="docutils literal">unix_sum</tt>, <tt class="docutils literal">fletcher16</tt>, <tt class="docutils literal">luhn</tt> and the rest) are
 Jacksum's, so tcs-xtce uses Jacksum's definitions where it has them: a
@@ -1312,9 +1318,6 @@ to a fixed-size array is: the element may be missing. Rust and Python
 read it through <tt class="docutils literal">element()</tt>, which fails with <tt class="docutils literal">BadSize</tt>; C, which
 has no way to leave an expression early, checks with
 <tt class="docutils literal">xtce_pk_element()</tt> before each statement that reads it.</p>
-<p>Error detection (<tt class="docutils literal">ErrorDetectCorrect</tt>: CRCs and checksums) is left
-out on purpose: the packets travel over a link that already detects
-errors. Documents that use it are reported as unsupported.</p>
 </li>
 <li><p class="first"><strong>Computed fields:</strong> packet length fields are computed when the
 document marks them, and sizes and counts when what they size is a

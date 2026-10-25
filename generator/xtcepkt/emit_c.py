@@ -15,11 +15,11 @@ from .common import (Ref, c_op, fast_order, field_range, flt, header_lines,
                      int_enc, invertible, leaf_calibrators, math_value,
                      size_args, str_cap, string_spec)
 from .compile import snake
-from .model import (term_indexes, term_locals, term_paths, walk, Index,
-                    AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
-                    ContextCal, DynSize, Criterion, Fixed, FloatEnc, IntEnc,
-                    Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
-                    Spline, StringEnc, Value, VType, Require, Fill, Segment)
+from .model import (
+    term_indexes, term_locals, term_paths, walk, Index, AggregateEnc, AllOf,
+    AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, DynSize, Criterion, Fixed,
+    FloatEnc, IntEnc, Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
+    Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -983,6 +983,8 @@ class CEmitter:
                 self.line(f"(void)m{it.id};", depth)
             elif isinstance(it, Require):
                 self.require(it, self.read_acc, "r->err", depth)
+            elif isinstance(it, Verify):
+                self.verify(it.check, depth)
             elif isinstance(it, Fill):
                 self.fill(it, "r", self.read_ref, depth)
             elif isinstance(it, Pad):
@@ -1034,6 +1036,7 @@ class CEmitter:
                     for v in walk(it.items):
                         if isinstance(v, Value):
                             self.line(f"bool h{v.local.id} = false;", depth)
+                            self.line(f"(void)h{v.local.id};", depth)
                             self.local(v.local.vtype, f"v{v.local.id}", depth)
                 self.element_guards(
                     [p for c in it.criteria for p in term_paths(c)],
@@ -1073,6 +1076,8 @@ class CEmitter:
             elif isinstance(it, Require):
                 self.require(it, self.write_ref(n, names).place, "w->err",
                              depth)
+            elif isinstance(it, Verify):
+                self.patch(it.check, depth)
             elif isinstance(it, Fill):
                 self.fill(it, "w", self.write_ref(n, names), depth)
             elif isinstance(it, Pad):
@@ -1201,20 +1206,36 @@ class CEmitter:
             self.line(f"XTCE_PK_TRY(xtce_pk_read_finish(r, {cstr(lc.name)}));",
                       depth)
         for c in n.checks:
-            f = cstr(c.local.name)
-            self.line("{", depth)
-            d = depth + 1
-            self.line("static const xtce_pk_checksum_spec k = "
-                      f"{checksum_spec(c.spec)};", d)
-            start, end = self.region(c, "r")
-            self.line("uint64_t c;", d)
-            self.line(f"XTCE_PK_TRY(xtce_pk_read_checksum(r, &k, {start}, "
-                      f"{end}, {f}, &c));", d)
-            mask = f"UINT64_C(0x{(1 << c.local.vtype.enc.bits) - 1:x})"
-            self.line(f"if ((c & {mask}) != (uint64_t)v{c.local.id})", d)
-            self.line(f"return xtce_pk_fail(r->err, XTCE_PK_BAD_CHECKSUM, {f}, "
-                      "NULL);", d + 1)
-            self.line("}", depth)
+            self.verify(c, depth)
+
+    def verify(self, c, depth: int) -> None:
+        """Fails with BadChecksum unless check ``c`` holds."""
+        f = cstr(c.local.name)
+        self.line("{", depth)
+        d = depth + 1
+        self.line("static const xtce_pk_checksum_spec k = "
+                  f"{checksum_spec(c.spec)};", d)
+        start, end = self.region(c, "r")
+        self.line("uint64_t c;", d)
+        self.line(f"XTCE_PK_TRY(xtce_pk_read_checksum(r, &k, {start}, {end}, "
+                  f"{f}, &c));", d)
+        mask = f"UINT64_C(0x{(1 << c.local.vtype.enc.bits) - 1:x})"
+        self.line(f"if ((c & {mask}) != (uint64_t)v{c.local.id})", d)
+        self.line(f"return xtce_pk_fail(r->err, XTCE_PK_BAD_CHECKSUM, {f}, "
+                  "NULL);", d + 1)
+        self.line("}", depth)
+
+    def patch(self, c, depth: int) -> None:
+        """Writes the value of check ``c`` into its field."""
+        enc = c.local.vtype.enc
+        self.line("{", depth)
+        self.line("static const xtce_pk_checksum_spec k = "
+                  f"{checksum_spec(c.spec)};", depth + 1)
+        start, end = self.region(c, "w")
+        self.line(f"XTCE_PK_TRY(xtce_pk_patch_checksum(w, &k, {start}, {end}, "
+                  f"l{c.local.id}, {enc.bits}, {bool_lit(enc.little_endian)}, "
+                  f"{cstr(c.local.name)}));", depth + 1)
+        self.line("}", depth)
 
     def region(self, c, rw: str) -> tuple:
         """The start and end of the bits a check covers, with reader or
@@ -1324,16 +1345,7 @@ class CEmitter:
                       f"{enc.bits}, {le}, INT64_C({length.length}), "
                       f"{cstr(length.name)}));", 1)
         for c in n.checks:
-            enc = c.local.vtype.enc
-            self.line("{", 1)
-            self.line("static const xtce_pk_checksum_spec k = "
-                      f"{checksum_spec(c.spec)};", 2)
-            start, end = self.region(c, "w")
-            self.line(f"XTCE_PK_TRY(xtce_pk_patch_checksum(w, &k, {start}, "
-                      f"{end}, l{c.local.id}, {enc.bits}, "
-                      f"{bool_lit(enc.little_endian)}, {cstr(c.local.name)}));",
-                      2)
-            self.line("}", 1)
+            self.patch(c, 1)
         self.line("return 0;", 1)
         self.line("}")
         self.encode(t)

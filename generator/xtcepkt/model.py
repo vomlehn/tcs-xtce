@@ -565,6 +565,16 @@ class Check:
 
 
 @dataclass
+class Verify:
+    """A Check of a container that is included only when its
+    IncludeCondition holds.  Its bits all lie in that container, so it is
+    verified (or computed, when encoding) where the container ends."""
+
+    check: Check
+    bits = 0  # it occupies nothing
+
+
+@dataclass
 class Require:
     """Criteria that must hold where it stands: the RestrictionCriteria of
     an included container with a BaseContainer.  Decoding and encoding fail
@@ -594,7 +604,8 @@ class Fill:
                 else self.size)
 
 
-Item = Union[Seek, Mark, Value, Segment, Fixed, Pad, Cond, Require, Fill]
+Item = Union[Seek, Mark, Value, Segment, Fixed, Pad, Cond, Require, Fill,
+             Verify]
 
 
 def walk(items: list) -> list:

@@ -8,7 +8,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
-                    Require, Fill, Segment)
+                    Require, Fill, Segment, Verify)
 
 
 def pstr(s: str) -> str:
@@ -479,6 +479,8 @@ class PythonEmitter:
                 self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: f"v{lc.id}", depth)
+            elif isinstance(it, Verify):
+                self.verify(it.check, depth)
             elif isinstance(it, Fill):
                 self.fill(it, "r", self.read_ref, depth)
             elif isinstance(it, Segment):
@@ -533,6 +535,8 @@ class PythonEmitter:
                 self.line(f"w.zeros({it.bits})", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: self.place(n, lc, names), depth)
+            elif isinstance(it, Verify):
+                self.patch(it.check, depth)
             elif isinstance(it, Fill):
                 self.fill(it, "w", self.write_ref(n, names), depth)
             elif isinstance(it, Cond):
@@ -651,12 +655,24 @@ class PythonEmitter:
         if lc is not None:
             self.line(f"r.finish({pstr(lc.name)})", depth)
         for c in n.checks:
-            f = pstr(c.local.name)
-            start, end = self.region(c, "r")
-            mask = hex((1 << c.local.vtype.enc.bits) - 1)
-            self.line(f"if r.checksum({c.spec!r}, {start}, {end}, {f}) & "
-                      f"{mask} != v{c.local.id}:", depth)
-            self.line(f'raise pk.PacketError("BadChecksum", {f})', depth + 1)
+            self.verify(c, depth)
+
+    def verify(self, c, depth: int) -> None:
+        """Fails with BadChecksum unless check ``c`` holds."""
+        f = pstr(c.local.name)
+        start, end = self.region(c, "r")
+        mask = hex((1 << c.local.vtype.enc.bits) - 1)
+        self.line(f"if r.checksum({c.spec!r}, {start}, {end}, {f}) & {mask} != "
+                  f"v{c.local.id}:", depth)
+        self.line(f'raise pk.PacketError("BadChecksum", {f})', depth + 1)
+
+    def patch(self, c, depth: int) -> None:
+        """Writes the value of check ``c`` into its field."""
+        enc = c.local.vtype.enc
+        start, end = self.region(c, "w")
+        self.line(f"w.patch_checksum({c.spec!r}, {start}, {end}, "
+                  f"l{c.local.id}, {enc.bits}, {enc.little_endian}, "
+                  f"{pstr(c.local.name)})", depth)
 
     def region(self, c, rw: str) -> tuple:
         """The start and end of the bits a check covers, with reader or
@@ -767,11 +783,7 @@ class PythonEmitter:
                       f"{enc.little_endian}, {length.length}, "
                       f"{pstr(length.name)})", 2)
         for c in n.checks:
-            enc = c.local.vtype.enc
-            start, end = self.region(c, "w")
-            self.line(f"w.patch_checksum({c.spec!r}, {start}, {end}, "
-                      f"l{c.local.id}, {enc.bits}, {enc.little_endian}, "
-                      f"{pstr(c.local.name)})", 2)
+            self.patch(c, 2)
         if len(self.out) == body:
             # A packet without entries, such as a meta-command without a
             # command container, writes nothing.

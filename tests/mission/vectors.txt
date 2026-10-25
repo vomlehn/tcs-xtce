@@ -159,5 +159,9 @@ tc 112ec00500090f010208abcd00000000  # stamp, a trailer kind that isn't 7
 tm 09d6c02a000501fffe023344  # dwell: temperature -2, then volts 0x33 by alias
 tm 09d6c02a00040001010055  # dwell: nothing, then temperature 256 by alias
 tm 09d6c02a0002030066  # dwell: an unlisted selector, then nothing
+tm 09e0c02a00070112345a12345a77  # guarded: both blocks, each with fletcher8 90
+tm 09e0c02a00010077  # guarded: no blocks
+tm 09e0c02a00070112345b12345a77  # guarded, a bit flipped in the first block's check
+tm 09e0c02a00070112345a12355a77  # guarded, a bit flipped in the second block's data
 tc 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: forced, level 7
 tc 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: not forced, so no level

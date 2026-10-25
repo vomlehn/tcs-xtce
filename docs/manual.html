@@ -2091,6 +2091,12 @@ packet for a packet or base container (the packet ends with its last
 byte), and those of the included entries for an included container.
 Values are computed in the order of their fields, so a value may cover
 the fields of those before it, as in the demo's <tt class="docutils literal">Checked</tt>.</p>
+<p>A check in an included container that is there only when an
+<tt class="docutils literal">IncludeCondition</tt> holds (its own or that of a container including
+it) is checked where the container ends, and computed there when
+encoding, if the container is present: its bits all lie inside it. The
+demo's <tt class="docutils literal">Guarded</tt> includes <tt class="docutils literal">Block</tt> that way, directly and inside
+<tt class="docutils literal">BlockWrap</tt>.</p>
 <p>The algorithms, all over the covered bits taken most significant bit
 first, with a last partial word padded with zero bits:</p>
 <ul class="simple">
@@ -2236,17 +2242,16 @@ SpaceSystem, then from each enclosing one. References may cross
 documents (see <a class="reference internal" href="#missions-in-several-documents">Missions in several documents</a>).</dd>
 <dt>Not supported</dt>
 <dd>references to elements of arrays whose count varies in a dimension
-other than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an
-integer or string without an <tt class="docutils literal">aliasNameSpace</tt>, other instances than 0, repeated segment entries, repeated containers in commands,
-commands that include another meta-command's container,
-<tt class="docutils literal">CustomAlgorithm</tt> criteria, transform algorithms, custom
-checksum algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which
-XTCE deprecates) and in included containers with an
-<tt class="docutils literal">IncludeCondition</tt>, calibrators inside aggregate types that use other
-values, least-significant-bit-first strings and binary data that may
-not start on a byte boundary, integers
-of more than 64 bits, <tt class="docutils literal">nextEntry</tt> locations, and a <tt class="docutils literal">containerEnd</tt>
-location in a container without a fixed size.</dd>
+other than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer
+or string without an <tt class="docutils literal">aliasNameSpace</tt>, other instances than 0,
+repeated segment entries, repeated containers in commands, commands that
+include another meta-command's container, <tt class="docutils literal">CustomAlgorithm</tt> criteria,
+transform algorithms, custom checksum algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt>
+in a data encoding (which XTCE deprecates), calibrators inside aggregate
+types that use other values, least-significant-bit-first strings and
+binary data that may not start on a byte boundary, integers of more than
+64 bits, <tt class="docutils literal">nextEntry</tt> locations, and a <tt class="docutils literal">containerEnd</tt> location in a
+container without a fixed size.</dd>
 </dl>
 </div>
 <div class="section" id="known-limitations">
