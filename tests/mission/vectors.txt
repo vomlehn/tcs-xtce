@@ -170,5 +170,9 @@ tm 09eac02a00020109aa  # history: 1 then 9, no HistPrev, 1 byte
 tm 09f4c02a0002011234  # pulse: the message PulseStart
 tm 09f4c02a000202abcd  # pulse: the message PulseStop
 tm 09f4c02a0002030001  # pulse: a kind that no message picks
+tm 09fec02a001002421600009645525200010178030907d0  # alarmed: science context, ERR, level over 100, a sample over 100, opt 9, 2 s
+tm 09fec02a000f0342820000056f6b3132000a141e03e8  # alarmed: fault, 65 degrees, level 5, ok12, no opt, 1 s
+tm 09fec02a000f0142700000fa616263000064646505dc  # alarmed: safe, 60 degrees exactly, level 250, an unmatched text, 1.5 s
+tm 09fec02a0010007fc000000a4f4b000001000000050000  # alarmed: a NaN temperature, level 10, OK, opt 5
 tc 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: forced, level 7
 tc 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: not forced, so no level

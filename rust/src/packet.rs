@@ -2500,6 +2500,165 @@ pub fn write_rest(
 // `describe` output is identical in every language so that the runtimes can be
 // compared byte for byte.
 
+/// XTCE's concern levels, least to most.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AlarmLevel {
+    Normal,
+    Watch,
+    Warning,
+    Distress,
+    Critical,
+    Severe,
+}
+
+impl AlarmLevel {
+    /// The level with index `i` (0 is `Normal`); larger ones are `Severe`.
+    pub fn from_index(i: u8) -> Self {
+        match i {
+            0 => Self::Normal,
+            1 => Self::Watch,
+            2 => Self::Warning,
+            3 => Self::Distress,
+            4 => Self::Critical,
+            _ => Self::Severe,
+        }
+    }
+
+    /// XTCE's name for the level.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Watch => "watch",
+            Self::Warning => "warning",
+            Self::Distress => "distress",
+            Self::Critical => "critical",
+            Self::Severe => "severe",
+        }
+    }
+}
+
+impl fmt::Display for AlarmLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// The alarm of one field: its level, or `None` when the field is absent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Alarm {
+    pub field: &'static str,
+    pub level: Option<AlarmLevel>,
+}
+
+/// The alarms of a packet's fields, at most `N` of them.
+#[derive(Debug, Clone, Copy)]
+pub struct Alarms<const N: usize> {
+    items: [Alarm; N],
+    len: usize,
+}
+
+impl<const N: usize> Default for Alarms<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize> Alarms<N> {
+    pub fn new() -> Self {
+        Self {
+            items: [Alarm {
+                field: "",
+                level: None,
+            }; N],
+            len: 0,
+        }
+    }
+
+    pub fn push(&mut self, field: &'static str, level: Option<AlarmLevel>) {
+        self.items[self.len] = Alarm { field, level };
+        self.len += 1;
+    }
+
+    pub fn as_slice(&self) -> &[Alarm] {
+        &self.items[..self.len]
+    }
+
+    /// The most severe level among the fields present, if any is.
+    pub fn worst(&self) -> Option<AlarmLevel> {
+        self.as_slice().iter().filter_map(|a| a.level).max()
+    }
+}
+
+/// `field=level` for each alarm, `none` when the field is absent, as every
+/// runtime writes it.
+impl<const N: usize> fmt::Display for Alarms<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, a) in self.as_slice().iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            match a.level {
+                Some(l) => write!(f, "{}={}", a.field, l)?,
+                None => write!(f, "{}=none", a.field)?,
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Whether `x` lies in an alarm range; a bound of `None` is infinite.
+pub fn in_band(
+    x: f64,
+    lo: Option<f64>,
+    lo_incl: bool,
+    hi: Option<f64>,
+    hi_incl: bool,
+) -> bool {
+    lo.is_none_or(|lo| if lo_incl { x >= lo } else { x > lo })
+        && hi.is_none_or(|hi| if hi_incl { x <= hi } else { x < hi })
+}
+
+/// The level of enumeration value `x`: that of the first (first value,
+/// last value, level) in `labels` holding it, else `default`.
+pub fn enum_alarm(x: i64, labels: &[(i64, i64, u8)], default: u8) -> u8 {
+    labels
+        .iter()
+        .find(|&&(lo, hi, _)| lo <= x && x <= hi)
+        .map_or(default, |l| l.2)
+}
+
+/// An automaton over UTF-8 bytes that a string alarm's pattern compiles to:
+/// state `q`'s transitions are `trans[starts[q]..starts[q + 1]]`, each
+/// (first byte, last byte, next state).
+pub struct Dfa {
+    pub starts: &'static [u16],
+    pub trans: &'static [(u8, u8, u16)],
+    pub accept: &'static [bool],
+}
+
+/// Whether `dfa` accepts all of `data`.
+pub fn dfa_match(dfa: &Dfa, data: &[u8]) -> bool {
+    let mut q = 0usize;
+    for &b in data {
+        let row =
+            &dfa.trans[dfa.starts[q] as usize..dfa.starts[q + 1] as usize];
+        match row.iter().find(|&&(lo, hi, _)| lo <= b && b <= hi) {
+            Some(&(_, _, next)) => q = next as usize,
+            None => return false,
+        }
+    }
+    dfa.accept[q]
+}
+
+/// The level of string `s`: that of the first (automaton, level) in
+/// `patterns` it matches, else `default`.
+pub fn pattern_alarm(s: &str, patterns: &[(&Dfa, u8)], default: u8) -> u8 {
+    patterns
+        .iter()
+        .find(|(d, _)| dfa_match(d, s.as_bytes()))
+        .map_or(default, |p| p.1)
+}
+
 pub fn describe_f64<W: fmt::Write + ?Sized>(
     x: f64,
     out: &mut W,

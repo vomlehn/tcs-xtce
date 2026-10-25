@@ -384,18 +384,19 @@ ul.auto-toc {
 <li><a class="reference internal" href="#generated-code" id="toc-entry-13">Generated code</a></li>
 <li><a class="reference internal" href="#bit-and-byte-order" id="toc-entry-14">Bit and byte order</a></li>
 <li><a class="reference internal" href="#containers" id="toc-entry-15">Containers</a></li>
-<li><a class="reference internal" href="#times" id="toc-entry-16">Times</a></li>
-<li><a class="reference internal" href="#error-detection" id="toc-entry-17">Error detection</a></li>
-<li><a class="reference internal" href="#determinism-across-languages" id="toc-entry-18">Determinism across languages</a></li>
-<li><a class="reference internal" href="#arrays-and-sizes-from-other-fields" id="toc-entry-19">Arrays and sizes from other fields</a></li>
-<li><a class="reference internal" href="#aggregates" id="toc-entry-20">Aggregates</a></li>
-<li><a class="reference internal" href="#packet-length-fields" id="toc-entry-21">Packet length fields</a></li>
-<li><a class="reference internal" href="#runtime" id="toc-entry-22">Runtime</a></li>
+<li><a class="reference internal" href="#alarms" id="toc-entry-16">Alarms</a></li>
+<li><a class="reference internal" href="#times" id="toc-entry-17">Times</a></li>
+<li><a class="reference internal" href="#error-detection" id="toc-entry-18">Error detection</a></li>
+<li><a class="reference internal" href="#determinism-across-languages" id="toc-entry-19">Determinism across languages</a></li>
+<li><a class="reference internal" href="#arrays-and-sizes-from-other-fields" id="toc-entry-20">Arrays and sizes from other fields</a></li>
+<li><a class="reference internal" href="#aggregates" id="toc-entry-21">Aggregates</a></li>
+<li><a class="reference internal" href="#packet-length-fields" id="toc-entry-22">Packet length fields</a></li>
+<li><a class="reference internal" href="#runtime" id="toc-entry-23">Runtime</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#the-digest-xtce-digest" id="toc-entry-23">The digest (xtce-digest)</a></li>
-<li><a class="reference internal" href="#testing-strategy" id="toc-entry-24">Testing strategy</a></li>
-<li><a class="reference internal" href="#limitations-and-future-work" id="toc-entry-25">Limitations and future work</a></li>
+<li><a class="reference internal" href="#the-digest-xtce-digest" id="toc-entry-24">The digest (xtce-digest)</a></li>
+<li><a class="reference internal" href="#testing-strategy" id="toc-entry-25">Testing strategy</a></li>
+<li><a class="reference internal" href="#limitations-and-future-work" id="toc-entry-26">Limitations and future work</a></li>
 </ul>
 </div>
 <div class="section" id="goals">
@@ -845,8 +846,35 @@ looks them up in <tt class="docutils literal">tc_containers</tt>, which holds th
 than its base meta-command's container, starts with that container's
 items. A <tt class="docutils literal">SizeInBits</tt> adds the same <tt class="docutils literal">Pad</tt> or <tt class="docutils literal">Fill</tt> as in telemetry.</p>
 </div>
+<div class="section" id="alarms">
+<h2><a class="toc-backref" href="#toc-entry-16">Alarms</a></h2>
+<p>A parameter type's alarms compile into an <tt class="docutils literal">Alarm</tt>: a default
+<tt class="docutils literal">AlarmDef</tt> and the contexts that replace it, each definition a list of
+<tt class="docutils literal">Band</tt>s, enumeration label levels, string patterns and conditions.
+Criteria (contexts and <tt class="docutils literal">AlarmConditions</tt>) stay unbound in the type and
+are bound per packet in <tt class="docutils literal">bind_alarms</tt>, against every value of the
+packet, since an alarm is evaluated on a whole decoded packet. The
+generated <tt class="docutils literal">alarms()</tt> methods read the struct's fields, so a criterion on
+a value the packet computes (a size, a length) leaves the alarm out, with
+a note in the packet's documentation; so does anything that needs earlier
+packets, which a codec doesn't keep.</p>
+<p>Every runtime must give the same level, so integer ranges become whole,
+inclusive bounds clamped to the field's type when they are compiled
+(<tt class="docutils literal">int_band</tt>): Python compares an integer with a float exactly, and Rust
+and C would round through <tt class="docutils literal">double</tt>. Floats compare as doubles, with a
+missing bound skipped rather than infinite, so that a NaN is outside
+every range in every language.</p>
+<p>String patterns can't count on a regular expression library in C, nor
+in Rust without a dependency, so <tt class="docutils literal">regex.py</tt> compiles each pattern with
+Python's own parser into a Thompson automaton over UTF-8 bytes (code
+point ranges split into byte sequences as RE2 does), determinizes it,
+and minimizes it. The runtimes walk its transition table, a few lines in
+each language. Only regular constructs compile; whole-string matching
+makes <tt class="docutils literal">^</tt> and <tt class="docutils literal">$</tt> at the ends redundant, and anything else raises
+<tt class="docutils literal">Unsupported</tt> for that alarm.</p>
+</div>
 <div class="section" id="times">
-<h2><a class="toc-backref" href="#toc-entry-16">Times</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-17">Times</a></h2>
 <p>Every time with a numeric encoding is a double of seconds. The encoding's
 calibrator, <tt class="docutils literal">scale</tt>, <tt class="docutils literal">offset</tt> and <tt class="docutils literal">units</tt> compose into one
 calibrator (an affine map applied to a polynomial is a polynomial, to a
@@ -858,7 +886,7 @@ counter exceeds. Text and binary times are kept as they are, because
 XTCE only describes their meaning through transform algorithms.</p>
 </div>
 <div class="section" id="error-detection">
-<h2><a class="toc-backref" href="#toc-entry-17">Error detection</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-18">Error detection</a></h2>
 <p>XTCE says an <tt class="docutils literal">ErrorDetectCorrect</tt> algorithm covers &quot;all or part of&quot;
 its container, from its start or its end, and that <tt class="docutils literal">parameterRef</tt> names
 the parameter holding the value, but not where the covered bits end.
@@ -895,7 +923,7 @@ digit per 4 bits, as packed BCD does. CRCs follow the parameter model of
 the CRC catalogue, so the catalogue's check values test them.</p>
 </div>
 <div class="section" id="determinism-across-languages">
-<h2><a class="toc-backref" href="#toc-entry-18">Determinism across languages</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-19">Determinism across languages</a></h2>
 <p>The three emitters produce the same structure. The runtimes are written
 to give bit-identical results:</p>
 <ul class="simple">
@@ -954,7 +982,7 @@ Unlisted values therefore round-trip instead of failing. Telemetry from
 newer flight software decodes even when the database is out of date.</p>
 </div>
 <div class="section" id="arrays-and-sizes-from-other-fields">
-<h2><a class="toc-backref" href="#toc-entry-19">Arrays and sizes from other fields</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-20">Arrays and sizes from other fields</a></h2>
 <p>Arrays and repeated entries share one representation: a <tt class="docutils literal">VType</tt> of
 kind <tt class="docutils literal">array</tt> whose <tt class="docutils literal">ArrayEnc</tt> holds the element type, a count and
 the gap between elements. A multi-dimensional array is flattened into
@@ -1090,7 +1118,7 @@ follows catches data above the field's bound.</p>
 checks that the data matches it and fails with <tt class="docutils literal">BadSize</tt> if not.</p>
 </div>
 <div class="section" id="aggregates">
-<h2><a class="toc-backref" href="#toc-entry-20">Aggregates</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-21">Aggregates</a></h2>
 <p>An aggregate is a <tt class="docutils literal">VType</tt> of kind <tt class="docutils literal">aggregate</tt> whose
 <tt class="docutils literal">AggregateEnc</tt> lists its members. Generated code reads and writes the
 members in place, recursing through member types, so aggregates nest in
@@ -1126,7 +1154,7 @@ layout, and <tt class="docutils literal">Pad</tt> covers the rest of a fixed-siz
 not repeated.</p>
 </div>
 <div class="section" id="packet-length-fields">
-<h2><a class="toc-backref" href="#toc-entry-21">Packet length fields</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-22">Packet length fields</a></h2>
 <p>XTCE 1.3 can say that a field's size comes from another value, but not
 that a value is the size of its packet. Its algorithms could compute
 one, but have no operand for the packet's size, and tools such as Yamcs
@@ -1152,7 +1180,7 @@ known position, and nothing may depend on its value while the packet is
 being encoded.</p>
 </div>
 <div class="section" id="runtime">
-<h2><a class="toc-backref" href="#toc-entry-22">Runtime</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-23">Runtime</a></h2>
 <p><tt class="docutils literal">BitReader</tt> and <tt class="docutils literal">BitWriter</tt> handle fields of 1–64 bits, most
 significant bit first, at any bit position:</p>
 <ul class="simple">
@@ -1168,7 +1196,7 @@ own. In C the writer fills a caller-owned array and fails with
 </div>
 </div>
 <div class="section" id="the-digest-xtce-digest">
-<h1><a class="toc-backref" href="#toc-entry-23">The digest (xtce-digest)</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-24">The digest (xtce-digest)</a></h1>
 <p>Packets carry no field names, tags or lengths, so two programs can read
 each other's packets only if they were built from documents that define
 the same packets. <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> gives them a way to check: an MD5
@@ -1224,7 +1252,7 @@ each file with the Python runtime. Computing a digest allocates memory,
 so it belongs at start-up, not in code that must not allocate.</p>
 </div>
 <div class="section" id="testing-strategy">
-<h1><a class="toc-backref" href="#toc-entry-24">Testing strategy</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-25">Testing strategy</a></h1>
 <dl class="docutils">
 <dt><strong>Schema coverage</strong></dt>
 <dd>21 generated sample documents cover every element slot and every
@@ -1306,7 +1334,7 @@ checked.</p>
 </dl>
 </div>
 <div class="section" id="limitations-and-future-work">
-<h1><a class="toc-backref" href="#toc-entry-25">Limitations and future work</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-26">Limitations and future work</a></h1>
 <ul>
 <li><p class="first"><strong>XML binding:</strong></p>
 <ul class="simple">

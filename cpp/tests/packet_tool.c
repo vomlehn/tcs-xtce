@@ -18,6 +18,15 @@ static uint8_t input[4096];
 static uint8_t output[4096];
 static char text[8192];
 
+static xtce_pk_alarm alarms[64];
+
+/* Prints ` | alarms: field=level, ...` for a packet with alarms. */
+static void print_alarms(const xtce_pk_alarm* a, size_t n) {
+        if (!n) return;
+        xtce_pk_describe_alarms(a, n, text, sizeof text);
+        printf(" | alarms: %s", text);
+}
+
 static void print_hex(const uint8_t* b, size_t n) {
         size_t i;
         for (i = 0; i < n; ++i) printf("%02x", b[i]);
@@ -44,11 +53,12 @@ static void print_hex(const uint8_t* b, size_t n) {
                 printf("%s | ", text);                                      \
                 if (type##_encode(&packet, output, sizeof output, &out_len, \
                                   &err)) {                                  \
-                        printf("error:%s\n", xtce_pk_error_kind(err.code)); \
+                        printf("error:%s", xtce_pk_error_kind(err.code));   \
                 } else {                                                    \
                         print_hex(output, out_len);                         \
-                        printf("\n");                                       \
                 }                                                           \
+                print_alarms(alarms, type##_alarms(&packet, alarms));       \
+                printf("\n");                                               \
         } while (0)
 
 int main(int argc, char** argv) {

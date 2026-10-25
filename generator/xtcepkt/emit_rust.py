@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import math
+import textwrap
 
 from .common import (MATH_OPS, Ref, fast_order, field_range, flt, header_lines,
                      int_enc, invertible, math_value, size_args, str_cap,
@@ -45,6 +47,13 @@ def field_type(vt: VType, alloc: bool, optional: bool = False) -> str:
     if k == "binary":
         return "Vec<u8>" if alloc else f"pk::FixedBytes<{vt.enc.bits // 8}>"
     return {"float": "f64", "bool": "bool"}.get(k) or vt.ident
+
+
+def rflt(x: float) -> str:
+    """An f64 literal, infinities included."""
+    if math.isinf(x):
+        return "f64::INFINITY" if x > 0 else "f64::NEG_INFINITY"
+    return flt(x) + "_f64"
 
 
 def literal(vt: VType, v) -> str:
@@ -515,6 +524,7 @@ class RustEmitter:
         self.m = mission
         self.source = source
         self.alloc = alloc
+        self.dfas: list = []
         self.out: list[str] = []
 
     def line(self, s: str = "", depth: int = 0) -> None:
@@ -547,6 +557,17 @@ class RustEmitter:
             self.node(n)
         for k in m.kinds:
             self.kind(k)
+        for name, dfa in self.dfas:
+            self.line()
+            self.line(f"/// The automaton matching `{dfa.pattern}`.")
+            self.line(f"static {name}: pk::Dfa = pk::Dfa {{")
+            self.line("starts: &[" + ", ".join(map(str, dfa.starts)) + "],", 1)
+            self.line("trans: &["
+                      + ", ".join(f"({a}, {b}, {c})" for a, b, c in dfa.trans)
+                      + "],", 1)
+            self.line("accept: &["
+                      + ", ".join(str(a).lower() for a in dfa.accept) + "],", 1)
+            self.line("};")
         return "\n".join(self.out) + "\n"
 
     def enum_type(self, vt: VType) -> None:
@@ -839,6 +860,10 @@ class RustEmitter:
             self.line("///")
             self.line(f"/// `{lc.name}` gives the size of `{c.name}`: computed "
                       "from its length when encoding.")
+        for note in n.alarm_notes:
+            self.line("///")
+            for text in textwrap.wrap(f"Alarm left out: {note}.", 72):
+                self.line(f"/// {text}")
         self.line("#[derive(Debug, Clone, PartialEq, Default)]")
         self.line(f"pub struct {n.ident} {{")
         for name, lc in n.fields:
@@ -849,6 +874,8 @@ class RustEmitter:
             self.line(f"pub {name}: "
                       f"{field_type(lc.vtype, self.alloc, lc.optional)},", 1)
         self.line("}")
+        self.line()
+        self.alarms(n)
         self.line()
         self.line(f"impl Packet for {n.ident} {{")
         self.line(f"const NAME: &'static str = {rstr(n.key)};", 1)
@@ -943,6 +970,110 @@ class RustEmitter:
 
     # -- dispatch --
 
+    def alarms(self, n: Node) -> None:
+        """``alarms()``, which gives each alarmed field's level, and a
+        method computing each one."""
+        names = dict((lc, name) for name, lc in n.fields)
+        place = lambda lc: self.place(n, lc, names)  # noqa: E731
+        self.line(f"impl {n.ident} {{")
+        self.line("/// The number of fields with an alarm.", 1)
+        self.line(f"pub const ALARMS: usize = {len(n.alarms)};", 1)
+        self.line()
+        self.line("/// The alarm level of each field with an alarm (`None` "
+                  "when the", 1)
+        self.line("/// field is absent).", 1)
+        self.line(f"pub fn alarms(&self) -> pk::Alarms<{len(n.alarms)}> {{", 1)
+        if n.alarms:
+            self.line("let mut a = pk::Alarms::new();", 2)
+            for name, _, _ in n.alarms:
+                self.line(f"a.push({rstr(name)}, self.alarm_{name}());", 2)
+            self.line("a", 2)
+        else:
+            self.line("pk::Alarms::new()", 2)
+        self.line("}", 1)
+        for name, lc, a in n.alarms:
+            vt = lc.vtype
+            kind = vt.elem.kind if vt.kind == "array" else vt.kind
+            self.line()
+            self.line(f"fn alarm_{name}(&self) -> Option<pk::AlarmLevel> {{", 1)
+            x = f"self.{name}"
+            if lc.optional:
+                x = (f"{x}.as_ref()?" if kind == "string" or vt.kind == "array"
+                     else f"{x}?")
+            d = 2
+            if vt.kind == "array":
+                self.line("let mut worst = 0u8;", 2)
+                self.line(f"for x in {x}.iter() {{", 2)
+                self.line("let x = x.as_str();" if kind == "string"
+                          else "let x = *x;", 3)
+                d = 3
+            else:
+                self.line(f"let x = {x}.as_str();" if kind == "string"
+                          else f"let x = {x};", 2)
+            self.line("let mut lv = 0u8;", d)
+            for k, (terms, ad) in enumerate(a.contexts):
+                cond = conjunction([term(c, place) for c in terms])
+                self.line(f"{'if' if k == 0 else '} else if'} {cond} {{", d)
+                self.alarm_def(ad, kind, place, d + 1)
+            if a.contexts:
+                if a.default is not None:
+                    self.line("} else {", d)
+                    self.alarm_def(a.default, kind, place, d + 1)
+                self.line("}", d)
+            elif a.default is not None:
+                self.alarm_def(a.default, kind, place, d)
+            if vt.kind == "array":
+                self.line("worst = worst.max(lv);", d)
+                self.line("}", 2)
+                self.line("Some(pk::AlarmLevel::from_index(worst))", 2)
+            else:
+                self.line("Some(pk::AlarmLevel::from_index(lv))", 2)
+            self.line("}", 1)
+        self.line("}")
+
+    def alarm_def(self, ad, kind: str, place, depth: int) -> None:
+        """Statements raising ``lv`` to the level that alarm definition
+        ``ad`` gives value ``x`` (of kind ``kind``)."""
+        for b in ad.bands:
+            if kind == "int":
+                parts = ([f"{b.lo}i128 <= x as i128"] if b.lo is not None
+                         else []) + ([f"x as i128 <= {b.hi}i128"]
+                                     if b.hi is not None else [])
+                test = " && ".join(parts) or "true"
+            else:
+                def opt(v):
+                    return "None" if v is None else f"Some({rflt(v)})"
+                test = (f"pk::in_band(x, {opt(b.lo)}, "
+                        f"{str(b.lo_incl).lower()}, {opt(b.hi)}, "
+                        f"{str(b.hi_incl).lower()})")
+            self.line(f"if {test if b.inside else '!(' + test + ')'} {{", depth)
+            self.line(f"lv = lv.max({b.level});", depth + 1)
+            self.line("}", depth)
+        if kind == "enum" and (ad.labels or ad.default):
+            labels = ", ".join(f"({lo}, {hi}, {lv})"
+                               for lo, hi, lv in ad.labels)
+            self.line(f"lv = lv.max(pk::enum_alarm(x.0, &[{labels}], "
+                      f"{ad.default}));", depth)
+        if kind == "string" and (ad.patterns or ad.default):
+            pats = ", ".join(f"(&{self.dfa(dfa)}, {lv})"
+                             for dfa, lv in ad.patterns)
+            self.line(f"lv = lv.max(pk::pattern_alarm(x, &[{pats}], "
+                      f"{ad.default}));", depth)
+        for level, terms in ad.conditions:
+            self.line(f"if {conjunction([term(c, place) for c in terms])} {{",
+                      depth)
+            self.line(f"lv = lv.max({level});", depth + 1)
+            self.line("}", depth)
+
+    def dfa(self, dfa) -> str:
+        """The name of the static holding a pattern's automaton."""
+        for name, d in self.dfas:
+            if d is dfa:
+                return name
+        name = f"DFA{len(self.dfas)}"
+        self.dfas.append((name, dfa))
+        return name
+
     def kind(self, k: Kind) -> None:
         self.line()
         self.line(f"/// Every concrete packet derived from `{k.root.key}`.")
@@ -981,6 +1112,28 @@ class RustEmitter:
         for m in k.members:
             self.line(f"Self::{m.ident}(p) => p.fmt(f),", 3)
         self.line("}", 2)
+        self.line("}", 1)
+        self.line("}")
+        most = max(len(m.alarms) for m in k.members)
+        self.line()
+        self.line(f"impl {k.ident} {{")
+        self.line("/// The most fields with an alarm that a member has.", 1)
+        self.line(f"pub const ALARMS: usize = {most};", 1)
+        self.line()
+        self.line("/// The alarm level of each field with an alarm (`None` "
+                  "when the", 1)
+        self.line("/// field is absent).", 1)
+        self.line(f"pub fn alarms(&self) -> pk::Alarms<{most}> {{", 1)
+        self.line("let mut out = pk::Alarms::new();", 2)
+        self.line("match self {", 2)
+        for m in k.members:
+            self.line(f"Self::{m.ident}(p) => {{", 3)
+            self.line("for a in p.alarms().as_slice() {", 4)
+            self.line("out.push(a.field, a.level);", 5)
+            self.line("}", 4)
+            self.line("}", 3)
+        self.line("}", 2)
+        self.line("out", 2)
         self.line("}", 1)
         self.line("}")
         for m in k.members:

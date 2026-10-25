@@ -13,6 +13,7 @@ largest packet it will see and reused until the codec is discarded.
 
 from __future__ import annotations
 
+import enum
 import math
 import struct
 from fractions import Fraction
@@ -1436,6 +1437,68 @@ def describe_str(s: str) -> str:
             out.append(c)
     out.append('"')
     return "".join(out)
+
+
+class AlarmLevel(enum.IntEnum):
+    """XTCE's concern levels, least to most."""
+
+    NORMAL = 0
+    WATCH = 1
+    WARNING = 2
+    DISTRESS = 3
+    CRITICAL = 4
+    SEVERE = 5
+
+    def __str__(self) -> str:
+        return self.name.lower()
+
+
+def in_band(x, lo, lo_incl: bool, hi, hi_incl: bool) -> bool:
+    """Whether ``x`` lies in an alarm range; a bound of None is infinite."""
+    return ((lo is None or (x >= lo if lo_incl else x > lo))
+            and (hi is None or (x <= hi if hi_incl else x < hi)))
+
+
+def enum_alarm(x: int, labels: tuple, default: int) -> int:
+    """The level of enumeration value ``x``: that of the first (first
+    value, last value, level) in ``labels`` holding it, else ``default``."""
+    for lo, hi, level in labels:
+        if lo <= x <= hi:
+            return level
+    return default
+
+
+def dfa_match(dfa: tuple, data: bytes) -> bool:
+    """Whether the automaton ``(starts, trans, accept)`` (see the generator's
+    ``model.Dfa``) accepts ``data``."""
+    starts, trans, accept = dfa
+    q = 0
+    for b in data:
+        for i in range(starts[q], starts[q + 1]):
+            lo, hi, nxt = trans[i]
+            if lo <= b <= hi:
+                q = nxt
+                break
+        else:
+            return False
+    return accept[q]
+
+
+def pattern_alarm(s: str, patterns: tuple, default: int) -> int:
+    """The level of string ``s``: that of the first (automaton, level) in
+    ``patterns`` it matches, else ``default``."""
+    data = s.encode("utf-8")
+    for dfa, level in patterns:
+        if dfa_match(dfa, data):
+            return level
+    return default
+
+
+def describe_alarms(alarms) -> str:
+    """``field=level`` for each (field, level), ``none`` when the field is
+    absent, as every runtime writes it."""
+    return ", ".join(f"{name}={'none' if level is None else level}"
+                     for name, level in alarms)
 
 
 def describe_optional(v, describe) -> str:

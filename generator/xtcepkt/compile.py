@@ -20,13 +20,14 @@ import re
 from typing import Callable, Optional
 
 from .common import (code_unit, encode_text, fast_order, find_unit, wire_cap)
-from .model import (MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc,
-                    BinaryEnc, Cond, Criterion, DynSize, EnumLabel, FloatEnc,
-                    Fixed, Index, IntEnc, Item, Kind, Local, Mark, Member,
-                    Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
-                    Term, Unsupported, Value, VType, ref_text, term_locals,
-                    walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp,
-                    Require, ValueRef, needs_binding, Fill, Segment, Verify)
+from .regex import compile_pattern
+from .model import (
+    MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
+    Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index, IntEnc, Item, Kind,
+    Local, Mark, Member, Mission, Node, Pad, Polynomial, Seek, Spline,
+    StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk,
+    MATH_UNARY, Check, ContextCal, EndSeek, MathOp, Require, ValueRef,
+    needs_binding, Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -529,6 +530,84 @@ class Compiler:
         cache = (table is self.atypes, key)
         if cache in self.vtypes:
             return self.vtypes[cache]
+        vt = self._vtype(key, table, cache)
+        if table is self.ptypes and vt.alarm is None:
+            path, _, _ = table[key]
+            vt.alarm = self.alarm(self.inherited(key, table), vt, path,
+                                  f"type {qname(key)}")
+        return vt
+
+    # -- alarms --
+
+    def alarm(self, t, vt: VType, path: Key, where: str) -> Optional[Alarm]:
+        """The DefaultAlarm and ContextAlarmList of parameter type ``t``.
+        One that can't be evaluated is kept with a ``note`` saying why, so
+        that the packets still compile."""
+        da = getattr(t, "default_alarm", None)
+        cl = getattr(t, "context_alarm_list", None)
+        if da is None and cl is None:
+            return None
+        try:
+            return Alarm(path, self.alarm_def(da, vt, where) if da else None,
+                         [(ca.context_match, self.alarm_def(ca, vt, where))
+                          for ca in (cl.context_alarm if cl else [])])
+        except Unsupported as e:
+            return Alarm(path, None, note=str(e))
+
+    def alarm_def(self, a, vt: VType, where: str) -> AlarmDef:
+        d = AlarmDef(min_violations=a.min_violations or 1,
+                     min_conformance=a.min_conformance or 1)
+        if a.disabled:
+            return d
+        if a.choice is not None:
+            if a.choice.name != "AlarmConditions":
+                raise Unsupported(f"{where}: a {a.choice.name}")
+            ac = a.choice.value
+            for level, name in enumerate(LEVELS):
+                mc = getattr(ac, f"{name}_alarm", None)
+                if mc is not None:
+                    d.conditions.append((level, mc))
+        if getattr(a, "change_alarm_ranges", None) is not None:
+            raise Unsupported(f"{where}: ChangeAlarmRanges")
+        if getattr(a, "change_per_second_alarm_ranges", None) is not None:
+            raise Unsupported(f"{where}: ChangePerSecondAlarmRanges")
+        ranges = getattr(a, "static_alarm_ranges", None)
+        if ranges is not None:
+            tu = getattr(ranges, "time_units", None)
+            unit = TIME_UNITS[tu.value if tu else "seconds"]
+            inside = (ranges.range_form is not None
+                      and ranges.range_form.value == "inside")
+            for level, name in enumerate(LEVELS):
+                r = getattr(ranges, f"{name}_range", None)
+                if r is not None:
+                    d.bands.append(band(r, level, inside, unit))
+        multi = getattr(a, "alarm_multi_ranges", None)
+        for r in multi.range if multi is not None else []:
+            level = LEVELS.index(r.level.value) if r.level else 0
+            inside = r.range_form is not None and r.range_form.value == "inside"
+            d.bands.append(band(r, level, inside, 1.0))
+        if getattr(a, "default_alarm_level", None) is not None:
+            d.default = LEVELS.index(a.default_alarm_level.value)
+        el = getattr(a, "enumeration_alarm_list", None)
+        for ea in el.enumeration_alarm if el is not None else []:
+            lab = next((lab for lab in vt.labels
+                        if lab.label == ea.enumeration_label), None)
+            if lab is None:
+                raise Unsupported(f"{where}: an alarm on unknown label "
+                                  f"{ea.enumeration_label!r}")
+            d.labels.append((lab.value, lab.max_value,
+                             LEVELS.index(ea.alarm_level.value)))
+        sl = getattr(a, "string_alarm_list", None)
+        for sa in sl.string_alarm if sl is not None else []:
+            d.patterns.append((compile_pattern(sa.match_pattern),
+                               LEVELS.index(sa.alarm_level.value)))
+        if d.bands and vt.kind not in ("int", "float", "time"):
+            raise Unsupported(f"{where}: alarm ranges on a {vt.kind} value")
+        if vt.kind == "int":
+            d.bands = [int_band(b, vt) for b in d.bands]
+        return d
+
+    def _vtype(self, key: Key, table: dict, cache: tuple) -> VType:
         path, kind, _ = table[key]
         where = f"type {qname(key)}"
         t = self.inherited(key, table)
@@ -2411,6 +2490,7 @@ class Compiler:
         used, aggregates = {}, {}
         for n in concrete:
             self._finish(n)
+            self.bind_alarms(n)
             for it in walk(n.all_items()):
                 if isinstance(it, Value):
                     for vt in it.local.vtype.tree():
@@ -2433,6 +2513,49 @@ class Compiler:
                        types=list(used.values()),
                        aggregates=list(aggregates.values()), nodes=concrete,
                        kinds=kinds, roots=roots, skipped=msgs)
+
+    def bind_alarms(self, n: Node) -> None:
+        """The alarms of a packet's fields, their criteria bound to its
+        values.  An array's alarm is its elements'.  Alarms that can't be
+        evaluated are left out, and ``alarm_notes`` says why."""
+        fields = {lc for _, lc in n.fields}
+        scope = self.scope_of(n)
+        for name, lc in n.fields:
+            vt = lc.vtype
+            target = vt.elem if vt.kind == "array" else vt
+            if target.kind in ("array", "aggregate"):
+                if any(t.alarm for t in target.tree()):
+                    n.alarm_notes.append(f"{n.key}: the alarms inside "
+                                         f"{lc.name} are not evaluated")
+                continue
+            a = target.alarm
+            if a is None:
+                continue
+            if a.note:
+                n.alarm_notes.append(f"{n.key}: alarm of {lc.name}: {a.note}")
+                continue
+            where = f"{n.key}: alarm of {lc.name}"
+
+            def terms(mc):
+                ts = self.match(mc, a.path, scope, where)
+                for t in ts:
+                    for x in term_locals(t):
+                        if x not in fields and x not in n.fixed:
+                            raise Unsupported(f"{where}: criteria on {x.name}, "
+                                              "which the packet computes")
+                return ts
+
+            def bound(d):
+                return dataclasses.replace(
+                    d, conditions=[(lv, terms(mc)) for lv, mc in d.conditions])
+
+            try:
+                n.alarms.append(
+                    (name, lc,
+                     Alarm(a.path, bound(a.default) if a.default else None,
+                           [(terms(mc), bound(d)) for mc, d in a.contexts])))
+            except Unsupported as e:
+                n.alarm_notes.append(str(e))
 
     def _finish(self, n: Node) -> None:
         fixed = {}
@@ -2556,6 +2679,44 @@ def bounded(vt: VType, b: DynSize, rng: tuple[int, int]) -> VType:
         b.max = min(units, MAX_FIELD_BITS // 8)
         enc = dataclasses.replace(e, bits=b.max * 8, dyn=b)
     return dataclasses.replace(vt, enc=enc)
+
+
+def band(r, level: int, inside: bool, unit: float) -> Band:
+    """An alarm range (in ``unit`` seconds, for a time) as a Band."""
+    def scaled(x):
+        return None if x is None else x * unit
+    lo = r.min_inclusive if r.min_inclusive is not None else r.min_exclusive
+    hi = r.max_inclusive if r.max_inclusive is not None else r.max_exclusive
+    return Band(level, scaled(lo), r.min_exclusive is None, scaled(hi),
+                r.max_exclusive is None, inside)
+
+
+def int_band(b: Band, vt: VType) -> Band:
+    """A Band for integer values: whole, inclusive bounds within the range
+    of the field's type (None when the type's own limit is as far), so
+    that every language compares integers exactly.  An empty range is
+    1 to 0."""
+    lo_lim, hi_lim = (vt.eng_limits if vt.eng
+                      else ((-(1 << (vt.width - 1)), 1 << (vt.width - 1))
+                            if vt.signed else (0, 1 << vt.width)))
+    hi_lim -= 1
+    lo = hi = None
+    if b.lo is not None:
+        if not math.isfinite(b.lo):
+            lo = None if b.lo < 0 else hi_lim + 1
+        else:
+            lo = math.ceil(b.lo) if b.lo_incl else math.floor(b.lo) + 1
+    if b.hi is not None:
+        if not math.isfinite(b.hi):
+            hi = None if b.hi > 0 else lo_lim - 1
+        else:
+            hi = math.floor(b.hi) if b.hi_incl else math.ceil(b.hi) - 1
+    if ((lo is not None and lo > hi_lim) or (hi is not None and hi < lo_lim)
+            or (lo is not None and hi is not None and lo > hi)):
+        return Band(b.level, 1, True, 0, True, b.inside)
+    lo = None if lo is not None and lo <= lo_lim else lo
+    hi = None if hi is not None and hi >= hi_lim else hi
+    return Band(b.level, lo, True, hi, True, b.inside)
 
 
 def instance_of(scope: list, key: str, instance: int,

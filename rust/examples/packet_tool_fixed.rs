@@ -11,7 +11,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::fmt::{Display, Write as _};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tcs_xtce::fixed::{FixedBytes, FixedString};
-use tcs_xtce::packet::{Codec, Packet};
+use tcs_xtce::packet::{Alarms, Codec, Packet};
 
 /// The system allocator, counting the allocations made through it.
 struct Counting;
@@ -51,13 +51,25 @@ fn hex(b: &[u8]) -> String {
 type Text = FixedString<8192>;
 type Bytes = FixedBytes<4096>;
 
-fn run<P: Packet + Display>(codec: &mut Codec, data: &[u8]) -> String {
+fn alarm_text<const N: usize>(a: &Alarms<N>, t: &mut Text) {
+    if !a.as_slice().is_empty() {
+        write!(t, " | alarms: {a}").expect("alarms too long");
+    }
+}
+
+fn run<P: Packet + Display>(
+    codec: &mut Codec,
+    data: &[u8],
+    alarms: impl Fn(&P, &mut Text),
+) -> String {
     let mut text = Text::new();
+    let mut alarmed = Text::new();
     let mut bytes = Bytes::new();
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     let packet = P::decode(data);
     let again = packet.as_ref().map(|p| {
         write!(text, "{p}").expect("description too long");
+        alarms(p, &mut alarmed);
         codec
             .encode(p)
             .map(|out| bytes.extend_from_slice(out).expect("packet too long"))
@@ -66,8 +78,15 @@ fn run<P: Packet + Display>(codec: &mut Codec, data: &[u8]) -> String {
     assert_eq!(before, after, "the codec allocated heap memory");
     match again {
         Err(e) => format!("error:{} | -", e.kind()),
-        Ok(Err(e)) => format!("{} | error:{}", text.as_str(), e.kind()),
-        Ok(Ok(())) => format!("{} | {}", text.as_str(), hex(&bytes)),
+        Ok(Err(e)) => format!(
+            "{} | error:{}{}",
+            text.as_str(),
+            e.kind(),
+            alarmed.as_str()
+        ),
+        Ok(Ok(())) => {
+            format!("{} | {}{}", text.as_str(), hex(&bytes), alarmed.as_str())
+        }
     }
 }
 
@@ -91,9 +110,15 @@ fn main() {
             .map(|i| u8::from_str_radix(&h[i..i + 2], 16).expect("bad hex"))
             .collect();
         let out = match kind {
-            "tm" => run::<demo::CCSDSPacketKind>(&mut tm, &data),
-            "tc" => run::<demo::CCSDSCommandKind>(&mut tc, &data),
-            "hk" => run::<demo::Housekeeping>(&mut hk, &data),
+            "tm" => run(&mut tm, &data, |p: &demo::CCSDSPacketKind, t| {
+                alarm_text(&p.alarms(), t)
+            }),
+            "tc" => run(&mut tc, &data, |p: &demo::CCSDSCommandKind, t| {
+                alarm_text(&p.alarms(), t)
+            }),
+            "hk" => run(&mut hk, &data, |p: &demo::Housekeeping, t| {
+                alarm_text(&p.alarms(), t)
+            }),
             _ => panic!("unknown vector kind {kind}"),
         };
         println!("{out}");

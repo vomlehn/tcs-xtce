@@ -2393,6 +2393,111 @@ static inline int xtce_pk_bytes_cmp(const void* a, size_t na, const void* b,
 /* --- canonical text (identical in every runtime)
  * ------------------------------------------ */
 
+/* --- alarms ------------------------------------------------------------------
+ */
+
+/* XTCE's concern levels, least to most, and XTCE_PK_ABSENT for a field that
+ * is absent. */
+enum {
+        XTCE_PK_ABSENT = -1,
+        XTCE_PK_NORMAL,
+        XTCE_PK_WATCH,
+        XTCE_PK_WARNING,
+        XTCE_PK_DISTRESS,
+        XTCE_PK_CRITICAL,
+        XTCE_PK_SEVERE
+};
+
+/* The alarm of one field: its level, or XTCE_PK_ABSENT. */
+typedef struct xtce_pk_alarm {
+        const char* field;
+        int level;
+} xtce_pk_alarm;
+
+/* XTCE's name for a level, or "none" for XTCE_PK_ABSENT. */
+static inline const char* xtce_pk_alarm_name(int level) {
+        static const char* const names[] = {"normal",   "watch",
+                                            "warning",  "distress",
+                                            "critical", "severe"};
+        return level >= 0 && level <= XTCE_PK_SEVERE ? names[level] : "none";
+}
+
+/* Whether `x` lies in an alarm range; a missing bound is infinite. */
+static inline bool xtce_pk_in_band(double x, bool has_lo, double lo,
+                                   bool lo_incl, bool has_hi, double hi,
+                                   bool hi_incl) {
+        return (!has_lo || (lo_incl ? x >= lo : x > lo)) &&
+               (!has_hi || (hi_incl ? x <= hi : x < hi));
+}
+
+/* An enumeration alarm: the values `lo` to `hi` raise `level`. */
+typedef struct xtce_pk_label_alarm {
+        int64_t lo;
+        int64_t hi;
+        int level;
+} xtce_pk_label_alarm;
+
+/* The level of enumeration value `x`: that of the first of the `n`
+ * `labels` holding it, else `def`. */
+static inline int xtce_pk_enum_alarm(int64_t x,
+                                     const xtce_pk_label_alarm* labels,
+                                     size_t n, int def) {
+        size_t i;
+        for (i = 0; i < n; ++i)
+                if (labels[i].lo <= x && x <= labels[i].hi)
+                        return labels[i].level;
+        return def;
+}
+
+/* An automaton over UTF-8 bytes that a string alarm's pattern compiles to:
+ * state q's transitions are trans[starts[q]] to trans[starts[q + 1] - 1],
+ * each taking the bytes `lo` to `hi` to state `next`. */
+typedef struct xtce_pk_dfa_trans {
+        uint8_t lo;
+        uint8_t hi;
+        uint16_t next;
+} xtce_pk_dfa_trans;
+
+typedef struct xtce_pk_dfa {
+        const uint16_t* starts;
+        const xtce_pk_dfa_trans* trans;
+        const bool* accept;
+} xtce_pk_dfa;
+
+/* Whether `dfa` accepts all `n` bytes at `s`. */
+static inline bool xtce_pk_dfa_match(const xtce_pk_dfa* dfa, const char* s,
+                                     size_t n) {
+        size_t q = 0, k;
+        for (k = 0; k < n; ++k) {
+                uint8_t b = (uint8_t)s[k];
+                size_t i = dfa->starts[q], end = dfa->starts[q + 1];
+                while (i < end && !(dfa->trans[i].lo <= b &&
+                                    b <= dfa->trans[i].hi))
+                        ++i;
+                if (i == end) return false;
+                q = dfa->trans[i].next;
+        }
+        return dfa->accept[q];
+}
+
+/* A string alarm: strings that `dfa` accepts raise `level`. */
+typedef struct xtce_pk_pattern {
+        const xtce_pk_dfa* dfa;
+        int level;
+} xtce_pk_pattern;
+
+/* The level of the `len` bytes at `s`: that of the first of the `n`
+ * `patterns` they match, else `def`. */
+static inline int xtce_pk_pattern_alarm(const char* s, size_t len,
+                                        const xtce_pk_pattern* patterns,
+                                        size_t n, int def) {
+        size_t i;
+        for (i = 0; i < n; ++i)
+                if (xtce_pk_dfa_match(patterns[i].dfa, s, len))
+                        return patterns[i].level;
+        return def;
+}
+
 /* Accumulates text into `cap` bytes at `buf` (which may be NULL when `cap` is
  * 0), truncating what does not fit but counting it in `len`, like snprintf. */
 typedef struct xtce_pk_text {
@@ -2426,6 +2531,21 @@ static inline void xtce_pk_text_puts(xtce_pk_text* t, const char* s) {
 
 static inline void xtce_pk_text_putc(xtce_pk_text* t, char c) {
         xtce_pk_text_putn(t, &c, 1);
+}
+
+/* Writes `field=level` for each of the `n` alarms, `none` for a field that is
+ * absent, as every runtime writes them, like snprintf. */
+static inline size_t xtce_pk_describe_alarms(const xtce_pk_alarm* a, size_t n,
+                                             char* buf, size_t cap) {
+        xtce_pk_text t = xtce_pk_text_init(buf, cap);
+        size_t i;
+        for (i = 0; i < n; ++i) {
+                if (i) xtce_pk_text_puts(&t, ", ");
+                xtce_pk_text_puts(&t, a[i].field);
+                xtce_pk_text_putc(&t, '=');
+                xtce_pk_text_puts(&t, xtce_pk_alarm_name(a[i].level));
+        }
+        return t.len;
 }
 
 static inline void xtce_pk_text_int(xtce_pk_text* t, int64_t v) {

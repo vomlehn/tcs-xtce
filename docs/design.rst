@@ -478,6 +478,36 @@ looks them up in ``tc_containers``, which holds the
 than its base meta-command's container, starts with that container's
 items. A ``SizeInBits`` adds the same ``Pad`` or ``Fill`` as in telemetry.
 
+Alarms
+------
+
+A parameter type's alarms compile into an ``Alarm``: a default
+``AlarmDef`` and the contexts that replace it, each definition a list of
+``Band``\ s, enumeration label levels, string patterns and conditions.
+Criteria (contexts and ``AlarmConditions``) stay unbound in the type and
+are bound per packet in ``bind_alarms``, against every value of the
+packet, since an alarm is evaluated on a whole decoded packet. The
+generated ``alarms()`` methods read the struct's fields, so a criterion on
+a value the packet computes (a size, a length) leaves the alarm out, with
+a note in the packet's documentation; so does anything that needs earlier
+packets, which a codec doesn't keep.
+
+Every runtime must give the same level, so integer ranges become whole,
+inclusive bounds clamped to the field's type when they are compiled
+(``int_band``): Python compares an integer with a float exactly, and Rust
+and C would round through ``double``. Floats compare as doubles, with a
+missing bound skipped rather than infinite, so that a NaN is outside
+every range in every language.
+
+String patterns can't count on a regular expression library in C, nor
+in Rust without a dependency, so ``regex.py`` compiles each pattern with
+Python's own parser into a Thompson automaton over UTF-8 bytes (code
+point ranges split into byte sequences as RE2 does), determinizes it,
+and minimizes it. The runtimes walk its transition table, a few lines in
+each language. Only regular constructs compile; whole-string matching
+makes ``^`` and ``$`` at the ends redundant, and anything else raises
+``Unsupported`` for that alarm.
+
 Times
 -----
 

@@ -1,8 +1,9 @@
 //! Decodes and re-encodes the packet vectors in `tests/mission/vectors.txt`.
 //!
 //! For each vector prints `<description of the decoded packet> | <hex of the
-//! re-encoded packet>`, with `error:<kind>` in place of either on failure.
-//! The C++ and Python versions of this tool print identical output.
+//! re-encoded packet>`, with `error:<kind>` in place of either on failure,
+//! then ` | alarms: <field=level, ...>` for a packet with alarms.  The C++
+//! and Python versions of this tool print identical output.
 //!
 //! Usage: `packet_tool VECTORS`
 
@@ -10,13 +11,24 @@
 mod demo;
 
 use std::fmt::Display;
-use tcs_xtce::packet::{Codec, Packet};
+use tcs_xtce::packet::{Alarms, Codec, Packet};
 
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
-fn run<P: Packet + Display>(data: &[u8]) -> String {
+fn alarm_text<const N: usize>(a: &Alarms<N>) -> String {
+    if a.as_slice().is_empty() {
+        String::new()
+    } else {
+        format!(" | alarms: {a}")
+    }
+}
+
+fn run<P: Packet + Display>(
+    data: &[u8],
+    alarms: impl Fn(&P) -> String,
+) -> String {
     let mut codec = Codec::for_packet::<P>();
     codec.load(data);
     let packet = match codec.decode::<P>() {
@@ -27,7 +39,7 @@ fn run<P: Packet + Display>(data: &[u8]) -> String {
         Ok(out) => hex(out),
         Err(e) => format!("error:{}", e.kind()),
     };
-    format!("{packet} | {again}")
+    format!("{packet} | {again}{}", alarms(&packet))
 }
 
 fn main() {
@@ -44,9 +56,15 @@ fn main() {
             .map(|i| u8::from_str_radix(&h[i..i + 2], 16).expect("bad hex"))
             .collect();
         let out = match kind {
-            "tm" => run::<demo::CCSDSPacketKind>(&data),
-            "tc" => run::<demo::CCSDSCommandKind>(&data),
-            "hk" => run::<demo::Housekeeping>(&data),
+            "tm" => {
+                run(&data, |p: &demo::CCSDSPacketKind| alarm_text(&p.alarms()))
+            }
+            "tc" => {
+                run(&data, |p: &demo::CCSDSCommandKind| alarm_text(&p.alarms()))
+            }
+            "hk" => {
+                run(&data, |p: &demo::Housekeeping| alarm_text(&p.alarms()))
+            }
             _ => panic!("unknown vector kind {kind}"),
         };
         println!("{out}");

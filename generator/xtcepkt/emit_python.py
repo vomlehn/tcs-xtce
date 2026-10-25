@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import textwrap
+
 from .common import (Ref, fast_order, field_range, flt, header_lines,
                      invertible, math_value, size_args, string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
@@ -386,6 +388,7 @@ class PythonEmitter:
         self.m = mission
         self.source = source
         self.out: list[str] = []
+        self.dfas: list = []
 
     def line(self, s: str = "", depth: int = 0) -> None:
         self.out.append("    " * depth + s if s else "")
@@ -421,7 +424,30 @@ class PythonEmitter:
             self.node(n)
         for k in m.kinds:
             self.kind(k)
+        for name, dfa in self.dfas:
+            self.line()
+            self.line()
+            self.line(f"# The automaton matching {dfa.pattern!r}.")
+            self.line(f"{name} = (")
+            self.wrapped(dfa.starts, 1)
+            self.wrapped(dfa.trans, 1)
+            self.wrapped([bool(a) for a in dfa.accept], 1)
+            self.line(")")
         return "\n".join(self.out) + "\n"
+
+    def wrapped(self, items: list, depth: int) -> None:
+        """A tuple of ``items``, wrapped to fit 80 columns."""
+        self.line("(", depth)
+        line = ""
+        for x in items:
+            text = f"{x!r}, ".replace("True", "True").replace(" ,", ",")
+            if len(line) + len(text) + 4 * (depth + 1) > 80:
+                self.line(line.rstrip(), depth + 1)
+                line = ""
+            line += text
+        if line:
+            self.line(line.rstrip(), depth + 1)
+        self.line("),", depth)
 
     def enum_type(self, vt: VType) -> None:
         self.line()
@@ -716,6 +742,10 @@ class PythonEmitter:
             self.line()
             self.line(f"``{lc.name}`` gives the size of ``{c.name}``: computed "
                       "from its length when encoding.", 1)
+        for note in n.alarm_notes:
+            self.line()
+            for text in textwrap.wrap(f"Alarm left out: {note}.", 72):
+                self.line(text, 1)
         self.line('"""', 1)
         self.line()
         self.line(f"NAME: ClassVar[str] = {pstr(n.key)}", 1)
@@ -789,6 +819,7 @@ class PythonEmitter:
             # command container, writes nothing.
             self.line("pass", 2)
         self.line()
+        self.alarms(n)
         self.line("def describe(self) -> str:", 1)
         self.line('"""Canonical text form, identical in every generated '
                   'language."""', 2)
@@ -808,6 +839,89 @@ class PythonEmitter:
         for (name, _), p in zip(n.fields, parts):
             self.line(f"{pstr(name + '=')} + {p},", 3)
         self.line(')) + "}"', 2)
+
+    def alarms(self, n: Node) -> None:
+        """``alarms()``, which gives each alarmed field's level, and a
+        method computing each one."""
+        names = dict((lc, name) for name, lc in n.fields)
+        place = lambda lc: self.place(n, lc, names)  # noqa: E731
+        self.line("def alarms(self) -> list:", 1)
+        self.line('"""(field, alarm level) for each field with an alarm; the '
+                  'level is None', 2)
+        self.line('when the field is absent."""', 2)
+        if not n.alarms:
+            self.line("return []", 2)
+        else:
+            self.line("return [", 2)
+            for name, _, _ in n.alarms:
+                self.line(f"({pstr(name)}, self._alarm_{name}()),", 3)
+            self.line("]", 2)
+        self.line()
+        for name, lc, a in n.alarms:
+            self.line(f"def _alarm_{name}(self) -> Optional[pk.AlarmLevel]:", 1)
+            self.line(f"x = self.{name}", 2)
+            if lc.optional:
+                self.line("if x is None:", 2)
+                self.line("return None", 3)
+            d = 2
+            if lc.vtype.kind == "array":
+                self.line("worst = 0", 2)
+                self.line("for x in x:", 2)
+                d = 3
+            self.line("lv = 0", d)
+            kind = (lc.vtype.elem.kind if lc.vtype.kind == "array"
+                    else lc.vtype.kind)
+            for k, (terms, ad) in enumerate(a.contexts):
+                cond = " and ".join(f"({term(c, place)})" for c in terms)
+                self.line(f"{'if' if k == 0 else 'elif'} {cond}:", d)
+                self.alarm_def(ad, kind, place, d + 1)
+            if a.contexts:
+                if a.default is not None:
+                    self.line("else:", d)
+                    self.alarm_def(a.default, kind, place, d + 1)
+            elif a.default is not None:
+                self.alarm_def(a.default, kind, place, d)
+            if lc.vtype.kind == "array":
+                self.line("worst = max(worst, lv)", d)
+                self.line("return pk.AlarmLevel(worst)", 2)
+            else:
+                self.line("return pk.AlarmLevel(lv)", 2)
+            self.line()
+
+    def alarm_def(self, ad, kind: str, place, depth: int) -> None:
+        """Statements raising ``lv`` to the level that alarm definition
+        ``ad`` gives value ``x`` (of kind ``kind``)."""
+        start = len(self.out)
+        for b in ad.bands:
+            test = (f"pk.in_band(x, {b.lo!r}, {b.lo_incl}, {b.hi!r}, "
+                    f"{b.hi_incl})")
+            self.line(f"if {test if b.inside else 'not ' + test}:", depth)
+            self.line(f"lv = max(lv, {b.level})", depth + 1)
+        if kind == "enum" and (ad.labels or ad.default):
+            labels = "".join(f"({lo}, {hi}, {lv}), "
+                             for lo, hi, lv in ad.labels)
+            self.line(f"lv = max(lv, pk.enum_alarm(x, ({labels.rstrip()}), "
+                      f"{ad.default}))", depth)
+        if kind == "string" and (ad.patterns or ad.default):
+            pats = "".join(f"({self.dfa(dfa)}, {lv}), "
+                           for dfa, lv in ad.patterns)
+            self.line(f"lv = max(lv, pk.pattern_alarm(x, ({pats.rstrip()}), "
+                      f"{ad.default}))", depth)
+        for level, terms in ad.conditions:
+            cond = " and ".join(f"({term(c, place)})" for c in terms)
+            self.line(f"if {cond}:", depth)
+            self.line(f"lv = max(lv, {level})", depth + 1)
+        if len(self.out) == start:
+            self.line("pass", depth)
+
+    def dfa(self, dfa) -> str:
+        """The name of the module constant holding a pattern's automaton."""
+        for name, d in self.dfas:
+            if d is dfa:
+                return name
+        name = f"_DFA{len(self.dfas)}"
+        self.dfas.append((name, dfa))
+        return name
 
     def kind(self, k: Kind) -> None:
         self.line()

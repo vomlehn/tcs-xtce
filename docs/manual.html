@@ -1495,6 +1495,11 @@ type, shown here for <tt class="docutils literal">T</tt> = <tt class="docutils l
 <td>dataclass <tt class="docutils literal">==</tt></td>
 <td>Comparison</td>
 </tr>
+<tr><td><tt class="docutils literal">alarms() <span class="pre">-&gt;</span> <span class="pre">pk::Alarms&lt;N&gt;</span></tt>, <tt class="docutils literal">ALARMS</tt></td>
+<td><tt class="docutils literal">size_t T_alarms(const T*, xtce_pk_alarm* out)</tt>, <tt class="docutils literal">T_ALARMS</tt></td>
+<td><tt class="docutils literal">alarms()</tt></td>
+<td>Each alarmed field's alarm level (see Alarms)</td>
+</tr>
 </tbody>
 </table>
 <p>The C/C++ functions return <tt class="docutils literal">0</tt> on success, or an <tt class="docutils literal">XTCE_PK_*</tt> error
@@ -2236,6 +2241,46 @@ again by their <tt class="docutils literal">dwell</tt> aliases, as <tt class="do
 <tt class="docutils literal">dwell_volt2</tt>. Without an <tt class="docutils literal">aliasNameSpace</tt>, an integer or string
 selector is not supported, since the parameters it may name can't be
 known.</dd>
+<dt>Alarms</dt>
+<dd><p class="first">A parameter type's <tt class="docutils literal">DefaultAlarm</tt> and <tt class="docutils literal">ContextAlarmList</tt>. The first
+<tt class="docutils literal">ContextAlarm</tt> whose <tt class="docutils literal">ContextMatch</tt> holds picks its definition,
+else the <tt class="docutils literal">DefaultAlarm</tt> applies; the level is the most severe of
+what the definition says:</p>
+<ul class="simple">
+<li><tt class="docutils literal">StaticAlarmRanges</tt> of integers, floats and relative times (with
+<tt class="docutils literal">timeUnits</tt>): with <tt class="docutils literal"><span class="pre">rangeForm=&quot;outside&quot;</span></tt> (the default) a value
+outside a level's range raises that level, so the ranges nest, watch
+innermost; with <tt class="docutils literal">&quot;inside&quot;</tt>, a value inside it does. A missing bound
+is infinite, and a NaN is outside every range.</li>
+<li><tt class="docutils literal">AlarmMultiRanges</tt>: each <tt class="docutils literal">Range</tt> raises its own <tt class="docutils literal">level</tt>, by its
+own <tt class="docutils literal">rangeForm</tt>.</li>
+<li><tt class="docutils literal">EnumerationAlarmList</tt>: the level of the value's label, else
+<tt class="docutils literal">defaultAlarmLevel</tt>.</li>
+<li><tt class="docutils literal">StringAlarmList</tt>: the level of the first <tt class="docutils literal">matchPattern</tt> that the
+whole string matches, else <tt class="docutils literal">defaultAlarmLevel</tt>. Patterns use
+Python's syntax (as Java's mostly does), without backreferences or
+lookarounds; <tt class="docutils literal">\d</tt>, <tt class="docutils literal">\w</tt> and <tt class="docutils literal">\s</tt> are ASCII. The generator
+compiles each to an automaton, so no runtime needs a regular
+expression library.</li>
+<li><tt class="docutils literal">AlarmConditions</tt>: each level whose criteria hold, for any type.</li>
+<li><tt class="docutils literal"><span class="pre">disabled=&quot;true&quot;</span></tt>: no alarm.</li>
+</ul>
+<p><tt class="docutils literal">alarms()</tt> lists each field with an alarm and its level, from
+<tt class="docutils literal">normal</tt> up to <tt class="docutils literal">severe</tt>, or none for a field that is absent. An
+array's level is its worst element's. Criteria may compare any field
+of the packet, before or after the value. Integers are compared with
+the ranges exactly, in every language.</p>
+<p>The demo's <tt class="docutils literal">Alarmed</tt> packet has one of each, and the test tools
+print the levels after the packet:
+<tt class="docutils literal">... | alarms: al_mode=normal, al_temp=warning, ...</tt>.</p>
+<p class="last">A packet leaves out an alarm that it can't evaluate, and its generated
+documentation says why: one whose criteria use a value the packet
+doesn't hold, or one the packet computes (a size or length field);
+<tt class="docutils literal">ChangeAlarmRanges</tt> and <tt class="docutils literal">ChangePerSecondAlarmRanges</tt>,
+<tt class="docutils literal">minViolations</tt> and <tt class="docutils literal">minConformance</tt> above 1, which depend on
+earlier packets; a <tt class="docutils literal">CustomAlarm</tt>; and alarms inside aggregates and
+arrays of arrays.</p>
+</dd>
 <dt>Messages</dt>
 <dd>A <tt class="docutils literal">MessageSet</tt>'s <tt class="docutils literal">Message</tt> picks out its container by its
 <tt class="docutils literal">MatchCriteria</tt>. It is generated as a packet derived from that

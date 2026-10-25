@@ -1037,6 +1037,10 @@ type, shown here for ``T`` = ``demo_Housekeeping``.
      - assignment; compare ``T_describe`` output
      - dataclass ``==``
      - Comparison
+   * - ``alarms() -> pk::Alarms<N>``, ``ALARMS``
+     - ``size_t T_alarms(const T*, xtce_pk_alarm* out)``, ``T_ALARMS``
+     - ``alarms()``
+     - Each alarmed field's alarm level (see Alarms)
 
 The C/C++ functions return ``0`` on success, or an ``XTCE_PK_*`` error
 code after filling in ``*err`` (``err`` may be ``NULL``). ``T_describe``
@@ -1810,6 +1814,48 @@ Indirect entries
    ``dwell_volt2``. Without an ``aliasNameSpace``, an integer or string
    selector is not supported, since the parameters it may name can't be
    known.
+
+Alarms
+   A parameter type's ``DefaultAlarm`` and ``ContextAlarmList``. The first
+   ``ContextAlarm`` whose ``ContextMatch`` holds picks its definition,
+   else the ``DefaultAlarm`` applies; the level is the most severe of
+   what the definition says:
+
+   * ``StaticAlarmRanges`` of integers, floats and relative times (with
+     ``timeUnits``): with ``rangeForm="outside"`` (the default) a value
+     outside a level's range raises that level, so the ranges nest, watch
+     innermost; with ``"inside"``, a value inside it does. A missing bound
+     is infinite, and a NaN is outside every range.
+   * ``AlarmMultiRanges``: each ``Range`` raises its own ``level``, by its
+     own ``rangeForm``.
+   * ``EnumerationAlarmList``: the level of the value's label, else
+     ``defaultAlarmLevel``.
+   * ``StringAlarmList``: the level of the first ``matchPattern`` that the
+     whole string matches, else ``defaultAlarmLevel``. Patterns use
+     Python's syntax (as Java's mostly does), without backreferences or
+     lookarounds; ``\d``, ``\w`` and ``\s`` are ASCII. The generator
+     compiles each to an automaton, so no runtime needs a regular
+     expression library.
+   * ``AlarmConditions``: each level whose criteria hold, for any type.
+   * ``disabled="true"``: no alarm.
+
+   ``alarms()`` lists each field with an alarm and its level, from
+   ``normal`` up to ``severe``, or none for a field that is absent. An
+   array's level is its worst element's. Criteria may compare any field
+   of the packet, before or after the value. Integers are compared with
+   the ranges exactly, in every language.
+
+   The demo's ``Alarmed`` packet has one of each, and the test tools
+   print the levels after the packet:
+   ``... | alarms: al_mode=normal, al_temp=warning, ...``.
+
+   A packet leaves out an alarm that it can't evaluate, and its generated
+   documentation says why: one whose criteria use a value the packet
+   doesn't hold, or one the packet computes (a size or length field);
+   ``ChangeAlarmRanges`` and ``ChangePerSecondAlarmRanges``,
+   ``minViolations`` and ``minConformance`` above 1, which depend on
+   earlier packets; a ``CustomAlarm``; and alarms inside aggregates and
+   arrays of arrays.
 
 Messages
    A ``MessageSet``'s ``Message`` picks out its container by its

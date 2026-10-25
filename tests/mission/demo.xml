@@ -848,6 +848,109 @@
           </SizeInBits>
         </BinaryDataEncoding>
       </BinaryParameterType>
+      <!-- Types with alarms, for the Alarmed packet. -->
+      <EnumeratedParameterType name="AlModeType">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <EnumerationList>
+          <Enumeration value="0" label="NOMINAL"/>
+          <Enumeration value="1" label="SAFE"/>
+          <Enumeration value="2" label="SCIENCE"/>
+          <Enumeration value="3" label="FAULT"/>
+        </EnumerationList>
+        <DefaultAlarm>
+          <EnumerationAlarmList>
+            <EnumerationAlarm alarmLevel="watch" enumerationLabel="SAFE"/>
+            <EnumerationAlarm alarmLevel="critical" enumerationLabel="FAULT"/>
+          </EnumerationAlarmList>
+        </DefaultAlarm>
+      </EnumeratedParameterType>
+      <FloatParameterType name="AlTempType">
+        <FloatDataEncoding sizeInBits="32"/>
+        <DefaultAlarm>
+          <StaticAlarmRanges>
+            <WarningRange minInclusive="0" maxInclusive="50"/>
+            <CriticalRange minInclusive="-10" maxExclusive="60"/>
+          </StaticAlarmRanges>
+        </DefaultAlarm>
+        <ContextAlarmList>
+          <ContextAlarm>
+            <StaticAlarmRanges rangeForm="inside">
+              <WarningRange minExclusive="35"/>
+            </StaticAlarmRanges>
+            <ContextMatch>
+              <Comparison parameterRef="AlMode" value="SCIENCE"/>
+            </ContextMatch>
+          </ContextAlarm>
+        </ContextAlarmList>
+      </FloatParameterType>
+      <IntegerParameterType name="AlLevelType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <DefaultAlarm>
+          <AlarmMultiRanges>
+            <Range maxExclusive="10" level="watch" rangeForm="inside"/>
+            <Range minInclusive="200" level="severe" rangeForm="inside"/>
+          </AlarmMultiRanges>
+        </DefaultAlarm>
+      </IntegerParameterType>
+      <StringParameterType name="AlTextType">
+        <StringDataEncoding>
+          <SizeInBits>
+            <Fixed><FixedValue>32</FixedValue></Fixed>
+            <TerminationChar>00</TerminationChar>
+          </SizeInBits>
+        </StringDataEncoding>
+        <DefaultAlarm defaultAlarmLevel="warning">
+          <StringAlarmList>
+            <StringAlarm alarmLevel="critical" matchPattern="ER.*"/>
+            <StringAlarm alarmLevel="normal" matchPattern="(?i)ok\d*"/>
+          </StringAlarmList>
+        </DefaultAlarm>
+      </StringParameterType>
+      <BooleanParameterType name="AlFlagType">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <DefaultAlarm>
+          <AlarmConditions>
+            <WarningAlarm>
+              <Comparison parameterRef="AlLevel" value="100"
+                comparisonOperator="&gt;"/>
+            </WarningAlarm>
+          </AlarmConditions>
+        </DefaultAlarm>
+      </BooleanParameterType>
+      <IntegerParameterType name="AlSampleType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <DefaultAlarm>
+          <StaticAlarmRanges>
+            <WarningRange maxInclusive="100"/>
+          </StaticAlarmRanges>
+        </DefaultAlarm>
+      </IntegerParameterType>
+      <ArrayParameterType name="AlSamplesType" arrayTypeRef="AlSampleType">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex><FixedValue>0</FixedValue></StartingIndex>
+            <EndingIndex><FixedValue>2</FixedValue></EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <IntegerParameterType name="AlOptType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <DefaultAlarm>
+          <StaticAlarmRanges>
+            <WatchRange maxInclusive="5"/>
+          </StaticAlarmRanges>
+        </DefaultAlarm>
+      </IntegerParameterType>
+      <RelativeTimeParameterType name="AlDelayType">
+        <Encoding units="milliseconds">
+          <IntegerDataEncoding sizeInBits="16"/>
+        </Encoding>
+        <DefaultAlarm>
+          <StaticAlarmRanges timeUnits="milliseconds">
+            <WarningRange maxInclusive="1500"/>
+          </StaticAlarmRanges>
+        </DefaultAlarm>
+      </RelativeTimeParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -1020,6 +1123,14 @@
       <Parameter name="HistData" parameterTypeRef="HistDataType"/>
       <Parameter name="PulseKind" parameterTypeRef="U8"/>
       <Parameter name="PulseValue" parameterTypeRef="U16"/>
+      <Parameter name="AlMode" parameterTypeRef="AlModeType"/>
+      <Parameter name="AlTemp" parameterTypeRef="AlTempType"/>
+      <Parameter name="AlLevel" parameterTypeRef="AlLevelType"/>
+      <Parameter name="AlText" parameterTypeRef="AlTextType"/>
+      <Parameter name="AlFlag" parameterTypeRef="AlFlagType"/>
+      <Parameter name="AlSamples" parameterTypeRef="AlSamplesType"/>
+      <Parameter name="AlOpt" parameterTypeRef="AlOptType"/>
+      <Parameter name="AlDelay" parameterTypeRef="AlDelayType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1791,6 +1902,28 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="500"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Values with alarms of every kind that a packet can evaluate. -->
+      <SequenceContainer name="Alarmed">
+        <EntryList>
+          <ParameterRefEntry parameterRef="AlMode"/>
+          <ParameterRefEntry parameterRef="AlTemp"/>
+          <ParameterRefEntry parameterRef="AlLevel"/>
+          <ParameterRefEntry parameterRef="AlText"/>
+          <ParameterRefEntry parameterRef="AlFlag"/>
+          <ParameterRefEntry parameterRef="AlSamples"/>
+          <ParameterRefEntry parameterRef="AlOpt">
+            <IncludeCondition>
+              <Comparison parameterRef="AlFlag" value="true"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="AlDelay"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="510"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

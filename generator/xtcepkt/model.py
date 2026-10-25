@@ -394,6 +394,8 @@ class VType:
     # Integers with a calibrator: the type's sizeInBits and signed, which
     # give the range of the calibrated value rather than the encoding.
     eng: Optional[tuple[int, bool]] = None
+    # The type's DefaultAlarm and ContextAlarmList, if it has either.
+    alarm: Optional["Alarm"] = None
 
     @property
     def width(self) -> int:
@@ -435,6 +437,72 @@ class VType:
                  else [m.vtype for m in e.members]
                  if isinstance(e, AggregateEnc) else [])
         return [t for i in inner for t in i.tree()] + [self]
+
+
+# --- alarms ------------------------------------------------------------------
+
+# XTCE's concern levels, least to most; a level is an index into this.
+LEVELS = ("normal", "watch", "warning", "distress", "critical", "severe")
+
+
+@dataclass
+class Band:
+    """An alarm range: values inside it (``inside``), or else outside it,
+    raise ``level``.  A missing bound is infinite."""
+
+    level: int
+    lo: Optional[float] = None
+    lo_incl: bool = True
+    hi: Optional[float] = None
+    hi_incl: bool = True
+    inside: bool = False
+
+
+@dataclass
+class Dfa:
+    """A deterministic automaton over UTF-8 bytes that tells whether a
+    string matches a pattern.  State 0 is the start; the transitions of
+    state ``q`` are ``trans[starts[q]:starts[q + 1]]``, each ``(lo, hi,
+    next)`` for the bytes ``lo`` to ``hi``; a byte with no transition
+    fails the match, and the string matches if it ends in an ``accept``
+    state."""
+
+    pattern: str
+    starts: list[int]
+    trans: list[tuple[int, int, int]]
+    accept: list[bool]
+
+
+@dataclass
+class AlarmDef:
+    """One alarm definition (a DefaultAlarm, or a ContextAlarm's).  The
+    level is the most severe of: each Band the value violates; for an
+    enumeration, the level of its label in ``labels`` ((first value, last
+    value, level)), or else ``default``; for a string, the level of the
+    first pattern it matches, or else ``default``; and the level of each
+    AlarmConditions criterion that holds (``conditions``, (level,
+    criteria), unbound until a packet binds them)."""
+
+    bands: list[Band] = field(default_factory=list)
+    labels: list[tuple[int, int, int]] = field(default_factory=list)
+    patterns: list[tuple[Dfa, int]] = field(default_factory=list)
+    default: int = 0
+    conditions: list[tuple[int, object]] = field(default_factory=list)
+    min_violations: int = 1
+    min_conformance: int = 1
+
+
+@dataclass
+class Alarm:
+    """The alarms of a type: the first context whose criteria hold picks
+    its definition, else ``default`` applies (None: no alarm).  Criteria
+    are unbound (the document's, resolved from SpaceSystem ``path``) in a
+    type, and bound to a packet's values in ``Node.alarms``."""
+
+    path: tuple
+    default: Optional[AlarmDef]
+    contexts: list[tuple[object, AlarmDef]] = field(default_factory=list)
+    note: str = ""  # why it can't be evaluated, if it can't
 
 
 # --- containers --------------------------------------------------------------
@@ -724,6 +792,10 @@ class Node:
     next_container: Optional[str] = None
     max_bytes: int = 0
     error: Optional[str] = None
+    # Concrete only: (field name, value, alarm bound to this packet's values)
+    # for each field with an alarm, and why any others were left out.
+    alarms: list = field(default_factory=list)
+    alarm_notes: list = field(default_factory=list)
 
     def chain(self) -> list["Node"]:
         """This node and its bases, root first."""
