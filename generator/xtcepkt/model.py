@@ -445,6 +445,15 @@ class Local:
     # A packet length field: the generated code computes it, as the number
     # of bytes after it plus ``length``, and checks it when decoding.
     length: Optional[int] = None
+    # A field that holds a checksum (an ErrorDetectCorrect value): the
+    # generated code computes it, and checks it when decoding.
+    checksum: bool = False
+
+    @property
+    def computed(self) -> bool:
+        """Whether the generated code computes the value: it is not a field
+        of the generated struct."""
+        return self.length is not None or self.checksum
 
 
 @dataclass
@@ -495,6 +504,26 @@ class Cond:
 
     criteria: list["Term"]
     items: list["Item"]
+
+
+@dataclass(eq=False)
+class Check:
+    """An ErrorDetectCorrect algorithm of a container.  With ``from_end``
+    (XTCE's reference="end") it covers the bits from mark ``start`` (0 for
+    the packet's start) to ``skip`` bits before the container's end (mark
+    ``end``, or the packet's end when None).  Otherwise it covers the bits
+    from ``skip`` bits after mark ``start`` to ``local``, if that lies after
+    them, or else to the container's end.  ``local`` holds the
+    value: its low bits when the algorithm gives more.  ``spec`` is the
+    algorithm, as the Python runtime's ``checksum`` takes it."""
+
+    spec: tuple
+    local: Local
+    start: int
+    end: Optional[int]
+    skip: int
+    from_end: bool
+    container: str
 
 
 Item = Union[Seek, Mark, Value, Fixed, Pad, Cond]
@@ -606,6 +635,8 @@ class Node:
     # (the value whose size it gives, its DynSize).  They are not fields;
     # encoding computes them from the other value's length.
     derived: dict = field(default_factory=dict)
+    # ErrorDetectCorrect checks, in the order their values are computed
+    checks: list = field(default_factory=list)
     max_bytes: int = 0
     error: Optional[str] = None
 

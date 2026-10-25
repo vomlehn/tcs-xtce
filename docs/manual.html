@@ -1633,7 +1633,11 @@ bound, or an array or binary value doesn't have it</td>
 </tr>
 <tr><td><tt class="docutils literal">InvalidValue</tt></td>
 <td>A field's bits are not a value of its encoding: a BCD digit above 9,
-or a DEC reserved operand</td>
+a DEC reserved operand, or a digit above 9 for a check digit</td>
+</tr>
+<tr><td><tt class="docutils literal">BadChecksum</tt></td>
+<td>A checksum field (see &quot;Error detection&quot; under <a class="reference internal" href="#supported-xtce">Supported XTCE</a>)
+doesn't match the data it checks</td>
 </tr>
 <tr><td><tt class="docutils literal">NoSpace</tt></td>
 <td>C/C++ only: the output buffer is smaller than the packet</td>
@@ -1755,6 +1759,15 @@ Python), <tt class="docutils literal">xtce_pk_read_utf8</tt> and <tt class="docu
 and write strings encoded as binary. Python's <tt class="docutils literal">bool_from_string(s,
 one, zero, field)</tt> decodes a boolean encoded as a string; the other
 languages generate it inline.</dd>
+<dt>Error detection</dt>
+<dd><tt class="docutils literal">checksum(spec, data, start, end, field)</tt> (<tt class="docutils literal">xtce_pk_checksum</tt>)
+computes an <tt class="docutils literal">ErrorDetectCorrect</tt> algorithm over bits <tt class="docutils literal">start</tt> to
+<tt class="docutils literal">end</tt> of <tt class="docutils literal">data</tt>: a Rust <tt class="docutils literal">Checksum</tt>, a C
+<tt class="docutils literal">xtce_pk_checksum_spec</tt>, or a Python tuple (see the runtime's
+documentation). The reader's <tt class="docutils literal">checksum(spec, start, end, field)</tt> and
+<tt class="docutils literal">packet_end()</tt>, and the writer's <tt class="docutils literal">patch_checksum(spec, start, end,
+at, bits, little_endian, field)</tt> and <tt class="docutils literal">packet_end()</tt>, are what
+generated code uses.</dd>
 <dt>Sizes from other fields</dt>
 <dd><tt class="docutils literal">dynamic_size(x, slope, intercept, unit, max, field)</tt> computes
 <tt class="docutils literal">(slope * x + intercept) / unit</tt> and fails with <tt class="docutils literal">BadSize</tt> unless it
@@ -2010,11 +2023,65 @@ are not supported.</p>
 documentation but not applied.</dd>
 <dt>Containers</dt>
 <dd><tt class="docutils literal">SequenceContainer</tt> entry lists with <tt class="docutils literal">ParameterRefEntry</tt>,
-<tt class="docutils literal">ArrayParameterRefEntry</tt> and <tt class="docutils literal">ContainerRefEntry</tt>. Included containers are flattened in, or with
-a <tt class="docutils literal">RepeatEntry</tt> become a list, and may not have a <tt class="docutils literal">BaseContainer</tt>.
-A <tt class="docutils literal">BinaryEncoding</tt> with a fixed <tt class="docutils literal">SizeInBits</tt> pads a telemetry
-container to that size. <tt class="docutils literal">BaseContainer</tt> inheritance uses
-<tt class="docutils literal">RestrictionCriteria</tt>.</dd>
+<tt class="docutils literal">ArrayParameterRefEntry</tt> and <tt class="docutils literal">ContainerRefEntry</tt>. Included
+containers are flattened in, or with a <tt class="docutils literal">RepeatEntry</tt> become a list,
+and may not have a <tt class="docutils literal">BaseContainer</tt>. A <tt class="docutils literal">BinaryEncoding</tt> with a fixed
+<tt class="docutils literal">SizeInBits</tt> pads a telemetry container to that size. <tt class="docutils literal">BaseContainer</tt>
+inheritance uses <tt class="docutils literal">RestrictionCriteria</tt>.</dd>
+<dt>Error detection</dt>
+<dd><p class="first">The <tt class="docutils literal">ErrorDetectCorrect</tt> of a container's <tt class="docutils literal">BinaryEncoding</tt> (of a
+sequence container, whether a packet, a base container or an included
+one, or of a command container): every <tt class="docutils literal">CRC</tt>, <tt class="docutils literal">Checksum</tt>, <tt class="docutils literal">XOR</tt>
+and <tt class="docutils literal">Parity</tt> whose <tt class="docutils literal">parameterRef</tt> names the field that holds its
+value. (One without a <tt class="docutils literal">parameterRef</tt> only documents the container,
+and is ignored.) Like a packet length field, that field is not a field
+of the generated struct: encoding computes it once the packet is
+written (after the length), and decoding computes it and fails with
+<tt class="docutils literal">BadChecksum</tt> if the field differs. It must be an uncalibrated
+unsigned binary integer, big or little endian in whole bytes, without
+an <tt class="docutils literal">IncludeCondition</tt>, and nothing may compare it or take a size
+from it. It holds the value's low bits when the algorithm gives more.
+For a check in a base container, the field may be in that container
+or a derived one.</p>
+<p>The bits a value covers: with <tt class="docutils literal"><span class="pre">reference=&quot;start&quot;</span></tt> (the default),
+from <tt class="docutils literal">bitsFromReference</tt> bits after the start of the container to its
+field, or to the end of the container if the field comes before them;
+with <tt class="docutils literal"><span class="pre">reference=&quot;end&quot;</span></tt>, from the start of the container to
+<tt class="docutils literal">bitsFromReference</tt> bits before its end, as for a checksum in the
+container's last bits. The container's start and end are those of the
+packet for a packet or base container (the packet ends with its last
+byte), and those of the included entries for an included container.
+Values are computed in the order of their fields, so a value may cover
+the fields of those before it, as in the demo's <tt class="docutils literal">Checked</tt>.</p>
+<p>The algorithms, all over the covered bits taken most significant bit
+first, with a last partial word padded with zero bits:</p>
+<ul class="simple">
+<li><tt class="docutils literal">CRC</tt>: the <tt class="docutils literal">width</tt>-bit CRC (1 to 64) of <tt class="docutils literal">Polynomial</tt> (without
+its top bit, as XTCE writes it), starting from <tt class="docutils literal">InitRemainder</tt> and
+ending XORed with <tt class="docutils literal">FinalXOR</tt>, each truncated to the width. With
+<tt class="docutils literal">reflectData</tt> each byte is taken least significant bit first, and
+with <tt class="docutils literal">reflectRemainder</tt> the remainder is reflected before the final
+XOR, as in the usual model of CRCs (so CRC-32 is width 32,
+<tt class="docutils literal">04C11DB7</tt>, <tt class="docutils literal">FFFFFFFF</tt> both ways and both reflections).
+<tt class="docutils literal"><span class="pre">direction=&quot;leastSignificantBitFirst&quot;</span></tt> reflects the data too (both
+together cancel).</li>
+<li><tt class="docutils literal">Checksum</tt>: <tt class="docutils literal">sum8</tt>, <tt class="docutils literal">sum16</tt>, <tt class="docutils literal">sum24</tt> and <tt class="docutils literal">sum32</tt>, the sum of
+the bytes modulo 2 to that many bits; <tt class="docutils literal">unix_sum</tt>, the checksum of
+BSD and GNU <tt class="docutils literal">sum</tt>; <tt class="docutils literal">fletcher4</tt>, <tt class="docutils literal">fletcher8</tt>, <tt class="docutils literal">fletcher16</tt> and
+<tt class="docutils literal">fletcher32</tt>, Fletcher's checksum of that many bits, on words of
+half as many bits; <tt class="docutils literal">adler32</tt>; and <tt class="docutils literal">luhn</tt>, <tt class="docutils literal">verhoeff</tt> and
+<tt class="docutils literal">damm</tt>, the check digit of the decimal digits in every 4 bits (a
+digit above 9 fails with <tt class="docutils literal">InvalidValue</tt>). <tt class="docutils literal">custom</tt> is not
+supported. <tt class="docutils literal">hashSizeInBits</tt> changes nothing.</li>
+<li><tt class="docutils literal">XOR</tt>: the exclusive or of the words the size of the field.</li>
+<li><tt class="docutils literal">Parity</tt>: the bit that makes the number of one bits even
+(<tt class="docutils literal">Even</tt>) or odd (<tt class="docutils literal">Odd</tt>), with the field's bit.</li>
+</ul>
+<p class="last">The names follow Jacksum's, whose <tt class="docutils literal">sum8</tt> to <tt class="docutils literal">sum32</tt> and
+<tt class="docutils literal">unix_sum</tt> they match. The demo's <tt class="docutils literal">Checked</tt> packet has one of most
+kinds, and an included <tt class="docutils literal">Block</tt> with its own check; its <tt class="docutils literal">Send</tt>
+command has a Luhn check digit.</p>
+</dd>
 <dt>Criteria</dt>
 <dd><tt class="docutils literal">RestrictionCriteria</tt>, <tt class="docutils literal">IncludeCondition</tt> and <tt class="docutils literal">DiscreteLookup</tt>
 take a <tt class="docutils literal">Comparison</tt>, a <tt class="docutils literal">ComparisonList</tt> (all must hold) or a
@@ -2070,7 +2137,9 @@ other than the first, arrays of arrays, <tt class="docutils literal">IndirectPar
 <tt class="docutils literal">RepeatEntry</tt> offsets that other values give, other instances than 0,
 <tt class="docutils literal">CustomAlgorithm</tt> criteria, <tt class="docutils literal">NextContainer</tt>, a container
 <tt class="docutils literal">BinaryEncoding</tt> on command containers, with a size from a
-<tt class="docutils literal">DynamicValue</tt> or with transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt>,
+<tt class="docutils literal">DynamicValue</tt> or with transform algorithms, custom checksum
+algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
+deprecates) and in included containers with an <tt class="docutils literal">IncludeCondition</tt>,
 calibrators inside aggregate types that use other values,
 least-significant-bit-first strings and binary data, integers of more
 than 64 bits, and include conditions in command containers.</dd>

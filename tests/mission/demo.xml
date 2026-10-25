@@ -4,8 +4,9 @@
      container from a nested SpaceSystem, every supported encoding, both
      calibrator kinds, commands with argument assignments, arrays, repeated
      entries, sizes and counts given by other fields, aggregates, every bit
-     and byte order, integer and float encoding and character set, and
-     context calibrators, math operations and splines of any order. -->
+     and byte order, integer and float encoding and character set, context
+     calibrators, math operations and splines of any order, and every kind
+     of error detection. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Demo">
   <TelemetryMetaData>
     <ParameterTypeSet>
@@ -711,6 +712,16 @@
           </ContextCalibratorList>
         </IntegerDataEncoding>
       </FloatParameterType>
+      <!-- Error detection: checksum fields. -->
+      <IntegerParameterType name="CheckBit" signed="false">
+        <IntegerDataEncoding sizeInBits="1"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="CheckDigit" signed="false">
+        <IntegerDataEncoding sizeInBits="4"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="U7" signed="false">
+        <IntegerDataEncoding sizeInBits="7"/>
+      </IntegerParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -824,6 +835,16 @@
       <Parameter name="Steps" parameterTypeRef="StepsType"/>
       <Parameter name="Scaled" parameterTypeRef="ScaledType"/>
       <Parameter name="Angle" parameterTypeRef="AngleType"/>
+      <Parameter name="Counter" parameterTypeRef="U8"/>
+      <Parameter name="BlockData" parameterTypeRef="U16"/>
+      <Parameter name="BlockCheck" parameterTypeRef="U8"/>
+      <Parameter name="Par" parameterTypeRef="CheckBit"/>
+      <Parameter name="Spare" parameterTypeRef="U7"/>
+      <Parameter name="Sum" parameterTypeRef="U8"/>
+      <Parameter name="Xor" parameterTypeRef="U8"/>
+      <Parameter name="Crc" parameterTypeRef="U16"/>
+      <Parameter name="Tail" parameterTypeRef="U16"/>
+      <Parameter name="SendCheck" parameterTypeRef="CheckDigit"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1279,6 +1300,51 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <!-- A block with its own check, included in Checked. -->
+      <SequenceContainer name="Block">
+        <BinaryEncoding>
+          <ErrorDetectCorrect>
+            <Checksum name="fletcher8" parameterRef="BlockCheck"/>
+          </ErrorDetectCorrect>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="BlockData"/>
+          <ParameterRefEntry parameterRef="BlockCheck"/>
+        </EntryList>
+      </SequenceContainer>
+      <!-- Each value covers the bits before its field (Tail, the bits before
+           its own 16): parity, then a sum after the header, an XOR, a CRC
+           and a BSD sum, each covering the values before it. -->
+      <SequenceContainer name="Checked">
+        <BinaryEncoding>
+          <ErrorDetectCorrect>
+            <Parity type="Odd" parameterRef="Par"/>
+            <Checksum name="sum8" parameterRef="Sum" bitsFromReference="48"/>
+            <XOR parameterRef="Xor"/>
+            <CRC width="16" parameterRef="Crc">
+              <Polynomial>1021</Polynomial>
+              <InitRemainder>FFFF</InitRemainder>
+            </CRC>
+            <Checksum name="unix_sum" parameterRef="Tail" reference="end"
+              bitsFromReference="16"/>
+          </ErrorDetectCorrect>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="Counter"/>
+          <ContainerRefEntry containerRef="Block"/>
+          <ParameterRefEntry parameterRef="Par"/>
+          <ParameterRefEntry parameterRef="Spare"/>
+          <ParameterRefEntry parameterRef="Sum"/>
+          <ParameterRefEntry parameterRef="Xor"/>
+          <ParameterRefEntry parameterRef="Crc"/>
+          <ParameterRefEntry parameterRef="Tail"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="400"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
     </ContainerSet>
   </TelemetryMetaData>
   <CommandMetaData>
@@ -1462,6 +1528,9 @@
       <IntegerArgumentType name="FlagsArgType" signed="false">
         <IntegerDataEncoding sizeInBits="16" bitOrder="leastSignificantBitFirst"
           byteOrder="leastSignificantByteFirst"/>
+      </IntegerArgumentType>
+      <IntegerArgumentType name="DigitsArgType" signed="false">
+        <IntegerDataEncoding sizeInBits="32" encoding="packedBCD"/>
       </IntegerArgumentType>
     </ArgumentTypeSet>
     <MetaCommandSet>
@@ -1736,6 +1805,31 @@
             <ArgumentRefEntry argumentRef="Label"/>
             <ArgumentRefEntry argumentRef="Code"/>
             <ArgumentRefEntry argumentRef="Flags"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <!-- A Luhn check digit over the command's eight digits. -->
+      <MetaCommand name="Send">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="12"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Digits" argumentTypeRef="DigitsArgType"/>
+        </ArgumentList>
+        <CommandContainer name="SendContainer">
+          <BinaryEncoding>
+            <ErrorDetectCorrect>
+              <Checksum name="luhn" parameterRef="SendCheck"
+                bitsFromReference="56"/>
+            </ErrorDetectCorrect>
+          </BinaryEncoding>
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Digits"/>
+            <ParameterRefEntry parameterRef="SendCheck"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

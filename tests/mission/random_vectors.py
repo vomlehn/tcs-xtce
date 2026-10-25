@@ -240,6 +240,23 @@ def configure(rng) -> bytes:
             + rng.randbytes(2))
 
 
+def checked(rng, header: bytes):
+    """A Checked packet: half the time with every checksum right (encoded
+    by the codec, header and all; the result is then the whole packet, and
+    True), otherwise a random body, which they mostly reject (and False)."""
+    if rng.random() < 0.5:
+        return rng.randbytes(11), False
+    p = demo.Checked(
+        sec_hdr_flag=bool(header[0] & 0x08),
+        seq_flags=demo.SeqFlagsType.UNSEGMENTED,
+        seq_count=rng.randrange(1 << 14), counter=rng.randrange(256),
+        block_data=rng.randrange(1 << 16), spare=rng.randrange(128))
+    data = bytearray(p.to_bytes())
+    if rng.random() < 0.2:  # one bit wrong
+        data[rng.randrange(len(data))] ^= 1 << rng.randrange(8)
+    return bytes(data), True
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -255,10 +272,12 @@ def upload(rng) -> bytes:
 def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
+        keep = False  # whether the packet length is right as it is
         if rng.random() < 0.6:
             apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
-                               380, 390, 395, 395, rng.randrange(1 << 11)])
+                               380, 390, 395, 395, 400, 400,
+                               rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -297,6 +316,10 @@ def main() -> None:
                 data += tally(rng)
             elif apid == 380 and rng.random() < 0.9:
                 data += encodings(rng)
+            elif apid == 400 and rng.random() < 0.9:
+                body, whole = checked(rng, data)
+                data = body if whole else data + body
+                keep = whole
             elif apid == 390 and rng.random() < 0.9:
                 # A calibration context mode, mostly 1 or 2, and the flag.
                 data += bits([(8, rng.choice([1, 2, 2, rng.randrange(256)])),
@@ -319,8 +342,8 @@ def main() -> None:
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
-            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11,
-                                 rng.randrange(256)])
+            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
+                                 12, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
@@ -339,15 +362,24 @@ def main() -> None:
                 data += bytes([lo, hi]) + rng.randbytes(2 if lo < hi else 0)
             elif opcode == 11 and rng.random() < 0.9:
                 data += configure(rng)
+            elif opcode == 12 and rng.random() < 0.9:
+                # Eight digits and a Luhn check digit, mostly right.
+                digits = "".join(rng.choice("0123456789") for _ in range(8))
+                p = demo.Send(seq_count=1, digits=int(digits))
+                body = p.to_bytes()[7:]
+                if rng.random() < 0.3:
+                    body = body[:4] + bytes([rng.randrange(256)])
+                data += body
             elif opcode == 8 and rng.random() < 0.8:
                 n = rng.choice([1, 2, 4, rng.randrange(6)])
                 data += (bytes([rng.randrange(3), n])
                          + rng.randbytes(2 * min(n, 4)))
             kind = "tc"
         data += rng.randbytes(rng.randrange(40))
-        data = packet_length(rng,
-                             demo.CCSDSPacketKind if kind == "tm"
-                             else demo.CCSDSCommandKind, data)
+        if not keep:
+            data = packet_length(rng,
+                                 demo.CCSDSPacketKind if kind == "tm"
+                                 else demo.CCSDSCommandKind, data)
         if rng.random() < 0.1:
             data = data[: rng.randrange(len(data) + 1)]
         print(kind, data.hex() or "00")

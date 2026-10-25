@@ -40,6 +40,21 @@ FLOATS = {"IEEE754": "XTCE_PK_IEEE", "MILSTD_1750A": "XTCE_PK_MIL1750A",
 
 I64_MIN, I64_MAX, U64_MAX = -(2**63), 2**63 - 1, 2**64 - 1
 
+
+def checksum_spec(spec: tuple) -> str:
+    """The initializer of an xtce_pk_checksum_spec: kind, bits, polynomial,
+    init, final XOR, reflect data, reflect remainder and odd."""
+    kind = spec[0]
+    if kind == "crc":
+        width, poly, init, final, ref_in, ref_out = spec[1:]
+        return (f"{{XTCE_PK_CRC, {width}, UINT64_C(0x{poly:x}), "
+                f"UINT64_C(0x{init:x}), UINT64_C(0x{final:x}), "
+                f"{bool_lit(ref_in)}, {bool_lit(ref_out)}, false}}")
+    bits = spec[1] if len(spec) > 1 and kind != "parity" else 0
+    odd = kind == "parity" and spec[1]
+    return (f"{{XTCE_PK_{kind.upper()}, {bits}, 0, 0, 0, false, false, "
+            f"{bool_lit(odd)}}}")
+
 # What `<empty optional> op <value>` gives, as with std::optional in C++.
 EMPTY = {"==": False, "!=": True, "<": True, "<=": True, ">": False,
          ">=": False}
@@ -970,6 +985,8 @@ class CEmitter:
                           f"{cstr(where)}));", depth)
             elif isinstance(it, Value):
                 lc = it.local
+                if lc.checksum:
+                    self.line(f"size_t p{lc.id} = r->pos;", depth)
                 if not nested:
                     self.local(lc.vtype, f"v{lc.id}", depth)
                 self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth,
@@ -1034,7 +1051,7 @@ class CEmitter:
                 self.line(f"if ({cond}) {{", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
                 self.line("}", depth)
-            elif it.local.length is not None:
+            elif it.local.computed:
                 lc = it.local
                 self.line(f"size_t l{lc.id} = w->pos;", depth)
                 self.line("XTCE_PK_TRY(xtce_pk_write_bits(w, "
@@ -1071,11 +1088,44 @@ class CEmitter:
         return "0" if i == 0 else f"m{i}"
 
     def finish(self, n: Node, depth: int) -> None:
-        """Checks the packet length field when decoding ends."""
+        """Checks the packet length field and the checksums when decoding
+        ends."""
         lc = n.length_field()
         if lc is not None:
             self.line(f"XTCE_PK_TRY(xtce_pk_read_finish(r, {cstr(lc.name)}));",
                       depth)
+        for c in n.checks:
+            f = cstr(c.local.name)
+            self.line("{", depth)
+            d = depth + 1
+            self.line("static const xtce_pk_checksum_spec k = "
+                      f"{checksum_spec(c.spec)};", d)
+            start, end = self.region(c, "r")
+            self.line("uint64_t c;", d)
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_checksum(r, &k, {start}, "
+                      f"{end}, {f}, &c));", d)
+            mask = f"UINT64_C(0x{(1 << c.local.vtype.enc.bits) - 1:x})"
+            self.line(f"if ((c & {mask}) != (uint64_t)v{c.local.id})", d)
+            self.line(f"return xtce_pk_fail(r->err, XTCE_PK_BAD_CHECKSUM, {f}, "
+                      "NULL);", d + 1)
+            self.line("}", depth)
+
+    def region(self, c, rw: str) -> tuple:
+        """The start and end of the bits a check covers, with reader or
+        writer ``rw``: on decoding ``p`` and on encoding ``l`` hold the
+        position of its field."""
+        pos = f"{'p' if rw == 'r' else 'l'}{c.local.id}"
+        base = self.mark(c.start)
+        start = (f"(size_t){base} + {c.skip}" if c.skip and not c.from_end
+                 else f"(size_t){base}")
+        end = (f"m{c.end}" if c.end is not None
+               else f"xtce_pk_{'read' if rw == 'r' else 'write'}_packet_end("
+                    f"{rw})")
+        if c.from_end:
+            end = f"({end} > {c.skip} ? {end} - {c.skip} : 0)"
+        else:
+            end = f"({pos} >= {start} ? {pos} : {end})"
+        return f"({start})", end
 
     def construct(self, n: Node, out: str, depth: int) -> None:
         for name, lc in n.fields:
@@ -1165,6 +1215,17 @@ class CEmitter:
             self.line(f"XTCE_PK_TRY(xtce_pk_patch_length(w, l{length.id}, "
                       f"{enc.bits}, {le}, INT64_C({length.length}), "
                       f"{cstr(length.name)}));", 1)
+        for c in n.checks:
+            enc = c.local.vtype.enc
+            self.line("{", 1)
+            self.line("static const xtce_pk_checksum_spec k = "
+                      f"{checksum_spec(c.spec)};", 2)
+            start, end = self.region(c, "w")
+            self.line(f"XTCE_PK_TRY(xtce_pk_patch_checksum(w, &k, {start}, "
+                      f"{end}, l{c.local.id}, {enc.bits}, "
+                      f"{bool_lit(enc.little_endian)}, {cstr(c.local.name)}));",
+                      2)
+            self.line("}", 1)
         self.line("return 0;", 1)
         self.line("}")
         self.encode(t)

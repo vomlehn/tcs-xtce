@@ -122,3 +122,15 @@ tm 098bc02a0008fd02940a7d8c838f00  # derived: gain 7, mix 37, curve 25 (extrapol
 tm 098bc02a0008040014018782ff8f00  # derived: gain 14, mix 9, curve 225, steps 5 (flat), scaled 755, angle sin(3) + 4 = 4.141120008059867
 tm 098bc02a0008000100000007800000  # derived: steps 25 (linear), mix 4
 tm 098bc02a0008000100000014800000  # derived, steps beyond its last point without extrapolation
+tm 0990c02a000a0712345a00a7a57b5586b8  # checked: fletcher8 90, parity 0, sum8 167, xor 165, crc 31573, bsd sum 34488
+tm 0990c02a000affffff00555281fd2064b9  # checked, other values: (0, 0, 82, 129, 64800, 25785)
+tm 0990c02a000a0712355a00a7a57b5586b8  # checked, a bit flipped in BlockData
+tm 0990c02a000a0712345b00a7a57b5586b8  # checked, a bit flipped in BlockCheck
+tm 0990c02a000a0712345a01a7a57b5586b8  # checked, a bit flipped in the parity byte
+tm 0990c02a000a0712345a00a6a57b5586b8  # checked, a bit flipped in Sum
+tm 0990c02a000a0712345a00a7a47b5586b8  # checked, a bit flipped in Xor
+tm 0990c02a000a0712345a00a7a57b5486b8  # checked, a bit flipped in Crc
+tm 0990c02a000a0712345a00a7a57b5586b9  # checked, a bit flipped in Tail
+tm 0990c02a000a0612345a00a7a57b5586b8  # checked, a bit flipped in Counter
+tc 112ec00500050c7992739820  # send, Luhn check digit 2
+tc 112ec00500050c7992739830  # send, a wrong check digit

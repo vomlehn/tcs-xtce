@@ -3,7 +3,10 @@
  * double's bits, and "e FORMAT BITS DOUBLE" encodes the double (its bits in
  * hex) and prints the raw value; an error prints its kind.  "m OP A B" applies
  * a MathOperationCalibrator operator to two doubles (their bits in hex) and
- * prints the result's bits.  Built as C and as C++. */
+ * prints the result's bits.  "k KIND BITS POLY INIT XOR REFLECT_DATA
+ * REFLECT_REMAINDER ODD DATA START END" computes an ErrorDetectCorrect
+ * checksum (numbers in hex, flags 0 or 1) of the bits from START to END of
+ * DATA.  Built as C and as C++. */
 #include <xtce/packet.h>
 
 static int format(const char* name) {
@@ -98,6 +101,52 @@ int main(void) {
                 xtce_pk_error err = XTCE_PK_ZERO;
                 uint64_t hi, lo;
                 int rc;
+                if (op[0] == 'k') {
+                        static const char* const kinds[] = {
+                                "crc",  "sum",      "unix_sum", "fletcher",
+                                "adler32", "luhn",  "verhoeff", "damm",
+                                "xor",  "parity"};
+                        char sb[16], sp[24], si[24], sx[24], data[256];
+                        char ss[24], se[24];
+                        int ri, ro, od, k;
+                        xtce_pk_checksum_spec spec = XTCE_PK_ZERO;
+                        uint64_t v;
+                        if (scanf("%15s %23s %23s %23s %d %d %d %255s "
+                                  "%23s %23s",
+                                  sb, sp, si, sx, &ri, &ro, &od, data, ss,
+                                  se) != 10)
+                                return 1;
+                        for (k = 0; k < 10; ++k)
+                                if (!strcmp(fmt, kinds[k])) spec.kind = k;
+                        parse_hex(sb, &hi, &lo);
+                        spec.bits = (unsigned)lo;
+                        parse_hex(sp, &hi, &spec.poly);
+                        parse_hex(si, &hi, &spec.init);
+                        parse_hex(sx, &hi, &spec.final_xor);
+                        spec.reflect_data = ri;
+                        spec.reflect_remainder = ro;
+                        spec.odd = od;
+                        {
+                                uint8_t bytes[128];
+                                size_t nb = strlen(data) / 2, i;
+                                uint64_t start, end;
+                                for (i = 0; i < nb; ++i) {
+                                        char two[3] = {data[2 * i],
+                                                       data[2 * i + 1], 0};
+                                        parse_hex(two, &hi, &lo);
+                                        bytes[i] = (uint8_t)lo;
+                                }
+                                parse_hex(ss, &hi, &start);
+                                parse_hex(se, &hi, &end);
+                                rc = xtce_pk_checksum(&spec, bytes, start, end,
+                                                      "x", &err, &v);
+                        }
+                        if (rc)
+                                printf("error:%s\n", xtce_pk_error_kind(rc));
+                        else
+                                print_hex(0, v);
+                        continue;
+                }
                 if (op[0] == 'm') {
                         char sa[40], sb[40];
                         double a, b, x;

@@ -446,6 +446,40 @@ The runtimes keep the existing ``uint_order`` for the common cases and
 call the general ``uint_bits`` only for the others, so ordinary packets
 pay nothing for it.
 
+Error detection
+---------------
+
+XTCE says an ``ErrorDetectCorrect`` algorithm covers "all or part of"
+its container, from its start or its end, and that ``parameterRef`` names
+the parameter holding the value, but not where the covered bits end.
+tcs-xtce takes the reading that fits the way checksums are laid out: from
+the start, the bits run up to the value's own field (a trailing CRC
+covers everything before it), and from the end, ``bitsFromReference``
+bits are left out at the end (where the value sits). Fields are computed
+in the order they appear, which lets later values cover earlier ones;
+the opposite (a value covering one computed after it) would need the
+computation order to be given, which XTCE has no way to say.
+
+A checksum field is computed, not set, like the packet length field: it
+is not in the generated struct, and the same rules keep anything else
+from depending on it. The encoder writes a zero placeholder and patches
+it at the end, after the length field (which the covered bits usually
+include). For a check declared on a base container, the field is looked
+up per concrete packet, so that each derived container may have its own,
+but it must be in the declaring container or below: marking a field of a
+base container computed would take it out of sibling packets that don't
+have the check.
+
+XTCE names the checksum algorithms without defining them. The names
+(``sum8``, ``unix_sum``, ``fletcher16``, ``luhn`` and the rest) are
+Jacksum's, so tcs-xtce uses Jacksum's definitions where it has them: a
+``sumN`` is the sum of the bytes, and ``unix_sum`` is BSD ``sum``, which
+``tests/float/known.txt`` checks against the real ``sum`` command's
+output. Fletcher's checksums take their words most significant bit
+first, like the rest of a packet, and the check digits take a decimal
+digit per 4 bits, as packed BCD does. CRCs follow the parameter model of
+the CRC catalogue, so the catalogue's check values test them.
+
 Determinism across languages
 ----------------------------
 

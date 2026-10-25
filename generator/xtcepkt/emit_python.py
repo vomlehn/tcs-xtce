@@ -463,6 +463,8 @@ class PythonEmitter:
                 self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
             elif isinstance(it, Value):
                 lc = it.local
+                if lc.checksum:
+                    self.line(f"p{lc.id} = r.pos", depth)
                 self.line(
                     f"v{lc.id} = "
                     f"{read_expr(lc.vtype, pstr(lc.name), self.read_ref)}",
@@ -504,7 +506,7 @@ class PythonEmitter:
                     for c in it.criteria)
                 self.line(f"if {cond}:", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
-            elif it.local.length is not None:
+            elif it.local.computed:
                 lc = it.local
                 self.line(f"l{lc.id} = w.pos", depth)
                 self.line(f"w.uint({lc.vtype.enc.bits}, 0)", depth)
@@ -573,10 +575,32 @@ class PythonEmitter:
         return "0" if i == 0 else f"m{i}"
 
     def finish(self, n: Node, depth: int) -> None:
-        """Checks the packet length field when decoding ends."""
+        """Checks the packet length field and the checksums when decoding
+        ends."""
         lc = n.length_field()
         if lc is not None:
             self.line(f"r.finish({pstr(lc.name)})", depth)
+        for c in n.checks:
+            f = pstr(c.local.name)
+            start, end = self.region(c, "r")
+            mask = hex((1 << c.local.vtype.enc.bits) - 1)
+            self.line(f"if r.checksum({c.spec!r}, {start}, {end}, {f}) & "
+                      f"{mask} != v{c.local.id}:", depth)
+            self.line(f'raise pk.PacketError("BadChecksum", {f})', depth + 1)
+
+    def region(self, c, rw: str) -> tuple:
+        """The start and end of the bits a check covers, with reader or
+        writer ``rw``: on decoding ``p`` and on encoding ``l`` hold the
+        position of its field."""
+        pos = f"{'p' if rw == 'r' else 'l'}{c.local.id}"
+        base = self.mark(c.start)
+        start = f"{base} + {c.skip}" if c.skip and not c.from_end else base
+        end = f"m{c.end}" if c.end is not None else f"{rw}.packet_end()"
+        if c.from_end:
+            end = f"max({end} - {c.skip}, 0)"
+        else:
+            end = f"{pos} if {pos} >= {start} else {end}"
+        return f"({start})", f"({end})"
 
     @staticmethod
     def construct(n: Node) -> str:
@@ -670,6 +694,12 @@ class PythonEmitter:
             self.line(f"w.patch_length(l{length.id}, {enc.bits}, "
                       f"{enc.little_endian}, {length.length}, "
                       f"{pstr(length.name)})", 2)
+        for c in n.checks:
+            enc = c.local.vtype.enc
+            start, end = self.region(c, "w")
+            self.line(f"w.patch_checksum({c.spec!r}, {start}, {end}, "
+                      f"l{c.local.id}, {enc.bits}, {enc.little_endian}, "
+                      f"{pstr(c.local.name)})", 2)
         if len(self.out) == body:
             # A packet without entries, such as a meta-command without a
             # command container, writes nothing.

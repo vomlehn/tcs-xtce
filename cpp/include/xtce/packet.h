@@ -49,6 +49,7 @@ enum {
         XTCE_PK_BAD_SIZE,
         XTCE_PK_BAD_LENGTH,
         XTCE_PK_INVALID_VALUE,
+        XTCE_PK_BAD_CHECKSUM,
         XTCE_PK_NO_SPACE,
 };
 
@@ -65,7 +66,7 @@ static inline const char* xtce_pk_error_kind(int code) {
                 "Ok",          "Truncated",     "BadPosition",   "NoMatch",
                 "Mismatch",    "OutOfRange",    "InvalidString", "TooLong",
                 "Calibration", "NotInvertible", "Missing",       "BadSize",
-                "BadLength",   "InvalidValue",  "NoSpace"};
+                "BadLength",   "InvalidValue",  "BadChecksum",   "NoSpace"};
         return code >= 0 && code <= XTCE_PK_NO_SPACE ? kinds[code] : "Unknown";
 }
 
@@ -123,6 +124,10 @@ static inline int xtce_pk_error_message(const xtce_pk_error* e, char* buf,
                         return snprintf(buf, cap,
                                         "the bits of %s are not a value of "
                                         "its encoding",
+                                        f);
+                case XTCE_PK_BAD_CHECKSUM:
+                        return snprintf(buf, cap,
+                                        "%s does not match the data it checks",
                                         f);
                 case XTCE_PK_NO_SPACE:
                         return snprintf(buf, cap,
@@ -341,6 +346,11 @@ static inline int xtce_pk_read_ordered64(xtce_pk_reader* r, unsigned bits,
                                          uint64_t* out) {
         uint64_t hi;
         return xtce_pk_read_ordered(r, bits, lsb, order, list, f, &hi, out);
+}
+
+/* The end of the packet in bits: the end of the last byte read. */
+static inline size_t xtce_pk_read_packet_end(const xtce_pk_reader* r) {
+        return (r->end + 7) / 8 * 8;
 }
 
 /* Skips `bits` bits of padding, which must be in the packet. */
@@ -596,6 +606,223 @@ static inline int xtce_pk_write_zeros(xtce_pk_writer* w, size_t bits) {
         if ((bits - lead) % 8)
                 XTCE_PK_TRY(xtce_pk_write_bits(w, (unsigned)((bits - lead) % 8),
                                                0));
+        return 0;
+}
+
+/* --- error detection
+ * ------------------------------------------------------------- */
+
+/* XTCE ErrorDetectCorrect algorithms; the manual describes each. */
+enum {
+        XTCE_PK_CRC = 0,
+        XTCE_PK_SUM,      /* bytes summed, modulo 2^bits */
+        XTCE_PK_UNIX_SUM, /* the BSD sum checksum */
+        XTCE_PK_FLETCHER, /* Fletcher's checksum of `bits` bits */
+        XTCE_PK_ADLER32,
+        XTCE_PK_LUHN, /* check digits of decimal digits, one per 4 bits */
+        XTCE_PK_VERHOEFF,
+        XTCE_PK_DAMM,
+        XTCE_PK_XOR,    /* the exclusive or of `bits`-bit words */
+        XTCE_PK_PARITY, /* the parity bit; `odd` for odd parity */
+};
+
+typedef struct xtce_pk_checksum_spec {
+        int kind;
+        unsigned bits; /* CRC width, or the bits of a sum, Fletcher or XOR */
+        uint64_t poly, init, final_xor;
+        bool reflect_data, reflect_remainder, odd;
+} xtce_pk_checksum_spec;
+
+static const uint8_t xtce_pk_verhoeff_d[10][10] = {
+        {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {1, 2, 3, 4, 0, 6, 7, 8, 9, 5},
+        {2, 3, 4, 0, 1, 7, 8, 9, 5, 6}, {3, 4, 0, 1, 2, 8, 9, 5, 6, 7},
+        {4, 0, 1, 2, 3, 9, 5, 6, 7, 8}, {5, 9, 8, 7, 6, 0, 4, 3, 2, 1},
+        {6, 5, 9, 8, 7, 1, 0, 4, 3, 2}, {7, 6, 5, 9, 8, 2, 1, 0, 4, 3},
+        {8, 7, 6, 5, 9, 3, 2, 1, 0, 4}, {9, 8, 7, 6, 5, 4, 3, 2, 1, 0}};
+static const uint8_t xtce_pk_verhoeff_p[8][10] = {
+        {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {1, 5, 7, 6, 2, 8, 3, 0, 9, 4},
+        {5, 8, 0, 3, 7, 9, 6, 1, 4, 2}, {8, 9, 1, 6, 0, 4, 3, 5, 2, 7},
+        {9, 4, 5, 3, 1, 2, 6, 8, 7, 0}, {4, 2, 8, 6, 5, 7, 3, 9, 0, 1},
+        {2, 7, 9, 3, 8, 0, 6, 4, 1, 5}, {7, 0, 4, 6, 9, 1, 3, 2, 5, 8}};
+static const uint8_t xtce_pk_verhoeff_inv[10] = {0, 4, 3, 2, 1,
+                                                 5, 6, 7, 8, 9};
+static const uint8_t xtce_pk_damm[10][10] = {
+        {0, 3, 1, 7, 5, 9, 8, 6, 4, 2}, {7, 0, 9, 2, 1, 5, 4, 8, 6, 3},
+        {4, 2, 0, 6, 8, 7, 1, 3, 5, 9}, {1, 7, 5, 0, 9, 8, 3, 4, 2, 6},
+        {6, 1, 2, 3, 0, 4, 5, 9, 7, 8}, {3, 6, 7, 4, 2, 0, 9, 5, 8, 1},
+        {5, 8, 6, 9, 7, 2, 0, 1, 3, 4}, {8, 9, 4, 5, 3, 6, 2, 0, 1, 7},
+        {9, 4, 3, 8, 6, 1, 7, 2, 0, 5}, {2, 5, 8, 1, 4, 3, 6, 7, 9, 0}};
+
+/* The `width`-bit word at bit q of data, stopping at bit `end` and padding
+ * with zero bits; *n gets the number of data bits in it. */
+static inline uint64_t xtce_pk_word_at(const uint8_t* data, size_t q,
+                                       size_t end, unsigned width,
+                                       unsigned* n) {
+        uint64_t w = 0;
+        unsigned i;
+        *n = end - q < width ? (unsigned)(end - q) : width;
+        for (i = 0; i < *n; ++i)
+                w = (w << 1) | ((data[(q + i) / 8] >> (7 - (q + i) % 8)) & 1);
+        return w << (width - *n);
+}
+
+static inline uint64_t xtce_pk_reflect(uint64_t v, unsigned bits) {
+        uint64_t r = 0;
+        unsigned i;
+        for (i = 0; i < bits; ++i) r = (r << 1) | ((v >> i) & 1);
+        return r;
+}
+
+/* An XTCE ErrorDetectCorrect algorithm over the bits from start to end of
+ * data, into *out. */
+static inline int xtce_pk_checksum(const xtce_pk_checksum_spec* s,
+                                   const uint8_t* data, size_t start,
+                                   size_t end, const char* f,
+                                   xtce_pk_error* err, uint64_t* out) {
+        size_t q, k, n;
+        unsigned got;
+        uint64_t c = 0, a = 0, b = 0, w;
+        if (end < start) end = start;
+        switch (s->kind) {
+                case XTCE_PK_CRC: {
+                        uint64_t top = (uint64_t)1 << (s->bits - 1);
+                        uint64_t m = xtce_pk_mask(s->bits);
+                        c = s->init;
+                        for (q = start; q < end; q += got) {
+                                unsigned i;
+                                w = xtce_pk_word_at(data, q, end, 8, &got) >>
+                                    (8 - got);
+                                if (s->reflect_data)
+                                        w = xtce_pk_reflect(w, got);
+                                for (i = got; i-- > 0;) {
+                                        bool carry = ((c & top) != 0) !=
+                                                     (((w >> i) & 1) != 0);
+                                        c = (c << 1) & m;
+                                        if (carry) c ^= s->poly;
+                                }
+                        }
+                        if (s->reflect_remainder)
+                                c = xtce_pk_reflect(c, s->bits);
+                        *out = c ^ s->final_xor;
+                        return 0;
+                }
+                case XTCE_PK_SUM:
+                        for (q = start; q < end; q += got)
+                                c += xtce_pk_word_at(data, q, end, 8, &got);
+                        *out = c & xtce_pk_mask(s->bits);
+                        return 0;
+                case XTCE_PK_UNIX_SUM:
+                        for (q = start; q < end; q += got)
+                                c = ((c >> 1) + ((c & 1) << 15) +
+                                     xtce_pk_word_at(data, q, end, 8, &got)) &
+                                    0xffff;
+                        *out = c;
+                        return 0;
+                case XTCE_PK_FLETCHER: {
+                        unsigned half = s->bits / 2;
+                        uint64_t m = xtce_pk_mask(half);
+                        for (q = start; q < end; q += got) {
+                                a = (a + xtce_pk_word_at(data, q, end, half,
+                                                         &got)) %
+                                    m;
+                                b = (b + a) % m;
+                        }
+                        *out = (b << half) | a;
+                        return 0;
+                }
+                case XTCE_PK_ADLER32:
+                        a = 1;
+                        for (q = start; q < end; q += got) {
+                                a = (a + xtce_pk_word_at(data, q, end, 8,
+                                                         &got)) %
+                                    65521;
+                                b = (b + a) % 65521;
+                        }
+                        *out = (b << 16) | a;
+                        return 0;
+                case XTCE_PK_LUHN:
+                case XTCE_PK_VERHOEFF:
+                case XTCE_PK_DAMM:
+                        /* Decimal digits, one in every 4 bits, counted from
+                         * the right for Luhn and Verhoeff. */
+                        n = (end - start + 3) / 4;
+                        for (k = 0; k < n; ++k) {
+                                size_t i = n - 1 - k; /* from the right */
+                                uint64_t d = xtce_pk_word_at(
+                                        data,
+                                        s->kind == XTCE_PK_VERHOEFF
+                                                ? start + 4 * i
+                                                : start + 4 * k,
+                                        end, 4, &got);
+                                if (d > 9)
+                                        return xtce_pk_fail(
+                                                err, XTCE_PK_INVALID_VALUE, f,
+                                                NULL);
+                                if (s->kind == XTCE_PK_LUHN) {
+                                        if (i % 2 == 0) {
+                                                d *= 2;
+                                                if (d > 9) d -= 9;
+                                        }
+                                        c += d;
+                                } else if (s->kind == XTCE_PK_VERHOEFF) {
+                                        c = xtce_pk_verhoeff_d
+                                                [c][xtce_pk_verhoeff_p
+                                                            [(k + 1) % 8][d]];
+                                } else {
+                                        c = xtce_pk_damm[c][d];
+                                }
+                        }
+                        if (s->kind == XTCE_PK_LUHN)
+                                *out = (10 - c % 10) % 10;
+                        else if (s->kind == XTCE_PK_VERHOEFF)
+                                *out = xtce_pk_verhoeff_inv[c];
+                        else
+                                *out = c;
+                        return 0;
+                case XTCE_PK_XOR:
+                        for (q = start; q < end; q += got)
+                                c ^= xtce_pk_word_at(data, q, end, s->bits,
+                                                     &got);
+                        *out = c;
+                        return 0;
+                default:
+                        c = s->odd;
+                        for (q = start; q < end; q += got) {
+                                w = xtce_pk_word_at(data, q, end, 8, &got);
+                                for (; w; w &= w - 1) ++c;
+                        }
+                        *out = c & 1;
+                        return 0;
+        }
+}
+
+/* The checksum spec of the bits from start to end of the packet read, into
+ * *out. */
+static inline int xtce_pk_read_checksum(const xtce_pk_reader* r,
+                                        const xtce_pk_checksum_spec* spec,
+                                        size_t start, size_t end,
+                                        const char* f, uint64_t* out) {
+        return xtce_pk_checksum(spec, r->data, start, end, f, r->err, out);
+}
+
+/* The end of the packet written so far, in bits. */
+static inline size_t xtce_pk_write_packet_end(const xtce_pk_writer* w) {
+        return w->len * 8;
+}
+
+/* Fills in the checksum field f of `bits` bits at bit `at`: the checksum
+ * spec of the bits from start to end, its low `bits` bits. */
+static inline int xtce_pk_patch_checksum(xtce_pk_writer* w,
+                                         const xtce_pk_checksum_spec* spec,
+                                         size_t start, size_t end, size_t at,
+                                         unsigned bits, bool le,
+                                         const char* f) {
+        uint64_t v;
+        size_t pos = w->pos;
+        XTCE_PK_TRY(xtce_pk_checksum(spec, w->buf, start, end, f, w->err, &v));
+        w->pos = at;
+        XTCE_PK_TRY(xtce_pk_write_uint(w, bits, le, v & xtce_pk_mask(bits)));
+        w->pos = pos;
         return 0;
 }
 

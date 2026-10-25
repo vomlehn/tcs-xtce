@@ -3,11 +3,15 @@
 //! prints the double's bits, and `e FORMAT BITS DOUBLE` encodes the double
 //! (its bits in hex) and prints the raw value; an error prints its kind.
 //! `m OP A B` applies a MathOperationCalibrator operator to two doubles
-//! (their bits in hex) and prints the result's bits.
+//! (their bits in hex) and prints the result's bits.  `k KIND BITS POLY
+//! INIT XOR REFLECT_DATA REFLECT_REMAINDER ODD DATA START END` computes an
+//! ErrorDetectCorrect checksum (numbers in hex, flags 0 or 1) of the bits
+//! from START to END of DATA.
 
 use std::io::BufRead;
 use tcs_xtce::packet::{
-    float_decode, float_encode, math, FloatFormat, MathOperator,
+    checksum, float_decode, float_encode, math, Checksum, FloatFormat,
+    MathOperator,
 };
 
 fn format(name: &str) -> FloatFormat {
@@ -81,6 +85,40 @@ fn main() {
     for line in std::io::stdin().lock().lines() {
         let line = line.unwrap();
         let w: Vec<&str> = line.split_whitespace().collect();
+        if w[0] == "k" {
+            let n = |i: usize| u64::from_str_radix(w[i], 16).unwrap();
+            let bits = n(2) as u32;
+            let spec = match w[1] {
+                "crc" => Checksum::Crc {
+                    width: bits,
+                    poly: n(3),
+                    init: n(4),
+                    final_xor: n(5),
+                    reflect_data: w[6] == "1",
+                    reflect_remainder: w[7] == "1",
+                },
+                "sum" => Checksum::Sum(bits),
+                "unix_sum" => Checksum::UnixSum,
+                "fletcher" => Checksum::Fletcher(bits),
+                "adler32" => Checksum::Adler32,
+                "luhn" => Checksum::Luhn,
+                "verhoeff" => Checksum::Verhoeff,
+                "damm" => Checksum::Damm,
+                "xor" => Checksum::Xor(bits),
+                _ => Checksum::Parity(w[8] == "1"),
+            };
+            let data: Vec<u8> = (0..w[9].len() / 2)
+                .map(|i| {
+                    u8::from_str_radix(&w[9][2 * i..2 * i + 2], 16).unwrap()
+                })
+                .collect();
+            let (start, end) = (n(10) as usize, n(11) as usize);
+            match checksum(&spec, &data, start, end, "x") {
+                Ok(v) => println!("{v:x}"),
+                Err(e) => println!("error:{}", e.kind()),
+            }
+            continue;
+        }
         if w[0] == "m" {
             let arg =
                 |s: &str| f64::from_bits(u64::from_str_radix(s, 16).unwrap());

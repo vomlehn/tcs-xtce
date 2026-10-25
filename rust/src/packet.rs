@@ -57,6 +57,8 @@ pub enum PacketError {
     /// The bits of `field` are not a value of its encoding (a BCD digit
     /// above 9, or a DEC reserved operand).
     InvalidValue { field: &'static str },
+    /// The checksum field `field` does not match the data it checks.
+    BadChecksum { field: &'static str },
 }
 
 impl PacketError {
@@ -76,6 +78,7 @@ impl PacketError {
             Self::BadSize { .. } => "BadSize",
             Self::BadLength { .. } => "BadLength",
             Self::InvalidValue { .. } => "InvalidValue",
+            Self::BadChecksum { .. } => "BadChecksum",
         }
     }
 }
@@ -125,6 +128,9 @@ impl fmt::Display for PacketError {
             }
             Self::InvalidValue { field } => {
                 write!(f, "the bits of {field} are not a value of its encoding")
+            }
+            Self::BadChecksum { field } => {
+                write!(f, "{field} does not match the data it checks")
             }
         }
     }
@@ -352,6 +358,22 @@ impl<'a> BitReader<'a> {
         self.pos = q;
         self.end = self.end.max(q);
         Ok(combine(&groups[..k], order))
+    }
+
+    /// The end of the packet in bits: the end of the last byte read.
+    pub fn packet_end(&self) -> usize {
+        self.end.div_ceil(8) * 8
+    }
+
+    /// The checksum `spec` of the bits from `start` to `end`.
+    pub fn checksum(
+        &self,
+        spec: &Checksum,
+        start: usize,
+        end: usize,
+        field: &'static str,
+    ) -> Result<u64> {
+        checksum(spec, self.data, start, end, field)
     }
 
     /// Skips `bits` bits of padding, which must be in the packet.
@@ -626,6 +648,33 @@ impl<'a> BitWriter<'a> {
         Ok(())
     }
 
+    /// The end of the packet written so far, in bits.
+    pub fn packet_end(&self) -> usize {
+        self.buf.len() * 8
+    }
+
+    /// Fills in the checksum field `field` of `bits` bits at bit `at`: the
+    /// checksum `spec` of the bits from `start` to `end`, its low `bits`
+    /// bits.
+    #[allow(clippy::too_many_arguments)]
+    pub fn patch_checksum(
+        &mut self,
+        spec: &Checksum,
+        start: usize,
+        end: usize,
+        at: usize,
+        bits: u32,
+        le: bool,
+        field: &'static str,
+    ) -> Result<()> {
+        let v = checksum(spec, self.buf.as_bytes(), start, end, field)?;
+        let pos = self.pos;
+        self.pos = at;
+        self.uint_order(bits, le, v & mask(bits));
+        self.pos = pos;
+        Ok(())
+    }
+
     /// Writes `bits` zero bits, overwriting whatever a seek left there.
     pub fn zeros(&mut self, bits: usize) {
         if bits == 0 {
@@ -709,6 +758,254 @@ fn split(v: u128, lengths: &[u32], j: usize, order: ByteOrder) -> u8 {
         ByteOrder::List(sig) => 8 * sig[j] as u32,
     };
     ((v >> shift) & ((1u128 << n) - 1)) as u8
+}
+
+// --- error detection ---------------------------------------------------------
+
+/// An XTCE ErrorDetectCorrect algorithm; the manual describes each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Checksum {
+    /// A CRC of `width` (1 to 64) bits.
+    Crc {
+        width: u32,
+        poly: u64,
+        init: u64,
+        final_xor: u64,
+        reflect_data: bool,
+        reflect_remainder: bool,
+    },
+    /// The sum of the bytes, modulo 2 to the given number of bits.
+    Sum(u32),
+    /// The BSD `sum` checksum.
+    UnixSum,
+    /// Fletcher's checksum of the given number of bits.
+    Fletcher(u32),
+    Adler32,
+    /// Check digits of decimal digits, one in every 4 bits.
+    Luhn,
+    Verhoeff,
+    Damm,
+    /// The exclusive or of words of the given number of bits.
+    Xor(u32),
+    /// The parity bit; true for odd parity.
+    Parity(bool),
+}
+
+const VERHOEFF_D: [[u8; 10]; 10] = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+    [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+    [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+    [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+    [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+    [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+    [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+    [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+    [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+];
+const VERHOEFF_P: [[u8; 10]; 8] = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+    [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+    [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+    [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+    [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+    [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+    [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+];
+const VERHOEFF_INV: [u8; 10] = [0, 4, 3, 2, 1, 5, 6, 7, 8, 9];
+const DAMM: [[u8; 10]; 10] = [
+    [0, 3, 1, 7, 5, 9, 8, 6, 4, 2],
+    [7, 0, 9, 2, 1, 5, 4, 8, 6, 3],
+    [4, 2, 0, 6, 8, 7, 1, 3, 5, 9],
+    [1, 7, 5, 0, 9, 8, 3, 4, 2, 6],
+    [6, 1, 2, 3, 0, 4, 5, 9, 7, 8],
+    [3, 6, 7, 4, 2, 0, 9, 5, 8, 1],
+    [5, 8, 6, 9, 7, 2, 0, 1, 3, 4],
+    [8, 9, 4, 5, 3, 6, 2, 0, 1, 7],
+    [9, 4, 3, 8, 6, 1, 7, 2, 0, 5],
+    [2, 5, 8, 1, 4, 3, 6, 7, 9, 0],
+];
+
+/// The bit at position `q` of `data`, most significant bit first.
+fn bit_at(data: &[u8], q: usize) -> u64 {
+    ((data[q / 8] >> (7 - q % 8)) & 1) as u64
+}
+
+/// Calls `f` with each `width`-bit word of the bits from `start` to `end`,
+/// and the bits of it that are data; a last partial word is padded with
+/// zero bits.
+fn for_words(
+    data: &[u8],
+    start: usize,
+    end: usize,
+    width: u32,
+    mut f: impl FnMut(u64, u32),
+) {
+    let mut q = start;
+    while q < end {
+        let n = (end - q).min(width as usize) as u32;
+        let mut w = 0u64;
+        for i in 0..n as usize {
+            w = (w << 1) | bit_at(data, q + i);
+        }
+        f(w << (width - n), n);
+        q += n as usize;
+    }
+}
+
+fn reflect(v: u64, bits: u32) -> u64 {
+    if bits == 0 {
+        0
+    } else {
+        v.reverse_bits() >> (64 - bits)
+    }
+}
+
+/// The decimal digits, one in every 4 bits, from `start` to `end`.
+fn digits(
+    data: &[u8],
+    start: usize,
+    end: usize,
+    field: &'static str,
+    mut f: impl FnMut(u64),
+) -> Result<()> {
+    let mut bad = false;
+    for_words(data, start, end, 4, |d, _| {
+        bad |= d > 9;
+        f(d);
+    });
+    if bad {
+        Err(PacketError::InvalidValue { field })
+    } else {
+        Ok(())
+    }
+}
+
+/// An XTCE ErrorDetectCorrect algorithm over the bits from `start` to `end`
+/// of `data`.
+pub fn checksum(
+    spec: &Checksum,
+    data: &[u8],
+    start: usize,
+    end: usize,
+    field: &'static str,
+) -> Result<u64> {
+    let end = end.max(start);
+    Ok(match *spec {
+        Checksum::Crc {
+            width,
+            poly,
+            init,
+            final_xor,
+            reflect_data,
+            reflect_remainder,
+        } => {
+            let (top, m) = (1u64 << (width - 1), mask(width));
+            let mut reg = init;
+            for_words(data, start, end, 8, |g, n| {
+                let g = g >> (8 - n);
+                let g = if reflect_data { reflect(g, n) } else { g };
+                for i in (0..n).rev() {
+                    let carry = (reg & top != 0) != ((g >> i) & 1 == 1);
+                    reg = (reg << 1) & m;
+                    if carry {
+                        reg ^= poly;
+                    }
+                }
+            });
+            if reflect_remainder {
+                reg = reflect(reg, width);
+            }
+            reg ^ final_xor
+        }
+        Checksum::Sum(bits) => {
+            let mut c = 0u64;
+            for_words(data, start, end, 8, |b, _| c = c.wrapping_add(b));
+            c & mask(bits)
+        }
+        Checksum::UnixSum => {
+            let mut c = 0u64;
+            for_words(data, start, end, 8, |b, _| {
+                c = ((c >> 1) + ((c & 1) << 15) + b) & 0xffff;
+            });
+            c
+        }
+        Checksum::Fletcher(bits) => {
+            let half = bits / 2;
+            let m = mask(half);
+            let (mut a, mut b) = (0u64, 0u64);
+            for_words(data, start, end, half, |w, _| {
+                a = (a + w) % m;
+                b = (b + a) % m;
+            });
+            (b << half) | a
+        }
+        Checksum::Adler32 => {
+            let (mut a, mut b) = (1u64, 0u64);
+            for_words(data, start, end, 8, |w, _| {
+                a = (a + w) % 65521;
+                b = (b + a) % 65521;
+            });
+            (b << 16) | a
+        }
+        Checksum::Luhn => {
+            // The digits are counted from the right; there is one in every
+            // 4 bits, the last padded.
+            let n = (end - start).div_ceil(4);
+            let (mut k, mut total) = (0usize, 0u64);
+            digits(data, start, end, field, |d| {
+                let mut d = d;
+                if (n - 1 - k) % 2 == 0 {
+                    d *= 2;
+                    if d > 9 {
+                        d -= 9;
+                    }
+                }
+                total += d;
+                k += 1;
+            })?;
+            (10 - total % 10) % 10
+        }
+        Checksum::Verhoeff => {
+            // Verhoeff walks the digits from the right, reading each where
+            // it lies; a last partial digit is padded.
+            let n = (end - start).div_ceil(4);
+            let mut c = 0usize;
+            for i in 0..n {
+                let q = start + 4 * (n - 1 - i);
+                let mut d = 0usize;
+                for b in 0..4 {
+                    let bit = if q + b < end { bit_at(data, q + b) } else { 0 };
+                    d = (d << 1) | bit as usize;
+                }
+                if d > 9 {
+                    return Err(PacketError::InvalidValue { field });
+                }
+                c = VERHOEFF_D[c][VERHOEFF_P[(i + 1) % 8][d] as usize] as usize;
+            }
+            VERHOEFF_INV[c] as u64
+        }
+        Checksum::Damm => {
+            let mut c = 0usize;
+            digits(data, start, end, field, |d| {
+                c = DAMM[c][(d as usize).min(9)] as usize;
+            })?;
+            c as u64
+        }
+        Checksum::Xor(bits) => {
+            let mut c = 0u64;
+            for_words(data, start, end, bits, |w, _| c ^= w);
+            c
+        }
+        Checksum::Parity(odd) => {
+            let mut ones = odd as u64;
+            for_words(data, start, end, 8, |b, _| {
+                ones += b.count_ones() as u64
+            });
+            ones & 1
+        }
+    })
 }
 
 // --- integers ----------------------------------------------------------------

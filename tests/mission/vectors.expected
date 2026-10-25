@@ -122,3 +122,15 @@ Derived{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq
 Derived{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, bias=4, derived_mode=Safe, cal_flag=false, gain=14.0, mix=9.0, curve=225.0, steps=5.0, scaled=755, angle=4.141120008059867} | error:NotInvertible
 Derived{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, bias=0, derived_mode=Nominal, cal_flag=false, gain=0.0, mix=4.0, curve=0.0, steps=25.0, scaled=-10, angle=0.0} | error:NotInvertible
 error:Calibration | -
+Checked{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, counter=7, block_data=4660, spare=0} | 0990c02a000a0712345a00a7a57b5586b8
+Checked{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, counter=255, block_data=65535, spare=85} | 0990c02a000affffff00555281fd2064b9
+error:BadChecksum | -
+error:BadChecksum | -
+error:BadChecksum | -
+error:BadChecksum | -
+error:BadChecksum | -
+error:BadChecksum | -
+error:BadChecksum | -
+error:BadChecksum | -
+Send{seq_count=5, digits=79927398} | 112ec00500050c7992739820
+error:BadChecksum | -

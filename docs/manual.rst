@@ -1174,7 +1174,10 @@ formats the message.
      - The packet's entries end before the end its packet length field gives
    * - ``InvalidValue``
      - A field's bits are not a value of its encoding: a BCD digit above 9,
-       or a DEC reserved operand
+       a DEC reserved operand, or a digit above 9 for a check digit
+   * - ``BadChecksum``
+     - A checksum field (see "Error detection" under `Supported XTCE`_)
+       doesn't match the data it checks
    * - ``NoSpace``
      - C/C++ only: the output buffer is smaller than the packet
 
@@ -1300,6 +1303,16 @@ Strings and binary
    and write strings encoded as binary. Python's ``bool_from_string(s,
    one, zero, field)`` decodes a boolean encoded as a string; the other
    languages generate it inline.
+
+Error detection
+   ``checksum(spec, data, start, end, field)`` (``xtce_pk_checksum``)
+   computes an ``ErrorDetectCorrect`` algorithm over bits ``start`` to
+   ``end`` of ``data``: a Rust ``Checksum``, a C
+   ``xtce_pk_checksum_spec``, or a Python tuple (see the runtime's
+   documentation). The reader's ``checksum(spec, start, end, field)`` and
+   ``packet_end()``, and the writer's ``patch_checksum(spec, start, end,
+   at, bits, little_endian, field)`` and ``packet_end()``, are what
+   generated code uses.
 
 Sizes from other fields
    ``dynamic_size(x, slope, intercept, unit, max, field)`` computes
@@ -1574,11 +1587,67 @@ Times
 
 Containers
    ``SequenceContainer`` entry lists with ``ParameterRefEntry``,
-   ``ArrayParameterRefEntry`` and ``ContainerRefEntry``. Included containers are flattened in, or with
-   a ``RepeatEntry`` become a list, and may not have a ``BaseContainer``.
-   A ``BinaryEncoding`` with a fixed ``SizeInBits`` pads a telemetry
-   container to that size. ``BaseContainer`` inheritance uses
-   ``RestrictionCriteria``.
+   ``ArrayParameterRefEntry`` and ``ContainerRefEntry``. Included
+   containers are flattened in, or with a ``RepeatEntry`` become a list,
+   and may not have a ``BaseContainer``. A ``BinaryEncoding`` with a fixed
+   ``SizeInBits`` pads a telemetry container to that size. ``BaseContainer``
+   inheritance uses ``RestrictionCriteria``.
+
+Error detection
+   The ``ErrorDetectCorrect`` of a container's ``BinaryEncoding`` (of a
+   sequence container, whether a packet, a base container or an included
+   one, or of a command container): every ``CRC``, ``Checksum``, ``XOR``
+   and ``Parity`` whose ``parameterRef`` names the field that holds its
+   value. (One without a ``parameterRef`` only documents the container,
+   and is ignored.) Like a packet length field, that field is not a field
+   of the generated struct: encoding computes it once the packet is
+   written (after the length), and decoding computes it and fails with
+   ``BadChecksum`` if the field differs. It must be an uncalibrated
+   unsigned binary integer, big or little endian in whole bytes, without
+   an ``IncludeCondition``, and nothing may compare it or take a size
+   from it. It holds the value's low bits when the algorithm gives more.
+   For a check in a base container, the field may be in that container
+   or a derived one.
+
+   The bits a value covers: with ``reference="start"`` (the default),
+   from ``bitsFromReference`` bits after the start of the container to its
+   field, or to the end of the container if the field comes before them;
+   with ``reference="end"``, from the start of the container to
+   ``bitsFromReference`` bits before its end, as for a checksum in the
+   container's last bits. The container's start and end are those of the
+   packet for a packet or base container (the packet ends with its last
+   byte), and those of the included entries for an included container.
+   Values are computed in the order of their fields, so a value may cover
+   the fields of those before it, as in the demo's ``Checked``.
+
+   The algorithms, all over the covered bits taken most significant bit
+   first, with a last partial word padded with zero bits:
+
+   * ``CRC``: the ``width``-bit CRC (1 to 64) of ``Polynomial`` (without
+     its top bit, as XTCE writes it), starting from ``InitRemainder`` and
+     ending XORed with ``FinalXOR``, each truncated to the width. With
+     ``reflectData`` each byte is taken least significant bit first, and
+     with ``reflectRemainder`` the remainder is reflected before the final
+     XOR, as in the usual model of CRCs (so CRC-32 is width 32,
+     ``04C11DB7``, ``FFFFFFFF`` both ways and both reflections).
+     ``direction="leastSignificantBitFirst"`` reflects the data too (both
+     together cancel).
+   * ``Checksum``: ``sum8``, ``sum16``, ``sum24`` and ``sum32``, the sum of
+     the bytes modulo 2 to that many bits; ``unix_sum``, the checksum of
+     BSD and GNU ``sum``; ``fletcher4``, ``fletcher8``, ``fletcher16`` and
+     ``fletcher32``, Fletcher's checksum of that many bits, on words of
+     half as many bits; ``adler32``; and ``luhn``, ``verhoeff`` and
+     ``damm``, the check digit of the decimal digits in every 4 bits (a
+     digit above 9 fails with ``InvalidValue``). ``custom`` is not
+     supported. ``hashSizeInBits`` changes nothing.
+   * ``XOR``: the exclusive or of the words the size of the field.
+   * ``Parity``: the bit that makes the number of one bits even
+     (``Even``) or odd (``Odd``), with the field's bit.
+
+   The names follow Jacksum's, whose ``sum8`` to ``sum32`` and
+   ``unix_sum`` they match. The demo's ``Checked`` packet has one of most
+   kinds, and an included ``Block`` with its own check; its ``Send``
+   command has a Luhn check digit.
 
 Criteria
    ``RestrictionCriteria``, ``IncludeCondition`` and ``DiscreteLookup``
@@ -1640,7 +1709,9 @@ Not supported
    ``RepeatEntry`` offsets that other values give, other instances than 0,
    ``CustomAlgorithm`` criteria, ``NextContainer``, a container
    ``BinaryEncoding`` on command containers, with a size from a
-   ``DynamicValue`` or with transform algorithms, ``ErrorDetectCorrect``,
+   ``DynamicValue`` or with transform algorithms, custom checksum
+   algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
+   deprecates) and in included containers with an ``IncludeCondition``,
    calibrators inside aggregate types that use other values,
    least-significant-bit-first strings and binary data, integers of more
    than 64 bits, and include conditions in command containers.

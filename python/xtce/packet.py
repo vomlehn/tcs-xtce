@@ -31,7 +31,8 @@ class PacketError(ValueError):
     ``kind`` names the error and is the same in every runtime: ``Truncated``,
     ``BadPosition``, ``NoMatch``, ``Mismatch``, ``OutOfRange``,
     ``InvalidString``, ``TooLong``, ``Calibration``, ``NotInvertible``,
-    ``Missing``, ``BadSize``, ``BadLength`` or ``InvalidValue``.
+    ``Missing``, ``BadSize``, ``BadLength``, ``InvalidValue`` or
+    ``BadChecksum``.
     """
 
     MESSAGES = {"Truncated": "packet too short for {0}",
@@ -48,7 +49,8 @@ class PacketError(ValueError):
                 "BadSize": "invalid size or count for {0}",
                 "BadLength": "{0} does not match the length of the packet",
                 "InvalidValue": ("the bits of {0} are not a value of its "
-                                 "encoding")}
+                                 "encoding"),
+                "BadChecksum": "{0} does not match the data it checks"}
 
     def __init__(self, kind: str, *what: str) -> None:
         super().__init__(self.MESSAGES[kind].format(*what))
@@ -220,6 +222,15 @@ class BitReader:
         self.end = max(self.end, q)
         return _combine(groups, order)
 
+    def packet_end(self) -> int:
+        """The end of the packet in bits: the end of the last byte read."""
+        return (self.end + 7) // 8 * 8
+
+    def checksum(self, spec: tuple, start: int, end: int, field: str) -> int:
+        """The checksum ``spec`` (see ``checksum``) of the bits from
+        ``start`` to ``end`` of the packet."""
+        return checksum(spec, self.data, start, end, field)
+
     def pad(self, bits: int, field: str) -> None:
         """Skip ``bits`` bits of padding, which must be in the packet."""
         if self.pos + bits > self.nbits:
@@ -341,6 +352,21 @@ class BitWriter:
         if bits:
             self.uint(bits, 0)
 
+    def packet_end(self) -> int:
+        """The end of the packet written so far, in bits."""
+        return len(self.buf) * 8
+
+    def patch_checksum(self, spec: tuple, start: int, end: int, at: int,
+                       bits: int, le: bool, field: str) -> None:
+        """Fill in the checksum field ``field`` of ``bits`` bits at bit
+        ``at``: the checksum ``spec`` of the bits from ``start`` to ``end``,
+        its low ``bits`` bits."""
+        v = checksum(spec, self.buf._data, start, end, field)
+        pos = self.pos
+        self.pos = at
+        self.uint_order(bits, le, v & ((1 << bits) - 1))
+        self.pos = pos
+
     def bytes(self, data) -> None:
         if data:
             self.uint(len(data) * 8, int.from_bytes(data, "big"))
@@ -381,6 +407,126 @@ def _split(v: int, lengths, order) -> list:
     else:
         out = [((v >> (8 * sig)) & 0xFF, 8) for sig in order]
     return out
+
+
+# -- error detection
+# -------------------------------------------------------------------
+
+_VERHOEFF_D = ("0123456789", "1234067895", "2340178956", "3401289567",
+               "4012395678", "5987604321", "6598710432", "7659821043",
+               "8765932104", "9876543210")
+_VERHOEFF_P = ("0123456789", "1576283094", "5803796142", "8916043527",
+               "9453126870", "4286573901", "2793806415", "7046913258")
+_VERHOEFF_INV = "0432156789"
+_DAMM = ("0317598642", "7092154863", "4206871359", "1750983426", "6123045978",
+         "3674209581", "5869720134", "8945362017", "9438617205", "2581436790")
+
+
+def _words(data, start: int, end: int, width: int) -> list:
+    """The ``width``-bit words of the bits from ``start`` to ``end`` of
+    ``data``, most significant bit first; a last partial word is padded
+    with zero bits."""
+    n = end - start
+    if n <= 0:
+        return []
+    first, last = start >> 3, (end + 7) >> 3
+    v = int.from_bytes(bytes(data[first:last]), "big") >> (last * 8 - end)
+    v &= (1 << n) - 1
+    pad = -n % width
+    v <<= pad
+    n += pad
+    return [(v >> (n - width * (i + 1))) & ((1 << width) - 1)
+            for i in range(n // width)]
+
+
+def _reflect(v: int, bits: int) -> int:
+    return int(format(v, f"0{bits}b")[::-1], 2) if bits else 0
+
+
+def _digits(data, start: int, end: int, field: str) -> list:
+    """Decimal digits, one in every 4 bits."""
+    ds = _words(data, start, end, 4)
+    if any(d > 9 for d in ds):
+        raise PacketError("InvalidValue", field)
+    return ds
+
+
+def checksum(spec: tuple, data, start: int, end: int, field: str) -> int:
+    """An XTCE ErrorDetectCorrect algorithm over the bits from ``start`` to
+    ``end`` of ``data``.  ``spec`` is ``("crc", width, polynomial, init,
+    final_xor, reflect_data, reflect_remainder)``, ``("sum", bits)``,
+    ``("unix_sum",)``, ``("fletcher", bits)``, ``("adler32",)``,
+    ``("luhn",)``, ``("verhoeff",)``, ``("damm",)``, ``("xor", bits)`` or
+    ``("parity", odd)``; the manual describes each."""
+    kind = spec[0]
+    if kind == "crc":
+        width, poly, init, final, ref_in, ref_out = spec[1:]
+        top, mask = 1 << (width - 1), (1 << width) - 1
+        reg = init
+        n = end - start
+        groups = _words(data, start, start + n - n % 8, 8)
+        sizes = [8] * len(groups)
+        if n % 8:
+            groups.append(_words(data, end - n % 8, end, n % 8)[0])
+            sizes.append(n % 8)
+        for g, size in zip(groups, sizes):
+            if ref_in:
+                g = _reflect(g, size)
+            for i in range(size - 1, -1, -1):
+                bit = (g >> i) & 1
+                carry = bool(reg & top) != bool(bit)
+                reg = (reg << 1) & mask
+                if carry:
+                    reg ^= poly
+        if ref_out:
+            reg = _reflect(reg, width)
+        return reg ^ final
+    if kind == "sum":
+        return sum(_words(data, start, end, 8)) & ((1 << spec[1]) - 1)
+    if kind == "unix_sum":
+        c = 0
+        for b in _words(data, start, end, 8):
+            c = ((c >> 1) + ((c & 1) << 15) + b) & 0xFFFF
+        return c
+    if kind == "fletcher":
+        half = spec[1] // 2
+        m = (1 << half) - 1
+        a = b = 0
+        for w in _words(data, start, end, half):
+            a = (a + w) % m
+            b = (b + a) % m
+        return (b << half) | a
+    if kind == "adler32":
+        a, b = 1, 0
+        for w in _words(data, start, end, 8):
+            a = (a + w) % 65521
+            b = (b + a) % 65521
+        return (b << 16) | a
+    if kind == "luhn":
+        total = 0
+        for i, d in enumerate(reversed(_digits(data, start, end, field))):
+            if i % 2 == 0:
+                d *= 2
+                d -= 9 if d > 9 else 0
+            total += d
+        return (10 - total % 10) % 10
+    if kind == "verhoeff":
+        c = 0
+        for i, d in enumerate(reversed(_digits(data, start, end, field))):
+            c = int(_VERHOEFF_D[c][int(_VERHOEFF_P[(i + 1) % 8][d])])
+        return int(_VERHOEFF_INV[c])
+    if kind == "damm":
+        c = 0
+        for d in _digits(data, start, end, field):
+            c = int(_DAMM[c][d])
+        return c
+    if kind == "xor":
+        c = 0
+        for w in _words(data, start, end, spec[1]):
+            c ^= w
+        return c
+    ones = sum(bin(w).count("1") for w in _words(data, start, end, 8))
+    return (ones + spec[1]) & 1  # parity: odd adds one
 
 
 # -- integers

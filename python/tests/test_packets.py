@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
 import demo  # noqa: E402
 from xtce import ManagedBuffer  # noqa: E402
 from xtce.packet import (  # noqa: E402
-    BitReader, BitWriter, Codec, PacketError, bcd_decode, bcd_encode,
+    BitReader, BitWriter, Codec, PacketError, bcd_decode, bcd_encode, checksum,
     decode_text, encode_text, enum_value, float_decode, float_encode,
     float_to_raw, math_op, spline_orders)
 
@@ -567,6 +567,45 @@ class CalibratorTests(unittest.TestCase):
             self.assertEqual(p.sensor, {1: 151.0, 2: 10.0, 9: -93.0}[mode])
             raw_now = int.from_bytes(p.to_bytes()[7:10], "big") >> 7 & 0xFFFF
             self.assertEqual(raw_now, raw)
+
+
+class ChecksumTests(unittest.TestCase):
+    """ErrorDetectCorrect algorithms: the CRC catalogue's check values of
+    "123456789", and the others' published examples."""
+
+    def test_algorithms(self):
+        d = b"123456789"
+        n = len(d) * 8
+        for spec, want in (
+                (("crc", 16, 0x1021, 0xFFFF, 0, False, False), 0x29B1),
+                (("crc", 32, 0x04C11DB7, 2**32 - 1, 2**32 - 1, True, True),
+                 0xCBF43926), (("crc", 5, 0x05, 0x1F, 0x1F, True, True), 0x19),
+                (("unix_sum",), 53615), (("adler32",), 0x091E01DE),
+                (("sum", 8), 0xDD)):
+            with self.subTest(spec=spec):
+                self.assertEqual(checksum(spec, d, 0, n, "f"), want)
+        self.assertEqual(checksum(("fletcher", 16), b"abcde", 0, 40, "f"),
+                         0xC8F0)
+        digits = bytes.fromhex("7992739871")
+        self.assertEqual(checksum(("luhn",), digits, 0, 40, "f"), 3)
+        self.assertEqual(checksum(("verhoeff",), b"\x02\x36", 4, 16, "f"), 3)
+        self.assertEqual(checksum(("damm",), b"\x05\x72", 4, 16, "f"), 4)
+        with self.assertRaises(PacketError) as cm:
+            checksum(("luhn",), b"\x7a", 0, 8, "f")
+        self.assertEqual(cm.exception.kind, "InvalidValue")
+
+    def test_checked_packet(self):
+        p = demo.Checked(sec_hdr_flag=True,
+                         seq_flags=demo.SeqFlagsType.UNSEGMENTED, seq_count=42,
+                         counter=7, block_data=0x1234, spare=0)
+        data = p.to_bytes()
+        self.assertEqual(data.hex(), "0990c02a000a0712345a00a7a57b5586b8")
+        self.assertEqual(demo.Checked.decode(data), p)
+        for i in range(len(data)):
+            bad = bytearray(data)
+            bad[i] ^= 0x10
+            with self.assertRaises(PacketError, msg=i):
+                demo.Checked.decode(bytes(bad))
 
 
 if __name__ == "__main__":

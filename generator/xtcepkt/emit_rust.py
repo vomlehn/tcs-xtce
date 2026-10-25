@@ -202,6 +202,24 @@ FLOATS = {"IEEE754": "Ieee", "MILSTD_1750A": "Mil1750a", "DEC": "Dec",
           "IBM": "Ibm", "TI": "Ti"}
 
 
+def checksum_spec(spec: tuple) -> str:
+    """The runtime's Checksum for an ErrorDetectCorrect algorithm."""
+    kind = spec[0]
+    if kind == "crc":
+        width, poly, init, final, ref_in, ref_out = spec[1:]
+        return (f"pk::Checksum::Crc {{ width: {width}, poly: 0x{poly:x}, init: "
+                f"0x{init:x}, final_xor: 0x{final:x}, reflect_data: "
+                f"{str(ref_in).lower()}, reflect_remainder: "
+                f"{str(ref_out).lower()} }}")
+    names = {"sum": "Sum", "unix_sum": "UnixSum", "fletcher": "Fletcher",
+             "adler32": "Adler32", "luhn": "Luhn", "verhoeff": "Verhoeff",
+             "damm": "Damm", "xor": "Xor", "parity": "Parity"}
+    if len(spec) == 1:
+        return f"pk::Checksum::{names[kind]}"
+    arg = str(spec[1]).lower()
+    return f"pk::Checksum::{names[kind]}({arg})"
+
+
 def byte_order(e) -> str:
     if e.order == "be":
         return "pk::ByteOrder::Big"
@@ -574,6 +592,8 @@ class RustEmitter:
                 self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
             elif isinstance(it, Value):
                 lc = it.local
+                if lc.checksum:
+                    self.line(f"let p{lc.id} = r.position();", depth)
                 expr = read_expr(lc.vtype, rstr(lc.name), self.read_ref,
                                  self.alloc)
                 if assign:
@@ -618,7 +638,7 @@ class RustEmitter:
                 self.line(f"if {conjunction(conds)} {{", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
                 self.line("}", depth)
-            elif it.local.length is not None:
+            elif it.local.computed:
                 lc = it.local
                 self.line(f"let l{lc.id} = w.position();", depth)
                 self.line(f"w.uint({lc.vtype.enc.bits}, 0);", depth)
@@ -664,10 +684,35 @@ class RustEmitter:
         return "0" if i == 0 else f"m{i}"
 
     def finish(self, n: Node, depth: int) -> None:
-        """Checks the packet length field when decoding ends."""
+        """Checks the packet length field and the checksums when decoding
+        ends."""
         lc = n.length_field()
         if lc is not None:
             self.line(f"r.finish({rstr(lc.name)})?;", depth)
+        for c in n.checks:
+            f = rstr(c.local.name)
+            start, end = self.region(c, "r")
+            self.line(f"if r.checksum(&{checksum_spec(c.spec)}, {start}, "
+                      f"{end}, {f})? & "
+                      f"{hex((1 << c.local.vtype.enc.bits) - 1)} != "
+                      f"v{c.local.id} as u64 {{", depth)
+            self.line(f"return Err(PacketError::BadChecksum {{ field: {f} }});",
+                      depth + 1)
+            self.line("}", depth)
+
+    def region(self, c, rw: str) -> tuple:
+        """The start and end of the bits a check covers, with reader or
+        writer ``rw``: on decoding ``p`` and on encoding ``l`` hold the
+        position of its field."""
+        pos = f"{'p' if rw == 'r' else 'l'}{c.local.id}"
+        base = self.mark(c.start)
+        start = f"{base} + {c.skip}" if c.skip and not c.from_end else base
+        end = f"m{c.end}" if c.end is not None else f"{rw}.packet_end()"
+        if c.from_end:
+            end = f"{end}.saturating_sub({c.skip})"
+        else:
+            end = f"if {pos} >= {start} {{ {pos} }} else {{ {end} }}"
+        return f"({start})", f"({end})"
 
     def construct(self, n: Node) -> str:
         fields = ", ".join(f"{name}: v{lc.id}" for name, lc in n.fields)
@@ -766,6 +811,13 @@ class RustEmitter:
             self.line(f"w.patch_length(l{length.id}, {enc.bits}, "
                       f"{str(enc.little_endian).lower()}, {length.length}, "
                       f"{rstr(length.name)})?;", 2)
+        for c in n.checks:
+            enc = c.local.vtype.enc
+            start, end = self.region(c, "w")
+            self.line(f"w.patch_checksum(&{checksum_spec(c.spec)}, {start}, "
+                      f"{end}, l{c.local.id}, {enc.bits}, "
+                      f"{str(enc.little_endian).lower()}, "
+                      f"{rstr(c.local.name)})?;", 2)
         if empty:
             self.line("let _ = w;", 2)
         self.line("Ok(())", 2)

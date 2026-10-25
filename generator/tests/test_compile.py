@@ -1459,6 +1459,84 @@ class CalibratorTests(unittest.TestCase):
         self.assertIn("uses other values of the packet", self.rejected(text))
 
 
+def checked_mission(edc: str, entries: str = "", ctype: str = "U8") -> str:
+    """A container P of A (8 bits) and K (``ctype``), with the
+    ErrorDetectCorrect items ``edc``."""
+    return mission(tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+            <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <IntegerParameterType name="S8">
+            <IntegerDataEncoding sizeInBits="8" encoding="twosComplement"/>
+          </IntegerParameterType>
+        </ParameterTypeSet>
+        <ParameterSet><Parameter name="A" parameterTypeRef="U8"/>
+          <Parameter name="K" parameterTypeRef="{ctype}"/></ParameterSet>
+        <ContainerSet><SequenceContainer name="P">
+          <BinaryEncoding><ErrorDetectCorrect>{edc}</ErrorDetectCorrect>
+          </BinaryEncoding>
+          <EntryList>{entries or '<ParameterRefEntry parameterRef="A"/>'
+                      '<ParameterRefEntry parameterRef="K"/>'}</EntryList>
+        </SequenceContainer></ContainerSet>""")
+
+
+class ErrorDetectionTests(unittest.TestCase):
+    def node(self, text: str):
+        return compile_xml(text).nodes[0]
+
+    def rejected(self, text: str) -> str:
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        return str(cm.exception)
+
+    def test_checks(self):
+        n = self.node(checked_mission('<CRC width="8" parameterRef="K" '
+                                      'reflectData="true"><Polynomial>107'
+                                      '</Polynomial><FinalXOR>55</FinalXOR>'
+                                      '</CRC>'))
+        (c,) = n.checks
+        # The polynomial and final XOR are truncated to the width.
+        self.assertEqual(c.spec, ("crc", 8, 0x07, 0, 0x55, True, False))
+        self.assertEqual((c.local.name, c.skip, c.from_end), ("K", 0, False))
+        self.assertEqual([name for name, _ in n.fields], ["a"])
+        self.assertTrue(c.local.computed)
+        n = self.node(checked_mission('<Checksum name="fletcher16" '
+                                      'parameterRef="K" reference="end" '
+                                      'bitsFromReference="8"/>'))
+        (c,) = n.checks
+        self.assertEqual((c.spec, c.skip, c.from_end),
+                         (("fletcher", 16), 8, True))
+        n = self.node(checked_mission('<XOR parameterRef="K"/><Parity '
+                                      'type="Even"/>'))
+        self.assertEqual([c.spec for c in n.checks], [("xor", 8)])
+
+    def test_rejected(self):
+        cases = [
+            (checked_mission('<Checksum name="custom" parameterRef="K"/>'),
+             "a custom checksum algorithm"),
+            (checked_mission('<XOR parameterRef="K"/>', ctype="S8"),
+             "checksum field K must be an uncalibrated unsigned"),
+            (checked_mission('<XOR parameterRef="K"/>',
+                             entries='<ParameterRefEntry parameterRef="A"/>'),
+             "the XOR value /Sat/K is not in container /Sat/P"),
+            (checked_mission('<XOR parameterRef="K"/><Parity type="Odd" '
+                             'parameterRef="K"/>'),
+             "already a packet length or checksum field"),
+            (checked_mission('<CRC width="65" parameterRef="K"><Polynomial>07'
+                             '</Polynomial></CRC>'), "a 65-bit CRC")]
+        for text, why in cases:
+            with self.subTest(why=why):
+                self.assertIn(why, self.rejected(text))
+
+    def test_deprecated_in_a_data_encoding(self):
+        text = typed('<IntegerParameterType name="T"><IntegerDataEncoding>'
+                     '<ErrorDetectCorrect><Parity type="Odd"/>'
+                     '</ErrorDetectCorrect></IntegerDataEncoding>'
+                     '</IntegerParameterType>')
+        self.assertIn("ErrorDetectCorrect in a data encoding (deprecated",
+                      self.rejected(text))
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -1562,18 +1640,19 @@ class LengthTests(unittest.TestCase):
                 (dict(entries=LEN, containers=criterion),
                  "a criterion or assignment on packet length field Len"),
                 (dict(entries=LEN + '<ParameterRefEntry parameterRef="Data"/>'),
-                 "size or count from packet length field"),
+                 "size or count from packet length or checksum field"),
                 (dict(entries=LEN
                       + '<ParameterRefEntry parameterRef="Looked"/>'),
-                 "size or count from packet length field Len"),
+                 "size or count from packet length or checksum field Len"),
                 (dict(entries='<ParameterRefEntry parameterRef="Len">'
                               '<RepeatEntry><Count><FixedValue>2</FixedValue>'
                               '</Count></RepeatEntry></ParameterRefEntry>'),
-                 "RepeatEntry on packet length field Len"),
+                 "RepeatEntry on packet length or checksum field Len"),
                 (dict(entries='<ContainerRefEntry containerRef="Rec">'
                               '<RepeatEntry><Count><FixedValue>2</FixedValue>'
                               '</Count></RepeatEntry></ContainerRefEntry>',
-                      containers=repeated), "Len is a packet length field")):
+                      containers=repeated),
+                 "Len is a packet length or checksum field")):
             with self.subTest(why=why):
                 with self.assertRaises(Unsupported) as cm:
                     compile_xml(length_mission(**kw))

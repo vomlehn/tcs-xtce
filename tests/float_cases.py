@@ -1,7 +1,8 @@
 """Prints the float conversion cases that tests/float_check.sh gives every
 runtime: random raw values of every format and size to decode, random
-doubles (and special ones) to encode, and MathOperationCalibrator operators
-on special and random operands, in the float tools' input format.
+doubles (and special ones) to encode, MathOperationCalibrator operators on
+special and random operands, and ErrorDetectCorrect checksums of random
+data, in the float tools' input format.
 
 Usage: python3 tests/float_cases.py SEED COUNT
 """
@@ -56,6 +57,36 @@ def main() -> None:
         for _ in range(count // 10):
             a, b = (rng.uniform(-20, 20) for _ in range(2))
             print(f"m {op} {bits_of(a)} {bits_of(b)}")
+    for _ in range(count):
+        print(checksum_case(rng))
+
+
+CHECKSUMS = {"crc": None, "sum": (8, 16, 24, 32), "unix_sum": (16,),
+             "fletcher": (4, 8, 16, 32), "adler32": (32,), "luhn": (4,),
+             "verhoeff": (4,), "damm": (4,), "xor": (1, 4, 8, 16, 32, 64),
+             "parity": (1,)}
+
+
+def checksum_case(rng) -> str:
+    """A checksum of random data, between random bits of it."""
+    kind = rng.choice(list(CHECKSUMS))
+    n = rng.randrange(1, 40)
+    if kind in ("luhn", "verhoeff", "damm"):
+        # Decimal digits, now and then one above 9.
+        data = bytes(rng.randrange(10) << 4 | rng.randrange(10)
+                     for _ in range(n))
+        if rng.random() < 0.1:
+            data = data[:-1] + bytes([0xAB])
+    else:
+        data = rng.randbytes(n)
+    start = rng.randrange(n * 8)
+    end = rng.randrange(start, n * 8 + 1)
+    bits = (rng.randrange(1, 65) if kind == "crc"
+            else rng.choice(CHECKSUMS[kind]))
+    poly, init, xor = (rng.getrandbits(bits) for _ in range(3))
+    flags = " ".join(str(rng.randrange(2)) for _ in range(3))
+    return (f"k {kind} {bits:x} {poly:x} {init:x} {xor:x} {flags} {data.hex()} "
+            f"{start:x} {end:x}")
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ from .model import (
     Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index, IntEnc, Item, Kind,
     Local, Mark, Member, Mission, Node, Pad, Polynomial, Seek, Spline,
     StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk,
-    MATH_UNARY, ContextCal, MathOp, ValueRef, needs_binding)
+    MATH_UNARY, Check, ContextCal, MathOp, ValueRef, needs_binding)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -421,6 +421,9 @@ class Compiler:
         self._aggregating: set = set()
         # container key -> aggregate of a repeated container
         self.ctypes: dict = {}
+        # ErrorDetectCorrect of the containers included in the node being
+        # compiled: (container, path, start mark, end mark, scope, name)
+        self.included_checks: list = []
         seen = set()
         for root in self.roots:
             if root.name in seen:
@@ -850,7 +853,10 @@ class Compiler:
 
     def encoding(self, name: str, e, path: Key, where: str):
         if getattr(e, "error_detect_correct", None):
-            raise Unsupported(f"{where}: ErrorDetectCorrect")
+            # XTCE deprecates it here: it doesn't say where the value goes.
+            raise Unsupported(f"{where}: ErrorDetectCorrect in a data encoding "
+                              "(deprecated; give it in the container's "
+                              "BinaryEncoding)")
         if name == "IntegerDataEncoding":
             bits = e.size_in_bits if e.size_in_bits is not None else 8
             kind = e.encoding.value if e.encoding else "unsigned"
@@ -1128,9 +1134,9 @@ class Compiler:
         rp = getattr(e, "repeat_entry", None)
         if rp is None:
             return local
-        if local.length is not None:
-            raise Unsupported(f"{where}: RepeatEntry on packet length field "
-                              f"{local.name}")
+        if local.computed:
+            raise Unsupported(f"{where}: RepeatEntry on packet length or "
+                              f"checksum field {local.name}")
         vt = local.vtype
         if vt.kind == "array":
             raise Unsupported(f"{where}: RepeatEntry on an array")
@@ -1204,9 +1210,10 @@ class Compiler:
             for path, mc, c in cal.cases:
                 terms = self.match(mc, path, scope, where, arg_key)
                 for lc in (x for t in terms for x in term_locals(t)):
-                    if lc.length is not None:
+                    if lc.computed:
                         raise Unsupported(f"{where}: a context calibrator on "
-                                          f"packet length field {lc.name}")
+                                          "packet length or checksum field "
+                                          f"{lc.name}")
                 cases.append((terms, self.bind_cal(c, scope, where, arg_key)))
             default = (self.bind_cal(cal.default, scope, where, arg_key)
                        if cal.default is not None else None)
@@ -1227,9 +1234,9 @@ class Compiler:
         if vt.kind not in ("int", "float", "enum", "bool"):
             raise Unsupported(f"{where}: MathOperationCalibrator uses "
                               f"{vt.kind} value {name}")
-        if local.length is not None:
+        if local.computed:
             raise Unsupported(f"{where}: MathOperationCalibrator uses packet "
-                              f"length field {name}")
+                              f"length or checksum field {name}")
         if r.ref.use_calibrated_value is False and vt.calibrator is not None:
             raise Unsupported(f"{where}: MathOperationCalibrator uses the raw "
                               f"value of calibrated {name}")
@@ -1245,9 +1252,9 @@ class Compiler:
                       for lk in table.discrete_lookup]
             for crit, _ in lookup:
                 for lc in (x for c in crit for x in term_locals(c)):
-                    if lc.length is not None:
+                    if lc.computed:
                         raise Unsupported(f"{where}: size or count from packet "
-                                          f"length field {lc.name}")
+                                          f"length or checksum field {lc.name}")
             values = [v for _, v in lookup] + [table.default_value]
             return (dataclasses.replace(d, lookup=lookup,
                                         default=table.default_value),
@@ -1269,9 +1276,9 @@ class Compiler:
         if ref.optional:
             raise Unsupported(f"{where}: size or count from {name}, which has "
                               "an IncludeCondition")
-        if ref.length is not None:
-            raise Unsupported(f"{where}: size or count from packet length "
-                              f"field {name}")
+        if ref.computed:
+            raise Unsupported(f"{where}: size or count from packet length or "
+                              f"checksum field {name}")
         member, vt = walk_members(ref.vtype, d.members,
                                   f"{where}: size or count from {d.name}")
         if vt.kind != "int":
@@ -1333,6 +1340,15 @@ class Compiler:
                     out.append(Mark(m))
                     inner = self.tm_items(inc, cpath, stack + [ckey], m, scope)
                     out += inner + self.size_pad(inc, inner, m, where)
+                    if edc_items(inc):
+                        if cond is not None:
+                            raise Unsupported(f"{where}: ErrorDetectCorrect in "
+                                              "an included container with an "
+                                              "IncludeCondition")
+                        end = self._id()
+                        out.append(Mark(end))
+                        self.included_checks.append((inc, cpath, m, end,
+                                                     list(scope), qname(ckey)))
             if cond is not None:
                 for it in walk(out):
                     if isinstance(it, Value):
@@ -1346,14 +1362,11 @@ class Compiler:
         be = sc.binary_encoding
         if be is None:
             return []
-        if be.error_detect_correct is not None:
-            raise Unsupported(f"{where}: ErrorDetectCorrect")
         if (be.from_binary_transform_algorithm
                 or be.to_binary_transform_algorithm):
             raise Unsupported(f"{where}: container transform algorithms")
         if be.size_in_bits is None:
-            raise Unsupported(f"{where}: container BinaryEncoding without "
-                              "SizeInBits")
+            return []
         size = self.int_value(be.size_in_bits, (), "container SizeInBits",
                               where)
         if isinstance(size, DynSize):
@@ -1421,9 +1434,9 @@ class Compiler:
                 if vt.dyn is not None:
                     raise Unsupported(f"{what}: {it.local.name} has a size "
                                       "that another value gives")
-                if it.local.length is not None:
+                if it.local.computed:
                     raise Unsupported(f"{what}: {it.local.name} is a packet "
-                                      "length field")
+                                      "length or checksum field")
                 members.append(Member(it.local.name,
                                       names.take(snake(it.local.name)), vt,
                                       skip))
@@ -1469,14 +1482,20 @@ class Compiler:
                                           "NextContainer")
                     node.criteria = self.match(rc, path, scope,
                                                f"container {node.key}")
-            if sc.binary_encoding is not None and base is not None:
+            if (sc.binary_encoding is not None and base is not None
+                    and sc.binary_encoding.size_in_bits is not None):
                 raise Unsupported(f"container {node.key}: BinaryEncoding with "
-                                  "a BaseContainer")
+                                  "a size and a BaseContainer")
+            node._edc = (sc, path)
+            self.included_checks = []
             node.items = self.tm_items(sc, path, [key], 0, scope)
+            node._included = self.included_checks
             node.items += self.size_pad(sc, node.items, 0,
                                         f"container {node.key}")
             self.check_rest(node, f"container {node.key}")
             self.check_length(node, f"container {node.key}")
+            if not node.abstract:
+                node.checks = self.node_checks(node, f"container {node.key}")
             if base is not None:
                 base.children.append(node)
         except Unsupported as e:
@@ -1485,6 +1504,91 @@ class Compiler:
         node._building = False
         self.order.append(node)
         return node
+
+    def node_checks(self, node: Node, where: str) -> list:
+        """The ErrorDetectCorrect checks of a concrete packet: those of the
+        containers in its inheritance chain, which cover the packet, and
+        those of the containers it includes.  Values are computed in the
+        order of their fields in the packet."""
+        out = []
+        chain = node.chain()
+        for k, n in enumerate(chain):
+            sc, path = getattr(n, "_edc", (None, None))
+            # A check's field is in its container or one derived from it,
+            # which all share the check.
+            below = [it.local for m in chain[k:] for it in walk(m.items)
+                     if isinstance(it, Value)]
+            for name, v in edc_items(sc):
+                out.append(self.check(name, v, path, below, 0, None, n.key,
+                                      where))
+        for n in chain:
+            for inc, path, m, end, scope, ckey in getattr(n, "_included", []):
+                for name, v in edc_items(inc):
+                    out.append(self.check(name, v, path, scope, m, end, ckey,
+                                          where))
+        criteria = (node.all_criteria()
+                    + [c for it in node.all_items() for c in conds(it)])
+        for c in out:
+            if any(x is c.local for t in criteria for x in term_locals(t)):
+                raise Unsupported(f"{where}: a criterion or assignment on "
+                                  f"checksum field {c.local.name}")
+        order = {id(it.local): i for i, it in enumerate(walk(node.all_items()))
+                 if isinstance(it, Value)}
+        return sorted(out, key=lambda c: order[id(c.local)])
+
+    def check(self, name: str, v, path: Key, scope: list, start: int, end,
+              container: str, where: str) -> Check:
+        """One ErrorDetectCorrect algorithm, whose value is in a field among
+        ``scope``."""
+        pkey = qname(self.resolve(v.parameter_ref, path, self.params,
+                                  "parameter"))
+        local = next((lc for lc in reversed(scope) if lc.key == pkey), None)
+        if local is None:
+            raise Unsupported(f"{where}: the {name} value {pkey} is not in "
+                              f"container {container}")
+        vt = local.vtype
+        if (vt.kind != "int" or not isinstance(vt.enc, IntEnc) or vt.enc.signed
+                or vt.enc.bcd or vt.calibrator is not None
+                or not fast_order(vt.enc)):
+            raise Unsupported(f"{where}: checksum field {local.name} must be "
+                              "an uncalibrated unsigned binary integer, big "
+                              "or little endian in whole bytes, most "
+                              "significant bit first")
+        if local.optional:
+            raise Unsupported(f"{where}: checksum field {local.name} has an "
+                              "IncludeCondition")
+        if local.computed:
+            raise Unsupported(f"{where}: checksum field {local.name} is "
+                              "already a packet length or checksum field")
+        if name == "CRC":
+            width = v.width
+            if not 1 <= width <= 64:
+                raise Unsupported(f"{where}: a {width}-bit CRC")
+            m = (1 << width) - 1
+
+            def hexnum(h, default=0):
+                return (int.from_bytes(hex_bytes(h, where), "big") if h
+                        and h.strip() else default)
+
+            lsb = (v.direction is not None
+                   and v.direction.value == "leastSignificantBitFirst")
+            spec = ("crc", width, hexnum(v.polynomial) & m,
+                    hexnum(v.init_remainder) & m, hexnum(v.final_xor) & m,
+                    bool(v.reflect_data) != lsb, bool(v.reflect_remainder))
+        elif name == "Checksum":
+            algo = v.name.value
+            if algo == "custom":
+                raise Unsupported(f"{where}: a custom checksum algorithm")
+            m = re.fullmatch(r"(sum|fletcher)(\d+)", algo)
+            spec = (m.group(1), int(m.group(2))) if m else (algo,)
+        elif name == "XOR":
+            spec = ("xor", vt.enc.bits)
+        else:
+            spec = ("parity", v.type.value == "Odd")
+        local.checksum = True
+        skip = v.bits_from_reference or 0
+        from_end = v.reference is not None and v.reference.value == "end"
+        return Check(spec, local, start, end, skip, from_end, container)
 
     @staticmethod
     def check_rest(node: Node, where: str) -> None:
@@ -1709,8 +1813,12 @@ class Compiler:
                                                    f"{asg.argument_value}"))
             cc = mc.command_container
             if cc is not None:
-                if cc.binary_encoding is not None:
+                be = cc.binary_encoding
+                if be is not None and (be.size_in_bits is not None
+                                       or be.from_binary_transform_algorithm
+                                       or be.to_binary_transform_algorithm):
                     raise Unsupported(f"{where}: container BinaryEncoding")
+                node._edc = (cc, path)
                 if cc.base_container is not None:
                     bc = self.resolve(cc.base_container.container_ref, path,
                                       self.mc_containers, "command container")
@@ -1728,6 +1836,8 @@ class Compiler:
                                            self.scope_of(base) if base else [])
             self.check_rest(node, where)
             self.check_length(node, where)
+            if not node.abstract:
+                node.checks = self.node_checks(node, where)
             if base is not None:
                 base.children.append(node)
         except Unsupported as e:
@@ -1858,9 +1968,21 @@ class Compiler:
         names = Namer()
         n.fields = [(names.take(snake(it.local.name)), it.local)
                     for it in walk(n.all_items()) if isinstance(it, Value)
-                    and it.local not in fixed and it.local.length is None
+                    and it.local not in fixed and not it.local.computed
                     and it.local not in n.derived]
         n.max_bytes = (max_bits(n.all_items()) + 7) // 8
+
+
+def edc_items(container) -> list:
+    """The (kind, algorithm) ErrorDetectCorrect items of a container's
+    BinaryEncoding that name the parameter holding their value; the others
+    only document the container."""
+    be = getattr(container, "binary_encoding", None)
+    edc = be.error_detect_correct if be is not None else None
+    if edc is None:
+        return []
+    return [(ch.name, ch.value) for ch in edc.items
+            if ch.value.parameter_ref is not None]
 
 
 def int_range(e: IntEnc) -> tuple[int, int]:
@@ -2024,8 +2146,8 @@ def derived_sizes(n: Node) -> dict:
             continue
         lc = it.local
         vt = lc.vtype
-        if (lc.optional or lc in n.fixed or lc.length is not None
-                or vt.kind != "int" or vt.calibrator is not None):
+        if (lc.optional or lc in n.fixed or lc.computed or vt.kind != "int"
+                or vt.calibrator is not None):
             continue
         found = uses.get(lc, [])
         sizes = [u for u in found if u is not None and u is not READ]
