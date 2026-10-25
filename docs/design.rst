@@ -338,6 +338,15 @@ into the model in ``model.py``:
    code unit in UTF-16 and UTF-32) and 16-bit size tags. Time types become ``float`` seconds, with
    ``scale``/``offset`` as a linear calibrator.
 
+**Calibrators that use other values.**
+   Context calibrators and math operations that read other values of the
+   packet are compiled unbound, as part of their type, like sizes from
+   other fields. Each packet entry binds a copy to the values decoded
+   before it: criteria become terms on those values, and operands
+   references to them. Types inside aggregates are shared by every packet
+   that uses the aggregate, so a calibrator there can't be bound to one
+   packet's values, and the compiler rejects it.
+
 **Items.**
    A container's entry list becomes a flat list of items:
 
@@ -465,6 +474,21 @@ to give bit-identical results:
   builds to the standards' examples and to each other on 60,000 random
   conversions. No library float conversion is used for these formats, so
   nothing depends on the platform's ``long double``.
+* **Math operations** are compiled, not interpreted: the compiler turns
+  a ``MathOperationCalibrator``'s postfix expression into a tree,
+  applying ``swap``, ``drop``, ``dup`` and ``over`` as it goes, and each
+  emitter writes it as an expression. ``+``, ``-`` and ``*`` are plain
+  arithmetic, identical everywhere; every other operator calls the
+  runtime's ``math`` function, which pins down what the schema leaves
+  open (the sign of a modulo, NaN in ``min`` and ``max``, out-of-range
+  shifts) and what languages do differently (Python raises where C
+  returns NaN or infinity, and loses the sign of zero when rounding to an
+  integer). The transcendental functions come from the C library in all
+  three: Python's ``math`` and C call it, and Rust's standard library
+  does too, except for ``asinh``, ``acosh`` and ``atanh``, which it
+  computes itself and which the Rust runtime therefore calls from the C
+  library directly. ``tests/float_check.sh`` checks every operator on
+  special and random operands in all four builds.
 * **Character sets** are converted by each runtime's own code (Python's
   codecs, Rust's ``char`` conversions and C's tables), with the same
   rules for invalid bytes. Windows-1252's five undefined bytes are

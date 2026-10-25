@@ -13,7 +13,8 @@ from xtcepkt import emit_c  # noqa: E402
 from xtcepkt.compile import (  # noqa: E402
     compile_document, compile_documents, item_bits, member_path, value_range)
 from xtcepkt.model import (  # noqa: E402
-    MAX_FIELD_BITS, AnyOf, Index, Pad, Seek, Unsupported)
+    MAX_FIELD_BITS, AnyOf, ContextCal, Index, MathOp, Pad, Seek, Spline,
+    Unsupported)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -1320,6 +1321,142 @@ class EncodingRuleTests(unittest.TestCase):
                 '<SizeInBits><Fixed><FixedValue>32</FixedValue></Fixed>'
                 '</SizeInBits></StringDataEncoding></BooleanParameterType>')
         self.assertIn("'€' is not US-ASCII", self.rejected(text))
+
+
+def calibrated_by(cal: str, before: str = "", ptype: str = "Float") -> str:
+    """A mission with a parameter X, calibrated by ``cal`` (the XML inside
+    an IntegerDataEncoding), after the parameters ``before`` (name, type)
+    pairs of 8-bit unsigned integers."""
+    params = "".join(f'<Parameter name="{n}" parameterTypeRef="U8"/>'
+                     for n in before)
+    entries = "".join(f'<ParameterRefEntry parameterRef="{n}"/>'
+                      for n in before)
+    return mission(tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+            <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <{ptype}ParameterType name="T">
+            <IntegerDataEncoding sizeInBits="8">{cal}</IntegerDataEncoding>
+          </{ptype}ParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>{params}<Parameter name="X" parameterTypeRef="T"/>
+        </ParameterSet>
+        <ContainerSet><SequenceContainer name="P"><EntryList>{entries}
+          <ParameterRefEntry parameterRef="X"/></EntryList>
+        </SequenceContainer></ContainerSet>""")
+
+
+def rpn(*items: str) -> str:
+    out = []
+    for it in items:
+        if it == "x":
+            out.append("<ThisParameterOperand/>")
+        elif it.startswith("@"):
+            out.append("<ParameterInstanceRefOperand "
+                       f'parameterRef="{it[1:]}"/>')
+        elif it[0].isdigit() or it[0] == "-" and len(it) > 1:
+            out.append(f"<ValueOperand>{it}</ValueOperand>")
+        else:
+            out.append(f"<Operator>{it.replace('&', '&amp;')}</Operator>")
+    return ("<DefaultCalibrator><MathOperationCalibrator>" + "".join(out)
+            + "</MathOperationCalibrator></DefaultCalibrator>")
+
+
+class CalibratorTests(unittest.TestCase):
+    def cal(self, text: str):
+        return compile_xml(text).nodes[0].fields[-1][1].vtype.calibrator
+
+    def rejected(self, text: str) -> str:
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        return str(cm.exception)
+
+    def test_math_operation_is_a_tree(self):
+        cal = self.cal(calibrated_by(rpn("x", "2", "*", "@A", "+", "dup", "*",
+                                         "1", "swap", "-"), ["A"]))
+        self.assertIsInstance(cal, MathOp)
+        op, one, sq = cal.expr
+        self.assertEqual((op, one), ("-", ("const", 1.0)))
+        self.assertEqual(sq[0], "*")
+        self.assertEqual(repr(sq[1][1]), repr(sq[2][1]))  # dup copies it
+        self.assertEqual(sq[1][1], ("*", ("raw",), ("const", 2.0)))
+        self.assertEqual(sq[1][2][1].local.name, "A")  # bound to A
+        self.assertFalse(cal.invertible)
+
+    def test_math_operation_rejected(self):
+        for items, why in ((("x", "+"), "has too few operands"),
+                           (("x", "2"), "leaves 2 values on its stack"),
+                           (("x", "two", "*"), "'two' is not a number"),
+                           (("x", "@A", "+"),
+                            "unresolved parameter reference 'A'")):
+            with self.subTest(items=items):
+                text = calibrated_by(rpn(*items))
+                if "two" in items:
+                    text = text.replace("<Operator>two</Operator>",
+                                        "<ValueOperand>two</ValueOperand>")
+                self.assertIn(why, self.rejected(text))
+
+    def test_context_calibrators_pick_by_earlier_values(self):
+        poly = ('<PolynomialCalibrator><Term coefficient="{c}" exponent="1"/>'
+                '</PolynomialCalibrator>')
+        text = calibrated_by("<DefaultCalibrator>" + poly.format(c=1)
+                             + "</DefaultCalibrator><ContextCalibratorList>"
+                               "<ContextCalibrator><ContextMatch>"
+                               '<Comparison parameterRef="M" value="1"/>'
+                               '</ContextMatch><Calibrator>' + poly.format(c=2)
+                             + "</Calibrator></ContextCalibrator>"
+                               "</ContextCalibratorList>", ["M"])
+        cal = self.cal(text)
+        self.assertIsInstance(cal, ContextCal)
+        ((terms, case),) = cal.cases
+        self.assertEqual(terms[0].local.name, "M")
+        self.assertEqual(case.terms, [(2.0, 1)])
+        self.assertEqual(cal.default.terms, [(1.0, 1)])
+        self.assertIn("not decoded before it",
+                      self.rejected(text.replace('<ParameterRefEntry '
+                                                 'parameterRef="M"/>', "")))
+
+    def test_spline_orders(self):
+        def spline(points: str, order: str = "") -> str:
+            return (f"<DefaultCalibrator><SplineCalibrator {order}>{points}"
+                    "</SplineCalibrator></DefaultCalibrator>")
+
+        pts = "".join(f'<SplinePoint raw="{r}" calibrated="{r * r}"/>'
+                      for r in range(4))
+        cal = self.cal(calibrated_by(spline(pts, 'order="2"')))
+        self.assertEqual(cal.orders, (2, 2, 2, 2))
+        self.assertFalse(cal.invertible)
+        cal = self.cal(calibrated_by(spline(pts, 'order="0"')))
+        self.assertEqual((cal.order, cal.orders), (0, ()))
+        mixed = pts.replace('raw="1" calibrated="1"',
+                            'raw="1" calibrated="1" order="0"')
+        self.assertEqual(self.cal(calibrated_by(spline(mixed))).orders,
+                         (1, 0, 1, 1))
+        self.assertIn(
+            "two points at raw value 1",
+            self.rejected(calibrated_by(spline(pts
+                                               + '<SplinePoint raw="1" '
+                                                 'calibrated="5"/>'))))
+
+    def test_bound_calibrators_in_aggregates_rejected(self):
+        text = mission(tm="""
+            <ParameterTypeSet>
+              <IntegerParameterType name="U8" signed="false">
+                <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+              <FloatParameterType name="T"><IntegerDataEncoding sizeInBits="8">
+              """ + rpn("x", "@A", "+") + """</IntegerDataEncoding>
+              </FloatParameterType>
+              <AggregateParameterType name="Agg"><MemberList>
+                <Member name="M" typeRef="T"/></MemberList>
+              </AggregateParameterType>
+            </ParameterTypeSet>
+            <ParameterSet><Parameter name="A" parameterTypeRef="U8"/>
+              <Parameter name="X" parameterTypeRef="Agg"/></ParameterSet>
+            <ContainerSet><SequenceContainer name="P"><EntryList>
+              <ParameterRefEntry parameterRef="A"/>
+              <ParameterRefEntry parameterRef="X"/></EntryList>
+            </SequenceContainer></ContainerSet>""")
+        self.assertIn("uses other values of the packet", self.rejected(text))
 
 
 if __name__ == "__main__":

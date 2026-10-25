@@ -24,7 +24,8 @@ from .model import (
     MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
     Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index, IntEnc, Item, Kind,
     Local, Mark, Member, Mission, Node, Pad, Polynomial, Seek, Spline,
-    StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk)
+    StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk,
+    MATH_UNARY, ContextCal, MathOp, ValueRef, needs_binding)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -865,7 +866,8 @@ class Compiler:
                     and bits < 2):
                 raise Unsupported(f"{where}: 1-bit signed integer")
             lsb, order = self.byte_order(e, bits, where)
-            return (IntEnc(bits, kind, order, lsb), self.calibrator(e, where))
+            return (IntEnc(bits, kind, order, lsb),
+                    self.calibrator(e, path, where))
         if name == "FloatDataEncoding":
             kind = e.encoding.value if e.encoding else "IEEE754_1985"
             kind = "IEEE754" if kind == "IEEE754_1985" else kind
@@ -877,7 +879,8 @@ class Compiler:
                 raise Unsupported(f"{where}: {kind} has no {bits}-bit format "
                                   f"(it has {', '.join(map(str, sizes))})")
             lsb, order = self.byte_order(e, bits, where)
-            return FloatEnc(bits, kind, order, lsb), self.calibrator(e, where)
+            return (FloatEnc(bits, kind, order, lsb),
+                    self.calibrator(e, path, where))
         if name == "StringDataEncoding":
             cs = e.encoding.value if e.encoding else "UTF-8"
             if (getattr(e, "bit_order", None)
@@ -976,25 +979,86 @@ class Compiler:
                               f"{16 // unit} {cs} code units")
         return b
 
-    def calibrator(self, e, where: str):
-        if getattr(e, "context_calibrator_list", None):
-            raise Unsupported(f"{where}: ContextCalibratorList")
-        c = e.default_calibrator
-        if c is None:
-            return None
+    def calibrator(self, e, path: Key, where: str):
+        """The calibrator of an integer or float encoding: its default
+        calibrator, and its context calibrators if it has any."""
+        default = (self.one_calibrator(e.default_calibrator, path, where)
+                   if e.default_calibrator is not None else None)
+        ccl = getattr(e, "context_calibrator_list", None)
+        if ccl is None or not ccl.context_calibrator:
+            return default
+        return ContextCal([(path, cc.context_match,
+                            self.one_calibrator(cc.calibrator, path, where))
+                           for cc in ccl.context_calibrator], default)
+
+    def one_calibrator(self, c, path: Key, where: str):
         if c.choice.name == "PolynomialCalibrator":
             return Polynomial([(t.coefficient, t.exponent)
                                for t in c.choice.value.term])
         if c.choice.name == "SplineCalibrator":
             s = c.choice.value
             order = s.order if s.order is not None else 1
-            if order not in (0, 1):
-                raise Unsupported(f"{where}: spline of order {order}")
-            pts = sorted((p.raw, p.calibrated) for p in s.spline_point)
+            pts = sorted(((p.raw, p.calibrated,
+                           p.order if p.order is not None else order)
+                          for p in s.spline_point), key=lambda t: t[0])
             if len(pts) < 2:
                 raise Unsupported(f"{where}: spline with fewer than two points")
-            return Spline(pts, order, bool(s.extrapolate))
-        raise Unsupported(f"{where}: {c.choice.name}")
+            if any(a[0] == b[0] for a, b in zip(pts, pts[1:])):
+                raise Unsupported(
+                    f"{where}: spline with two points at raw value "
+                    + next(f"{a[0]:g}" for a, b in zip(pts, pts[1:])
+                           if a[0] == b[0]))
+            orders = tuple(o for _, _, o in pts)
+            uniform = len(set(orders[:-1])) == 1 and orders[0] in (0, 1)
+            return Spline([(r, c) for r, c, _ in pts], orders[0],
+                          bool(s.extrapolate), () if uniform else orders)
+        return self.math_operation(c.choice.value, path, where)
+
+    def math_operation(self, mc, path: Key, where: str) -> MathOp:
+        """A MathOperationCalibrator's postfix expression as a tree."""
+        stack: list = []
+
+        def pop(n: int, op: str) -> list:
+            if len(stack) < n:
+                raise Unsupported(f"{where}: MathOperationCalibrator operator "
+                                  f"{op!r} has too few operands")
+            args = stack[len(stack) - n:]
+            del stack[len(stack) - n:]
+            return args
+
+        for item in mc.items:
+            name, v = item.name, item.value
+            if name == "ValueOperand":
+                try:
+                    stack.append(("const", float(v.strip())))
+                except ValueError:
+                    raise Unsupported(f"{where}: ValueOperand {v!r} is not a "
+                                      "number") from None
+            elif name == "ThisParameterOperand":
+                stack.append(("raw",))
+            elif name == "ParameterInstanceRefOperand":
+                stack.append(("value", ValueRef(v, path)))
+            else:
+                op = v.value
+                if op == "swap":
+                    a, b = pop(2, op)
+                    stack += [b, a]
+                elif op == "drop":
+                    pop(1, op)
+                elif op == "dup":
+                    (a,) = pop(1, op)
+                    stack += [a, a]
+                elif op == "over":
+                    a, b = pop(2, op)
+                    stack += [a, b, a]
+                elif op in MATH_UNARY:
+                    stack.append((op, *pop(1, op)))
+                else:
+                    stack.append((op, *pop(2, op)))
+        if len(stack) != 1:
+            raise Unsupported(f"{where}: MathOperationCalibrator leaves "
+                              f"{len(stack)} values on its stack, not one")
+        return MathOp(stack[0])
 
     # -- literals --
 
@@ -1104,11 +1168,72 @@ class Compiler:
         """Binds the size or count of a value to what gives it, which must
         be decoded before it, and bounds it."""
         vt = local.vtype
-        if vt.dyn is None:
-            return local
-        b, rng = self.bind_dyn(vt.dyn, scope, where, arg_key)
-        local.vtype = bounded(vt, b, rng)
+        if vt.dyn is not None:
+            b, rng = self.bind_dyn(vt.dyn, scope, where, arg_key)
+            vt = bounded(vt, b, rng)
+        local.vtype = self.bind_calibrators(vt, scope, where, arg_key)
         return local
+
+    def bind_calibrators(self, vt: VType, scope: list, where: str,
+                         arg_key) -> VType:
+        """``vt``, with copies of the calibrators in it that use other
+        values of the packet bound to those in ``scope``."""
+        e = vt.enc
+        if isinstance(e, ArrayEnc):
+            elem = self.bind_calibrators(e.elem, scope, where, arg_key)
+            if elem is e.elem:
+                return vt
+            return dataclasses.replace(vt,
+                                       enc=dataclasses.replace(e, elem=elem))
+        if isinstance(e, AggregateEnc):
+            for t in vt.tree():
+                if needs_binding(t.calibrator):
+                    raise Unsupported(f"{where}: a calibrator in aggregate "
+                                      f"{vt.key} uses other values of the "
+                                      "packet")
+            return vt
+        if not needs_binding(vt.calibrator):
+            return vt
+        return dataclasses.replace(
+            vt, calibrator=self.bind_cal(vt.calibrator, scope, where, arg_key))
+
+    def bind_cal(self, cal, scope: list, where: str, arg_key):
+        """A copy of ``cal`` bound to the values in ``scope``."""
+        if isinstance(cal, ContextCal):
+            cases = []
+            for path, mc, c in cal.cases:
+                terms = self.match(mc, path, scope, where, arg_key)
+                for lc in (x for t in terms for x in term_locals(t)):
+                    if lc.length is not None:
+                        raise Unsupported(f"{where}: a context calibrator on "
+                                          f"packet length field {lc.name}")
+                cases.append((terms, self.bind_cal(c, scope, where, arg_key)))
+            default = (self.bind_cal(cal.default, scope, where, arg_key)
+                       if cal.default is not None else None)
+            return ContextCal(cases, default, bound=True)
+        if isinstance(cal, MathOp):
+            return MathOp(self.bind_expr(cal.expr, scope, where, arg_key))
+        return cal
+
+    def bind_expr(self, e: tuple, scope: list, where: str, arg_key) -> tuple:
+        if e[0] in ("const", "raw"):
+            return e
+        if e[0] != "value":
+            return (e[0],
+                    *(self.bind_expr(a, scope, where, arg_key) for a in e[1:]))
+        r = e[1]
+        local, member, vt, name = self.value_ref("ParameterInstanceRef", r.ref,
+                                                 r.path, scope, where, arg_key)
+        if vt.kind not in ("int", "float", "enum", "bool"):
+            raise Unsupported(f"{where}: MathOperationCalibrator uses "
+                              f"{vt.kind} value {name}")
+        if local.length is not None:
+            raise Unsupported(f"{where}: MathOperationCalibrator uses packet "
+                              f"length field {name}")
+        if r.ref.use_calibrated_value is False and vt.calibrator is not None:
+            raise Unsupported(f"{where}: MathOperationCalibrator uses the raw "
+                              f"value of calibrated {name}")
+        return ("value", ValueRef(r.ref, r.path, local, member, vt))
 
     def bind_dyn(self, d: DynSize, scope: list, where: str,
                  arg_key: Optional[Callable] = None):
@@ -1758,7 +1883,8 @@ def value_range(vt: VType) -> tuple[int, int]:
     cal = vt.calibrator
     if isinstance(cal, Polynomial) and cal.invertible:
         ends = [cal.slope * x + cal.intercept for x in (lo, hi)]
-    elif isinstance(cal, Spline) and not cal.extrapolate:
+    elif isinstance(cal, Spline) and not cal.extrapolate and not cal.orders:
+        # Interpolation of order 0 or 1 stays within the points.
         ends = [c for _, c in cal.points]
     else:
         return elo, elim - 1

@@ -258,12 +258,16 @@ class Polynomial:
 @dataclass
 class Spline:
     points: list[tuple[float, float]]  # (raw, calibrated), sorted by raw
-    order: int  # 0 (step) or 1 (linear)
+    order: int  # the order of every segment, when ``orders`` is empty
     extrapolate: bool
+    # The order of the segment from each point, when the points' own orders
+    # differ from 0 or 1 everywhere; a segment of order k interpolates
+    # through k + 1 points.
+    orders: tuple = ()
 
     @property
     def invertible(self) -> bool:
-        if self.order != 1:
+        if self.order != 1 or self.orders:
             return False
         cal = [c for _, c in self.points]
         inc = all(a < b for a, b in zip(cal, cal[1:]))
@@ -271,7 +275,76 @@ class Spline:
         return inc or dec
 
 
-Calibrator = Union[Polynomial, Spline]
+@dataclass(eq=False)
+class ValueRef:
+    """Another value of the packet that a calibrator uses (a
+    ParameterInstanceRefOperand).  Unbound, ``ref`` is the XTCE reference
+    and ``path`` the SpaceSystem it is in; bound, ``local`` is the value,
+    ``member`` the path into it, and ``vtype`` the type there."""
+
+    ref: object
+    path: tuple
+    local: Optional["Local"] = None
+    member: tuple = ()
+    vtype: Optional["VType"] = None
+
+
+# The operators of a MathOperationCalibrator, by the number of operands they
+# take.  swap, drop, dup and over rearrange the stack, so the compiler
+# applies them.
+MATH_UNARY = ("ln", "log", "e^x", "1/x", "x!", "tan", "cos", "sin", "atan",
+              "acos", "asin", "tanh", "cosh", "sinh", "atanh", "acosh", "asinh",
+              "abs", "int", "!", "~")
+MATH_BINARY = ("+", "-", "*", "/", "%", "^", "y^x", "atan2", "<<", ">>", "&",
+               "|", "&&", "||", ">", ">=", "<", "<=", "==", "!=", "min", "max",
+               "xor", "div")
+
+
+@dataclass
+class MathOp:
+    """A MathOperationCalibrator as an expression tree: ``("const", x)``,
+    ``("raw",)`` for the value being calibrated, ``("value", ValueRef)``
+    for another value of the packet, or ``(operator, operand, ...)``."""
+
+    expr: tuple
+    invertible = False
+
+    def refs(self) -> list:
+        """The ValueRefs it uses."""
+        out = []
+
+        def visit(e):
+            if e[0] == "value":
+                out.append(e[1])
+            elif e[0] not in ("const", "raw"):
+                for a in e[1:]:
+                    visit(a)
+        visit(self.expr)
+        return out
+
+
+@dataclass
+class ContextCal:
+    """A ContextCalibratorList and the default calibrator (or None): the
+    first case whose criteria hold picks its calibrator.  Unbound, a case
+    is (path, ContextMatch, calibrator); bound, (terms, calibrator).
+    Encoding inverts the calibrator the criteria pick, failing with
+    NotInvertible if that one can't be inverted."""
+
+    cases: list
+    default: Optional[object]
+    bound: bool = False
+    invertible = True
+
+
+Calibrator = Union[Polynomial, Spline, MathOp, ContextCal]
+
+
+def needs_binding(cal) -> bool:
+    """Whether a calibrator uses other values of the packet."""
+    if isinstance(cal, ContextCal):
+        return not cal.bound
+    return isinstance(cal, MathOp) and any(r.local is None for r in cal.refs())
 
 
 # --- value types

@@ -113,3 +113,12 @@ tm 097cc02a0089e5d5fdfa0b0a0d0c123405063e00c000a0000000000000003ffb999999999999a
 tc 112ec005000d0b01000000040048006920260100  # configure
 tc 112ec00500090bff800000009999ffff  # configure, empty label and largest code
 tc 112ec00500090b01000000009a990100  # configure, a BCD digit above 9
+tm 0986c02a000301009600  # calibrated, context 1: 0.5 x + 1 = 151.0
+tm 0986c02a00030280fa00  # calibrated, context 2: linear spline = 10.0
+tm 0986c02a00030200fa00  # calibrated, context 2 needs the flag: default x - 100 = 400.0
+tm 0986c02a000307800000  # calibrated, no context: default = -100.0
+tm 0986c02a000302ffff80  # calibrated, context 2 at the spline's last point = 100.0
+tm 098bc02a0008fd02940a7d8c838f00  # derived: gain 7, mix 37, curve 25 (extrapolated), steps 62.5, scaled 11, angle 900 (Bias < 0)
+tm 098bc02a0008040014018782ff8f00  # derived: gain 14, mix 9, curve 225, steps 5 (flat), scaled 755, angle sin(3) + 4 = 4.141120008059867
+tm 098bc02a0008000100000007800000  # derived: steps 25 (linear), mix 4
+tm 098bc02a0008000100000014800000  # derived, steps beyond its last point without extrapolation

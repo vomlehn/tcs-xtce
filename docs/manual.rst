@@ -1270,8 +1270,14 @@ Floats
 
 Calibrators
    ``polynomial(x, terms)``, ``polynomial_inverse(y, intercept, slope)``,
-   ``spline(x, points, order, extrapolate, field)`` and
-   ``spline_inverse(y, points, extrapolate, field)``.
+   ``spline(x, points, order, extrapolate, field)``,
+   ``spline_orders(x, points, orders, extrapolate, field)`` (a spline
+   whose segments have their own orders) and
+   ``spline_inverse(y, points, extrapolate, field)``. ``math(op, a, b)``
+   (Rust, with a ``MathOperator``), ``xtce_pk_math`` (C, with an
+   ``XTCE_PK_OP_`` code) and ``math_op(op, a, b)`` (Python, with the XTCE
+   operator) apply a ``MathOperationCalibrator`` operator; Python's
+   ``not_invertible(field)`` raises ``NotInvertible``.
    ``round_to_int(y, lo, lim, field)`` rounds a calibrated value half away
    from zero and fails with ``OutOfRange`` unless ``lo <= result < lim``.
 
@@ -1430,15 +1436,66 @@ Bit and byte order
    and ``leastSignificantBitFirst`` on them is not supported.
 
 Calibrators
-   ``PolynomialCalibrator`` and ``SplineCalibrator`` of order 0 or 1, as
-   the ``DefaultCalibrator`` of an integer or float encoding on a float
-   type, or of an integer encoding on an integer type. Encoding uses the
-   inverse calibrator. This works for
-   polynomials of degree 0 or 1 with a non-zero slope, and for linear
-   splines whose calibrated values strictly increase or decrease. Other
-   calibrators are decode-only: encoding them fails with
-   ``NotInvertible``. Engineering values are rounded half away from zero
-   to the nearest raw integer.
+   ``PolynomialCalibrator``, ``SplineCalibrator`` and
+   ``MathOperationCalibrator``, as the ``DefaultCalibrator`` of an integer
+   or float encoding on a float type, or of an integer encoding on an
+   integer type, and a ``ContextCalibratorList``. Encoding uses the
+   inverse calibrator. This works for polynomials of degree 0 or 1 with a
+   non-zero slope, and for linear splines whose calibrated values strictly
+   increase or decrease. Other calibrators are decode-only: encoding them
+   fails with ``NotInvertible``. Engineering values are rounded half away
+   from zero to the nearest raw integer.
+
+   A spline's ``order`` applies to every segment, and a ``SplinePoint``'s
+   own ``order`` to the segment that starts at it. A segment of order 0 is
+   flat at its first point; order 1 interpolates linearly; order *k*
+   interpolates with the polynomial through *k* + 1 points, the segment's
+   first point and those after it (or as many before it as the end of the
+   points needs). Outside the points, the first or last segment
+   extrapolates when ``extrapolate`` is true; otherwise decoding fails
+   with ``Calibration``. In the demo, ``Curve`` is quadratic and ``Steps``
+   flat, then linear, then quadratic.
+
+   A ``MathOperationCalibrator`` is its postfix expression, compiled into
+   ordinary code in each language: ``ThisParameterOperand`` is the raw
+   value, ``ValueOperand`` a constant, and ``ParameterInstanceRefOperand``
+   another value of the packet decoded before this one (a number, an
+   enumeration's value or a boolean as 1 or 0), as for a criterion. Every
+   operator is supported, with the operands from the bottom of the stack
+   first:
+
+   * ``+ - * /``, ``%`` (the modulo, with the sign of the divisor),
+     ``div`` (the Euclidean quotient of two operands: the schema's
+     notation shows one, but a quotient needs two), ``^`` (``x1**x2``),
+     ``y^x`` (``x2**x1``), ``abs``, ``int`` (the integer part), ``min`` and
+     ``max`` (``min`` gives the second operand only when it is smaller, so
+     a NaN first operand stays), ``1/x`` and ``x!`` (of a whole number;
+     NaN otherwise, infinity above 170);
+   * ``ln``, ``log`` (base 10), ``e^x``, ``sin``, ``cos``, ``tan``,
+     ``asin``, ``acos``, ``atan``, ``atan2`` (``atan2(x2, x1)``, as the
+     schema says), ``sinh``, ``cosh``, ``tanh``, ``asinh``, ``acosh`` and
+     ``atanh``, from the C library, whose results the IEEE rules give
+     outside their domains (NaN, or an infinity at a pole);
+   * the comparisons ``> >= < <= == !=`` and the logical ``&& || !``,
+     which give 1 or 0 (``!`` takes one operand);
+   * the bitwise ``<< >> & | xor`` and ``~`` (which takes one operand) on
+     64-bit two's complement integers: the operands are truncated to
+     integers, the result is NaN when one has no 64-bit value or a shift
+     is outside 0 to 63, ``>>`` is arithmetic, and ``<<`` wraps;
+   * ``swap``, ``drop``, ``dup`` and ``over``, which rearrange the stack.
+
+   A ``ContextCalibratorList`` picks the calibrator of the first
+   ``ContextCalibrator`` whose ``ContextMatch`` holds, on values decoded
+   before this one, and the ``DefaultCalibrator`` (or none) when none
+   does. Encoding evaluates the same criteria on the packet's fields and
+   inverts the calibrator they pick, failing with ``NotInvertible`` only
+   if that one can't be inverted. In the demo, ``Calibrated`` picks by
+   ``CalMode`` and ``CalFlag``, and ``Derived`` has math operations on
+   other values, an enumeration and a boolean among them.
+
+   Calibrators that use other values must be in the packet's own types or
+   array elements, not inside an aggregate type, which would bind them to
+   different values in different packets.
 
    On an integer type the calibrated value is rounded half away from zero
    to an integer of the type's ``sizeInBits`` (default 32) and ``signed``
@@ -1584,7 +1641,7 @@ Not supported
    ``CustomAlgorithm`` criteria, ``NextContainer``, a container
    ``BinaryEncoding`` on command containers, with a size from a
    ``DynamicValue`` or with transform algorithms, ``ErrorDetectCorrect``,
-   context calibrators, ``MathOperationCalibrator``,
+   calibrators inside aggregate types that use other values,
    least-significant-bit-first strings and binary data, integers of more
    than 64 bits, and include conditions in command containers.
 

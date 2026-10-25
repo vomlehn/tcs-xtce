@@ -1374,6 +1374,225 @@ pub fn spline(
     Ok(last.1)
 }
 
+/// A spline whose segments have their own orders: the segment from point
+/// `i` has order `orders[i]`, and one of order k interpolates through k + 1
+/// points, starting at point `i` or as close after it as the points allow.
+/// Outside the points, the first or last segment extrapolates.
+pub fn spline_orders(
+    x: f64,
+    points: &[(f64, f64)],
+    orders: &[u32],
+    extrapolate: bool,
+    field: &'static str,
+) -> Result<f64> {
+    let n = points.len();
+    if (x < points[0].0 || x > points[n - 1].0) && !extrapolate {
+        return Err(PacketError::Calibration { field });
+    }
+    let mut i = 0;
+    while i < n - 2 && x >= points[i + 1].0 {
+        i += 1;
+    }
+    let k = orders[i] as usize;
+    if k == 0 {
+        return Ok(if x >= points[n - 1].0 {
+            points[n - 1].1
+        } else {
+            points[i].1
+        });
+    }
+    let k = k.min(n - 1);
+    let j = i.min(n - 1 - k);
+    let mut y = 0.0;
+    for m in j..=j + k {
+        let mut t = points[m].1;
+        for q in j..=j + k {
+            if q != m {
+                t *= (x - points[q].0) / (points[m].0 - points[q].0);
+            }
+        }
+        y += t;
+    }
+    Ok(y)
+}
+
+/// An operator of a MathOperationCalibrator, for [`math`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MathOperator {
+    Div,
+    Mod,
+    Pow,
+    RevPow,
+    Ln,
+    Log10,
+    Exp,
+    Inv,
+    Factorial,
+    Tan,
+    Cos,
+    Sin,
+    Atan,
+    Atan2,
+    Acos,
+    Asin,
+    Tanh,
+    Cosh,
+    Sinh,
+    Atanh,
+    Acosh,
+    Asinh,
+    Shl,
+    Shr,
+    BitAnd,
+    BitOr,
+    BitXor,
+    BitNot,
+    And,
+    Or,
+    Not,
+    Abs,
+    EuclidDiv,
+    Trunc,
+    Gt,
+    Ge,
+    Lt,
+    Le,
+    Eq,
+    Ne,
+    Min,
+    Max,
+}
+
+// Rust's standard library computes these three with its own formulas, not
+// the C library's, which the C and Python runtimes use; they would differ in
+// the last bit.  Every other function of `math` calls the C library already.
+extern "C" {
+    fn asinh(x: f64) -> f64;
+    fn acosh(x: f64) -> f64;
+    fn atanh(x: f64) -> f64;
+}
+
+/// `x` truncated to a 64-bit integer, if it has such a value.
+fn to_i64(x: f64) -> Option<i64> {
+    if x.is_finite()
+        && (-9223372036854775808.0..9223372036854775808.0).contains(&x)
+    {
+        Some(x.trunc() as i64)
+    } else {
+        None
+    }
+}
+
+fn truth(b: bool) -> f64 {
+    if b {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+/// The value of a MathOperationCalibrator operator on the operands `a` and
+/// `b` (`b` is ignored by unary operators); identical in every runtime.
+/// `+`, `-` and `*` are written as plain arithmetic.
+pub fn math(op: MathOperator, a: f64, b: f64) -> f64 {
+    use MathOperator::*;
+    match op {
+        Div => a / b,
+        Mod => {
+            let mut m = if b != 0.0 && a.is_finite() {
+                a % b
+            } else {
+                f64::NAN
+            };
+            if m != 0.0 && (m < 0.0) != (b < 0.0) {
+                m += b;
+            }
+            m
+        }
+        EuclidDiv => {
+            if b == 0.0 || !a.is_finite() || !b.is_finite() {
+                return f64::NAN;
+            }
+            let mut r = a % b;
+            if r < 0.0 {
+                r += b.abs();
+            }
+            ((a - r) / b).round()
+        }
+        Pow => a.powf(b),
+        RevPow => b.powf(a),
+        Ln => a.ln(),
+        Log10 => a.log10(),
+        Exp => a.exp(),
+        Inv => 1.0 / a,
+        Factorial => {
+            if !(a >= 0.0) || a != a.floor() {
+                return f64::NAN;
+            }
+            if a > 170.0 {
+                return f64::INFINITY;
+            }
+            let mut r = 1.0;
+            for i in 2..=(a as u32) {
+                r *= i as f64;
+            }
+            r
+        }
+        Tan => a.tan(),
+        Cos => a.cos(),
+        Sin => a.sin(),
+        Atan => a.atan(),
+        Atan2 => b.atan2(a),
+        Acos => a.acos(),
+        Asin => a.asin(),
+        Tanh => a.tanh(),
+        Cosh => a.cosh(),
+        Sinh => a.sinh(),
+        // SAFETY: the C library's functions take and return a double, and
+        // have no other effects.
+        Atanh => unsafe { atanh(a) },
+        Acosh => unsafe { acosh(a) },
+        Asinh => unsafe { asinh(a) },
+        Abs => a.abs(),
+        Trunc => a.trunc(),
+        Not => truth(a == 0.0),
+        And => truth(a != 0.0 && b != 0.0),
+        Or => truth(a != 0.0 || b != 0.0),
+        Gt => truth(a > b),
+        Ge => truth(a >= b),
+        Lt => truth(a < b),
+        Le => truth(a <= b),
+        Eq => truth(a == b),
+        Ne => truth(a != b),
+        Min => {
+            if b < a {
+                b
+            } else {
+                a
+            }
+        }
+        Max => {
+            if b > a {
+                b
+            } else {
+                a
+            }
+        }
+        BitNot => to_i64(a).map_or(f64::NAN, |i| !i as f64),
+        _ => match (to_i64(a), to_i64(b)) {
+            (Some(i), Some(j)) => match op {
+                Shl | Shr if !(0..64).contains(&j) => f64::NAN,
+                Shl => i.wrapping_shl(j as u32) as f64,
+                Shr => (i >> j) as f64,
+                BitAnd => (i & j) as f64,
+                BitOr => (i | j) as f64,
+                _ => (i ^ j) as f64,
+            },
+            _ => f64::NAN,
+        },
+    }
+}
+
 /// Inverts a linear spline whose calibrated values are strictly monotonic.
 pub fn spline_inverse(
     y: f64,

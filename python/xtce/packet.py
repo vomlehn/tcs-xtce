@@ -839,6 +839,36 @@ def spline(x: float, points, order: int, extrapolate: bool,
     return last[1]
 
 
+def spline_orders(x: float, points, orders, extrapolate: bool,
+                  field: str) -> float:
+    """A spline whose segments have their own orders: the segment from point
+    ``i`` has order ``orders[i]``, and one of order k interpolates through
+    k + 1 points, starting at point ``i`` or as close after it as the
+    points allow.  Outside the points, the first or last segment
+    extrapolates."""
+    n = len(points)
+    if (x < points[0][0] or x > points[-1][0]) and not extrapolate:
+        raise PacketError("Calibration", field)
+    i = 0
+    while i < n - 2 and x >= points[i + 1][0]:
+        i += 1
+    k = orders[i]
+    if k == 0:
+        if x >= points[-1][0]:
+            return points[-1][1]
+        return points[i][1]
+    k = min(k, n - 1)
+    j = min(i, n - 1 - k)
+    y = 0.0
+    for m in range(j, j + k + 1):
+        t = points[m][1]
+        for q in range(j, j + k + 1):
+            if q != m:
+                t *= (x - points[q][0]) / (points[m][0] - points[q][0])
+        y += t
+    return y
+
+
 def spline_inverse(y: float, points, extrapolate: bool, field: str) -> float:
     flip = [(c, r) for r, c in points]
     for i in range(len(points) - 1):
@@ -851,6 +881,142 @@ def spline_inverse(y: float, points, extrapolate: bool, field: str) -> float:
     if (y < points[0][1]) == increasing:
         return _lerp(y, flip[0], flip[1])
     return _lerp(y, flip[-2], flip[-1])
+
+
+def _int(x: float):
+    """``x`` truncated to a 64-bit integer, or None when it has no such
+    value."""
+    if not math.isfinite(x) or not -2.0**63 <= x < 2.0**63:
+        return None
+    return int(x)
+
+
+def _wrap(v: int) -> float:
+    """A 64-bit two's complement integer, as a float."""
+    v &= (1 << 64) - 1
+    return float(v - (1 << 64) if v >> 63 else v)
+
+
+def _call(f, *args) -> float:
+    try:
+        return f(*args)
+    except (ValueError, OverflowError, ZeroDivisionError):
+        return _libm_result(f, *args)
+
+
+def _libm_result(f, *args) -> float:
+    """What C's libm gives where Python's math raises: NaN for domain
+    errors, infinity for overflow and poles."""
+    if f is math.log or f is math.log10:
+        return -math.inf if args[0] == 0 else math.nan
+    if f is math.exp or f in (math.cosh, math.sinh):
+        return math.copysign(math.inf, args[0]) if f is math.sinh else math.inf
+    if f is math.pow:
+        a, b = args
+        if a == 0 and b < 0:
+            odd = b == int(b) and int(b) % 2 == 1
+            return math.copysign(math.inf, a) if odd else math.inf
+        if math.isfinite(a) and math.isfinite(b) and a < 0 and b != int(b):
+            return math.nan
+        big = (math.copysign(math.inf, a)
+               if (a < 0 and b == int(b) and int(b) % 2) else math.inf)
+        return big
+    if f is math.atanh:
+        return (math.copysign(math.inf, args[0]) if abs(args[0]) == 1
+                else math.nan)
+    return math.nan
+
+
+def math_op(op: str, a: float, b: float = 0.0) -> float:
+    """The value of a MathOperationCalibrator operator on the operands ``a``
+    and ``b`` (``b`` is ignored by unary operators); identical in every
+    runtime.  See the manual for each operator."""
+    if op == "/":
+        if b != 0:
+            return a / b
+        if a == 0 or math.isnan(a) or math.isnan(b):
+            return math.nan
+        return math.copysign(math.inf, a) * math.copysign(1.0, b)
+    if op == "%":
+        m = math.fmod(a, b) if b != 0 and math.isfinite(a) else math.nan
+        if m != 0 and (m < 0) != (b < 0):
+            m += b
+        return m
+    if op == "div":
+        if b == 0 or not math.isfinite(a) or not math.isfinite(b):
+            return math.nan
+        r = math.fmod(a, b)
+        if r < 0:
+            r += abs(b)
+        q = (a - r) / b
+        if not math.isfinite(q):
+            return q
+        return math.copysign(float(_round(q)), q)  # keeps -0.0
+    if op == "^":
+        return _call(math.pow, a, b)
+    if op == "y^x":
+        return _call(math.pow, b, a)
+    unary = {"ln": math.log, "log": math.log10, "e^x": math.exp,
+             "tan": math.tan, "cos": math.cos, "sin": math.sin,
+             "atan": math.atan, "acos": math.acos, "asin": math.asin,
+             "tanh": math.tanh, "cosh": math.cosh, "sinh": math.sinh,
+             "atanh": math.atanh, "acosh": math.acosh, "asinh": math.asinh}
+    if op in unary:
+        if math.isnan(a):
+            return math.nan
+        if math.isinf(a) and op in ("tan", "cos", "sin"):
+            return math.nan
+        return _call(unary[op], a)
+    if op == "1/x":
+        return math.copysign(math.inf, a) if a == 0 else 1.0 / a
+    if op == "x!":
+        if a == math.inf:
+            return math.inf
+        if not a >= 0 or a != math.floor(a):
+            return math.nan
+        if a > 170:
+            return math.inf
+        r = 1.0
+        for i in range(2, int(a) + 1):
+            r *= i
+        return r
+    if op == "atan2":
+        return math.atan2(b, a)
+    if op == "abs":
+        return abs(a)
+    if op == "int":
+        if not math.isfinite(a):
+            return a
+        return math.copysign(float(math.trunc(a)), a)  # keeps -0.0
+    if op == "!":
+        return 1.0 if a == 0 else 0.0
+    if op == "&&":
+        return 1.0 if a != 0 and b != 0 else 0.0
+    if op == "||":
+        return 1.0 if a != 0 or b != 0 else 0.0
+    if op in (">", ">=", "<", "<=", "==", "!="):
+        return 1.0 if {">": a > b, ">=": a >= b, "<": a < b, "<=": a <= b,
+                       "==": a == b, "!=": a != b}[op] else 0.0
+    if op == "min":
+        return b if b < a else a
+    if op == "max":
+        return b if b > a else a
+    i = _int(a)
+    if op == "~":
+        return math.nan if i is None else _wrap(~i)
+    j = _int(b)
+    if i is None or j is None:
+        return math.nan
+    if op in ("<<", ">>"):
+        if not 0 <= j < 64:
+            return math.nan
+        return _wrap(i << j) if op == "<<" else _wrap(i >> j)
+    return _wrap({"&": i & j, "|": i | j, "xor": i ^ j}[op])
+
+
+def not_invertible(field: str):
+    """Raises ``NotInvertible`` for ``field``: in generated expressions."""
+    raise PacketError("NotInvertible", field)
 
 
 # -- sizes from other fields

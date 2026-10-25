@@ -15,7 +15,7 @@ from xtce import ManagedBuffer  # noqa: E402
 from xtce.packet import (  # noqa: E402
     BitReader, BitWriter, Codec, PacketError, bcd_decode, bcd_encode,
     decode_text, encode_text, enum_value, float_decode, float_encode,
-    float_to_raw)
+    float_to_raw, math_op, spline_orders)
 
 
 def with_length(data, length: int) -> bytes:
@@ -516,6 +516,57 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaises(PacketError) as cm:
             dataclasses.replace(p, latin1="€").to_bytes()
         self.assertEqual(cm.exception.kind, "InvalidString")
+
+
+class CalibratorTests(unittest.TestCase):
+    """MathOperationCalibrator operators and splines of any order."""
+
+    def test_operators(self):
+        nan = math.nan
+        cases = [("%", -7, 3, 2.0), ("%", 7, -3, -2.0), ("div", -7, 3, -3.0),
+                 ("div", 7, -3, -2.0), ("^", 2, 10, 1024.0),
+                 ("y^x", 2, 10, 100.0), ("x!", 5, 0, 120.0),
+                 ("x!", 2.5, 0, nan), ("atan2", 1, 0, 0.0), ("<<", 1, 4, 16.0),
+                 (">>", -16, 2, -4.0), ("&", 6, 3, 2.0), ("|", 6, 3, 7.0),
+                 ("xor", 6, 3, 5.0), ("~", 0, 0, -1.0), ("<<", 1, 64, nan),
+                 ("!", 0, 0, 1.0), ("&&", 2, 0, 0.0), ("||", 2, 0, 1.0),
+                 (">=", 2, 2, 1.0), ("min", nan, 1, nan), ("max", 1, nan, 1.0),
+                 ("int", -2.5, 0, -2.0), ("1/x", 0, 0, math.inf),
+                 ("/", -1, 0, -math.inf), ("ln", 0, 0, -math.inf),
+                 ("ln", -1, 0, nan)]
+        for op, a, b, want in cases:
+            with self.subTest(op=op, a=a, b=b):
+                got = math_op(op, a, b)
+                if math.isnan(want):
+                    self.assertTrue(math.isnan(got))
+                else:
+                    self.assertEqual(got, want)
+        self.assertEqual(math.copysign(1, math_op("int", -0.5)), -1)
+
+    def test_spline_orders(self):
+        pts = [(0.0, 0.0), (1.0, 1.0), (2.0, 4.0), (3.0, 9.0)]
+        quad = (2, 2, 2, 2)
+        self.assertEqual(spline_orders(1.5, pts, quad, False, "f"), 2.25)
+        self.assertEqual(spline_orders(2.5, pts, quad, False, "f"), 6.25)
+        self.assertEqual(spline_orders(-1, pts, quad, True, "f"), 1.0)
+        mixed = (0, 1, 2, 2)
+        self.assertEqual(spline_orders(0.5, pts, mixed, False, "f"), 0.0)
+        self.assertEqual(spline_orders(1.5, pts, mixed, False, "f"), 2.5)
+        with self.assertRaises(PacketError) as cm:
+            spline_orders(4, pts, quad, False, "f")
+        self.assertEqual(cm.exception.kind, "Calibration")
+
+    def test_context_calibration_inverts_the_chosen_calibrator(self):
+        for mode, flag, raw in ((1, False, 300), (2, True, 500), (9, True, 7)):
+            p = demo.Calibrated.decode(
+                bytes(demo.Calibrated(sec_hdr_flag=True,
+                                      seq_flags=demo.SeqFlagsType.UNSEGMENTED,
+                                      seq_count=1, cal_mode=mode, cal_flag=flag,
+                                      sensor={1: 151.0, 2: 10.0,
+                                              9: -93.0}[mode]).to_bytes()))
+            self.assertEqual(p.sensor, {1: 151.0, 2: 10.0, 9: -93.0}[mode])
+            raw_now = int.from_bytes(p.to_bytes()[7:10], "big") >> 7 & 0xFFFF
+            self.assertEqual(raw_now, raw)
 
 
 if __name__ == "__main__":

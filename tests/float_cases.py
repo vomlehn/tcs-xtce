@@ -1,6 +1,7 @@
 """Prints the float conversion cases that tests/float_check.sh gives every
-runtime: random raw values of every format and size to decode, and random
-doubles (and special ones) to encode, in the float tools' input format.
+runtime: random raw values of every format and size to decode, random
+doubles (and special ones) to encode, and MathOperationCalibrator operators
+on special and random operands, in the float tools' input format.
 
 Usage: python3 tests/float_cases.py SEED COUNT
 """
@@ -16,6 +17,16 @@ SPECIAL = [0.0, -0.0, 1.0, -1.0, 0.5, -0.5, 2.0, -2.0, 1 / 3, -0.1, math.inf,
            -math.inf, math.nan, 5e-324, 2.2250738585072014e-308,
            1.7976931348623157e308, 65504.0, 65520.0, 3.4028235e38, 1e-40,
            7.2e75, 1.7e38, -2.0**127, 2.0**-129, 1e-300, 1e300]
+
+
+OPERATORS = ["/", "%", "^", "y^x", "ln", "log", "e^x", "1/x", "x!", "tan",
+             "cos", "sin", "atan", "atan2", "acos", "asin", "tanh", "cosh",
+             "sinh", "atanh", "acosh", "asinh", "<<", ">>", "&", "|", "xor",
+             "~", "&&", "||", "!", "abs", "div", "int", ">", ">=", "<", "<=",
+             "==", "!=", "min", "max"]
+OPERANDS = [0.0, -0.0, 1.0, -1.0, 2.0, -3.0, 0.5, 7.0, -7.0, 3.5, 63.0, 64.0,
+            170.0, 171.0, 1e300, -1e300, math.inf, -math.inf, math.nan, 9e18,
+            -9.3e18, 1e-310]
 
 
 def bits_of(x: float) -> str:
@@ -38,6 +49,13 @@ def main() -> None:
                     x = math.ldexp(rng.random() + 0.5, rng.randrange(-300, 300))
                     x = -x if rng.random() < 0.5 else x
                 print(f"e {fmt} {bits} {bits_of(x)}")
+    for op in OPERATORS:
+        for a in OPERANDS:
+            for b in OPERANDS:
+                print(f"m {op} {bits_of(a)} {bits_of(b)}")
+        for _ in range(count // 10):
+            a, b = (rng.uniform(-20, 20) for _ in range(2))
+            print(f"m {op} {bits_of(a)} {bits_of(b)}")
 
 
 if __name__ == "__main__":

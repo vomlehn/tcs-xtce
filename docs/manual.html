@@ -1726,8 +1726,14 @@ float format (see &quot;Float encoding&quot; under <a class="reference internal"
 <tt class="docutils literal">XTCE_PK_TI</tt>; Python the XTCE names.</dd>
 <dt>Calibrators</dt>
 <dd><tt class="docutils literal">polynomial(x, terms)</tt>, <tt class="docutils literal">polynomial_inverse(y, intercept, slope)</tt>,
-<tt class="docutils literal">spline(x, points, order, extrapolate, field)</tt> and
-<tt class="docutils literal">spline_inverse(y, points, extrapolate, field)</tt>.
+<tt class="docutils literal">spline(x, points, order, extrapolate, field)</tt>,
+<tt class="docutils literal">spline_orders(x, points, orders, extrapolate, field)</tt> (a spline
+whose segments have their own orders) and
+<tt class="docutils literal">spline_inverse(y, points, extrapolate, field)</tt>. <tt class="docutils literal">math(op, a, b)</tt>
+(Rust, with a <tt class="docutils literal">MathOperator</tt>), <tt class="docutils literal">xtce_pk_math</tt> (C, with an
+<tt class="docutils literal">XTCE_PK_OP_</tt> code) and <tt class="docutils literal">math_op(op, a, b)</tt> (Python, with the XTCE
+operator) apply a <tt class="docutils literal">MathOperationCalibrator</tt> operator; Python's
+<tt class="docutils literal">not_invertible(field)</tt> raises <tt class="docutils literal">NotInvertible</tt>.
 <tt class="docutils literal">round_to_int(y, lo, lim, field)</tt> rounds a calibrated value half away
 from zero and fails with <tt class="docutils literal">OutOfRange</tt> unless <tt class="docutils literal">lo &lt;= result &lt; lim</tt>.</dd>
 <dt>Strings and binary</dt>
@@ -1874,15 +1880,63 @@ bytes, which have no byte order: <tt class="docutils literal">leastSignificantBy
 <tt class="docutils literal"><span class="pre">UTF-16</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32</span></tt> string makes it <tt class="docutils literal"><span class="pre">UTF-16LE</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32LE</span></tt>,
 and <tt class="docutils literal">leastSignificantBitFirst</tt> on them is not supported.</dd>
 <dt>Calibrators</dt>
-<dd><p class="first"><tt class="docutils literal">PolynomialCalibrator</tt> and <tt class="docutils literal">SplineCalibrator</tt> of order 0 or 1, as
-the <tt class="docutils literal">DefaultCalibrator</tt> of an integer or float encoding on a float
-type, or of an integer encoding on an integer type. Encoding uses the
-inverse calibrator. This works for
-polynomials of degree 0 or 1 with a non-zero slope, and for linear
-splines whose calibrated values strictly increase or decrease. Other
-calibrators are decode-only: encoding them fails with
-<tt class="docutils literal">NotInvertible</tt>. Engineering values are rounded half away from zero
-to the nearest raw integer.</p>
+<dd><p class="first"><tt class="docutils literal">PolynomialCalibrator</tt>, <tt class="docutils literal">SplineCalibrator</tt> and
+<tt class="docutils literal">MathOperationCalibrator</tt>, as the <tt class="docutils literal">DefaultCalibrator</tt> of an integer
+or float encoding on a float type, or of an integer encoding on an
+integer type, and a <tt class="docutils literal">ContextCalibratorList</tt>. Encoding uses the
+inverse calibrator. This works for polynomials of degree 0 or 1 with a
+non-zero slope, and for linear splines whose calibrated values strictly
+increase or decrease. Other calibrators are decode-only: encoding them
+fails with <tt class="docutils literal">NotInvertible</tt>. Engineering values are rounded half away
+from zero to the nearest raw integer.</p>
+<p>A spline's <tt class="docutils literal">order</tt> applies to every segment, and a <tt class="docutils literal">SplinePoint</tt>'s
+own <tt class="docutils literal">order</tt> to the segment that starts at it. A segment of order 0 is
+flat at its first point; order 1 interpolates linearly; order <em>k</em>
+interpolates with the polynomial through <em>k</em> + 1 points, the segment's
+first point and those after it (or as many before it as the end of the
+points needs). Outside the points, the first or last segment
+extrapolates when <tt class="docutils literal">extrapolate</tt> is true; otherwise decoding fails
+with <tt class="docutils literal">Calibration</tt>. In the demo, <tt class="docutils literal">Curve</tt> is quadratic and <tt class="docutils literal">Steps</tt>
+flat, then linear, then quadratic.</p>
+<p>A <tt class="docutils literal">MathOperationCalibrator</tt> is its postfix expression, compiled into
+ordinary code in each language: <tt class="docutils literal">ThisParameterOperand</tt> is the raw
+value, <tt class="docutils literal">ValueOperand</tt> a constant, and <tt class="docutils literal">ParameterInstanceRefOperand</tt>
+another value of the packet decoded before this one (a number, an
+enumeration's value or a boolean as 1 or 0), as for a criterion. Every
+operator is supported, with the operands from the bottom of the stack
+first:</p>
+<ul class="simple">
+<li><tt class="docutils literal">+ - * /</tt>, <tt class="docutils literal">%</tt> (the modulo, with the sign of the divisor),
+<tt class="docutils literal">div</tt> (the Euclidean quotient of two operands: the schema's
+notation shows one, but a quotient needs two), <tt class="docutils literal">^</tt> (<tt class="docutils literal"><span class="pre">x1**x2</span></tt>),
+<tt class="docutils literal">y^x</tt> (<tt class="docutils literal"><span class="pre">x2**x1</span></tt>), <tt class="docutils literal">abs</tt>, <tt class="docutils literal">int</tt> (the integer part), <tt class="docutils literal">min</tt> and
+<tt class="docutils literal">max</tt> (<tt class="docutils literal">min</tt> gives the second operand only when it is smaller, so
+a NaN first operand stays), <tt class="docutils literal">1/x</tt> and <tt class="docutils literal">x!</tt> (of a whole number;
+NaN otherwise, infinity above 170);</li>
+<li><tt class="docutils literal">ln</tt>, <tt class="docutils literal">log</tt> (base 10), <tt class="docutils literal">e^x</tt>, <tt class="docutils literal">sin</tt>, <tt class="docutils literal">cos</tt>, <tt class="docutils literal">tan</tt>,
+<tt class="docutils literal">asin</tt>, <tt class="docutils literal">acos</tt>, <tt class="docutils literal">atan</tt>, <tt class="docutils literal">atan2</tt> (<tt class="docutils literal">atan2(x2, x1)</tt>, as the
+schema says), <tt class="docutils literal">sinh</tt>, <tt class="docutils literal">cosh</tt>, <tt class="docutils literal">tanh</tt>, <tt class="docutils literal">asinh</tt>, <tt class="docutils literal">acosh</tt> and
+<tt class="docutils literal">atanh</tt>, from the C library, whose results the IEEE rules give
+outside their domains (NaN, or an infinity at a pole);</li>
+<li>the comparisons <tt class="docutils literal">&gt; &gt;= &lt; &lt;= == !=</tt> and the logical <tt class="docutils literal">&amp;&amp; || !</tt>,
+which give 1 or 0 (<tt class="docutils literal">!</tt> takes one operand);</li>
+<li>the bitwise <tt class="docutils literal">&lt;&lt; &gt;&gt; &amp; | xor</tt> and <tt class="docutils literal">~</tt> (which takes one operand) on
+64-bit two's complement integers: the operands are truncated to
+integers, the result is NaN when one has no 64-bit value or a shift
+is outside 0 to 63, <tt class="docutils literal">&gt;&gt;</tt> is arithmetic, and <tt class="docutils literal">&lt;&lt;</tt> wraps;</li>
+<li><tt class="docutils literal">swap</tt>, <tt class="docutils literal">drop</tt>, <tt class="docutils literal">dup</tt> and <tt class="docutils literal">over</tt>, which rearrange the stack.</li>
+</ul>
+<p>A <tt class="docutils literal">ContextCalibratorList</tt> picks the calibrator of the first
+<tt class="docutils literal">ContextCalibrator</tt> whose <tt class="docutils literal">ContextMatch</tt> holds, on values decoded
+before this one, and the <tt class="docutils literal">DefaultCalibrator</tt> (or none) when none
+does. Encoding evaluates the same criteria on the packet's fields and
+inverts the calibrator they pick, failing with <tt class="docutils literal">NotInvertible</tt> only
+if that one can't be inverted. In the demo, <tt class="docutils literal">Calibrated</tt> picks by
+<tt class="docutils literal">CalMode</tt> and <tt class="docutils literal">CalFlag</tt>, and <tt class="docutils literal">Derived</tt> has math operations on
+other values, an enumeration and a boolean among them.</p>
+<p>Calibrators that use other values must be in the packet's own types or
+array elements, not inside an aggregate type, which would bind them to
+different values in different packets.</p>
 <p class="last">On an integer type the calibrated value is rounded half away from zero
 to an integer of the type's <tt class="docutils literal">sizeInBits</tt> (default 32) and <tt class="docutils literal">signed</tt>
 (default true); decoding fails with <tt class="docutils literal">OutOfRange</tt> if it doesn't fit.
@@ -2017,7 +2071,7 @@ other than the first, arrays of arrays, <tt class="docutils literal">IndirectPar
 <tt class="docutils literal">CustomAlgorithm</tt> criteria, <tt class="docutils literal">NextContainer</tt>, a container
 <tt class="docutils literal">BinaryEncoding</tt> on command containers, with a size from a
 <tt class="docutils literal">DynamicValue</tt> or with transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt>,
-context calibrators, <tt class="docutils literal">MathOperationCalibrator</tt>,
+calibrators inside aggregate types that use other values,
 least-significant-bit-first strings and binary data, integers of more
 than 64 bits, and include conditions in command containers.</dd>
 </dl>

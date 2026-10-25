@@ -927,7 +927,10 @@ def align(src: str) -> str:
         if stmt[-1].kind == "COMMENT" and stmt[-1].row == nl.row:
             trailing = stmt.pop()
         indent = lines[srow - 1][:stmt[0].col]
-        text = lay_out(stmt, indent)
+        try:
+            text = lay_out(stmt, indent)
+        except (SyntaxError, tokenize.TokenError):
+            continue  # a statement this can't lay out stays as it is
         if trailing:
             text += "  " + trailing.text
         old = lines[srow - 1:erow]

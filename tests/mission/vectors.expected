@@ -113,3 +113,12 @@ Encodings{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, s
 Configure{seq_count=5, gain=2.0, label_="Hi", code=2026, flags=1} | 112ec005000d0b01000000040048006920260100
 Configure{seq_count=5, gain=-1.0, label_="", code=9999, flags=65535} | 112ec00500090bff800000009999ffff
 error:InvalidValue | -
+Calibrated{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, cal_mode=1, cal_flag=false, sensor=151.0} | 0986c02a000301009600
+Calibrated{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, cal_mode=2, cal_flag=true, sensor=10.0} | 0986c02a00030280fa00
+Calibrated{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, cal_mode=2, cal_flag=false, sensor=400.0} | 0986c02a00030200fa00
+Calibrated{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, cal_mode=7, cal_flag=true, sensor=-100.0} | 0986c02a000307800000
+Calibrated{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, cal_mode=2, cal_flag=true, sensor=100.0} | 0986c02a000302ffff80
+Derived{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, bias=-3, derived_mode=Science, cal_flag=true, gain=7.0, mix=37.0, curve=25.0, steps=62.5, scaled=11, angle=900.0} | error:NotInvertible
+Derived{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, bias=4, derived_mode=Safe, cal_flag=false, gain=14.0, mix=9.0, curve=225.0, steps=5.0, scaled=755, angle=4.141120008059867} | error:NotInvertible
+Derived{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, bias=0, derived_mode=Nominal, cal_flag=false, gain=0.0, mix=4.0, curve=0.0, steps=25.0, scaled=-10, angle=0.0} | error:NotInvertible
+error:Calibration | -

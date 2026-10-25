@@ -3,8 +3,9 @@
      headers, container inheritance with restriction criteria, an included
      container from a nested SpaceSystem, every supported encoding, both
      calibrator kinds, commands with argument assignments, arrays, repeated
-     entries, sizes and counts given by other fields, aggregates, and every
-     bit and byte order, integer and float encoding and character set. -->
+     entries, sizes and counts given by other fields, aggregates, every bit
+     and byte order, integer and float encoding and character set, and
+     context calibrators, math operations and splines of any order. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Demo">
   <TelemetryMetaData>
     <ParameterTypeSet>
@@ -561,6 +562,155 @@
           </Variable>
         </StringDataEncoding>
       </StringParameterType>
+      <!-- Calibrators: context calibrators, math operations and splines
+           of higher orders. -->
+      <IntegerParameterType name="S8">
+        <IntegerDataEncoding sizeInBits="8" encoding="twosComplement"/>
+      </IntegerParameterType>
+      <FloatParameterType name="SensorType" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="16">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="-100" exponent="0"/>
+              <Term coefficient="1" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+          <ContextCalibratorList>
+            <ContextCalibrator>
+              <ContextMatch>
+                <Comparison parameterRef="CalMode" value="1"/>
+              </ContextMatch>
+              <Calibrator>
+                <PolynomialCalibrator>
+                  <Term coefficient="1" exponent="0"/>
+                  <Term coefficient="0.5" exponent="1"/>
+                </PolynomialCalibrator>
+              </Calibrator>
+            </ContextCalibrator>
+            <ContextCalibrator>
+              <ContextMatch>
+                <ComparisonList>
+                  <Comparison parameterRef="CalMode" value="2"/>
+                  <Comparison parameterRef="CalFlag" value="true"/>
+                </ComparisonList>
+              </ContextMatch>
+              <Calibrator>
+                <SplineCalibrator>
+                  <SplinePoint raw="0" calibrated="-40"/>
+                  <SplinePoint raw="1000" calibrated="60"/>
+                  <SplinePoint raw="65535" calibrated="100"/>
+                </SplineCalibrator>
+              </Calibrator>
+            </ContextCalibrator>
+          </ContextCalibratorList>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <!-- 0.25 x + Bias -->
+      <FloatParameterType name="GainType" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <MathOperationCalibrator>
+              <ThisParameterOperand/>
+              <ValueOperand>0.25</ValueOperand>
+              <Operator>*</Operator>
+              <ParameterInstanceRefOperand parameterRef="Bias"/>
+              <Operator>+</Operator>
+            </MathOperationCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <!-- max((x mod 7)^2, 3) + Mode (an enumeration) - Flag (a boolean) -->
+      <FloatParameterType name="MixType" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <MathOperationCalibrator>
+              <ThisParameterOperand/>
+              <ValueOperand>7</ValueOperand>
+              <Operator>%</Operator>
+              <Operator>dup</Operator>
+              <Operator>*</Operator>
+              <ValueOperand>3</ValueOperand>
+              <Operator>max</Operator>
+              <ParameterInstanceRefOperand parameterRef="DerivedMode"/>
+              <Operator>+</Operator>
+              <ParameterInstanceRefOperand parameterRef="CalFlag"/>
+              <Operator>-</Operator>
+            </MathOperationCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <!-- A quadratic spline: x^2 through its points, extrapolated. -->
+      <FloatParameterType name="CurveType" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="8" encoding="twosComplement">
+          <DefaultCalibrator>
+            <SplineCalibrator order="2" extrapolate="true">
+              <SplinePoint raw="0" calibrated="0"/>
+              <SplinePoint raw="10" calibrated="100"/>
+              <SplinePoint raw="20" calibrated="400"/>
+              <SplinePoint raw="30" calibrated="900"/>
+            </SplineCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <!-- Each segment its own order: flat, linear, then quadratic. -->
+      <FloatParameterType name="StepsType" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <SplineCalibrator>
+              <SplinePoint raw="0" calibrated="5" order="0"/>
+              <SplinePoint raw="10" calibrated="10" order="1"/>
+              <SplinePoint raw="20" calibrated="40" order="2"/>
+              <SplinePoint raw="30" calibrated="90"/>
+              <SplinePoint raw="40" calibrated="160"/>
+            </SplineCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <!-- An integer from a math operation: 3 x - 10, rounded. -->
+      <IntegerParameterType name="ScaledType" sizeInBits="16">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <MathOperationCalibrator>
+              <ThisParameterOperand/>
+              <ValueOperand>3</ValueOperand>
+              <Operator>*</Operator>
+              <ValueOperand>10</ValueOperand>
+              <Operator>-</Operator>
+            </MathOperationCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </IntegerParameterType>
+      <!-- sin(x / 10) + |Bias|, or x^2 when Bias is negative -->
+      <FloatParameterType name="AngleType" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <MathOperationCalibrator>
+              <ThisParameterOperand/>
+              <ValueOperand>10</ValueOperand>
+              <Operator>/</Operator>
+              <Operator>sin</Operator>
+              <ParameterInstanceRefOperand parameterRef="Bias"/>
+              <Operator>abs</Operator>
+              <Operator>+</Operator>
+            </MathOperationCalibrator>
+          </DefaultCalibrator>
+          <ContextCalibratorList>
+            <ContextCalibrator>
+              <ContextMatch>
+                <Comparison parameterRef="Bias" value="0"
+                  comparisonOperator="&lt;"/>
+              </ContextMatch>
+              <Calibrator>
+                <MathOperationCalibrator>
+                  <ThisParameterOperand/>
+                  <ValueOperand>2</ValueOperand>
+                  <Operator>^</Operator>
+                </MathOperationCalibrator>
+              </Calibrator>
+            </ContextCalibrator>
+          </ContextCalibratorList>
+        </IntegerDataEncoding>
+      </FloatParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -663,6 +813,17 @@
       <Parameter name="WideName" parameterTypeRef="Utf16LeName"/>
       <Parameter name="Wider" parameterTypeRef="Utf32Text"/>
       <Parameter name="Line" parameterTypeRef="LineText"/>
+      <Parameter name="CalMode" parameterTypeRef="U8"/>
+      <Parameter name="CalFlag" parameterTypeRef="FlagType"/>
+      <Parameter name="Sensor" parameterTypeRef="SensorType"/>
+      <Parameter name="Bias" parameterTypeRef="S8"/>
+      <Parameter name="DerivedMode" parameterTypeRef="ModeType"/>
+      <Parameter name="Gain" parameterTypeRef="GainType"/>
+      <Parameter name="Mix" parameterTypeRef="MixType"/>
+      <Parameter name="Curve" parameterTypeRef="CurveType"/>
+      <Parameter name="Steps" parameterTypeRef="StepsType"/>
+      <Parameter name="Scaled" parameterTypeRef="ScaledType"/>
+      <Parameter name="Angle" parameterTypeRef="AngleType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1085,6 +1246,36 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="380"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="Calibrated">
+        <EntryList>
+          <ParameterRefEntry parameterRef="CalMode"/>
+          <ParameterRefEntry parameterRef="CalFlag"/>
+          <ParameterRefEntry parameterRef="Sensor"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="390"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="Derived">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Bias"/>
+          <ParameterRefEntry parameterRef="DerivedMode"/>
+          <ParameterRefEntry parameterRef="CalFlag"/>
+          <ParameterRefEntry parameterRef="Gain"/>
+          <ParameterRefEntry parameterRef="Mix"/>
+          <ParameterRefEntry parameterRef="Curve"/>
+          <ParameterRefEntry parameterRef="Steps"/>
+          <ParameterRefEntry parameterRef="Scaled"/>
+          <ParameterRefEntry parameterRef="Angle"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="395"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

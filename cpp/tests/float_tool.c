@@ -1,8 +1,9 @@
 /* Converts floats as tests/float_check.sh asks, one case per line of standard
  * input: "d FORMAT BITS RAW" decodes the raw value (hex) and prints the
  * double's bits, and "e FORMAT BITS DOUBLE" encodes the double (its bits in
- * hex) and prints the raw value; an error prints its kind.  Built as C and as
- * C++. */
+ * hex) and prints the raw value; an error prints its kind.  "m OP A B" applies
+ * a MathOperationCalibrator operator to two doubles (their bits in hex) and
+ * prints the result's bits.  Built as C and as C++. */
 #include <xtce/packet.h>
 
 static int format(const char* name) {
@@ -11,6 +12,63 @@ static int format(const char* name) {
         if (!strcmp(name, "DEC")) return XTCE_PK_DEC;
         if (!strcmp(name, "IBM")) return XTCE_PK_IBM;
         return XTCE_PK_TI;
+}
+
+static const char* const operators[] = {
+        "/", "%", "^", "y^x", "ln", "log", "e^x", "1/x", "x!", "tan", "cos",
+        "sin", "atan", "atan2", "acos", "asin", "tanh", "cosh", "sinh",
+        "atanh", "acosh", "asinh", "<<", ">>", "&", "|", "xor", "~", "&&",
+        "||", "!", "abs", "div", "int", ">", ">=", "<", "<=", "==", "!=",
+        "min", "max"};
+
+static int operator_code(const char* name) {
+        static const int codes[] = {
+                XTCE_PK_OP_DIV,
+                XTCE_PK_OP_MOD,
+                XTCE_PK_OP_POW,
+                XTCE_PK_OP_REV_POW,
+                XTCE_PK_OP_LN,
+                XTCE_PK_OP_LOG10,
+                XTCE_PK_OP_EXP,
+                XTCE_PK_OP_INV,
+                XTCE_PK_OP_FACTORIAL,
+                XTCE_PK_OP_TAN,
+                XTCE_PK_OP_COS,
+                XTCE_PK_OP_SIN,
+                XTCE_PK_OP_ATAN,
+                XTCE_PK_OP_ATAN2,
+                XTCE_PK_OP_ACOS,
+                XTCE_PK_OP_ASIN,
+                XTCE_PK_OP_TANH,
+                XTCE_PK_OP_COSH,
+                XTCE_PK_OP_SINH,
+                XTCE_PK_OP_ATANH,
+                XTCE_PK_OP_ACOSH,
+                XTCE_PK_OP_ASINH,
+                XTCE_PK_OP_SHL,
+                XTCE_PK_OP_SHR,
+                XTCE_PK_OP_BIT_AND,
+                XTCE_PK_OP_BIT_OR,
+                XTCE_PK_OP_BIT_XOR,
+                XTCE_PK_OP_BIT_NOT,
+                XTCE_PK_OP_AND,
+                XTCE_PK_OP_OR,
+                XTCE_PK_OP_NOT,
+                XTCE_PK_OP_ABS,
+                XTCE_PK_OP_EUCLID_DIV,
+                XTCE_PK_OP_TRUNC,
+                XTCE_PK_OP_GT,
+                XTCE_PK_OP_GE,
+                XTCE_PK_OP_LT,
+                XTCE_PK_OP_LE,
+                XTCE_PK_OP_EQ,
+                XTCE_PK_OP_NE,
+                XTCE_PK_OP_MIN,
+                XTCE_PK_OP_MAX};
+        size_t i;
+        for (i = 0; i < sizeof codes / sizeof codes[0]; ++i)
+                if (!strcmp(name, operators[i])) return codes[i];
+        return -1;
 }
 
 /* Parses up to 32 hex digits into (hi, lo). */
@@ -36,10 +94,26 @@ static void print_hex(uint64_t hi, uint64_t lo) {
 int main(void) {
         char op[4], fmt[16], raw[40];
         unsigned bits;
-        while (scanf("%3s %15s %u %39s", op, fmt, &bits, raw) == 4) {
+        while (scanf("%3s %15s", op, fmt) == 2) {
                 xtce_pk_error err = XTCE_PK_ZERO;
                 uint64_t hi, lo;
                 int rc;
+                if (op[0] == 'm') {
+                        char sa[40], sb[40];
+                        double a, b, x;
+                        uint64_t u;
+                        if (scanf("%39s %39s", sa, sb) != 2) return 1;
+                        parse_hex(sa, &hi, &lo);
+                        memcpy(&a, &lo, 8);
+                        parse_hex(sb, &hi, &lo);
+                        memcpy(&b, &lo, 8);
+                        x = xtce_pk_math(operator_code(fmt), a, b);
+                        memcpy(&u, &x, 8);
+                        if (isnan(x)) u = 0x7ff8000000000000ull;
+                        print_hex(0, u);
+                        continue;
+                }
+                if (scanf("%u %39s", &bits, raw) != 2) return 1;
                 parse_hex(raw, &hi, &lo);
                 if (op[0] == 'd') {
                         double x;

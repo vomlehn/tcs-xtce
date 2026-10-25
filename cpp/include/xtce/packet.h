@@ -1379,6 +1379,205 @@ static inline int xtce_pk_spline(double x, const xtce_pk_point* p, size_t n,
         return 0;
 }
 
+/* A spline whose segments have their own orders: the segment from point i
+ * has order orders[i], and one of order k interpolates through k + 1 points,
+ * starting at point i or as close after it as the points allow.  Outside the
+ * points, the first or last segment extrapolates. */
+static inline int xtce_pk_spline_orders(double x, const xtce_pk_point* p,
+                                        size_t n, const unsigned* orders,
+                                        bool extrapolate, const char* f,
+                                        xtce_pk_error* err, double* out) {
+        size_t i = 0, k, j, m, q;
+        double y = 0.0;
+        if ((x < p[0].raw || x > p[n - 1].raw) && !extrapolate)
+                return xtce_pk_fail(err, XTCE_PK_CALIBRATION, f, NULL);
+        while (i < n - 2 && x >= p[i + 1].raw) ++i;
+        k = orders[i];
+        if (k == 0) {
+                *out = x >= p[n - 1].raw ? p[n - 1].calibrated
+                                         : p[i].calibrated;
+                return 0;
+        }
+        if (k > n - 1) k = n - 1;
+        j = i < n - 1 - k ? i : n - 1 - k;
+        for (m = j; m <= j + k; ++m) {
+                double t = p[m].calibrated;
+                for (q = j; q <= j + k; ++q)
+                        if (q != m)
+                                t *= (x - p[q].raw) / (p[m].raw - p[q].raw);
+                y += t;
+        }
+        *out = y;
+        return 0;
+}
+
+/* Operators of a MathOperationCalibrator, for xtce_pk_math; +, - and * are
+ * written as plain arithmetic. */
+enum {
+        XTCE_PK_OP_DIV = 0,
+        XTCE_PK_OP_MOD,
+        XTCE_PK_OP_POW,
+        XTCE_PK_OP_REV_POW,
+        XTCE_PK_OP_LN,
+        XTCE_PK_OP_LOG10,
+        XTCE_PK_OP_EXP,
+        XTCE_PK_OP_INV,
+        XTCE_PK_OP_FACTORIAL,
+        XTCE_PK_OP_TAN,
+        XTCE_PK_OP_COS,
+        XTCE_PK_OP_SIN,
+        XTCE_PK_OP_ATAN,
+        XTCE_PK_OP_ATAN2,
+        XTCE_PK_OP_ACOS,
+        XTCE_PK_OP_ASIN,
+        XTCE_PK_OP_TANH,
+        XTCE_PK_OP_COSH,
+        XTCE_PK_OP_SINH,
+        XTCE_PK_OP_ATANH,
+        XTCE_PK_OP_ACOSH,
+        XTCE_PK_OP_ASINH,
+        XTCE_PK_OP_SHL,
+        XTCE_PK_OP_SHR,
+        XTCE_PK_OP_BIT_AND,
+        XTCE_PK_OP_BIT_OR,
+        XTCE_PK_OP_BIT_XOR,
+        XTCE_PK_OP_BIT_NOT,
+        XTCE_PK_OP_AND,
+        XTCE_PK_OP_OR,
+        XTCE_PK_OP_NOT,
+        XTCE_PK_OP_ABS,
+        XTCE_PK_OP_EUCLID_DIV,
+        XTCE_PK_OP_TRUNC,
+        XTCE_PK_OP_GT,
+        XTCE_PK_OP_GE,
+        XTCE_PK_OP_LT,
+        XTCE_PK_OP_LE,
+        XTCE_PK_OP_EQ,
+        XTCE_PK_OP_NE,
+        XTCE_PK_OP_MIN,
+        XTCE_PK_OP_MAX,
+};
+
+/* x truncated to a 64-bit integer into *out; false if it has none. */
+static inline bool xtce_pk_to_i64(double x, int64_t* out) {
+        if (!isfinite(x) || x < -9223372036854775808.0 ||
+            x >= 9223372036854775808.0)
+                return false;
+        *out = (int64_t)trunc(x);
+        return true;
+}
+
+/* The value of a MathOperationCalibrator operator on the operands a and b
+ * (b is ignored by unary operators); identical in every runtime. */
+static inline double xtce_pk_math(int op, double a, double b) {
+        int64_t i, j;
+        double m, r;
+        switch (op) {
+                case XTCE_PK_OP_DIV:
+                        return a / b;
+                case XTCE_PK_OP_MOD:
+                        m = b != 0 && isfinite(a) ? fmod(a, b) : NAN;
+                        if (m != 0 && (m < 0) != (b < 0)) m += b;
+                        return m;
+                case XTCE_PK_OP_EUCLID_DIV:
+                        if (b == 0 || !isfinite(a) || !isfinite(b)) return NAN;
+                        r = fmod(a, b);
+                        if (r < 0) r += fabs(b);
+                        return round((a - r) / b);
+                case XTCE_PK_OP_POW:
+                        return pow(a, b);
+                case XTCE_PK_OP_REV_POW:
+                        return pow(b, a);
+                case XTCE_PK_OP_LN:
+                        return log(a);
+                case XTCE_PK_OP_LOG10:
+                        return log10(a);
+                case XTCE_PK_OP_EXP:
+                        return exp(a);
+                case XTCE_PK_OP_INV:
+                        return 1.0 / a;
+                case XTCE_PK_OP_FACTORIAL: {
+                        double f = 1.0;
+                        unsigned k, n;
+                        if (!(a >= 0) || a != floor(a)) return NAN;
+                        if (a > 170) return HUGE_VAL;
+                        n = (unsigned)a;
+                        for (k = 2; k <= n; ++k) f *= k;
+                        return f;
+                }
+                case XTCE_PK_OP_TAN:
+                        return tan(a);
+                case XTCE_PK_OP_COS:
+                        return cos(a);
+                case XTCE_PK_OP_SIN:
+                        return sin(a);
+                case XTCE_PK_OP_ATAN:
+                        return atan(a);
+                case XTCE_PK_OP_ATAN2:
+                        return atan2(b, a);
+                case XTCE_PK_OP_ACOS:
+                        return acos(a);
+                case XTCE_PK_OP_ASIN:
+                        return asin(a);
+                case XTCE_PK_OP_TANH:
+                        return tanh(a);
+                case XTCE_PK_OP_COSH:
+                        return cosh(a);
+                case XTCE_PK_OP_SINH:
+                        return sinh(a);
+                case XTCE_PK_OP_ATANH:
+                        return atanh(a);
+                case XTCE_PK_OP_ACOSH:
+                        return acosh(a);
+                case XTCE_PK_OP_ASINH:
+                        return asinh(a);
+                case XTCE_PK_OP_ABS:
+                        return fabs(a);
+                case XTCE_PK_OP_TRUNC:
+                        return trunc(a);
+                case XTCE_PK_OP_NOT:
+                        return a == 0 ? 1.0 : 0.0;
+                case XTCE_PK_OP_AND:
+                        return a != 0 && b != 0 ? 1.0 : 0.0;
+                case XTCE_PK_OP_OR:
+                        return a != 0 || b != 0 ? 1.0 : 0.0;
+                case XTCE_PK_OP_GT:
+                        return a > b ? 1.0 : 0.0;
+                case XTCE_PK_OP_GE:
+                        return a >= b ? 1.0 : 0.0;
+                case XTCE_PK_OP_LT:
+                        return a < b ? 1.0 : 0.0;
+                case XTCE_PK_OP_LE:
+                        return a <= b ? 1.0 : 0.0;
+                case XTCE_PK_OP_EQ:
+                        return a == b ? 1.0 : 0.0;
+                case XTCE_PK_OP_NE:
+                        return a != b ? 1.0 : 0.0;
+                case XTCE_PK_OP_MIN:
+                        return b < a ? b : a;
+                case XTCE_PK_OP_MAX:
+                        return b > a ? b : a;
+                case XTCE_PK_OP_BIT_NOT:
+                        return xtce_pk_to_i64(a, &i) ? (double)~i : NAN;
+        }
+        if (!xtce_pk_to_i64(a, &i) || !xtce_pk_to_i64(b, &j)) return NAN;
+        switch (op) {
+                case XTCE_PK_OP_SHL:
+                        if (j < 0 || j > 63) return NAN;
+                        return (double)(int64_t)((uint64_t)i << j);
+                case XTCE_PK_OP_SHR:
+                        if (j < 0 || j > 63) return NAN;
+                        /* Arithmetic: the sign bit fills in. */
+                        return (double)(i < 0 ? ~(~i >> j) : i >> j);
+                case XTCE_PK_OP_BIT_AND:
+                        return (double)(i & j);
+                case XTCE_PK_OP_BIT_OR:
+                        return (double)(i | j);
+                default:
+                        return (double)(i ^ j);
+        }
+}
+
 static inline int xtce_pk_spline_inverse(double y, const xtce_pk_point* p,
                                          size_t n, bool extrapolate,
                                          const char* f, xtce_pk_error* err,

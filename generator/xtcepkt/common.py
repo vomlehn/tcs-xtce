@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import math
+import re
 import textwrap
 
 from xtcegen import CRATE, REPOSITORY
 
-from .model import (BinaryEnc, Criterion, FloatEnc, IntEnc, Node, Polynomial,
-                    Spline, StringEnc, Value, VType)
+from .model import (BinaryEnc, ContextCal, Criterion, FloatEnc, IntEnc, MathOp,
+                    Node, Polynomial, Spline, StringEnc, Value, VType)
 
 # The runtimes' integer encodings.  BCD values are decoded to unsigned ones.
 ENCODINGS = {"unsigned": "Unsigned", "twosComplement": "TwosComplement",
@@ -31,6 +32,61 @@ def int_enc(vt: VType) -> str:
 
 def le(vt: VType) -> bool:
     return bool(getattr(vt.enc, "little_endian", False))
+
+
+class Ref:
+    """Gives the value a size or location uses (``ref(d)`` for a DynSize),
+    and how generated code reaches a Local (``place``), for calibrators and
+    for size code that checks first that the elements it reads are
+    there."""
+
+    def __init__(self, fn, place):
+        self.fn = fn
+        self.place = place
+
+    def __call__(self, d):
+        return self.fn(d)
+
+
+# MathOperationCalibrator operators: the Rust runtime's MathOperator and
+# the C runtime's XTCE_PK_OP_ names.  +, - and * are plain arithmetic.
+MATH_OPS = {"/": "Div", "%": "Mod", "^": "Pow", "y^x": "RevPow", "ln": "Ln",
+            "log": "Log10", "e^x": "Exp", "1/x": "Inv", "x!": "Factorial",
+            "tan": "Tan", "cos": "Cos", "sin": "Sin", "atan": "Atan",
+            "atan2": "Atan2", "acos": "Acos", "asin": "Asin", "tanh": "Tanh",
+            "cosh": "Cosh", "sinh": "Sinh", "atanh": "Atanh", "acosh": "Acosh",
+            "asinh": "Asinh", "<<": "Shl", ">>": "Shr", "&": "BitAnd",
+            "|": "BitOr", "xor": "BitXor", "~": "BitNot", "&&": "And",
+            "||": "Or", "!": "Not", "abs": "Abs", "div": "EuclidDiv",
+            "int": "Trunc", ">": "Gt", ">=": "Ge", "<": "Lt", "<=": "Le",
+            "==": "Eq", "!=": "Ne", "min": "Min", "max": "Max"}
+
+
+def c_op(op: str) -> str:
+    """The C runtime's name of a MathOperationCalibrator operator."""
+    return "XTCE_PK_OP_" + re.sub(r"(?<!^)(?=[A-Z])", "_", MATH_OPS[op]).upper()
+
+
+def leaf_calibrators(cal) -> list:
+    """The polynomials and splines in a calibrator, the cases of a context
+    calibrator first."""
+    if isinstance(cal, ContextCal):
+        out = [x for _, c in cal.cases for x in leaf_calibrators(c)]
+        return out + leaf_calibrators(cal.default)
+    return [cal] if isinstance(cal, (Polynomial, Spline)) else []
+
+
+def math_value(vt: VType, x: str, lang: str) -> str:
+    """Expression converting the value ``x`` of type ``vt`` to a double in
+    ``lang`` ("rust", "c" or "python"), for a MathOperationCalibrator."""
+    k = vt.kind
+    if lang == "rust":
+        return {"float": f"({x})", "enum": f"(({x}).0 as f64)",
+                "bool": f"(if {x} {{ 1.0 }} else {{ 0.0 }})"}.get(
+            k, f"(({x}) as f64)")
+    if lang == "c":
+        return {"bool": f"(({x}) ? 1.0 : 0.0)"}.get(k, f"((double)({x}))")
+    return {"bool": f"(1.0 if {x} else 0.0)"}.get(k, f"float({x})")
 
 
 def fast_order(e) -> bool:
@@ -166,4 +222,5 @@ __all__ = ["Criterion", "FloatEnc", "IntEnc", "Polynomial", "Spline",
            "StringEnc", "criteria_by_node", "field_range", "size_args",
            "header_lines", "flt", "int_enc", "invertible", "le", "raw_is_int",
            "str_cap", "string_spec", "values", "wire_cap", "wire_region",
-           "code_unit", "encode_text", "find_unit", "fast_order"]
+           "code_unit", "encode_text", "find_unit", "fast_order", "Ref",
+           "MATH_OPS", "c_op", "leaf_calibrators", "math_value"]

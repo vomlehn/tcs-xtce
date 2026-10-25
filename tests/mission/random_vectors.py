@@ -258,7 +258,7 @@ def main() -> None:
         if rng.random() < 0.6:
             apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
-                               380, rng.randrange(1 << 11)])
+                               380, 390, 395, 395, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -297,6 +297,19 @@ def main() -> None:
                 data += tally(rng)
             elif apid == 380 and rng.random() < 0.9:
                 data += encodings(rng)
+            elif apid == 390 and rng.random() < 0.9:
+                # A calibration context mode, mostly 1 or 2, and the flag.
+                data += bits([(8, rng.choice([1, 2, 2, rng.randrange(256)])),
+                              (1, rng.randrange(2)),
+                              (16, rng.randrange(1 << 16))])
+            elif apid == 395 and rng.random() < 0.9:
+                # Steps beyond 40 fail without extrapolation, now and then.
+                steps = rng.choice([rng.randrange(41), rng.randrange(256)])
+                data += bits(
+                    [(8, rng.randrange(256)), (8, rng.randrange(4)),
+                     (1, rng.randrange(2))]
+                    + [(8, rng.randrange(256)) for _ in range(3)] + [(8, steps)]
+                    + [(8, rng.randrange(256)) for _ in range(2)])
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
             elif apid == 340 and rng.random() < 0.8:

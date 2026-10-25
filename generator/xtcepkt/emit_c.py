@@ -11,14 +11,15 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .common import (fast_order, field_range, flt, header_lines, int_enc,
-                     invertible, size_args, str_cap, string_spec)
+from .common import (Ref, c_op, fast_order, field_range, flt, header_lines,
+                     int_enc, invertible, leaf_calibrators, math_value,
+                     size_args, str_cap, string_spec)
 from .compile import snake
 from .model import (term_indexes, term_locals, term_paths, walk, Index,
                     AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
-                    DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark,
-                    Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
-                    Value, VType)
+                    ContextCal, DynSize, Criterion, Fixed, FloatEnc, IntEnc,
+                    Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
+                    Spline, StringEnc, Value, VType)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -90,19 +91,6 @@ class Acc:
         self.present = present
 
 
-class Ref:
-    """Gives the value a size or location uses (``ref(d)``), and how code
-    reaches a Local (``place``), so that size code can check first that
-    the elements it reads are there."""
-
-    def __init__(self, fn, place):
-        self.fn = fn
-        self.place = place
-
-    def __call__(self, d: DynSize) -> str:
-        return self.fn(d)
-
-
 class CEmitter:
     def __init__(self, mission: Mission, source: str, prefix: Optional[str]):
         self.m = mission
@@ -111,8 +99,10 @@ class CEmitter:
         self.out: list[str] = []
         # Keyed by id(VType): a parameter type and an argument type may share
         # a qualified name.
-        self.consts: dict[int, str] = {}  # vtype -> constant name
-        self.counts: dict[int, int] = {}  # vtype -> calibrator table length
+        # id of a string type or calibrator -> constant name
+        self.consts: dict[int, str] = {}
+        self.counts: dict[int, int] = {}  # calibrator -> table length
+        self.orders: dict[int, str] = {}  # spline -> its segments' orders
 
     def line(self, s: str = "", depth: int = 0) -> None:
         self.out.append(INDENT * depth + s if s else "")
@@ -231,71 +221,148 @@ class CEmitter:
             self.line(f"}} {name};")
 
     def declare_consts(self) -> None:
-        seen = []
+        strings, cals = [], []
         for vt in self.vtypes():
-            if vt.calibrator is None and not isinstance(vt.enc, StringEnc):
-                continue
-            name = f"{self.p}k{len(self.consts)}"
-            self.consts[id(vt)] = name
-            seen.append((name, vt))
-        if not seen:
+            if isinstance(vt.enc, StringEnc):
+                name = f"{self.p}k{len(self.consts)}"
+                self.consts[id(vt)] = name
+                strings.append((name, vt))
+            for cal in leaf_calibrators(vt.calibrator):
+                if id(cal) not in self.consts:
+                    name = f"{self.p}k{len(self.consts)}"
+                    self.consts[id(cal)] = name
+                    cals.append((name, cal, vt))
+        if not strings and not cals:
             return
         self.line()
-        for name, vt in seen:
-            cal = vt.calibrator
+        for name, cal, vt in cals:
             if isinstance(cal, Polynomial):
                 terms = ", ".join(f"{{{flt(c)}, {e}}}" for c, e in cal.terms)
-                self.counts[id(vt)] = len(cal.terms)
+                self.counts[id(cal)] = len(cal.terms)
                 self.line(f"static const xtce_pk_term {name}[{len(cal.terms)}] "
                           f"= {{{terms}}}; /* {vt.key} */")
-            elif isinstance(cal, Spline):
+            else:
                 pts = ", ".join(f"{{{flt(a)}, {flt(b)}}}"
                                 for a, b in cal.points)
-                self.counts[id(vt)] = len(cal.points)
+                self.counts[id(cal)] = len(cal.points)
                 self.line("static const xtce_pk_point "
                           f"{name}[{len(cal.points)}] = {{{pts}}}; /* {vt.key} "
                           "*/")
-            else:
-                fixed, mx, term, tag = string_spec(vt)
-                lit = (f"(const uint8_t*){cstr(term)}" if term is not None
-                       else "NULL")
-                spec = ", ".join([bool_lit(fixed is not None), str(fixed or 0),
-                                  str(mx), bool_lit(term is not None), lit,
-                                  str(len(term or b"")), str(tag),
-                                  CHARSETS[vt.enc.charset]])
-                self.line(f"static const xtce_pk_string_spec {name} = "
-                          f"{{{spec}}}; /* {vt.key} */")
+                if cal.orders:
+                    self.orders[id(cal)] = f"{name}_orders"
+                    self.line("static const unsigned "
+                              f"{name}_orders[{len(cal.orders)}] = "
+                              f"{{{', '.join(map(str, cal.orders))}}};")
+        for name, vt in strings:
+            fixed, mx, term, tag = string_spec(vt)
+            lit = (f"(const uint8_t*){cstr(term)}" if term is not None
+                   else "NULL")
+            spec = ", ".join([bool_lit(fixed is not None), str(fixed or 0),
+                              str(mx), bool_lit(term is not None), lit,
+                              str(len(term or b"")), str(tag),
+                              CHARSETS[vt.enc.charset]])
+            self.line(f"static const xtce_pk_string_spec {name} = {{{spec}}}; "
+                      f"/* {vt.key} */")
 
-    def table(self, vt: VType) -> str:
-        return f"{self.consts[id(vt)]}, {self.counts[id(vt)]}"
+    def table(self, cal) -> str:
+        return f"{self.consts[id(cal)]}, {self.counts[id(cal)]}"
 
     # -- reading and writing one value --
 
-    def calibrate(self, vt: VType, x: str, dst: str, f: str,
-                  depth: int) -> None:
-        cal = vt.calibrator
+    def calibrate(self, vt: VType, x: str, dst: str, f: str, depth: int,
+                  ref) -> None:
+        """Sets ``dst`` to ``x`` calibrated; ``ref.place`` gives the Acc of
+        a Local the calibrator uses."""
+        self.apply_cal(vt.calibrator, x, dst, f, depth, ref.place, "r->err")
+
+    def uncalibrate(self, vt: VType, y: str, f: str, depth: int, ref) -> None:
+        """Declares ``double y``, the raw value whose calibration is ``y``."""
+        self.line("double y;", depth)
+        self.invert_cal(vt.calibrator, y, "y", f, depth, ref.place)
+
+    def math_expr(self, e: tuple, x: str, place) -> str:
+        """C expression for a MathOperationCalibrator tree; ``x`` is the
+        value being calibrated."""
+        if e[0] == "const":
+            return f"({flt(e[1])})"
+        if e[0] == "raw":
+            return x
+        if e[0] == "value":
+            r = e[1]
+            v = place(r.local).expr
+            for p in r.member:
+                v += f".data[{p.i}]" if isinstance(p, Index) else "." + p
+            return math_value(r.vtype, v, "c")
+        args = [self.math_expr(a, x, place) for a in e[1:]]
+        if e[0] in ("+", "-", "*"):
+            return f"({args[0]} {e[0]} {args[1]})"
+        b = args[1] if len(args) > 1 else "0.0"
+        return f"xtce_pk_math({c_op(e[0])}, {args[0]}, {b})"
+
+    def cases(self, cal: ContextCal, x: str, depth: int, place, err: str,
+              body) -> None:
+        """An if-else chain over a context calibrator's cases, on the value
+        ``x``: ``body(c, x, depth)`` for the calibrator of the first case
+        that holds, or the default."""
+        v = f"c{depth}"
+        self.line("{", depth)
+        self.line(f"double {v} = {x};", depth + 1)
+        refs = [p for terms, _ in cal.cases for t in terms
+                for p in term_paths(t)]
+        self.element_guards(refs, place, err, depth + 1)
+        for k, (terms, c) in enumerate(cal.cases):
+            cond = " && ".join(f"({self.term(t, place)})" for t in terms)
+            keyword = "if" if k == 0 else "} else if"
+            self.line(f"{keyword} ({cond or 'true'}) {{", depth + 1)
+            body(c, v, depth + 2)
+        self.line("} else {", depth + 1)
+        body(cal.default, v, depth + 2)
+        self.line("}", depth + 1)
+        self.line("}", depth)
+
+    def apply_cal(self, cal, x: str, dst: str, f: str, depth: int, place,
+                  err: str) -> None:
         if cal is None:
             self.line(f"{dst} = {x};", depth)
         elif isinstance(cal, Polynomial):
-            self.line(f"{dst} = xtce_pk_polynomial({x}, {self.table(vt)});",
+            self.line(f"{dst} = xtce_pk_polynomial({x}, {self.table(cal)});",
+                      depth)
+        elif isinstance(cal, Spline) and cal.orders:
+            ext = bool_lit(cal.extrapolate)
+            self.line(f"XTCE_PK_TRY(xtce_pk_spline_orders({x}, "
+                      f"{self.table(cal)}, {self.orders[id(cal)]}, {ext}, {f}, "
+                      f"{err}, &{dst}));", depth)
+        elif isinstance(cal, Spline):
+            ext = bool_lit(cal.extrapolate)
+            self.line(f"XTCE_PK_TRY(xtce_pk_spline({x}, {self.table(cal)}, "
+                      f"{cal.order}, {ext}, {f}, {err}, &{dst}));", depth)
+        elif isinstance(cal, MathOp):
+            refs = [(r.local, r.member) for r in cal.refs()]
+            self.element_guards(refs, place, err, depth)
+            self.line(f"{dst} = {self.math_expr(cal.expr, x, place)};", depth)
+        else:
+            self.cases(cal, x, depth, place, err,
+                       lambda c, v, d: self.apply_cal(c, v, dst, f, d, place,
+                                                      err))
+
+    def invert_cal(self, cal, y: str, dst: str, f: str, depth: int,
+                   place) -> None:
+        if cal is None:
+            self.line(f"{dst} = {y};", depth)
+        elif not cal.invertible:
+            self.line("return xtce_pk_fail(w->err, XTCE_PK_NOT_INVERTIBLE, "
+                      f"{f}, NULL);", depth)
+        elif isinstance(cal, Polynomial):
+            self.line(f"{dst} = xtce_pk_polynomial_inverse({y}, "
+                      f"{flt(cal.intercept)}, {flt(cal.slope)});", depth)
+        elif isinstance(cal, Spline):
+            ext = bool_lit(cal.extrapolate)
+            self.line(f"XTCE_PK_TRY(xtce_pk_spline_inverse({y}, "
+                      f"{self.table(cal)}, {ext}, {f}, w->err, &{dst}));",
                       depth)
         else:
-            ext = bool_lit(cal.extrapolate)
-            self.line(f"XTCE_PK_TRY(xtce_pk_spline({x}, {self.table(vt)}, "
-                      f"{cal.order}, {ext}, {f}, r->err, &{dst}));", depth)
-
-    def uncalibrate(self, vt: VType, y: str, f: str, depth: int) -> None:
-        cal = vt.calibrator
-        if cal is None:
-            self.line(f"double y = {y};", depth)
-        elif isinstance(cal, Polynomial):
-            self.line(f"double y = xtce_pk_polynomial_inverse({y}, "
-                      f"{flt(cal.intercept)}, {flt(cal.slope)});", depth)
-        else:
-            ext = bool_lit(cal.extrapolate)
-            self.line("double y;", depth)
-            self.line(f"XTCE_PK_TRY(xtce_pk_spline_inverse({y}, "
-                      f"{self.table(vt)}, {ext}, {f}, w->err, &y));", depth)
+            self.cases(cal, y, depth, place, "w->err",
+                       lambda c, v, d: self.invert_cal(c, v, dst, f, d, place))
 
     def size(self, d, err: str, f: str, ref, depth: int) -> None:
         """Declares ``size_t n``: a count, or the size or count that a value
@@ -397,12 +464,12 @@ class CEmitter:
             if (isinstance(e, FloatEnc) and e.fmt == "IEEE754"
                     and e.bits in (32, 64)):
                 self.calibrate(vt, f"xtce_pk_float_from_raw(raw, {e.bits})",
-                               dst, f, d)
+                               dst, f, d, ref)
             elif isinstance(e, FloatEnc):
                 self.line("double x;", d)
                 self.line(f"XTCE_PK_TRY(xtce_pk_float_decode({FLOATS[e.fmt]}, "
                           f"{e.bits}, hi, raw, {f}, r->err, &x));", d)
-                self.calibrate(vt, "x", dst, f, d)
+                self.calibrate(vt, "x", dst, f, d, ref)
             else:
                 if e.bcd:
                     self.line(f"XTCE_PK_TRY(xtce_pk_bcd_decode(raw, {e.bits}, "
@@ -415,7 +482,7 @@ class CEmitter:
                     self.line("double y, v;", d)
                     self.calibrate(vt,
                                    f"xtce_pk_int_to_double(raw, {e.bits}, "
-                                   f"{enc})", "y", f, d)
+                                   f"{enc})", "y", f, d, ref)
                     self.line(f"XTCE_PK_TRY(xtce_pk_round_to_int(y, {flt(lo)}, "
                               f"{flt(lim)}, {f}, r->err, &v));", d)
                     self.line(f"{dst} = ({self.ctype(vt)})v;", d)
@@ -430,7 +497,7 @@ class CEmitter:
                 else:
                     self.calibrate(vt,
                                    f"xtce_pk_int_to_double(raw, {e.bits}, "
-                                   f"{enc})", dst, f, d)
+                                   f"{enc})", dst, f, d, ref)
             self.line("}", depth)
         elif isinstance(e, BinaryEnc) and vt.kind == "string":
             self.line(f"XTCE_PK_TRY(xtce_pk_read_utf8(r, {e.bits // 8}, {f}, "
@@ -569,7 +636,7 @@ class CEmitter:
         if isinstance(e, FloatEnc):
             self.line("{", depth)
             d = depth + 1
-            self.uncalibrate(vt, x, f, d)
+            self.uncalibrate(vt, x, f, d, ref)
             if e.fmt == "IEEE754" and e.bits in (32, 64):
                 self.line(f"uint64_t raw = xtce_pk_float_to_raw(y, {e.bits});",
                           d)
@@ -586,7 +653,7 @@ class CEmitter:
             d = depth + 1
             self.line("uint64_t raw;", d)
             if vt.kind == "int" and vt.calibrator is not None:
-                self.uncalibrate(vt, f"(double)({x})", f, d)
+                self.uncalibrate(vt, f"(double)({x})", f, d, ref)
                 self.line(f"XTCE_PK_TRY(xtce_pk_double_to_int(y, {bits}, "
                           f"{enc}, {f}, w->err, &raw));", d)
             elif vt.kind == "int" and vt.signed:
@@ -601,7 +668,7 @@ class CEmitter:
             elif vt.kind == "bool":
                 self.line(f"raw = ({x}) ? 1u : 0u;", d)
             else:
-                self.uncalibrate(vt, x, f, d)
+                self.uncalibrate(vt, x, f, d, ref)
                 self.line(f"XTCE_PK_TRY(xtce_pk_double_to_int(y, {bits}, "
                           f"{enc}, {f}, w->err, &raw));", d)
             if e.bcd:

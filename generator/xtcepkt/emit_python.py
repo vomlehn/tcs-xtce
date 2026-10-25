@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from .common import (fast_order, field_range, flt, header_lines, invertible,
-                     size_args, string_spec)
+from .common import (Ref, fast_order, field_range, flt, header_lines,
+                     invertible, math_value, size_args, string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
-                    AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed,
-                    FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad,
-                    Polynomial, Seek, Spline, Value, VType)
+                    AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
+                    DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
+                    Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType)
 
 
 def pstr(s: str) -> str:
@@ -62,24 +62,78 @@ def points(cal: Spline) -> str:
             + ",)")
 
 
-def calibrate(vt: VType, x: str, f: str) -> str:
-    cal = vt.calibrator
+def math_expr(e: tuple, x: str, place) -> str:
+    """Python expression for a MathOperationCalibrator tree; ``x`` is the
+    value being calibrated."""
+    if e[0] == "const":
+        return f"({flt(e[1])})"
+    if e[0] == "raw":
+        return x
+    if e[0] == "value":
+        r = e[1]
+        return math_value(r.vtype,
+                          reach(place(r.local), r.member, pstr(r.local.name)),
+                          "python")
+    args = [math_expr(a, x, place) for a in e[1:]]
+    if e[0] in ("+", "-", "*"):
+        return f"({args[0]} {e[0]} {args[1]})"
+    b = args[1] if len(args) > 1 else "0.0"
+    return f"pk.math_op({e[0]!r}, {args[0]}, {b})"
+
+
+def apply_cal(cal, x: str, f: str, place) -> str:
+    """Expression calibrating ``x`` with ``cal``; ``place`` gives the
+    expression for a Local that the calibrator uses."""
     if cal is None:
         return x
     if isinstance(cal, Polynomial):
         terms = ", ".join(f"({flt(c)}, {e})" for c, e in cal.terms)
         return f"pk.polynomial({x}, ({terms},))"
-    return f"pk.spline({x}, {points(cal)}, {cal.order}, {cal.extrapolate}, {f})"
+    if isinstance(cal, Spline):
+        if cal.orders:
+            return (f"pk.spline_orders({x}, {points(cal)}, {cal.orders!r}, "
+                    f"{cal.extrapolate}, {f})")
+        return (f"pk.spline({x}, {points(cal)}, {cal.order}, "
+                f"{cal.extrapolate}, {f})")
+    if isinstance(cal, MathOp):
+        return f"(lambda x: {math_expr(cal.expr, 'x', place)})({x})"
+    body = choose(cal, lambda c: apply_cal(c, "x", f, place), place)
+    return f"(lambda x: {body})({x})"
 
 
-def uncalibrate(vt: VType, y: str, f: str) -> str:
-    cal = vt.calibrator
+def invert_cal(cal, y: str, f: str, place) -> str:
+    """Expression inverting ``cal`` for the engineering value ``y``; one
+    that can't be inverted raises NotInvertible."""
     if cal is None:
         return y
+    if not cal.invertible:
+        return f"pk.not_invertible({f})"
     if isinstance(cal, Polynomial):
         return (f"pk.polynomial_inverse({y}, {flt(cal.intercept)}, "
                 f"{flt(cal.slope)})")
-    return f"pk.spline_inverse({y}, {points(cal)}, {cal.extrapolate}, {f})"
+    if isinstance(cal, Spline):
+        return f"pk.spline_inverse({y}, {points(cal)}, {cal.extrapolate}, {f})"
+    body = choose(cal, lambda c: invert_cal(c, "y", f, place), place)
+    return f"(lambda y: {body})({y})"
+
+
+def choose(cal: ContextCal, body, place) -> str:
+    """A conditional expression over a context calibrator's cases:
+    ``body(c)`` for the calibrator of the first case that holds, or the
+    default."""
+    out = ""
+    for terms, c in cal.cases:
+        test = " and ".join(f"({term(t, place)})" for t in terms) or "True"
+        out += f"{body(c)} if {test} else "
+    return f"({out}{body(cal.default)})"
+
+
+def calibrate(vt: VType, x: str, f: str, place) -> str:
+    return apply_cal(vt.calibrator, x, f, place)
+
+
+def uncalibrate(vt: VType, y: str, f: str, place) -> str:
+    return invert_cal(vt.calibrator, y, f, place)
 
 
 def source(d: DynSize, place) -> str:
@@ -153,7 +207,7 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         a = f"_a{depth}_"
         sizes = {m.vtype.dyn.member for m in e.members
                  if m.vtype.dyn is not None}
-        inner = lambda d: a + d.member if d.member else ref(d)  # noqa: E731
+        inner = Ref(lambda d: a + d.member if d.member else ref(d), ref.place)
         parts = []
         for m in e.members:
             x = read_expr(m.vtype, f, inner, depth + 1)
@@ -174,7 +228,8 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
                    f"{e.encoding == 'packedBCD'}, {f})")
         enc = int_encoding(e)
         if vt.kind == "int" and vt.calibrator is not None:
-            y = calibrate(vt, f"pk.int_to_float({raw}, {e.bits}, {enc})", f)
+            y = calibrate(vt, f"pk.int_to_float({raw}, {e.bits}, {enc})", f,
+                          ref.place)
             lo, lim = vt.eng_limits
             return f"pk.round_to_int({y}, {flt(lo)}, {flt(lim)}, {f})"
         if vt.kind == "int":
@@ -184,14 +239,16 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
             return f"pk.enum_value({vt.ident}, {v})"
         if vt.kind == "bool":
             return f"{raw} != 0"
-        return calibrate(vt, f"pk.int_to_float({raw}, {e.bits}, {enc})", f)
+        return calibrate(vt, f"pk.int_to_float({raw}, {e.bits}, {enc})", f,
+                         ref.place)
     if isinstance(e, FloatEnc):
         if e.fmt == "IEEE754" and e.bits in (32, 64):
-            return calibrate(
-                vt, f"pk.float_from_raw({raw_read(e, f)}, {e.bits})", f)
+            return calibrate(vt,
+                             f"pk.float_from_raw({raw_read(e, f)}, {e.bits})",
+                             f, ref.place)
         return calibrate(vt,
                          f"pk.float_decode({e.fmt!r}, {e.bits}, "
-                         f"{raw_read(e, f)}, {f})", f)
+                         f"{raw_read(e, f)}, {f})", f, ref.place)
     if isinstance(e, BinaryEnc):
         if e.rest:
             return f"r.bytes(r.rest_bytes({e.bits // 8}, {f}), {f})"
@@ -214,8 +271,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         if vt.kind == "int" and vt.calibrator is not None:
             if not invertible(vt):
                 return f'raise pk.PacketError("NotInvertible", {f})'
-            raw = (f"pk.float_to_int({uncalibrate(vt, f'float({x})', f)}, "
-                   f"{bits}, {enc}, {f})")
+            y = uncalibrate(vt, f"float({x})", f, ref.place)
+            raw = f"pk.float_to_int({y}, {bits}, {enc}, {f})"
         elif vt.kind == "int":
             raw = f"pk.from_signed({x}, {bits}, {enc}, {f})"
         elif vt.kind == "enum":
@@ -225,8 +282,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         else:
             if not invertible(vt):
                 return f'raise pk.PacketError("NotInvertible", {f})'
-            raw = (f"pk.float_to_int({uncalibrate(vt, x, f)}, {bits}, {enc}, "
-                   f"{f})")
+            raw = (f"pk.float_to_int({uncalibrate(vt, x, f, ref.place)}, "
+                   f"{bits}, {enc}, {f})")
         if e.bcd:
             raw = (f"pk.bcd_encode({raw}, {bits}, {e.encoding == 'packedBCD'}, "
                    f"{f})")
@@ -234,7 +291,7 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     if isinstance(e, FloatEnc):
         if not invertible(vt):
             return f'raise pk.PacketError("NotInvertible", {f})'
-        y = uncalibrate(vt, x, f)
+        y = uncalibrate(vt, x, f, ref.place)
         if e.fmt == "IEEE754" and e.bits in (32, 64):
             return raw_write(e, f"pk.float_to_raw({y}, {e.bits})")
         return raw_write(e, f"pk.float_encode({e.fmt!r}, {e.bits}, {y}, {f})")
@@ -464,8 +521,8 @@ class PythonEmitter:
     def write_value(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
         e = vt.enc
         if isinstance(e, AggregateEnc):
-            def inner(d):
-                return f"{x}.{d.member}" if d.member else ref(d)
+            inner = Ref(lambda d: f"{x}.{d.member}" if d.member else ref(d),
+                        ref.place)
             for m in e.members:
                 if m.skip:
                     self.line(f"w.zeros({m.skip})", depth)
@@ -490,14 +547,16 @@ class PythonEmitter:
         else:
             self.line(write_stmt(vt, x, f, ref), depth)
 
-    @staticmethod
-    def read_ref(d: DynSize) -> str:
-        """The value a size or location uses, when decoding."""
-        return source(d, lambda lc: f"v{lc.id}")
+    # The value a size or location uses, and the expression for a Local,
+    # when decoding.
+    read_ref = Ref(lambda d: source(d, lambda lc: f"v{lc.id}"),
+                   lambda lc: f"v{lc.id}")
 
-    def write_ref(self, n: Node, names: dict):
-        """The value a size or location uses, when encoding."""
-        return lambda d: source(d, lambda lc: self.place(n, lc, names))
+    def write_ref(self, n: Node, names: dict) -> Ref:
+        """The value a size or location uses, and the expression for a
+        Local, when encoding."""
+        place = lambda lc: self.place(n, lc, names)  # noqa: E731
+        return Ref(lambda d: source(d, place), place)
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:

@@ -708,6 +708,14 @@ IEEE floats, <tt class="docutils literal">previousEntry</tt> locations, a <tt cl
 code unit in UTF-16 and UTF-32) and 16-bit size tags. Time types become <tt class="docutils literal">float</tt> seconds, with
 <tt class="docutils literal">scale</tt>/<tt class="docutils literal">offset</tt> as a linear calibrator.</p>
 </dd>
+<dt><strong>Calibrators that use other values.</strong></dt>
+<dd>Context calibrators and math operations that read other values of the
+packet are compiled unbound, as part of their type, like sizes from
+other fields. Each packet entry binds a copy to the values decoded
+before it: criteria become terms on those values, and operands
+references to them. Types inside aggregates are shared by every packet
+that uses the aggregate, so a calibrator there can't be bound to one
+packet's values, and the compiler rejects it.</dd>
 <dt><strong>Items.</strong></dt>
 <dd><p class="first">A container's entry list becomes a flat list of items:</p>
 <ul class="simple">
@@ -832,6 +840,21 @@ bit, which rounds identically. <tt class="docutils literal">tests/float_check.sh
 builds to the standards' examples and to each other on 60,000 random
 conversions. No library float conversion is used for these formats, so
 nothing depends on the platform's <tt class="docutils literal">long double</tt>.</li>
+<li><strong>Math operations</strong> are compiled, not interpreted: the compiler turns
+a <tt class="docutils literal">MathOperationCalibrator</tt>'s postfix expression into a tree,
+applying <tt class="docutils literal">swap</tt>, <tt class="docutils literal">drop</tt>, <tt class="docutils literal">dup</tt> and <tt class="docutils literal">over</tt> as it goes, and each
+emitter writes it as an expression. <tt class="docutils literal">+</tt>, <tt class="docutils literal">-</tt> and <tt class="docutils literal">*</tt> are plain
+arithmetic, identical everywhere; every other operator calls the
+runtime's <tt class="docutils literal">math</tt> function, which pins down what the schema leaves
+open (the sign of a modulo, NaN in <tt class="docutils literal">min</tt> and <tt class="docutils literal">max</tt>, out-of-range
+shifts) and what languages do differently (Python raises where C
+returns NaN or infinity, and loses the sign of zero when rounding to an
+integer). The transcendental functions come from the C library in all
+three: Python's <tt class="docutils literal">math</tt> and C call it, and Rust's standard library
+does too, except for <tt class="docutils literal">asinh</tt>, <tt class="docutils literal">acosh</tt> and <tt class="docutils literal">atanh</tt>, which it
+computes itself and which the Rust runtime therefore calls from the C
+library directly. <tt class="docutils literal">tests/float_check.sh</tt> checks every operator on
+special and random operands in all four builds.</li>
 <li><strong>Character sets</strong> are converted by each runtime's own code (Python's
 codecs, Rust's <tt class="docutils literal">char</tt> conversions and C's tables), with the same
 rules for invalid bytes. Windows-1252's five undefined bytes are
