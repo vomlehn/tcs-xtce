@@ -678,6 +678,12 @@ binary value with ``bitOrder="leastSignificantBitFirst"`` must start at
 0: its bytes then read as they do in the usual order, so the emitters and
 runtimes ignore its bit order.
 
+A ``Message`` becomes a node whose base is its container and whose
+criteria are its ``MatchCriteria``, with no items: in the generated code
+it is a derived packet like any other. Its node is kept apart from the
+containers' in the compiler's table, since a message and a container may
+share a name.
+
 A reference's ``instance`` picks among the values with its key in the
 scope, latest first (``instance_of``); a size keeps it in its
 ``DynSize`` until binding. Only values already decoded in the packet can

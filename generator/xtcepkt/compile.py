@@ -409,6 +409,7 @@ class Compiler:
         self.params: dict[Key, tuple] = {}
         self.atypes: dict[Key, tuple] = {}
         self.containers: dict[Key, tuple] = {}
+        self.messages: dict[Key, tuple] = {}
         self.mcs: dict[Key, tuple] = {}
         # CommandContainer -> MetaCommand
         self.mc_containers: dict[Key, Key] = {}
@@ -454,6 +455,9 @@ class Compiler:
                 for ch in md.parameter_set.items:
                     if ch.name == "Parameter":
                         self.params[path + (ch.value.name,)] = (path, ch.value)
+        if tm and tm.message_set:
+            for m in tm.message_set.message:
+                self.messages[path + (m.name,)] = (path, m)
         if tm and tm.container_set:
             for sc in tm.container_set.sequence_container:
                 self.containers[path + (sc.name,)] = (path, sc)
@@ -2062,6 +2066,33 @@ class Compiler:
         local.length = length_adjust(a, local.vtype, f"argument {local.key}")
         return local
 
+    def msg_node(self, key: Key) -> Node:
+        """A Message: the root container it names, chosen by its
+        MatchCriteria, like a container derived from it with no entries of
+        its own."""
+        path, m = self.messages[key]
+        node = Node("tm", qname(key), m.name, False)
+        # Messages are named apart from containers.
+        self.nodes[("message",) + key] = node
+        where = f"message {node.key}"
+        try:
+            ckey = self.resolve(m.container_ref.container_ref, path,
+                                self.containers, "container")
+            base = self.tm_node(ckey)
+            if base.error:
+                raise Unsupported(f"base container {base.key} is not supported")
+            node.base = base
+            node.criteria = self.match(m.match_criteria, path,
+                                       self.scope_of(base), where)
+            if not node.criteria:
+                raise Unsupported(f"{where}: MatchCriteria with no comparisons")
+            base.children.append(node)
+        except Unsupported as e:
+            node.error = str(e)
+            node.base = None
+        self.order.append(node)
+        return node
+
     def tc_node(self, key: Key) -> Node:
         if key in self.nodes:
             n = self.nodes[key]
@@ -2329,6 +2360,8 @@ class Compiler:
             self.tm_node(key)
         for key in self.mcs:
             self.tc_node(key)
+        for key in self.messages:
+            self.msg_node(key)
         # A node whose base failed fails too.  Errors list the root causes
         # only; skipping names every node left out, root causes first.
         # The containers others derive from.

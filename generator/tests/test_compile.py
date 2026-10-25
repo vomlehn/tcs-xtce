@@ -2102,3 +2102,35 @@ class InstanceTests(unittest.TestCase):
                 with self.assertRaises(Unsupported) as cm:
                     compile_xml(self.mission(instance))
                 self.assertIn(why, str(cm.exception))
+
+
+class MessageTests(unittest.TestCase):
+    def mission(self, container: str) -> str:
+        """Root container R with U8 K, and message M picking R when K is 4."""
+        return mission(tm=f"""
+            <ParameterTypeSet>
+              <IntegerParameterType name="U8" signed="false">
+              <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+            </ParameterTypeSet>
+            <ParameterSet><Parameter name="K" parameterTypeRef="U8"/>
+            </ParameterSet>
+            <ContainerSet><SequenceContainer name="R"><EntryList>
+              <ParameterRefEntry parameterRef="K"/></EntryList>
+            </SequenceContainer></ContainerSet>
+            <MessageSet><Message name="M"><MatchCriteria>
+              <Comparison parameterRef="K" value="4"/></MatchCriteria>
+              <ContainerRef containerRef="{container}"/></Message>
+            </MessageSet>""")
+
+    def test_message(self):
+        m = compile_xml(self.mission("R"))
+        r, msg = m.nodes
+        self.assertEqual((msg.key, msg.base), ("/Sat/M", r))
+        self.assertEqual(msg.fixed, {r.fields[0][1]: 4})
+        self.assertEqual(msg.fields, [])
+        self.assertEqual([k.members for k in m.kinds], [[r, msg]])
+
+    def test_unknown_container(self):
+        m = compile_xml(self.mission("Q"), skip_unsupported=True)
+        self.assertEqual([n.name for n in m.nodes], ["R"])
+        self.assertIn("unresolved container reference 'Q'", m.skipped[0])

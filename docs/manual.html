@@ -2236,6 +2236,13 @@ again by their <tt class="docutils literal">dwell</tt> aliases, as <tt class="do
 <tt class="docutils literal">dwell_volt2</tt>. Without an <tt class="docutils literal">aliasNameSpace</tt>, an integer or string
 selector is not supported, since the parameters it may name can't be
 known.</dd>
+<dt>Messages</dt>
+<dd>A <tt class="docutils literal">MessageSet</tt>'s <tt class="docutils literal">Message</tt> picks out its container by its
+<tt class="docutils literal">MatchCriteria</tt>. It is generated as a packet derived from that
+container with no entries of its own, so decoding the container's kind
+gives the message when its criteria hold, and <tt class="docutils literal">==</tt> comparisons fix
+their values when encoding. The demo's <tt class="docutils literal">PulseStart</tt> and
+<tt class="docutils literal">PulseStop</tt> are <tt class="docutils literal">Pulse</tt> packets of two kinds.</dd>
 <dt>Instances</dt>
 <dd>A <tt class="docutils literal">ParameterInstanceRef</tt> (in a criterion, a size, a location or a
 calibrator) names the value of a parameter decoded last before it, its

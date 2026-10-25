@@ -167,5 +167,8 @@ Pairs{seq_count=5, pair=[{pair_a=1, pair_b=515}, {pair_a=4, pair_b=1286}]} | 112
 error:BadSize | -
 History{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, hist_val=2, hist_prev=119, hist_data=0x0102030405} | 09eac02a00070502770102030405
 History{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, hist_val=9, hist_prev=none, hist_data=0xaa} | 09eac02a00020109aa
+PulseStart{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, pulse_value=4660} | 09f4c02a0002011234
+PulseStop{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, pulse_value=43981} | 09f4c02a000202abcd
+Pulse{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, pulse_kind=3, pulse_value=1} | 09f4c02a0002030001
 Arm{seq_count=5, force=true, level=7} | 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50
 Arm{seq_count=5, force=false, level=none} | 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50

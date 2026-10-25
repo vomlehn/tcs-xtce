@@ -167,5 +167,8 @@ tc 112ec00500071002010203040506  # pairs: (1, 0x0203) and (4, 0x0506)
 tc 112ec005000110050102030405060708090a0b0c0d0e0f  # pairs, a count beyond its range
 tm 09eac02a00070502770102030405  # history: 5 then 2, so HistPrev, and 5 bytes
 tm 09eac02a00020109aa  # history: 1 then 9, no HistPrev, 1 byte
+tm 09f4c02a0002011234  # pulse: the message PulseStart
+tm 09f4c02a000202abcd  # pulse: the message PulseStop
+tm 09f4c02a0002030001  # pulse: a kind that no message picks
 tc 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: forced, level 7
 tc 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: not forced, so no level

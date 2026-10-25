@@ -1030,6 +1030,11 @@ conditional block whose size isn't a whole number of bytes). A string or
 binary value with <tt class="docutils literal"><span class="pre">bitOrder=&quot;leastSignificantBitFirst&quot;</span></tt> must start at
 0: its bytes then read as they do in the usual order, so the emitters and
 runtimes ignore its bit order.</p>
+<p>A <tt class="docutils literal">Message</tt> becomes a node whose base is its container and whose
+criteria are its <tt class="docutils literal">MatchCriteria</tt>, with no items: in the generated code
+it is a derived packet like any other. Its node is kept apart from the
+containers' in the compiler's table, since a message and a container may
+share a name.</p>
 <p>A reference's <tt class="docutils literal">instance</tt> picks among the values with its key in the
 scope, latest first (<tt class="docutils literal">instance_of</tt>); a size keeps it in its
 <tt class="docutils literal">DynSize</tt> until binding. Only values already decoded in the packet can

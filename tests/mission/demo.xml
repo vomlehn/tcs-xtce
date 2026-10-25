@@ -1018,6 +1018,8 @@
       <Parameter name="HistVal" parameterTypeRef="U8"/>
       <Parameter name="HistPrev" parameterTypeRef="U8"/>
       <Parameter name="HistData" parameterTypeRef="HistDataType"/>
+      <Parameter name="PulseKind" parameterTypeRef="U8"/>
+      <Parameter name="PulseValue" parameterTypeRef="U16"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1779,7 +1781,34 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <!-- The messages PulseStart and PulseStop pick out two kinds of
+           Pulse; other kinds are plain Pulse packets. -->
+      <SequenceContainer name="Pulse">
+        <EntryList>
+          <ParameterRefEntry parameterRef="PulseKind"/>
+          <ParameterRefEntry parameterRef="PulseValue"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="500"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
     </ContainerSet>
+    <MessageSet>
+      <Message name="PulseStart">
+        <MatchCriteria>
+          <Comparison parameterRef="PulseKind" value="1"/>
+        </MatchCriteria>
+        <ContainerRef containerRef="Pulse"/>
+      </Message>
+      <Message name="PulseStop">
+        <MatchCriteria>
+          <Comparison parameterRef="PulseKind" value="2"/>
+        </MatchCriteria>
+        <ContainerRef containerRef="Pulse"/>
+      </Message>
+    </MessageSet>
   </TelemetryMetaData>
   <CommandMetaData>
     <ParameterTypeSet>

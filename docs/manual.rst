@@ -1811,6 +1811,14 @@ Indirect entries
    selector is not supported, since the parameters it may name can't be
    known.
 
+Messages
+   A ``MessageSet``'s ``Message`` picks out its container by its
+   ``MatchCriteria``. It is generated as a packet derived from that
+   container with no entries of its own, so decoding the container's kind
+   gives the message when its criteria hold, and ``==`` comparisons fix
+   their values when encoding. The demo's ``PulseStart`` and
+   ``PulseStop`` are ``Pulse`` packets of two kinds.
+
 Instances
    A ``ParameterInstanceRef`` (in a criterion, a size, a location or a
    calibrator) names the value of a parameter decoded last before it, its
