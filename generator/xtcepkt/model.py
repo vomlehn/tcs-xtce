@@ -142,6 +142,8 @@ class ArrayEnc:
     # (empty otherwise): what element references and subsets index.
     starts: tuple = (0,)
     shape: tuple = ()
+    # Each dimension's size, None for the one another value gives.
+    sizes: tuple = ()
 
     @property
     def max_count(self) -> int:
@@ -152,10 +154,12 @@ class ArrayEnc:
 @dataclass(frozen=True)
 class Index:
     """A step into element ``i`` of a one-dimensional array of ``count``
-    elements, in a reference such as ``P[2]``."""
+    elements, in a reference such as ``P[2]``.  ``count`` is None when
+    another value gives it: the element may then be missing, which reading
+    it reports."""
 
     i: int
-    count: int
+    count: Optional[int]
 
 
 def ref_text(name: str, steps) -> str:
@@ -452,9 +456,20 @@ def term_indexes(t) -> list:
         for lc, path in ((t.local, t.path), (t.other, t.other_path)):
             if lc is not None:
                 out += [(lc, path[:k], s.count) for k, s in enumerate(path)
-                        if isinstance(s, Index)]
+                        if isinstance(s, Index) and s.count is not None]
         return out
     return [x for u in t.terms for x in term_indexes(u)]
+
+
+def term_paths(t) -> list:
+    """(local, path) for every value a term reads, with the member and
+    element steps into it."""
+    if isinstance(t, Criterion):
+        out = [(t.local, t.path)]
+        if t.other is not None:
+            out.append((t.other, t.other_path))
+        return out
+    return [x for u in t.terms for x in term_paths(u)]
 
 
 # A criterion, or a tree of them.  Lists of terms hold when all of them do.

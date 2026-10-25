@@ -1235,23 +1235,26 @@ uses its own member: in the demo, each <tt class="docutils literal">BatchType</t
 a <tt class="docutils literal">Size</tt> that counts its <tt class="docutils literal">Values</tt>. The member's name wins over a
 parameter or argument with the same name, and other references from
 inside an aggregate are not supported.</p>
-<p>When the referenced value does nothing but count an array or give the
-size of a binary value, encoding computes it from that data's length,
-and it is not a field of the generated struct. In the demo,
+<p>When the referenced value counts an array or gives the size of a binary
+value, encoding computes it from that data's length, and it is not a
+field of the generated struct. Criteria, locations and lookups may read
+it too: encoding computes it first, and they read the computed value. In the demo,
 <tt class="docutils literal">SampleCount</tt>, <tt class="docutils literal">PayloadSize</tt>, <tt class="docutils literal">TargetCount</tt>, <tt class="docutils literal">LogCount</tt>,
 <tt class="docutils literal">BatchCount</tt>, <tt class="docutils literal">WordCount</tt> and <tt class="docutils literal">Fill</tt>'s <tt class="docutils literal">Last</tt> are computed this
 way: set <tt class="docutils literal">Readings</tt> to three values and <tt class="docutils literal">SampleCount</tt> is written as
-3. The value must be an integer without a calibrator, outside any
+3. In the demo, <tt class="docutils literal">Tally</tt>'s <tt class="docutils literal">TallyCount</tt> counts <tt class="docutils literal">Tallies</tt> and also
+decides whether <tt class="docutils literal">TallyMore</tt> is included, and it is computed all the
+same. The value must be an integer without a calibrator, outside any
 <tt class="docutils literal">IncludeCondition</tt>, and it must give the size of a whole field (not a
 member, element or part of one) that is also outside any
 <tt class="docutils literal">IncludeCondition</tt>. Encoding fails with <tt class="docutils literal">BadSize</tt> if no value of the
 field gives the data's length, or if that length is above the field's
 bound (below), and with <tt class="docutils literal">OutOfRange</tt> if the value doesn't fit the
 field.</p>
-<p>Otherwise the referenced value stays an ordinary field: when it is also
-compared by a criterion, gives a location, picks a
-<tt class="docutils literal">DiscreteLookupList</tt> value or sizes a string, or when it is an
-aggregate member such as <tt class="docutils literal">RouteHdr.Count</tt>. Encoding then computes the
+<p>Otherwise the referenced value stays an ordinary field: when it also
+sizes a string, gives the size of a member or element, or sizes a value
+that may be absent, or when it is an aggregate member such as
+<tt class="docutils literal">RouteHdr.Count</tt>. Encoding then computes the
 size or count from the field and fails with <tt class="docutils literal">BadSize</tt> if the data
 doesn't match: set both. When decoding, a size or count that is
 negative, not whole, not a whole number of bytes (for sizes in bits of
@@ -1650,16 +1653,25 @@ Criteria, lookups and sizes can refer to a member with XTCE's dot
 syntax (<tt class="docutils literal"><span class="pre">parameterRef=&quot;RouteHdr.Count&quot;</span></tt>, also nested, as in
 <tt class="docutils literal">P.a.b</tt>, and in <tt class="docutils literal">argumentRef</tt>), but not to a whole aggregate.</dd>
 <dt>Array elements</dt>
-<dd>Criteria, lookups and sizes can refer to an element with XTCE's
+<dd><p class="first">Criteria, lookups and sizes can refer to an element with XTCE's
 bracket syntax, mixed with members (<tt class="docutils literal"><span class="pre">Probes[1].Gains[0]</span></tt>), with
-one index per dimension (<tt class="docutils literal"><span class="pre">Matrix[1][2]</span></tt>). Every dimension of the
-array must have a fixed size, and each index must be within its
-dimension, counting from its <tt class="docutils literal">StartingIndex</tt>; for a subset, the
+one index per dimension (<tt class="docutils literal"><span class="pre">Matrix[1][2]</span></tt>). Each index must be within
+its dimension, counting from its <tt class="docutils literal">StartingIndex</tt>; for a subset, the
 indexes are the full array's, and must fall inside the subset. When encoding, criteria are checked before any field is
 written, so arrays they index are first checked to have their count,
 and encoding fails with <tt class="docutils literal">BadSize</tt> (naming the field) otherwise. In
 the demo, <tt class="docutils literal">ProbeOne</tt> and <tt class="docutils literal">ProbeOther</tt> are chosen by
-<tt class="docutils literal"><span class="pre">Probes[0].Id</span></tt>, and <tt class="docutils literal">ProbeData</tt> is sized by <tt class="docutils literal"><span class="pre">Probes[1].Gains[0]</span></tt>.</dd>
+<tt class="docutils literal"><span class="pre">Probes[0].Id</span></tt>, and <tt class="docutils literal">ProbeData</tt> is sized by <tt class="docutils literal"><span class="pre">Probes[1].Gains[0]</span></tt>.</p>
+<p class="last">The array's count may come from another value in its first dimension
+(the only one, for a one-dimensional array), but not in a later one,
+which would move every element after the first row. Whether the
+element is there is then known only from the packet: decoding and
+encoding fail with <tt class="docutils literal">BadSize</tt>, naming the array, when it isn't, at
+the point where the criterion or size that reads it is evaluated. In
+the demo, <tt class="docutils literal">Tally</tt>'s <tt class="docutils literal">TallyData</tt> is sized by <tt class="docutils literal">Tallies[0]</tt> and its
+<tt class="docutils literal">TallyExtra</tt> is included when <tt class="docutils literal">Tallies[1]</tt> is 7, so a <tt class="docutils literal">Tally</tt> with
+one tally fails, and one with none fails sooner.</p>
+</dd>
 <dt>Arrays</dt>
 <dd>Elements of any supported type except arrays and values whose size
 another field gives. Each dimension's <tt class="docutils literal">StartingIndex</tt> is a
@@ -1813,7 +1825,8 @@ select the command when decoding.</dd>
 and unqualified names. An unqualified name is looked up in the
 current SpaceSystem, then in each enclosing one.</dd>
 <dt>Not supported</dt>
-<dd>references to elements of arrays whose count varies, arrays of arrays, <tt class="docutils literal">IndirectParameterRefEntry</tt>, stream and segment entries,
+<dd>references to elements of arrays whose count varies in a dimension
+other than the first, arrays of arrays, <tt class="docutils literal">IndirectParameterRefEntry</tt>, stream and segment entries,
 <tt class="docutils literal">RepeatEntry</tt> offsets that other values give, other instances than 0,
 <tt class="docutils literal">CustomAlgorithm</tt> criteria, <tt class="docutils literal">NextContainer</tt>, a container
 <tt class="docutils literal">BinaryEncoding</tt> on command containers, with a size from a

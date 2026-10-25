@@ -775,13 +775,16 @@ a ``Size`` that counts its ``Values``. The member's name wins over a
 parameter or argument with the same name, and other references from
 inside an aggregate are not supported.
 
-When the referenced value does nothing but count an array or give the
-size of a binary value, encoding computes it from that data's length,
-and it is not a field of the generated struct. In the demo,
+When the referenced value counts an array or gives the size of a binary
+value, encoding computes it from that data's length, and it is not a
+field of the generated struct. Criteria, locations and lookups may read
+it too: encoding computes it first, and they read the computed value. In the demo,
 ``SampleCount``, ``PayloadSize``, ``TargetCount``, ``LogCount``,
 ``BatchCount``, ``WordCount`` and ``Fill``'s ``Last`` are computed this
 way: set ``Readings`` to three values and ``SampleCount`` is written as
-3. The value must be an integer without a calibrator, outside any
+3. In the demo, ``Tally``'s ``TallyCount`` counts ``Tallies`` and also
+decides whether ``TallyMore`` is included, and it is computed all the
+same. The value must be an integer without a calibrator, outside any
 ``IncludeCondition``, and it must give the size of a whole field (not a
 member, element or part of one) that is also outside any
 ``IncludeCondition``. Encoding fails with ``BadSize`` if no value of the
@@ -789,10 +792,10 @@ field gives the data's length, or if that length is above the field's
 bound (below), and with ``OutOfRange`` if the value doesn't fit the
 field.
 
-Otherwise the referenced value stays an ordinary field: when it is also
-compared by a criterion, gives a location, picks a
-``DiscreteLookupList`` value or sizes a string, or when it is an
-aggregate member such as ``RouteHdr.Count``. Encoding then computes the
+Otherwise the referenced value stays an ordinary field: when it also
+sizes a string, gives the size of a member or element, or sizes a value
+that may be absent, or when it is an aggregate member such as
+``RouteHdr.Count``. Encoding then computes the
 size or count from the field and fails with ``BadSize`` if the data
 doesn't match: set both. When decoding, a size or count that is
 negative, not whole, not a whole number of bytes (for sizes in bits of
@@ -1199,14 +1202,23 @@ Aggregates
 Array elements
    Criteria, lookups and sizes can refer to an element with XTCE's
    bracket syntax, mixed with members (``Probes[1].Gains[0]``), with
-   one index per dimension (``Matrix[1][2]``). Every dimension of the
-   array must have a fixed size, and each index must be within its
-   dimension, counting from its ``StartingIndex``; for a subset, the
+   one index per dimension (``Matrix[1][2]``). Each index must be within
+   its dimension, counting from its ``StartingIndex``; for a subset, the
    indexes are the full array's, and must fall inside the subset. When encoding, criteria are checked before any field is
    written, so arrays they index are first checked to have their count,
    and encoding fails with ``BadSize`` (naming the field) otherwise. In
    the demo, ``ProbeOne`` and ``ProbeOther`` are chosen by
    ``Probes[0].Id``, and ``ProbeData`` is sized by ``Probes[1].Gains[0]``.
+
+   The array's count may come from another value in its first dimension
+   (the only one, for a one-dimensional array), but not in a later one,
+   which would move every element after the first row. Whether the
+   element is there is then known only from the packet: decoding and
+   encoding fail with ``BadSize``, naming the array, when it isn't, at
+   the point where the criterion or size that reads it is evaluated. In
+   the demo, ``Tally``'s ``TallyData`` is sized by ``Tallies[0]`` and its
+   ``TallyExtra`` is included when ``Tallies[1]`` is 7, so a ``Tally`` with
+   one tally fails, and one with none fails sooner.
 
 Arrays
    Elements of any supported type except arrays and values whose size
@@ -1377,7 +1389,8 @@ Name references
    current SpaceSystem, then in each enclosing one.
 
 Not supported
-   references to elements of arrays whose count varies, arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
+   references to elements of arrays whose count varies in a dimension
+   other than the first, arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
    ``RepeatEntry`` offsets that other values give, other instances than 0,
    ``CustomAlgorithm`` criteria, ``NextContainer``, a container
    ``BinaryEncoding`` on command containers, with a size from a

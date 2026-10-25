@@ -1016,20 +1016,30 @@ version-tolerant reading mode or one binding per schema version.</li>
 <li>Facet and <tt class="docutils literal">xs:key</tt> constraints are left to <tt class="docutils literal">xmllint</tt>.</li>
 </ul>
 </li>
-<li><p class="first"><strong>Packet codecs</strong> — the main missing XTCE features are:</p>
-<ul class="simple">
-<li>references to elements of arrays whose count varies.</li>
-</ul>
-<p>The model has room for each of these: new <tt class="docutils literal">Item</tt> kinds, and
-<tt class="docutils literal">VType</tt> kinds for structured values, as arrays have.</p>
+<li><p class="first"><strong>Packet codecs</strong> — the constructs the manual lists under &quot;Not
+supported&quot; are still missing; among them, references to elements of
+arrays whose count varies in a dimension other than the first, which
+would need the flattened index computed at run time. The model has
+room for them: new <tt class="docutils literal">Item</tt> kinds, and <tt class="docutils literal">VType</tt> kinds for structured
+values, as arrays have.</p>
+<p>A reference to an element of an array whose count varies (in its
+first dimension) can't be checked when the code is generated, as one
+to a fixed-size array is: the element may be missing. Rust and Python
+read it through <tt class="docutils literal">element()</tt>, which fails with <tt class="docutils literal">BadSize</tt>; C, which
+has no way to leave an expression early, checks with
+<tt class="docutils literal">xtce_pk_element()</tt> before each statement that reads it.</p>
 <p>Error detection (<tt class="docutils literal">ErrorDetectCorrect</tt>: CRCs and checksums) is left
 out on purpose: the packets travel over a link that already detects
 errors. Documents that use it are reported as unsupported.</p>
 </li>
 <li><p class="first"><strong>Computed fields:</strong> packet length fields are computed when the
-document marks them, and sizes and counts when nothing else uses the
-field that gives them. A size or count with other uses is still set by
-the application, which must make it agree with the data.</p>
+document marks them, and sizes and counts when what they size is a
+whole value that is always present; criteria, locations and lookups
+that read them see the computed value. A size or count that also sizes
+a string, a member or an element, or a value that may be absent, is
+still set by the application, which must make it agree with the data:
+a string's size can't be worked out from its content, and a member's
+field is part of an aggregate the application builds.</p>
 </li>
 </ul>
 </div>

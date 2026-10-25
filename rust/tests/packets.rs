@@ -636,6 +636,54 @@ fn references_to_array_elements() {
 }
 
 #[test]
+fn elements_of_arrays_whose_count_varies() {
+    let t = Tally {
+        sec_hdr_flag: true,
+        tallies: vec![2, 7],
+        tally_data: vec![0xab, 0xcd],
+        tally_extra: Some(0x55),
+        ..Default::default()
+    };
+    let b = t.to_bytes().unwrap();
+    assert_eq!(&b[6..], &[0x02, 0x02, 0x07, 0xab, 0xcd, 0x55]);
+    assert_eq!(Tally::decode(&b).unwrap(), t);
+    // Tallies[1] == 7 includes the extra, so with one tally the element it
+    // reads is missing.
+    let bad = Err(PacketError::BadSize { field: "Tallies" });
+    let mut e = t.clone();
+    e.tallies = vec![0];
+    e.tally_data.clear();
+    assert_eq!(e.to_bytes(), bad);
+    // Tallies[0] sizes the data, so without tallies it is missing too.
+    e.tallies.clear();
+    assert_eq!(e.to_bytes(), bad);
+    // TallyCount is computed from the length of Tallies, and TallyCount >= 3
+    // includes TallyMore.
+    let three = Tally {
+        sec_hdr_flag: true,
+        tallies: vec![0, 7, 1],
+        tally_extra: Some(0x55),
+        tally_more: Some(0x66),
+        ..Default::default()
+    };
+    let b = three.to_bytes().unwrap();
+    assert_eq!(&b[6..], &[0x03, 0x00, 0x07, 0x01, 0x55, 0x66]);
+    assert_eq!(Tally::decode(&b).unwrap(), three);
+    let mut e = three.clone();
+    e.tally_more = None;
+    assert_eq!(
+        e.to_bytes(),
+        Err(PacketError::Missing { field: "TallyMore" })
+    );
+    // Decoding fails the same way.
+    let one = [0x09, 0x72, 0xc0, 0x2a, 0x00, 0x01, 0x01, 0x00];
+    let none = [0x09, 0x72, 0xc0, 0x2a, 0x00, 0x00, 0x00];
+    let missing = Some(PacketError::BadSize { field: "Tallies" });
+    assert_eq!(Tally::decode(&one).err(), missing);
+    assert_eq!(Tally::decode(&none).err(), missing);
+}
+
+#[test]
 fn array_subsets() {
     // Rows 1..2 and columns 1..2 of the 3x4 Matrix; Matrix[1][2] is the
     // second of them.

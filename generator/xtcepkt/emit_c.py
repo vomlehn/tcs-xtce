@@ -14,10 +14,11 @@ from typing import Optional
 from .common import (field_range, flt, header_lines, int_enc, invertible, le,
                      size_args, str_cap, string_spec)
 from .compile import snake
-from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
-                    AnyOf, ArrayEnc, BinaryEnc, Cond, DynSize, Criterion, Fixed,
-                    FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad,
-                    Polynomial, Seek, Spline, StringEnc, Value, VType)
+from .model import (term_indexes, term_locals, term_paths, walk, Index,
+                    AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
+                    DynSize, Criterion, Fixed, FloatEnc, IntEnc, Kind, Mark,
+                    Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
+                    Value, VType)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -80,6 +81,19 @@ class Acc:
     def __init__(self, expr: str, present: Optional[str] = None):
         self.expr = expr
         self.present = present
+
+
+class Ref:
+    """Gives the value a size or location uses (``ref(d)``), and how code
+    reaches a Local (``place``), so that size code can check first that
+    the elements it reads are there."""
+
+    def __init__(self, fn, place):
+        self.fn = fn
+        self.place = place
+
+    def __call__(self, d: DynSize) -> str:
+        return self.fn(d)
 
 
 class CEmitter:
@@ -286,6 +300,11 @@ class CEmitter:
         if not isinstance(d, DynSize):
             self.line(f"size_t n = {d};", depth)
             return
+        if d.member is None:
+            refs = ([(d.local, d.path)] if d.lookup is None
+                    else [p for criteria, _ in d.lookup for c in criteria
+                          for p in term_paths(c)])
+            self.element_guards(refs, ref.place, err, depth)
         self.line("size_t n;", depth)
         x = f"(double)({ref(d)})"
         args = (f"{x}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, "
@@ -293,6 +312,23 @@ class CEmitter:
         self.line(f"XTCE_PK_TRY(xtce_pk_dynamic_size({args}));", depth)
         if d.factor != 1:
             self.line(f"n *= {d.factor};", depth)
+
+    def element_guards(self, refs, place, err: str, depth: int) -> None:
+        """Checks that the elements of arrays whose count varies that
+        ``refs`` (local and path pairs) read are there.  ``place`` gives the
+        Acc of a Local."""
+        done = set()
+        for lc, path in refs:
+            x = place(lc).expr
+            for p in path:
+                if not isinstance(p, Index):
+                    x += "." + p
+                    continue
+                if p.count is None and (x, p.i) not in done:
+                    done.add((x, p.i))
+                    self.line(f"XTCE_PK_TRY(xtce_pk_element({x}.len, {p.i}, "
+                              f"{cstr(lc.name)}, {err}));", depth)
+                x += f".data[{p.i}]"
 
     def string_spec(self, vt: VType, err: str, f: str, ref, depth: int) -> str:
         """The address of the spec of a string type, declaring a sized copy
@@ -310,8 +346,8 @@ class CEmitter:
         gives a size or count."""
         e = vt.enc
         if isinstance(e, AggregateEnc):
-            def inner(d):
-                return f"{dst}.{d.member}" if d.member else ref(d)
+            inner = Ref(lambda d: f"{dst}.{d.member}" if d.member
+                        else ref(d), ref.place)
             for m in e.members:
                 if m.skip:
                     self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {m.skip}, "
@@ -424,8 +460,8 @@ class CEmitter:
         e = vt.enc
         bad = f"return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, {f}, NULL);"
         if isinstance(e, AggregateEnc):
-            def inner(d):
-                return f"{x}.{d.member}" if d.member else ref(d)
+            inner = Ref(lambda d: f"{x}.{d.member}" if d.member else ref(d),
+                        ref.place)
             for m in e.members:
                 if m.skip:
                     self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {m.skip}));",
@@ -761,14 +797,17 @@ class CEmitter:
             x = f"({cond}) ? {slit(v)} : {x}"
         return f"({x})"
 
-    def read_ref(self, d: DynSize) -> str:
+    @property
+    def read_ref(self) -> Ref:
         """The value a size or location uses, when decoding."""
-        return self.size_source(d, lambda lc: Acc(f"v{lc.id}"))
+        return Ref(lambda d: self.size_source(d, self.read_acc),
+                   self.read_acc)
 
-    def write_ref(self, n: Node, names: dict):
+    def write_ref(self, n: Node, names: dict) -> Ref:
         """The value a size or location uses, when encoding."""
-        return lambda d: self.size_source(d,
-                                          lambda lc: self.place(n, lc, names))
+        def place(lc):
+            return self.place(n, lc, names)
+        return Ref(lambda d: self.size_source(d, place), place)
 
     def seek(self, it: Seek, side: str, ref, where: str, depth: int) -> None:
         """A Seek, by the reader (``side`` "read") or writer ("write")."""
@@ -818,6 +857,9 @@ class CEmitter:
                         if isinstance(v, Value):
                             self.line(f"bool h{v.local.id} = false;", depth)
                             self.local(v.local.vtype, f"v{v.local.id}", depth)
+                self.element_guards([p for c in it.criteria
+                                     for p in term_paths(c)], self.read_acc,
+                                    "r->err", depth)
                 cond = " && ".join(f"({self.term(c, self.read_acc)})"
                                    for c in it.criteria)
                 self.line(f"if ({cond}) {{", depth)
@@ -854,6 +896,10 @@ class CEmitter:
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {it.bits}));",
                           depth)
             elif isinstance(it, Cond):
+                self.element_guards([p for c in it.criteria
+                                     for p in term_paths(c)],
+                                    lambda lc: self.place(n, lc, names),
+                                    "w->err", depth)
                 cond = " && ".join(
                     f"({self.term(c, lambda lc: self.place(n, lc, names))})"
                     for c in it.criteria)
@@ -923,6 +969,7 @@ class CEmitter:
         self.line("(void)out;", 1)
         for node in n.chain():
             for c in node.criteria:
+                self.element_guards(term_paths(c), self.read_acc, "r->err", 1)
                 self.line(f"if (!({self.term(c, self.read_acc)})) {{", 1)
                 self.line("return xtce_pk_fail(err, XTCE_PK_MISMATCH, "
                           f"{cstr(node.key)}, {cstr(c.text)});", 2)
@@ -955,6 +1002,11 @@ class CEmitter:
                           "NULL);", 1)
             self.line(f"{self.ctype(lc.vtype)} d{lc.id} = "
                       f"({self.ctype(lc.vtype)}){s};", 1)
+        for node in n.chain():
+            for c in node.criteria:
+                self.element_guards(term_paths(c),
+                                    lambda lc: self.place(n, lc, names),
+                                    "w->err", 1)
         guards = {}
         for node in n.chain():
             for c in node.criteria:
@@ -1098,6 +1150,9 @@ class CEmitter:
         for c in n.children:
             if c.error:
                 continue
+            self.element_guards([p for x in c.criteria
+                                 for p in term_paths(x)], self.read_acc,
+                                "r->err", depth)
             conds = [self.term(x, self.read_acc) for x in c.criteria]
             cond = (" && ".join(f"({x})" for x in conds) if len(conds) > 1
                     else (conds or ["1"])[0])

@@ -722,6 +722,14 @@ static inline int xtce_pk_spline_inverse(double y, const xtce_pk_point* p,
 /* --- sizes from other fields
  * ---------------------------------------------------------- */
 
+/* Checks that an array whose count another field gives, and that has `len`
+ * elements, has element `i`.  Fails with XTCE_PK_BAD_SIZE, naming `f`, if it
+ * doesn't. */
+static inline int xtce_pk_element(size_t len, size_t i, const char* f,
+                                  xtce_pk_error* err) {
+        return i < len ? 0 : xtce_pk_fail(err, XTCE_PK_BAD_SIZE, f, NULL);
+}
+
 /* A size or count that another field gives (an XTCE DynamicValue):
  * (slope * x + intercept) / unit, where x is that field's value and unit is 8
  * for a size in bits used in whole bytes.  Fails with XTCE_PK_BAD_SIZE unless

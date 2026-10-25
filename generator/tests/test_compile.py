@@ -921,21 +921,32 @@ class DerivedSizeTests(unittest.TestCase):
         ((lc, (consumer, _)),) = n.derived.items()
         self.assertEqual((lc.name, consumer.name), ("N", "Arr"))
 
-    def test_count_with_other_uses_stays_a_field(self):
+    def test_count_that_is_also_read_is_computed(self):
+        # A location and an include condition read the computed value.
         located = ('<ParameterRefEntry parameterRef="N"/>'
                    '<ArrayParameterRefEntry parameterRef="Arr">'
                    '<LocationInContainerInBits '
                    f'referenceLocation="previousEntry">{dynamic("N")}'
                    '</LocationInContainerInBits></ArrayParameterRefEntry>')
+        read = (COUNT_THEN_ARRAY + '<ParameterRefEntry parameterRef="F">'
+                '<IncludeCondition><Comparison parameterRef="N" value="2" '
+                'comparisonOperator="&gt;="/></IncludeCondition>'
+                '</ParameterRefEntry>')
+        for entries in (located, read):
+            n = self.node(entries)
+            self.assertEqual([lc.name for lc in n.derived], ["N"])
+            self.assertEqual([name for name, _ in n.fields][0], "arr")
+
+    def test_count_of_a_value_that_may_be_absent_stays_a_field(self):
         conditional = ('<ParameterRefEntry parameterRef="N"/>'
                        '<ArrayParameterRefEntry parameterRef="Arr">'
                        '<IncludeCondition><Comparison parameterRef="N" '
                        'value="0" comparisonOperator="!="/></IncludeCondition>'
                        '</ArrayParameterRefEntry>')
-        for entries in (located, conditional):
-            n = self.node(entries)
-            self.assertEqual(n.derived, {})
-            self.assertEqual([name for name, _ in n.fields], ["n", "arr"])
+        n = self.node(conditional)
+        self.assertEqual(n.derived, {})
+        self.assertEqual([name for name, _ in n.fields], ["n", "arr"])
+
 
 class ElementTests(unittest.TestCase):
     def condition(self, dims: str, ref: str) -> str:
@@ -965,6 +976,18 @@ class ElementTests(unittest.TestCase):
         crit = compile_xml(text).nodes[0].items[2].criteria[0]
         self.assertEqual((crit.path, crit.text),
                          ((Index(4, 6),), "/Sat/Arr[2][1] == 1"))
+
+    def test_element_of_an_array_whose_count_varies(self):
+        # Whether the element is there is checked when the packet is
+        # decoded or encoded, so its Index has no count.
+        m = compile_xml(self.condition(dim(fixed(0), dynamic("N")), "Arr[2]"))
+        crit = m.nodes[0].items[2].criteria[0]
+        self.assertEqual(crit.path, (Index(2, None),))
+        # Rows 1..N of 3 elements: Arr[2][1] is the 5th.
+        text = self.condition(dim(fixed(1), dynamic("N"))
+                              + dim(fixed(0), fixed(2)), "Arr[2][1]")
+        crit = compile_xml(text).nodes[0].items[2].criteria[0]
+        self.assertEqual(crit.path, (Index(4, None),))
 
     def test_subset(self):
         # Elements 1..3 of 0..4 in the entry, then 2 of them in another.
@@ -999,8 +1022,10 @@ class ElementTests(unittest.TestCase):
     def test_rejected(self):
         for dims, ref, why in (
                 (dim(fixed(0), fixed(2)), "Arr[3]", "index 3 is outside 0..2"),
-                (dim(fixed(0), dynamic("N")), "Arr[0]",
-                 "element of an array whose count varies"),
+                (dim(fixed(0), fixed(1)) + dim(fixed(0), dynamic("N")),
+                 "Arr[0][0]", "element of an array whose count varies in a "
+                 "dimension other than the first"),
+                (dim(fixed(1), dynamic("N")), "Arr[0]", "index 0 is before 1"),
                 (dim(fixed(0), fixed(1)) + dim(fixed(0), fixed(1)), "Arr[0]",
                  "1 indexes for a 2-dimensional array"),
                 (dim(fixed(1), fixed(2)), "Arr[0]", "index 0 is outside 1..2"),

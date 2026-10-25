@@ -87,7 +87,7 @@ def source(d: DynSize, place) -> str:
     first matching value of a DiscreteLookupList.  ``place`` gives the
     expression for a Local."""
     if d.lookup is None:
-        return place(d.local) + access(d.path)
+        return reach(place(d.local), d.path, pstr(d.local.name))
     x = str(d.default)
     for criteria, v in reversed(d.lookup):
         x = (f"({v} if {' and '.join(f'({term(c, place)})' for c in criteria)} "
@@ -214,10 +214,18 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     return f"pk.write_string(w, {spec(vt, ref, f)}, {x}, {f})"
 
 
-def access(path) -> str:
-    """The expression suffix for a member and element path."""
-    return "".join(f"[{p.i}]" if isinstance(p, Index) else "." + p
-                   for p in path)
+def reach(x: str, path, f: str) -> str:
+    """The expression for the member or element ``path`` of ``x``.  An
+    element of an array whose count varies may be missing, which raises
+    ``BadSize`` naming ``f``."""
+    for p in path:
+        if not isinstance(p, Index):
+            x += "." + p
+        elif p.count is None:
+            x = f"pk.element({x}, {p.i}, {f})"
+        else:
+            x += f"[{p.i}]"
+    return x
 
 
 def term(t, place) -> str:
@@ -234,9 +242,10 @@ def condition(c: Criterion, x: str, y=None) -> str:
     """``x`` is the expression for the criterion's local, and ``y`` for
     the value it compares with, if any."""
     vt = c.vtype
-    x += access(c.path)
+    x = reach(x, c.path, pstr(c.local.name))
     if y is not None:
-        return f"{x} {c.op} {y}{access(c.other_path)}"
+        y = reach(y, c.other_path, pstr(c.other.name))
+        return f"{x} {c.op} {y}"
     v = c.value if vt.kind in ("int", "enum") else literal(vt, c.value)
     return f"{x} {c.op} {v}"
 
@@ -546,7 +555,8 @@ class PythonEmitter:
             for c in node.criteria:
                 for lc, prefix, count in term_indexes(c):
                     if lc in names:
-                        guards[(f"self.{names[lc]}{access(prefix)}",
+                        guards[(reach(f"self.{names[lc]}", prefix,
+                                      pstr(lc.name)),
                                 count)] = (lc.name)
         for (x, count), name in guards.items():
             # Criteria are checked before the arrays they index are written.

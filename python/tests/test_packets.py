@@ -374,6 +374,37 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(self.kind(dataclasses.replace(p, probe_data=b"\xab")),
                          "BadSize")
 
+    def test_elements_of_arrays_whose_count_varies(self):
+        t = demo.Tally(sec_hdr_flag=True, tallies=[2, 7],
+                       tally_data=b"\xab\xcd", tally_extra=0x55)
+        b = t.to_bytes()
+        self.assertEqual(bytes(b[6:]).hex(), "020207abcd55")
+        self.assertEqual(demo.Tally.decode(b), t)
+        # Tallies[1] == 7 includes the extra, so with one tally the element
+        # it reads is missing.
+        short = dataclasses.replace(t, tallies=[0], tally_data=b"")
+        self.assertEqual(self.kind(short), "BadSize")
+        # Tallies[0] sizes the data, so without tallies it is missing too.
+        self.assertEqual(self.kind(dataclasses.replace(short, tallies=[])),
+                         "BadSize")
+        # TallyCount is computed from the length of Tallies, and TallyCount
+        # >= 3 includes TallyMore.
+        three = demo.Tally(sec_hdr_flag=True, tallies=[0, 7, 1],
+                           tally_data=b"", tally_extra=0x55, tally_more=0x66)
+        b = three.to_bytes()
+        self.assertEqual(bytes(b[6:]).hex(), "030007015566")
+        self.assertEqual(demo.Tally.decode(b), three)
+        self.assertEqual(self.kind(dataclasses.replace(three,
+                                                       tally_more=None)),
+                         "Missing")
+        # Decoding fails the same way.
+        for body in ("0100", "00"):
+            data = bytes.fromhex(f"0972c02a{len(body) // 2 - 1:04x}{body}")
+            with self.assertRaises(PacketError) as cm:
+                demo.Tally.decode(data)
+            self.assertEqual((cm.exception.kind, cm.exception.what),
+                             ("BadSize", ("Tallies",)))
+
     def test_array_subsets(self):
         # Rows 1..2 and columns 1..2 of the 3x4 Matrix; Matrix[1][2] is the
         # second of them.

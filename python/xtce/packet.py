@@ -499,6 +499,14 @@ def read_list(r: "BitReader", n: int, gap: int, field: str, read) -> list:
     return out
 
 
+def element(v, i: int, field: str):
+    """Element ``i`` of ``v``, an array whose count another field gives;
+    raises ``BadSize``, naming ``field``, if ``v`` has no element ``i``."""
+    if i >= len(v):
+        raise PacketError("BadSize", field)
+    return v[i]
+
+
 def check_size(v, n: int, field: str) -> None:
     """Raises ``BadSize`` unless ``v`` has ``n`` elements or bytes."""
     if len(v) != n:

@@ -839,6 +839,16 @@ pub fn dynamic_size(
     Ok((y / unit) as usize)
 }
 
+/// Element `i` of `v`, an array whose count another field gives.  Fails with
+/// `BadSize`, naming `field`, if `v` has no element `i`.
+pub fn element<'a, T>(
+    v: &'a [T],
+    i: usize,
+    field: &'static str,
+) -> Result<&'a T> {
+    v.get(i).ok_or(PacketError::BadSize { field })
+}
+
 /// The value of the field that gives a size or count of `n` (the inverse of
 /// [`dynamic_size`] followed by multiplying by `factor`), for encoding a
 /// field computed from the length of the value it sizes.  Fails with

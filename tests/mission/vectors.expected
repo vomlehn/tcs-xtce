@@ -88,6 +88,11 @@ ProbeOne{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, se
 ProbeOther{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, probes=[{id_=4, gains=[2, 3]}, {id_=5, gains=[2, 0]}], probe_data=0xabcd} | 095ec02a0004423520abcd
 ProbeOne{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, probes=[{id_=1, gains=[2, 3]}, {id_=5, gains=[0, 0]}], probe_data=0x, probe_note=119} | 015ec02a000312350077
 error:Truncated | -
+Tally{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tallies=[2, 7], tally_data=0xabcd, tally_extra=85, tally_more=none} | 0972c02a0005020207abcd55
+Tally{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tallies=[1, 3], tally_data=0xab, tally_extra=none, tally_more=none} | 0972c02a0003020103ab
+error:BadSize | -
+error:BadSize | -
+Tally{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tallies=[0, 7, 1], tally_data=0x, tally_extra=85, tally_more=102} | 0972c02a0005030007015566
 MatrixMiddle{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, matrix=[1, 7, 2, 6], matrix_note=171} | 0968c02a00021726ab
 MatrixMiddle{version=0, packet_type=TM, sec_hdr_flag=false, seq_flags=Unsegmented, seq_count=42, matrix=[1, 2, 3, 6], matrix_note=none} | 0168c02a00011236
 error:Truncated | -

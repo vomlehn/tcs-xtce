@@ -258,6 +258,37 @@
           </SizeInBits>
         </BinaryDataEncoding>
       </BinaryParameterType>
+      <!-- Tallies: an array whose count varies, and values that use its
+           elements, which may be missing. -->
+      <IntegerParameterType name="TallyCountType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="4"/>
+      </IntegerParameterType>
+      <ArrayParameterType name="TalliesType" arrayTypeRef="U8">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <DynamicValue>
+                <ParameterInstanceRef parameterRef="TallyCount"/>
+                <LinearAdjustment intercept="-1"/>
+              </DynamicValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <BinaryParameterType name="TallyDataType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="Tallies[0]"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
       <ArrayParameterType name="MatrixType" arrayTypeRef="U4">
         <DimensionList>
           <Dimension>
@@ -476,6 +507,11 @@
       <Parameter name="Probes" parameterTypeRef="ProbesType"/>
       <Parameter name="ProbeData" parameterTypeRef="ProbeDataType"/>
       <Parameter name="ProbeNote" parameterTypeRef="U8"/>
+      <Parameter name="TallyCount" parameterTypeRef="TallyCountType"/>
+      <Parameter name="Tallies" parameterTypeRef="TalliesType"/>
+      <Parameter name="TallyData" parameterTypeRef="TallyDataType"/>
+      <Parameter name="TallyExtra" parameterTypeRef="U8"/>
+      <Parameter name="TallyMore" parameterTypeRef="U8"/>
       <Parameter name="GateLo" parameterTypeRef="U8"/>
       <Parameter name="GateHi" parameterTypeRef="U8"/>
       <Parameter name="GateSpan" parameterTypeRef="U16"/>
@@ -770,6 +806,30 @@
         <BaseContainer containerRef="ProbeBase">
           <RestrictionCriteria>
             <Comparison parameterRef="Probes[0].Id" value="1" comparisonOperator="!="/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="Tally">
+        <EntryList>
+          <ParameterRefEntry parameterRef="TallyCount"/>
+          <ArrayParameterRefEntry parameterRef="Tallies"/>
+          <ParameterRefEntry parameterRef="TallyData"/>
+          <ParameterRefEntry parameterRef="TallyExtra">
+            <IncludeCondition>
+              <Comparison parameterRef="Tallies[1]" value="7"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <!-- TallyCount is computed from the length of Tallies, though
+               this condition reads it too. -->
+          <ParameterRefEntry parameterRef="TallyMore">
+            <IncludeCondition>
+              <Comparison parameterRef="TallyCount" value="3" comparisonOperator="&gt;="/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="370"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

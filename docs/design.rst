@@ -663,18 +663,29 @@ Limitations and future work
   * Namespace URIs aren't checked.
   * Facet and ``xs:key`` constraints are left to ``xmllint``.
 
-* **Packet codecs** — the main missing XTCE features are:
+* **Packet codecs** — the constructs the manual lists under "Not
+  supported" are still missing; among them, references to elements of
+  arrays whose count varies in a dimension other than the first, which
+  would need the flattened index computed at run time. The model has
+  room for them: new ``Item`` kinds, and ``VType`` kinds for structured
+  values, as arrays have.
 
-  * references to elements of arrays whose count varies.
-
-  The model has room for each of these: new ``Item`` kinds, and
-  ``VType`` kinds for structured values, as arrays have.
+  A reference to an element of an array whose count varies (in its
+  first dimension) can't be checked when the code is generated, as one
+  to a fixed-size array is: the element may be missing. Rust and Python
+  read it through ``element()``, which fails with ``BadSize``; C, which
+  has no way to leave an expression early, checks with
+  ``xtce_pk_element()`` before each statement that reads it.
 
   Error detection (``ErrorDetectCorrect``: CRCs and checksums) is left
   out on purpose: the packets travel over a link that already detects
   errors. Documents that use it are reported as unsupported.
 
 * **Computed fields:** packet length fields are computed when the
-  document marks them, and sizes and counts when nothing else uses the
-  field that gives them. A size or count with other uses is still set by
-  the application, which must make it agree with the data.
+  document marks them, and sizes and counts when what they size is a
+  whole value that is always present; criteria, locations and lookups
+  that read them see the computed value. A size or count that also sizes
+  a string, a member or an element, or a value that may be absent, is
+  still set by the application, which must make it agree with the data:
+  a string's size can't be worked out from its content, and a member's
+  field is part of an aggregate the application builds.

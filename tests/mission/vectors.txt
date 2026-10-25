@@ -88,6 +88,11 @@ tm 095ec02a0005123520abcd77  # probe, chosen by Probes[0].Id == 1, data sized by
 tm 095ec02a0004423520abcd  # probe, any other Probes[0].Id
 tm 015ec02a000312350077  # probe, no data
 tm 095ec02a0003123520ab  # probe truncated in the data
+tm 0972c02a0005020207abcd55  # tally, data sized by Tallies[0], Tallies[1] == 7 includes the extra
+tm 0972c02a0003020103ab  # tally without the extra
+tm 0972c02a00010100  # tally with no Tallies[1] for its include condition
+tm 0972c02a000000  # tally with no Tallies[0] for the data's size
+tm 0972c02a0005030007015566  # tally with three tallies: TallyCount >= 3 includes TallyMore
 tm 0968c02a00021726ab  # matrix middle, a 2x2 subset; Matrix[1][2] == 7 includes the note
 tm 0168c02a00011236  # matrix middle without the note
 tm 0968c02a000017  # matrix middle truncated in the subset

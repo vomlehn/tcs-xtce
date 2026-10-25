@@ -269,9 +269,14 @@ def walk_members(vt: VType, members: tuple, what: str) -> tuple[tuple, VType]:
             if vt.kind != "array":
                 raise Unsupported(f"{what}: {vt.kind} type {vt.key} is not an "
                                   "array")
-            if not e.shape:
+            # The count can vary in the first dimension only: elements are
+            # flattened with the last dimension fastest, so a varying later
+            # dimension would move every element after the first row.
+            varies = isinstance(e.count, DynSize)
+            if varies and None in e.sizes[1:]:
                 raise Unsupported(f"{what}: element of an array whose count "
-                                  "varies")
+                                  "varies in a dimension other than the "
+                                  "first")
             # One index per dimension, flattened with the last fastest.
             index = [step]
             while len(index) < e.dims and steps and isinstance(steps[0], int):
@@ -280,12 +285,20 @@ def walk_members(vt: VType, members: tuple, what: str) -> tuple[tuple, VType]:
                 raise Unsupported(f"{what}: {len(index)} indexes for a "
                                   f"{e.dims}-dimensional array")
             flat = 0
-            for i, start, size in zip(index, e.starts, e.shape):
-                if not start <= i < start + size:
+            for i, start, size in zip(index, e.starts, e.sizes):
+                if size is None:
+                    # Whether the element is there is known only when the
+                    # packet is decoded or encoded.  This is the first
+                    # dimension, so flat starts as i - start.
+                    if i < start:
+                        raise Unsupported(f"{what}: index {i} is before "
+                                          f"{start}")
+                    size = 1
+                elif not start <= i < start + size:
                     raise Unsupported(f"{what}: index {i} is outside "
                                       f"{start}..{start + size - 1}")
                 flat = flat * size + i - start
-            path.append(Index(flat, e.count))
+            path.append(Index(flat, None if varies else e.count))
             vt = e.elem
             continue
         if vt.kind != "aggregate":
@@ -653,7 +666,7 @@ class Compiler:
         dims = dl.dimension if dl is not None else []
         if not dims:
             raise Unsupported(f"{where}: array without dimensions")
-        fixed, dyn, starts, sizes = 1, None, [], []
+        fixed, dyn, starts, sizes, all_sizes = 1, None, [], [], []
         for d in dims:
             start = self.int_value(d.starting_index, path,
                                    "array StartingIndex", where)
@@ -668,18 +681,20 @@ class Compiler:
                                       f"StartingIndex {start}")
                 fixed *= end - start + 1
                 sizes.append(end - start + 1)
+                all_sizes.append(end - start + 1)
             elif dyn is not None:
                 raise Unsupported(f"{where}: more than one dimension from "
                                   "DynamicValue")
             else:
                 end.intercept += 1 - start  # the count is end - start + 1
                 dyn = end
+                all_sizes.append(None)
         if dyn is not None:
             dyn.factor = fixed
         count = dyn if dyn is not None else fixed
         shape = tuple(sizes) if dyn is None else ()
         return ArrayEnc(elem, count, dims=len(dims), starts=tuple(starts),
-                        shape=shape)
+                        shape=shape, sizes=tuple(all_sizes))
 
     def subset(self, local: Local, e, path: Key, where: str) -> Local:
         """Turns the value of an array entry with a DimensionList into the
@@ -1019,8 +1034,10 @@ class Compiler:
             if count == 1:
                 return local
         shape = (count,) if isinstance(count, int) else ()
+        size = count if isinstance(count, int) else None
         local.vtype = VType(key=vt.key, name=vt.name, kind="array",
-                            enc=ArrayEnc(vt, count, gap, shape=shape),
+                            enc=ArrayEnc(vt, count, gap, shape=shape,
+                                         sizes=(size,)),
                             doc=vt.doc)
         return local
 
@@ -1777,32 +1794,41 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
 def derived_sizes(n: Node) -> dict:
     """The values of ``n`` that encoding computes: Local -> (the value whose
     size or count it gives, that DynSize).  Such a value is an uncalibrated
-    integer, always present, and used for nothing but the count of an array
-    or the size of a binary value, both always present, so that it can be
-    worked out from their lengths.  Anything else that reads it (a
-    criterion, a location, a lookup, a string's size, an aggregate's or
-    element's size) leaves it a field that the application sets."""
+    integer, always present, that gives the count of an array or the size
+    of a binary value, always present, so that it can be worked out from
+    their length.  Criteria, locations and lookups may also read it:
+    encoding computes it first and they read the computed value.  Anything
+    else that uses it (a string's size, an aggregate's or element's size,
+    or a size or count of a value that may be absent) leaves it a field
+    that the application sets."""
     items = walk(n.all_items())
-    uses: dict = {}  # Local -> [(consumer, DynSize) or None for any other use]
+    # Local -> [(consumer, DynSize) for a size or count it gives, READ for a
+    # criterion, location or lookup that reads it, or None for any other use]
+    uses: dict = {}
 
     def use(lc, what=None) -> None:
         uses.setdefault(lc, []).append(what)
 
-    def dyn_uses(d: DynSize, consumer=None) -> None:
+    def dyn_uses(d: DynSize, consumer=None, read=False) -> None:
+        """A size or count, of ``consumer`` when it is a whole value that is
+        always present, or a location's offset when ``read``."""
         if d.lookup is not None:
             for crit, _ in d.lookup:
                 for lc in (x for c in crit for x in term_locals(c)):
-                    use(lc)
+                    use(lc, READ)
         elif d.local is not None:
-            plain = consumer is not None and not d.path
-            use(d.local, (consumer, d) if plain else None)
+            if read and not d.path:
+                use(d.local, READ)
+            else:
+                plain = consumer is not None and not d.path
+                use(d.local, (consumer, d) if plain else None)
 
     for c in n.all_criteria() + [c for it in n.all_items() for c in conds(it)]:
         for lc in term_locals(c):
-            use(lc)
+            use(lc, READ)
     for it in items:
         if isinstance(it, Seek) and isinstance(it.offset, DynSize):
-            dyn_uses(it.offset)
+            dyn_uses(it.offset, read=True)
         elif isinstance(it, Value):
             vt = it.local.vtype
             for t in vt.tree():
@@ -1823,9 +1849,13 @@ def derived_sizes(n: Node) -> dict:
                 or vt.kind != "int" or vt.calibrator is not None):
             continue
         found = uses.get(lc, [])
-        if found and all(u is not None for u in found):
-            derived[lc] = found[0]
+        sizes = [u for u in found if u is not None and u is not READ]
+        if sizes and None not in found:
+            derived[lc] = sizes[0]
     return derived
+
+
+READ = "read"  # a use of a value that only reads it
 
 
 def conds(it: Item) -> list[Term]:

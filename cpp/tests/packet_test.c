@@ -638,6 +638,62 @@ int main(void) {
                 CHECK(strcmp(ENCODE(demo_ProbeOne, &pr), "BadSize") == 0);
         }
 
+        /* Elements of arrays whose count varies. */
+        {
+                static demo_Tally t, back;
+                static const uint8_t body[] = {0x02, 0x02, 0x07,
+                                               0xab, 0xcd, 0x55};
+                static const uint8_t one[] = {0x09, 0x72, 0xc0, 0x2a,
+                                              0x00, 0x01, 0x01, 0x00};
+                static const uint8_t none[] = {0x09, 0x72, 0xc0, 0x2a,
+                                               0x00, 0x00, 0x00};
+                demo_Tally_init(&t);
+                t.sec_hdr_flag = true;
+                t.tallies.len = 2;
+                t.tallies.data[0] = 2;
+                t.tallies.data[1] = 7;
+                t.tally_data.len = 2;
+                t.tally_data.data[0] = 0xab;
+                t.tally_data.data[1] = 0xcd;
+                t.has_tally_extra = true;
+                t.tally_extra = 0x55;
+                CHECK(strcmp(ENCODE(demo_Tally, &t), "Ok") == 0);
+                CHECK(len == 12 && memcmp(buf + 6, body, sizeof body) == 0);
+                CHECK(demo_Tally_decode(&back, buf, len, &err) == 0 &&
+                      back.has_tally_extra && back.tally_extra == 0x55);
+                /* Tallies[1] == 7 includes the extra, so with one tally the
+                 * element it reads is missing. */
+                t.tallies.len = 1;
+                t.tallies.data[0] = 0;
+                t.tally_data.len = 0;
+                CHECK(strcmp(ENCODE(demo_Tally, &t), "BadSize") == 0 &&
+                      strcmp(err.field, "Tallies") == 0);
+                /* Tallies[0] sizes the data, so without tallies it is missing
+                 * too. */
+                t.tallies.len = 0;
+                CHECK(strcmp(ENCODE(demo_Tally, &t), "BadSize") == 0);
+                /* TallyCount is computed from the length of Tallies, and
+                 * TallyCount >= 3 includes TallyMore. */
+                t.tallies.len = 3;
+                t.tallies.data[0] = 0;
+                t.tallies.data[1] = 7;
+                t.tallies.data[2] = 1;
+                t.has_tally_more = true;
+                t.tally_more = 0x66;
+                CHECK(strcmp(ENCODE(demo_Tally, &t), "Ok") == 0);
+                CHECK(len == 12 && buf[6] == 3 && buf[11] == 0x66);
+                CHECK(demo_Tally_decode(&back, buf, len, &err) == 0 &&
+                      back.has_tally_more && back.tally_more == 0x66);
+                t.has_tally_more = false;
+                CHECK(strcmp(ENCODE(demo_Tally, &t), "Missing") == 0);
+                /* Decoding fails the same way. */
+                CHECK(demo_Tally_decode(&back, one, sizeof one, &err) ==
+                              XTCE_PK_BAD_SIZE &&
+                      strcmp(err.field, "Tallies") == 0);
+                CHECK(demo_Tally_decode(&back, none, sizeof none, &err) ==
+                      XTCE_PK_BAD_SIZE);
+        }
+
         /* Array subsets. */
         {
                 static demo_MatrixMiddle mm, mm2;
