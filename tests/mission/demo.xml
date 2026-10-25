@@ -980,6 +980,14 @@
       <FloatParameterType name="DrDoubleType" sizeInBits="64">
         <FloatDataEncoding sizeInBits="64"/>
       </FloatParameterType>
+      <IntegerParameterType name="U32" signed="false">
+        <IntegerDataEncoding sizeInBits="32"/>
+      </IntegerParameterType>
+      <BinaryParameterType name="DlDataType">
+        <BinaryDataEncoding>
+          <SizeInBits><FixedValue>88</FixedValue></SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -1170,6 +1178,9 @@
       <Parameter name="DrSpeedKph" parameterTypeRef="DrDoubleType"/>
       <Parameter name="DrRatio" parameterTypeRef="DrDoubleType"/>
       <Parameter name="DrCount" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="DlSync" parameterTypeRef="U32"/>
+      <Parameter name="DlCount" parameterTypeRef="U8"/>
+      <Parameter name="DlData" parameterTypeRef="DlDataType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -2000,6 +2011,15 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <!-- A frame of the Downlink stream: the CCSDS sync marker, a count
+           and 11 bytes. -->
+      <SequenceContainer name="DlFrame">
+        <EntryList>
+          <ParameterRefEntry parameterRef="DlSync"/>
+          <ParameterRefEntry parameterRef="DlCount"/>
+          <ParameterRefEntry parameterRef="DlData"/>
+        </EntryList>
+      </SequenceContainer>
     </ContainerSet>
     <MessageSet>
       <Message name="PulseStart">
@@ -2015,6 +2035,26 @@
         <ContainerRef containerRef="Pulse"/>
       </Message>
     </MessageSet>
+    <StreamSet>
+      <!-- 128-bit frames found by the CCSDS sync marker, with a bit wrong
+           allowed and a bit of slip; locked after two good frames, and
+           inverted after three frames' worth of searching. -->
+      <FixedFrameStream name="Downlink" frameLengthInBits="128"
+        syncApertureInBits="1">
+        <ContainerRef containerRef="DlFrame"/>
+        <SyncStrategy verifyToLockGoodFrames="2" maxBitErrorsInSyncPattern="1">
+          <AutoInvert badFramesToAutoInvert="3"/>
+          <SyncPattern pattern="1ACFFC1D" patternLengthInBits="32"/>
+        </SyncStrategy>
+      </FixedFrameStream>
+      <!-- CCSDS packets between HDLC flags, NRZ-M coded. -->
+      <VariableFrameStream name="Uplink" pcmType="NRZM">
+        <ContainerRef containerRef="CCSDSPacket"/>
+        <SyncStrategy>
+          <Flag flagSizeInBits="6" flagBitType="ones"/>
+        </SyncStrategy>
+      </VariableFrameStream>
+    </StreamSet>
     <AlgorithmSet>
       <MathAlgorithm name="SpeedToKph">
         <MathOperation outputParameterRef="DrSpeedKph">

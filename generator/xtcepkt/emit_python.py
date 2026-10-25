@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import textwrap
 
-from .common import (notes, Ref, fast_order, field_range, flt, header_lines,
-                     inputs, invertible, math_value, size_args, string_spec)
+from .common import (notes, stream_doc, Ref, fast_order, field_range, flt,
+                     header_lines, inputs, invertible, math_value, size_args,
+                     string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
@@ -413,7 +414,8 @@ class PythonEmitter:
         self.line('return "true" if v else "false"', 1)
         self.line()
         names = ([vt.ident for vt in m.types + m.aggregates] + ["AlarmMonitor"]
-                 + [n.ident for n in m.nodes] + [k.ident for k in m.kinds])
+                 + [n.ident for n in m.nodes] + [k.ident for k in m.kinds]
+                 + [st.ident for st in m.streams])
         self.line()
         self.line("__all__ = [" + ", ".join(pstr(n) for n in names) + "]")
         for vt in m.types:
@@ -425,6 +427,8 @@ class PythonEmitter:
             self.node(n)
         for k in m.kinds:
             self.kind(k)
+        for st in m.streams:
+            self.stream(st)
         for name, dfa in self.dfas:
             self.line()
             self.line()
@@ -435,6 +439,31 @@ class PythonEmitter:
             self.wrapped([bool(a) for a in dfa.accept], 1)
             self.line(")")
         return "\n".join(self.out) + "\n"
+
+    def stream(self, st) -> None:
+        self.line()
+        self.line()
+        base = "FrameSync" if st.fixed else "FlagSync"
+        self.line(f"class {st.ident}(pk.{base}):")
+        doc = stream_doc(st).replace(st.key,
+                                     f"``{st.key}``").replace(
+            st.container, f"``{st.container}``")
+        for k, text in enumerate(textwrap.wrap(doc, 70)):
+            self.line(('"""' if k == 0 else "") + text, 1)
+        self.line('"""', 1)
+        self.line()
+        self.line(f"CONTAINER: ClassVar[str] = {pstr(st.container)}", 1)
+        self.line()
+        self.line("def __init__(self) -> None:", 1)
+        if st.fixed:
+            self.line(f"super().__init__({st.frame_bits}, 0x{st.pattern:x}, "
+                      f"0x{st.mask:x}, {st.pattern_bits}, {st.location}, "
+                      f"{st.max_errors}, {st.aperture}, {st.verify}, "
+                      f"{st.check}, {st.invert_after}, {pstr(st.pcm)}, "
+                      f"{st.inverted})", 2)
+        else:
+            self.line(f"super().__init__({st.flag_bits}, {st.flag_ones}, "
+                      f"{st.max_bits}, {pstr(st.pcm)}, {st.inverted})", 2)
 
     def wrapped(self, items: list, depth: int) -> None:
         """A tuple of ``items``, wrapped to fit 80 columns."""

@@ -198,6 +198,23 @@ def criteria_by_node(node: Node) -> list[tuple[Node, list[Criterion]]]:
     return [(n, n.criteria) for n in node.chain()[1:]]
 
 
+def stream_capacity(st) -> tuple[int, int]:
+    """The bits a stream's synchronizer keeps, and the bytes of its
+    frames, at most."""
+    if st.fixed:
+        bits = ((max(st.verify, 2) + 2) * st.frame_bits + 2 * st.aperture
+                + st.location + st.pattern_bits + 16)
+        return bits, (st.frame_bits + 7) // 8
+    return st.max_bits + st.flag_bits + 2, (st.max_bits + 8) // 8
+
+
+def stream_doc(st) -> str:
+    """What a stream type's documentation says it is."""
+    what = "Fixed" if st.fixed else "Variable"
+    return (f"{what} frame stream {st.key}: finds its frames, each a "
+            f"{st.container} packet.")
+
+
 def notes(n: Node) -> list[str]:
     """What the generated documentation of packet ``n`` says it leaves
     out."""

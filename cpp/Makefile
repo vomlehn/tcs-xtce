@@ -19,7 +19,7 @@ HEADERS  := $(wildcard include/xtce/*.hpp include/xtce/*.h)
 .PHONY: all
 all: lib $(BUILD)/xtce_roundtrip $(BUILD)/packet_tool $(BUILD)/packet_tool_cxx \
      $(BUILD)/digest_tool $(BUILD)/digest_tool_cxx $(BUILD)/float_tool \
-     $(BUILD)/float_tool_cxx
+     $(BUILD)/float_tool_cxx $(BUILD)/stream_tool $(BUILD)/stream_tool_cxx
 
 .PHONY: lib
 lib: $(BUILD)/libxtce.a $(BUILD)/libxtce.so
@@ -50,6 +50,12 @@ $(BUILD)/packet_tool: tests/packet_tool.c $(PKT_DEPS) | $(BUILD)
 	$(CC) -std=c11 $(CFLAGS) $(WARN) -Iinclude -Itests $< -lm -o $@
 
 $(BUILD)/packet_tool_cxx: tests/packet_tool.c $(PKT_DEPS) | $(BUILD)
+	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -Itests -x c++ $< -o $@
+
+$(BUILD)/stream_tool: tests/stream_tool.c $(PKT_DEPS) | $(BUILD)
+	$(CC) -std=c11 $(CFLAGS) $(WARN) -Iinclude -Itests $< -lm -o $@
+
+$(BUILD)/stream_tool_cxx: tests/stream_tool.c $(PKT_DEPS) | $(BUILD)
 	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -Itests -x c++ $< -o $@
 
 $(BUILD)/packet_test: tests/packet_test.c $(PKT_DEPS) | $(BUILD)

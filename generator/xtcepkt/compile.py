@@ -28,7 +28,7 @@ from .model import (MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc,
                     Term, Unsupported, Value, VType, ref_text, term_locals,
                     walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp,
                     Require, ValueRef, needs_binding, Fill, Segment, Verify,
-                    Alarm, AlarmDef, Band, LEVELS, Change, Algorithm)
+                    Alarm, AlarmDef, Band, LEVELS, Change, Algorithm, Stream)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -413,6 +413,7 @@ class Compiler:
         self.containers: dict[Key, tuple] = {}
         self.messages: dict[Key, tuple] = {}
         self.algorithms: dict[Key, tuple] = {}
+        self.streams: dict[Key, tuple] = {}
         self.mcs: dict[Key, tuple] = {}
         # CommandContainer -> MetaCommand
         self.mc_containers: dict[Key, Key] = {}
@@ -463,6 +464,10 @@ class Compiler:
                 for ch in md.parameter_set.items:
                     if ch.name == "Parameter":
                         self.params[path + (ch.value.name,)] = (path, ch.value)
+        if tm and tm.stream_set:
+            for ch in tm.stream_set.items:
+                self.streams[path + (ch.value.name,)] = (path, ch.name,
+                                                         ch.value)
         if tm and tm.message_set:
             for m in tm.message_set.message:
                 self.messages[path + (m.name,)] = (path, m)
@@ -2483,6 +2488,12 @@ class Compiler:
             if n.error:
                 (derived if n.error.startswith("base ")
                  else roots).append(f"{n.key}: {n.error}")
+        streams = []
+        for key in self.streams:
+            try:
+                streams.append(self.stream(key))
+            except Unsupported as e:
+                roots.append(str(e))
         msgs = roots + derived
         if msgs and not self.skip_unsupported:
             if derived:
@@ -2498,6 +2509,10 @@ class Compiler:
         for n in ok:
             if not n.abstract:
                 n.ident = names.take(camel(n.name), camel(n.key))
+        for st in streams:
+            name = st.key.rsplit("/", 1)[-1]
+            st.ident = names.take(camel(name) + "Stream",
+                                  camel(st.key) + "Stream")
         roots = [n for n in ok if n.base is None and n.children]
         kinds = []
         for r in roots:
@@ -2531,6 +2546,10 @@ class Compiler:
                                   camel(vt.key))
         for k in kinds:
             k.max_bytes = max(m.max_bytes for m in k.members)
+        for st in streams:
+            sizes = ([k.max_bytes for k in kinds if k.root.key == st.container]
+                     + [n.max_bytes for n in concrete if n.key == st.container])
+            st.max_bits = 8 * max(sizes, default=MAX_FIELD_BITS // 8)
         mnames = Namer()
         # The mission is named for its last document, which by convention
         # is its own: the documents it builds on come first.
@@ -2540,7 +2559,66 @@ class Compiler:
             aggregates=list(aggregates.values()), nodes=concrete, kinds=kinds,
             roots=roots, skipped=msgs,
             monitored=[(k, mnames.take(snake(k.rsplit("/", 1)[-1]), snake(k)),
-                        h) for k, h in monitored.items()])
+                        h) for k, h in monitored.items()], streams=streams)
+
+    def stream(self, key: Key) -> Stream:
+        """A FixedFrameStream or VariableFrameStream."""
+        path, kind, st = self.streams[key]
+        where = f"stream {qname(key)}"
+        if kind == "CustomStream":
+            raise Unsupported(f"{where}: CustomStream")
+        if st.choice.name != "ContainerRef":
+            raise Unsupported(f"{where}: frames from a ServiceRef")
+        if st.stream_ref is not None:
+            raise Unsupported(f"{where}: a StreamRef")
+        pcm = st.pcm_type.value if st.pcm_type else "NRZL"
+        if pcm not in ("NRZL", "NRZM", "NRZS"):
+            raise Unsupported(f"{where}: pcmType {pcm}")
+        ckey = qname(self.resolve(st.choice.value.container_ref, path,
+                                  self.containers, "container"))
+        ss = st.sync_strategy
+        if ss.auto_invert is not None and ss.auto_invert.invert_algorithm:
+            raise Unsupported(f"{where}: an InvertAlgorithm")
+        out = Stream(qname(key), "", ckey, kind == "FixedFrameStream", pcm,
+                     bool(st.inverted))
+        if not out.fixed:
+            flag = ss.flag
+            out.flag_bits = flag.flag_size_in_bits or 6
+            if out.flag_bits < 2:
+                raise Unsupported(f"{where}: a flag of {out.flag_bits} bit")
+            out.flag_ones = (flag.flag_bit_type is None
+                             or flag.flag_bit_type.value == "ones")
+            return out
+        out.frame_bits = st.frame_length_in_bits
+        sp = ss.sync_pattern
+        n = sp.pattern_length_in_bits
+        if not 1 <= n <= 64:
+            raise Unsupported(f"{where}: a {n}-bit sync pattern")
+        # The pattern and mask are truncated from the left.
+        out.pattern = int(sp.pattern.strip() or "0", 16) & ((1 << n) - 1)
+        mask = (1 << n) - 1
+        if sp.mask is not None:
+            m = sp.mask_length_in_bits or n
+            mask = (int(sp.mask.strip() or "0", 16) & ((1 << m) - 1)
+                    | (((1 << n) - 1) & ~((1 << m) - 1)))
+        out.mask, out.pattern_bits = mask & ((1 << n) - 1), n
+        out.location = sp.bit_location_from_start_of_container or 0
+        if (out.location < 0 or out.frame_bits < 1
+                or out.location + n > out.frame_bits):
+            raise Unsupported(f"{where}: a sync pattern outside the frame")
+        out.max_errors = ss.max_bit_errors_in_sync_pattern or 0
+        out.aperture = st.sync_aperture_in_bits or 0
+        if 2 * out.aperture >= out.frame_bits:
+            raise Unsupported(f"{where}: a sync aperture of half a frame or "
+                              "more")
+        if ss.verify_to_lock_good_frames is not None:
+            out.verify = ss.verify_to_lock_good_frames
+        if ss.check_to_lock_good_frames is not None:
+            out.check = ss.check_to_lock_good_frames
+        if ss.auto_invert is not None:
+            out.invert_after = ((ss.auto_invert.bad_frames_to_auto_invert
+                                 or 1024) * out.frame_bits)
+        return out
 
     def bind_algorithms(self, n: Node) -> None:
         """The MathAlgorithms that packet ``n`` triggers, by holding a value

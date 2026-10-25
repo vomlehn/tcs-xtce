@@ -1,0 +1,10 @@
+downlink 5a1acffc1d0111111111111111111111111acffc1d022121212121212121212121  # noise, A and B: B's sync locks it (verify 2), giving A
+downlink 1acffc1d033131313131313131313131  # C's sync gives B
+downlink 0acffc1d044141414141414141414141  # D, a bit wrong in its sync, gives C
+downlink 8d67fe0e82a8a8a8a8a8a8a8a8a8a8a8  # E one bit late gives D
+downlink 80000000000000000000000000000000  # no sync where F belongs: E, then Check
+downlink 0d67fe0e83b8b8b8b8b8b8b8b8b8b8b8  # G's sync relocks, but the missed frame isn't given
+downlink 8d67fe0e8440c0c0c0c0c0c0c0c0c0c080  # H gives G
+uplink dabf0477fcc0000cc5  # noise, a flag, P and most of a flag
+uplink 4562b2b4015a5401fc54  # the flag's end gives P; Q, which needs stuffed bits, and R
+uplink 22ababfe03ab  # an aborted frame, then R

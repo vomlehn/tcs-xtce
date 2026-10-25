@@ -1906,6 +1906,57 @@ Algorithms
    ``triggerRate``, is a processor's work, not a codec's; a
    ``CustomAlgorithm`` is not supported.
 
+Streams
+   A ``StreamSet``'s ``FixedFrameStream`` and ``VariableFrameStream``
+   become stream types (``DownlinkStream`` for a stream ``Downlink``)
+   that find frames in a stream of bytes: ``push`` takes the next bytes,
+   in pieces of any size, and gives each frame they complete, as bytes
+   (padded with zeros to whole bytes), to decode as the stream's
+   ``ContainerRef`` (``CONTAINER``). In Rust ``push(&data, |frame|
+   ...)``; in C ``P_DownlinkStream_init(&s)`` then
+   ``P_DownlinkStream_push(&s, data, len, fn, ctx)``; in Python
+   ``s.push(data)`` returns the frames. Neither allocates.
+
+   Both read the bits most significant first, invert them when
+   ``inverted`` says to, and decode the ``pcmType``: ``NRZL`` (the
+   level is the bit), ``NRZM`` (a one is a change of level) or ``NRZS``
+   (a zero is).
+
+   A fixed stream finds its frames by the ``SyncPattern``
+   (``patternLengthInBits`` of ``pattern``, and of ``mask`` when given,
+   both truncated from the left; bits of the pattern that a shorter mask
+   doesn't reach are compared), at ``bitLocationFromStartOfContainer``
+   in each ``frameLengthInBits`` frame, with up to
+   ``maxBitErrorsInSyncPattern`` bits wrong. It works as the schema
+   says: in Search it looks for the pattern at every bit; in Verify it
+   needs ``verifyToLockGoodFrames`` frames in a row whose patterns are
+   one frame apart, give or take ``syncApertureInBits``, and then locks;
+   in Lock it gives each frame whose pattern it found, and a missed
+   pattern sends it to Check, where ``checkToLockGoodFrames`` good
+   patterns in a row lock it again (the missed frame isn't given) and a
+   missed one sends it back to Search. With ``AutoInvert``, searching
+   ``badFramesToAutoInvert`` frames' worth of bits in vain inverts the
+   bits. The demo's ``Downlink`` has 128-bit frames led by the CCSDS
+   sync marker.
+
+   A variable stream's frames lie between flags of ``flagSizeInBits``
+   ones (or zeros), with a bit of the other kind on either side, as
+   HDLC's are with six ones: the bit of the other kind stuffed after
+   ``flagSizeInBits - 1`` in a row in a frame is removed, and more in a
+   row abort the frame, as does a frame larger than the container's
+   largest packet; frames are found again from the next flag. A
+   variable stream has no sync states, so its ``SyncStrategy``'s other
+   settings don't apply. The demo's ``Uplink`` carries CCSDS packets
+   between flags, NRZ-M coded.
+
+   ``tests/stream_check.sh`` checks that every runtime finds the same
+   frames, in ``tests/mission/streams.txt`` and in random streams with
+   slips, bit errors, inversions and aborts. Not supported: a
+   ``ServiceRef`` or ``StreamRef`` in place of the container, a
+   ``CustomStream``, an ``InvertAlgorithm``, the biphase ``pcmType``\ s,
+   sync patterns longer than 64 bits, and a ``syncApertureInBits`` of
+   half a frame or more.
+
 Messages
    A ``MessageSet``'s ``Message`` picks out its container by its
    ``MatchCriteria``. It is generated as a packet derived from that
@@ -1935,15 +1986,15 @@ Name references
 Not supported
    references to elements of arrays whose count varies in a dimension other
    than the first, ``IndirectParameterRefEntry`` chosen by an integer or
-   string without an ``aliasNameSpace``, instances of values in other
-   packets, repeated segment entries, commands that include another
-   meta-command's container, ``CustomAlgorithm`` criteria, transform
-   algorithms, custom checksum algorithms, ``ErrorDetectCorrect`` in a data
-   encoding (which XTCE deprecates), calibrators inside aggregate types that
-   use other values, least-significant-bit-first strings and binary data
-   that may not start on a byte boundary, integers of more than 64 bits,
-   ``nextEntry`` locations, and a ``containerEnd`` location in a container
-   without a fixed size.
+   string without an ``aliasNameSpace``, the stream constructs listed under
+   Streams, instances of values in other packets, repeated segment entries,
+   commands that include another meta-command's container,
+   ``CustomAlgorithm`` criteria, transform algorithms, custom checksum
+   algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
+   deprecates), calibrators inside aggregate types that use other values,
+   least-significant-bit-first strings and binary data that may not start on
+   a byte boundary, integers of more than 64 bits, ``nextEntry`` locations,
+   and a ``containerEnd`` location in a container without a fixed size.
 
 Known limitations
 -----------------

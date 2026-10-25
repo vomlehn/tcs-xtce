@@ -534,6 +534,32 @@ then absent, which the emitters test before computing it. The output is a
 double whatever the output parameter's type, since there is no encoding
 to round it to.
 
+Streams
+-------
+
+A stream isn't a packet but a way to find packets in a stream of bits, so
+the compiler reduces each one to the parameters of a synchronizer
+(``model.Stream``) and each runtime has the synchronizers themselves:
+``FrameSync`` for fixed frames and ``FlagSync`` for variable ones. The
+generated stream types only name a synchronizer with its parameters and
+buffer sizes (``common.stream_capacity``), so the logic exists once per
+language and is checked across them by ``tests/stream_check.sh``.
+
+``FrameSync`` keeps the decoded bits one to a byte, which keeps the
+pattern search and the slip window simple at the cost of memory, and
+compacts the buffer after each byte down to the earliest bit it may still
+need: where Search resumes, the pattern that began Verify (which a failed
+Verify searches again from), or the last pattern found. That bounds the
+buffer by the frames Verify spans plus a frame or two, which is what the
+fixed arrays of the Rust and C types hold. Auto-inversion flips the bits
+as they are read rather than rewriting the buffer, so bits kept for a
+later search flip with the rest.
+
+``FlagSync`` follows HDLC, generalized to any flag size and to flags of
+zeros: a flag is the run of flag bits ended by a bit of the other kind,
+the frame is what came before it less the flag's leading bit, and a bit
+of the other kind after one fewer than a flag's run is a stuffed bit.
+
 Times
 -----
 

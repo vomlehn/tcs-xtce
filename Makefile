@@ -116,7 +116,7 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
 .PHONY: test
 test: test-generator test-rust test-cpp test-python cross-check packet-check \
-      digest-check float-check examples line-width
+      stream-check digest-check float-check examples line-width
 
 # Every line of code, hand-written or generated, fits in 80 columns.  It comes
 # last in `test` so that the code the examples generate exists by then.
@@ -149,6 +149,11 @@ cross-check: rust cpp python $(SAMPLES)
 packet-check: rust cpp python
 	sh tests/packet_check.sh $(RUST_PKT_TOOL) $(RUST_FIXED_PKT_TOOL) \
 		$(C_PKT_TOOL) $(CXX_PKT_TOOL)
+
+.PHONY: stream-check
+stream-check: rust cpp python
+	sh tests/stream_check.sh rust/target/release/examples/stream_tool \
+		cpp/build/stream_tool cpp/build/stream_tool_cxx
 
 .PHONY: digest-check
 digest-check: rust cpp

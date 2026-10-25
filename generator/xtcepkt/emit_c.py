@@ -13,10 +13,10 @@ import math
 import textwrap
 from typing import Optional
 
-from .common import (notes, Ref, c_op, fast_order, field_range, flt,
-                     header_lines, inputs, int_enc, invertible,
-                     leaf_calibrators, math_value, size_args, str_cap,
-                     string_spec)
+from .common import (notes, stream_capacity, stream_doc, Ref, c_op, fast_order,
+                     field_range, flt, header_lines, inputs, int_enc,
+                     invertible, leaf_calibrators, math_value, size_args,
+                     str_cap, string_spec)
 from .compile import snake
 from .model import (
     term_indexes, term_locals, term_paths, walk, Index, AggregateEnc, AllOf,
@@ -825,6 +825,8 @@ class CEmitter:
             self.define(n)
         for k in m.kinds:
             self.define_kind(k)
+        for st in m.streams:
+            self.stream(st)
         self.line()
         self.line("#ifdef __cplusplus")
         self.line("}")
@@ -1604,6 +1606,50 @@ class CEmitter:
     def dfa(self, dfa) -> str:
         """The name of the constant holding a pattern's automaton."""
         return self.dfa_names[id(dfa)]
+
+    def stream(self, st) -> None:
+        t = self.p + st.ident
+        bits, size = stream_capacity(st)
+        sync = "frame" if st.fixed else "flag"
+        pcm = f"XTCE_PK_{st.pcm}"
+        self.line()
+        for k, text in enumerate(textwrap.wrap(stream_doc(st)
+                                               + " Initialize it with "
+                                                 f"{t}_init, and don't copy it "
+                                                 "after.", 72)):
+            self.line(("/* " if k == 0 else " * ") + text)
+        self.line(" */")
+        self.line(f"#define {t}_CONTAINER {cstr(st.container)}")
+        self.line(f"typedef struct {t} {{")
+        self.line(f"xtce_pk_{sync}_sync sync;", 1)
+        self.line(f"uint8_t bits[{bits}];", 1)
+        self.line(f"uint8_t frame[{size}];", 1)
+        self.line(f"}} {t};")
+        self.line()
+        if st.fixed:
+            self.line(f"static const xtce_pk_frame_spec {t}_spec = "
+                      f"{{{st.frame_bits}, UINT64_C(0x{st.pattern:x}), "
+                      f"UINT64_C(0x{st.mask:x}), {st.pattern_bits}, "
+                      f"{st.location}, {st.max_errors}, {st.aperture}, "
+                      f"{st.verify}, {st.check}, UINT64_C({st.invert_after}), "
+                      f"{pcm}, {bool_lit(st.inverted)}}};")
+        else:
+            self.line(f"static const xtce_pk_flag_spec {t}_spec = "
+                      f"{{{st.flag_bits}, {bool_lit(st.flag_ones)}, "
+                      f"{st.max_bits}, {pcm}, {bool_lit(st.inverted)}}};")
+        self.line()
+        self.line(f"static inline void {t}_init({t}* s) {{")
+        self.line(f"xtce_pk_{sync}_sync_init(&s->sync, &{t}_spec, s->bits, "
+                  f"{bits}, s->frame);", 1)
+        self.line("}")
+        self.line()
+        self.line("/* Takes the next `len` bytes of the stream, and gives `f` "
+                  "each frame they")
+        self.line(" * complete. */")
+        self.line(f"static inline void {t}_push({t}* s, const uint8_t* data, "
+                  "size_t len, xtce_pk_frame_fn f, void* ctx) {")
+        self.line(f"xtce_pk_{sync}_sync_push(&s->sync, data, len, f, ctx);", 1)
+        self.line("}")
 
     def declare_monitor(self) -> None:
         t = self.p + "AlarmMonitor"

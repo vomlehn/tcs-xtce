@@ -553,6 +553,48 @@ class Algorithm:
     expr: tuple
 
 
+@dataclass
+class Stream:
+    """A FixedFrameStream or VariableFrameStream: how to find its frames in
+    a stream of bits, and the container (``container``, its qualified
+    name) that each frame is.
+
+    Both read the bits most significant first, invert them when
+    ``inverted``, and decode ``pcm`` (NRZL, NRZM or NRZS) to data bits.  A
+    fixed stream's frames are ``frame_bits`` long, with the sync
+    ``pattern`` (``pattern_bits`` long, compared where ``mask`` has ones,
+    with at most ``max_errors`` bits wrong) ``location`` bits into each;
+    the next frame's pattern may slip ``aperture`` bits either way.  It
+    takes ``verify`` frames in a row with good patterns to lock, and
+    ``check`` to lock again after a missed pattern; with ``invert_after``,
+    the bits are inverted after that many bits are searched in vain.  A
+    variable stream's frames lie between flags of ``flag_bits`` ones (or
+    zeros, unless ``flag_ones``), with a bit of the other kind stuffed
+    after ``flag_bits - 1`` in a row."""
+
+    key: str
+    ident: str  # generated type name
+    container: str
+    fixed: bool
+    pcm: str = "NRZL"
+    inverted: bool = False
+    frame_bits: int = 0
+    pattern: int = 0
+    mask: int = 0
+    pattern_bits: int = 0
+    location: int = 0
+    max_errors: int = 0
+    aperture: int = 0
+    verify: int = 4
+    check: int = 1
+    invert_after: int = 0
+    flag_bits: int = 6
+    flag_ones: bool = True
+    # The most bits a variable stream's frame holds: the largest packet the
+    # container can be.
+    max_bits: int = 0
+
+
 # --- containers --------------------------------------------------------------
 
 
@@ -905,3 +947,4 @@ class Mission:
     # name, field name in the AlarmMonitor, samples of history to keep),
     # one per parameter whatever packets hold it.
     monitored: list[tuple[str, str, int]] = field(default_factory=list)
+    streams: list[Stream] = field(default_factory=list)

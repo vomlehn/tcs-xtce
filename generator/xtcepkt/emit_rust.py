@@ -6,9 +6,10 @@ import json
 import math
 import textwrap
 
-from .common import (notes, MATH_OPS, Ref, fast_order, field_range, flt,
-                     header_lines, inputs, int_enc, invertible, math_value,
-                     size_args, str_cap, string_spec, wire_region)
+from .common import (notes, stream_capacity, stream_doc, MATH_OPS, Ref,
+                     fast_order, field_range, flt, header_lines, inputs,
+                     int_enc, invertible, math_value, size_args, str_cap,
+                     string_spec, wire_region)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
@@ -558,6 +559,8 @@ class RustEmitter:
             self.node(n)
         for k in m.kinds:
             self.kind(k)
+        for st in m.streams:
+            self.stream(st)
         for name, dfa in self.dfas:
             self.line()
             self.line(f"/// The automaton matching `{dfa.pattern}`.")
@@ -570,6 +573,62 @@ class RustEmitter:
                       + ", ".join(str(a).lower() for a in dfa.accept) + "],", 1)
             self.line("};")
         return "\n".join(self.out) + "\n"
+
+    def stream(self, st) -> None:
+        bits, size = stream_capacity(st)
+        sync = "FrameSync" if st.fixed else "FlagSync"
+        pcm = {"NRZL": "Nrzl", "NRZM": "Nrzm", "NRZS": "Nrzs"}[st.pcm]
+        self.line()
+        doc = stream_doc(st).replace(st.key,
+                                     f"`{st.key}`").replace(st.container,
+                                                            f"`{st.container}`")
+        for text in textwrap.wrap(doc, 72):
+            self.line(f"/// {text}")
+        self.line("#[derive(Debug, Clone)]")
+        self.line(f"pub struct {st.ident}(pk::{sync}<{bits}, {size}>);")
+        self.line()
+        self.line(f"impl Default for {st.ident} {{")
+        self.line("fn default() -> Self {", 1)
+        self.line("Self::new()", 2)
+        self.line("}", 1)
+        self.line("}")
+        self.line()
+        self.line(f"impl {st.ident} {{")
+        self.line("/// The container that each frame is.", 1)
+        self.line(f"pub const CONTAINER: &'static str = {rstr(st.container)};",
+                  1)
+        if st.fixed:
+            self.line("pub const SPEC: pk::FrameSpec = pk::FrameSpec {", 1)
+            fields = (
+                ("frame_bits", st.frame_bits), ("pattern", f"0x{st.pattern:x}"),
+                ("mask", f"0x{st.mask:x}"), ("pattern_bits", st.pattern_bits),
+                ("location", st.location), ("max_errors", st.max_errors),
+                ("aperture", st.aperture), ("verify", st.verify),
+                ("check", st.check), ("invert_after", st.invert_after),
+                ("pcm", f"pk::Pcm::{pcm}"),
+                ("inverted", str(st.inverted).lower()))
+        else:
+            self.line("pub const SPEC: pk::FlagSpec = pk::FlagSpec {", 1)
+            fields = (("flag_bits", st.flag_bits),
+                      ("flag_ones", str(st.flag_ones).lower()),
+                      ("max_bits", st.max_bits), ("pcm", f"pk::Pcm::{pcm}"),
+                      ("inverted", str(st.inverted).lower()))
+        for name, v in fields:
+            self.line(f"{name}: {v},", 2)
+        self.line("};", 1)
+        self.line()
+        self.line("pub fn new() -> Self {", 1)
+        self.line(f"Self(pk::{sync}::new(Self::SPEC))", 2)
+        self.line("}", 1)
+        self.line()
+        self.line("/// Takes the next bytes of the stream, and gives `f` each "
+                  "frame they", 1)
+        self.line("/// complete (its bits padded with zeros).", 1)
+        self.line("pub fn push(&mut self, data: &[u8], f: impl FnMut(&[u8])) {",
+                  1)
+        self.line("self.0.push(data, f);", 2)
+        self.line("}", 1)
+        self.line("}")
 
     def alarm_monitor(self) -> None:
         self.line()

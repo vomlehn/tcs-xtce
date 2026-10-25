@@ -2711,6 +2711,385 @@ impl<const H: usize> AlarmState<H> {
     }
 }
 
+/// How a PCM stream's levels become data bits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pcm {
+    /// The level is the bit.
+    Nrzl,
+    /// A one is a change of level.
+    Nrzm,
+    /// A zero is a change of level.
+    Nrzs,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LineDecoder {
+    pcm: Pcm,
+    inverted: bool,
+    prev: u8,
+}
+
+impl LineDecoder {
+    fn new(pcm: Pcm, inverted: bool) -> Self {
+        Self {
+            pcm,
+            inverted,
+            prev: 0,
+        }
+    }
+
+    fn decode(&mut self, raw: u8) -> u8 {
+        let level = raw ^ u8::from(self.inverted);
+        let bit = match self.pcm {
+            Pcm::Nrzl => level,
+            Pcm::Nrzm => level ^ self.prev,
+            Pcm::Nrzs => 1 ^ level ^ self.prev,
+        };
+        self.prev = level;
+        bit
+    }
+}
+
+/// Packs `bits`, most significant first, into the start of `out`, padded
+/// with zeros, and returns the bytes used.
+fn pack_bits(bits: impl Iterator<Item = u8>, out: &mut [u8]) -> usize {
+    let mut n = 0;
+    for (i, b) in bits.enumerate() {
+        if i % 8 == 0 {
+            out[i / 8] = 0;
+        }
+        out[i / 8] |= b << (7 - i % 8);
+        n = i + 1;
+    }
+    n.div_ceil(8)
+}
+
+/// The parameters of a FixedFrameStream; see [`FrameSync`].
+#[derive(Debug, Clone, Copy)]
+pub struct FrameSpec {
+    pub frame_bits: usize,
+    pub pattern: u64,
+    pub mask: u64,
+    pub pattern_bits: u32,
+    pub location: usize,
+    pub max_errors: u32,
+    pub aperture: usize,
+    pub verify: u32,
+    pub check: u32,
+    pub invert_after: u64,
+    pub pcm: Pcm,
+    pub inverted: bool,
+}
+
+const SEARCH: u8 = 0;
+const VERIFY: u8 = 1;
+const LOCK: u8 = 2;
+const CHECK: u8 = 3;
+
+/// Finds the frames of a FixedFrameStream in a stream of bytes, by the
+/// state machine XTCE describes: in Search, it looks for the sync pattern at
+/// every bit; in Verify, it needs `verify` frames in a row whose patterns are
+/// where the frame length (give or take `aperture` bits) says, then it
+/// locks; in Lock, it gives each frame whose pattern it found, and a missed
+/// pattern sends it to Check, where `check` good patterns in a row lock it
+/// again and a missed one sends it back to Search.  Searching `invert_after`
+/// bits (when not 0) without finding a pattern inverts the bits.  It keeps
+/// up to `BITS` bits and gives frames of `BYTES` bytes; the generated stream
+/// types choose both.
+#[derive(Debug, Clone)]
+pub struct FrameSync<const BITS: usize, const BYTES: usize> {
+    spec: FrameSpec,
+    line: LineDecoder,
+    bits: [u8; BITS],
+    len: usize,
+    base: usize,
+    state: u8,
+    pos: usize,
+    first: usize,
+    cur: usize,
+    cur_good: bool,
+    last: usize,
+    good: u32,
+    searched: u64,
+    flip: u8,
+    frame: [u8; BYTES],
+}
+
+impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
+    pub fn new(spec: FrameSpec) -> Self {
+        Self {
+            spec,
+            line: LineDecoder::new(spec.pcm, spec.inverted),
+            bits: [0; BITS],
+            len: 0,
+            base: 0,
+            state: SEARCH,
+            pos: 0,
+            first: 0,
+            cur: 0,
+            cur_good: false,
+            last: 0,
+            good: 0,
+            searched: 0,
+            flip: 0,
+            frame: [0; BYTES],
+        }
+    }
+
+    /// Takes the next bytes of the stream, and gives `f` each frame they
+    /// complete (its bits padded with zeros).
+    pub fn push(&mut self, data: &[u8], mut f: impl FnMut(&[u8])) {
+        for &byte in data {
+            for k in (0..8).rev() {
+                let b = self.line.decode((byte >> k) & 1);
+                if self.len == BITS {
+                    // Never, with the capacity the generator gives; start
+                    // again rather than overrun.
+                    self.base += self.len;
+                    self.len = 0;
+                    self.state = SEARCH;
+                    self.pos = self.base;
+                }
+                self.bits[self.len] = b;
+                self.len += 1;
+            }
+            self.run(&mut f);
+        }
+    }
+
+    fn bit(&self, i: usize) -> u8 {
+        self.bits[i - self.base] ^ self.flip
+    }
+
+    fn matches(&self, s: usize) -> bool {
+        let n = self.spec.pattern_bits;
+        let at = s + self.spec.location;
+        let mut errors = 0;
+        for j in 0..n {
+            let shift = n - 1 - j;
+            if (self.spec.mask >> shift) & 1 == 1
+                && u64::from(self.bit(at + j as usize))
+                    != (self.spec.pattern >> shift) & 1
+            {
+                errors += 1;
+                if errors > self.spec.max_errors {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    fn emit(&mut self, s: usize, f: &mut impl FnMut(&[u8])) {
+        let mut frame = [0u8; BYTES];
+        let n = pack_bits(
+            (0..self.spec.frame_bits).map(|i| self.bit(s + i)),
+            &mut frame,
+        );
+        self.frame = frame;
+        f(&self.frame[..n]);
+    }
+
+    fn run(&mut self, f: &mut impl FnMut(&[u8])) {
+        let span = self.spec.location + self.spec.pattern_bits as usize;
+        loop {
+            let end = self.base + self.len;
+            if self.state == SEARCH {
+                if self.pos + span > end {
+                    break;
+                }
+                if self.matches(self.pos) {
+                    self.first = self.pos;
+                    self.last = self.pos;
+                    self.cur = self.pos;
+                    self.cur_good = true;
+                    self.good = 1;
+                    self.searched = 0;
+                    self.state =
+                        if self.spec.verify <= 1 { LOCK } else { VERIFY };
+                } else {
+                    self.pos += 1;
+                    self.searched += 1;
+                    if self.spec.invert_after != 0
+                        && self.searched >= self.spec.invert_after
+                    {
+                        self.flip ^= 1;
+                        self.searched = 0;
+                    }
+                }
+                continue;
+            }
+            let next = self.cur + self.spec.frame_bits;
+            if next + self.spec.aperture + span > end {
+                break;
+            }
+            let mut found = None;
+            'search: for d in 0..=self.spec.aperture {
+                for at in [next - d, next + d] {
+                    if self.matches(at) {
+                        found = Some(at);
+                        break 'search;
+                    }
+                    if d == 0 {
+                        break;
+                    }
+                }
+            }
+            if let Some(at) = found {
+                if self.state != LOCK {
+                    self.good += 1;
+                    let need = if self.state == VERIFY {
+                        self.spec.verify
+                    } else {
+                        self.spec.check
+                    };
+                    if self.good >= need {
+                        self.state = LOCK;
+                    }
+                }
+                if self.state == LOCK && self.cur_good {
+                    self.emit(self.cur, f);
+                }
+                self.cur = at;
+                self.last = at;
+                self.cur_good = true;
+            } else if self.state == LOCK {
+                if self.cur_good {
+                    self.emit(self.cur, f);
+                }
+                self.state = CHECK;
+                self.good = 0;
+                self.cur = next;
+                self.cur_good = false;
+            } else {
+                self.pos = if self.state == VERIFY {
+                    self.first
+                } else {
+                    self.last
+                } + 1;
+                self.state = SEARCH;
+                self.searched = 0;
+            }
+        }
+        let keep = match self.state {
+            SEARCH => self.pos,
+            VERIFY => self.first,
+            _ => self.last,
+        };
+        let drop = keep - self.base;
+        self.bits.copy_within(drop..self.len, 0);
+        self.len -= drop;
+        self.base = keep;
+    }
+}
+
+/// The parameters of a VariableFrameStream; see [`FlagSync`].
+#[derive(Debug, Clone, Copy)]
+pub struct FlagSpec {
+    pub flag_bits: u32,
+    pub flag_ones: bool,
+    pub max_bits: usize,
+    pub pcm: Pcm,
+    pub inverted: bool,
+}
+
+/// Finds the frames of a VariableFrameStream in a stream of bytes: frames
+/// lie between flags, each `flag_bits` ones (or zeros, unless `flag_ones`)
+/// with a bit of the other kind on either side, and a bit of the other kind
+/// is stuffed into a frame after `flag_bits - 1` in a row, which this
+/// removes.  More than `flag_bits` in a row abort the frame, as does a frame
+/// of more than `max_bits`; frames are found again from the next flag.  It
+/// keeps up to `BITS` bits (`max_bits + flag_bits + 2`) and gives frames of
+/// up to `BYTES` bytes.
+#[derive(Debug, Clone)]
+pub struct FlagSync<const BITS: usize, const BYTES: usize> {
+    spec: FlagSpec,
+    line: LineDecoder,
+    bits: [u8; BITS],
+    len: usize,
+    run: u32,
+    hunting: bool,
+    frame: [u8; BYTES],
+}
+
+impl<const BITS: usize, const BYTES: usize> FlagSync<BITS, BYTES> {
+    pub fn new(spec: FlagSpec) -> Self {
+        Self {
+            spec,
+            line: LineDecoder::new(spec.pcm, spec.inverted),
+            bits: [0; BITS],
+            len: 0,
+            run: 0,
+            hunting: true,
+            frame: [0; BYTES],
+        }
+    }
+
+    /// Takes the next bytes of the stream, and gives `f` each frame they
+    /// complete (its bits padded with zeros).
+    pub fn push(&mut self, data: &[u8], mut f: impl FnMut(&[u8])) {
+        for &byte in data {
+            for k in (0..8).rev() {
+                let b = self.line.decode((byte >> k) & 1);
+                self.bit(b, &mut f);
+            }
+        }
+    }
+
+    fn bit(&mut self, b: u8, f: &mut impl FnMut(&[u8])) {
+        let flag = u8::from(self.spec.flag_ones);
+        let fb = self.spec.flag_bits;
+        if b == flag {
+            self.run += 1;
+            if self.run > fb {
+                self.hunting = true;
+            }
+            if !self.hunting {
+                if self.len < BITS {
+                    self.bits[self.len] = b;
+                }
+                self.len += 1;
+                if self.len > self.spec.max_bits + fb as usize + 1 {
+                    self.hunting = true;
+                }
+            }
+            if self.hunting {
+                self.len = 0;
+            }
+            return;
+        }
+        if self.run == fb {
+            if !self.hunting {
+                let mut n = self.len - fb as usize;
+                if n > 0 && self.bits[n - 1] != flag {
+                    n -= 1;
+                }
+                if n > 0 {
+                    let mut frame = [0u8; BYTES];
+                    let bytes =
+                        pack_bits(self.bits[..n].iter().copied(), &mut frame);
+                    self.frame = frame;
+                    f(&self.frame[..bytes]);
+                }
+            }
+            self.hunting = false;
+            self.len = 0;
+        } else if self.run == fb - 1 && !self.hunting {
+            // a stuffed bit
+        } else if !self.hunting {
+            if self.len < BITS {
+                self.bits[self.len] = b;
+            }
+            self.len += 1;
+            if self.len > self.spec.max_bits + fb as usize + 1 {
+                self.hunting = true;
+                self.len = 0;
+            }
+        }
+        self.run = 0;
+    }
+}
+
 /// The output of one MathAlgorithm: its value, or `None` when an input is
 /// absent.
 #[derive(Debug, Clone, Copy, PartialEq)]

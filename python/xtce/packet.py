@@ -1559,6 +1559,216 @@ class AlarmState:
             del self.times[0]
 
 
+def _line_decoder(pcm: str, inverted: bool):
+    """A function turning the bits of a PCM stream (``pcm`` NRZL, NRZM or
+    NRZS, inverted when ``inverted``) into data bits."""
+    prev = [0]
+
+    def decode(raw: int) -> int:
+        level = raw ^ inverted
+        if pcm == "NRZM":  # a one is a change of level
+            bit = level ^ prev[0]
+        elif pcm == "NRZS":  # a zero is a change of level
+            bit = 1 ^ level ^ prev[0]
+        else:
+            bit = level
+        prev[0] = level
+        return bit
+    return decode
+
+
+def _pack(bits) -> bytes:
+    """Bits, most significant first, as bytes padded with zeros."""
+    out = bytearray((len(bits) + 7) // 8)
+    for i, b in enumerate(bits):
+        out[i >> 3] |= b << (7 - (i & 7))
+    return bytes(out)
+
+
+class FrameSync:
+    """Finds the frames of a FixedFrameStream in a stream of bytes, by the
+    state machine XTCE describes: in Search, it looks for the sync pattern
+    at every bit; in Verify, it needs ``verify`` frames in a row whose
+    patterns are where the frame length (give or take ``aperture`` bits)
+    says, then it locks; in Lock, it gives each frame whose pattern it
+    found, and a missed pattern sends it to Check, where ``check`` good
+    patterns in a row lock it again and a missed one sends it back to
+    Search.  Searching ``invert_after`` bits (when not 0) without finding a
+    pattern inverts the bits.  See the generator's ``model.Stream``."""
+
+    SEARCH, VERIFY, LOCK, CHECK = range(4)
+
+    def __init__(self, frame_bits: int, pattern: int, mask: int,
+                 pattern_bits: int, location: int, max_errors: int,
+                 aperture: int, verify: int, check: int, invert_after: int,
+                 pcm: str = "NRZL", inverted: bool = False) -> None:
+        self.frame_bits = frame_bits
+        self.pat = [(pattern >> (pattern_bits - 1 - j)) & 1
+                    for j in range(pattern_bits)]
+        self.mask = [(mask >> (pattern_bits - 1 - j)) & 1
+                     for j in range(pattern_bits)]
+        self.location = location
+        self.max_errors = max_errors
+        self.aperture = aperture
+        self.verify = verify
+        self.check = check
+        self.invert_after = invert_after
+        self.decode = _line_decoder(pcm, inverted)
+        self.bits = bytearray()
+        self.base = 0  # the stream position of bits[0]
+        self.state = self.SEARCH
+        self.pos = 0  # where Search looks next
+        self.first = 0  # the pattern that started Verify
+        self.cur = 0  # the start of the current frame
+        self.cur_good = False  # whether its pattern was found
+        self.last = 0  # the last pattern found
+        self.good = 0
+        self.searched = 0
+        self.flip = 0
+
+    def push(self, data) -> list:
+        """The frames that ``data``, the next bytes of the stream, completes,
+        each as bytes (its bits padded with zeros)."""
+        frames: list = []
+        for byte in data:
+            for k in range(7, -1, -1):
+                self.bits.append(self.decode((byte >> k) & 1))
+            self._run(frames)
+        return frames
+
+    def _bit(self, i: int) -> int:
+        return self.bits[i - self.base] ^ self.flip
+
+    def _matches(self, s: int) -> bool:
+        errors = 0
+        at = s + self.location
+        for j, (p, m) in enumerate(zip(self.pat, self.mask)):
+            if m and self._bit(at + j) != p:
+                errors += 1
+                if errors > self.max_errors:
+                    return False
+        return True
+
+    def _frame(self, s: int) -> bytes:
+        return _pack([self._bit(s + i) for i in range(self.frame_bits)])
+
+    def _run(self, frames: list) -> None:
+        span = self.location + len(self.pat)
+        while True:
+            end = self.base + len(self.bits)
+            if self.state == self.SEARCH:
+                if self.pos + span > end:
+                    break
+                if self._matches(self.pos):
+                    self.first = self.last = self.cur = self.pos
+                    self.cur_good = True
+                    self.good = 1
+                    self.searched = 0
+                    self.state = (self.LOCK if self.verify <= 1
+                                  else self.VERIFY)
+                else:
+                    self.pos += 1
+                    self.searched += 1
+                    if self.invert_after and self.searched >= self.invert_after:
+                        self.flip ^= 1
+                        self.searched = 0
+                continue
+            nxt = self.cur + self.frame_bits
+            if nxt + self.aperture + span > end:
+                break
+            found = None
+            for d in range(self.aperture + 1):
+                for e in ((0,) if d == 0 else (-d, d)):
+                    if found is None and self._matches(nxt + e):
+                        found = nxt + e
+            if found is not None:
+                if self.state != self.LOCK:
+                    self.good += 1
+                    if (self.good >= (self.verify if self.state == self.VERIFY
+                                      else self.check)):
+                        self.state = self.LOCK
+                if self.state == self.LOCK and self.cur_good:
+                    frames.append(self._frame(self.cur))
+                self.cur = self.last = found
+                self.cur_good = True
+            elif self.state == self.LOCK:
+                if self.cur_good:
+                    frames.append(self._frame(self.cur))
+                self.state = self.CHECK
+                self.good = 0
+                self.cur = nxt
+                self.cur_good = False
+            else:
+                self.pos = ((self.first if self.state == self.VERIFY
+                             else self.last) + 1)
+                self.state = self.SEARCH
+                self.searched = 0
+        keep = (self.pos if self.state == self.SEARCH else self.first
+                if self.state == self.VERIFY else self.last)
+        del self.bits[:keep - self.base]
+        self.base = keep
+
+
+class FlagSync:
+    """Finds the frames of a VariableFrameStream in a stream of bytes:
+    frames lie between flags, each ``flag_bits`` ones (or zeros, unless
+    ``flag_ones``) with a bit of the other kind on either side, and a bit
+    of the other kind is stuffed into a frame after ``flag_bits - 1`` in a
+    row, which this removes.  More than ``flag_bits`` in a row abort the
+    frame, as does a frame of more than ``max_bits``; frames are found
+    again from the next flag.  See the generator's ``model.Stream``."""
+
+    def __init__(self, flag_bits: int, flag_ones: bool, max_bits: int,
+                 pcm: str = "NRZL", inverted: bool = False) -> None:
+        self.flag_bits = flag_bits
+        self.flag = int(flag_ones)
+        self.max_bits = max_bits
+        self.decode = _line_decoder(pcm, inverted)
+        self.frame: list = []
+        self.run = 0
+        self.hunting = True
+
+    def push(self, data) -> list:
+        """The frames that ``data``, the next bytes of the stream, completes,
+        each as bytes (its bits padded with zeros)."""
+        frames: list = []
+        for byte in data:
+            for k in range(7, -1, -1):
+                self._bit(self.decode((byte >> k) & 1), frames)
+        return frames
+
+    def _bit(self, b: int, frames: list) -> None:
+        f = self.flag_bits
+        if b == self.flag:
+            self.run += 1
+            if self.run > f:
+                self.hunting = True
+            if not self.hunting:
+                self.frame.append(b)
+                if len(self.frame) > self.max_bits + f + 1:
+                    self.hunting = True
+            if self.hunting:
+                self.frame = []
+            return
+        if self.run == f:  # a flag
+            if not self.hunting:
+                body = self.frame[:-f]
+                if body and body[-1] != self.flag:
+                    body.pop()  # the flag's leading bit
+                if body:
+                    frames.append(_pack(body))
+            self.hunting = False
+            self.frame = []
+        elif self.run == f - 1 and not self.hunting:
+            pass  # a stuffed bit
+        elif not self.hunting:
+            self.frame.append(b)
+            if len(self.frame) > self.max_bits + f + 1:
+                self.hunting = True
+                self.frame = []
+        self.run = 0
+
+
 def describe_alarms(alarms) -> str:
     """``field=level`` for each (field, level), ``none`` when the field is
     absent, as every runtime writes it."""

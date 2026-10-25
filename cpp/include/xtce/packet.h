@@ -2755,6 +2755,322 @@ static inline void xtce_pk_text_bytes(xtce_pk_text* t, const uint8_t* b,
         }
 }
 
+/* --- streams -----------------------------------------------------------------
+ */
+
+/* How a PCM stream's levels become data bits: the level is the bit
+ * (NRZL), a one is a change of level (NRZM), or a zero is (NRZS). */
+enum { XTCE_PK_NRZL, XTCE_PK_NRZM, XTCE_PK_NRZS };
+
+typedef struct xtce_pk_line {
+        int pcm;
+        bool inverted;
+        uint8_t prev;
+} xtce_pk_line;
+
+static inline uint8_t xtce_pk_line_decode(xtce_pk_line* l, uint8_t raw) {
+        uint8_t level = (uint8_t)(raw ^ (l->inverted ? 1 : 0)), bit;
+        if (l->pcm == XTCE_PK_NRZM)
+                bit = (uint8_t)(level ^ l->prev);
+        else if (l->pcm == XTCE_PK_NRZS)
+                bit = (uint8_t)(1 ^ level ^ l->prev);
+        else
+                bit = level;
+        l->prev = level;
+        return bit;
+}
+
+/* Called with each frame found: its bits, padded with zeros, in `len`
+ * bytes. */
+typedef void (*xtce_pk_frame_fn)(void* ctx, const uint8_t* frame, size_t len);
+
+/* The parameters of a FixedFrameStream; see xtce_pk_frame_sync. */
+typedef struct xtce_pk_frame_spec {
+        size_t frame_bits;
+        uint64_t pattern;
+        uint64_t mask;
+        unsigned pattern_bits;
+        size_t location;
+        unsigned max_errors;
+        size_t aperture;
+        unsigned verify;
+        unsigned check;
+        uint64_t invert_after;
+        int pcm;
+        bool inverted;
+} xtce_pk_frame_spec;
+
+/* Finds the frames of a FixedFrameStream in a stream of bytes, by the state
+ * machine XTCE describes: in Search, it looks for the sync pattern at every
+ * bit; in Verify, it needs `verify` frames in a row whose patterns are where
+ * the frame length (give or take `aperture` bits) says, then it locks; in
+ * Lock, it gives each frame whose pattern it found, and a missed pattern
+ * sends it to Check, where `check` good patterns in a row lock it again and
+ * a missed one sends it back to Search.  Searching `invert_after` bits (when
+ * not 0) without finding a pattern inverts the bits.  It keeps up to `cap`
+ * bits in `bits` and builds frames in `frame`; the generated stream types
+ * hold both. */
+typedef struct xtce_pk_frame_sync {
+        const xtce_pk_frame_spec* spec;
+        xtce_pk_line line;
+        uint8_t* bits;
+        size_t cap;
+        size_t len;
+        size_t base;
+        int state;
+        size_t pos;
+        size_t first;
+        size_t cur;
+        bool cur_good;
+        size_t last;
+        unsigned good;
+        uint64_t searched;
+        uint8_t flip;
+        uint8_t* frame;
+} xtce_pk_frame_sync;
+
+enum { XTCE_PK_SEARCH, XTCE_PK_VERIFY, XTCE_PK_LOCK, XTCE_PK_CHECK };
+
+static inline void xtce_pk_frame_sync_init(xtce_pk_frame_sync* s,
+                                           const xtce_pk_frame_spec* spec,
+                                           uint8_t* bits, size_t cap,
+                                           uint8_t* frame) {
+        memset(s, 0, sizeof *s);
+        s->spec = spec;
+        s->line.pcm = spec->pcm;
+        s->line.inverted = spec->inverted;
+        s->bits = bits;
+        s->cap = cap;
+        s->frame = frame;
+        s->state = XTCE_PK_SEARCH;
+}
+
+static inline uint8_t xtce_pk_frame_bit(const xtce_pk_frame_sync* s,
+                                        size_t i) {
+        return (uint8_t)(s->bits[i - s->base] ^ s->flip);
+}
+
+static inline bool xtce_pk_frame_matches(const xtce_pk_frame_sync* s,
+                                         size_t at) {
+        const xtce_pk_frame_spec* sp = s->spec;
+        unsigned n = sp->pattern_bits, j, errors = 0;
+        at += sp->location;
+        for (j = 0; j < n; ++j) {
+                unsigned shift = n - 1 - j;
+                uint64_t want = (sp->pattern >> shift) & 1;
+                if (((sp->mask >> shift) & 1) &&
+                    xtce_pk_frame_bit(s, at + j) != want)
+                        if (++errors > sp->max_errors) return false;
+        }
+        return true;
+}
+
+static inline void xtce_pk_frame_emit(xtce_pk_frame_sync* s, size_t at,
+                                      xtce_pk_frame_fn f, void* ctx) {
+        size_t i, n = s->spec->frame_bits;
+        memset(s->frame, 0, (n + 7) / 8);
+        for (i = 0; i < n; ++i)
+                s->frame[i / 8] |=
+                        (uint8_t)(xtce_pk_frame_bit(s, at + i) << (7 - i % 8));
+        f(ctx, s->frame, (n + 7) / 8);
+}
+
+static inline void xtce_pk_frame_run(xtce_pk_frame_sync* s,
+                                     xtce_pk_frame_fn f, void* ctx) {
+        const xtce_pk_frame_spec* sp = s->spec;
+        size_t span = sp->location + sp->pattern_bits, keep;
+        for (;;) {
+                size_t end = s->base + s->len, next, at = 0, d;
+                bool found = false;
+                if (s->state == XTCE_PK_SEARCH) {
+                        if (s->pos + span > end) break;
+                        if (xtce_pk_frame_matches(s, s->pos)) {
+                                s->first = s->last = s->cur = s->pos;
+                                s->cur_good = true;
+                                s->good = 1;
+                                s->searched = 0;
+                                s->state = sp->verify <= 1 ? XTCE_PK_LOCK
+                                                           : XTCE_PK_VERIFY;
+                        } else {
+                                ++s->pos;
+                                ++s->searched;
+                                if (sp->invert_after &&
+                                    s->searched >= sp->invert_after) {
+                                        s->flip ^= 1;
+                                        s->searched = 0;
+                                }
+                        }
+                        continue;
+                }
+                next = s->cur + sp->frame_bits;
+                if (next + sp->aperture + span > end) break;
+                for (d = 0; d <= sp->aperture && !found; ++d) {
+                        if (xtce_pk_frame_matches(s, next - d)) {
+                                found = true;
+                                at = next - d;
+                        } else if (d && xtce_pk_frame_matches(s, next + d)) {
+                                found = true;
+                                at = next + d;
+                        }
+                }
+                if (found) {
+                        if (s->state != XTCE_PK_LOCK) {
+                                unsigned need = s->state == XTCE_PK_VERIFY
+                                                        ? sp->verify
+                                                        : sp->check;
+                                if (++s->good >= need) s->state = XTCE_PK_LOCK;
+                        }
+                        if (s->state == XTCE_PK_LOCK && s->cur_good)
+                                xtce_pk_frame_emit(s, s->cur, f, ctx);
+                        s->cur = s->last = at;
+                        s->cur_good = true;
+                } else if (s->state == XTCE_PK_LOCK) {
+                        if (s->cur_good) xtce_pk_frame_emit(s, s->cur, f, ctx);
+                        s->state = XTCE_PK_CHECK;
+                        s->good = 0;
+                        s->cur = next;
+                        s->cur_good = false;
+                } else {
+                        s->pos = (s->state == XTCE_PK_VERIFY ? s->first
+                                                             : s->last) + 1;
+                        s->state = XTCE_PK_SEARCH;
+                        s->searched = 0;
+                }
+        }
+        keep = s->state == XTCE_PK_SEARCH   ? s->pos
+               : s->state == XTCE_PK_VERIFY ? s->first
+                                            : s->last;
+        memmove(s->bits, s->bits + (keep - s->base), s->len - (keep - s->base));
+        s->len -= keep - s->base;
+        s->base = keep;
+}
+
+/* Takes the next `len` bytes of the stream, and gives `f` each frame they
+ * complete. */
+static inline void xtce_pk_frame_sync_push(xtce_pk_frame_sync* s,
+                                           const uint8_t* data, size_t len,
+                                           xtce_pk_frame_fn f, void* ctx) {
+        size_t i;
+        int k;
+        for (i = 0; i < len; ++i) {
+                for (k = 7; k >= 0; --k) {
+                        uint8_t b = xtce_pk_line_decode(
+                                &s->line, (uint8_t)((data[i] >> k) & 1));
+                        if (s->len == s->cap) {
+                                /* Never, with the capacity the generator
+                                 * gives; start again rather than overrun. */
+                                s->base += s->len;
+                                s->len = 0;
+                                s->state = XTCE_PK_SEARCH;
+                                s->pos = s->base;
+                        }
+                        s->bits[s->len++] = b;
+                }
+                xtce_pk_frame_run(s, f, ctx);
+        }
+}
+
+/* The parameters of a VariableFrameStream; see xtce_pk_flag_sync. */
+typedef struct xtce_pk_flag_spec {
+        unsigned flag_bits;
+        bool flag_ones;
+        size_t max_bits;
+        int pcm;
+        bool inverted;
+} xtce_pk_flag_spec;
+
+/* Finds the frames of a VariableFrameStream in a stream of bytes: frames lie
+ * between flags, each `flag_bits` ones (or zeros, unless `flag_ones`) with a
+ * bit of the other kind on either side, and a bit of the other kind is
+ * stuffed into a frame after `flag_bits - 1` in a row, which this removes.
+ * More than `flag_bits` in a row abort the frame, as does a frame of more
+ * than `max_bits`; frames are found again from the next flag.  It keeps up
+ * to `cap` bits (max_bits + flag_bits + 2) in `bits` and builds frames in
+ * `frame`. */
+typedef struct xtce_pk_flag_sync {
+        const xtce_pk_flag_spec* spec;
+        xtce_pk_line line;
+        uint8_t* bits;
+        size_t cap;
+        size_t len;
+        unsigned run;
+        bool hunting;
+        uint8_t* frame;
+} xtce_pk_flag_sync;
+
+static inline void xtce_pk_flag_sync_init(xtce_pk_flag_sync* s,
+                                          const xtce_pk_flag_spec* spec,
+                                          uint8_t* bits, size_t cap,
+                                          uint8_t* frame) {
+        memset(s, 0, sizeof *s);
+        s->spec = spec;
+        s->line.pcm = spec->pcm;
+        s->line.inverted = spec->inverted;
+        s->bits = bits;
+        s->cap = cap;
+        s->frame = frame;
+        s->hunting = true;
+}
+
+static inline void xtce_pk_flag_bit(xtce_pk_flag_sync* s, uint8_t b,
+                                    xtce_pk_frame_fn f, void* ctx) {
+        const xtce_pk_flag_spec* sp = s->spec;
+        uint8_t flag = sp->flag_ones ? 1 : 0;
+        unsigned fb = sp->flag_bits;
+        if (b == flag) {
+                ++s->run;
+                if (s->run > fb) s->hunting = true;
+                if (!s->hunting) {
+                        if (s->len < s->cap) s->bits[s->len] = b;
+                        ++s->len;
+                        if (s->len > sp->max_bits + fb + 1) s->hunting = true;
+                }
+                if (s->hunting) s->len = 0;
+                return;
+        }
+        if (s->run == fb) {
+                if (!s->hunting) {
+                        size_t n = s->len - fb, i;
+                        if (n > 0 && s->bits[n - 1] != flag) --n;
+                        if (n > 0) {
+                                memset(s->frame, 0, (n + 7) / 8);
+                                for (i = 0; i < n; ++i)
+                                        s->frame[i / 8] |= (uint8_t)(
+                                                s->bits[i] << (7 - i % 8));
+                                f(ctx, s->frame, (n + 7) / 8);
+                        }
+                }
+                s->hunting = false;
+                s->len = 0;
+        } else if (s->run == fb - 1 && !s->hunting) {
+                /* a stuffed bit */
+        } else if (!s->hunting) {
+                if (s->len < s->cap) s->bits[s->len] = b;
+                ++s->len;
+                if (s->len > sp->max_bits + fb + 1) {
+                        s->hunting = true;
+                        s->len = 0;
+                }
+        }
+        s->run = 0;
+}
+
+/* Takes the next `len` bytes of the stream, and gives `f` each frame they
+ * complete. */
+static inline void xtce_pk_flag_sync_push(xtce_pk_flag_sync* s,
+                                          const uint8_t* data, size_t len,
+                                          xtce_pk_frame_fn f, void* ctx) {
+        size_t i;
+        int k;
+        for (i = 0; i < len; ++i)
+                for (k = 7; k >= 0; --k)
+                        xtce_pk_flag_bit(s,
+                                         xtce_pk_line_decode(
+                                                 &s->line,
+                                                 (uint8_t)((data[i] >> k) & 1)),
+                                         f, ctx);
+}
+
 #ifdef __cplusplus
 }
 #endif
