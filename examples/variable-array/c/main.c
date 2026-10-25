@@ -3,7 +3,9 @@
  * using the code tcs-xtce generated into variable_array.h.
  *
  * A Paragraph is a two-dimensional array whose dimensions both vary: an
- * array of lines, each an array of words.  Before each packet the sender
+ * array of lines, each an array of words.  The sender first writes the digest
+ * of variable_array.xml, which the receiver checks against the digest of its
+ * own copy, so that both agree on the packets.  Before each packet the sender
  * writes a Length packet, also described by variable_array.xml, giving its
  * size in bytes, so the receiver knows how many bytes to read; it then
  * writes the whole Paragraph in a single write.  The receiver checks that every
@@ -12,7 +14,7 @@
  *
  * The same file is built as C and as C++; both, and the Rust and Python
  * versions of this program, print identical output.  It uses POSIX threads
- * and sockets.
+ * and sockets.  Run it in the directory that holds variable_array.xml.
  *
  * The C build finds variable_array.h in c/ (--lang c) and the C++ build in
  * cxx/ (--lang c++), so it is included with <> rather than "": a quoted
@@ -29,10 +31,15 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <variable_array.h>
+#include <xtce/digest.h>
 
 /* The lorem ipsum paragraph in five lines, as two arrays: three lines, then
  * two.  Each array ends with NULL. */
 #define N_PARAGRAPHS 2
+
+/* The XTCE file that describes the packets, and the size of its digest. */
+#define XTCE "variable_array.xml"
+#define DIGEST_BYTES 16
 static const char* const PARAGRAPH_1[] = {
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
         "eiusmod tempor incididunt ut",
@@ -129,8 +136,9 @@ static void send_all(int fd, const uint8_t* buf, size_t len) {
         }
 }
 
-/* Connects to the address in `arg` and sends each array: a Length packet,
- * then the Paragraph packet in a single write.  Then closes the connection. */
+/* Connects to the address in `arg`, sends the digest of the XTCE file, then
+ * sends each array: a Length packet, then the Paragraph packet in a single
+ * write.  Then closes the connection. */
 static void* send_paragraphs(void* arg) {
         const struct sockaddr_in* addr = (const struct sockaddr_in*)arg;
         /* The output buffers are preallocated to
@@ -139,12 +147,19 @@ static void* send_paragraphs(void* arg) {
         static uint8_t output[variable_array_Paragraph_MAX_BYTES];
         uint8_t length_output[variable_array_Length_MAX_BYTES];
         static variable_array_Paragraph value;
+        uint8_t digest[DIGEST_BYTES];
+        xtce_digest_error derr;
         size_t n;
         int fd = socket(AF_INET, SOCK_STREAM, 0);
 
         if (fd < 0 ||
             connect(fd, (const struct sockaddr*)addr, sizeof *addr) != 0)
                 fail("connect: %s", strerror(errno));
+        /* First the digest, so the receiver can check that it uses the same
+         * definitions of Length and Paragraph. */
+        if (xtce_digest_file_bytes(XTCE, digest, &derr))
+                fail("%s: %s", XTCE, derr.message);
+        send_all(fd, digest, sizeof digest);
 
         for (n = 0; n < N_PARAGRAPHS; ++n) {
                 xtce_pk_error err;
@@ -184,8 +199,8 @@ static void* send_paragraphs(void* arg) {
 }
 
 /* Reads `len` bytes into `buf`.  Returns 0 if the stream ended before the
- * first byte, and fails if it ended part way through. */
-static int read_all(int fd, uint8_t* buf, size_t len) {
+ * first byte, and fails if it ended part way through `what`. */
+static int read_all(int fd, uint8_t* buf, size_t len, const char* what) {
         size_t got = 0;
         while (got < len) {
                 ssize_t r = recv(fd, buf + got, len - got, 0);
@@ -193,16 +208,17 @@ static int read_all(int fd, uint8_t* buf, size_t len) {
                 if (r < 0) fail("receive: %s", strerror(errno));
                 if (r == 0) {
                         if (got == 0) return 0;
-                        fail("stream closed in the middle of an array");
+                        fail("stream closed in the middle of %s", what);
                 }
                 got += (size_t)r;
         }
         return 1;
 }
 
-/* Accepts the connection and receives arrays until it closes: for each, it
- * reads and decodes the Length packet, then reads that many bytes, decodes
- * the Paragraph, checks it and prints it. */
+/* Accepts the connection, checks the sender's XTCE digest, and receives
+ * arrays until it closes: for each, it reads and decodes the Length packet,
+ * then reads that many bytes, decodes the Paragraph, checks it and prints
+ * it. */
 static void receive_paragraphs(int listener) {
         /* The input buffers are preallocated to
          * variable_array_Paragraph_MAX_BYTES and
@@ -211,10 +227,25 @@ static void receive_paragraphs(int listener) {
         static variable_array_Paragraph got, want;
         uint8_t length_input[variable_array_Length_MAX_BYTES];
         size_t n = 0, i, j;
+        uint8_t theirs[DIGEST_BYTES], ours[DIGEST_BYTES];
+        char theirs_hex[33], ours_hex[33];
+        xtce_digest_error derr;
         int fd = accept(listener, NULL, NULL);
 
         if (fd < 0) fail("accept: %s", strerror(errno));
-        while (read_all(fd, length_input, sizeof length_input)) {
+        /* The sender's digest must be the digest of this side's XTCE file:
+         * then both read and write the packets the same way. */
+        if (!read_all(fd, theirs, sizeof theirs, "the sender's XTCE digest"))
+                fail("stream closed before the sender's XTCE digest");
+        if (xtce_digest_file_bytes(XTCE, ours, &derr))
+                fail("%s: %s", XTCE, derr.message);
+        xtce_digest_hex(theirs, theirs_hex);
+        xtce_digest_hex(ours, ours_hex);
+        if (memcmp(theirs, ours, sizeof ours) != 0)
+                fail("the sender's XTCE digest %s is not %s, the digest of %s",
+                     theirs_hex, ours_hex, XTCE);
+        printf("XTCE digest: %s, the same on both sides\n", ours_hex);
+        while (read_all(fd, length_input, sizeof length_input, "an array")) {
                 xtce_pk_error err;
                 variable_array_Length length;
                 size_t len;
@@ -230,7 +261,7 @@ static void receive_paragraphs(int listener) {
                 if (len > sizeof input)
                         fail("length %zu is more than a Paragraph's %zu", len,
                              (size_t)variable_array_Paragraph_MAX_BYTES);
-                if (len > 0 && !read_all(fd, input, len))
+                if (len > 0 && !read_all(fd, input, len, "an array"))
                         fail("stream closed in the middle of an array");
                 if (n == N_PARAGRAPHS)
                         fail("received more arrays than were sent");

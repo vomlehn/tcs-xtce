@@ -2,10 +2,13 @@
  * described by to_from.xml, using the code tcs-xtce generated into
  * to_from.h.
  *
- * `to_from_c write` writes one packet per word to standard output.
- * `to_from_c read` reads packets from standard input and prints the words as
- * they arrive, separated by spaces, and a newline at the end of the input.
- * It checks that every word arrives intact and in order.
+ * `to_from_c write` writes the digest of to_from.xml, then one packet per
+ * word, to standard output.  `to_from_c read` reads the digest from standard
+ * input and checks that it is the digest of its own to_from.xml, so that both
+ * programs agree on what a Word is; it then reads packets and prints the
+ * words as they arrive, separated by spaces, and a newline at the end of the
+ * input.  It checks that every word arrives intact and in order.  Run it in
+ * the directory that holds to_from.xml.
  *
  * The same file is built as C and as C++.  Both, and the Rust and Python
  * versions of this program, write the same bytes and print the same words,
@@ -21,18 +24,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <to_from.h>
+#include <xtce/digest.h>
 
 static const char LOREM_IPSUM[] =
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
         "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim "
-        "ad "
-        "minim veniam, quis nostrud exercitation ullamco laboris nisi ut "
-        "aliquip "
-        "ex ea commodo consequat. Duis aute irure dolor in reprehenderit in "
-        "voluptate velit esse cillum dolore eu fugiat nulla pariatur. "
-        "Excepteur "
-        "sint occaecat cupidatat non proident, sunt in culpa qui officia "
-        "deserunt mollit anim id est laborum.";
+        "ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut "
+        "aliquip ex ea commodo consequat. Duis aute irure dolor in "
+        "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
+        "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
+        "culpa qui officia deserunt mollit anim id est laborum.";
+
+/* The XTCE file that describes a Word, and the size of its digest. */
+#define XTCE "to_from.xml"
+#define DIGEST_BYTES 16
 
 /* The size of a Word's size tag: 32 bits, most significant byte first, as
  * to_from.xml gives it. */
@@ -68,9 +73,17 @@ static void write_words(void) {
         /* The output buffer is preallocated to to_from_Word_MAX_BYTES (36) and
          * reused for every packet. */
         uint8_t output[to_from_Word_MAX_BYTES];
+        uint8_t digest[DIGEST_BYTES];
         size_t pos = 0, n, len;
         const char* text;
+        xtce_digest_error derr;
 
+        /* First the digest of the XTCE file, so the reader can check that it
+         * uses the same definition of a Word. */
+        if (xtce_digest_file_bytes(XTCE, digest, &derr))
+                fail("%s: %s", XTCE, derr.message);
+        if (fwrite(digest, 1, sizeof digest, stdout) != sizeof digest)
+                fail("write failed");
         while (next_word(&pos, &text, &n)) {
                 to_from_Word word;
                 xtce_pk_error err;
@@ -94,13 +107,14 @@ static void write_words(void) {
 }
 
 /* Reads `len` bytes from standard input into `buf`.  Returns 0 if the input
- * ended before the first byte, and fails if it ended part way through. */
-static int read_all(uint8_t* buf, size_t len) {
+ * ended before the first byte, and fails if it ended part way through
+ * `what`. */
+static int read_all(uint8_t* buf, size_t len, const char* what) {
         size_t got = fread(buf, 1, len, stdin);
         if (ferror(stdin)) fail("read failed");
         if (got == len) return 1;
         if (got == 0) return 0;
-        fail("input ended in the middle of a word");
+        fail("input ended in the middle of %s", what);
         return 0;
 }
 
@@ -112,10 +126,26 @@ static void read_words(void) {
         uint8_t input[to_from_Word_MAX_BYTES];
         size_t pos = 0, count = 0, want_len;
         const char* want;
+        uint8_t theirs[DIGEST_BYTES], ours[DIGEST_BYTES];
+        char theirs_hex[33], ours_hex[33];
+        xtce_digest_error derr;
+
+        /* The writer's digest must be the digest of this program's XTCE
+         * file: then both read and write a Word the same way. */
+        if (!read_all(theirs, sizeof theirs, "the writer's XTCE digest"))
+                fail("input ended before the writer's XTCE digest");
+        if (xtce_digest_file_bytes(XTCE, ours, &derr))
+                fail("%s: %s", XTCE, derr.message);
+        xtce_digest_hex(theirs, theirs_hex);
+        xtce_digest_hex(ours, ours_hex);
+        if (memcmp(theirs, ours, sizeof ours) != 0)
+                fail("the writer's XTCE digest %s is not %s, the digest of %s",
+                     theirs_hex, ours_hex, XTCE);
+        printf("XTCE digest: %s, the same on both sides\n", ours_hex);
 
         /* A packet is its 32-bit size tag followed by that many bytes of text,
          * so the tag says how much more of the input belongs to this word. */
-        while (read_all(input, TAG_BYTES)) {
+        while (read_all(input, TAG_BYTES, "a word")) {
                 to_from_Word word;
                 xtce_pk_error err;
                 uint32_t size = (uint32_t)input[0] << 24 |
@@ -124,7 +154,7 @@ static void read_words(void) {
 
                 if (size > sizeof input - TAG_BYTES)
                         fail("size tag %lu is too large", (unsigned long)size);
-                if (size > 0 && !read_all(input + TAG_BYTES, size))
+                if (size > 0 && !read_all(input + TAG_BYTES, size, "a word"))
                         fail("input ended in the middle of a word");
 
                 /* Deserialize from the input buffer. */

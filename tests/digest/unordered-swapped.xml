@@ -1,0 +1,1 @@
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="S"><SpaceSystem name="Y"/><ParameterSet><Parameter name="A" parameterTypeRef="T"/><Parameter name="B" parameterTypeRef="T"/></ParameterSet><SpaceSystem name="Z"/></SpaceSystem>

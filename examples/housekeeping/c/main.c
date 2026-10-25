@@ -11,8 +11,11 @@
  *   holds degrees, volts and watts, and the packet holds raw counts.
  * - HeaterPower is in the packet only when the heater is on.
  *
- * The same file is built as C and as C++; both, and the Rust and Python
- * versions of this program, print identical output.
+ * The stream starts with the digest of housekeeping.xml, so that whatever
+ * reads it can check that it uses the same definition of a Status.  The same
+ * file is built as C and as C++; both, and the Rust and Python versions of
+ * this program, print identical output.  Run it in the directory that holds
+ * housekeeping.xml.
  *
  * The C build finds housekeeping.h in c/ (--lang c) and the C++ build in
  * cxx/ (--lang c++), so it is included with <> rather than "": a quoted
@@ -23,8 +26,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <xtce/digest.h>
 
 #define N_READINGS 4
+
+/* The XTCE file that describes a Status, and the size of its digest. */
+#define XTCE "housekeeping.xml"
+#define DIGEST_BYTES 16
 
 /* A Status to encode, and the values decoding it must give: the nearest the
  * calibrators can represent.  The heater powers are ignored when the heater
@@ -109,20 +117,27 @@ static void try_decode(const uint8_t* data, size_t len, const char* why) {
 }
 
 int main(void) {
-        /* The packets, one after another, and a buffer for one packet,
-         * preallocated to housekeeping_Status_MAX_BYTES (7) and reused for
-         * every packet. */
-        uint8_t stream[N_READINGS * housekeeping_Status_MAX_BYTES];
+        /* The digest and the packets, one after another, and a buffer for
+         * one packet, preallocated to housekeeping_Status_MAX_BYTES (7) and
+         * reused for every packet. */
+        uint8_t stream[DIGEST_BYTES +
+                       N_READINGS * housekeeping_Status_MAX_BYTES];
         uint8_t out[housekeeping_Status_MAX_BYTES];
         uint8_t bad[housekeeping_Status_MAX_BYTES + 1];
         char t[256], h[64], h2[64];
-        size_t i, len, n = 0, at = 0;
+        size_t i, len, n = DIGEST_BYTES, at = DIGEST_BYTES;
         xtce_pk_error err;
         housekeeping_Status s;
+        uint8_t digest[DIGEST_BYTES];
+        char digest_text[33], stream_text[33];
+        xtce_digest_error derr;
 
-        /* Encode each reading and append it to the stream, as a recorder
-         * would store packets: one after another, with nothing between
-         * them. */
+        /* The stream starts with the digest of the XTCE file.  Then encode
+         * each reading and append it, as a recorder would store packets: one
+         * after another, with nothing between them. */
+        if (xtce_digest_file_bytes(XTCE, digest, &derr))
+                fail("%s: %s", XTCE, derr.message);
+        memcpy(stream, digest, DIGEST_BYTES);
         for (i = 0; i < N_READINGS; ++i) {
                 const struct reading* r = &READINGS[i];
                 status(&s, r->heater_on, r->temperature, r->bus_voltage,
@@ -134,10 +149,20 @@ int main(void) {
                 memcpy(stream + n, out, len);
                 n += len;
         }
-        printf("stream: %d packets, %zu bytes\n", N_READINGS, n);
+        printf("stream: the XTCE digest, then %d packets, %zu bytes\n",
+               N_READINGS, n);
 
-        /* Walk the stream.  Each packet starts with PacketLength, the number
-         * of bytes after it, so the packet is 2 + PacketLength bytes long. */
+        /* The stream's digest must be the digest of this program's XTCE
+         * file: then it reads the packets as they were written. */
+        xtce_digest_hex(digest, digest_text);
+        xtce_digest_hex(stream, stream_text);
+        if (memcmp(stream, digest, DIGEST_BYTES) != 0)
+                fail("the stream's XTCE digest %s is not %s, the digest of %s",
+                     stream_text, digest_text, XTCE);
+        printf("XTCE digest: %s, the same on both sides\n", digest_text);
+
+        /* Walk the packets.  Each starts with PacketLength, the number of
+         * bytes after it, so the packet is 2 + PacketLength bytes long. */
         for (i = 0; i < N_READINGS; ++i) {
                 const struct reading* r = &READINGS[i];
                 housekeeping_Status want;
@@ -173,8 +198,8 @@ int main(void) {
         try_encode(&s);
         status(&s, false, 300.0, 28.0, 0);
         try_encode(&s);
-        try_decode(stream + 5, 4, "cut short");
-        memcpy(bad, stream, 5);
+        try_decode(stream + DIGEST_BYTES + 5, 4, "cut short");
+        memcpy(bad, stream + DIGEST_BYTES, 5);
         bad[1] += 1;
         bad[5] = 0;
         try_decode(bad, 6, "PacketLength one too many");

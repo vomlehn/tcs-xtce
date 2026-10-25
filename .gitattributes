@@ -1,0 +1,3 @@
+# Test documents for the XTCE digest: their exact bytes (line ends, a BOM,
+# invalid UTF-8) are what is being tested.
+tests/digest/*.xml -text

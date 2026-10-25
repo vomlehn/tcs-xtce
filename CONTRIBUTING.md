@@ -75,6 +75,13 @@ counting a tab as 8 columns, and names each line that is too wide.
   columns (`generator/xtcegen/wrap.py`), so generated code needs no
   formatting.
 
+**The digest is the same in every runtime.** `python/xtce/digest.py`,
+`rust/src/digest.rs` and `cpp/include/xtce/digest.h` compute the same XTCE
+digest, and `tests/digest_check.sh` (part of `make test`) checks that they
+agree with each other and with `tests/digest/expected.txt`. A change to what
+the digest covers, including the `UNORDERED` list, goes into all three, with
+the expected digests updated.
+
 **Don't edit generated files.** Files that start with `@generated` are
 rewritten by `make generate` (the XML binding, from `generator/xtcegen`) or
 `make packets` (the demo mission's codecs, from `generator/xtcepkt`).

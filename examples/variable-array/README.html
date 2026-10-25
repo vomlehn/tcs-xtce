@@ -376,13 +376,16 @@ to 15 words, and the words differ in length. Words are split at spaces, so
 punctuation stays with its word.</p>
 <p>Each program has two threads:</p>
 <ul class="simple">
-<li>The <strong>sender</strong> connects to the receiver. For each array in turn, it
+<li>The <strong>sender</strong> connects to the receiver and sends the 16-byte digest of
+<tt class="docutils literal">variable_array.xml</tt>. Then, for each array in turn, it
 serializes the whole array into one <tt class="docutils literal">Paragraph</tt> packet, writes the
 packet's length as a <tt class="docutils literal">Length</tt> packet, then writes the <tt class="docutils literal">Paragraph</tt>
 packet with a single write call and
 checks that the call took every byte. After the last array it closes the
 connection.</li>
-<li>The <strong>receiver</strong> accepts the connection. For each array in turn, it reads
+<li>The <strong>receiver</strong> accepts the connection, reads the digest and checks it
+against the digest of its own <tt class="docutils literal">variable_array.xml</tt> (see <a class="reference internal" href="#checking-the-xtce-definition">Checking the
+XTCE definition</a>). For each array in turn, it then reads
 and deserializes the <tt class="docutils literal">Length</tt> packet, then reads that many bytes and
 deserializes the <tt class="docutils literal">Paragraph</tt> packet. It compares
 the packet with the array it expects: the number of lines, the number of
@@ -391,8 +394,8 @@ array as a line, with its words separated by spaces. When the connection
 closes, it checks that both arrays arrived. If anything is wrong, it
 prints the first problem to standard error and exits with status 1.</li>
 </ul>
-<p>So the program prints five lines: three from the first array, then two
-from the second.</p>
+<p>So the program prints the digest, then five lines: three from the first
+array, then two from the second.</p>
 <div class="section" id="the-length-before-each-packet">
 <h1>The length before each packet</h1>
 <p>A TCP stream carries bytes, not messages: the two arrays can arrive
@@ -419,7 +422,7 @@ more, which is the whole <tt class="docutils literal">Paragraph</tt> and nothing
 rejects a larger <tt class="docutils literal">ByteCount</tt> before reading it. (A <tt class="docutils literal">ValidRange</tt> on
 <tt class="docutils literal">ByteCountType</tt> wouldn't do this: tcs-xtce uses ranges to bound counts
 and sizes, but doesn't check other integers against them.)</p>
-<p>On the wire the two arrays look like this:</p>
+<p>On the wire, after the 16-byte digest, the two arrays look like this:</p>
 <pre class="literal-block">
 00000197                         Length: 407 bytes
 03 0e 00000005 4c6f72656d ...    array 1: 3 lines, the first has 14 words, &quot;Lorem&quot;, ...
@@ -429,6 +432,45 @@ and sizes, but doesn't check other integers against them.)</p>
 <p>Both threads are in one process. The receiver listens on <tt class="docutils literal">127.0.0.1</tt> on a
 port the system picks, so the programs need no network access and don't
 conflict with other programs or with each other.</p>
+</div>
+<div class="section" id="checking-the-xtce-definition">
+<h1>Checking the XTCE definition</h1>
+<p>The packets carry no field names or types, so the receiver can read them only
+if it was built from the same definition as the sender. To check, the sender sends
+the 16-byte MD5 digest of <tt class="docutils literal">variable_array.xml</tt>, before any packet. The receiver
+computes the digest of its own copy of <tt class="docutils literal">variable_array.xml</tt> and compares. If they
+match, it prints</p>
+<pre class="literal-block">
+XTCE digest: &lt;32 hex digits&gt;, the same on both sides
+</pre>
+<p>and goes on; if they don't, it prints both digests to standard error and
+exits with status 1, before it reads a packet.</p>
+<p>The digest is of what the document means, not of its bytes: comments,
+whitespace between elements, attribute order, namespace prefixes and the
+order of unordered collections such as a <tt class="docutils literal">ParameterSet</tt> don't change it,
+while any change to a type, a field or the order of entries does. Every
+runtime computes it the same way:</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Language</th>
+<th class="head">Function</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Rust</td>
+<td><tt class="docutils literal"><span class="pre">tcs_xtce::digest::digest_file_bytes(path)</span></tt>, giving <tt class="docutils literal">[u8; 16]</tt></td>
+</tr>
+<tr><td>C, C++</td>
+<td><tt class="docutils literal">xtce_digest_file_bytes(path, out, &amp;err)</tt>, from the header
+<tt class="docutils literal">xtce/digest.h</tt>, which needs no library</td>
+</tr>
+<tr><td>Python</td>
+<td><tt class="docutils literal">xtce.digest.digest_file_bytes(path)</tt>, giving <tt class="docutils literal">bytes</tt></td>
+</tr>
+</tbody>
+</table>
+<p><tt class="docutils literal"><span class="pre">xtce-digest</span> variable_array.xml</tt> prints the same digest in hex. Each program reads
+<tt class="docutils literal">variable_array.xml</tt> from the current directory, so run it from this one.</p>
 </div>
 <div class="section" id="the-xtce-description">
 <h1>The XTCE description</h1>
@@ -557,6 +599,7 @@ that they print the same thing:</p>
 <pre class="literal-block">
 $ make
 ...
+XTCE digest: 904beed3fc463cd7addc91dfca67c304, the same on both sides
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
 labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
 laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
@@ -568,14 +611,14 @@ variable-array: Rust, C, C++ and Python output identical
 <p><a class="reference internal" href="#makefile-targets">Makefile targets</a> lists the other targets.</p>
 <p>To run one program on its own, generate the code first with
 <tt class="docutils literal">make generate</tt>, then run the commands below from this directory. Each
-program prints the five lines and exits with status 0 if both arrays
-arrived intact.</p>
+program prints the digest and the five lines, and exits with status 0 if
+both arrays arrived intact.</p>
 <div class="section" id="rust">
 <h2>Rust</h2>
 <p><a class="reference external" href="rust/src/main.rs">rust/src/main.rs</a> is a stand-alone Cargo crate that
 depends on the <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> crate in <tt class="docutils literal"><span class="pre">../../rust</span></tt>.</p>
 <pre class="code sh literal-block">
-<span class="name builtin">cd</span><span class="whitespace"> </span>rust<span class="whitespace"> </span><span class="operator">&amp;&amp;</span><span class="whitespace"> </span>cargo<span class="whitespace"> </span>run<span class="whitespace"> </span>--release
+cargo<span class="whitespace"> </span>run<span class="whitespace"> </span>--release<span class="whitespace"> </span>--manifest-path<span class="whitespace"> </span>rust/Cargo.toml
 </pre>
 <p>It sends from a thread started with <tt class="docutils literal"><span class="pre">std::thread::spawn</span></tt> and receives in
 the main thread, over <tt class="docutils literal"><span class="pre">std::net::TcpStream</span></tt>. Each thread has its own
@@ -585,9 +628,9 @@ reused for both arrays.</p>
 <div class="section" id="c-and-c">
 <h2>C and C++</h2>
 <p><a class="reference external" href="c/main.c">c/main.c</a> is built twice, once as C11 and once as C++20, and
-uses POSIX threads and sockets. It needs only the header
-<tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt> and the generated header; it links with
-no tcs-xtce library.</p>
+uses POSIX threads and sockets. It needs only the headers
+<tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt> and <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/digest.h</span></tt>
+and the generated header; it links with no tcs-xtce library.</p>
 <pre class="code sh literal-block">
 make<span class="whitespace"> </span>c<span class="whitespace">
 </span>build/variable_array_c<span class="whitespace">       </span><span class="comment single"># the C build

@@ -23,7 +23,8 @@ GEN     := rust/src/housekeeping.rs c/housekeeping.h cxx/housekeeping.h \
 GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py \
                      $(TOP)/generator/tcs_xtce/*.py \
                      $(TOP)/generator/xtcegen/*.py)
-PKT_H   := $(TOP)/cpp/include/xtce/packet.h
+PKT_H   := $(TOP)/cpp/include/xtce/packet.h \
+           $(TOP)/cpp/include/xtce/digest.h
 TCS_XTCE := cd $(TOP)/generator && \
             $(PYTHON) -m tcs_xtce ../examples/housekeeping/$(XML) \
            --source-name examples/housekeeping/$(XML)

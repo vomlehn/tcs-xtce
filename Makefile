@@ -7,7 +7,8 @@
 #   make packets         regenerate the demo mission's packet codecs
 #   make rust|cpp|python build one library
 #   make test            run every language's tests, the cross-language
-#                        checks and the line-width check
+#                        checks (packets and digests) and the line-width
+#                        check
 #   make line-width      check that no line of code is wider than 80 columns
 #   make samples-check   check tcs-xtce against public XTCE documents
 #                        (downloads them)
@@ -114,7 +115,7 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
 .PHONY: test
 test: test-generator test-rust test-cpp test-python cross-check packet-check \
-      examples line-width
+      digest-check examples line-width
 
 # Every line of code, hand-written or generated, fits in 80 columns.  It comes
 # last in `test` so that the code the examples generate exists by then.
@@ -147,6 +148,11 @@ cross-check: rust cpp python $(SAMPLES)
 packet-check: rust cpp python
 	sh tests/packet_check.sh $(RUST_PKT_TOOL) $(RUST_FIXED_PKT_TOOL) \
 		$(C_PKT_TOOL) $(CXX_PKT_TOOL)
+
+.PHONY: digest-check
+digest-check: rust cpp
+	sh tests/digest_check.sh rust/target/release/examples/digest_tool \
+		cpp/build/digest_tool cpp/build/digest_tool_cxx
 
 # Public XTCE documents, pinned to commits in tests/external/sources.txt and
 # downloaded on demand; not part of `make test`, which needs no network.

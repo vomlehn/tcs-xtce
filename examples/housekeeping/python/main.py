@@ -11,15 +11,25 @@ A Status packet shows three things the generated code does:
   holds degrees, volts and watts, and the packet holds raw counts.
 * HeaterPower is in the packet only when the heater is on.
 
-The Rust and C/C++ versions of this program print identical output.
+The stream starts with the digest of housekeeping.xml, so that whatever reads
+it can check that it uses the same definition of a Status.  The Rust and
+C/C++ versions of this program print identical output.  Run it in the
+directory that holds housekeeping.xml.
 """
 
 import sys
 from typing import NamedTuple, Optional
 
+from xtce import XtceError
+from xtce.digest import digest_file_bytes
 from xtce.packet import Codec, PacketError
 
 from housekeeping import Status
+
+
+# The XTCE file that describes a Status, and the size of its digest.
+XTCE = "housekeeping.xml"
+DIGEST_BYTES = 16
 
 
 class Reading(NamedTuple):
@@ -68,20 +78,33 @@ def main() -> None:
     # The codec owns an input and an output buffer, both preallocated to
     # Status.MAX_BYTES (7) and reused for every packet.
     codec = Codec.for_packet(Status)
+    try:
+        digest = digest_file_bytes(XTCE)
+    except (OSError, XtceError) as e:
+        fail(f"{XTCE}: {e}")
 
-    # Encode each reading and append it to the stream, as a recorder would
-    # store packets: one after another, with nothing between them.
-    stream = bytearray()
+    # The stream starts with the digest of the XTCE file.  Then encode each
+    # reading and append it, as a recorder would store packets: one after
+    # another, with nothing between them.
+    stream = bytearray(digest)
     for r in READINGS:
         with codec.encode(r.status) as view:
             data = bytes(view)
         print(f"encode {r.status.describe()} -> {data.hex()}")
         stream += data
-    print(f"stream: {len(READINGS)} packets, {len(stream)} bytes")
+    print(f"stream: the XTCE digest, then {len(READINGS)} packets, "
+          f"{len(stream)} bytes")
 
-    # Walk the stream. Each packet starts with PacketLength, the number of
-    # bytes after it, so the packet is 2 + PacketLength bytes long.
-    at = 0
+    # The stream's digest must be the digest of this program's XTCE file:
+    # then it reads the packets as they were written.
+    if bytes(stream[:DIGEST_BYTES]) != digest:
+        fail(f"the stream's XTCE digest {stream[:DIGEST_BYTES].hex()} is "
+             f"not {digest.hex()}, the digest of {XTCE}")
+    print(f"XTCE digest: {digest.hex()}, the same on both sides")
+
+    # Walk the packets. Each starts with PacketLength, the number of bytes
+    # after it, so the packet is 2 + PacketLength bytes long.
+    at = DIGEST_BYTES
     for r in READINGS:
         if len(stream) - at < 2:
             fail(f"the stream ends inside a packet at byte {at}")
@@ -107,9 +130,10 @@ def main() -> None:
                Status(heater_on=True, temperature=20.0, bus_voltage=28.0))
     try_encode(codec,
                Status(heater_on=False, temperature=300.0, bus_voltage=28.0))
-    on = bytes(stream[5:12])
+    first = DIGEST_BYTES
+    on = bytes(stream[first + 5:first + 12])
     try_decode(codec, on[:4], "cut short")
-    off = bytearray(stream[0:5])
+    off = bytearray(stream[first:first + 5])
     off[1] += 1
     try_decode(codec, bytes(off) + b"\0", "PacketLength one too many")
 

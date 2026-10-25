@@ -18,9 +18,10 @@ byte. The packets are bit-packed, so a field takes only the bits its encoding
 gives, with none of the padding a language's own structures have; the
 housekeeping example's status packet is 7 bytes, where the C structure is 40.
 Packets carry no field names or tags. Instead, programs check that they were
-built from the same definition by comparing digests from `xtce-digest` (or its
-`digest_file` and `digest_string` library functions), which guarantees that
-they agree on every field's type and order. That avoids the per-message cost
+built from the same definition by comparing digests, which every runtime
+(Rust, C/C++ and Python) computes the same way, as does `xtce-digest`: the
+sender sends its digest first, and the receiver checks it, which guarantees
+that they agree on every field's type and order. That avoids the per-message cost
 of self-describing formats: the same packet is 77 bytes as JSON and 29 as
 Protocol Buffers.
 

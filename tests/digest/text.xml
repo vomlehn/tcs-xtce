@@ -1,0 +1,1 @@
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="S"><LongDescription>  a &lt;b&gt; &amp; &quot;c&quot; &#65;&#x42; <!-- x -->d<?p q?>e <![CDATA[<raw> & ]]>  </LongDescription></SpaceSystem>

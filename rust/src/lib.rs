@@ -23,6 +23,7 @@
 //! ```
 
 pub mod buffer;
+pub mod digest;
 pub mod document;
 pub mod fixed;
 pub mod generated;

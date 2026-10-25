@@ -503,13 +503,16 @@ the C structure that holds it is 40 bytes, 14 of them padding.</p>
 lengths in it: it is the field values and nothing else. That works
 because both programs are built from the same XTCE document, so each
 knows what every field is and where it is. To make sure they are, compare
-the digests of their documents: <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> (see <a class="reference internal" href="#xtce-digest">xtce-digest</a>), or
-its library functions <tt class="docutils literal">digest_file</tt> and <tt class="docutils literal">digest_string</tt>, gives two
-documents the same digest only when they say the same thing, and so
-define the same packets, with the same fields, types and order. (It errs
-the other way: some edits that change nothing it generates still change
-the digest.) A program can check this once,
-for example when two programs connect, rather than in every message.</p>
+the digests of their documents. Every runtime computes the digest: Rust,
+C, C++ and Python (see <a class="reference internal" href="#xtce-digest">xtce-digest</a>), and so does the <tt class="docutils literal"><span class="pre">xtce-digest</span></tt>
+command. Two documents get the same digest only when they say the same
+thing, and so define the same packets, with the same fields, types and
+order. (It errs the other way: some edits that change nothing tcs-xtce
+generates still change the digest.) A program checks this once, before
+any packets, rather than in every message: the sender sends the 16-byte
+digest of its document first, and the receiver compares it with the
+digest of its own. The <tt class="docutils literal"><span class="pre">to-from</span></tt>, <tt class="docutils literal"><span class="pre">variable-array</span></tt> and
+<tt class="docutils literal">housekeeping</tt> examples do this.</p>
 <p><strong>Compared with self-describing formats.</strong> JSON and Google Protocol
 Buffers carry part of the definition in every message, so a reader can
 cope with a writer it wasn't built with. They pay for it in every
@@ -537,7 +540,7 @@ reads each field from where the document says it is.</p>
 <td>The <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> command, and the compiler behind it that turns a mission's XTCE document into packet codecs</td>
 </tr>
 <tr><td><tt class="docutils literal">generator/xtce_digest/</tt></td>
-<td>The <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> command, which prints a digest of what an XTCE document means (see <a class="reference internal" href="#xtce-digest">xtce-digest</a>)</td>
+<td>The <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> command, which prints a digest of what an XTCE document means (see <a class="reference internal" href="#xtce-digest">xtce-digest</a>); the digest itself is in each runtime</td>
 </tr>
 <tr><td><tt class="docutils literal">rust/</tt></td>
 <td>The <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> Rust crate (imported as <tt class="docutils literal">tcs_xtce</tt>)</td>
@@ -1932,23 +1935,61 @@ well-formed XML or isn't valid XTCE is reported on standard error and
 ends the command with status 1; the files before it have been printed,
 and the ones after it are not read. Status 0 means every file was
 digested.</p>
-<p>The same digest is available to Python programs from the
-<tt class="docutils literal">xtce_digest</tt> package (in <tt class="docutils literal">generator/</tt>), which needs only the
-<tt class="docutils literal">xtce</tt> package in <tt class="docutils literal">python/</tt>:</p>
+<p>Every runtime computes the same digest, so that a program in any
+language can compute its document's digest, send it, and compare it with
+the digest it receives. Each has functions that give the digest of a
+document in memory or in a file, as 16 bytes (to send) or as 32 lowercase
+hex digits (to print):</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Language</th>
+<th class="head">Functions</th>
+<th class="head">Errors</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Rust (<tt class="docutils literal"><span class="pre">tcs_xtce::digest</span></tt>)</td>
+<td><tt class="docutils literal"><span class="pre">digest_bytes(&amp;[u8])</span> <span class="pre">-&gt;</span> [u8; 16]</tt>, <tt class="docutils literal"><span class="pre">digest(&amp;[u8])</span></tt>,
+<tt class="docutils literal"><span class="pre">digest_string(&amp;str)</span></tt>, <tt class="docutils literal">digest_file_bytes(path)</tt>,
+<tt class="docutils literal">digest_file(path)</tt>, <tt class="docutils literal"><span class="pre">hex(&amp;[u8;</span> 16])</tt></td>
+<td><tt class="docutils literal"><span class="pre">Err(tcs_xtce::Error)</span></tt></td>
+</tr>
+<tr><td>C and C++ (<tt class="docutils literal">xtce/digest.h</tt>, which needs no library)</td>
+<td><tt class="docutils literal">xtce_digest_bytes(data, len, out, &amp;err)</tt>,
+<tt class="docutils literal">xtce_digest(data, len, hex, &amp;err)</tt>,
+<tt class="docutils literal">xtce_digest_string(text, hex, &amp;err)</tt>,
+<tt class="docutils literal">xtce_digest_file_bytes(path, out, &amp;err)</tt>,
+<tt class="docutils literal">xtce_digest_file(path, hex, &amp;err)</tt>,
+<tt class="docutils literal">xtce_digest_hex(out, hex)</tt>; in C++ also
+<tt class="docutils literal"><span class="pre">xtce::digest(std::string_view)</span></tt> and
+<tt class="docutils literal"><span class="pre">xtce::digest_file(path)</span></tt>, returning <tt class="docutils literal"><span class="pre">std::string</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">-1</span></tt> and <tt class="docutils literal">err.message</tt>; C++ throws <tt class="docutils literal"><span class="pre">std::runtime_error</span></tt></td>
+</tr>
+<tr><td>Python (<tt class="docutils literal">xtce.digest</tt>)</td>
+<td><tt class="docutils literal">digest_bytes(data)</tt>, <tt class="docutils literal">digest(data)</tt>, <tt class="docutils literal">digest_string(text)</tt>,
+<tt class="docutils literal">digest_file_bytes(path)</tt>, <tt class="docutils literal">digest_file(path)</tt></td>
+<td><tt class="docutils literal">XtceError</tt>, and <tt class="docutils literal">OSError</tt> for a file that can't be read</td>
+</tr>
+</tbody>
+</table>
 <pre class="code python literal-block">
-<span class="keyword namespace">from</span><span class="whitespace"> </span><span class="name namespace">xtce_digest</span><span class="whitespace"> </span><span class="keyword namespace">import</span> <span class="name">XtceError</span><span class="punctuation">,</span> <span class="name">digest_file</span><span class="punctuation">,</span> <span class="name">digest_string</span><span class="whitespace">
+<span class="keyword namespace">from</span><span class="whitespace"> </span><span class="name namespace">xtce.digest</span><span class="whitespace"> </span><span class="keyword namespace">import</span> <span class="name">digest_file</span><span class="punctuation">,</span> <span class="name">digest_file_bytes</span><span class="whitespace">
 
-</span><span class="name">digest_file</span><span class="punctuation">(</span><span class="literal string double">&quot;../tests/mission/demo.xml&quot;</span><span class="punctuation">)</span>    <span class="comment single"># '6d2d1d775d75a68089fddade8e95c585'</span><span class="whitespace">
-</span><span class="name">digest_string</span><span class="punctuation">(</span><span class="name">xml_text</span><span class="punctuation">)</span>                     <span class="comment single"># the XML itself, str or bytes</span>
+</span><span class="name">digest_file</span><span class="punctuation">(</span><span class="literal string double">&quot;tests/mission/demo.xml&quot;</span><span class="punctuation">)</span>        <span class="comment single"># '6d2d1d775d75a68089fddade8e95c585'</span><span class="whitespace">
+</span><span class="name">digest_file_bytes</span><span class="punctuation">(</span><span class="literal string double">&quot;tests/mission/demo.xml&quot;</span><span class="punctuation">)</span>  <span class="comment single"># the same 16 bytes</span>
 </pre>
-<p>Both check that the document is valid XTCE first, and raise
-<tt class="docutils literal">XtceError</tt> if it isn't; <tt class="docutils literal">digest_file</tt> also raises <tt class="docutils literal">OSError</tt> if the
-file can't be read. <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> calls <tt class="docutils literal">digest_file</tt> for each file.</p>
+<p>The document must be well-formed XML 1.0 in UTF-8 whose root element is
+<tt class="docutils literal">SpaceSystem</tt>; a document that declares another encoding, or has a
+DOCTYPE, is rejected. The functions don't check the document against the
+XTCE schema: <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> does, before it digests each file. Computing
+a digest allocates memory, so programs that must not allocate compute it
+at start-up.</p>
 <p>The digest covers every element, attribute and piece of text, but not
 what leaves the document meaning the same:</p>
 <ul class="simple">
 <li>comments and processing instructions;</li>
-<li>whitespace between elements, and at the start and end of text;</li>
+<li>whitespace (spaces, tabs, carriage returns and line feeds) between
+elements, and at the start and end of text;</li>
 <li>the order of attributes, and the namespace prefixes used;</li>
 <li>the order of the children of an element that holds an unordered
 collection: the nested <tt class="docutils literal">SpaceSystem</tt> elements of a
@@ -1990,6 +2031,10 @@ generator changed;</li>
 <li>builds and runs the C, C++, Rust and Python programs;</li>
 <li>checks that their output is identical.</li>
 </ul>
+<p>Every example that sends packets first sends the 16-byte digest of its
+XTCE file, and the side that receives them checks it against the digest
+of its own copy before it reads a packet (see <a class="reference internal" href="#exchanging-data-between-programs">Exchanging data between
+programs</a>).</p>
 <p><tt class="docutils literal">make html</tt> in an example's directory converts its <tt class="docutils literal">README.rst</tt> into
 <tt class="docutils literal">README.html</tt>. <tt class="docutils literal">make</tt> in <tt class="docutils literal">examples/</tt> itself does that for every
 example and for <tt class="docutils literal">examples/README.rst</tt>, the <a class="reference external" href="../examples/README.html">index of examples</a>.</p>
@@ -2032,15 +2077,18 @@ watts while the packet holds raw counts. <tt class="docutils literal">HeaterPowe
 <tt class="docutils literal">IncludeCondition</tt> on the boolean <tt class="docutils literal">HeaterOn</tt>, so it is optional: <tt class="docutils literal">Option&lt;f64&gt;</tt>
 in Rust, <tt class="docutils literal">has_heater_power</tt> and <tt class="docutils literal">heater_power</tt> in C/C++, and
 <tt class="docutils literal">Optional[float]</tt> in Python.</p>
-<p>Each program encodes four readings into one stream, one packet after
-another, then walks the stream: it reads each packet's <tt class="docutils literal">PacketLength</tt> to
+<p>Each program starts a stream with the digest of <tt class="docutils literal">housekeeping.xml</tt> and
+encodes four readings into it, one packet after another, then walks the
+stream: it checks the digest against that of its own copy, then reads each
+packet's <tt class="docutils literal">PacketLength</tt> to
 find where the packet ends, decodes it, and checks it against the reading,
 rounded to the nearest step of each calibrator. It then shows the errors
 for a missing heater power, a temperature out of range, a packet cut short
 and a wrong <tt class="docutils literal">PacketLength</tt>:</p>
 <pre class="literal-block">
-decode at 5: 7 bytes -&gt; Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
-decode at 12: 7 bytes -&gt; Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+XTCE digest: 27a384a7bcaa921a001f482d2d82e282, the same on both sides
+decode at 21: 7 bytes -&gt; Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+decode at 28: 7 bytes -&gt; Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
 encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=none} -&gt; error:Missing (HeaterPower is required by its include condition)
 </pre>
 <p>See the <a class="reference external" href="../examples/housekeeping/README.html">housekeeping README</a> for
@@ -2105,9 +2153,11 @@ at most 288 bits, so a word holds up to 32 bytes:</p>
 </pre>
 <p>The example shows that code generated for one language reads what code
 generated for another wrote. Each language's program takes one argument.
-With <tt class="docutils literal">write</tt>, it serializes each of the 69 words of the lorem ipsum
-paragraph into a <tt class="docutils literal">Word</tt> packet and writes the packets to standard output.
-With <tt class="docutils literal">read</tt>, it reads packets from standard input, using each packet's
+With <tt class="docutils literal">write</tt>, it writes the digest of <tt class="docutils literal">to_from.xml</tt>, then serializes
+each of the 69 words of the lorem ipsum paragraph into a <tt class="docutils literal">Word</tt> packet
+and writes the packets, to standard output. With <tt class="docutils literal">read</tt>, it checks the
+digest against that of its own <tt class="docutils literal">to_from.xml</tt>, then reads packets from
+standard input, using each packet's
 size tag to find where it ends, and deserializes them. It prints each word
 as it arrives, with a space before every word but the first, and a newline
 when the input ends. It checks that every word arrives intact and in
@@ -2119,6 +2169,7 @@ the writer's output to the reader:</p>
 <pre class="literal-block">
 $ ./to-from python c
 to: python from: c
+XTCE digest: ad4767eca527cdc6d62f3bf78ad5ff4f, the same on both sides
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ...
 </pre>
 <p><tt class="docutils literal">make</tt> in the example's directory checks that the four writers write the
@@ -2167,17 +2218,19 @@ on the two counts bound the arrays, and so <tt class="docutils literal">MAX_BYTE
 size of the C structures.</p>
 <p>Each program builds two <tt class="docutils literal">Paragraph</tt>s from the lorem ipsum paragraph
 in five lines, one word per element: the first three lines, then the last
-two. One thread opens a TCP connection on the loopback interface and, for
-each array, writes its length, then the whole <tt class="docutils literal">Paragraph</tt> in a single
-write. The length is a second container in the same XTCE file, <tt class="docutils literal">Length</tt>,
+two. One thread opens a TCP connection on the loopback interface, writes
+the digest of <tt class="docutils literal">variable_array.xml</tt>, and, for each array, writes its
+length, then the whole <tt class="docutils literal">Paragraph</tt> in a single write. The length is a second container in the same XTCE file, <tt class="docutils literal">Length</tt>,
 holding a 32-bit <tt class="docutils literal">ByteCount</tt>, so it too is encoded and decoded with the
-generated code. Another thread reads and decodes each 4-byte <tt class="docutils literal">Length</tt>,
+generated code. Another thread checks the digest against that of its own
+copy, then reads and decodes each 4-byte <tt class="docutils literal">Length</tt>,
 then reads that many bytes, deserializes the <tt class="docutils literal">Paragraph</tt> and checks
 every line and word.
 It then prints each inner array as a line, with spaces between the words,
 or exits with status 1 if anything differs. The lengths let the receiver
 find where each packet ends, since a TCP stream doesn't keep writes apart:</p>
 <pre class="literal-block">
+XTCE digest: 904beed3fc463cd7addc91dfca67c304, the same on both sides
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
 labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
 laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
@@ -2216,6 +2269,12 @@ allocate nothing while decoding, encoding or describing a packet;</li>
 bytes.</li>
 </ul>
 </li>
+<li><tt class="docutils literal">tests/digest_check.sh</tt>: the Rust, C, C++ and Python digest functions
+give the same digest for the demo mission, the examples' XTCE files, the
+schema-covering samples and the documents in <tt class="docutils literal">tests/digest</tt>, which
+cover comments, CDATA, references, line ends, namespaces, unordered
+collections and documents that must be rejected; those also have known
+digests, in <tt class="docutils literal">tests/digest/expected.txt</tt>.</li>
 </ul>
 <p>The <tt class="docutils literal">packet_tool</tt> programs (<tt class="docutils literal">rust/examples</tt>, <tt class="docutils literal">cpp/tests</tt>, built as
 <tt class="docutils literal">cpp/build/packet_tool</tt> and <tt class="docutils literal">cpp/build/packet_tool_cxx</tt>, and

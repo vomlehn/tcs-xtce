@@ -383,10 +383,13 @@ heater on are two bytes longer.</li>
 </ul>
 <p>Each program does the same thing:</p>
 <ol class="arabic simple">
-<li>It encodes four readings, two with the heater off and two with it on,
-and appends each packet to one stream, as a recorder would store them:
+<li>It starts a stream with the 16-byte digest of <tt class="docutils literal">housekeeping.xml</tt>, as
+a recorder would start a file. It encodes four readings, two with the
+heater off and two with it on, and appends each packet to the stream:
 one after another, with nothing between them.</li>
-<li>It walks the stream. It reads each packet's <tt class="docutils literal">PacketLength</tt> from its
+<li>It walks the stream. It checks the digest against the digest of its own
+<tt class="docutils literal">housekeeping.xml</tt> (see <a class="reference internal" href="#checking-the-xtce-definition">Checking the XTCE definition</a>), then reads
+each packet's <tt class="docutils literal">PacketLength</tt> from its
 first two bytes, so it knows the packet is <tt class="docutils literal">2 + PacketLength</tt> bytes
 long, and decodes those bytes. It checks that each packet decodes to the
 reading it encoded, rounded to what the calibrators can represent, and
@@ -398,6 +401,45 @@ long.</li>
 </ol>
 <p>If a check fails, the program prints the problem to standard error and
 exits with status 1.</p>
+<div class="section" id="checking-the-xtce-definition">
+<h1>Checking the XTCE definition</h1>
+<p>The packets carry no field names or types, so the program that reads it can read them only
+if it was built from the same definition as the program that wrote the stream. To check, the stream starts with
+the 16-byte MD5 digest of <tt class="docutils literal">housekeeping.xml</tt>, before any packet. The program that reads it
+computes the digest of its own copy of <tt class="docutils literal">housekeeping.xml</tt> and compares. If they
+match, it prints</p>
+<pre class="literal-block">
+XTCE digest: &lt;32 hex digits&gt;, the same on both sides
+</pre>
+<p>and goes on; if they don't, it prints both digests to standard error and
+exits with status 1, before it reads a packet.</p>
+<p>The digest is of what the document means, not of its bytes: comments,
+whitespace between elements, attribute order, namespace prefixes and the
+order of unordered collections such as a <tt class="docutils literal">ParameterSet</tt> don't change it,
+while any change to a type, a field or the order of entries does. Every
+runtime computes it the same way:</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Language</th>
+<th class="head">Function</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Rust</td>
+<td><tt class="docutils literal"><span class="pre">tcs_xtce::digest::digest_file_bytes(path)</span></tt>, giving <tt class="docutils literal">[u8; 16]</tt></td>
+</tr>
+<tr><td>C, C++</td>
+<td><tt class="docutils literal">xtce_digest_file_bytes(path, out, &amp;err)</tt>, from the header
+<tt class="docutils literal">xtce/digest.h</tt>, which needs no library</td>
+</tr>
+<tr><td>Python</td>
+<td><tt class="docutils literal">xtce.digest.digest_file_bytes(path)</tt>, giving <tt class="docutils literal">bytes</tt></td>
+</tr>
+</tbody>
+</table>
+<p><tt class="docutils literal"><span class="pre">xtce-digest</span> housekeeping.xml</tt> prints the same digest in hex. Each program reads
+<tt class="docutils literal">housekeeping.xml</tt> from the current directory, so run it from this one.</p>
+</div>
 <div class="section" id="the-xtce-description">
 <h1>The XTCE description</h1>
 <p><a class="reference external" href="housekeeping.xml">housekeeping.xml</a> defines one container, <tt class="docutils literal">Status</tt>:</p>
@@ -555,11 +597,12 @@ encode Status{heater_on=false, temperature=21.53, bus_voltage=28.3, heater_power
 encode Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5} -&gt; 0005125cdc0120
 encode Status{heater_on=true, temperature=-20.01, bus_voltage=26.9, heater_power=12.74} -&gt; 000511e0d7032f
 encode Status{heater_on=false, temperature=5.0, bus_voltage=28.0, heater_power=none} -&gt; 00030370e0
-stream: 4 packets, 24 bytes
-decode at 0: 5 bytes -&gt; Status{heater_on=false, temperature=21.5, bus_voltage=28.25, heater_power=none}
-decode at 5: 7 bytes -&gt; Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
-decode at 12: 7 bytes -&gt; Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
-decode at 19: 5 bytes -&gt; Status{heater_on=false, temperature=5.0, bus_voltage=28.0, heater_power=none}
+stream: the XTCE digest, then 4 packets, 40 bytes
+XTCE digest: 27a384a7bcaa921a001f482d2d82e282, the same on both sides
+decode at 16: 5 bytes -&gt; Status{heater_on=false, temperature=21.5, bus_voltage=28.25, heater_power=none}
+decode at 21: 7 bytes -&gt; Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+decode at 28: 7 bytes -&gt; Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+decode at 35: 5 bytes -&gt; Status{heater_on=false, temperature=5.0, bus_voltage=28.0, heater_power=none}
 encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=none} -&gt; error:Missing (HeaterPower is required by its include condition)
 encode Status{heater_on=false, temperature=300.0, bus_voltage=28.0, heater_power=none} -&gt; error:OutOfRange (value of Temperature does not fit its encoding)
 decode 0005125c (cut short) -&gt; error:Truncated (packet too short for PacketLength)
@@ -572,13 +615,14 @@ values the packet holds: 21.53 °C became 21.5, 28.3 V became 28.25, and
 <p><a class="reference internal" href="#makefile-targets">Makefile targets</a> lists the other targets.</p>
 <p>To run one program on its own, generate the code first with
 <tt class="docutils literal">make generate</tt>, then run the commands below from this directory. Each
-prints the lines above, without the last, which <tt class="docutils literal">make</tt> prints.</p>
+prints the lines above, without the last, which <tt class="docutils literal">make</tt> prints. Run it
+from this directory, where it finds <tt class="docutils literal">housekeeping.xml</tt>.</p>
 <div class="section" id="rust">
 <h2>Rust</h2>
 <p><a class="reference external" href="rust/src/main.rs">rust/src/main.rs</a> is a stand-alone Cargo crate that
 depends on the <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> crate in <tt class="docutils literal"><span class="pre">../../rust</span></tt>:</p>
 <pre class="code sh literal-block">
-<span class="name builtin">cd</span><span class="whitespace"> </span>rust<span class="whitespace"> </span><span class="operator">&amp;&amp;</span><span class="whitespace"> </span>cargo<span class="whitespace"> </span>run<span class="whitespace"> </span>--release
+cargo<span class="whitespace"> </span>run<span class="whitespace"> </span>--release<span class="whitespace"> </span>--manifest-path<span class="whitespace"> </span>rust/Cargo.toml
 </pre>
 <p>or <tt class="docutils literal">make rust</tt>, then <tt class="docutils literal">rust/target/release/housekeeping</tt>. Its <tt class="docutils literal">Codec</tt>
 has buffers preallocated to <tt class="docutils literal"><span class="pre">Status::MAX_BYTES</span></tt> and reused for every
@@ -587,8 +631,9 @@ packet.</p>
 <div class="section" id="c-and-c">
 <h2>C and C++</h2>
 <p><a class="reference external" href="c/main.c">c/main.c</a> is built twice, once as C11 and once as C++20. It
-needs only the header <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt> and the generated
-header; it links with no tcs-xtce library.</p>
+needs only the headers <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt> and
+<tt class="docutils literal"><span class="pre">../../cpp/include/xtce/digest.h</span></tt> and the generated header; it links with
+no tcs-xtce library.</p>
 <pre class="code sh literal-block">
 make<span class="whitespace"> </span>c<span class="whitespace">
 </span>build/housekeeping_c<span class="whitespace">         </span><span class="comment single"># the C build

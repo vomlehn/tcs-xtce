@@ -12,14 +12,22 @@
 //!   counts.
 //! * `HeaterPower` is in the packet only when the heater is on.
 //!
-//! The C/C++ and Python versions of this program print identical output.
+//! The stream starts with the digest of `housekeeping.xml`, so that whatever
+//! reads it can check that it uses the same definition of a `Status`.  The
+//! C/C++ and Python versions of this program print identical output.  Run it
+//! in the directory that holds `housekeeping.xml`.
 
 mod housekeeping;
 
 use std::process;
 
 use housekeeping::Status;
+use tcs_xtce::digest::{digest_file_bytes, hex as digest_hex};
 use tcs_xtce::packet::Codec;
+
+/// The XTCE file that describes a `Status`, and the size of its digest.
+const XTCE: &str = "housekeeping.xml";
+const DIGEST_BYTES: usize = 16;
 
 /// A `Status` to encode, and the values decoding it must give: the nearest
 /// the calibrators can represent.
@@ -98,10 +106,13 @@ fn main() {
     // Status::MAX_BYTES (7) and reused for every packet.
     let mut codec = Codec::for_packet::<Status>();
     let readings = readings();
+    let digest = digest_file_bytes(XTCE)
+        .unwrap_or_else(|e| fail(&format!("{XTCE}: {e}")));
 
-    // Encode each reading and append it to the stream, as a recorder would
-    // store packets: one after another, with nothing between them.
-    let mut stream = Vec::new();
+    // The stream starts with the digest of the XTCE file.  Then encode each
+    // reading and append it, as a recorder would store packets: one after
+    // another, with nothing between them.
+    let mut stream = digest.to_vec();
     for r in &readings {
         let bytes = codec
             .encode(&r.status)
@@ -109,11 +120,29 @@ fn main() {
         println!("encode {} -> {}", r.status, hex(bytes));
         stream.extend_from_slice(bytes);
     }
-    println!("stream: {} packets, {} bytes", readings.len(), stream.len());
+    println!(
+        "stream: the XTCE digest, then {} packets, {} bytes",
+        readings.len(),
+        stream.len()
+    );
 
-    // Walk the stream. Each packet starts with PacketLength, the number of
-    // bytes after it, so the packet is 2 + PacketLength bytes long.
-    let mut at = 0;
+    // The stream's digest must be the digest of this program's XTCE file:
+    // then it reads the packets as they were written.
+    if stream[..DIGEST_BYTES] != digest {
+        fail(&format!(
+            "the stream's XTCE digest {} is not {}, the digest of {XTCE}",
+            hex(&stream[..DIGEST_BYTES]),
+            digest_hex(&digest)
+        ));
+    }
+    println!(
+        "XTCE digest: {}, the same on both sides",
+        digest_hex(&digest)
+    );
+
+    // Walk the packets. Each starts with PacketLength, the number of bytes
+    // after it, so the packet is 2 + PacketLength bytes long.
+    let mut at = DIGEST_BYTES;
     for r in &readings {
         if stream.len() - at < 2 {
             fail(&format!("the stream ends inside a packet at byte {at}"));
@@ -172,9 +201,10 @@ fn main() {
             heater_power: None,
         },
     );
-    let on = stream[5..12].to_vec();
+    let first = DIGEST_BYTES;
+    let on = stream[first + 5..first + 12].to_vec();
     try_decode(&mut codec, &on[..4], "cut short");
-    let mut off = stream[0..5].to_vec();
+    let mut off = stream[first..first + 5].to_vec();
     off[1] += 1;
     off.push(0);
     try_decode(&mut codec, &off, "PacketLength one too many");

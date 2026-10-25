@@ -21,10 +21,13 @@ does for you:
 
 Each program does the same thing:
 
-1. It encodes four readings, two with the heater off and two with it on,
-   and appends each packet to one stream, as a recorder would store them:
+1. It starts a stream with the 16-byte digest of ``housekeeping.xml``, as
+   a recorder would start a file. It encodes four readings, two with the
+   heater off and two with it on, and appends each packet to the stream:
    one after another, with nothing between them.
-2. It walks the stream. It reads each packet's ``PacketLength`` from its
+2. It walks the stream. It checks the digest against the digest of its own
+   ``housekeeping.xml`` (see `Checking the XTCE definition`_), then reads
+   each packet's ``PacketLength`` from its
    first two bytes, so it knows the packet is ``2 + PacketLength`` bytes
    long, and decodes those bytes. It checks that each packet decodes to the
    reading it encoded, rounded to what the calibrators can represent, and
@@ -36,6 +39,45 @@ Each program does the same thing:
 
 If a check fails, the program prints the problem to standard error and
 exits with status 1.
+
+Checking the XTCE definition
+----------------------------
+
+The packets carry no field names or types, so the program that reads it can read them only
+if it was built from the same definition as the program that wrote the stream. To check, the stream starts with
+the 16-byte MD5 digest of ``housekeeping.xml``, before any packet. The program that reads it
+computes the digest of its own copy of ``housekeeping.xml`` and compares. If they
+match, it prints
+
+::
+
+   XTCE digest: <32 hex digits>, the same on both sides
+
+and goes on; if they don't, it prints both digests to standard error and
+exits with status 1, before it reads a packet.
+
+The digest is of what the document means, not of its bytes: comments,
+whitespace between elements, attribute order, namespace prefixes and the
+order of unordered collections such as a ``ParameterSet`` don't change it,
+while any change to a type, a field or the order of entries does. Every
+runtime computes it the same way:
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Language
+     - Function
+   * - Rust
+     - ``tcs_xtce::digest::digest_file_bytes(path)``, giving ``[u8; 16]``
+   * - C, C++
+     - ``xtce_digest_file_bytes(path, out, &err)``, from the header
+       ``xtce/digest.h``, which needs no library
+   * - Python
+     - ``xtce.digest.digest_file_bytes(path)``, giving ``bytes``
+
+``xtce-digest housekeeping.xml`` prints the same digest in hex. Each program reads
+``housekeeping.xml`` from the current directory, so run it from this one.
 
 The XTCE description
 --------------------
@@ -211,11 +253,12 @@ that they print the same thing:
    encode Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5} -> 0005125cdc0120
    encode Status{heater_on=true, temperature=-20.01, bus_voltage=26.9, heater_power=12.74} -> 000511e0d7032f
    encode Status{heater_on=false, temperature=5.0, bus_voltage=28.0, heater_power=none} -> 00030370e0
-   stream: 4 packets, 24 bytes
-   decode at 0: 5 bytes -> Status{heater_on=false, temperature=21.5, bus_voltage=28.25, heater_power=none}
-   decode at 5: 7 bytes -> Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
-   decode at 12: 7 bytes -> Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
-   decode at 19: 5 bytes -> Status{heater_on=false, temperature=5.0, bus_voltage=28.0, heater_power=none}
+   stream: the XTCE digest, then 4 packets, 40 bytes
+   XTCE digest: 27a384a7bcaa921a001f482d2d82e282, the same on both sides
+   decode at 16: 5 bytes -> Status{heater_on=false, temperature=21.5, bus_voltage=28.25, heater_power=none}
+   decode at 21: 7 bytes -> Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+   decode at 28: 7 bytes -> Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+   decode at 35: 5 bytes -> Status{heater_on=false, temperature=5.0, bus_voltage=28.0, heater_power=none}
    encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=none} -> error:Missing (HeaterPower is required by its include condition)
    encode Status{heater_on=false, temperature=300.0, bus_voltage=28.0, heater_power=none} -> error:OutOfRange (value of Temperature does not fit its encoding)
    decode 0005125c (cut short) -> error:Truncated (packet too short for PacketLength)
@@ -230,7 +273,8 @@ values the packet holds: 21.53 °C became 21.5, 28.3 V became 28.25, and
 
 To run one program on its own, generate the code first with
 ``make generate``, then run the commands below from this directory. Each
-prints the lines above, without the last, which ``make`` prints.
+prints the lines above, without the last, which ``make`` prints. Run it
+from this directory, where it finds ``housekeeping.xml``.
 
 Rust
 ~~~~
@@ -240,7 +284,7 @@ depends on the ``tcs-xtce`` crate in ``../../rust``:
 
 .. code-block:: sh
 
-   cd rust && cargo run --release
+   cargo run --release --manifest-path rust/Cargo.toml
 
 or ``make rust``, then ``rust/target/release/housekeeping``. Its ``Codec``
 has buffers preallocated to ``Status::MAX_BYTES`` and reused for every
@@ -250,8 +294,9 @@ C and C++
 ~~~~~~~~~
 
 `c/main.c <c/main.c>`__ is built twice, once as C11 and once as C++20. It
-needs only the header ``../../cpp/include/xtce/packet.h`` and the generated
-header; it links with no tcs-xtce library.
+needs only the headers ``../../cpp/include/xtce/packet.h`` and
+``../../cpp/include/xtce/digest.h`` and the generated header; it links with
+no tcs-xtce library.
 
 .. code-block:: sh
 

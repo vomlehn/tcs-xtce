@@ -4,13 +4,16 @@
 //! `variable_array.rs`.
 //!
 //! A `Paragraph` is a two-dimensional array whose dimensions both vary: an
-//! array of lines, each an array of words. Before each packet the sender
-//! writes a `Length` packet, also described by `variable_array.xml`, giving
-//! its size in bytes, so the receiver knows how many bytes to read; it then
-//! writes the whole `Paragraph` in a single write. The receiver checks that
-//! every line and word arrived intact and in order, then prints each line
-//! with its words separated by spaces. The C/C++ and Python versions of this
-//! program print identical output.
+//! array of lines, each an array of words. The sender first writes the
+//! digest of `variable_array.xml`, which the receiver checks against the
+//! digest of its own copy, so that both agree on the packets. Before each
+//! packet the sender writes a `Length` packet, also described by
+//! `variable_array.xml`, giving its size in bytes, so the receiver knows how
+//! many bytes to read; it then writes the whole `Paragraph` in a single
+//! write. The receiver checks that every line and word arrived intact and in
+//! order, then prints each line with its words separated by spaces. The
+//! C/C++ and Python versions of this program print identical output. Run it
+//! in the directory that holds `variable_array.xml`.
 
 mod variable_array;
 
@@ -19,6 +22,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::process;
 use std::thread;
 
+use tcs_xtce::digest::{digest_file_bytes, hex};
 use tcs_xtce::packet::{Codec, Packet};
 use variable_array::{Length, Line, Paragraph};
 
@@ -40,6 +44,10 @@ const PARAGRAPHS: [&[&str]; 2] = [
             anim id est laborum.",
     ],
 ];
+
+/// The XTCE file that describes the packets, and the size of its digest.
+const XTCE: &str = "variable_array.xml";
+const DIGEST_BYTES: usize = 16;
 
 fn fail(msg: &str) -> ! {
     eprintln!("variable-array: {msg}");
@@ -93,11 +101,19 @@ fn difference(got: &Paragraph, want: &Paragraph) -> Option<String> {
     None
 }
 
-/// Connects to `addr` and sends each array: a `Length` packet, then the
-/// `Paragraph` packet in a single write. Then closes the connection.
+/// Connects to `addr`, sends the digest of the XTCE file, then sends each
+/// array: a `Length` packet, then the `Paragraph` packet in a single write.
+/// Then closes the connection.
 fn send(addr: SocketAddr) {
     let mut stream = TcpStream::connect(addr)
         .unwrap_or_else(|e| fail(&format!("connect: {e}")));
+    // First the digest, so the receiver can check that it uses the same
+    // definitions of Length and Paragraph.
+    let digest = digest_file_bytes(XTCE)
+        .unwrap_or_else(|e| fail(&format!("{XTCE}: {e}")));
+    stream
+        .write_all(&digest)
+        .unwrap_or_else(|e| fail(&format!("send: {e}")));
     // The codecs' output buffers are preallocated to Paragraph::MAX_BYTES
     // and Length::MAX_BYTES (4) and reused for both arrays.
     let mut codec = Codec::for_packet::<Paragraph>();
@@ -128,13 +144,13 @@ fn send(addr: SocketAddr) {
 }
 
 /// Reads into all of `buf`. Returns false if the stream ended before the
-/// first byte, and fails if it ended part way through.
-fn read_all(stream: &mut TcpStream, buf: &mut [u8]) -> bool {
+/// first byte, and fails if it ended part way through `what`.
+fn read_all(stream: &mut TcpStream, buf: &mut [u8], what: &str) -> bool {
     let mut got = 0;
     while got < buf.len() {
         match stream.read(&mut buf[got..]) {
             Ok(0) if got == 0 => return false,
-            Ok(0) => fail("stream closed in the middle of an array"),
+            Ok(0) => fail(&format!("stream closed in the middle of {what}")),
             Ok(n) => got += n,
             Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
             Err(e) => fail(&format!("receive: {e}")),
@@ -143,9 +159,10 @@ fn read_all(stream: &mut TcpStream, buf: &mut [u8]) -> bool {
     true
 }
 
-/// Accepts the connection and receives arrays until it closes: for each, it
-/// reads and decodes the `Length` packet, then reads that many bytes,
-/// decodes the `Paragraph`, checks it and prints it.
+/// Accepts the connection, checks the sender's XTCE digest, and receives
+/// arrays until it closes: for each, it reads and decodes the `Length`
+/// packet, then reads that many bytes, decodes the `Paragraph`, checks it
+/// and prints it.
 fn receive(listener: TcpListener) {
     let (mut stream, _) = listener
         .accept()
@@ -158,7 +175,24 @@ fn receive(listener: TcpListener) {
     let mut length_packet = [0u8; Length::MAX_BYTES];
     let mut p = 0;
 
-    while read_all(&mut stream, &mut length_packet) {
+    // The sender's digest must be the digest of this side's XTCE file: then
+    // both read and write the packets the same way.
+    let mut theirs = [0u8; DIGEST_BYTES];
+    if !read_all(&mut stream, &mut theirs, "the sender's XTCE digest") {
+        fail("stream closed before the sender's XTCE digest");
+    }
+    let ours = digest_file_bytes(XTCE)
+        .unwrap_or_else(|e| fail(&format!("{XTCE}: {e}")));
+    if theirs != ours {
+        fail(&format!(
+            "the sender's XTCE digest {} is not {}, the digest of {XTCE}",
+            hex(&theirs),
+            hex(&ours)
+        ));
+    }
+    println!("XTCE digest: {}, the same on both sides", hex(&ours));
+
+    while read_all(&mut stream, &mut length_packet, "an array") {
         length_codec.load(&length_packet);
         let length: Length = length_codec
             .decode()
@@ -170,7 +204,7 @@ fn receive(listener: TcpListener) {
                 Paragraph::MAX_BYTES
             ));
         }
-        if !read_all(&mut stream, &mut packet[..len]) {
+        if !read_all(&mut stream, &mut packet[..len], "an array") {
             fail("stream closed in the middle of an array");
         }
         if p == PARAGRAPHS.len() {

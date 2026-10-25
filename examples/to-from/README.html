@@ -369,22 +369,27 @@ language and read by the program in another: Rust, C, C++ or Python.</p>
 <p>The data is the standard lorem ipsum paragraph (&quot;Lorem ipsum dolor sit amet,
 consectetur adipiscing elit, …&quot;), split at spaces into its 69 words, so
 punctuation stays with its word. Each word is one <tt class="docutils literal">Word</tt> packet.</p>
-<p>The example shows two things:</p>
+<p>The example shows three things:</p>
 <ul class="simple">
 <li><strong>Strings of varying length.</strong> A <tt class="docutils literal">Word</tt> is as long as its text, plus a
 four-byte size tag that XTCE describes.</li>
 <li><strong>Writing in one language and reading in another.</strong> The code each
 language's generator produces writes the same bytes, and reads the bytes
 any of the others wrote.</li>
+<li><strong>Checking that both use the same definition.</strong> The writer first sends
+the digest of <tt class="docutils literal">to_from.xml</tt>, and the reader checks it against the digest
+of its own copy (see <a class="reference internal" href="#checking-the-xtce-definition">Checking the XTCE definition</a>).</li>
 </ul>
 <p>Each language's program takes one argument:</p>
 <dl class="docutils">
 <dt><tt class="docutils literal">write</tt></dt>
-<dd>Serializes each word into a <tt class="docutils literal">Word</tt> packet and writes the packets, one
-after another, to standard output.</dd>
+<dd>Writes the 16-byte digest of <tt class="docutils literal">to_from.xml</tt> to standard output, then
+serializes each word into a <tt class="docutils literal">Word</tt> packet and writes the packets, one
+after another.</dd>
 <dt><tt class="docutils literal">read</tt></dt>
-<dd>Reads packets from standard input and deserializes them. It prints each
-word as it arrives, with a space before every word except the first, and
+<dd>Reads the digest from standard input and checks it against the digest of
+its own <tt class="docutils literal">to_from.xml</tt>, printing it if they match. It then reads packets
+and deserializes them. It prints each word as it arrives, with a space before every word except the first, and
 a newline when the input ends. It checks every word against the
 paragraph's next word, so that it catches any word that is damaged,
 missing, extra or out of order, and input that ends early or in the
@@ -407,6 +412,7 @@ piped to the reader's standard input:</p>
 <pre class="literal-block">
 $ ./to-from python c
 to: python from: c
+XTCE digest: ad4767eca527cdc6d62f3bf78ad5ff4f, the same on both sides
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
 </pre>
 <p>Here the C program wrote the packets and the Python program read them.
@@ -429,7 +435,8 @@ together occupy at most 288 bits, so a word holds up to 32 bytes of UTF-8;</li>
 most significant byte first, followed by its bytes, with no terminator or
 padding. <tt class="docutils literal">&quot;Lorem&quot;</tt> is <tt class="docutils literal">00000005 4c6f72656d</tt>, and <tt class="docutils literal">&quot;sit&quot;</tt> is
 <tt class="docutils literal">00000003 736974</tt>. A word longer than 32 bytes can't be serialized.</p>
-<p>The packets follow each other with nothing between them. Because a <tt class="docutils literal">Word</tt>
+<p>The writer's output is the 16-byte digest, then the packets, which follow
+each other with nothing between them. Because a <tt class="docutils literal">Word</tt>
 packet starts with its size tag, the reader reads those four bytes, then that
 many more, and hands the whole packet to the generated decoder.</p>
 <p>The file validates against the XTCE 1.3 schema:</p>
@@ -437,6 +444,45 @@ many more, and hands the whole packet to the generated decoder.</p>
 <span class="name variable">XML_CATALOG_FILES</span><span class="operator">=</span>../../references/catalog.xml<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>to_from.xml
 </pre>
+</div>
+<div class="section" id="checking-the-xtce-definition">
+<h1>Checking the XTCE definition</h1>
+<p>The packets carry no field names or types, so the reader can read them only
+if it was built from the same definition as the writer. To check, the writer sends
+the 16-byte MD5 digest of <tt class="docutils literal">to_from.xml</tt>, before any packet. The reader
+computes the digest of its own copy of <tt class="docutils literal">to_from.xml</tt> and compares. If they
+match, it prints</p>
+<pre class="literal-block">
+XTCE digest: &lt;32 hex digits&gt;, the same on both sides
+</pre>
+<p>and goes on; if they don't, it prints both digests to standard error and
+exits with status 1, before it reads a packet.</p>
+<p>The digest is of what the document means, not of its bytes: comments,
+whitespace between elements, attribute order, namespace prefixes and the
+order of unordered collections such as a <tt class="docutils literal">ParameterSet</tt> don't change it,
+while any change to a type, a field or the order of entries does. Every
+runtime computes it the same way:</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Language</th>
+<th class="head">Function</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Rust</td>
+<td><tt class="docutils literal"><span class="pre">tcs_xtce::digest::digest_file_bytes(path)</span></tt>, giving <tt class="docutils literal">[u8; 16]</tt></td>
+</tr>
+<tr><td>C, C++</td>
+<td><tt class="docutils literal">xtce_digest_file_bytes(path, out, &amp;err)</tt>, from the header
+<tt class="docutils literal">xtce/digest.h</tt>, which needs no library</td>
+</tr>
+<tr><td>Python</td>
+<td><tt class="docutils literal">xtce.digest.digest_file_bytes(path)</tt>, giving <tt class="docutils literal">bytes</tt></td>
+</tr>
+</tbody>
+</table>
+<p><tt class="docutils literal"><span class="pre">xtce-digest</span> to_from.xml</tt> prints the same digest in hex. Each program reads
+<tt class="docutils literal">to_from.xml</tt> from the current directory, so run it from this one.</p>
 </div>
 <div class="section" id="generating-the-code">
 <h1>Generating the code</h1>
@@ -508,6 +554,7 @@ to: c from: rust
 ...
 to: python from: python
 cat build/c-c.txt
+XTCE digest: ad4767eca527cdc6d62f3bf78ad5ff4f, the same on both sides
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor ...
 to-from: the 4 writers wrote the same bytes, and the 16 reader/writer pairs printed the same words
 </pre>
@@ -524,14 +571,16 @@ depends on the <tt class="docutils literal"><span class="pre">tcs-xtce</span></t
 rust/target/release/to-from<span class="whitespace"> </span>write<span class="whitespace"> </span>&gt;words.bin<span class="whitespace">
 </span>rust/target/release/to-from<span class="whitespace"> </span><span class="name builtin">read</span><span class="whitespace"> </span>&lt;words.bin
 </pre>
-<p>or <tt class="docutils literal">cd rust &amp;&amp; cargo run <span class="pre">--release</span> <span class="pre">--</span> read</tt> (or <tt class="docutils literal">write</tt>). Its <tt class="docutils literal">Codec</tt>
+<p>or <tt class="docutils literal">cargo run <span class="pre">--release</span> <span class="pre">--manifest-path</span> rust/Cargo.toml <span class="pre">--</span> read</tt> (or
+<tt class="docutils literal">write</tt>), which also runs it from this directory. Its <tt class="docutils literal">Codec</tt>
 has a buffer preallocated to <tt class="docutils literal"><span class="pre">Word::MAX_BYTES</span></tt> and reused for every word.</p>
 </div>
 <div class="section" id="c-and-c">
 <h2>C and C++</h2>
 <p><a class="reference external" href="c/main.c">c/main.c</a> is built twice, once as C11 and once as C++20. It
-needs only the header <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt> and the generated
-header; it links with no tcs-xtce library.</p>
+needs only the headers <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt> and
+<tt class="docutils literal"><span class="pre">../../cpp/include/xtce/digest.h</span></tt> and the generated header; it links with
+no tcs-xtce library.</p>
 <pre class="code sh literal-block">
 build/to_from_c<span class="whitespace"> </span>write<span class="whitespace"> </span>&gt;words.bin<span class="whitespace">       </span><span class="comment single"># the C build
 </span>build/to_from_cxx<span class="whitespace"> </span><span class="name builtin">read</span><span class="whitespace"> </span>&lt;words.bin<span class="whitespace">      </span><span class="comment single"># the C++ build</span>

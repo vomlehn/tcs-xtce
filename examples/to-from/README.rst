@@ -8,23 +8,28 @@ The data is the standard lorem ipsum paragraph ("Lorem ipsum dolor sit amet,
 consectetur adipiscing elit, …"), split at spaces into its 69 words, so
 punctuation stays with its word. Each word is one ``Word`` packet.
 
-The example shows two things:
+The example shows three things:
 
 * **Strings of varying length.** A ``Word`` is as long as its text, plus a
   four-byte size tag that XTCE describes.
 * **Writing in one language and reading in another.** The code each
   language's generator produces writes the same bytes, and reads the bytes
   any of the others wrote.
+* **Checking that both use the same definition.** The writer first sends
+  the digest of ``to_from.xml``, and the reader checks it against the digest
+  of its own copy (see `Checking the XTCE definition`_).
 
 Each language's program takes one argument:
 
 ``write``
-   Serializes each word into a ``Word`` packet and writes the packets, one
-   after another, to standard output.
+   Writes the 16-byte digest of ``to_from.xml`` to standard output, then
+   serializes each word into a ``Word`` packet and writes the packets, one
+   after another.
 
 ``read``
-   Reads packets from standard input and deserializes them. It prints each
-   word as it arrives, with a space before every word except the first, and
+   Reads the digest from standard input and checks it against the digest of
+   its own ``to_from.xml``, printing it if they match. It then reads packets
+   and deserializes them. It prints each word as it arrives, with a space before every word except the first, and
    a newline when the input ends. It checks every word against the
    paragraph's next word, so that it catches any word that is damaged,
    missing, extra or out of order, and input that ends early or in the
@@ -52,6 +57,7 @@ piped to the reader's standard input:
 
    $ ./to-from python c
    to: python from: c
+   XTCE digest: ad4767eca527cdc6d62f3bf78ad5ff4f, the same on both sides
    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
 
 Here the C program wrote the packets and the Python program read them.
@@ -76,7 +82,8 @@ most significant byte first, followed by its bytes, with no terminator or
 padding. ``"Lorem"`` is ``00000005 4c6f72656d``, and ``"sit"`` is
 ``00000003 736974``. A word longer than 32 bytes can't be serialized.
 
-The packets follow each other with nothing between them. Because a ``Word``
+The writer's output is the 16-byte digest, then the packets, which follow
+each other with nothing between them. Because a ``Word``
 packet starts with its size tag, the reader reads those four bytes, then that
 many more, and hands the whole packet to the generated decoder.
 
@@ -86,6 +93,45 @@ The file validates against the XTCE 1.3 schema:
 
    XML_CATALOG_FILES=../../references/catalog.xml \
        xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd to_from.xml
+
+Checking the XTCE definition
+----------------------------
+
+The packets carry no field names or types, so the reader can read them only
+if it was built from the same definition as the writer. To check, the writer sends
+the 16-byte MD5 digest of ``to_from.xml``, before any packet. The reader
+computes the digest of its own copy of ``to_from.xml`` and compares. If they
+match, it prints
+
+::
+
+   XTCE digest: <32 hex digits>, the same on both sides
+
+and goes on; if they don't, it prints both digests to standard error and
+exits with status 1, before it reads a packet.
+
+The digest is of what the document means, not of its bytes: comments,
+whitespace between elements, attribute order, namespace prefixes and the
+order of unordered collections such as a ``ParameterSet`` don't change it,
+while any change to a type, a field or the order of entries does. Every
+runtime computes it the same way:
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Language
+     - Function
+   * - Rust
+     - ``tcs_xtce::digest::digest_file_bytes(path)``, giving ``[u8; 16]``
+   * - C, C++
+     - ``xtce_digest_file_bytes(path, out, &err)``, from the header
+       ``xtce/digest.h``, which needs no library
+   * - Python
+     - ``xtce.digest.digest_file_bytes(path)``, giving ``bytes``
+
+``xtce-digest to_from.xml`` prints the same digest in hex. Each program reads
+``to_from.xml`` from the current directory, so run it from this one.
 
 Generating the code
 -------------------
@@ -157,6 +203,7 @@ Building and running
    ...
    to: python from: python
    cat build/c-c.txt
+   XTCE digest: ad4767eca527cdc6d62f3bf78ad5ff4f, the same on both sides
    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor ...
    to-from: the 4 writers wrote the same bytes, and the 16 reader/writer pairs printed the same words
 
@@ -178,15 +225,17 @@ depends on the ``tcs-xtce`` crate in ``../../rust``:
    rust/target/release/to-from write >words.bin
    rust/target/release/to-from read <words.bin
 
-or ``cd rust && cargo run --release -- read`` (or ``write``). Its ``Codec``
+or ``cargo run --release --manifest-path rust/Cargo.toml -- read`` (or
+``write``), which also runs it from this directory. Its ``Codec``
 has a buffer preallocated to ``Word::MAX_BYTES`` and reused for every word.
 
 C and C++
 ~~~~~~~~~
 
 `c/main.c <c/main.c>`__ is built twice, once as C11 and once as C++20. It
-needs only the header ``../../cpp/include/xtce/packet.h`` and the generated
-header; it links with no tcs-xtce library.
+needs only the headers ``../../cpp/include/xtce/packet.h`` and
+``../../cpp/include/xtce/digest.h`` and the generated header; it links with
+no tcs-xtce library.
 
 .. code-block:: sh
 

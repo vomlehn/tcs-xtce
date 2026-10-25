@@ -23,7 +23,8 @@ GEN     := rust/src/variable_array.rs c/variable_array.h cxx/variable_array.h \
 GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py \
                      $(TOP)/generator/tcs_xtce/*.py \
                      $(TOP)/generator/xtcegen/*.py)
-PKT_H   := $(TOP)/cpp/include/xtce/packet.h
+PKT_H   := $(TOP)/cpp/include/xtce/packet.h \
+           $(TOP)/cpp/include/xtce/digest.h
 TCS_XTCE := cd $(TOP)/generator && \
             $(PYTHON) -m tcs_xtce ../examples/variable-array/$(XML) \
            --source-name examples/variable-array/$(XML)

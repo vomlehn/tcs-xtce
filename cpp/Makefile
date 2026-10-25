@@ -17,7 +17,8 @@ LIB_OBJS := $(LIB_SRCS:src/%.cpp=$(BUILD)/%.o)
 HEADERS  := $(wildcard include/xtce/*.hpp include/xtce/*.h)
 
 .PHONY: all
-all: lib $(BUILD)/xtce_roundtrip $(BUILD)/packet_tool $(BUILD)/packet_tool_cxx
+all: lib $(BUILD)/xtce_roundtrip $(BUILD)/packet_tool $(BUILD)/packet_tool_cxx \
+     $(BUILD)/digest_tool $(BUILD)/digest_tool_cxx
 
 .PHONY: lib
 lib: $(BUILD)/libxtce.a $(BUILD)/libxtce.so
@@ -55,6 +56,13 @@ $(BUILD)/packet_test: tests/packet_test.c $(PKT_DEPS) | $(BUILD)
 
 $(BUILD)/packet_test_cxx: tests/packet_test.c $(PKT_DEPS) | $(BUILD)
 	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -Itests -x c++ $< -o $@
+
+# The XTCE digest, from the header xtce/digest.h alone, built both ways.
+$(BUILD)/digest_tool: tests/digest_tool.c include/xtce/digest.h | $(BUILD)
+	$(CC) -std=c11 $(CFLAGS) $(WARN) -Iinclude $< -o $@
+
+$(BUILD)/digest_tool_cxx: tests/digest_tool.c include/xtce/digest.h | $(BUILD)
+	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -x c++ $< -o $@
 
 # The C test is compiled as C and linked with the C++ runtime.
 $(BUILD)/c_api_test: tests/c_api_test.c $(BUILD)/libxtce.a

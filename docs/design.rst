@@ -602,9 +602,9 @@ digest of what a document means, which they can compare once, when they
 start talking, instead of describing the data in every message.
 
 The digest is computed over a canonical encoding of the document's
-elements, attributes and text, read with ElementTree, which drops
-comments and processing instructions and names elements by namespace
-URI rather than prefix. Whitespace around text is dropped, attributes
+elements, attributes and text, with comments and processing instructions
+dropped and elements and attributes named by namespace URI rather than
+prefix. Whitespace around text is dropped, attributes
 are sorted, and the children of elements that hold unordered collections
 (``UNORDERED``: the ``…Set`` elements, ``ComparisonList`` and the like)
 are sorted by their encoding, so reordering a ``ParameterSet`` changes
@@ -619,9 +619,32 @@ the document; a missed change would cost corrupted data. MD5 is used for
 its speed and ubiquity, not for security: it detects accidental
 differences, not deliberate collisions.
 
-``digest_file`` and ``digest_string`` in ``generator/xtce_digest`` read
-and validate a document from a file or a string and return its digest;
-the command is a loop over ``digest_file``.
+Each runtime computes the digest itself, so a program in any language
+can send its digest and check the one it receives: ``xtce.digest`` in
+Python, ``tcs_xtce::digest`` in Rust, and ``xtce/digest.h`` for C and C++,
+header-only like ``xtce/packet.h`` so that C programs still link no
+library. The encoding is specified in ``python/xtce/digest.py``, and each
+runtime has its own small XML reader for it: the readers the XML bindings
+use are driven by the schema and don't keep namespaces, and an
+implementation per language keeps each runtime free of dependencies
+(Rust and C have no MD5 either, so each has one, from RFC 1321, with the
+constant table written out rather than computed with ``sin``).
+
+Byte-identical digests need every reader to agree on details XML leaves
+to the parser, so the encoding pins them down: the document must be
+UTF-8 and may not declare another encoding; DOCTYPEs are rejected, so no
+reader has to expand entities from a DTD; text is trimmed of the four XML
+whitespace characters only, not of everything a language calls
+whitespace; and line ends and attribute values are normalized as XML
+requires. ``tests/digest_check.sh`` runs all four runtimes on the test
+documents, including edge cases in ``tests/digest``, and checks them
+against each other and against known digests. The ``UNORDERED`` list is
+written out in each runtime and must stay the same in all of them.
+
+The runtimes don't check documents against the schema; the
+``xtce-digest`` command, in ``generator/xtce_digest``, does, then digests
+each file with the Python runtime. Computing a digest allocates memory,
+so it belongs at start-up, not in code that must not allocate.
 
 Testing strategy
 ================

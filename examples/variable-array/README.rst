@@ -15,13 +15,16 @@ punctuation stays with its word.
 
 Each program has two threads:
 
-* The **sender** connects to the receiver. For each array in turn, it
+* The **sender** connects to the receiver and sends the 16-byte digest of
+  ``variable_array.xml``. Then, for each array in turn, it
   serializes the whole array into one ``Paragraph`` packet, writes the
   packet's length as a ``Length`` packet, then writes the ``Paragraph``
   packet with a single write call and
   checks that the call took every byte. After the last array it closes the
   connection.
-* The **receiver** accepts the connection. For each array in turn, it reads
+* The **receiver** accepts the connection, reads the digest and checks it
+  against the digest of its own ``variable_array.xml`` (see `Checking the
+  XTCE definition`_). For each array in turn, it then reads
   and deserializes the ``Length`` packet, then reads that many bytes and
   deserializes the ``Paragraph`` packet. It compares
   the packet with the array it expects: the number of lines, the number of
@@ -30,8 +33,8 @@ Each program has two threads:
   closes, it checks that both arrays arrived. If anything is wrong, it
   prints the first problem to standard error and exits with status 1.
 
-So the program prints five lines: three from the first array, then two
-from the second.
+So the program prints the digest, then five lines: three from the first
+array, then two from the second.
 
 The length before each packet
 -----------------------------
@@ -63,7 +66,7 @@ rejects a larger ``ByteCount`` before reading it. (A ``ValidRange`` on
 ``ByteCountType`` wouldn't do this: tcs-xtce uses ranges to bound counts
 and sizes, but doesn't check other integers against them.)
 
-On the wire the two arrays look like this:
+On the wire, after the 16-byte digest, the two arrays look like this:
 
 ::
 
@@ -75,6 +78,45 @@ On the wire the two arrays look like this:
 Both threads are in one process. The receiver listens on ``127.0.0.1`` on a
 port the system picks, so the programs need no network access and don't
 conflict with other programs or with each other.
+
+Checking the XTCE definition
+----------------------------
+
+The packets carry no field names or types, so the receiver can read them only
+if it was built from the same definition as the sender. To check, the sender sends
+the 16-byte MD5 digest of ``variable_array.xml``, before any packet. The receiver
+computes the digest of its own copy of ``variable_array.xml`` and compares. If they
+match, it prints
+
+::
+
+   XTCE digest: <32 hex digits>, the same on both sides
+
+and goes on; if they don't, it prints both digests to standard error and
+exits with status 1, before it reads a packet.
+
+The digest is of what the document means, not of its bytes: comments,
+whitespace between elements, attribute order, namespace prefixes and the
+order of unordered collections such as a ``ParameterSet`` don't change it,
+while any change to a type, a field or the order of entries does. Every
+runtime computes it the same way:
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Language
+     - Function
+   * - Rust
+     - ``tcs_xtce::digest::digest_file_bytes(path)``, giving ``[u8; 16]``
+   * - C, C++
+     - ``xtce_digest_file_bytes(path, out, &err)``, from the header
+       ``xtce/digest.h``, which needs no library
+   * - Python
+     - ``xtce.digest.digest_file_bytes(path)``, giving ``bytes``
+
+``xtce-digest variable_array.xml`` prints the same digest in hex. Each program reads
+``variable_array.xml`` from the current directory, so run it from this one.
 
 The XTCE description
 --------------------
@@ -211,6 +253,7 @@ that they print the same thing:
 
    $ make
    ...
+   XTCE digest: 904beed3fc463cd7addc91dfca67c304, the same on both sides
    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
    labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
    laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
@@ -223,8 +266,8 @@ that they print the same thing:
 
 To run one program on its own, generate the code first with
 ``make generate``, then run the commands below from this directory. Each
-program prints the five lines and exits with status 0 if both arrays
-arrived intact.
+program prints the digest and the five lines, and exits with status 0 if
+both arrays arrived intact.
 
 Rust
 ~~~~
@@ -234,7 +277,7 @@ depends on the ``tcs-xtce`` crate in ``../../rust``.
 
 .. code-block:: sh
 
-   cd rust && cargo run --release
+   cargo run --release --manifest-path rust/Cargo.toml
 
 It sends from a thread started with ``std::thread::spawn`` and receives in
 the main thread, over ``std::net::TcpStream``. Each thread has its own
@@ -245,9 +288,9 @@ C and C++
 ~~~~~~~~~
 
 `c/main.c <c/main.c>`__ is built twice, once as C11 and once as C++20, and
-uses POSIX threads and sockets. It needs only the header
-``../../cpp/include/xtce/packet.h`` and the generated header; it links with
-no tcs-xtce library.
+uses POSIX threads and sockets. It needs only the headers
+``../../cpp/include/xtce/packet.h`` and ``../../cpp/include/xtce/digest.h``
+and the generated header; it links with no tcs-xtce library.
 
 .. code-block:: sh
 

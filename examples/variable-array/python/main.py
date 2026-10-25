@@ -3,19 +3,23 @@ TCP connection, each as a Paragraph packet described by variable_array.xml,
 using the code tcs-xtce generated into variable_array.py.
 
 A Paragraph is a two-dimensional array whose dimensions both vary: an array
-of lines, each an array of words. Before each packet the sender writes a
+of lines, each an array of words. The sender first writes the digest of
+variable_array.xml, which the receiver checks against the digest of its own
+copy, so that both agree on the packets. Before each packet the sender writes a
 Length packet, also described by variable_array.xml, giving its size in
 bytes, so the receiver knows how many bytes to read; it then writes the
 whole Paragraph in a single write. The receiver checks that every line and
 word arrived intact and in order, then prints each line with its words
 separated by spaces. The Rust and C/C++ versions of this program print
-identical output.
+identical output. Run it in the directory that holds variable_array.xml.
 """
 
 import socket
 import sys
 import threading
 
+from xtce import XtceError
+from xtce.digest import digest_file_bytes
 from xtce.packet import Codec, PacketError
 
 from variable_array import Length, Line, Paragraph
@@ -32,6 +36,11 @@ PARAGRAPHS = [["Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed "
                "Excepteur sint occaecat",
                "cupidatat non proident, sunt in culpa qui officia deserunt "
                "mollit anim id est laborum."]]
+
+
+# The XTCE file that describes the packets, and the size of its digest.
+XTCE = "variable_array.xml"
+DIGEST_BYTES = 16
 
 
 class Failed(Exception):
@@ -62,10 +71,14 @@ def difference(got: Paragraph, want: Paragraph):
 
 
 def send(address, errors: list) -> None:
-    """Connect to ``address`` and send each array: a Length packet, then the
-    Paragraph packet in a single write. Then close the connection."""
+    """Connect to ``address``, send the digest of the XTCE file, then send
+    each array: a Length packet, then the Paragraph packet in a single
+    write. Then close the connection."""
     try:
         with socket.create_connection(address) as sock:
+            # First the digest, so the receiver can check that it uses the
+            # same definitions of Length and Paragraph.
+            sock.sendall(digest_file_bytes(XTCE))
             # The codecs' output buffers are preallocated to
             # Paragraph.MAX_BYTES and Length.MAX_BYTES (4) and reused for both
             # arrays.
@@ -81,14 +94,15 @@ def send(address, errors: list) -> None:
                         raise Failed(f"one write sent {n} of {len(view)} bytes")
         # Leaving the with block closes the socket, which tells the receiver
         # there are no more arrays.
-    except (Failed, OSError, PacketError) as e:
+    except (Failed, OSError, PacketError, XtceError) as e:
         errors.append(e)
 
 
 def receive(listener: socket.socket) -> None:
-    """Accept the connection and receive arrays until it closes: for each,
-    read and decode the Length packet, then read that many bytes, decode the
-    Paragraph, check it and print it."""
+    """Accept the connection, check the sender's XTCE digest, and receive
+    arrays until it closes: for each, read and decode the Length packet,
+    then read that many bytes, decode the Paragraph, check it and print
+    it."""
     conn, _ = listener.accept()
     # The codecs' input buffers are preallocated to Paragraph.MAX_BYTES and
     # Length.MAX_BYTES (4) and reused for both arrays.
@@ -96,6 +110,16 @@ def receive(listener: socket.socket) -> None:
     length_codec = Codec.for_packet(Length)
     p = 0
     with conn, conn.makefile("rb") as stream:
+        # The sender's digest must be the digest of this side's XTCE file:
+        # then both read and write the packets the same way.
+        theirs = stream.read(DIGEST_BYTES)
+        if len(theirs) != DIGEST_BYTES:
+            raise Failed("stream closed before the sender's XTCE digest")
+        ours = digest_file_bytes(XTCE)
+        if theirs != ours:
+            raise Failed(f"the sender's XTCE digest {theirs.hex()} is not "
+                         f"{ours.hex()}, the digest of {XTCE}")
+        print(f"XTCE digest: {ours.hex()}, the same on both sides")
         while length := stream.read(Length.MAX_BYTES):
             if len(length) != Length.MAX_BYTES:
                 raise Failed("stream closed in the middle of an array")
@@ -134,7 +158,7 @@ def main() -> None:
         sender.start()
         try:
             receive(listener)
-        except (Failed, OSError, PacketError) as e:
+        except (Failed, OSError, PacketError, XtceError) as e:
             sys.exit(f"variable-array: {e}")
         finally:
             sender.join()

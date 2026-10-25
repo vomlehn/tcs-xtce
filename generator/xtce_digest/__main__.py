@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
-from xtce_digest import XtceError, digest_file
+from xtce_digest import XtceError, checked_digest
 
 
 def main(argv=None) -> int:
@@ -22,7 +23,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     for name in args.files:
         try:
-            print(f"{name}: {digest_file(name)}", flush=True)
+            print(f"{name}: {checked_digest(Path(name).read_bytes())}",
+                  flush=True)
         except (OSError, XtceError) as e:
             print(f"xtce-digest: {name}: {e}", file=sys.stderr)
             return 1

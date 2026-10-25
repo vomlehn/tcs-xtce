@@ -108,13 +108,16 @@ the C structure that holds it is 40 bytes, 14 of them padding.
 lengths in it: it is the field values and nothing else. That works
 because both programs are built from the same XTCE document, so each
 knows what every field is and where it is. To make sure they are, compare
-the digests of their documents: ``xtce-digest`` (see `xtce-digest`_), or
-its library functions ``digest_file`` and ``digest_string``, gives two
-documents the same digest only when they say the same thing, and so
-define the same packets, with the same fields, types and order. (It errs
-the other way: some edits that change nothing it generates still change
-the digest.) A program can check this once,
-for example when two programs connect, rather than in every message.
+the digests of their documents. Every runtime computes the digest: Rust,
+C, C++ and Python (see `xtce-digest`_), and so does the ``xtce-digest``
+command. Two documents get the same digest only when they say the same
+thing, and so define the same packets, with the same fields, types and
+order. (It errs the other way: some edits that change nothing tcs-xtce
+generates still change the digest.) A program checks this once, before
+any packets, rather than in every message: the sender sends the 16-byte
+digest of its document first, and the receiver compares it with the
+digest of its own. The ``to-from``, ``variable-array`` and
+``housekeeping`` examples do this.
 
 **Compared with self-describing formats.** JSON and Google Protocol
 Buffers carry part of the definition in every message, so a reader can
@@ -140,7 +143,7 @@ reads each field from where the document says it is.
    * - ``generator/tcs_xtce/``, ``generator/xtcepkt/``
      - The ``tcs-xtce`` command, and the compiler behind it that turns a mission's XTCE document into packet codecs
    * - ``generator/xtce_digest/``
-     - The ``xtce-digest`` command, which prints a digest of what an XTCE document means (see `xtce-digest`_)
+     - The ``xtce-digest`` command, which prints a digest of what an XTCE document means (see `xtce-digest`_); the digest itself is in each runtime
    * - ``rust/``
      - The ``tcs-xtce`` Rust crate (imported as ``tcs_xtce``)
    * - ``cpp/``
@@ -1503,26 +1506,59 @@ ends the command with status 1; the files before it have been printed,
 and the ones after it are not read. Status 0 means every file was
 digested.
 
-The same digest is available to Python programs from the
-``xtce_digest`` package (in ``generator/``), which needs only the
-``xtce`` package in ``python/``:
+Every runtime computes the same digest, so that a program in any
+language can compute its document's digest, send it, and compare it with
+the digest it receives. Each has functions that give the digest of a
+document in memory or in a file, as 16 bytes (to send) or as 32 lowercase
+hex digits (to print):
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Language
+     - Functions
+     - Errors
+   * - Rust (``tcs_xtce::digest``)
+     - ``digest_bytes(&[u8]) -> [u8; 16]``, ``digest(&[u8])``,
+       ``digest_string(&str)``, ``digest_file_bytes(path)``,
+       ``digest_file(path)``, ``hex(&[u8; 16])``
+     - ``Err(tcs_xtce::Error)``
+   * - C and C++ (``xtce/digest.h``, which needs no library)
+     - ``xtce_digest_bytes(data, len, out, &err)``,
+       ``xtce_digest(data, len, hex, &err)``,
+       ``xtce_digest_string(text, hex, &err)``,
+       ``xtce_digest_file_bytes(path, out, &err)``,
+       ``xtce_digest_file(path, hex, &err)``,
+       ``xtce_digest_hex(out, hex)``; in C++ also
+       ``xtce::digest(std::string_view)`` and
+       ``xtce::digest_file(path)``, returning ``std::string``
+     - ``-1`` and ``err.message``; C++ throws ``std::runtime_error``
+   * - Python (``xtce.digest``)
+     - ``digest_bytes(data)``, ``digest(data)``, ``digest_string(text)``,
+       ``digest_file_bytes(path)``, ``digest_file(path)``
+     - ``XtceError``, and ``OSError`` for a file that can't be read
 
 .. code-block:: python
 
-   from xtce_digest import XtceError, digest_file, digest_string
+   from xtce.digest import digest_file, digest_file_bytes
 
-   digest_file("../tests/mission/demo.xml")    # '6d2d1d775d75a68089fddade8e95c585'
-   digest_string(xml_text)                     # the XML itself, str or bytes
+   digest_file("tests/mission/demo.xml")        # '6d2d1d775d75a68089fddade8e95c585'
+   digest_file_bytes("tests/mission/demo.xml")  # the same 16 bytes
 
-Both check that the document is valid XTCE first, and raise
-``XtceError`` if it isn't; ``digest_file`` also raises ``OSError`` if the
-file can't be read. ``xtce-digest`` calls ``digest_file`` for each file.
+The document must be well-formed XML 1.0 in UTF-8 whose root element is
+``SpaceSystem``; a document that declares another encoding, or has a
+DOCTYPE, is rejected. The functions don't check the document against the
+XTCE schema: ``xtce-digest`` does, before it digests each file. Computing
+a digest allocates memory, so programs that must not allocate compute it
+at start-up.
 
 The digest covers every element, attribute and piece of text, but not
 what leaves the document meaning the same:
 
 * comments and processing instructions;
-* whitespace between elements, and at the start and end of text;
+* whitespace (spaces, tabs, carriage returns and line feeds) between
+  elements, and at the start and end of text;
 * the order of attributes, and the namespace prefixes used;
 * the order of the children of an element that holds an unordered
   collection: the nested ``SpaceSystem`` elements of a
@@ -1566,6 +1602,11 @@ directory, or ``make examples`` at the top level:
   generator changed;
 * builds and runs the C, C++, Rust and Python programs;
 * checks that their output is identical.
+
+Every example that sends packets first sends the 16-byte digest of its
+XTCE file, and the side that receives them checks it against the digest
+of its own copy before it reads a packet (see `Exchanging data between
+programs`_).
 
 ``make html`` in an example's directory converts its ``README.rst`` into
 ``README.html``. ``make`` in ``examples/`` itself does that for every
@@ -1616,8 +1657,10 @@ watts while the packet holds raw counts. ``HeaterPower`` has an
 in Rust, ``has_heater_power`` and ``heater_power`` in C/C++, and
 ``Optional[float]`` in Python.
 
-Each program encodes four readings into one stream, one packet after
-another, then walks the stream: it reads each packet's ``PacketLength`` to
+Each program starts a stream with the digest of ``housekeeping.xml`` and
+encodes four readings into it, one packet after another, then walks the
+stream: it checks the digest against that of its own copy, then reads each
+packet's ``PacketLength`` to
 find where the packet ends, decodes it, and checks it against the reading,
 rounded to the nearest step of each calibrator. It then shows the errors
 for a missing heater power, a temperature out of range, a packet cut short
@@ -1625,8 +1668,9 @@ and a wrong ``PacketLength``:
 
 ::
 
-   decode at 5: 7 bytes -> Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
-   decode at 12: 7 bytes -> Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+   XTCE digest: 27a384a7bcaa921a001f482d2d82e282, the same on both sides
+   decode at 21: 7 bytes -> Status{heater_on=true, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+   decode at 28: 7 bytes -> Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
    encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=none} -> error:Missing (HeaterPower is required by its include condition)
 
 See the `housekeeping README <../examples/housekeeping/README.html>`__ for
@@ -1699,9 +1743,11 @@ at most 288 bits, so a word holds up to 32 bytes:
 
 The example shows that code generated for one language reads what code
 generated for another wrote. Each language's program takes one argument.
-With ``write``, it serializes each of the 69 words of the lorem ipsum
-paragraph into a ``Word`` packet and writes the packets to standard output.
-With ``read``, it reads packets from standard input, using each packet's
+With ``write``, it writes the digest of ``to_from.xml``, then serializes
+each of the 69 words of the lorem ipsum paragraph into a ``Word`` packet
+and writes the packets, to standard output. With ``read``, it checks the
+digest against that of its own ``to_from.xml``, then reads packets from
+standard input, using each packet's
 size tag to find where it ends, and deserializes them. It prints each word
 as it arrives, with a space before every word but the first, and a newline
 when the input ends. It checks that every word arrives intact and in
@@ -1716,6 +1762,7 @@ the writer's output to the reader:
 
    $ ./to-from python c
    to: python from: c
+   XTCE digest: ad4767eca527cdc6d62f3bf78ad5ff4f, the same on both sides
    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ...
 
 ``make`` in the example's directory checks that the four writers write the
@@ -1771,11 +1818,12 @@ size of the C structures.
 
 Each program builds two ``Paragraph``\ s from the lorem ipsum paragraph
 in five lines, one word per element: the first three lines, then the last
-two. One thread opens a TCP connection on the loopback interface and, for
-each array, writes its length, then the whole ``Paragraph`` in a single
-write. The length is a second container in the same XTCE file, ``Length``,
+two. One thread opens a TCP connection on the loopback interface, writes
+the digest of ``variable_array.xml``, and, for each array, writes its
+length, then the whole ``Paragraph`` in a single write. The length is a second container in the same XTCE file, ``Length``,
 holding a 32-bit ``ByteCount``, so it too is encoded and decoded with the
-generated code. Another thread reads and decodes each 4-byte ``Length``,
+generated code. Another thread checks the digest against that of its own
+copy, then reads and decodes each 4-byte ``Length``,
 then reads that many bytes, deserializes the ``Paragraph`` and checks
 every line and word.
 It then prints each inner array as a line, with spaces between the words,
@@ -1784,6 +1832,7 @@ find where each packet ends, since a TCP stream doesn't keep writes apart:
 
 ::
 
+   XTCE digest: 904beed3fc463cd7addc91dfca67c304, the same on both sides
    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
    labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
    laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
@@ -1822,6 +1871,13 @@ Testing
     allocate nothing while decoding, encoding or describing a packet;
   * decoding a re-encoded packet gives the same values and the same
     bytes.
+
+* ``tests/digest_check.sh``: the Rust, C, C++ and Python digest functions
+  give the same digest for the demo mission, the examples' XTCE files, the
+  schema-covering samples and the documents in ``tests/digest``, which
+  cover comments, CDATA, references, line ends, namespaces, unordered
+  collections and documents that must be rejected; those also have known
+  digests, in ``tests/digest/expected.txt``.
 
 The ``packet_tool`` programs (``rust/examples``, ``cpp/tests``, built as
 ``cpp/build/packet_tool`` and ``cpp/build/packet_tool_cxx``, and
