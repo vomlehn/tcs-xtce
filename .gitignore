@@ -48,6 +48,10 @@ __pycache__/
 /examples/simple-string/c/simple_string.h
 /examples/simple-string/cxx/simple_string.h
 /examples/simple-string/python/simple_string.py
+/examples/housekeeping/rust/src/housekeeping.rs
+/examples/housekeeping/c/housekeeping.h
+/examples/housekeeping/cxx/housekeeping.h
+/examples/housekeeping/python/housekeeping.py
 /examples/to-from/rust/src/to_from.rs
 /examples/to-from/c/to_from.h
 /examples/to-from/cxx/to_from.h

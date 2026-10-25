@@ -35,6 +35,10 @@ file and every example's.
 
    * - Example
      - Shows
+   * - `housekeeping <housekeeping/README.html>`__
+     - Status packets with a packet length field, calibrated values and a
+       field present only when the heater is on, stored one after another
+       in a stream and split apart again
    * - `simple-string <simple-string/README.html>`__
      - A structure holding one string of up to 8 bytes, serialized into
        and deserialized from managed buffers

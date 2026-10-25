@@ -1487,6 +1487,10 @@ example and for ``examples/README.rst``, the `index of examples
 
 The examples are:
 
+* `housekeeping <../examples/housekeeping/README.html>`__: status packets
+  with a packet length field, calibrated temperatures, voltages and powers,
+  and a field present only when a heater is on, stored one after another
+  in a stream and split apart again by their length fields.
 * `simple-string <../examples/simple-string/README.html>`__: a structure
   holding one string of up to 8 bytes, serialized into and deserialized
   from managed buffers.
@@ -1500,6 +1504,46 @@ The examples are:
   thread to another, each after its length.
 
 Each is summarized below; its README has the details.
+
+``housekeeping``
+----------------
+
+``examples/housekeeping/housekeeping.xml`` describes a container,
+``Status``:
+
+::
+
+   PacketLength    16 bits   bytes after this field; computed when encoding
+   HeaterMode       4 bits   Off (0) or On (1)
+   Temperature     12 bits   raw / 16 - 50 degrees C
+   BusVoltage       8 bits   raw / 8 volts
+   HeaterPower     16 bits   raw / 64 watts, only when HeaterMode is On
+
+``PacketLength`` is a packet length field (see `Generated packet types`_):
+its ``tcs-xtce.length`` ``AncillaryData`` makes the generated code compute
+it when encoding and check it when decoding, and it isn't a field of the
+structure. ``Temperature``, ``BusVoltage`` and ``HeaterPower`` have
+``PolynomialCalibrator``\ s, so the structure holds degrees, volts and
+watts while the packet holds raw counts. ``HeaterPower`` has an
+``IncludeCondition`` on ``HeaterMode``, so it is optional: ``Option<f64>``
+in Rust, ``has_heater_power`` and ``heater_power`` in C/C++, and
+``Optional[float]`` in Python.
+
+Each program encodes four readings into one stream, one packet after
+another, then walks the stream: it reads each packet's ``PacketLength`` to
+find where the packet ends, decodes it, and checks it against the reading,
+rounded to the nearest step of each calibrator. It then shows the errors
+for a missing heater power, a temperature out of range, a packet cut short
+and a wrong ``PacketLength``:
+
+::
+
+   decode at 5: 7 bytes -> Status{heater_mode=On, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+   decode at 12: 7 bytes -> Status{heater_mode=On, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+   encode Status{heater_mode=On, temperature=20.0, bus_voltage=28.0, heater_power=none} -> error:Missing (HeaterPower is required by its include condition)
+
+See the `housekeeping README <../examples/housekeeping/README.html>`__ for
+more.
 
 ``simple-string``
 -----------------

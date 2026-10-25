@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A housekeeping packet with a length field, calibrated values and a field
+     that is present only when the heater is on.
+
+     PacketLength    16 bits   bytes after this field; computed when encoding
+     HeaterMode       4 bits   Off or On
+     Temperature     12 bits   raw / 16 - 50 degrees C
+     BusVoltage       8 bits   raw / 8 volts
+     HeaterPower     16 bits   raw / 64 watts, only when HeaterMode is On
+
+     The slopes are powers of two, so every calibrated value is exact in
+     binary and prints the same way in every language. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Housekeeping">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="LengthType" signed="false">
+        <IntegerDataEncoding sizeInBits="16"/>
+      </IntegerParameterType>
+      <EnumeratedParameterType name="HeaterModeType">
+        <IntegerDataEncoding sizeInBits="4"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Off"/>
+          <Enumeration value="1" label="On"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+      <FloatParameterType name="TemperatureType">
+        <UnitSet>
+          <Unit>degC</Unit>
+        </UnitSet>
+        <IntegerDataEncoding sizeInBits="12">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="-50" exponent="0"/>
+              <Term coefficient="0.0625" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <FloatParameterType name="VoltageType">
+        <UnitSet>
+          <Unit>V</Unit>
+        </UnitSet>
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="0.125" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <FloatParameterType name="PowerType">
+        <UnitSet>
+          <Unit>W</Unit>
+        </UnitSet>
+        <IntegerDataEncoding sizeInBits="16">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="0.015625" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="PacketLength" parameterTypeRef="LengthType">
+        <!-- The bytes after PacketLength, plus 0. -->
+        <AncillaryDataSet>
+          <AncillaryData name="tcs-xtce.length">0</AncillaryData>
+        </AncillaryDataSet>
+      </Parameter>
+      <Parameter name="HeaterMode" parameterTypeRef="HeaterModeType"/>
+      <Parameter name="Temperature" parameterTypeRef="TemperatureType"/>
+      <Parameter name="BusVoltage" parameterTypeRef="VoltageType"/>
+      <Parameter name="HeaterPower" parameterTypeRef="PowerType"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="Status">
+        <EntryList>
+          <ParameterRefEntry parameterRef="PacketLength"/>
+          <ParameterRefEntry parameterRef="HeaterMode"/>
+          <ParameterRefEntry parameterRef="Temperature"/>
+          <ParameterRefEntry parameterRef="BusVoltage"/>
+          <ParameterRefEntry parameterRef="HeaterPower">
+            <IncludeCondition>
+              <Comparison parameterRef="HeaterMode" value="On"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

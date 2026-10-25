@@ -1,0 +1,689 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.22.4: https://docutils.sourceforge.io/" />
+<title>housekeeping</title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 9511 2024-01-13 09:50:07Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+Despite the name, some widely supported CSS2 features are used.
+
+See https://docutils.sourceforge.io/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+.subscript {
+  vertical-align: sub;
+  font-size: smaller }
+
+.superscript {
+  vertical-align: super;
+  font-size: smaller }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
+}
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left, table.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right, table.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+table.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+.align-top    {
+  vertical-align: top }
+
+.align-middle {
+  vertical-align: middle }
+
+.align-bottom {
+  vertical-align: bottom }
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: gray; } /* line numbers */
+pre.code, code { background-color: #eeeeee }
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic, pre.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+</style>
+</head>
+<body>
+<div class="document" id="housekeeping">
+<h1 class="title">housekeeping</h1>
+
+<p>Housekeeping <tt class="docutils literal">Status</tt> packets, described in XTCE, encoded into one stream
+and decoded again from Rust, C, C++ and Python.</p>
+<p>A <tt class="docutils literal">Status</tt> packet reports a temperature, a bus voltage and, when its
+heater is on, the heater's power. It shows three things the generated code
+does for you:</p>
+<ul class="simple">
+<li><strong>A packet length field.</strong> <tt class="docutils literal">PacketLength</tt> holds the number of bytes
+after it. Encoding computes it from the packet's size, and decoding checks
+it, so packets stored one after another can be split apart again. It isn't
+a field of the generated structure.</li>
+<li><strong>Calibrated values.</strong> The structure holds degrees Celsius, volts and
+watts. The packet holds raw counts, which the calibrators in the XTCE
+file convert to and from those units.</li>
+<li><strong>An optional field.</strong> <tt class="docutils literal">HeaterPower</tt> is in the packet only when
+<tt class="docutils literal">HeaterMode</tt> is <tt class="docutils literal">On</tt>, as its include condition says. Packets with the
+heater on are two bytes longer.</li>
+</ul>
+<p>Each program does the same thing:</p>
+<ol class="arabic simple">
+<li>It encodes four readings, two with the heater off and two with it on,
+and appends each packet to one stream, as a recorder would store them:
+one after another, with nothing between them.</li>
+<li>It walks the stream. It reads each packet's <tt class="docutils literal">PacketLength</tt> from its
+first two bytes, so it knows the packet is <tt class="docutils literal">2 + PacketLength</tt> bytes
+long, and decodes those bytes. It checks that each packet decodes to the
+reading it encoded, rounded to what the calibrators can represent, and
+that encoding it again gives the same bytes.</li>
+<li>It shows four packets the generated code rejects: a <tt class="docutils literal">Status</tt> with the
+heater on but no heater power, a temperature too high for its encoding,
+a packet cut short, and a packet whose <tt class="docutils literal">PacketLength</tt> is one byte too
+long.</li>
+</ol>
+<p>If a check fails, the program prints the problem to standard error and
+exits with status 1.</p>
+<div class="section" id="the-xtce-description">
+<h1>The XTCE description</h1>
+<p><a class="reference external" href="housekeeping.xml">housekeeping.xml</a> defines one container, <tt class="docutils literal">Status</tt>:</p>
+<pre class="literal-block">
+PacketLength    16 bits   bytes after this field; computed when encoding
+HeaterMode       4 bits   Off (0) or On (1)
+Temperature     12 bits   raw / 16 - 50 degrees C
+BusVoltage       8 bits   raw / 8 volts
+HeaterPower     16 bits   raw / 64 watts, only when HeaterMode is On
+</pre>
+<p><strong>The length field.</strong> XTCE has no way to say that a field holds the length
+of its packet, so tcs-xtce reads it from an <tt class="docutils literal">AncillaryData</tt> named
+<tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> on the parameter. Its value, here 0, is added to the
+number of bytes after the field. (A CCSDS packet length, the bytes after
+the primary header minus one, would use -1.) Other tools ignore the
+<tt class="docutils literal">AncillaryData</tt>, so the file stays valid XTCE:</p>
+<pre class="code xml literal-block">
+<span class="name tag">&lt;Parameter</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;PacketLength&quot;</span><span class="whitespace"> </span><span class="name attribute">parameterTypeRef=</span><span class="literal string">&quot;LengthType&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;AncillaryDataSet&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;AncillaryData</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;tcs-xtce.length&quot;</span><span class="name tag">&gt;</span>0<span class="name tag">&lt;/AncillaryData&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/AncillaryDataSet&gt;</span><span class="whitespace">
+</span><span class="name tag">&lt;/Parameter&gt;</span>
+</pre>
+<p><strong>The calibrators.</strong> <tt class="docutils literal">Temperature</tt>, <tt class="docutils literal">BusVoltage</tt> and <tt class="docutils literal">HeaterPower</tt>
+are <tt class="docutils literal">FloatParameterType</tt>s with an <tt class="docutils literal">IntegerDataEncoding</tt> and a
+<tt class="docutils literal">PolynomialCalibrator</tt>. Decoding applies the polynomial to the raw count;
+encoding applies its inverse and rounds to the nearest count, half away from
+zero:</p>
+<pre class="code xml literal-block">
+<span class="name tag">&lt;FloatParameterType</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;TemperatureType&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;UnitSet&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;Unit&gt;</span>degC<span class="name tag">&lt;/Unit&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/UnitSet&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;IntegerDataEncoding</span><span class="whitespace"> </span><span class="name attribute">sizeInBits=</span><span class="literal string">&quot;12&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;DefaultCalibrator&gt;</span><span class="whitespace">
+      </span><span class="name tag">&lt;PolynomialCalibrator&gt;</span><span class="whitespace">
+        </span><span class="name tag">&lt;Term</span><span class="whitespace"> </span><span class="name attribute">coefficient=</span><span class="literal string">&quot;-50&quot;</span><span class="whitespace"> </span><span class="name attribute">exponent=</span><span class="literal string">&quot;0&quot;</span><span class="name tag">/&gt;</span><span class="whitespace">
+        </span><span class="name tag">&lt;Term</span><span class="whitespace"> </span><span class="name attribute">coefficient=</span><span class="literal string">&quot;0.0625&quot;</span><span class="whitespace"> </span><span class="name attribute">exponent=</span><span class="literal string">&quot;1&quot;</span><span class="name tag">/&gt;</span><span class="whitespace">
+      </span><span class="name tag">&lt;/PolynomialCalibrator&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;/DefaultCalibrator&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/IntegerDataEncoding&gt;</span><span class="whitespace">
+</span><span class="name tag">&lt;/FloatParameterType&gt;</span>
+</pre>
+<p>A temperature therefore covers -50 to 205.9375 °C in steps of 1/16 °C, a
+voltage 0 to 31.875 V in steps of 1/8 V, and a heater power 0 to
+1023.984375 W in steps of 1/64 W. The steps are powers of two, so every
+value the packet can hold is exact in binary, and prints the same way in
+every language. A value between two steps comes back as the nearest one:
+21.53 °C is sent as raw count 1144 and comes back as 21.5 °C. A value
+outside the range can't be encoded.</p>
+<p><strong>The include condition.</strong> The entry for <tt class="docutils literal">HeaterPower</tt> has an
+<tt class="docutils literal">IncludeCondition</tt> on <tt class="docutils literal">HeaterMode</tt>, compared by its label:</p>
+<pre class="code xml literal-block">
+<span class="name tag">&lt;ParameterRefEntry</span><span class="whitespace"> </span><span class="name attribute">parameterRef=</span><span class="literal string">&quot;HeaterPower&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;IncludeCondition&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;Comparison</span><span class="whitespace"> </span><span class="name attribute">parameterRef=</span><span class="literal string">&quot;HeaterMode&quot;</span><span class="whitespace"> </span><span class="name attribute">value=</span><span class="literal string">&quot;On&quot;</span><span class="name tag">/&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/IncludeCondition&gt;</span><span class="whitespace">
+</span><span class="name tag">&lt;/ParameterRefEntry&gt;</span>
+</pre>
+<p>So a <tt class="docutils literal">Status</tt> is 5 bytes with the heater off (<tt class="docutils literal">PacketLength</tt> 3) and 7
+with it on (<tt class="docutils literal">PacketLength</tt> 5). The heater-on reading -12.25 °C, 27.5 V,
+4.5 W is:</p>
+<pre class="literal-block">
+0005        PacketLength: 5 bytes follow
+1           HeaterMode: On
+25c         Temperature: raw 604, 604 / 16 - 50 = -12.25
+dc          BusVoltage: raw 220, 220 / 8 = 27.5
+0120        HeaterPower: raw 288, 288 / 64 = 4.5
+</pre>
+<p>The file validates against the XTCE 1.3 schema:</p>
+<pre class="code sh literal-block">
+<span class="name variable">XML_CATALOG_FILES</span><span class="operator">=</span>../../references/catalog.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>housekeeping.xml
+</pre>
+</div>
+<div class="section" id="generating-the-code">
+<h1>Generating the code</h1>
+<p><tt class="docutils literal">make generate</tt> runs the generator once per language:</p>
+<pre class="code sh literal-block">
+<span class="name builtin">cd</span><span class="whitespace"> </span>../../generator<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>../examples/housekeeping/rust/src/housekeeping.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>../examples/housekeeping/c/housekeeping.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>../examples/housekeeping/cxx/housekeeping.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c++<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>../examples/housekeeping/python/housekeeping.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python
+</pre>
+<p>The generated files aren't kept in git; <tt class="docutils literal">make</tt> runs <tt class="docutils literal">make generate</tt>
+first. <tt class="docutils literal"><span class="pre">--lang</span> c++</tt> writes the same header as <tt class="docutils literal"><span class="pre">--lang</span> c</tt>. The example
+generates both, so that the C program uses <tt class="docutils literal">c/housekeeping.h</tt> and the C++
+program uses <tt class="docutils literal">cxx/housekeeping.h</tt>.</p>
+<p>Each language gets a <tt class="docutils literal">Status</tt> structure and a <tt class="docutils literal">HeaterModeType</tt>
+enumeration. <tt class="docutils literal">PacketLength</tt> is not a field: the generated code computes
+and checks it. In C/C++ every name starts with <tt class="docutils literal">housekeeping_</tt>, the
+mission's prefix.</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">&nbsp;</th>
+<th class="head">Rust</th>
+<th class="head">C/C++</th>
+<th class="head">Python</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Status</td>
+<td><tt class="docutils literal">struct Status</tt> with <tt class="docutils literal">heater_mode: HeaterModeType</tt>,
+<tt class="docutils literal">temperature: f64</tt>, <tt class="docutils literal">bus_voltage: f64</tt> and
+<tt class="docutils literal">heater_power: Option&lt;f64&gt;</tt></td>
+<td><tt class="docutils literal">housekeeping_Status</tt> with <tt class="docutils literal">heater_mode</tt>, <tt class="docutils literal">double
+temperature</tt>, <tt class="docutils literal">double bus_voltage</tt>, <tt class="docutils literal">bool has_heater_power</tt>
+and <tt class="docutils literal">double heater_power</tt></td>
+<td><tt class="docutils literal">&#64;dataclass class Status</tt> with <tt class="docutils literal">heater_mode</tt>,
+<tt class="docutils literal">temperature: float</tt>, <tt class="docutils literal">bus_voltage: float</tt> and
+<tt class="docutils literal">heater_power: Optional[float]</tt></td>
+</tr>
+<tr><td>HeaterModeType</td>
+<td><tt class="docutils literal">struct HeaterModeType(pub i64)</tt>, with <tt class="docutils literal"><span class="pre">HeaterModeType::OFF</span></tt>
+and <tt class="docutils literal"><span class="pre">HeaterModeType::ON</span></tt></td>
+<td><tt class="docutils literal">int64_t</tt>, with <tt class="docutils literal">housekeeping_HeaterModeType_OFF</tt> and
+<tt class="docutils literal">housekeeping_HeaterModeType_ON</tt></td>
+<td><tt class="docutils literal">IntEnum</tt>, with <tt class="docutils literal">HeaterModeType.OFF</tt> and <tt class="docutils literal">HeaterModeType.ON</tt></td>
+</tr>
+<tr><td>Serialize</td>
+<td><tt class="docutils literal"><span class="pre">Codec::encode(&amp;status)</span></tt></td>
+<td><tt class="docutils literal">housekeeping_Status_encode(p, buf, cap, &amp;len, &amp;err)</tt></td>
+<td><tt class="docutils literal">Codec.encode(status)</tt></td>
+</tr>
+<tr><td>Deserialize</td>
+<td><tt class="docutils literal"><span class="pre">Codec::load(bytes)</span></tt>, then <tt class="docutils literal"><span class="pre">Codec::decode()</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">housekeeping_Status_decode(&amp;out,</span> data, len, &amp;err)</tt></td>
+<td><tt class="docutils literal">Codec.load(data)</tt>, then <tt class="docutils literal">Codec.decode(Status)</tt></td>
+</tr>
+<tr><td>Largest packet</td>
+<td><tt class="docutils literal"><span class="pre">Status::MAX_BYTES</span></tt> = 7</td>
+<td><tt class="docutils literal">housekeeping_Status_MAX_BYTES</tt> = 7</td>
+<td><tt class="docutils literal">Status.MAX_BYTES</tt> = 7</td>
+</tr>
+</tbody>
+</table>
+<p>When encoding, <tt class="docutils literal">heater_power</tt> must be present exactly when the heater is
+on: if <tt class="docutils literal">heater_mode</tt> is <tt class="docutils literal">On</tt> and it is absent, encoding fails with
+<tt class="docutils literal">Missing</tt>. When the heater is off it isn't encoded, and decoding leaves it
+absent (<tt class="docutils literal">None</tt>, or <tt class="docutils literal">has_heater_power</tt> false).</p>
+<p>Decoding stops where <tt class="docutils literal">PacketLength</tt> says the packet ends and ignores any
+bytes after it. It fails with <tt class="docutils literal">Truncated</tt> if the data is shorter than
+that, and with <tt class="docutils literal">BadLength</tt> if the packet's entries end before it.</p>
+</div>
+<div class="section" id="running-the-programs">
+<h1>Running the programs</h1>
+<p><tt class="docutils literal">make</tt> generates the code, builds and runs all four programs, and checks
+that they print the same thing:</p>
+<pre class="literal-block">
+$ make
+...
+encode Status{heater_mode=Off, temperature=21.53, bus_voltage=28.3, heater_power=none} -&gt; 00030478e2
+encode Status{heater_mode=On, temperature=-12.25, bus_voltage=27.5, heater_power=4.5} -&gt; 0005125cdc0120
+encode Status{heater_mode=On, temperature=-20.01, bus_voltage=26.9, heater_power=12.74} -&gt; 000511e0d7032f
+encode Status{heater_mode=Off, temperature=5.0, bus_voltage=28.0, heater_power=none} -&gt; 00030370e0
+stream: 4 packets, 24 bytes
+decode at 0: 5 bytes -&gt; Status{heater_mode=Off, temperature=21.5, bus_voltage=28.25, heater_power=none}
+decode at 5: 7 bytes -&gt; Status{heater_mode=On, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+decode at 12: 7 bytes -&gt; Status{heater_mode=On, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+decode at 19: 5 bytes -&gt; Status{heater_mode=Off, temperature=5.0, bus_voltage=28.0, heater_power=none}
+encode Status{heater_mode=On, temperature=20.0, bus_voltage=28.0, heater_power=none} -&gt; error:Missing (HeaterPower is required by its include condition)
+encode Status{heater_mode=Off, temperature=300.0, bus_voltage=28.0, heater_power=none} -&gt; error:OutOfRange (value of Temperature does not fit its encoding)
+decode 0005125c (cut short) -&gt; error:Truncated (packet too short for PacketLength)
+decode 00040478e200 (PacketLength one too many) -&gt; error:BadLength (PacketLength does not match the length of the packet)
+housekeeping: Rust, C, C++ and Python output identical
+</pre>
+<p>The <tt class="docutils literal">encode</tt> lines show the values as given, and the <tt class="docutils literal">decode</tt> lines the
+values the packet holds: 21.53 °C became 21.5, 28.3 V became 28.25, and
+12.74 W became 12.734375, the nearest step of each.</p>
+<p><a class="reference internal" href="#makefile-targets">Makefile targets</a> lists the other targets.</p>
+<p>To run one program on its own, generate the code first with
+<tt class="docutils literal">make generate</tt>, then run the commands below from this directory. Each
+prints the lines above, without the last, which <tt class="docutils literal">make</tt> prints.</p>
+<div class="section" id="rust">
+<h2>Rust</h2>
+<p><a class="reference external" href="rust/src/main.rs">rust/src/main.rs</a> is a stand-alone Cargo crate that
+depends on the <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> crate in <tt class="docutils literal"><span class="pre">../../rust</span></tt>:</p>
+<pre class="code sh literal-block">
+<span class="name builtin">cd</span><span class="whitespace"> </span>rust<span class="whitespace"> </span><span class="operator">&amp;&amp;</span><span class="whitespace"> </span>cargo<span class="whitespace"> </span>run<span class="whitespace"> </span>--release
+</pre>
+<p>or <tt class="docutils literal">make rust</tt>, then <tt class="docutils literal">rust/target/release/housekeeping</tt>. Its <tt class="docutils literal">Codec</tt>
+has buffers preallocated to <tt class="docutils literal"><span class="pre">Status::MAX_BYTES</span></tt> and reused for every
+packet.</p>
+</div>
+<div class="section" id="c-and-c">
+<h2>C and C++</h2>
+<p><a class="reference external" href="c/main.c">c/main.c</a> is built twice, once as C11 and once as C++20. It
+needs only the header <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt> and the generated
+header; it links with no tcs-xtce library.</p>
+<pre class="code sh literal-block">
+make<span class="whitespace"> </span>c<span class="whitespace">
+</span>build/housekeeping_c<span class="whitespace">         </span><span class="comment single"># the C build
+</span>build/housekeeping_cxx<span class="whitespace">       </span><span class="comment single"># the C++ build</span>
+</pre>
+<p>or, by hand:</p>
+<pre class="code sh literal-block">
+cc<span class="whitespace">  </span>-std<span class="operator">=</span>c11<span class="whitespace">   </span>-I../../cpp/include<span class="whitespace"> </span>-Ic<span class="whitespace">   </span>c/main.c<span class="whitespace"> </span>-lm<span class="whitespace"> </span>-o<span class="whitespace"> </span>housekeeping_c<span class="whitespace">
+</span>c++<span class="whitespace"> </span>-std<span class="operator">=</span>c++20<span class="whitespace"> </span>-I../../cpp/include<span class="whitespace"> </span>-Icxx<span class="whitespace"> </span>-x<span class="whitespace"> </span>c++<span class="whitespace"> </span>c/main.c<span class="whitespace"> </span>-o<span class="whitespace"> </span>housekeeping_cxx
+</pre>
+<p>It encodes into a plain array of <tt class="docutils literal">housekeeping_Status_MAX_BYTES</tt> bytes and
+keeps the stream in an array with room for four packets of that size.</p>
+</div>
+<div class="section" id="python">
+<h2>Python</h2>
+<p><a class="reference external" href="python/main.py">python/main.py</a> needs Python 3.10 or later and the
+<tt class="docutils literal">xtce</tt> package in <tt class="docutils literal"><span class="pre">../../python</span></tt>:</p>
+<pre class="code sh literal-block">
+<span class="name variable">PYTHONPATH</span><span class="operator">=</span>../../python:python<span class="whitespace"> </span>python3<span class="whitespace"> </span>python/main.py
+</pre>
+<p>Its <tt class="docutils literal">Codec</tt> has buffers preallocated to <tt class="docutils literal">Status.MAX_BYTES</tt> and reused
+for every packet.</p>
+</div>
+</div>
+<div class="section" id="makefile-targets">
+<h1>Makefile targets</h1>
+<dl class="docutils">
+<dt><tt class="docutils literal">make</tt>, or <tt class="docutils literal">make run</tt></dt>
+<dd>Generate the code if needed, build every program, run it and check
+the output, as above.</dd>
+<dt><tt class="docutils literal">make generate</tt></dt>
+<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">housekeeping.xml</tt> for every language, if the XTCE
+file or the generator changed since the code was last generated.</dd>
+<dt><tt class="docutils literal">make rust</tt></dt>
+<dd>Check the Rust program's formatting with <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt> and build
+<tt class="docutils literal">rust/target/release/housekeeping</tt>.</dd>
+<dt><tt class="docutils literal">make c</tt></dt>
+<dd>Build <tt class="docutils literal">build/housekeeping_c</tt> (C11) and <tt class="docutils literal">build/housekeeping_cxx</tt>
+(C++20).</dd>
+<dt><tt class="docutils literal">make python</tt></dt>
+<dd>Generate the Python module. The Python program needs no building.</dd>
+<dt><tt class="docutils literal">make html</tt></dt>
+<dd>Convert this file, <tt class="docutils literal">README.rst</tt>, to <tt class="docutils literal">README.html</tt>.</dd>
+<dt><tt class="docutils literal">make clean</tt></dt>
+<dd>Remove <tt class="docutils literal">build/</tt> and <tt class="docutils literal">rust/target/</tt>. The generated code and
+<tt class="docutils literal">README.html</tt> stay.</dd>
+</dl>
+</div>
+<div class="section" id="files">
+<h1>Files</h1>
+<p>The generated files aren't kept in git; building generates them.</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">housekeeping.xml</tt></td>
+<td>The XTCE description</td>
+</tr>
+<tr><td><tt class="docutils literal">rust/Cargo.toml</tt>, <tt class="docutils literal">rust/src/main.rs</tt></td>
+<td>The Rust program</td>
+</tr>
+<tr><td><tt class="docutils literal">rust/src/housekeeping.rs</tt></td>
+<td>Generated Rust module</td>
+</tr>
+<tr><td><tt class="docutils literal">c/main.c</tt></td>
+<td>The C and C++ program</td>
+</tr>
+<tr><td><tt class="docutils literal">c/housekeeping.h</tt>, <tt class="docutils literal">cxx/housekeeping.h</tt></td>
+<td>Generated header, from <tt class="docutils literal"><span class="pre">--lang</span> c</tt> and <tt class="docutils literal"><span class="pre">--lang</span> c++</tt></td>
+</tr>
+<tr><td><tt class="docutils literal">python/main.py</tt></td>
+<td>The Python program</td>
+</tr>
+<tr><td><tt class="docutils literal">python/housekeeping.py</tt></td>
+<td>Generated Python module</td>
+</tr>
+<tr><td><tt class="docutils literal">Makefile</tt></td>
+<td>Generates, builds, runs and checks; see above</td>
+</tr>
+<tr><td><tt class="docutils literal">README.rst</tt>, <tt class="docutils literal">README.html</tt></td>
+<td>This document</td>
+</tr>
+<tr><td><tt class="docutils literal">build/</tt></td>
+<td>The C and C++ programs and the programs' output</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="requirements">
+<h1>Requirements</h1>
+<p>Building needs what the top-level build needs: Rust with <tt class="docutils literal">rustfmt</tt>, a C11
+compiler, a C++20 compiler, and Python 3.10 or later. <tt class="docutils literal">make html</tt> needs
+<tt class="docutils literal">rst2html</tt>, from Docutils.</p>
+</div>
+</div>
+</body>
+</html>

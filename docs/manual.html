@@ -399,13 +399,14 @@ ul.auto-toc {
 </li>
 <li><a class="reference internal" href="#xtce-digest" id="toc-entry-25">xtce-digest</a></li>
 <li><a class="reference internal" href="#examples" id="toc-entry-26">Examples</a><ul>
-<li><a class="reference internal" href="#simple-string" id="toc-entry-27"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
-<li><a class="reference internal" href="#to-from" id="toc-entry-28"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></li>
-<li><a class="reference internal" href="#variable-array" id="toc-entry-29"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></li>
+<li><a class="reference internal" href="#housekeeping" id="toc-entry-27"><tt class="docutils literal">housekeeping</tt></a></li>
+<li><a class="reference internal" href="#simple-string" id="toc-entry-28"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
+<li><a class="reference internal" href="#to-from" id="toc-entry-29"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></li>
+<li><a class="reference internal" href="#variable-array" id="toc-entry-30"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing" id="toc-entry-30">Testing</a></li>
-<li><a class="reference internal" href="#license" id="toc-entry-31">License</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-31">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-32">License</a></li>
 </ul>
 </div>
 <div class="section" id="summary">
@@ -1913,6 +1914,10 @@ generator changed;</li>
 example and for <tt class="docutils literal">examples/README.rst</tt>, the <a class="reference external" href="../examples/README.html">index of examples</a>.</p>
 <p>The examples are:</p>
 <ul class="simple">
+<li><a class="reference external" href="../examples/housekeeping/README.html">housekeeping</a>: status packets
+with a packet length field, calibrated temperatures, voltages and powers,
+and a field present only when a heater is on, stored one after another
+in a stream and split apart again by their length fields.</li>
 <li><a class="reference external" href="../examples/simple-string/README.html">simple-string</a>: a structure
 holding one string of up to 8 bytes, serialized into and deserialized
 from managed buffers.</li>
@@ -1926,8 +1931,42 @@ a paragraph, sent one after the other over one TCP connection from one
 thread to another, each after its length.</li>
 </ul>
 <p>Each is summarized below; its README has the details.</p>
+<div class="section" id="housekeeping">
+<h2><a class="toc-backref" href="#toc-entry-27"><tt class="docutils literal">housekeeping</tt></a></h2>
+<p><tt class="docutils literal">examples/housekeeping/housekeeping.xml</tt> describes a container,
+<tt class="docutils literal">Status</tt>:</p>
+<pre class="literal-block">
+PacketLength    16 bits   bytes after this field; computed when encoding
+HeaterMode       4 bits   Off (0) or On (1)
+Temperature     12 bits   raw / 16 - 50 degrees C
+BusVoltage       8 bits   raw / 8 volts
+HeaterPower     16 bits   raw / 64 watts, only when HeaterMode is On
+</pre>
+<p><tt class="docutils literal">PacketLength</tt> is a packet length field (see <a class="reference internal" href="#generated-packet-types">Generated packet types</a>):
+its <tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> <tt class="docutils literal">AncillaryData</tt> makes the generated code compute
+it when encoding and check it when decoding, and it isn't a field of the
+structure. <tt class="docutils literal">Temperature</tt>, <tt class="docutils literal">BusVoltage</tt> and <tt class="docutils literal">HeaterPower</tt> have
+<tt class="docutils literal">PolynomialCalibrator</tt>s, so the structure holds degrees, volts and
+watts while the packet holds raw counts. <tt class="docutils literal">HeaterPower</tt> has an
+<tt class="docutils literal">IncludeCondition</tt> on <tt class="docutils literal">HeaterMode</tt>, so it is optional: <tt class="docutils literal">Option&lt;f64&gt;</tt>
+in Rust, <tt class="docutils literal">has_heater_power</tt> and <tt class="docutils literal">heater_power</tt> in C/C++, and
+<tt class="docutils literal">Optional[float]</tt> in Python.</p>
+<p>Each program encodes four readings into one stream, one packet after
+another, then walks the stream: it reads each packet's <tt class="docutils literal">PacketLength</tt> to
+find where the packet ends, decodes it, and checks it against the reading,
+rounded to the nearest step of each calibrator. It then shows the errors
+for a missing heater power, a temperature out of range, a packet cut short
+and a wrong <tt class="docutils literal">PacketLength</tt>:</p>
+<pre class="literal-block">
+decode at 5: 7 bytes -&gt; Status{heater_mode=On, temperature=-12.25, bus_voltage=27.5, heater_power=4.5}
+decode at 12: 7 bytes -&gt; Status{heater_mode=On, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
+encode Status{heater_mode=On, temperature=20.0, bus_voltage=28.0, heater_power=none} -&gt; error:Missing (HeaterPower is required by its include condition)
+</pre>
+<p>See the <a class="reference external" href="../examples/housekeeping/README.html">housekeeping README</a> for
+more.</p>
+</div>
 <div class="section" id="simple-string">
-<h2><a class="toc-backref" href="#toc-entry-27"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-28"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xml</span></tt> describes a container,
 <tt class="docutils literal">SimpleString</tt>, holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string
 that always occupies 64 bits and ends at a NUL byte, so it holds up to
@@ -1969,7 +2008,7 @@ buffers reused without reallocation: true
 for more.</p>
 </div>
 <div class="section" id="to-from">
-<h2><a class="toc-backref" href="#toc-entry-28"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-29"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/to-from/to_from.xml</span></tt> describes a container, <tt class="docutils literal">Word</tt>,
 holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string of varying length
 with a 32-bit size tag before it. The tag and the string together occupy
@@ -2006,7 +2045,7 @@ same bytes, and runs all 16 pairs of reader and writer.</p>
 <p>See the <a class="reference external" href="../examples/to-from/README.html">to-from README</a> for more.</p>
 </div>
 <div class="section" id="variable-array">
-<h2><a class="toc-backref" href="#toc-entry-29"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-30"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/variable-array/variable_array.xml</span></tt> describes a container,
 <tt class="docutils literal">Paragraph</tt>, holding a two-dimensional array whose dimensions both vary:
 an array of lines, each an array of words. A count before each array gives
@@ -2069,7 +2108,7 @@ for more.</p>
 </div>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-30">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-31">Testing</a></h1>
 <p><tt class="docutils literal">make test</tt> runs:</p>
 <ul class="simple">
 <li>the unit tests of every language (<tt class="docutils literal">cargo test</tt>, <tt class="docutils literal">cpp/tests</tt>,
@@ -2129,7 +2168,7 @@ tests/samples_check.py <span class="pre">--update</span></tt> rewrites <tt class
 diff.</p>
 </div>
 <div class="section" id="license">
-<h1><a class="toc-backref" href="#toc-entry-31">License</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-32">License</a></h1>
 <p>tcs-xtce -- the generator, the Rust crate, the C/C++ library and the Python
 package -- is licensed under either of the Apache License, Version 2.0
 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT

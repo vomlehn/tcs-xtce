@@ -1,0 +1,12 @@
+[package]
+name = "housekeeping"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Encodes and decodes housekeeping packets with a length field, calibrated values and an optional field"
+
+[dependencies]
+tcs-xtce = { path = "../../../rust" }
+
+# A stand-alone crate, not part of any enclosing workspace.
+[workspace]
