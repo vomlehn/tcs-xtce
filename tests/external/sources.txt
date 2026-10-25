@@ -5,6 +5,13 @@
 #   yamcs     test documents of Yamcs (https://github.com/yamcs/yamcs)
 #   xtcetools test documents and examples of the XTCE Toolkit
 #             (https://github.com/CesarCoelho/xtcetools)
+#   yamcs-examples   the mission databases of Yamcs's examples: PUS services,
+#                    a lander simulation and the packet viewer
+#   yamcs-xtce       test documents of Yamcs's XTCE loader
+#   yamcs-quickstart the mission database of the Yamcs quickstart
+#                    (https://github.com/yamcs/quickstart)
+#   yamcs-cfs        cFS (airliner) mission databases for Yamcs
+#                    (https://github.com/WindhoverLabs/yamcs-cfs)
 yamcs/BogusSAT-1.xml ec2b2a13aee4d73fb461ef973f3ebdec0724dab05cc3316451295f954cf32c66 https://raw.githubusercontent.com/yamcs/yamcs/ba3e728d14ae4914548a7f1fba6c49d72287f79b/yamcs-core/src/test/resources/xtce/BogusSAT-1.xml
 yamcs/BogusSAT-2.xml f9652874c9f3296dc3966f8aa036b2086ac379bfd6232140e17bce7c780d12b6 https://raw.githubusercontent.com/yamcs/yamcs/ba3e728d14ae4914548a7f1fba6c49d72287f79b/yamcs-core/src/test/resources/xtce/BogusSAT-2.xml
 yamcs/VariableBinary.xml aeeca73e491e074979174db6d61c6c0ddab8ac42ff46b0754b5f6b92fcf19886 https://raw.githubusercontent.com/yamcs/yamcs/ba3e728d14ae4914548a7f1fba6c49d72287f79b/yamcs-core/src/test/resources/xtce/VariableBinary.xml
@@ -39,3 +46,29 @@ xtcetools/UnitTest-BadForm.xml d2f907b3dc613e97fc29b36628f5eeeaf3af840a2446019e0
 xtcetools/UnitTest-Convert-DefNS.xml e41f8cb875540241d1f8270596ace47fc3684a94b6d733c8382c4f25987c5ad4 https://raw.githubusercontent.com/CesarCoelho/xtcetools/14b7f51c5a93faa0bae7c655dbb8d1d1f466fcf6/src/test/resources/org/xtce/toolkit/test/UnitTest-Convert-DefNS.xml
 xtcetools/UnitTest-Convert-NS.xml 783dd77ed8c27da7fb44100080dc91e5f8bd295125f1916b398be3e87dc76d4b https://raw.githubusercontent.com/CesarCoelho/xtcetools/14b7f51c5a93faa0bae7c655dbb8d1d1f466fcf6/src/test/resources/org/xtce/toolkit/test/UnitTest-Convert-NS.xml
 xtcetools/UnitTests.xml ddc7515fddc2885f5c78ca1f54df235d821b9fa7b6bc5a7604debb1a4175725a https://raw.githubusercontent.com/CesarCoelho/xtcetools/14b7f51c5a93faa0bae7c655dbb8d1d1f466fcf6/src/test/resources/org/xtce/toolkit/test/UnitTests.xml
+yamcs-examples/pus-dt.xml cbc668cb0fad7bd3cd02a72df32312d35f533e981be11e2eab24d558e73ecc4d https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/dt.xml
+yamcs-examples/pus-landing.xml c75d9a00f43f257a4036724641ea7d7105fe8fd7ae070bd76cfad255f570c8b2 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/landing.xml
+yamcs-examples/pus-xtce-verif.xml b9d35930624c020f7af8d5c701097cd13ac5f4086c5e488e87486c974b91ba05 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/pus-xtce-verif.xml
+yamcs-examples/pus.xml 9f5ed1a7216d8eea84feba4d4b881bfb7f89db796251f8ea81ed927576631613 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/pus.xml
+yamcs-examples/pus5.xml d0ced8a21cc0c81251ced6bf1d9641d593964e61704274f85dbc4f4e44518ce6 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/pus5.xml
+yamcs-examples/pus11.xml 679f2e035d092f518b5d0954835f71b978a681928863ad16872d6d8c12b9c9b4 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/pus11.xml
+yamcs-examples/pus17.xml f95addeefdd40860c64e0132fc8f8ad12c82c2abd137b9fa4da9a22b963b1c62 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/pus17.xml
+yamcs-examples/pus19.xml e142d9b735d99ee1c4c1fe6610be966ba09a509cf1c6130dec5693912876d766 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/pus19.xml
+yamcs-examples/pus20.xml a54155367d891a09390ef2d9f26794622d4275d0766b77a84b70f0cd3ca780fa https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/pus20.xml
+yamcs-examples/pus22.xml 3aa3864b33ddec58b407ec33d2342294c746ee580ecee997c5e452bb924bf175 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/pus22.xml
+yamcs-examples/pus23.xml dd88087ffcd66255036271d8b04ab8cf6f802cd1c14ceb47593b5df3fdde1263 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/pus/src/main/yamcs/mdb/pus23.xml
+yamcs-examples/downstream-direct.xml ea88806061cb84a83d29e43c0c728503b6cfb5afc5da540435bad756cf22c6eb https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/simulation/src/main/yamcs/mdb/downstream-direct.xml
+yamcs-examples/downstream-embedded.xml 4eff8f4a315f3f70ed111584d23a3c646e6bf6b4ed3e29372b3a91575fc6fb68 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/examples/simulation/src/main/yamcs/mdb/downstream-embedded.xml
+yamcs-examples/packet-viewer.xml aa8d8eafe65011a85790e753fd58e6017ff3058c346fcc82c1a6e1ac1dcd5186 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/packet-viewer/mdb-packaged/xtce.xml
+yamcs-xtce/basetype.xml 65fd82574d611d01f902d6512c7823bb88ac5288cdb23149e703107dcc250657 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/yamcs-xtce/src/test/resources/basetype.xml
+yamcs-xtce/indirect-param.xml 7c06e6f92f5b01724340ce90e6d2d6ac450edef90e780d2f7c4440942aacf953 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/yamcs-xtce/src/test/resources/indirect-param.xml
+yamcs-xtce/ipre-no-instance.xml 3c2cb74983d8640ccf030c13d69f812aa36a670dd34f77e8e18332ecb18efd64 https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/yamcs-xtce/src/test/resources/ipre-no-instance.xml
+yamcs-xtce/ranges-test.xml 6309e8b030818ffe2759e4cc9ed3a205d3687bdd2b46459f048dbcbdea989eef https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/yamcs-xtce/src/test/resources/ranges-test.xml
+yamcs-xtce/to-string.xml 547a2fe22a94e5d7deb99727cb49c756ba13d61bcec6541fd0e38170378dff0b https://raw.githubusercontent.com/yamcs/yamcs/1956d3aef76500738a8769e5b679763e82f5c042/yamcs-xtce/src/test/resources/to-string.xml
+yamcs-quickstart/xtce.xml 4d346dbf27fb920e9a1e3aa6e10c46532525da4916f9fde636569e8945140799 https://raw.githubusercontent.com/yamcs/quickstart/9beaf621cb0d3f3d4524b763bb92994d23eb7b32/src/main/yamcs/mdb/xtce.xml
+yamcs-cfs/CFE_EVS.xml 584813d7a2e48d873da5fd91aabad768fb2b84ea486c84f6a35261895b2f7912 https://raw.githubusercontent.com/WindhoverLabs/yamcs-cfs/6e1a1bc741e48fe3d48d8505bad8239607a85275/src/main/yamcs/mdb/CFE_EVS.xml
+yamcs-cfs/cfs-ccsds.xml d9efce975970d509d62523a182813cdac8523216f34719b78f44090aad73beff https://raw.githubusercontent.com/WindhoverLabs/yamcs-cfs/6e1a1bc741e48fe3d48d8505bad8239607a85275/src/main/yamcs/mdb/cfs-ccsds.xml
+yamcs-cfs/auto_generated.xml 771229b5eaa0a5d9d879067bab79e27af273756e98902a41c7f67cb0edb61610 https://raw.githubusercontent.com/WindhoverLabs/yamcs-cfs/6e1a1bc741e48fe3d48d8505bad8239607a85275/src/main/yamcs/mdb/auto_generated.xml
+yamcs-cfs/cfs.xml 14ab0740d6254f771a4e2bafce60c3af105f11b3b7fabb34d2f7f897c6dfe1ae https://raw.githubusercontent.com/WindhoverLabs/yamcs-cfs/6e1a1bc741e48fe3d48d8505bad8239607a85275/src/main/yamcs/mdb/cfs.xml
+yamcs-cfs/tutorial.xml e8eff3ee15685b250829c194ad84a2e544fa3b1408012056067278ff135ff210 https://raw.githubusercontent.com/WindhoverLabs/yamcs-cfs/6e1a1bc741e48fe3d48d8505bad8239607a85275/src/main/yamcs/mdb/tutorial.xml
+yamcs-cfs/ocpoc.xml aeb7182319d17d3a78b7de2ea20dab990ec8146389f315fbad1a8494b8d8284f https://raw.githubusercontent.com/WindhoverLabs/yamcs-cfs/6e1a1bc741e48fe3d48d8505bad8239607a85275/src/main/yamcs/mdb/ocpoc.xml

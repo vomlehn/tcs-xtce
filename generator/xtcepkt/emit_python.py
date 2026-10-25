@@ -542,6 +542,7 @@ class PythonEmitter:
         self.line(f"return {self.construct(n)}", 2)
         self.line()
         self.line("def encode_into(self, w: pk.BitWriter) -> None:", 1)
+        body = len(self.out)
         names = {lc: name for name, lc in n.fields}
         for lc, (c, d) in n.derived.items():
             # Sizes and counts come from the lengths of what they size.
@@ -575,6 +576,10 @@ class PythonEmitter:
             self.line(f"w.patch_length(l{length.id}, {enc.bits}, "
                       f"{enc.little_endian}, {length.length}, "
                       f"{pstr(length.name)})", 2)
+        if len(self.out) == body:
+            # A packet without entries, such as a meta-command without a
+            # command container, writes nothing.
+            self.line("pass", 2)
         self.line()
         self.line("def describe(self) -> str:", 1)
         self.line('"""Canonical text form, identical in every generated '

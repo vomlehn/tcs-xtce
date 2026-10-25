@@ -1888,9 +1888,13 @@ The ``packet_tool`` programs (``rust/examples``, ``cpp/tests``, built as
    rust/target/release/examples/packet_tool tests/mission/vectors.txt
 
 ``make samples-check`` is not part of ``make test``, because it
-downloads files. It checks ``tcs-xtce`` against 34 public XTCE documents:
-the test documents of `Yamcs <https://github.com/yamcs/yamcs>`_ and the
-test documents and examples of the `XTCE Toolkit
+downloads files. It checks ``tcs-xtce`` against 60 public XTCE documents:
+the test documents and the examples' mission databases of `Yamcs
+<https://github.com/yamcs/yamcs>`_ (PUS services, a lander simulation and
+more), the mission database of the `Yamcs quickstart
+<https://github.com/yamcs/quickstart>`_, the cFS (airliner) mission
+databases of `yamcs-cfs <https://github.com/WindhoverLabs/yamcs-cfs>`_,
+and the test documents and examples of the `XTCE Toolkit
 <https://github.com/CesarCoelho/xtcetools>`_.
 ``tests/external/sources.txt`` lists them, pinned to commits with a
 SHA-256 for each. They are downloaded once into
@@ -1898,7 +1902,10 @@ SHA-256 for each. They are downloaded once into
 for each document:
 
 * the binding accepts it exactly when ``xmllint`` finds it valid against
-  the XTCE 1.3 schema (older XTCE namespaces are read as 1.3);
+  the XTCE 1.3 schema. As the binding doesn't check namespaces, older XTCE
+  namespaces and a missing one are read as 1.3; and as it leaves facets
+  (patterns and ranges of values) to ``xmllint``, a document that breaks
+  only facets may load;
 * a document the binding accepts writes back to an equal document;
 * the compiler, the size report and every emitter produce output or
   report unsupported constructs, and never crash;

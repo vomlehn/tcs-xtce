@@ -2283,16 +2283,21 @@ digests, in <tt class="docutils literal">tests/digest/expected.txt</tt>.</li>
 rust/target/release/examples/packet_tool<span class="whitespace"> </span>tests/mission/vectors.txt
 </pre>
 <p><tt class="docutils literal">make <span class="pre">samples-check</span></tt> is not part of <tt class="docutils literal">make test</tt>, because it
-downloads files. It checks <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> against 34 public XTCE documents:
-the test documents of <a class="reference external" href="https://github.com/yamcs/yamcs">Yamcs</a> and the
-test documents and examples of the <a class="reference external" href="https://github.com/CesarCoelho/xtcetools">XTCE Toolkit</a>.
+downloads files. It checks <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> against 60 public XTCE documents:
+the test documents and the examples' mission databases of <a class="reference external" href="https://github.com/yamcs/yamcs">Yamcs</a> (PUS services, a lander simulation and
+more), the mission database of the <a class="reference external" href="https://github.com/yamcs/quickstart">Yamcs quickstart</a>, the cFS (airliner) mission
+databases of <a class="reference external" href="https://github.com/WindhoverLabs/yamcs-cfs">yamcs-cfs</a>,
+and the test documents and examples of the <a class="reference external" href="https://github.com/CesarCoelho/xtcetools">XTCE Toolkit</a>.
 <tt class="docutils literal">tests/external/sources.txt</tt> lists them, pinned to commits with a
 SHA-256 for each. They are downloaded once into
 <tt class="docutils literal">tests/external/files/</tt>. <tt class="docutils literal">tests/samples_check.py</tt> then checks that,
 for each document:</p>
 <ul class="simple">
 <li>the binding accepts it exactly when <tt class="docutils literal">xmllint</tt> finds it valid against
-the XTCE 1.3 schema (older XTCE namespaces are read as 1.3);</li>
+the XTCE 1.3 schema. As the binding doesn't check namespaces, older XTCE
+namespaces and a missing one are read as 1.3; and as it leaves facets
+(patterns and ranges of values) to <tt class="docutils literal">xmllint</tt>, a document that breaks
+only facets may load;</li>
 <li>a document the binding accepts writes back to an equal document;</li>
 <li>the compiler, the size report and every emitter produce output or
 report unsupported constructs, and never crash;</li>

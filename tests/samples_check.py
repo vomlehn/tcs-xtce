@@ -5,7 +5,10 @@ tests/external/sources.txt into tests/external/files/ and runs this script,
 which for each document checks that
 
 1. the XTCE binding accepts it exactly when ``xmllint`` finds it valid
-   against the XTCE 1.3 schema (older XTCE namespaces are read as 1.3);
+   against the XTCE 1.3 schema.  Like the binding, which doesn't check
+   namespaces, this reads older XTCE namespaces, and a document without
+   one, as 1.3; and since the binding leaves facets (patterns and ranges of
+   values) to xmllint, a document that breaks only facets may be accepted;
 2. a document the binding accepts writes back to an equal document;
 3. the packet compiler, the size report and the three emitters never crash:
    they either produce output or report an unsupported construct;
@@ -45,7 +48,8 @@ from xtce.digest import digest_file  # noqa: E402
 XSD = TOP / "references" / "SpaceSystem.xsd"
 CATALOG = TOP / "references" / "catalog.xml"
 NS13 = b"http://www.omg.org/spec/XTCE/20250214"
-OLD_NS = re.compile(rb"http://www\.omg\.org/(space/xtce|spec/XTCE/\d{8})")
+OLD_NS = re.compile(rb"https?://www\.omg\.org/(space/xtce|spec/XTCE/\d{8})"
+                    rb"(/SpaceSystem\.xsd)?")
 RLIB = TOP / "rust" / "target" / "release" / "libtcs_xtce.rlib"
 # The digest tools of the other runtimes, which print one digest per file.
 DIGEST_TOOLS = [TOP / "rust" / "target" / "release" / "examples"
@@ -63,8 +67,15 @@ def sources() -> list[tuple[str, str]]:
     return out
 
 
-def schema_valid(path: Path) -> bool:
+def schema_verdict(path: Path) -> str:
+    """"valid" or "invalid" against the XTCE 1.3 schema, or "facets" when
+    only facets (patterns and ranges of values) are broken."""
     data = OLD_NS.sub(NS13, path.read_bytes())
+    # A root without a namespace is read as XTCE 1.3, as the binding reads
+    # it.
+    if not re.search(rb"<(\w+:)?SpaceSystem\b[^>]*\sxmlns(:\w+)?=", data):
+        data = re.sub(rb"<SpaceSystem\b", b'<SpaceSystem xmlns="' + NS13 + b'"',
+                      data, count=1)
     # Validate against the local schema, not the one a document points at.
     data = re.sub(rb'\s+xsi:schemaLocation="[^"]*"', b"", data)
     with tempfile.NamedTemporaryFile(suffix=".xml") as t:
@@ -72,9 +83,14 @@ def schema_valid(path: Path) -> bool:
         t.flush()
         r = subprocess.run(
             ["xmllint", "--noout", "--nonet", "--schema", str(XSD), t.name],
-            capture_output=True,
+            capture_output=True, text=True,
             env={**os.environ, "XML_CATALOG_FILES": str(CATALOG)})
-    return r.returncode == 0
+    if r.returncode == 0:
+        return "valid"
+    errors = [x for x in r.stderr.splitlines() if "validity error" in x]
+    if errors and all("[facet " in x for x in errors):
+        return "facets"
+    return "invalid"
 
 
 def run(cmd: list[str]) -> str:
@@ -140,15 +156,17 @@ def digests(paths: list[Path]) -> dict:
 
 def check(path: Path, out: Path) -> list[str]:
     """The summary lines of one document."""
-    valid = schema_valid(path)
+    verdict = schema_verdict(path)
+    schema = {"valid": "schema valid", "invalid": "schema invalid",
+              "facets": "schema invalid (facets only)"}[verdict]
     try:
         doc = xtce.Document.from_file(str(path))
     except xtce.XtceError:
-        verdict = "valid" if valid else "invalid"
-        return ([f"schema {verdict}; rejected by the binding"]
-                + (["DISAGREE: the schema accepts it"] if valid else []))
-    lines = [f"schema {'valid' if valid else 'invalid'}; loaded by the binding"]
-    if not valid:
+        return ([f"{schema}; rejected by the binding"]
+                + (["DISAGREE: the schema accepts it"] if verdict == "valid"
+                   else []))
+    lines = [f"{schema}; loaded by the binding"]
+    if verdict == "invalid":
         lines.append("DISAGREE: the schema rejects it")
     if xtce.Document.from_bytes(doc.to_bytes()).root != doc.root:
         lines.append("ROUND TRIP DIFFERS")

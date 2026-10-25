@@ -948,6 +948,7 @@ class CEmitter:
         self.line("xtce_pk_reader r_ = xtce_pk_reader_init(data, len, err);",
                   depth)
         self.line("xtce_pk_reader* r = &r_;", depth)
+        self.line("(void)r;", depth)
 
     def define(self, n: Node) -> None:
         t = self.p + n.ident
@@ -972,6 +973,7 @@ class CEmitter:
         self.line(f"static inline int {t}_encode_into(const {t}* p, "
                   "xtce_pk_writer* w) {")
         self.line("(void)p;", 1)
+        self.line("(void)w;", 1)
         names = {
             lc: Acc(f"p->{name}", f"p->has_{name}" if lc.optional else None)
             for name, lc in n.fields}
@@ -1157,6 +1159,8 @@ class CEmitter:
             self.line(f"out->tag = {t}_{n.ident}_tag;", depth)
             self.line("{", depth)
             self.line(f"{self.p}{n.ident}* o = &out->u.{n.ident};", depth + 1)
+            # A packet without fields leaves o unused.
+            self.line("(void)o;", depth + 1)
             self.construct(n, "o", depth + 1)
             self.line("}", depth)
             self.line("return 0;", depth)

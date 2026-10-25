@@ -698,8 +698,9 @@ Testing strategy
    C and as C++.
 
 **Public documents**
-   ``make samples-check`` runs the binding and compiler on 34 public
-   XTCE documents from Yamcs and the XTCE Toolkit, pinned by commit and
+   ``make samples-check`` runs the binding and compiler on 60 public
+   XTCE documents from Yamcs, its quickstart, yamcs-cfs and the XTCE
+   Toolkit, pinned by commit and
    SHA-256. Generated code is compiled in every language, every runtime
    digests each document, and each document's summary, digest included,
    is compared with ``tests/external/expected.txt``.

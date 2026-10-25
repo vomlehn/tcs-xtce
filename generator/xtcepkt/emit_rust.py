@@ -593,7 +593,13 @@ class RustEmitter:
         self.line(f"const MAX_BYTES: usize = {n.max_bytes};", 1)
         self.line()
         self.line("fn decode(data: &[u8]) -> Result<Self> {", 1)
-        self.line("let mut r = BitReader::new(data);", 2)
+        # A packet without entries, such as a meta-command without a command
+        # container, reads and writes nothing.
+        empty = not any(node.items for node in n.chain())
+        if empty:
+            self.line("let _ = data;", 2)
+        else:
+            self.line("let mut r = BitReader::new(data);", 2)
         for i, node in enumerate(n.chain()):
             for c in node.criteria:
                 self.line(f"if !({term(c, lambda lc: f'v{lc.id}')}) {{", 2)
@@ -647,6 +653,8 @@ class RustEmitter:
             self.line(f"w.patch_length(l{length.id}, {enc.bits}, "
                       f"{str(enc.little_endian).lower()}, {length.length}, "
                       f"{rstr(length.name)})?;", 2)
+        if empty:
+            self.line("let _ = w;", 2)
         self.line("Ok(())", 2)
         self.line("}", 1)
         self.line("}")

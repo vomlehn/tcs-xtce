@@ -32,7 +32,7 @@ yamcs/booleans.xml: schema valid; loaded by the binding
   digest 67749fd5f2f4420d4d862cf86ae870c0
 yamcs/ccsds-green-book.xml: schema invalid; rejected by the binding
   digest 3394e6935b006a927780006ac08fd0bc
-yamcs/container-entry.xml: schema invalid; rejected by the binding
+yamcs/container-entry.xml: schema invalid (facets only); rejected by the binding
   digest b1ef9b15ff10fb93de6c899532d7378a
 yamcs/embedded-tc.xml: schema valid; loaded by the binding
   2 packets, 2 not supported
@@ -88,3 +88,193 @@ xtcetools/UnitTest-Convert-NS.xml: schema invalid; rejected by the binding
   digest 868987f9e7479c92789f02923147836c
 xtcetools/UnitTests.xml: schema invalid; rejected by the binding
   digest d8da0089d63dbc83c07df665a81244f5
+yamcs-examples/pus-dt.xml: schema valid; loaded by the binding
+  0 packets, 0 not supported
+  digest df682ff1dfa3bb010bccdfd178890118
+yamcs-examples/pus-landing.xml: schema invalid; rejected by the binding
+  digest 692b1413f8e6464b3ae6a14805aac56c
+yamcs-examples/pus-xtce-verif.xml: schema valid; loaded by the binding
+  0 packets, 10 not supported
+    unsupported: /PUS/ccsds: unresolved parameter type reference '/dt/uint11' in /PUS
+    unsupported: /PUS/pus-tc: unresolved argument type reference '/dt/uint11' in /PUS
+    unsupported: /PUS/pus-time: base container /PUS/ccsds is not supported
+    unsupported: /PUS/pus-tm: base container /PUS/ccsds is not supported
+    unsupported: /PUS/pus-tc-ack: base container /PUS/pus-tm is not supported
+    unsupported: /PUS/pus-tc-ack-acceptance-failure: base container /PUS/pus-tc-ack is not supported
+    unsupported: /PUS/pus-tc-ack-start-failure: base container /PUS/pus-tc-ack is not supported
+    unsupported: /PUS/pus-tc-ack-completion-failure: base container /PUS/pus-tc-ack is not supported
+    unsupported: /PUS/hk: base container /PUS/pus-tm is not supported
+    unsupported: /PUS/hk25: base container /PUS/hk is not supported
+  digest 39b703e4178618851e55548f68a51fa0
+yamcs-examples/pus.xml: schema valid; loaded by the binding
+  0 packets, 10 not supported
+    unsupported: /PUS/ccsds: unresolved parameter type reference '/dt/uint11' in /PUS
+    unsupported: /PUS/pus-tc: unresolved argument type reference '/dt/uint11' in /PUS
+    unsupported: /PUS/pus-time: base container /PUS/ccsds is not supported
+    unsupported: /PUS/pus-tm: base container /PUS/ccsds is not supported
+    unsupported: /PUS/pus-tc-ack: base container /PUS/pus-tm is not supported
+    unsupported: /PUS/pus-tc-ack-acceptance-failure: base container /PUS/pus-tc-ack is not supported
+    unsupported: /PUS/pus-tc-ack-start-failure: base container /PUS/pus-tc-ack is not supported
+    unsupported: /PUS/pus-tc-ack-completion-failure: base container /PUS/pus-tc-ack is not supported
+    unsupported: /PUS/hk: base container /PUS/pus-tm is not supported
+    unsupported: /PUS/hk25: base container /PUS/hk is not supported
+  digest 8d9e89731c42b37a9b7bda42df99298b
+yamcs-examples/pus5.xml: schema valid; loaded by the binding
+  0 packets, 6 not supported
+    unsupported: /PUS5/pus5-tm: unresolved container reference '/PUS/pus-tm' in /PUS5
+    unsupported: /PUS5/pus5-tc: unresolved meta-command reference '/PUS/pus-tc' in /PUS5
+    unsupported: /PUS5/ENABLE_REPORT_GENERATION: unresolved meta-command reference '/PUS/pus-tc' in /PUS5
+    unsupported: /PUS5/DISABLE_REPORT_GENERATION: unresolved meta-command reference '/PUS/pus-tc' in /PUS5
+    unsupported: /PUS5/event1: base container /PUS5/pus5-tm is not supported
+    unsupported: /PUS5/event2: base container /PUS5/pus5-tm is not supported
+  digest 120787fc48c0885faaa90cdb5027fbae
+yamcs-examples/pus11.xml: schema valid; loaded by the binding
+  0 packets, 31 not supported
+    unsupported: /PUS11/pus11-tm: unresolved container reference '/PUS/pus-tm' in /PUS11
+    unsupported: /PUS11/DETAIL_REPORT/DETAIL_REPORT_ELEMENT: unresolved parameter type reference '/PUS/PusTimeType' in /PUS11/DETAIL_REPORT
+    unsupported: /PUS11/SUMMARY_REPORT/SUMMARY_REPORT_ELEMENT: unresolved parameter type reference '/PUS/PusTimeType' in /PUS11/SUMMARY_REPORT
+    unsupported: /PUS11/pus11-tc: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/ENABLE_SCHEDULER: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/DISABLE_SCHEDULER: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/RESET_SCHEDULER: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/INSERT_ACTIVITIES: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/DELETE_ACTIVITIES_BY_ID: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/DELETE_ACTIVITIES_BY_FILTER: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/TIME_SHIFT_ACTIVITIES_BY_ID: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/TIME_SHIFT_ACTIVITIES_BY_FILTER: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/GET_DETAIL_REPORT_BY_ID: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/GET_DETAIL_REPORT_BY_FILTER: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/GET_SUMMARY_REPORT_BY_ID: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/GET_SUMMARY_REPORT_BY_FILTER: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/TIME_SHIFT_ACTIVITIES: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/GET_DETAIL_REPORT: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/GET_SUMMARY_REPORT: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/GET_SCHEDULE_STATUS: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/ENABLE_SCHEDULE: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/DISABLE_SCHEDULE: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/CREATE_GROUPS: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/DELETE_GROUPS: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/ENABLE_GROUPS: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/DISABLE_GROUPS: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/GET_GROUP_STATUS: unresolved meta-command reference '/PUS/pus-tc' in /PUS11
+    unsupported: /PUS11/SUBSCHEDULE_STATUS_REPORT: base container /PUS11/pus11-tm is not supported
+    unsupported: /PUS11/GROUP_STATUS_REPORT: base container /PUS11/pus11-tm is not supported
+    unsupported: /PUS11/DETAIL_REPORT/DETAIL_REPORT: base container /PUS11/pus11-tm is not supported
+    unsupported: /PUS11/SUMMARY_REPORT/SUMMARY_REPORT: base container /PUS11/pus11-tm is not supported
+  digest f2ebc28f0b05eeba9d791d0f1a77d8d1
+yamcs-examples/pus17.xml: schema valid; loaded by the binding
+  0 packets, 4 not supported
+    unsupported: /PUS17/pus17-tm: unresolved container reference '/PUS/pus-tm' in /PUS17
+    unsupported: /PUS17/pus17-tc: unresolved meta-command reference '/PUS/pus-tc' in /PUS17
+    unsupported: /PUS17/ARE_YOU_ALIVE: unresolved meta-command reference '/PUS/pus-tc' in /PUS17
+    unsupported: /PUS17/are-you-alive-report: base container /PUS17/pus17-tm is not supported
+  digest 3ff642d0627b85f986f1724b4a4fb453
+yamcs-examples/pus19.xml: schema valid; loaded by the binding
+  0 packets, 11 not supported
+    unsupported: /PUS19/pus19-tm: unresolved container reference '/PUS/pus-tm' in /PUS19
+    unsupported: /PUS19/pus19-tc: unresolved meta-command reference '/PUS/pus-tc' in /PUS19
+    unsupported: /PUS19/ADD_EVENT_ACTIONS: unresolved meta-command reference '/PUS/pus-tc' in /PUS19
+    unsupported: /PUS19/DELETE_EVENT_ACTIONS: unresolved meta-command reference '/PUS/pus-tc' in /PUS19
+    unsupported: /PUS19/DELETE_ALL_EVENT_ACTIONS: unresolved meta-command reference '/PUS/pus-tc' in /PUS19
+    unsupported: /PUS19/ENABLE_EVENT_ACTIONS: unresolved meta-command reference '/PUS/pus-tc' in /PUS19
+    unsupported: /PUS19/DISABLE_EVENT_ACTIONS: unresolved meta-command reference '/PUS/pus-tc' in /PUS19
+    unsupported: /PUS19/REPORT_STATUS: unresolved meta-command reference '/PUS/pus-tc' in /PUS19
+    unsupported: /PUS19/ENABLE_FUNCTION: unresolved meta-command reference '/PUS/pus-tc' in /PUS19
+    unsupported: /PUS19/DISABLE_FUNCTION: unresolved meta-command reference '/PUS/pus-tc' in /PUS19
+    unsupported: /PUS19/EVENT_ACTION_STATUS_REPORT: base container /PUS19/pus19-tm is not supported
+  digest 8719ead36d09565f8a7b3f19557c205a
+yamcs-examples/pus20.xml: schema valid; loaded by the binding
+  0 packets, 2 not supported
+    unsupported: /PUS20/TM(20,2)_parameter_value_report: unresolved container reference '/PUS/pus-tm' in /PUS20
+    unsupported: /PUS20/pus20-tc: unresolved meta-command reference '/PUS/pus-tc' in /PUS20
+  digest a07f5d808a077fd76a0c310321eb65fc
+yamcs-examples/pus22.xml: schema valid; loaded by the binding
+  0 packets, 31 not supported
+    unsupported: /PUS22/pus22-tm: unresolved container reference '/PUS/pus-tm' in /PUS22
+    unsupported: /PUS22/DETAIL_REPORT/DETAIL_REPORT_ELEMENT: unresolved parameter type reference '/dt/uint11' in /PUS22/DETAIL_REPORT
+    unsupported: /PUS22/SUMMARY_REPORT/SUMMARY_REPORT_ELEMENT: unresolved parameter type reference '/dt/uint16' in /PUS22/SUMMARY_REPORT
+    unsupported: /PUS22/pus22-tc: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/ENABLE_SCHEDULER: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/DISABLE_SCHEDULER: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/RESET_SCHEDULER: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/DELETE_ACTIVITIES_BY_ID: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/DELETE_ACTIVITIES_BY_FILTER: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/POSITION_SHIFT_ACTIVITIES_BY_ID: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/POSITION_SHIFT_ACTIVITIES_BY_FILTER: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/GET_DETAIL_REPORT_BY_ID: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/GET_DETAIL_REPORT_BY_FILTER: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/GET_SUMMARY_REPORT_BY_ID: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/GET_SUMMARY_REPORT_BY_FILTER: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/POSITION_SHIFT_ACTIVITIES: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/GET_DETAIL_REPORT: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/GET_SUMMARY_REPORT: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/GET_SCHEDULE_STATUS: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/ENABLE_SCHEDULE: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/DISABLE_SCHEDULE: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/CREATE_GROUPS: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/DELETE_GROUPS: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/ENABLE_GROUPS: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/DISABLE_GROUPS: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/GET_GROUP_STATUS: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/SET_ORBIT_NUMBER: unresolved meta-command reference '/PUS/pus-tc' in /PUS22
+    unsupported: /PUS22/SUBSCHEDULE_STATUS_REPORT: base container /PUS22/pus22-tm is not supported
+    unsupported: /PUS22/GROUP_STATUS_REPORT: base container /PUS22/pus22-tm is not supported
+    unsupported: /PUS22/DETAIL_REPORT/DETAIL_REPORT: base container /PUS22/pus22-tm is not supported
+    unsupported: /PUS22/SUMMARY_REPORT/SUMMARY_REPORT: base container /PUS22/pus22-tm is not supported
+  digest c9783457b8dd03d0238806505664f50e
+yamcs-examples/pus23.xml: schema valid; loaded by the binding
+  0 packets, 1 not supported
+    unsupported: /PUS23/pus23-tc: unresolved meta-command reference '/PUS/pus-tc' in /PUS23
+  digest 8b7c387bf1994ea1f6629fb457b0269c
+yamcs-examples/downstream-direct.xml: schema valid; loaded by the binding
+  2 packets, 0 not supported
+  digest 8e004f3dd9e6922ba64d6509fcbf0a18
+yamcs-examples/downstream-embedded.xml: schema valid; loaded by the binding
+  2 packets, 0 not supported
+  digest e959372fbc917d533c02e06681e372f3
+yamcs-examples/packet-viewer.xml: schema valid; loaded by the binding
+  3 packets, 2 not supported
+    unsupported: /myproject/TelemetryPacket: unresolved parameter reference 'CCSDS_Packet_ID/Version' in /myproject
+    unsupported: /myproject/Spacecraft: base container /myproject/TelemetryPacket is not supported
+  digest 7b00068808f52c343d81f6d48b99dcc4
+yamcs-xtce/basetype.xml: schema invalid; rejected by the binding
+  digest e7216dc80a4195a72bcc72ffb1d11903
+yamcs-xtce/indirect-param.xml: schema valid; loaded by the binding
+  0 packets, 2 not supported
+    unsupported: /Example/id_value_pair: container /Example/id_value_pair: IndirectParameterRefEntry
+    unsupported: /Example/id_value_pair2: container /Example/id_value_pair2: IndirectParameterRefEntry
+  digest 72c94a8769bc8c804cb911ac5d46a1cf
+yamcs-xtce/ipre-no-instance.xml: schema invalid; rejected by the binding
+  digest c694f5c4c30b645ad36a93ac037bfcb1
+yamcs-xtce/ranges-test.xml: schema valid; loaded by the binding
+  3 packets, 0 not supported
+  digest fec6a44776025588b7a6fd099c8ef402
+yamcs-xtce/to-string.xml: schema valid; loaded by the binding
+  0 packets, 0 not supported
+  digest 85a218ee79c14e3f3dce7a1926c93067
+yamcs-quickstart/xtce.xml: schema valid; loaded by the binding
+  3 packets, 2 not supported
+    unsupported: /myproject/TelemetryPacket: unresolved parameter reference 'CCSDS_Packet_ID/Version' in /myproject
+    unsupported: /myproject/Spacecraft: base container /myproject/TelemetryPacket is not supported
+  digest f4e9c3a82122855c10f71a5c4fbb39c4
+yamcs-cfs/CFE_EVS.xml: schema invalid (facets only); loaded by the binding
+  0 packets, 6 not supported
+    unsupported: /CFE_EVS/CFE_EVS_TlmPkt_t: unresolved container reference 'cfs-ccsds/cfs-tlm-hdr' in /CFE_EVS
+    unsupported: /CFE_EVS/NoOp: unresolved meta-command reference 'cfs-ccsds/cfs-cmd' in /CFE_EVS
+    unsupported: /CFE_EVS/ResetCounters: unresolved meta-command reference 'cfs-ccsds/cfs-cmd' in /CFE_EVS
+    unsupported: /CFE_EVS/EnableEventType: unresolved meta-command reference 'cfs-ccsds/cfs-cmd' in /CFE_EVS
+    unsupported: /CFE_EVS/DisableEventType: unresolved meta-command reference 'cfs-ccsds/cfs-cmd' in /CFE_EVS
+    unsupported: /CFE_EVS/CFE_EVS_TlmPkt_Payload_t: base container /CFE_EVS/CFE_EVS_TlmPkt_t is not supported
+  digest e8b4c653f16d5263e9a27d5e1a0bd95a
+yamcs-cfs/cfs-ccsds.xml: schema valid; loaded by the binding
+  0 packets, 1 not supported
+    unsupported: /cfs-ccsds/cfs-tlm-hdr: type /cfs-ccsds/BaseType/uint1_LE: little-endian size 1 is not whole bytes
+  digest 16846b8720855125a6b630fb58943b66
+yamcs-cfs/auto_generated.xml: schema invalid; rejected by the binding
+  digest 63a404f31532f7ba4beb0a374dd4cf6e
+yamcs-cfs/cfs.xml: schema invalid; rejected by the binding
+  digest f734f02c8115ee66eaa3a61236326157
+yamcs-cfs/tutorial.xml: schema invalid; rejected by the binding
+  digest 51d78ba9ef5ab2f366459606f42a5ff5
+yamcs-cfs/ocpoc.xml: schema invalid; rejected by the binding
+  digest 2c8841271cb1758d2684ad621de8c618
