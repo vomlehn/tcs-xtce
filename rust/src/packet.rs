@@ -2606,6 +2606,111 @@ impl<const N: usize> fmt::Display for Alarms<N> {
     }
 }
 
+/// What an alarm monitor keeps for one parameter: whether it is in alarm,
+/// its runs of samples in and out of alarm, and its last `H` values and
+/// their times, for change ranges.
+#[derive(Debug, Clone, Copy)]
+pub struct AlarmState<const H: usize> {
+    violations: u32,
+    conformances: u32,
+    level: u8,
+    values: [f64; H],
+    times: [f64; H],
+    len: usize,
+    next: usize,
+}
+
+impl<const H: usize> Default for AlarmState<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const H: usize> AlarmState<H> {
+    pub fn new() -> Self {
+        Self {
+            violations: 0,
+            conformances: 0,
+            level: 0,
+            values: [0.0; H],
+            times: [0.0; H],
+            len: 0,
+            next: 0,
+        }
+    }
+
+    /// The level to report for a sample whose own level is `level`: an alarm
+    /// is raised after `min_violations` samples in a row are in alarm, and
+    /// cleared after `min_conformance` in a row are not; in between, the
+    /// last level raised stands.
+    pub fn update(
+        &mut self,
+        level: u8,
+        min_violations: u32,
+        min_conformance: u32,
+    ) -> u8 {
+        if level > 0 {
+            self.violations += 1;
+            self.conformances = 0;
+            if self.level > 0 || self.violations >= min_violations {
+                self.level = level;
+            }
+        } else {
+            self.conformances += 1;
+            self.violations = 0;
+            if self.level > 0 && self.conformances >= min_conformance {
+                self.level = 0;
+            }
+        }
+        self.level
+    }
+
+    /// How much `x` (at time `t`) changed since the value `k` samples before
+    /// it: as a percentage of that value when `percent`, then per second
+    /// when `per_second`.  `None` when there is no such sample, or no change
+    /// can be worked out (no time between them, or a percentage of 0).
+    pub fn change(
+        &self,
+        x: f64,
+        t: f64,
+        k: usize,
+        per_second: bool,
+        percent: bool,
+    ) -> Option<f64> {
+        if k == 0 || self.len < k {
+            return None;
+        }
+        let i = (self.next + H - k) % H;
+        let (then, t_then) = (self.values[i], self.times[i]);
+        let mut d = x - then;
+        if percent {
+            if then == 0.0 {
+                return None;
+            }
+            d = d / then.abs() * 100.0;
+        }
+        if per_second {
+            let dt = t - t_then;
+            if !(dt > 0.0) {
+                return None;
+            }
+            d /= dt;
+        }
+        Some(d)
+    }
+
+    /// Remembers a sample, for change ranges.
+    pub fn push(&mut self, x: f64, t: f64) {
+        if H == 0 {
+            return;
+        }
+        self.values[self.next] = x;
+        self.times[self.next] = t;
+        self.next = (self.next + 1) % H;
+        self.len = (self.len + 1).min(H);
+    }
+}
+
 /// Whether `x` lies in an alarm range; a bound of `None` is infinite.
 pub fn in_band(
     x: f64,

@@ -474,6 +474,19 @@ class Dfa:
 
 
 @dataclass
+class Change:
+    """ChangeAlarmRanges: Bands on how much the value changed since the
+    value ``samples`` samples before it, per second when ``per_second``
+    (between the two samples' times), and as a percentage of the earlier
+    value when ``percent``."""
+
+    bands: list[Band]
+    per_second: bool = True
+    percent: bool = False
+    samples: int = 1
+
+
+@dataclass
 class AlarmDef:
     """One alarm definition (a DefaultAlarm, or a ContextAlarm's).  The
     level is the most severe of: each Band the value violates; for an
@@ -490,6 +503,13 @@ class AlarmDef:
     conditions: list[tuple[int, object]] = field(default_factory=list)
     min_violations: int = 1
     min_conformance: int = 1
+    change: Optional[Change] = None
+
+    @property
+    def stateful(self) -> bool:
+        """Whether its level depends on earlier samples."""
+        return (self.change is not None or self.min_violations > 1
+                or self.min_conformance > 1)
 
 
 @dataclass
@@ -503,6 +523,23 @@ class Alarm:
     default: Optional[AlarmDef]
     contexts: list[tuple[object, AlarmDef]] = field(default_factory=list)
     note: str = ""  # why it can't be evaluated, if it can't
+    # Bound: the qualified name of the parameter, whose state an
+    # AlarmMonitor keeps (see Mission.monitored).
+    key: str = ""
+
+    def defs(self) -> list[AlarmDef]:
+        return ([d for _, d in self.contexts]
+                + ([self.default] if self.default is not None else []))
+
+    @property
+    def stateful(self) -> bool:
+        return any(d.stateful for d in self.defs())
+
+    @property
+    def history(self) -> int:
+        """The samples of the value that its change ranges look back at."""
+        return max((d.change.samples for d in self.defs() if d.change),
+                   default=0)
 
 
 # --- containers --------------------------------------------------------------
@@ -849,3 +886,7 @@ class Mission:
     kinds: list[Kind]
     roots: list[Node]  # roots of the trees behind ``kinds``
     skipped: list[str] = field(default_factory=list)
+    # The parameters whose alarms depend on earlier samples: (qualified
+    # name, field name in the AlarmMonitor, samples of history to keep),
+    # one per parameter whatever packets hold it.
+    monitored: list[tuple[str, str, int]] = field(default_factory=list)

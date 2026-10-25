@@ -412,7 +412,7 @@ class PythonEmitter:
         self.line("def _describe_bool(v: bool) -> str:")
         self.line('return "true" if v else "false"', 1)
         self.line()
-        names = ([vt.ident for vt in m.types + m.aggregates]
+        names = ([vt.ident for vt in m.types + m.aggregates] + ["AlarmMonitor"]
                  + [n.ident for n in m.nodes] + [k.ident for k in m.kinds])
         self.line()
         self.line("__all__ = [" + ", ".join(pstr(n) for n in names) + "]")
@@ -420,6 +420,7 @@ class PythonEmitter:
             self.enum_type(vt)
         for vt in m.aggregates:
             self.aggregate_type(vt)
+        self.alarm_monitor()
         for n in m.nodes:
             self.node(n)
         for k in m.kinds:
@@ -448,6 +449,21 @@ class PythonEmitter:
         if line:
             self.line(line.rstrip(), depth + 1)
         self.line("),", depth)
+
+    def alarm_monitor(self) -> None:
+        self.line()
+        self.line()
+        self.line("class AlarmMonitor:")
+        self.line('"""The alarm state of each parameter whose alarms depend on '
+                  'earlier', 1)
+        self.line('samples, which the packets\' ``monitor()`` reads and '
+                  'updates."""', 1)
+        self.line()
+        self.line("def __init__(self) -> None:", 1)
+        for key, ident, history in self.m.monitored:
+            self.line(f"self.{ident} = pk.AlarmState({history})  # {key}", 2)
+        if not self.m.monitored:
+            self.line("pass", 2)
 
     def enum_type(self, vt: VType) -> None:
         self.line()
@@ -841,57 +857,108 @@ class PythonEmitter:
         self.line(')) + "}"', 2)
 
     def alarms(self, n: Node) -> None:
-        """``alarms()``, which gives each alarmed field's level, and a
-        method computing each one."""
+        """``alarms()`` and ``monitor()``, which give each alarmed field's
+        level, and a method computing each one."""
         names = dict((lc, name) for name, lc in n.fields)
         place = lambda lc: self.place(n, lc, names)  # noqa: E731
+        monitored = {k: ident for k, ident, _ in self.m.monitored}
         self.line("def alarms(self) -> list:", 1)
         self.line('"""(field, alarm level) for each field with an alarm; the '
                   'level is None', 2)
-        self.line('when the field is absent."""', 2)
-        if not n.alarms:
-            self.line("return []", 2)
-        else:
-            self.line("return [", 2)
-            for name, _, _ in n.alarms:
-                self.line(f"({pstr(name)}, self._alarm_{name}()),", 3)
-            self.line("]", 2)
+        self.line("when the field is absent.  Alarms that depend on earlier "
+                  "samples count", 2)
+        self.line('only this one (see ``monitor``)."""', 2)
+        self.line("return [", 2)
+        for name, _, _ in n.alarms:
+            self.line(f"({pstr(name)}, self._alarm_{name}()),", 3)
+        self.line("]", 2)
+        self.line()
+        self.line("def monitor(self, m: AlarmMonitor, t: float = 0.0) -> list:",
+                  1)
+        self.line('"""Like ``alarms()``, counting the earlier samples whose '
+                  'state ``m`` keeps,', 2)
+        self.line("for change ranges, minViolations and minConformance; ``t`` "
+                  "is this", 2)
+        self.line('sample\'s time in seconds."""', 2)
+        self.line("return [", 2)
+        for name, _, a in n.alarms:
+            call = (f"self._monitor_{name}(m, t)" if a.stateful
+                    else f"self._alarm_{name}()")
+            self.line(f"({pstr(name)}, {call}),", 3)
+        self.line("]", 2)
         self.line()
         for name, lc, a in n.alarms:
             self.line(f"def _alarm_{name}(self) -> Optional[pk.AlarmLevel]:", 1)
-            self.line(f"x = self.{name}", 2)
-            if lc.optional:
-                self.line("if x is None:", 2)
-                self.line("return None", 3)
-            d = 2
-            if lc.vtype.kind == "array":
-                self.line("worst = 0", 2)
-                self.line("for x in x:", 2)
-                d = 3
-            self.line("lv = 0", d)
-            kind = (lc.vtype.elem.kind if lc.vtype.kind == "array"
-                    else lc.vtype.kind)
-            for k, (terms, ad) in enumerate(a.contexts):
-                cond = " and ".join(f"({term(c, place)})" for c in terms)
-                self.line(f"{'if' if k == 0 else 'elif'} {cond}:", d)
-                self.alarm_def(ad, kind, place, d + 1)
-            if a.contexts:
-                if a.default is not None:
-                    self.line("else:", d)
-                    self.alarm_def(a.default, kind, place, d + 1)
-            elif a.default is not None:
-                self.alarm_def(a.default, kind, place, d)
-            if lc.vtype.kind == "array":
-                self.line("worst = max(worst, lv)", d)
-                self.line("return pk.AlarmLevel(worst)", 2)
-            else:
-                self.line("return pk.AlarmLevel(lv)", 2)
-            self.line()
+            self.alarm_body(name, lc, a, place, None)
+            if a.stateful:
+                self.line(f"def _monitor_{name}(self, m: AlarmMonitor, t: "
+                          "float) -> Optional[pk.AlarmLevel]:", 1)
+                self.alarm_body(name, lc, a, place, monitored[a.key])
 
-    def alarm_def(self, ad, kind: str, place, depth: int) -> None:
+    def alarm_body(self, name: str, lc, a, place, state) -> None:
+        """The body of a method giving a field's alarm level; with
+        ``state``, the AlarmMonitor field that keeps its parameter's
+        earlier samples."""
+        self.line(f"x = self.{name}", 2)
+        if lc.optional:
+            self.line("if x is None:", 2)
+            self.line("return None", 3)
+        if state is not None:
+            self.line(f"s = m.{state}", 2)
+            self.line("mv = mc = 1", 2)
+        d = 2
+        if lc.vtype.kind == "array":
+            self.line("worst = 0", 2)
+            self.line("for x in x:", 2)
+            d = 3
+        self.line("lv = 0", d)
+        kind = (lc.vtype.elem.kind if lc.vtype.kind == "array"
+                else lc.vtype.kind)
+        live = state is not None
+        for k, (terms, ad) in enumerate(a.contexts):
+            cond = " and ".join(f"({term(c, place)})" for c in terms)
+            self.line(f"{'if' if k == 0 else 'elif'} {cond}:", d)
+            self.alarm_def(ad, kind, place, d + 1, live)
+        if a.contexts:
+            if a.default is not None:
+                self.line("else:", d)
+                self.alarm_def(a.default, kind, place, d + 1, live)
+        elif a.default is not None:
+            self.alarm_def(a.default, kind, place, d, live)
+        if lc.vtype.kind == "array":
+            self.line("worst = max(worst, lv)", d)
+            self.line("lv = worst", 2)
+        if state is None:
+            self.line("return pk.AlarmLevel(lv)", 2)
+        else:
+            if a.history:
+                self.line("s.push(float(x), t)", 2)
+            self.line("return pk.AlarmLevel(s.update(lv, mv, mc))", 2)
+        self.line()
+
+    def alarm_def(self, ad, kind: str, place, depth: int,
+                  live: bool = False) -> None:
         """Statements raising ``lv`` to the level that alarm definition
-        ``ad`` gives value ``x`` (of kind ``kind``)."""
+        ``ad`` gives value ``x`` (of kind ``kind``); when ``live``, with
+        its change ranges (on AlarmState ``s``, at time ``t``) and setting
+        ``mv`` and ``mc`` to its minViolations and minConformance."""
         start = len(self.out)
+        if live and ad.change is not None:
+            c = ad.change
+            self.line(f"d = s.change(float(x), t, {c.samples}, {c.per_second}, "
+                      f"{c.percent})", depth)
+            self.line("if d is not None:", depth)
+            for b in c.bands:
+                test = (f"pk.in_band(d, {b.lo!r}, {b.lo_incl}, {b.hi!r}, "
+                        f"{b.hi_incl})")
+                self.line(f"if {test if b.inside else 'not ' + test}:",
+                          depth + 1)
+                self.line(f"lv = max(lv, {b.level})", depth + 2)
+            if not c.bands:
+                self.line("pass", depth + 1)
+        if live and (ad.min_violations, ad.min_conformance) != (1, 1):
+            self.line(f"mv, mc = {ad.min_violations}, {ad.min_conformance}",
+                      depth)
         for b in ad.bands:
             test = (f"pk.in_band(x, {b.lo!r}, {b.lo_incl}, {b.hi!r}, "
                     f"{b.hi_incl})")

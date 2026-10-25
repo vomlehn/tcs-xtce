@@ -1494,6 +1494,71 @@ def pattern_alarm(s: str, patterns: tuple, default: int) -> int:
     return default
 
 
+class AlarmState:
+    """What an alarm monitor keeps for one parameter: whether it is in
+    alarm, its runs of samples in and out of alarm, and its last
+    ``history`` values and their times, for change ranges."""
+
+    __slots__ = ("violations", "conformances", "level", "values", "times",
+                 "history")
+
+    def __init__(self, history: int = 0) -> None:
+        self.violations = 0
+        self.conformances = 0
+        self.level = 0
+        self.values: list = []
+        self.times: list = []
+        self.history = history
+
+    def update(self, level: int, min_violations: int,
+               min_conformance: int) -> int:
+        """The level to report for a sample whose own level is ``level``:
+        an alarm is raised after ``min_violations`` samples in a row are in
+        alarm, and cleared after ``min_conformance`` in a row are not; in
+        between, the last level raised stands."""
+        if level > 0:
+            self.violations += 1
+            self.conformances = 0
+            if self.level > 0 or self.violations >= min_violations:
+                self.level = level
+        else:
+            self.conformances += 1
+            self.violations = 0
+            if self.level > 0 and self.conformances >= min_conformance:
+                self.level = 0
+        return self.level
+
+    def change(self, x: float, t: float, k: int, per_second: bool,
+               percent: bool) -> Optional[float]:
+        """How much ``x`` (at time ``t``) changed since the value ``k``
+        samples before it: as a percentage of that value when ``percent``,
+        then per second when ``per_second``.  None when there is no such
+        sample, or no change can be worked out (no time between them, or a
+        percentage of 0)."""
+        if len(self.values) < k:
+            return None
+        then, t_then = self.values[-k], self.times[-k]
+        d = x - then
+        if percent:
+            if then == 0:
+                return None
+            d = d / abs(then) * 100.0
+        if per_second:
+            dt = t - t_then
+            if not dt > 0:
+                return None
+            d = d / dt
+        return d
+
+    def push(self, x: float, t: float) -> None:
+        """Remembers a sample, for change ranges."""
+        self.values.append(x)
+        self.times.append(t)
+        if len(self.values) > self.history:
+            del self.values[0]
+            del self.times[0]
+
+
 def describe_alarms(alarms) -> str:
     """``field=level`` for each (field, level), ``none`` when the field is
     absent, as every runtime writes it."""

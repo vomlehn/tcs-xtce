@@ -499,6 +499,19 @@ and C would round through ``double``. Floats compare as doubles, with a
 missing bound skipped rather than infinite, so that a NaN is outside
 every range in every language.
 
+Alarms that depend on earlier samples (``minViolations``,
+``minConformance``, change ranges) are XTCE's per parameter, not per
+packet, so their state lives in one mission-wide ``AlarmMonitor`` with a
+field per such parameter (``Mission.monitored``), whatever packets hold
+it. Each field is an ``AlarmState``: the run of samples in and out of
+alarm, the level last raised, and a ring of the last values and times, as
+long as the longest span of the parameter's change ranges. The ring is a
+fixed array (a const generic in Rust, arrays beside the state in C), so
+monitoring doesn't allocate. ``monitor()`` computes the sample's own
+level as ``alarms()`` does, adds the change ranges, remembers the value,
+and lets the state decide what to report. The arithmetic of a change is
+written the same way in each language, so the doubles agree.
+
 String patterns can't count on a regular expression library in C, nor
 in Rust without a dependency, so ``regex.py`` compiles each pattern with
 Python's own parser into a Thompson automaton over UTF-8 bytes (code

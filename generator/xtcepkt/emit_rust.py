@@ -543,8 +543,8 @@ class RustEmitter:
                       "encoding and describing a")
             self.line("//! packet never allocate.")
         self.line("#![allow(dead_code, unused_imports, unused_variables, "
-                  "unused_assignments, unreachable_code, unused_parens, "
-                  "clippy::all)]")
+                  "unused_assignments, unused_mut, unreachable_code, "
+                  "unused_parens, clippy::all)]")
         self.line()
         self.line("use std::fmt::{self, Write as _};")
         self.line("use tcs_xtce::packet::{self as pk, BitReader, BitWriter, "
@@ -553,6 +553,7 @@ class RustEmitter:
             self.enum_type(vt)
         for vt in m.aggregates:
             self.aggregate_type(vt)
+        self.alarm_monitor()
         for n in m.nodes:
             self.node(n)
         for k in m.kinds:
@@ -569,6 +570,19 @@ class RustEmitter:
                       + ", ".join(str(a).lower() for a in dfa.accept) + "],", 1)
             self.line("};")
         return "\n".join(self.out) + "\n"
+
+    def alarm_monitor(self) -> None:
+        self.line()
+        self.line("/// The alarm state of each parameter whose alarms depend "
+                  "on earlier")
+        self.line("/// samples, which the packets' `monitor()` reads and "
+                  "updates.")
+        self.line("#[derive(Debug, Clone, Default)]")
+        self.line("pub struct AlarmMonitor {")
+        for key, ident, history in self.m.monitored:
+            self.line(f"/// `{key}`", 1)
+            self.line(f"pub {ident}: pk::AlarmState<{history}>,", 1)
+        self.line("}")
 
     def enum_type(self, vt: VType) -> None:
         self.line()
@@ -971,84 +985,122 @@ class RustEmitter:
     # -- dispatch --
 
     def alarms(self, n: Node) -> None:
-        """``alarms()``, which gives each alarmed field's level, and a
-        method computing each one."""
+        """``alarms()`` and ``monitor()``, which give each alarmed field's
+        level, and a method computing each one."""
         names = dict((lc, name) for name, lc in n.fields)
         place = lambda lc: self.place(n, lc, names)  # noqa: E731
+        monitored = {k: ident for k, ident, _ in self.m.monitored}
+        count = len(n.alarms)
         self.line(f"impl {n.ident} {{")
         self.line("/// The number of fields with an alarm.", 1)
-        self.line(f"pub const ALARMS: usize = {len(n.alarms)};", 1)
+        self.line(f"pub const ALARMS: usize = {count};", 1)
         self.line()
         self.line("/// The alarm level of each field with an alarm (`None` "
                   "when the", 1)
-        self.line("/// field is absent).", 1)
-        self.line(f"pub fn alarms(&self) -> pk::Alarms<{len(n.alarms)}> {{", 1)
-        if n.alarms:
-            self.line("let mut a = pk::Alarms::new();", 2)
-            for name, _, _ in n.alarms:
-                self.line(f"a.push({rstr(name)}, self.alarm_{name}());", 2)
-            self.line("a", 2)
-        else:
-            self.line("pk::Alarms::new()", 2)
+        self.line("/// field is absent).  Alarms that depend on earlier "
+                  "samples count only", 1)
+        self.line("/// this one (see `monitor`).", 1)
+        self.line(f"pub fn alarms(&self) -> pk::Alarms<{count}> {{", 1)
+        self.line("let mut a = pk::Alarms::new();", 2)
+        for name, _, _ in n.alarms:
+            self.line(f"a.push({rstr(name)}, self.alarm_{name}());", 2)
+        self.line("a", 2)
+        self.line("}", 1)
+        self.line()
+        self.line("/// Like `alarms()`, counting the earlier samples whose "
+                  "state `m` keeps,", 1)
+        self.line("/// for change ranges, minViolations and minConformance; "
+                  "`t` is this", 1)
+        self.line("/// sample's time in seconds.", 1)
+        self.line("pub fn monitor(&self, m: &mut AlarmMonitor, t: f64) -> "
+                  f"pk::Alarms<{count}> {{", 1)
+        self.line("let mut a = pk::Alarms::new();", 2)
+        for name, _, a in n.alarms:
+            call = (f"self.monitor_{name}(m, t)" if a.stateful
+                    else f"self.alarm_{name}()")
+            self.line(f"a.push({rstr(name)}, {call});", 2)
+        self.line("a", 2)
         self.line("}", 1)
         for name, lc, a in n.alarms:
-            vt = lc.vtype
-            kind = vt.elem.kind if vt.kind == "array" else vt.kind
             self.line()
             self.line(f"fn alarm_{name}(&self) -> Option<pk::AlarmLevel> {{", 1)
-            x = f"self.{name}"
-            if lc.optional:
-                x = (f"{x}.as_ref()?" if kind == "string" or vt.kind == "array"
-                     else f"{x}?")
-            d = 2
-            if vt.kind == "array":
-                self.line("let mut worst = 0u8;", 2)
-                self.line(f"for x in {x}.iter() {{", 2)
-                self.line("let x = x.as_str();" if kind == "string"
-                          else "let x = *x;", 3)
-                d = 3
-            else:
-                self.line(f"let x = {x}.as_str();" if kind == "string"
-                          else f"let x = {x};", 2)
-            self.line("let mut lv = 0u8;", d)
-            for k, (terms, ad) in enumerate(a.contexts):
-                cond = conjunction([term(c, place) for c in terms])
-                self.line(f"{'if' if k == 0 else '} else if'} {cond} {{", d)
-                self.alarm_def(ad, kind, place, d + 1)
-            if a.contexts:
-                if a.default is not None:
-                    self.line("} else {", d)
-                    self.alarm_def(a.default, kind, place, d + 1)
-                self.line("}", d)
-            elif a.default is not None:
-                self.alarm_def(a.default, kind, place, d)
-            if vt.kind == "array":
-                self.line("worst = worst.max(lv);", d)
-                self.line("}", 2)
-                self.line("Some(pk::AlarmLevel::from_index(worst))", 2)
-            else:
-                self.line("Some(pk::AlarmLevel::from_index(lv))", 2)
-            self.line("}", 1)
+            self.alarm_body(name, lc, a, place, None)
+            if a.stateful:
+                self.line()
+                self.line(f"fn monitor_{name}(&self, m: &mut AlarmMonitor, t: "
+                          "f64) -> Option<pk::AlarmLevel> {", 1)
+                self.alarm_body(name, lc, a, place, monitored[a.key])
         self.line("}")
 
-    def alarm_def(self, ad, kind: str, place, depth: int) -> None:
+    def alarm_body(self, name: str, lc, a, place, state) -> None:
+        """The body of a method giving a field's alarm level; with
+        ``state``, the AlarmMonitor field that keeps its parameter's
+        earlier samples."""
+        vt = lc.vtype
+        kind = vt.elem.kind if vt.kind == "array" else vt.kind
+        x = f"self.{name}"
+        if lc.optional:
+            x = (f"{x}.as_ref()?" if kind == "string" or vt.kind == "array"
+                 else f"{x}?")
+        if state is not None:
+            self.line(f"let s = &mut m.{state};", 2)
+            self.line("let mut mv = 1u32;", 2)
+            self.line("let mut mc = 1u32;", 2)
+        d = 2
+        if vt.kind == "array":
+            self.line("let mut worst = 0u8;", 2)
+            self.line(f"for x in {x}.iter() {{", 2)
+            self.line("let x = x.as_str();" if kind == "string"
+                      else "let x = *x;", 3)
+            d = 3
+        else:
+            self.line(f"let x = {x}.as_str();" if kind == "string"
+                      else f"let x = {x};", 2)
+        self.line("let mut lv = 0u8;", d)
+        live = state is not None
+        for k, (terms, ad) in enumerate(a.contexts):
+            cond = conjunction([term(c, place) for c in terms])
+            self.line(f"{'if' if k == 0 else '} else if'} {cond} {{", d)
+            self.alarm_def(ad, kind, place, d + 1, live)
+        if a.contexts:
+            if a.default is not None:
+                self.line("} else {", d)
+                self.alarm_def(a.default, kind, place, d + 1, live)
+            self.line("}", d)
+        elif a.default is not None:
+            self.alarm_def(a.default, kind, place, d, live)
+        if vt.kind == "array":
+            self.line("worst = worst.max(lv);", d)
+            self.line("}", 2)
+            self.line("let lv = worst;", 2)
+        if state is None:
+            self.line("Some(pk::AlarmLevel::from_index(lv))", 2)
+        else:
+            if a.history:
+                self.line("s.push(x as f64, t);", 2)
+            self.line("Some(pk::AlarmLevel::from_index(s.update(lv, mv, mc)))",
+                      2)
+        self.line("}", 1)
+
+    def alarm_def(self, ad, kind: str, place, depth: int,
+                  live: bool = False) -> None:
         """Statements raising ``lv`` to the level that alarm definition
-        ``ad`` gives value ``x`` (of kind ``kind``)."""
-        for b in ad.bands:
-            if kind == "int":
-                parts = ([f"{b.lo}i128 <= x as i128"] if b.lo is not None
-                         else []) + ([f"x as i128 <= {b.hi}i128"]
-                                     if b.hi is not None else [])
-                test = " && ".join(parts) or "true"
-            else:
-                def opt(v):
-                    return "None" if v is None else f"Some({rflt(v)})"
-                test = (f"pk::in_band(x, {opt(b.lo)}, "
-                        f"{str(b.lo_incl).lower()}, {opt(b.hi)}, "
-                        f"{str(b.hi_incl).lower()})")
-            self.line(f"if {test if b.inside else '!(' + test + ')'} {{", depth)
-            self.line(f"lv = lv.max({b.level});", depth + 1)
+        ``ad`` gives value ``x`` (of kind ``kind``); when ``live``, with
+        its change ranges (on AlarmState ``s``, at time ``t``) and setting
+        ``mv`` and ``mc`` to its minViolations and minConformance."""
+        if live and ad.change is not None:
+            c = ad.change
+            self.line(f"if let Some(d) = s.change(x as f64, t, {c.samples}, "
+                      f"{str(c.per_second).lower()}, {str(c.percent).lower()}) "
+                      "{", depth)
+            for b in c.bands:
+                self.band(b, "d", "float", depth + 1)
             self.line("}", depth)
+        if live and (ad.min_violations, ad.min_conformance) != (1, 1):
+            self.line(f"mv = {ad.min_violations};", depth)
+            self.line(f"mc = {ad.min_conformance};", depth)
+        for b in ad.bands:
+            self.band(b, "x", kind, depth)
         if kind == "enum" and (ad.labels or ad.default):
             labels = ", ".join(f"({lo}, {hi}, {lv})"
                                for lo, hi, lv in ad.labels)
@@ -1064,6 +1116,23 @@ class RustEmitter:
                       depth)
             self.line(f"lv = lv.max({level});", depth + 1)
             self.line("}", depth)
+
+    def band(self, b, x: str, kind: str, depth: int) -> None:
+        """Raises ``lv`` to the Band's level if value ``x`` (of kind
+        ``kind``) violates it."""
+        if kind == "int":
+            parts = ([f"{b.lo}i128 <= {x} as i128"] if b.lo is not None
+                     else []) + ([f"{x} as i128 <= {b.hi}i128"]
+                                 if b.hi is not None else [])
+            test = " && ".join(parts) or "true"
+        else:
+            def opt(v):
+                return "None" if v is None else f"Some({rflt(v)})"
+            test = (f"pk::in_band({x}, {opt(b.lo)}, {str(b.lo_incl).lower()}, "
+                    f"{opt(b.hi)}, {str(b.hi_incl).lower()})")
+        self.line(f"if {test if b.inside else '!(' + test + ')'} {{", depth)
+        self.line(f"lv = lv.max({b.level});", depth + 1)
+        self.line("}", depth)
 
     def dfa(self, dfa) -> str:
         """The name of the static holding a pattern's automaton."""
@@ -1129,6 +1198,22 @@ class RustEmitter:
         for m in k.members:
             self.line(f"Self::{m.ident}(p) => {{", 3)
             self.line("for a in p.alarms().as_slice() {", 4)
+            self.line("out.push(a.field, a.level);", 5)
+            self.line("}", 4)
+            self.line("}", 3)
+        self.line("}", 2)
+        self.line("out", 2)
+        self.line("}", 1)
+        self.line()
+        self.line("/// Like `alarms()`, counting the earlier samples whose "
+                  "state `m` keeps.", 1)
+        self.line("pub fn monitor(&self, m: &mut AlarmMonitor, t: f64) -> "
+                  f"pk::Alarms<{most}> {{", 1)
+        self.line("let mut out = pk::Alarms::new();", 2)
+        self.line("match self {", 2)
+        for m in k.members:
+            self.line(f"Self::{m.ident}(p) => {{", 3)
+            self.line("for a in p.monitor(m, t).as_slice() {", 4)
             self.line("out.push(a.field, a.level);", 5)
             self.line("}", 4)
             self.line("}", 3)

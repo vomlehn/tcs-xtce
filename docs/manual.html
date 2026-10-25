@@ -1500,6 +1500,11 @@ type, shown here for <tt class="docutils literal">T</tt> = <tt class="docutils l
 <td><tt class="docutils literal">alarms()</tt></td>
 <td>Each alarmed field's alarm level (see Alarms)</td>
 </tr>
+<tr><td><tt class="docutils literal"><span class="pre">monitor(&amp;mut</span> AlarmMonitor, t) <span class="pre">-&gt;</span> <span class="pre">pk::Alarms&lt;N&gt;</span></tt></td>
+<td><tt class="docutils literal">size_t T_monitor(const T*, P_AlarmMonitor*, double t, xtce_pk_alarm* out)</tt></td>
+<td><tt class="docutils literal">monitor(m, t)</tt></td>
+<td>The same, counting earlier samples</td>
+</tr>
 </tbody>
 </table>
 <p>The C/C++ functions return <tt class="docutils literal">0</tt> on success, or an <tt class="docutils literal">XTCE_PK_*</tt> error
@@ -2270,16 +2275,36 @@ expression library.</li>
 array's level is its worst element's. Criteria may compare any field
 of the packet, before or after the value. Integers are compared with
 the ranges exactly, in every language.</p>
-<p>The demo's <tt class="docutils literal">Alarmed</tt> packet has one of each, and the test tools
-print the levels after the packet:
+<p>Some alarms depend on earlier samples of the parameter, which a packet
+doesn't hold: <tt class="docutils literal">alarms()</tt> judges them by this sample alone, and
+<tt class="docutils literal">monitor(m, t)</tt> counts the earlier samples, whose state the
+mission's <tt class="docutils literal">AlarmMonitor</tt> <tt class="docutils literal">m</tt> keeps (in C <tt class="docutils literal">P_AlarmMonitor</tt>, set up
+with <tt class="docutils literal">P_AlarmMonitor_init</tt>), at time <tt class="docutils literal">t</tt> in seconds. It keeps one
+state per parameter, whatever packets hold it.</p>
+<ul class="simple">
+<li><tt class="docutils literal">minViolations</tt>: an alarm is raised only once that many samples in
+a row are in alarm; <tt class="docutils literal">minConformance</tt>: it is cleared only once that
+many in a row are not. In between, the last level raised stands.</li>
+<li><tt class="docutils literal">ChangeAlarmRanges</tt>: the ranges apply to how much the value
+changed since the sample <tt class="docutils literal">spanOfInterestInSamples</tt> before it,
+per sample or (<tt class="docutils literal">changePerSecond</tt>, the default) per second between
+the two samples' times, and with <tt class="docutils literal"><span class="pre">changeBasis=&quot;percentageChange&quot;</span></tt>
+as a percentage of the earlier value. Until there is such a sample,
+or when the times are equal or the earlier value is 0, the change
+raises nothing.</li>
+<li><tt class="docutils literal">ChangePerSecondAlarmRanges</tt> of relative times: the same, per
+second, in <tt class="docutils literal">timeUnits</tt>.</li>
+</ul>
+<p>The demo's <tt class="docutils literal">Alarmed</tt> packet has one of each kind that a packet can
+judge alone, and <tt class="docutils literal">Trend</tt> the others. The test tools keep one monitor
+for all the vectors, each at the time of its index, and print the
+levels after the packet (and the monitor's, when they differ):
 <tt class="docutils literal">... | alarms: al_mode=normal, al_temp=warning, ...</tt>.</p>
 <p class="last">A packet leaves out an alarm that it can't evaluate, and its generated
 documentation says why: one whose criteria use a value the packet
-doesn't hold, or one the packet computes (a size or length field);
-<tt class="docutils literal">ChangeAlarmRanges</tt> and <tt class="docutils literal">ChangePerSecondAlarmRanges</tt>,
-<tt class="docutils literal">minViolations</tt> and <tt class="docutils literal">minConformance</tt> above 1, which depend on
-earlier packets; a <tt class="docutils literal">CustomAlarm</tt>; and alarms inside aggregates and
-arrays of arrays.</p>
+doesn't hold, or one the packet computes (a size or length field); a
+change range with a <tt class="docutils literal">spanOfInterestInSeconds</tt> or on an array; a
+<tt class="docutils literal">CustomAlarm</tt>; and alarms inside aggregates and arrays of arrays.</p>
 </dd>
 <dt>Messages</dt>
 <dd>A <tt class="docutils literal">MessageSet</tt>'s <tt class="docutils literal">Message</tt> picks out its container by its

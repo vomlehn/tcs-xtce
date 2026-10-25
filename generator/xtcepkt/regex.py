@@ -252,7 +252,8 @@ def determinize(nfa: Nfa, start: int, final: int, pattern: str) -> Dfa:
         cuts = sorted({a for a, _, _ in edges} | {b + 1 for _, b, _ in edges})
         row = []
         for a, b in zip(cuts, cuts[1:]):
-            dest = closure([t for lo, hi, t in edges if lo <= a and b - 1 <= hi])
+            dest = closure([t for lo, hi, t in edges if lo <= a
+                            and b - 1 <= hi])
             if not dest:
                 continue
             if dest not in index:

@@ -2422,6 +2422,78 @@ static inline const char* xtce_pk_alarm_name(int level) {
         return level >= 0 && level <= XTCE_PK_SEVERE ? names[level] : "none";
 }
 
+/* What an alarm monitor keeps for one parameter: whether it is in alarm,
+ * its runs of samples in and out of alarm, and how many of its last values
+ * (kept in arrays beside it, `cap` of them) it holds. */
+typedef struct xtce_pk_alarm_state {
+        uint32_t violations;
+        uint32_t conformances;
+        int level;
+        size_t len;
+        size_t next;
+} xtce_pk_alarm_state;
+
+/* The level to report for a sample whose own level is `level`: an alarm is
+ * raised after `min_violations` samples in a row are in alarm, and cleared
+ * after `min_conformance` in a row are not; in between, the last level
+ * raised stands. */
+static inline int xtce_pk_alarm_update(xtce_pk_alarm_state* s, int level,
+                                       uint32_t min_violations,
+                                       uint32_t min_conformance) {
+        if (level > 0) {
+                ++s->violations;
+                s->conformances = 0;
+                if (s->level > 0 || s->violations >= min_violations)
+                        s->level = level;
+        } else {
+                ++s->conformances;
+                s->violations = 0;
+                if (s->level > 0 && s->conformances >= min_conformance)
+                        s->level = 0;
+        }
+        return s->level;
+}
+
+/* How much `x` (at time `t`) changed since the value `k` samples before it,
+ * of the `cap` in `values` and `times`: as a percentage of that value when
+ * `percent`, then per second when `per_second`.  False when there is no
+ * such sample, or no change can be worked out (no time between them, or a
+ * percentage of 0). */
+static inline bool xtce_pk_alarm_change(const xtce_pk_alarm_state* s,
+                                        const double* values,
+                                        const double* times, size_t cap,
+                                        double x, double t, size_t k,
+                                        bool per_second, bool percent,
+                                        double* out) {
+        size_t i;
+        double then, d;
+        if (k == 0 || s->len < k) return false;
+        i = (s->next + cap - k) % cap;
+        then = values[i];
+        d = x - then;
+        if (percent) {
+                if (then == 0.0) return false;
+                d = d / fabs(then) * 100.0;
+        }
+        if (per_second) {
+                double dt = t - times[i];
+                if (!(dt > 0.0)) return false;
+                d /= dt;
+        }
+        *out = d;
+        return true;
+}
+
+/* Remembers a sample in the `cap` slots of `values` and `times`. */
+static inline void xtce_pk_alarm_push(xtce_pk_alarm_state* s, double* values,
+                                      double* times, size_t cap, double x,
+                                      double t) {
+        values[s->next] = x;
+        times[s->next] = t;
+        s->next = (s->next + 1) % cap;
+        if (s->len < cap) ++s->len;
+}
+
 /* Whether `x` lies in an alarm range; a missing bound is infinite. */
 static inline bool xtce_pk_in_band(double x, bool has_lo, double lo,
                                    bool lo_incl, bool has_hi, double hi,

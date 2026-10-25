@@ -1041,6 +1041,10 @@ type, shown here for ``T`` = ``demo_Housekeeping``.
      - ``size_t T_alarms(const T*, xtce_pk_alarm* out)``, ``T_ALARMS``
      - ``alarms()``
      - Each alarmed field's alarm level (see Alarms)
+   * - ``monitor(&mut AlarmMonitor, t) -> pk::Alarms<N>``
+     - ``size_t T_monitor(const T*, P_AlarmMonitor*, double t, xtce_pk_alarm* out)``
+     - ``monitor(m, t)``
+     - The same, counting earlier samples
 
 The C/C++ functions return ``0`` on success, or an ``XTCE_PK_*`` error
 code after filling in ``*err`` (``err`` may be ``NULL``). ``T_describe``
@@ -1845,17 +1849,37 @@ Alarms
    of the packet, before or after the value. Integers are compared with
    the ranges exactly, in every language.
 
-   The demo's ``Alarmed`` packet has one of each, and the test tools
-   print the levels after the packet:
+   Some alarms depend on earlier samples of the parameter, which a packet
+   doesn't hold: ``alarms()`` judges them by this sample alone, and
+   ``monitor(m, t)`` counts the earlier samples, whose state the
+   mission's ``AlarmMonitor`` ``m`` keeps (in C ``P_AlarmMonitor``, set up
+   with ``P_AlarmMonitor_init``), at time ``t`` in seconds. It keeps one
+   state per parameter, whatever packets hold it.
+
+   * ``minViolations``: an alarm is raised only once that many samples in
+     a row are in alarm; ``minConformance``: it is cleared only once that
+     many in a row are not. In between, the last level raised stands.
+   * ``ChangeAlarmRanges``: the ranges apply to how much the value
+     changed since the sample ``spanOfInterestInSamples`` before it,
+     per sample or (``changePerSecond``, the default) per second between
+     the two samples' times, and with ``changeBasis="percentageChange"``
+     as a percentage of the earlier value. Until there is such a sample,
+     or when the times are equal or the earlier value is 0, the change
+     raises nothing.
+   * ``ChangePerSecondAlarmRanges`` of relative times: the same, per
+     second, in ``timeUnits``.
+
+   The demo's ``Alarmed`` packet has one of each kind that a packet can
+   judge alone, and ``Trend`` the others. The test tools keep one monitor
+   for all the vectors, each at the time of its index, and print the
+   levels after the packet (and the monitor's, when they differ):
    ``... | alarms: al_mode=normal, al_temp=warning, ...``.
 
    A packet leaves out an alarm that it can't evaluate, and its generated
    documentation says why: one whose criteria use a value the packet
-   doesn't hold, or one the packet computes (a size or length field);
-   ``ChangeAlarmRanges`` and ``ChangePerSecondAlarmRanges``,
-   ``minViolations`` and ``minConformance`` above 1, which depend on
-   earlier packets; a ``CustomAlarm``; and alarms inside aggregates and
-   arrays of arrays.
+   doesn't hold, or one the packet computes (a size or length field); a
+   change range with a ``spanOfInterestInSeconds`` or on an array; a
+   ``CustomAlarm``; and alarms inside aggregates and arrays of arrays.
 
 Messages
    A ``MessageSet``'s ``Message`` picks out its container by its

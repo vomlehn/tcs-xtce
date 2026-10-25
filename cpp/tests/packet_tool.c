@@ -19,12 +19,20 @@ static uint8_t output[4096];
 static char text[8192];
 
 static xtce_pk_alarm alarms[64];
+static xtce_pk_alarm monitored[64];
+static demo_AlarmMonitor mon;
+static double now; /* the index of the vector */
+static char other[8192];
 
-/* Prints ` | alarms: field=level, ...` for a packet with alarms. */
-static void print_alarms(const xtce_pk_alarm* a, size_t n) {
+/* Prints ` | alarms: field=level, ...` for a packet with alarms, and
+ * ` | monitor: ...` when the monitor's levels are others. */
+static void print_alarms(const xtce_pk_alarm* a, size_t n,
+                         size_t monitored_n) {
         if (!n) return;
         xtce_pk_describe_alarms(a, n, text, sizeof text);
         printf(" | alarms: %s", text);
+        xtce_pk_describe_alarms(monitored, monitored_n, other, sizeof other);
+        if (strcmp(text, other) != 0) printf(" | monitor: %s", other);
 }
 
 static void print_hex(const uint8_t* b, size_t n) {
@@ -57,7 +65,8 @@ static void print_hex(const uint8_t* b, size_t n) {
                 } else {                                                    \
                         print_hex(output, out_len);                         \
                 }                                                           \
-                print_alarms(alarms, type##_alarms(&packet, alarms));       \
+                print_alarms(alarms, type##_alarms(&packet, alarms),        \
+                             type##_monitor(&packet, &mon, now, monitored)); \
                 printf("\n");                                               \
         } while (0)
 
@@ -73,12 +82,15 @@ int main(int argc, char** argv) {
                 perror(argv[1]);
                 return 1;
         }
+        demo_AlarmMonitor_init(&mon);
         while (fgets(line, sizeof line, in)) {
                 char kind[16], hex[sizeof line];
                 size_t n = 0, i;
+                static unsigned index;
                 char* hash = strchr(line, '#');
                 if (hash) *hash = 0;
                 if (sscanf(line, "%15s %s", kind, hex) != 2) continue;
+                now = index++;
                 for (i = 0; hex[i] && hex[i + 1] && n < sizeof input; i += 2) {
                         char byte[3] = {hex[i], hex[i + 1], 0};
                         input[n++] = (uint8_t)strtoul(byte, NULL, 16);

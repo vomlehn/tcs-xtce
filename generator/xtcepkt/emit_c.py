@@ -814,6 +814,7 @@ class CEmitter:
         self.declare_buffers()
         self.declare_composites()
         self.declare_consts()
+        self.declare_monitor()
         for n in m.nodes:
             self.declare(n)
         for k in m.kinds:
@@ -931,6 +932,13 @@ class CEmitter:
         self.line(" * of them at most) and returns how many there are. */")
         self.line(f"static inline size_t {t}_alarms(const {t}* p, "
                   "xtce_pk_alarm* out);")
+        self.line("/* Like _alarms, counting the earlier samples whose state "
+                  "`m` keeps, for")
+        self.line(" * change ranges, minViolations and minConformance; `t` is "
+                  "this sample's")
+        self.line(" * time in seconds. */")
+        self.line(f"static inline size_t {t}_monitor(const {t}* p, "
+                  f"{self.p}AlarmMonitor* m, double t, xtce_pk_alarm* out);")
 
     def declare_kind(self, k: Kind) -> None:
         t = self.p + k.ident
@@ -1400,76 +1408,117 @@ class CEmitter:
             lc: Acc(f"p->{name}", f"p->has_{name}" if lc.optional else None)
             for name, lc in n.fields}
         place = lambda lc: self.place(n, lc, names)  # noqa: E731
-        self.line()
-        self.line(f"static inline size_t {t}_alarms(const {t}* p, "
-                  "xtce_pk_alarm* out) {")
-        self.line("(void)p;", 1)
-        self.line("(void)out;", 1)
-        for i, (name, lc, a) in enumerate(n.alarms):
-            vt = lc.vtype
-            elem = vt.elem if vt.kind == "array" else vt
-            self.line("{", 1)
-            d = 2
-            self.line(f"out[{i}].field = {cstr(name)};", d)
-            if lc.optional:
-                self.line(f"if (!p->has_{name}) {{", d)
-                self.line(f"out[{i}].level = XTCE_PK_ABSENT;", d + 1)
-                self.line("} else {", d)
-                d += 1
-            if vt.kind == "array":
-                self.line("int worst = 0;", d)
-                self.line("size_t k;", d)
-                self.line(f"for (k = 0; k < p->{name}.len; ++k) {{", d)
-                d += 1
-                self.line(f"{self.ctype(elem)} x = p->{name}.data[k];", d)
+        monitored = {k: ident for k, ident, _ in self.m.monitored}
+        for live in (False, True):
+            self.line()
+            if live:
+                self.line(f"static inline size_t {t}_monitor(const {t}* p, "
+                          f"{self.p}AlarmMonitor* m, double t, xtce_pk_alarm* "
+                          "out) {")
+                self.line("(void)m;", 1)
+                self.line("(void)t;", 1)
             else:
-                self.line(f"{self.ctype(elem)} x = p->{name};", d)
-            self.line("int lv = 0;", d)
-            self.line("(void)x;", d)
-            for k, (terms, ad) in enumerate(a.contexts):
-                cond = " && ".join(f"({self.term(c, place)})" for c in terms)
-                self.line(f"{'if' if k == 0 else '} else if'} ({cond}) {{", d)
-                self.alarm_def(ad, elem, place, d + 1)
-            if a.contexts:
-                if a.default is not None:
-                    self.line("} else {", d)
-                    self.alarm_def(a.default, elem, place, d + 1)
-                self.line("}", d)
-            elif a.default is not None:
-                self.alarm_def(a.default, elem, place, d)
-            if vt.kind == "array":
-                self.line("if (lv > worst) worst = lv;", d)
-                d -= 1
-                self.line("}", d)
-                self.line(f"out[{i}].level = worst;", d)
-            else:
-                self.line(f"out[{i}].level = lv;", d)
-            if lc.optional:
-                d -= 1
-                self.line("}", d)
-            self.line("}", 1)
-        self.line(f"return {len(n.alarms)};", 1)
-        self.line("}")
+                self.line(f"static inline size_t {t}_alarms(const {t}* p, "
+                          "xtce_pk_alarm* out) {")
+            self.line("(void)p;", 1)
+            self.line("(void)out;", 1)
+            for i, (name, lc, a) in enumerate(n.alarms):
+                state = monitored[a.key] if live and a.stateful else None
+                self.alarm_body(i, name, lc, a, place, state)
+            self.line(f"return {len(n.alarms)};", 1)
+            self.line("}")
 
-    def alarm_def(self, ad, vt: VType, place, depth: int) -> None:
+    def alarm_body(self, i: int, name: str, lc, a, place, state) -> None:
+        """Stores field ``name``'s alarm in ``out[i]``; with ``state``, the
+        AlarmMonitor field that keeps its parameter's earlier samples."""
+        vt = lc.vtype
+        elem = vt.elem if vt.kind == "array" else vt
+        self.line("{", 1)
+        d = 2
+        self.line(f"out[{i}].field = {cstr(name)};", d)
+        if lc.optional:
+            self.line(f"if (!p->has_{name}) {{", d)
+            self.line(f"out[{i}].level = XTCE_PK_ABSENT;", d + 1)
+            self.line("} else {", d)
+            d += 1
+        if state is not None:
+            self.line(f"xtce_pk_alarm_state* s = &m->{state};", d)
+            self.line("uint32_t mv = 1, mc = 1;", d)
+        if vt.kind == "array":
+            self.line("int worst = 0;", d)
+            self.line("size_t k;", d)
+            self.line(f"for (k = 0; k < p->{name}.len; ++k) {{", d)
+            d += 1
+            self.line(f"{self.ctype(elem)} x = p->{name}.data[k];", d)
+        else:
+            self.line(f"{self.ctype(elem)} x = p->{name};", d)
+        self.line("int lv = 0;", d)
+        self.line("(void)x;", d)
+        live = None if state is None else (state, a.history)
+        for k, (terms, ad) in enumerate(a.contexts):
+            cond = " && ".join(f"({self.term(c, place)})" for c in terms)
+            self.line(f"{'if' if k == 0 else '} else if'} ({cond}) {{", d)
+            self.alarm_def(ad, elem, place, d + 1, live)
+        if a.contexts:
+            if a.default is not None:
+                self.line("} else {", d)
+                self.alarm_def(a.default, elem, place, d + 1, live)
+            self.line("}", d)
+        elif a.default is not None:
+            self.alarm_def(a.default, elem, place, d, live)
+        if vt.kind == "array":
+            self.line("if (lv > worst) worst = lv;", d)
+            d -= 1
+            self.line("}", d)
+            self.line("{", d)
+            self.line("int lv = worst;", d + 1)
+            self.level(i, state, a, d + 1)
+            self.line("}", d)
+        else:
+            self.level(i, state, a, d)
+        if lc.optional:
+            d -= 1
+            self.line("}", d)
+        self.line("}", 1)
+
+    def level(self, i: int, state, a, depth: int) -> None:
+        """Stores ``lv`` (through the monitor's state, if ``state``) in
+        ``out[i]``."""
+        if state is None:
+            self.line(f"out[{i}].level = lv;", depth)
+            return
+        if a.history:
+            self.line(f"xtce_pk_alarm_push(s, m->{state}_values, "
+                      f"m->{state}_times, {a.history}, (double)x, t);", depth)
+        self.line(f"out[{i}].level = xtce_pk_alarm_update(s, lv, mv, mc);",
+                  depth)
+
+    def alarm_def(self, ad, vt: VType, place, depth: int, live=None) -> None:
         """Statements raising ``lv`` to the level that alarm definition
-        ``ad`` gives value ``x`` (of type ``vt``)."""
+        ``ad`` gives value ``x`` (of type ``vt``); with ``live`` (the
+        AlarmMonitor field and its history), with its change ranges (on
+        AlarmState ``s``, at time ``t``) and setting ``mv`` and ``mc`` to
+        its minViolations and minConformance."""
         kind = vt.kind
-        for b in ad.bands:
-            if kind == "int":
-                lit = slit if vt.signed else ulit
-                parts = (([f"x >= {lit(b.lo)}"] if b.lo is not None else [])
-                         + ([f"x <= {lit(b.hi)}"] if b.hi is not None else []))
-                test = "(" + (" && ".join(parts) or "true") + ")"
-            else:
-                def bound(v):
-                    return ("false, 0.0" if v is None else f"true, {cflt(v)}")
-                test = (f"xtce_pk_in_band(x, {bound(b.lo)}, "
-                        f"{bool_lit(b.lo_incl)}, {bound(b.hi)}, "
-                        f"{bool_lit(b.hi_incl)})")
-            self.line(f"if ({test if b.inside else '!' + test}) {{", depth)
-            self.line(f"if (lv < {b.level}) lv = {b.level};", depth + 1)
+        if live is not None and ad.change is not None:
+            c = ad.change
+            state, history = live
+            self.line("{", depth)
+            self.line("double d;", depth + 1)
+            self.line(f"if (xtce_pk_alarm_change(s, m->{state}_values, "
+                      f"m->{state}_times, {history}, (double)x, t, "
+                      f"{c.samples}, {bool_lit(c.per_second)}, "
+                      f"{bool_lit(c.percent)}, &d)) {{", depth + 1)
+            for b in c.bands:
+                self.band(b, "d", vt, depth + 2, float_value=True)
+            self.line("}", depth + 1)
             self.line("}", depth)
+        if (live is not None
+                and (ad.min_violations, ad.min_conformance) != (1, 1)):
+            self.line(f"mv = {ad.min_violations};", depth)
+            self.line(f"mc = {ad.min_conformance};", depth)
+        for b in ad.bands:
+            self.band(b, "x", vt, depth)
         if kind == "enum" and (ad.labels or ad.default):
             self.line("{", depth)
             if ad.labels:
@@ -1503,9 +1552,50 @@ class CEmitter:
             self.line(f"if (lv < {level}) lv = {level};", depth + 1)
             self.line("}", depth)
 
+    def band(self, b, x: str, vt: VType, depth: int,
+             float_value: bool = False) -> None:
+        """Raises ``lv`` to the Band's level if value ``x`` (of type ``vt``,
+        or a double when ``float_value``) violates it."""
+        if vt.kind == "int" and not float_value:
+            lit = slit if vt.signed else ulit
+            parts = (([f"{x} >= {lit(b.lo)}"] if b.lo is not None else [])
+                     + ([f"{x} <= {lit(b.hi)}"] if b.hi is not None else []))
+            test = "(" + (" && ".join(parts) or "true") + ")"
+        else:
+            def bound(v):
+                return "false, 0.0" if v is None else f"true, {cflt(v)}"
+            test = (f"xtce_pk_in_band({x}, {bound(b.lo)}, "
+                    f"{bool_lit(b.lo_incl)}, {bound(b.hi)}, "
+                    f"{bool_lit(b.hi_incl)})")
+        self.line(f"if ({test if b.inside else '!' + test}) {{", depth)
+        self.line(f"if (lv < {b.level}) lv = {b.level};", depth + 1)
+        self.line("}", depth)
+
     def dfa(self, dfa) -> str:
         """The name of the constant holding a pattern's automaton."""
         return self.dfa_names[id(dfa)]
+
+    def declare_monitor(self) -> None:
+        t = self.p + "AlarmMonitor"
+        self.line()
+        self.line("/* The alarm state of each parameter whose alarms depend on "
+                  "earlier samples,")
+        self.line(" * which the packets' _monitor functions read and update; "
+                  f"{t}_init")
+        self.line(" * clears it. */")
+        self.line(f"typedef struct {t} {{")
+        for key, ident, history in self.m.monitored:
+            self.line(f"xtce_pk_alarm_state {ident}; /* {key} */", 1)
+            if history:
+                self.line(f"double {ident}_values[{history}];", 1)
+                self.line(f"double {ident}_times[{history}];", 1)
+        if not self.m.monitored:
+            self.line("char unused_; /* C structs need a member */", 1)
+        self.line(f"}} {t};")
+        self.line()
+        self.line(f"static inline void {t}_init({t}* m) {{")
+        self.line("memset(m, 0, sizeof *m);", 1)
+        self.line("}")
 
     def declare_dfas(self) -> None:
         """The automata of the string alarms' patterns."""
@@ -1631,6 +1721,20 @@ class CEmitter:
             self.line(f"return {self.p}{mem.ident}_alarms(&p->u.{mem.ident}, "
                       "out);", 3)
         self.line("}", 1)
+        self.line("(void)out;", 1)
+        self.line("return 0;", 1)
+        self.line("}")
+        self.line()
+        self.line(f"static inline size_t {t}_monitor(const {t}* p, "
+                  f"{self.p}AlarmMonitor* m, double t, xtce_pk_alarm* out) {{")
+        self.line("switch (p->tag) {", 1)
+        for mem in k.members:
+            self.line(f"case {t}_{mem.ident}_tag:", 2)
+            self.line(f"return {self.p}{mem.ident}_monitor(&p->u.{mem.ident}, "
+                      "m, t, out);", 3)
+        self.line("}", 1)
+        self.line("(void)m;", 1)
+        self.line("(void)t;", 1)
         self.line("(void)out;", 1)
         self.line("return 0;", 1)
         self.line("}")

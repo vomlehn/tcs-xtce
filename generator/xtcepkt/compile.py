@@ -27,7 +27,7 @@ from .model import (
     Local, Mark, Member, Mission, Node, Pad, Polynomial, Seek, Spline,
     StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk,
     MATH_UNARY, Check, ContextCal, EndSeek, MathOp, Require, ValueRef,
-    needs_binding, Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS)
+    needs_binding, Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -362,7 +362,7 @@ class Namer:
 RUNTIME_NAMES = {"Packet", "PacketError", "Codec", "BitReader", "BitWriter",
                  "Buffer", "Result", "Error", "ManagedBuffer", "Optional",
                  "Union", "Any", "String", "Vec", "Self", "Option", "Box", "Ok",
-                 "Err", "Some", "None"}
+                 "Err", "Some", "None", "AlarmMonitor"}
 
 
 # The AncillaryData that marks a parameter or argument as a packet length
@@ -567,20 +567,33 @@ class Compiler:
                 mc = getattr(ac, f"{name}_alarm", None)
                 if mc is not None:
                     d.conditions.append((level, mc))
-        if getattr(a, "change_alarm_ranges", None) is not None:
-            raise Unsupported(f"{where}: ChangeAlarmRanges")
-        if getattr(a, "change_per_second_alarm_ranges", None) is not None:
-            raise Unsupported(f"{where}: ChangePerSecondAlarmRanges")
+        cr = getattr(a, "change_alarm_ranges", None)
+        if cr is not None:
+            if vt.kind not in ("int", "float"):
+                raise Unsupported(f"{where}: ChangeAlarmRanges on a {vt.kind} "
+                                  "value")
+            if cr.span_of_interest_in_seconds:
+                raise Unsupported(f"{where}: ChangeAlarmRanges with a "
+                                  "spanOfInterestInSeconds")
+            d.change = Change(range_bands(cr, 1.0),
+                              cr.change_type is None
+                              or cr.change_type.value == "changePerSecond",
+                              cr.change_basis is not None
+                              and cr.change_basis.value == "percentageChange",
+                              cr.span_of_interest_in_samples or 1)
+        cr = getattr(a, "change_per_second_alarm_ranges", None)
+        if cr is not None:
+            if vt.kind != "float":
+                raise Unsupported(f"{where}: ChangePerSecondAlarmRanges on a "
+                                  "time held as text or bytes")
+            tu = cr.time_units
+            d.change = Change(
+                range_bands(cr, TIME_UNITS[tu.value if tu else "seconds"]))
         ranges = getattr(a, "static_alarm_ranges", None)
         if ranges is not None:
             tu = getattr(ranges, "time_units", None)
-            unit = TIME_UNITS[tu.value if tu else "seconds"]
-            inside = (ranges.range_form is not None
-                      and ranges.range_form.value == "inside")
-            for level, name in enumerate(LEVELS):
-                r = getattr(ranges, f"{name}_range", None)
-                if r is not None:
-                    d.bands.append(band(r, level, inside, unit))
+            d.bands += range_bands(ranges,
+                                   TIME_UNITS[tu.value if tu else "seconds"])
         multi = getattr(a, "alarm_multi_ranges", None)
         for r in multi.range if multi is not None else []:
             level = LEVELS.index(r.level.value) if r.level else 0
@@ -2488,9 +2501,13 @@ class Compiler:
                                     camel(r.key) + "Kind"), r, members, 0))
         concrete = [n for n in ok if not n.abstract]
         used, aggregates = {}, {}
+        monitored: dict = {}
         for n in concrete:
             self._finish(n)
             self.bind_alarms(n)
+            for _, _, a in n.alarms:
+                if a.stateful:
+                    monitored[a.key] = max(monitored.get(a.key, 0), a.history)
             for it in walk(n.all_items()):
                 if isinstance(it, Value):
                     for vt in it.local.vtype.tree():
@@ -2506,13 +2523,16 @@ class Compiler:
                                   camel(vt.key))
         for k in kinds:
             k.max_bytes = max(m.max_bytes for m in k.members)
+        mnames = Namer()
         # The mission is named for its last document, which by convention
         # is its own: the documents it builds on come first.
-        return Mission(name=self.roots[-1].name,
-                       spaces=[r.name for r in self.roots], source="",
-                       types=list(used.values()),
-                       aggregates=list(aggregates.values()), nodes=concrete,
-                       kinds=kinds, roots=roots, skipped=msgs)
+        return Mission(
+            name=self.roots[-1].name, spaces=[r.name for r in self.roots],
+            source="", types=list(used.values()),
+            aggregates=list(aggregates.values()), nodes=concrete, kinds=kinds,
+            roots=roots, skipped=msgs,
+            monitored=[(k, mnames.take(snake(k.rsplit("/", 1)[-1]), snake(k)),
+                        h) for k, h in monitored.items()])
 
     def bind_alarms(self, n: Node) -> None:
         """The alarms of a packet's fields, their criteria bound to its
@@ -2549,11 +2569,15 @@ class Compiler:
                 return dataclasses.replace(
                     d, conditions=[(lv, terms(mc)) for lv, mc in d.conditions])
 
+            if vt.kind == "array" and a.history:
+                n.alarm_notes.append(f"{where}: change ranges on an array")
+                continue
             try:
-                n.alarms.append(
-                    (name, lc,
-                     Alarm(a.path, bound(a.default) if a.default else None,
-                           [(terms(mc), bound(d)) for mc, d in a.contexts])))
+                n.alarms.append((name, lc,
+                                 Alarm(a.path,
+                                       bound(a.default) if a.default else None,
+                                       [(terms(mc), bound(d))
+                                        for mc, d in a.contexts], key=lc.key)))
             except Unsupported as e:
                 n.alarm_notes.append(str(e))
 
@@ -2679,6 +2703,14 @@ def bounded(vt: VType, b: DynSize, rng: tuple[int, int]) -> VType:
         b.max = min(units, MAX_FIELD_BITS // 8)
         enc = dataclasses.replace(e, bits=b.max * 8, dyn=b)
     return dataclasses.replace(vt, enc=enc)
+
+
+def range_bands(ranges, unit: float) -> list[Band]:
+    """The Bands of an AlarmRanges (in ``unit`` seconds, for a time)."""
+    inside = (ranges.range_form is not None
+              and ranges.range_form.value == "inside")
+    return [band(r, level, inside, unit) for level, name in enumerate(LEVELS)
+            if (r := getattr(ranges, f"{name}_range", None)) is not None]
 
 
 def band(r, level: int, inside: bool, unit: float) -> Band:

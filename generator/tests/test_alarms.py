@@ -103,12 +103,27 @@ class AlarmTests(unittest.TestCase):
         self.assertEqual(terms[0].text, "/Sat/B == 1")
         self.assertEqual(d.bands, [Band(1, None, True, 5, True)])
 
-    def test_notes(self):
-        # The context's B isn't in the packet; ChangeAlarmRanges need the
-        # values of other packets.
-        change = """<DefaultAlarm><ChangeAlarmRanges>
+    def test_monitored(self):
+        change = """<DefaultAlarm minViolations="3"><ChangeAlarmRanges
+            changeBasis="percentageChange" spanOfInterestInSamples="4">
             <WarningRange maxInclusive="3"/></ChangeAlarmRanges>
             </DefaultAlarm>"""
+        m = compile_xml(alarm_mission(change, "A A"))
+        self.assertEqual(m.monitored, [("/Sat/A", "a", 4)])
+        ((_, _, a1), (_, _, a2)) = m.nodes[0].alarms
+        c = a1.default.change
+        self.assertEqual((c.per_second, c.percent, c.samples), (True, True, 4))
+        self.assertEqual(a1.default.min_violations, 3)
+        self.assertTrue(a1.stateful and a2.stateful)
+        # Stateless alarms need no state.
+        self.assertEqual(compile_xml(alarm_mission(RANGES)).monitored, [])
+
+    def test_notes(self):
+        # The context's B isn't in the packet; a span in seconds needs
+        # times the packets don't give.
+        change = """<DefaultAlarm><ChangeAlarmRanges
+            spanOfInterestInSeconds="10"><WarningRange maxInclusive="3"/>
+            </ChangeAlarmRanges></DefaultAlarm>"""
         for alarm, why in ((RANGES + CONTEXT,
                             "criterion on /Sat/B, which is not decoded before "
                             "it"), (change, "ChangeAlarmRanges")):

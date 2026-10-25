@@ -2,7 +2,9 @@
 //!
 //! For each vector prints `<description of the decoded packet> | <hex of the
 //! re-encoded packet>`, with `error:<kind>` in place of either on failure,
-//! then ` | alarms: <field=level, ...>` for a packet with alarms.  The C++
+//! then ` | alarms: <field=level, ...>` for a packet with alarms, and
+//! ` | monitor: <field=level, ...>` when one alarm monitor, kept across the
+//! vectors (each at the time of its index), gives other levels.  The C++
 //! and Python versions of this tool print identical output.
 //!
 //! Usage: `packet_tool VECTORS`
@@ -17,17 +19,20 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
-fn alarm_text<const N: usize>(a: &Alarms<N>) -> String {
-    if a.as_slice().is_empty() {
-        String::new()
-    } else {
-        format!(" | alarms: {a}")
+fn alarm_text<const N: usize>(a: &Alarms<N>, m: &Alarms<N>) -> String {
+    let mut s = String::new();
+    if !a.as_slice().is_empty() {
+        s += &format!(" | alarms: {a}");
+        if a.to_string() != m.to_string() {
+            s += &format!(" | monitor: {m}");
+        }
     }
+    s
 }
 
 fn run<P: Packet + Display>(
     data: &[u8],
-    alarms: impl Fn(&P) -> String,
+    alarms: impl FnOnce(&P) -> String,
 ) -> String {
     let mut codec = Codec::for_packet::<P>();
     codec.load(data);
@@ -45,6 +50,8 @@ fn run<P: Packet + Display>(
 fn main() {
     let path = std::env::args().nth(1).expect("usage: packet_tool VECTORS");
     let text = std::fs::read_to_string(path).expect("cannot read vectors");
+    let mut mon = demo::AlarmMonitor::default();
+    let mut index = 0u32;
     for line in text.lines() {
         let line = line.split('#').next().unwrap_or("");
         let mut words = line.split_whitespace();
@@ -55,16 +62,18 @@ fn main() {
             .step_by(2)
             .map(|i| u8::from_str_radix(&h[i..i + 2], 16).expect("bad hex"))
             .collect();
+        let t = f64::from(index);
+        index += 1;
         let out = match kind {
-            "tm" => {
-                run(&data, |p: &demo::CCSDSPacketKind| alarm_text(&p.alarms()))
-            }
-            "tc" => {
-                run(&data, |p: &demo::CCSDSCommandKind| alarm_text(&p.alarms()))
-            }
-            "hk" => {
-                run(&data, |p: &demo::Housekeeping| alarm_text(&p.alarms()))
-            }
+            "tm" => run(&data, |p: &demo::CCSDSPacketKind| {
+                alarm_text(&p.alarms(), &p.monitor(&mut mon, t))
+            }),
+            "tc" => run(&data, |p: &demo::CCSDSCommandKind| {
+                alarm_text(&p.alarms(), &p.monitor(&mut mon, t))
+            }),
+            "hk" => run(&data, |p: &demo::Housekeeping| {
+                alarm_text(&p.alarms(), &p.monitor(&mut mon, t))
+            }),
             _ => panic!("unknown vector kind {kind}"),
         };
         println!("{out}");

@@ -951,6 +951,32 @@
           </StaticAlarmRanges>
         </DefaultAlarm>
       </RelativeTimeParameterType>
+      <!-- Alarms that depend on earlier samples, for the Trend packet. -->
+      <FloatParameterType name="TrRateType">
+        <FloatDataEncoding sizeInBits="32"/>
+        <DefaultAlarm>
+          <ChangeAlarmRanges changeType="changePerSample">
+            <WarningRange minInclusive="-5" maxInclusive="5"/>
+          </ChangeAlarmRanges>
+        </DefaultAlarm>
+      </FloatParameterType>
+      <IntegerParameterType name="TrPctType" signed="false">
+        <IntegerDataEncoding sizeInBits="16"/>
+        <DefaultAlarm>
+          <ChangeAlarmRanges changeBasis="percentageChange"
+            spanOfInterestInSamples="2">
+            <CriticalRange maxInclusive="50"/>
+          </ChangeAlarmRanges>
+        </DefaultAlarm>
+      </IntegerParameterType>
+      <IntegerParameterType name="TrStickyType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <DefaultAlarm minViolations="2" minConformance="2">
+          <StaticAlarmRanges>
+            <WarningRange maxInclusive="100"/>
+          </StaticAlarmRanges>
+        </DefaultAlarm>
+      </IntegerParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -1131,6 +1157,9 @@
       <Parameter name="AlSamples" parameterTypeRef="AlSamplesType"/>
       <Parameter name="AlOpt" parameterTypeRef="AlOptType"/>
       <Parameter name="AlDelay" parameterTypeRef="AlDelayType"/>
+      <Parameter name="TrRate" parameterTypeRef="TrRateType"/>
+      <Parameter name="TrPct" parameterTypeRef="TrPctType"/>
+      <Parameter name="TrSticky" parameterTypeRef="TrStickyType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1924,6 +1953,20 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="510"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Alarms on how values change, and one raised only after two
+           samples in alarm and cleared only after two out of it. -->
+      <SequenceContainer name="Trend">
+        <EntryList>
+          <ParameterRefEntry parameterRef="TrRate"/>
+          <ParameterRefEntry parameterRef="TrPct"/>
+          <ParameterRefEntry parameterRef="TrSticky"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="520"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
