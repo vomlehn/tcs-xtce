@@ -276,7 +276,7 @@ def main() -> None:
         if rng.random() < 0.6:
             apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
-                               380, 390, 395, 395, 400, 400,
+                               380, 390, 395, 395, 400, 400, 410,
                                rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
@@ -316,6 +316,15 @@ def main() -> None:
                 data += tally(rng)
             elif apid == 380 and rng.random() < 0.9:
                 data += encodings(rng)
+            elif apid == 410 and rng.random() < 0.9:
+                # Times: the calibrated one mostly inside its spline, text
+                # mostly ASCII.
+                cal = rng.choice([rng.randrange(1001), rng.randrange(1 << 16)])
+                text = bytes(rng.choice(b"0123456789-T:Z\xe9")
+                             for _ in range(rng.randrange(21)))
+                data += (rng.randbytes(7) + cal.to_bytes(2, "big")
+                         + rng.randbytes(8) + text.ljust(20, b"\0")
+                         + rng.randbytes(6))
             elif apid == 400 and rng.random() < 0.9:
                 body, whole = checked(rng, data)
                 data = body if whole else data + body

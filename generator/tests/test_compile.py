@@ -1537,6 +1537,62 @@ class ErrorDetectionTests(unittest.TestCase):
                       self.rejected(text))
 
 
+def timed(time_type: str) -> str:
+    """A mission with one packet holding a parameter of time type T."""
+    return mission(tm=f"""
+        <ParameterTypeSet>{time_type}</ParameterTypeSet>
+        <ParameterSet><Parameter name="X" parameterTypeRef="T"/>
+        </ParameterSet>
+        <ContainerSet><SequenceContainer name="P">
+          <EntryList><ParameterRefEntry parameterRef="X"/></EntryList>
+        </SequenceContainer></ContainerSet>""")
+
+
+class TimeTests(unittest.TestCase):
+    def vtype(self, text: str):
+        return compile_xml(text).nodes[0].fields[0][1].vtype
+
+    def test_units_scale_and_offset(self):
+        for units, factor in (("milliseconds", 1e-3), ("days", 86400.0),
+                              ("years", 31556952.0)):
+            vt = self.vtype(timed('<RelativeTimeParameterType name="T">'
+                                  f'<Encoding units="{units}" scale="2" '
+                                  'offset="3"><IntegerDataEncoding '
+                                  'sizeInBits="16"/></Encoding>'
+                                  '</RelativeTimeParameterType>'))
+            self.assertEqual(vt.calibrator.terms,
+                             [(3 * factor, 0), (2 * factor, 1)])
+
+    def test_calibrator_inside_the_encoding(self):
+        vt = self.vtype(timed('<RelativeTimeParameterType name="T"><Encoding '
+                              'units="minutes" offset="1"><IntegerDataEncoding '
+                              'sizeInBits="8"><DefaultCalibrator>'
+                              '<SplineCalibrator><SplinePoint raw="0" '
+                              'calibrated="0"/><SplinePoint raw="10" '
+                              'calibrated="1"/></SplineCalibrator>'
+                              '</DefaultCalibrator></IntegerDataEncoding>'
+                              '</Encoding></RelativeTimeParameterType>'))
+        self.assertIsInstance(vt.calibrator, Spline)
+        self.assertEqual(vt.calibrator.points, [(0, 60.0), (10, 120.0)])
+
+    def test_text_and_bytes(self):
+        vt = self.vtype(
+            timed('<AbsoluteTimeParameterType name="T"><Encoding>'
+                  "<StringDataEncoding><Variable maxSizeInBits=\"256\">"
+                  "<TerminationChar>00</TerminationChar></Variable>"
+                  "</StringDataEncoding></Encoding><ReferenceTime><Epoch>J2000"
+                  "</Epoch></ReferenceTime></AbsoluteTimeParameterType>"))
+        self.assertEqual(vt.kind, "string")
+        self.assertIn("since epoch J2000", vt.doc)
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(timed('<AbsoluteTimeParameterType name="T"><Encoding '
+                              'scale="2"><BinaryDataEncoding><SizeInBits>'
+                              '<FixedValue>8</FixedValue></SizeInBits>'
+                              '</BinaryDataEncoding></Encoding>'
+                              '</AbsoluteTimeParameterType>'))
+        self.assertIn("with units, scale or offset", str(cm.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -446,6 +446,19 @@ The runtimes keep the existing ``uint_order`` for the common cases and
 call the general ``uint_bits`` only for the others, so ordinary packets
 pay nothing for it.
 
+Times
+-----
+
+Every time with a numeric encoding is a double of seconds. The encoding's
+calibrator, ``scale``, ``offset`` and ``units`` compose into one
+calibrator (an affine map applied to a polynomial is a polynomial, to a
+spline a spline, and so on), so encoding inverts them the way it inverts
+any calibrator, and nothing in the emitters or runtimes knows about time.
+Seconds keep one meaning across a mission whatever units its documents
+use; the cost is the precision of a double, which a 64-bit nanosecond
+counter exceeds. Text and binary times are kept as they are, because
+XTCE only describes their meaning through transform algorithms.
+
 Error detection
 ---------------
 

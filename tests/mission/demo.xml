@@ -5,8 +5,8 @@
      calibrator kinds, commands with argument assignments, arrays, repeated
      entries, sizes and counts given by other fields, aggregates, every bit
      and byte order, integer and float encoding and character set, context
-     calibrators, math operations and splines of any order, and every kind
-     of error detection. -->
+     calibrators, math operations and splines of any order, every kind of
+     error detection, and times in every unit and encoding. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Demo">
   <TelemetryMetaData>
     <ParameterTypeSet>
@@ -722,6 +722,53 @@
       <IntegerParameterType name="U7" signed="false">
         <IntegerDataEncoding sizeInBits="7"/>
       </IntegerParameterType>
+      <!-- Times: every unit, a calibrated time, text and raw bytes. -->
+      <AbsoluteTimeParameterType name="MilliTimeType">
+        <Encoding units="milliseconds">
+          <IntegerDataEncoding sizeInBits="32"/>
+        </Encoding>
+        <ReferenceTime><Epoch>UNIX</Epoch></ReferenceTime>
+      </AbsoluteTimeParameterType>
+      <RelativeTimeParameterType name="DaysType">
+        <Encoding units="days"><IntegerDataEncoding sizeInBits="16"/></Encoding>
+      </RelativeTimeParameterType>
+      <RelativeTimeParameterType name="MonthsType">
+        <Encoding units="months"><IntegerDataEncoding sizeInBits="8"/></Encoding>
+      </RelativeTimeParameterType>
+      <!-- (2 x / 10 + 1) minutes -->
+      <RelativeTimeParameterType name="CalTimeType">
+        <Encoding units="minutes" scale="2" offset="1">
+          <IntegerDataEncoding sizeInBits="16">
+            <DefaultCalibrator>
+              <SplineCalibrator>
+                <SplinePoint raw="0" calibrated="0"/>
+                <SplinePoint raw="1000" calibrated="100"/>
+              </SplineCalibrator>
+            </DefaultCalibrator>
+          </IntegerDataEncoding>
+        </Encoding>
+      </RelativeTimeParameterType>
+      <RelativeTimeParameterType name="PicoType">
+        <Encoding units="picoseconds">
+          <FloatDataEncoding sizeInBits="64"/>
+        </Encoding>
+      </RelativeTimeParameterType>
+      <AbsoluteTimeParameterType name="IsoTimeType">
+        <Encoding>
+          <StringDataEncoding encoding="US-ASCII">
+            <SizeInBits><Fixed><FixedValue>160</FixedValue></Fixed></SizeInBits>
+          </StringDataEncoding>
+        </Encoding>
+        <ReferenceTime><Epoch>1958-01-01T00:00:00Z</Epoch></ReferenceTime>
+      </AbsoluteTimeParameterType>
+      <AbsoluteTimeParameterType name="RawTimeType">
+        <Encoding>
+          <BinaryDataEncoding>
+            <SizeInBits><FixedValue>48</FixedValue></SizeInBits>
+          </BinaryDataEncoding>
+        </Encoding>
+        <ReferenceTime><Epoch>TAI</Epoch></ReferenceTime>
+      </AbsoluteTimeParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -845,6 +892,13 @@
       <Parameter name="Crc" parameterTypeRef="U16"/>
       <Parameter name="Tail" parameterTypeRef="U16"/>
       <Parameter name="SendCheck" parameterTypeRef="CheckDigit"/>
+      <Parameter name="MilliTime" parameterTypeRef="MilliTimeType"/>
+      <Parameter name="Days" parameterTypeRef="DaysType"/>
+      <Parameter name="Months" parameterTypeRef="MonthsType"/>
+      <Parameter name="CalTime" parameterTypeRef="CalTimeType"/>
+      <Parameter name="Pico" parameterTypeRef="PicoType"/>
+      <Parameter name="IsoTime" parameterTypeRef="IsoTimeType"/>
+      <Parameter name="RawTime" parameterTypeRef="RawTimeType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1342,6 +1396,22 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="400"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="Times">
+        <EntryList>
+          <ParameterRefEntry parameterRef="MilliTime"/>
+          <ParameterRefEntry parameterRef="Days"/>
+          <ParameterRefEntry parameterRef="Months"/>
+          <ParameterRefEntry parameterRef="CalTime"/>
+          <ParameterRefEntry parameterRef="Pico"/>
+          <ParameterRefEntry parameterRef="IsoTime"/>
+          <ParameterRefEntry parameterRef="RawTime"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="410"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

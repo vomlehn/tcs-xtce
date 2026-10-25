@@ -637,33 +637,46 @@ class Compiler:
                 raise Unsupported(f"{where}: {s!r} does not fit its encoding")
 
     def time_type(self, key: Key, base: str, t, path: Key, where: str) -> VType:
-        """Times are seconds: ``scale * raw + offset`` from the reference time.
-        """
+        """Times are seconds from the reference time: the encoding's raw
+        value, calibrated, then ``scale * value + offset`` in its units.  A
+        time encoded as a string or as binary data keeps that text or those
+        bytes."""
         enc = t.encoding
         if enc is None:
             raise Unsupported(f"{where}: time type without Encoding")
         units = enc.units.value if enc.units else "seconds"
-        if units != "seconds":
-            raise Unsupported(f"{where}: time units {units}")
-        e, cal = self.encoding(enc.choice.name, enc.choice.value, path, where)
-        if not isinstance(e, (IntEnc, FloatEnc)):
-            raise Unsupported(f"{where}: time with {enc.choice.name}")
-        if cal is not None:
-            raise Unsupported(f"{where}: calibrator inside a time encoding")
         scale = enc.scale if enc.scale is not None else 1.0
         offset = enc.offset if enc.offset is not None else 0.0
-        if scale != 1.0 or offset != 0.0:
-            cal = Polynomial([(offset, 0), (scale, 1)])
-        doc = "seconds"
-        ref = t.reference_time
-        if ref is not None:
-            if ref.choice.name == "Epoch":
-                doc = f"seconds since epoch {ref.choice.value}"
-            elif ref.choice.name == "OffsetFrom":
-                doc = f"seconds after {ref.choice.value.parameter_ref}"
         what = "absolute" if base == "AbsoluteTime" else "relative"
+        ref = self.reference_time(t.reference_time, where)
+        e, cal = self.encoding(enc.choice.name, enc.choice.value, path, where)
+        if isinstance(e, (StringEnc, BinaryEnc)):
+            if (units, scale, offset) != ("seconds", 1.0, 0.0):
+                raise Unsupported(f"{where}: a time encoded as "
+                                  f"{enc.choice.name} with units, scale or "
+                                  "offset")
+            kind = "string" if isinstance(e, StringEnc) else "binary"
+            return VType(key=qname(key), name=t.name, kind=kind, enc=e,
+                         doc=f"{what} time as encoded, {ref}")
+        a = scale * TIME_UNITS[units]
+        cal = affine(cal, a, offset * TIME_UNITS[units])
         return VType(key=qname(key), name=t.name, kind="float", enc=e,
-                     calibrator=cal, doc=f"{what} time, {doc}")
+                     calibrator=cal, doc=f"{what} time, seconds {ref}")
+
+    @staticmethod
+    def reference_time(ref, where: str) -> str:
+        """What a time is reckoned from, for documentation."""
+        if ref is None:
+            return "from an unstated time"
+        if ref.choice.name == "OffsetFrom":
+            return f"after {ref.choice.value.parameter_ref}"
+        epoch = str(ref.choice.value).strip()
+        if (epoch not in ("TAI", "J2000", "UNIX", "GPS")
+                and not re.fullmatch(r"-?\d{4,}-\d\d-\d\d(T\d\d:\d\d:\d\d"
+                                     r"(\.\d+)?)?(Z|[+-]\d\d:\d\d)?", epoch)):
+            raise Unsupported(f"{where}: epoch {epoch!r} is not a date, a date "
+                              "and time, or TAI, J2000, UNIX or GPS")
+        return f"since epoch {epoch}"
 
     def array_type(self, key: Key, table: dict, path: Key, t,
                    where: str) -> VType:
@@ -1983,6 +1996,35 @@ def edc_items(container) -> list:
         return []
     return [(ch.name, ch.value) for ch in edc.items
             if ch.value.parameter_ref is not None]
+
+
+# Seconds in each XTCE time unit.  XTCE leaves months and years to the
+# system: they are the Gregorian calendar's mean month and year (365.2425
+# days).
+TIME_UNITS = {"seconds": 1.0, "milliseconds": 1e-3, "microseconds": 1e-6,
+              "nanoseconds": 1e-9, "picoseconds": 1e-12, "minutes": 60.0,
+              "hours": 3600.0, "days": 86400.0, "months": 2629746.0,
+              "years": 31556952.0}
+
+
+def affine(cal, a: float, b: float):
+    """``a * cal(x) + b``, as a calibrator (None for the identity)."""
+    if (a, b) == (1.0, 0.0):
+        return cal
+    if cal is None:
+        return Polynomial([(b, 0), (a, 1)])
+    if isinstance(cal, Polynomial):
+        terms = [(a * c, e) for c, e in cal.terms]
+        if b:
+            terms.append((b, 0))
+        return Polynomial(terms)
+    if isinstance(cal, Spline):
+        return dataclasses.replace(
+            cal, points=[(r, a * c + b) for r, c in cal.points])
+    if isinstance(cal, MathOp):
+        return MathOp(("+", ("*", cal.expr, ("const", a)), ("const", b)))
+    return ContextCal([(p, mc, affine(c, a, b)) for p, mc, c in cal.cases],
+                      affine(cal.default, a, b))
 
 
 def int_range(e: IntEnc) -> tuple[int, int]:

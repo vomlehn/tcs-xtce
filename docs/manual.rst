@@ -1580,10 +1580,29 @@ Binary
    are not supported.
 
 Times
-   The ``Encoding`` (integer or float, ``units="seconds"``) with
-   ``scale`` and ``offset`` gives seconds relative to the
-   ``ReferenceTime``. The reference time is recorded in the generated
-   documentation but not applied.
+   ``AbsoluteTime`` and ``RelativeTime`` types with an integer or float
+   ``Encoding`` are seconds, as doubles: the encoding's raw value,
+   calibrated if it has a calibrator, then ``scale * value + offset`` in
+   the ``Encoding``'s ``units``, converted to seconds. Every unit is
+   supported; XTCE leaves months and years to the system, and tcs-xtce
+   takes the Gregorian calendar's mean month (2,629,746 seconds) and year
+   (365.2425 days). Encoding inverts the whole chain, so it needs an
+   invertible calibrator, as for other values. A time's value is a double,
+   so an integer encoding of more than 53 bits, such as a 64-bit count of
+   nanoseconds, loses its low bits.
+
+   A time with a ``StringDataEncoding`` holds its text, and one with a
+   ``BinaryDataEncoding`` its bytes, unconverted: XTCE expects such times
+   to be described with transform algorithms. Neither may have ``units``,
+   ``scale`` or ``offset``.
+
+   The ``ReferenceTime`` (an ``Epoch``: ``TAI``, ``J2000``, ``UNIX``,
+   ``GPS``, a date or a date and time; or an ``OffsetFrom`` another
+   parameter) is recorded in the generated documentation and not applied:
+   a value is the seconds from its reference, and converting between time
+   scales such as TAI and UTC needs leap-second tables, which are outside
+   a codec. An epoch that is none of those forms is reported. The demo's
+   ``Times`` packet has one time of each kind.
 
 Containers
    ``SequenceContainer`` entry lists with ``ParameterRefEntry``,

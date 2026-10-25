@@ -2017,10 +2017,28 @@ other entries, where only the sender knows their size; those packets
 are not supported.</p>
 </dd>
 <dt>Times</dt>
-<dd>The <tt class="docutils literal">Encoding</tt> (integer or float, <tt class="docutils literal"><span class="pre">units=&quot;seconds&quot;</span></tt>) with
-<tt class="docutils literal">scale</tt> and <tt class="docutils literal">offset</tt> gives seconds relative to the
-<tt class="docutils literal">ReferenceTime</tt>. The reference time is recorded in the generated
-documentation but not applied.</dd>
+<dd><p class="first"><tt class="docutils literal">AbsoluteTime</tt> and <tt class="docutils literal">RelativeTime</tt> types with an integer or float
+<tt class="docutils literal">Encoding</tt> are seconds, as doubles: the encoding's raw value,
+calibrated if it has a calibrator, then <tt class="docutils literal">scale * value + offset</tt> in
+the <tt class="docutils literal">Encoding</tt>'s <tt class="docutils literal">units</tt>, converted to seconds. Every unit is
+supported; XTCE leaves months and years to the system, and tcs-xtce
+takes the Gregorian calendar's mean month (2,629,746 seconds) and year
+(365.2425 days). Encoding inverts the whole chain, so it needs an
+invertible calibrator, as for other values. A time's value is a double,
+so an integer encoding of more than 53 bits, such as a 64-bit count of
+nanoseconds, loses its low bits.</p>
+<p>A time with a <tt class="docutils literal">StringDataEncoding</tt> holds its text, and one with a
+<tt class="docutils literal">BinaryDataEncoding</tt> its bytes, unconverted: XTCE expects such times
+to be described with transform algorithms. Neither may have <tt class="docutils literal">units</tt>,
+<tt class="docutils literal">scale</tt> or <tt class="docutils literal">offset</tt>.</p>
+<p class="last">The <tt class="docutils literal">ReferenceTime</tt> (an <tt class="docutils literal">Epoch</tt>: <tt class="docutils literal">TAI</tt>, <tt class="docutils literal">J2000</tt>, <tt class="docutils literal">UNIX</tt>,
+<tt class="docutils literal">GPS</tt>, a date or a date and time; or an <tt class="docutils literal">OffsetFrom</tt> another
+parameter) is recorded in the generated documentation and not applied:
+a value is the seconds from its reference, and converting between time
+scales such as TAI and UTC needs leap-second tables, which are outside
+a codec. An epoch that is none of those forms is reported. The demo's
+<tt class="docutils literal">Times</tt> packet has one time of each kind.</p>
+</dd>
 <dt>Containers</dt>
 <dd><tt class="docutils literal">SequenceContainer</tt> entry lists with <tt class="docutils literal">ParameterRefEntry</tt>,
 <tt class="docutils literal">ArrayParameterRefEntry</tt> and <tt class="docutils literal">ContainerRefEntry</tt>. Included

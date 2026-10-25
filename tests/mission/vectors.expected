@@ -134,3 +134,7 @@ error:BadChecksum | -
 error:BadChecksum | -
 Send{seq_count=5, digits=79927398} | 112ec00500050c7992739820
 error:BadChecksum | -
+Times{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, milli_time=1234.567, days=259200.0, months=5259492.0, cal_time=660.0, pico=2.5, iso_time="2026-10-25T12:00:00Z", raw_time=0x0102030405ff} | 099ac02a002a0012d68700030200324282309ce5400000323032362d31302d32355431323a30303a30305a0102030405ff
+Times{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, milli_time=0.0, days=5662224000.0, months=670585230.0, cal_time=12060.0, pico=-1e-12, iso_time="", raw_time=0x000000000000} | 099ac02a002a00000000ffffff03e8bff00000000000000000000000000000000000000000000000000000000000000000
+error:Calibration | -
+error:InvalidString | -
