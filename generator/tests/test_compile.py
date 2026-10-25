@@ -14,7 +14,7 @@ from xtcepkt.compile import (  # noqa: E402
     compile_document, compile_documents, item_bits, member_path, value_range)
 from xtcepkt.model import (  # noqa: E402
     MAX_FIELD_BITS, AnyOf, ContextCal, Fill, Fixed, Index, MathOp, Pad, Require,
-    Seek, Spline, Unsupported, walk)
+    Seek, Segment, Spline, Unsupported, Value, walk)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -1822,3 +1822,71 @@ class LengthTests(unittest.TestCase):
             compile_xml(text)
         self.assertIn("a criterion or assignment on packet length field Len",
                       str(cm.exception))
+
+
+def segment_mission(entries: str) -> str:
+    """Telemetry with a 16-bit W, a variable-size binary V and a container
+    P whose entries are ``entries``."""
+    return mission(tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U16" signed="false">
+          <IntegerDataEncoding sizeInBits="16"/></IntegerParameterType>
+          <BinaryParameterType name="T"><BinaryDataEncoding><SizeInBits>
+          <DynamicValue><ParameterInstanceRef parameterRef="W"/>
+          </DynamicValue></SizeInBits></BinaryDataEncoding>
+          </BinaryParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="W" parameterTypeRef="U16"/>
+          <Parameter name="V" parameterTypeRef="T"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="P"><EntryList>{entries}</EntryList>
+          </SequenceContainer>
+        </ContainerSet>""")
+
+
+def seg(name: str, bits: int, order: str = "") -> str:
+    order = f' order="{order}"' if order else ""
+    return (f'<ParameterSegmentRefEntry parameterRef="{name}" '
+            f'sizeInBits="{bits}"{order}/>')
+
+
+class SegmentTests(unittest.TestCase):
+    def items(self, entries: str) -> list:
+        return compile_xml(segment_mission(entries)).nodes[0].items
+
+    def test_assembled(self):
+        a, b, v = self.items(seg("W", 4) + seg("W", 12))
+        self.assertIsInstance(a, Segment)
+        self.assertEqual((a.bits, a.shift, a.first), (4, 12, True))
+        self.assertEqual((b.bits, b.shift, b.first), (12, 0, False))
+        self.assertIsInstance(v, Value)
+        self.assertEqual(v.assembled, 16)
+        self.assertIs(v.local, a.local)
+
+    def test_order(self):
+        a, b, _ = self.items(seg("W", 4, "2") + seg("W", 12, "1"))
+        self.assertEqual((a.shift, b.shift), (0, 4))
+        self.assertTrue(a.first)
+
+    def test_raw(self):
+        # Half of W, and a segment of a value that varies in size.
+        n = compile_xml(segment_mission(
+            '<ParameterRefEntry parameterRef="W"/>' + seg("W", 8)
+            + seg("V", 8))).nodes[0]
+        self.assertEqual([lc.name for _, lc in n.fields],
+                         ["W", "WSegment0", "VSegment0"])
+        self.assertEqual(n.fields[1][1].vtype.enc.bits, 8)
+
+    def test_rejected(self):
+        for entries, why in (
+                (seg("W", 8, "1") + seg("W", 8, "1"),
+                 "segments of /Sat/W whose order is missing or repeated"),
+                (seg("W", 8) + seg("W", 12),
+                 "the segments of /Sat/W have 20 bits, and its encoding 16"),
+                (seg("V", 70), "a 70-bit segment of /Sat/V")):
+            with self.subTest(why=why):
+                with self.assertRaises(Unsupported) as cm:
+                    self.items(entries)
+                self.assertIn(why, str(cm.exception))

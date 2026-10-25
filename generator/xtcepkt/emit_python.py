@@ -8,7 +8,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
-                    Require, Fill)
+                    Require, Fill, Segment)
 
 
 def pstr(s: str) -> str:
@@ -481,8 +481,17 @@ class PythonEmitter:
                 self.require(it, lambda lc: f"v{lc.id}", depth)
             elif isinstance(it, Fill):
                 self.fill(it, "r", self.read_ref, depth)
+            elif isinstance(it, Segment):
+                lc = it.local
+                self.line(f"s{lc.id} {'=' if it.first else '|='} "
+                          f"r.uint({it.bits}, {pstr(lc.name)}) << {it.shift}",
+                          depth)
             elif isinstance(it, Value):
                 lc = it.local
+                if it.assembled:
+                    # Decode the value from its segments' bits.
+                    self.line(f"r, r{lc.id} = (pk.segment_reader(s{lc.id}, "
+                              f"{it.assembled}), r)", depth)
                 if lc.checksum:
                     self.line(f"p{lc.id} = r.pos", depth)
                 self.line(
@@ -492,6 +501,8 @@ class PythonEmitter:
                 if lc.length is not None:
                     self.line(f"r.limit(v{lc.id}, {lc.length}, "
                               f"{pstr(lc.name)})", depth)
+                if it.assembled:
+                    self.line(f"r = r{lc.id}", depth)
             elif isinstance(it, Cond):
                 if not nested:
                     for v in walk(it.items):
@@ -530,6 +541,20 @@ class PythonEmitter:
                     for c in it.criteria)
                 self.line(f"if {cond}:", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
+            elif isinstance(it, Segment):
+                lc = it.local
+                if it.first:
+                    # Encode the whole value, then write each segment's bits.
+                    self.line(f"w, w{lc.id} = pk.segment_writer(), w", depth)
+                    self.write_value(lc.vtype, self.place(n, lc, names),
+                                     pstr(lc.name), self.write_ref(n, names),
+                                     depth)
+                    self.line(f"s{lc.id}, w = pk.segment_bits(w, {it.total}), "
+                              f"w{lc.id}", depth)
+                self.line(f"w.uint({it.bits}, (s{lc.id} >> {it.shift}) & "
+                          f"0x{(1 << it.bits) - 1:x})", depth)
+            elif it.assembled:
+                pass
             elif it.local.computed:
                 lc = it.local
                 self.line(f"l{lc.id} = w.pos", depth)

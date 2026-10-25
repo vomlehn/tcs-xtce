@@ -11,7 +11,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
-                    Value, VType, Require, Fill)
+                    Value, VType, Require, Fill, Segment)
 
 
 def rstr(s: str) -> str:
@@ -613,13 +613,27 @@ class RustEmitter:
                 self.require(it, lambda lc: f"v{lc.id}", depth)
             elif isinstance(it, Fill):
                 self.fill(it, "r", self.read_ref, depth)
+            elif isinstance(it, Segment):
+                lc = it.local
+                part = (f"(r.uint({it.bits}, {rstr(lc.name)})? << {it.shift})")
+                self.line(f"let s{lc.id} = "
+                          f"{part if it.first else f's{lc.id} | {part}'};",
+                          depth)
             elif isinstance(it, Value):
                 lc = it.local
                 if lc.checksum:
                     self.line(f"let p{lc.id} = r.position();", depth)
                 expr = read_expr(lc.vtype, rstr(lc.name), self.read_ref,
                                  self.alloc)
-                if assign:
+                if it.assembled:
+                    # Decode the value from its segments' bits.
+                    self.line(f"let mut b{lc.id} = [0u8; 8];", depth)
+                    self.line(f"let v{lc.id} = {{", depth)
+                    self.line(f"let mut r = pk::segment_reader(&mut b{lc.id}, "
+                              f"s{lc.id}, {it.assembled});", depth + 1)
+                    self.line(expr, depth + 1)
+                    self.line("};", depth)
+                elif assign:
                     self.line(f"v{lc.id} = Some({expr});", depth)
                 else:
                     self.line(f"let v{lc.id} = {expr};", depth)
@@ -665,6 +679,19 @@ class RustEmitter:
                 self.line(f"if {conjunction(conds)} {{", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
                 self.line("}", depth)
+            elif isinstance(it, Segment):
+                lc = it.local
+                if it.first:
+                    # Encode the whole value, then write each segment's bits.
+                    self.line(f"let t{lc.id} = w.stash({it.total});", depth)
+                    self.line(write_stmt(lc.vtype, self.place(n, lc, names),
+                                         rstr(lc.name),
+                                         self.write_ref(n, names)), depth)
+                    self.line(f"let s{lc.id} = w.unstash(t{lc.id});", depth)
+                self.line(f"w.uint({it.bits}, (s{lc.id} >> {it.shift}) & "
+                          f"0x{(1 << it.bits) - 1:x});", depth)
+            elif it.assembled:
+                pass
             elif it.local.computed:
                 lc = it.local
                 self.line(f"let l{lc.id} = w.position();", depth)

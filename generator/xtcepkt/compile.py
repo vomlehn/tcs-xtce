@@ -26,7 +26,7 @@ from .model import (MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc,
                     Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
                     Term, Unsupported, Value, VType, ref_text, term_locals,
                     walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp,
-                    Require, ValueRef, needs_binding, Fill)
+                    Require, ValueRef, needs_binding, Fill, Segment)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -1327,11 +1327,12 @@ class Compiler:
         """Items for a container's entries.  ``scope`` lists the values read
         so far (base containers first) and grows as entries are added."""
         items: list[Item] = []
+        segs: dict = {}
         for ch in sc.entry_list.items:
             e = ch.value
             where = f"container {qname(stack[-1])}"
             if (ch.name not in ("ParameterRefEntry", "ContainerRefEntry",
-                                "ArrayParameterRefEntry")):
+                                "ArrayParameterRefEntry") + SEGMENTS):
                 raise Unsupported(f"{where}: {ch.name}")
             if (ch.name == "ContainerRefEntry"
                     and e.location_in_container_in_bits is not None
@@ -1346,7 +1347,13 @@ class Compiler:
             out = items if cond is None else []
             out += self.location(e.location_in_container_in_bits, start, path,
                                  scope, where)
-            if ch.name != "ContainerRefEntry":
+            if ch.name in SEGMENTS:
+                if out and isinstance(out[-1], EndSeek):
+                    out[-1] = self.end_seek(out[-1], sc, None, where,
+                                            e.size_in_bits)
+                out += self.segment(ch.name, e, path, where, segs,
+                                    cond is not None, scope)
+            elif ch.name != "ContainerRefEntry":
                 local = self.subset(self.param_local(e.parameter_ref, path), e,
                                     path, where)
                 local = self.bind(self.repeat(local, e, path, where), scope,
@@ -1403,7 +1410,101 @@ class Compiler:
                     if isinstance(it, Value):
                         it.local.optional = True
                 items.append(Cond(cond, out))
+        self.raw_segments(items, segs, scope)
         return items
+
+    def segment(self, name: str, e, path: Key, where: str, segs: dict,
+                cond: bool, scope: list) -> list[Item]:
+        """Items for a segment entry.  The segments of a parameter in one
+        entry list that make up its whole encoding (at most 64 bits) are
+        assembled into the value, which is in ``scope`` after its last
+        segment; ``segs`` keeps those still incomplete, which
+        raw_segments makes fields of their own.  Container and stream
+        segments, and segments with an IncludeCondition, are always their
+        own fields: the rest of the value is in other packets."""
+        if e.repeat_entry is not None:
+            raise Unsupported(f"{where}: a repeated {name}")
+        bits = e.size_in_bits
+        if name == "ParameterSegmentRefEntry":
+            pkey = self.resolve(e.parameter_ref, path, self.params, "parameter")
+            ref = qname(pkey)
+        elif name == "ContainerSegmentRefEntry":
+            ref = qname(self.resolve(e.container_ref, path, self.containers,
+                                     "container"))
+        else:
+            ref = e.stream_ref
+        counts = segs.setdefault("#counts", {})
+        k = counts.get(ref, 0)
+        counts[ref] = k + 1
+        if e.order is not None:
+            k = e.order
+        if name == "ParameterSegmentRefEntry" and not cond:
+            group = segs.get(ref)
+            if group is None:
+                local = self.param_local(e.parameter_ref, path)
+                local.length = None
+                total = fixed_bits(local.vtype)
+                group = segs[ref] = (local, total, [])
+            local, total, parts = group
+            seg = Segment(local, bits, total or 0)
+            parts.append((seg, e.order, k))
+            got = sum(s.bits for s, _, _ in parts)
+            if total is not None and total <= 64 and got >= total:
+                if got > total:
+                    raise Unsupported(f"{where}: the segments of {ref} have "
+                                      f"{got} bits, and its encoding {total}")
+                self.assemble(parts, where, ref)
+                del segs[ref]
+                scope.append(local)
+                return [seg, Value(local, assembled=total)]
+            return [seg]
+        lc = self.raw_segment(ref, k, bits, where)
+        scope.append(lc)
+        return [Value(lc)]
+
+    @staticmethod
+    def assemble(parts: list, where: str, ref: str) -> None:
+        """Places each Segment of a value in its encoding: by their order
+        attributes, or in document order without them."""
+        orders = [o for _, o, _ in parts]
+        if all(o is None for o in orders):
+            ranked = [s for s, _, _ in parts]
+        elif None in orders or len(set(orders)) != len(orders):
+            raise Unsupported(f"{where}: segments of {ref} whose order is "
+                              "missing or repeated")
+        else:
+            ranked = [s for s, _, _ in sorted(parts, key=lambda x: x[1])]
+        left = parts[0][0].total
+        for s in ranked:
+            left -= s.bits
+            s.shift = left
+        parts[0][0].first = True
+
+    def raw_segment(self, ref: str, k: int, bits: int, where: str) -> Local:
+        """A field that holds a segment's bits as they are."""
+        if bits <= 64:
+            vt = VType(key=f"{ref} segment", name=f"segment of {ref}",
+                       kind="int", enc=IntEnc(bits))
+        elif bits % 8 == 0 and bits <= MAX_FIELD_BITS:
+            vt = VType(key=f"{ref} segment", name=f"segment of {ref}",
+                       kind="binary", enc=BinaryEnc(bits))
+        else:
+            raise Unsupported(f"{where}: a {bits}-bit segment of {ref}")
+        vt.doc = f"segment {k} of {ref}, its bits as they are"
+        name = ref.rsplit("/", 1)[-1]
+        return self.local(f"{name}Segment{k}", f"{ref}#segment{k}", vt)
+
+    def raw_segments(self, items: list, segs: dict, scope: list) -> None:
+        """Makes fields of the segments of values that an entry list holds
+        only part of."""
+        for ref, group in segs.items():
+            if ref == "#counts":
+                continue
+            for seg, _, k in group[2]:
+                lc = self.raw_segment(ref, k, seg.bits, "")
+                i = next(i for i, it in enumerate(items) if it is seg)
+                items[i] = Value(lc)
+                scope.append(lc)
 
     def include_chain(self, ckey: Key, stack: list, where: str) -> list:
         """(path, container, key) of an included container and its bases,
@@ -1420,10 +1521,12 @@ class Compiler:
             key = self.resolve(c.base_container.container_ref, path,
                                self.containers, "container")
 
-    def end_seek(self, es: EndSeek, sc, local: Local, where: str) -> Seek:
-        """The Seek that ends ``local`` ``es.offset`` bits before the end of
-        container ``sc``, which must have a fixed size: otherwise its end
-        would depend on where its entries are."""
+    def end_seek(self, es: EndSeek, sc, local: Optional[Local], where: str,
+                 bits: int = 0) -> Seek:
+        """The Seek that ends ``local`` (or a segment of ``bits``)
+        ``es.offset`` bits before the end of container ``sc``, which must
+        have a fixed size: otherwise its end would depend on where its
+        entries are."""
         be = sc.binary_encoding
         size = (
             self.int_value(be.size_in_bits, (), "container SizeInBits", where)
@@ -1431,6 +1534,8 @@ class Compiler:
         if not isinstance(size, int):
             raise Unsupported(f"{where}: a location from the end of a "
                               "container without a fixed SizeInBits")
+        if local is None:
+            return Seek(es.start, size - es.offset - bits)
         vt = local.vtype
         if vt.dyn is not None or is_rest(vt):
             raise Unsupported(f"{where}: a location from the container's end "
@@ -1526,6 +1631,8 @@ class Compiler:
             elif isinstance(it, Pad):
                 skip += it.bits
                 pos = pos + it.bits if pos is not None else None
+            elif isinstance(it, Segment):
+                raise Unsupported(f"{what} has a value in segments")
             else:
                 vt = it.local.vtype
                 if vt.dyn is not None:
@@ -1961,11 +2068,12 @@ class Compiler:
             return f"{qname(scope[name][0])}#{name}"
 
         items: list[Item] = []
+        segs: dict = {}
         for ch in cc.entry_list.items:
             e = ch.value
             entries = ("ArgumentRefEntry", "ArrayArgumentRefEntry",
                        "ParameterRefEntry", "ArrayParameterRefEntry")
-            if ch.name not in entries + ("FixedValueEntry",):
+            if ch.name not in entries + ("FixedValueEntry",) + SEGMENTS:
                 raise Unsupported(f"{where}: {ch.name} in a CommandContainer")
             cond = None
             if e.include_condition is not None:
@@ -1974,7 +2082,10 @@ class Compiler:
             out = items if cond is None else []
             out += self.location(e.location_in_container_in_bits, 0, path,
                                  values, where, arg_key)
-            if ch.name in entries:
+            if ch.name in SEGMENTS:
+                out += self.segment(ch.name, e, path, where, segs,
+                                    cond is not None, values)
+            elif ch.name in entries:
                 if "Argument" in ch.name:
                     local = self.arg_local(scope, e.argument_ref, where)
                 else:
@@ -1991,6 +2102,7 @@ class Compiler:
                     if isinstance(it, Value):
                         it.local.optional = True
                 items.append(Cond(cond, out))
+        self.raw_segments(items, segs, values)
         return items
 
     def arg_key_of(self, scope: dict, name: str, where: str) -> str:
@@ -2236,6 +2348,10 @@ def bounded(vt: VType, b: DynSize, rng: tuple[int, int]) -> VType:
     return dataclasses.replace(vt, enc=enc)
 
 
+SEGMENTS = ("ParameterSegmentRefEntry", "ContainerSegmentRefEntry",
+            "StreamSegmentEntry")
+
+
 def fixed_bits(vt: VType) -> Optional[int]:
     """The bits a value of this type always occupies, or None if it varies."""
     e = vt.enc
@@ -2277,8 +2393,8 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
         elif isinstance(it, Mark):
             marks[it.id] = pos
         else:
-            bits = (fixed_bits(it.local.vtype) if isinstance(it, Value)
-                    else it.bits)
+            bits = (it.bits if not isinstance(it, Value) else 0 if it.assembled
+                    else fixed_bits(it.local.vtype))
             if bits is None:
                 return None
             pos += bits
@@ -2391,7 +2507,7 @@ def max_bits(items: list[Item]) -> int:
         elif isinstance(it, Mark):
             marks[it.id] = pos
         elif isinstance(it, Value):
-            pos += item_bits(it.local.vtype)
+            pos += 0 if it.assembled else item_bits(it.local.vtype)
         else:
             pos += it.bits
         extent = max(extent, pos)

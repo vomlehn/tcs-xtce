@@ -1750,6 +1750,29 @@ Commands
    the same way. The demo's ``Arm`` has an optional argument and a
    72-bit pattern sent twice.
 
+Segments
+   ``ParameterSegmentRefEntry``, ``ContainerSegmentRefEntry`` and
+   ``StreamSegmentEntry``, in telemetry and command containers. When the
+   segments of a parameter in one entry list make up its whole encoding,
+   of at most 64 bits, the value is assembled: its encoding is the bits
+   of its segments, in the order their ``order`` attributes give (all or
+   none of them must have one) or else in the order they come, decoded as
+   if it started at the beginning of a byte. The value becomes a field
+   after its last segment, and later entries may use it. Encoding encodes
+   the value and writes each segment's share of its bits.
+
+   XTCE's segments may also be spread over several packets, which a
+   packet codec can't put together. So a segment of a parameter that the
+   entry list doesn't complete (or that varies in size, or has more than
+   64 bits, or has an ``IncludeCondition``), and every container or stream
+   segment, is a field of its own that holds the segment's bits as they
+   are: an unsigned integer of up to 64 bits, or else whole bytes. It is
+   named for what it is part of and its ``order``, or its place among
+   that thing's segments in the entry list: ``SegPartSegment0``. The demo's
+   ``Segmented`` packet splits a 16-bit word around another value and
+   sends a float's halves low half first; ``Split`` sends a command
+   parameter's bytes the same way.
+
 Name references
    Absolute (``/Root/Sub/name``), relative (``Sub/name``, ``../name``),
    and unqualified names. An unqualified name, or a relative one that
@@ -1759,8 +1782,8 @@ Name references
 
 Not supported
    references to elements of arrays whose count varies in a dimension
-   other than the first, ``IndirectParameterRefEntry``, stream and segment
-   entries, other instances than 0, ``CustomAlgorithm`` criteria, a
+   other than the first, ``IndirectParameterRefEntry``, other instances
+   than 0, repeated segment entries, ``CustomAlgorithm`` criteria, a
    ``SizeInBits`` on command containers, transform algorithms, custom
    checksum algorithms, ``ErrorDetectCorrect`` in a data encoding (which
    XTCE deprecates) and in included containers with an

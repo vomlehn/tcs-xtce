@@ -19,7 +19,7 @@ from .model import (term_indexes, term_locals, term_paths, walk, Index,
                     AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
                     ContextCal, DynSize, Criterion, Fixed, FloatEnc, IntEnc,
                     Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
-                    Spline, StringEnc, Value, VType, Require, Fill)
+                    Spline, StringEnc, Value, VType, Require, Fill, Segment)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -988,6 +988,16 @@ class CEmitter:
             elif isinstance(it, Pad):
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {it.bits}, "
                           f"{cstr(where)}));", depth)
+            elif isinstance(it, Segment):
+                lc = it.local
+                if it.first:
+                    self.line(f"uint64_t s{lc.id} = 0;", depth)
+                self.line("{", depth)
+                self.line("uint64_t b;", depth + 1)
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_bits(r, {it.bits}, "
+                          f"{cstr(lc.name)}, &b));", depth + 1)
+                self.line(f"s{lc.id} |= b << {it.shift};", depth + 1)
+                self.line("}", depth)
             elif isinstance(it, Value):
                 lc = it.local
                 if lc.checksum:
@@ -995,6 +1005,22 @@ class CEmitter:
                     self.line(f"(void)p{lc.id};", depth)
                 if not nested:
                     self.local(lc.vtype, f"v{lc.id}", depth)
+                if it.assembled:
+                    # Decode the value from its segments' bits.
+                    self.line("{", depth)
+                    d = depth + 1
+                    self.line("uint8_t b[8];", d)
+                    self.line("xtce_pk_reader sub;", d)
+                    self.line(f"xtce_pk_segment_bytes(b, s{lc.id}, "
+                              f"{it.assembled});", d)
+                    self.line("sub = xtce_pk_reader_init(b, 8, r->err);", d)
+                    self.line("{", d)
+                    self.line("xtce_pk_reader* r = &sub;", d + 1)
+                    self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), d + 1,
+                                    self.read_ref)
+                    self.line("}", d)
+                    self.line("}", depth)
+                    continue
                 self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth,
                                 self.read_ref)
                 if lc.length is not None:
@@ -1062,28 +1088,52 @@ class CEmitter:
                 self.line(f"if ({cond}) {{", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
                 self.line("}", depth)
+            elif isinstance(it, Segment):
+                lc = it.local
+                if it.first:
+                    # Encode the whole value, then write each segment's bits.
+                    self.line(f"uint64_t s{lc.id};", depth)
+                    self.line("{", depth)
+                    d = depth + 1
+                    self.line("uint8_t b[8] = {0};", d)
+                    self.line("xtce_pk_writer sub = xtce_pk_writer_init(b, 8, "
+                              "w->err);", d)
+                    self.line("{", d)
+                    self.line("xtce_pk_writer* w = &sub;", d + 1)
+                    self.write_place(n, lc, names, d + 1)
+                    self.line("}", d)
+                    self.line(f"s{lc.id} = xtce_pk_segment_bits(b, "
+                              f"{it.total});", d)
+                    self.line("}", depth)
+                self.line(f"XTCE_PK_TRY(xtce_pk_write_bits(w, {it.bits}, "
+                          f"(s{lc.id} >> {it.shift}) & "
+                          f"UINT64_C(0x{(1 << it.bits) - 1:x})));", depth)
+            elif it.assembled:
+                pass
             elif it.local.computed:
                 lc = it.local
                 self.line(f"size_t l{lc.id} = w->pos;", depth)
                 self.line("XTCE_PK_TRY(xtce_pk_write_bits(w, "
                           f"{lc.vtype.enc.bits}, 0));", depth)
             else:
-                lc = it.local
-                f = cstr(lc.name)
-                ref = self.write_ref(n, names)
-                if lc in names:
-                    acc = names[lc]
-                    if acc.present:
-                        self.line(f"if (!{acc.present}) return "
-                                  f"xtce_pk_fail(w->err, XTCE_PK_MISSING, {f}, "
-                                  "NULL);", depth)
-                    self.write_value(lc.vtype, acc.expr, f, depth, ref)
-                elif lc in n.derived:
-                    self.write_value(lc.vtype, f"d{lc.id}", f, depth, ref)
-                else:
-                    self.write_value(lc.vtype,
-                                     self.literal(lc.vtype, n.fixed[lc]), f,
-                                     depth, ref, n.fixed[lc])
+                self.write_place(n, it.local, names, depth)
+
+    def write_place(self, n: Node, lc, names: dict, depth: int) -> None:
+        """Writes a value: a field, a computed size or count, or a fixed
+        constant."""
+        f = cstr(lc.name)
+        ref = self.write_ref(n, names)
+        if lc in names:
+            acc = names[lc]
+            if acc.present:
+                self.line(f"if (!{acc.present}) return xtce_pk_fail(w->err, "
+                          f"XTCE_PK_MISSING, {f}, NULL);", depth)
+            self.write_value(lc.vtype, acc.expr, f, depth, ref)
+        elif lc in n.derived:
+            self.write_value(lc.vtype, f"d{lc.id}", f, depth, ref)
+        else:
+            self.write_value(lc.vtype, self.literal(lc.vtype, n.fixed[lc]), f,
+                             depth, ref, n.fixed[lc])
 
     def place(self, n: Node, lc, names: dict) -> Acc:
         """How encoding code reaches a value: a field, a computed size or

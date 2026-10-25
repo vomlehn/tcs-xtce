@@ -372,6 +372,24 @@ class BitWriter:
             self.uint(len(data) * 8, int.from_bytes(data, "big"))
 
 
+def segment_reader(raw: int, total: int) -> BitReader:
+    """A reader of a value's ``total``-bit encoding, which its segments
+    gathered into ``raw`` (the encoding's last bit least significant)."""
+    return BitReader((raw << (64 - total)).to_bytes(8, "big"))
+
+
+def segment_writer() -> BitWriter:
+    """A writer for a value of at most 64 bits to split into segments."""
+    return BitWriter(ManagedBuffer(8))
+
+
+def segment_bits(w: BitWriter, total: int) -> int:
+    """The ``total``-bit encoding that segment_writer ``w`` holds, as
+    segment_reader takes it."""
+    data = bytes(w.buf._data[:len(w.buf)]).ljust(8, b"\0")
+    return int.from_bytes(data, "big") >> (64 - total)
+
+
 def _combine(groups, order) -> int:
     """The value of groups of bits ((value, length) pairs, in stream order)
     combined in ``order`` (see ``BitReader.uint_bits``)."""

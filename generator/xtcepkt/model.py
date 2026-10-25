@@ -494,7 +494,28 @@ class Mark:
 
 @dataclass
 class Value:
+    """A value on the wire.  An ``assembled`` value occupies no bits
+    itself: decoding reads it from the bits of its Segments, which come
+    before it, and ``assembled`` is the bits of its encoding."""
+
     local: Local
+    assembled: int = 0
+
+
+@dataclass
+class Segment:
+    """``bits`` bits of ``local``'s encoding (a ParameterSegmentRefEntry).
+    The value's whole encoding, ``total`` bits, is the bits of its segments
+    in order; this one lies ``shift`` bits above the end of it.  Decoding
+    gathers the bits and decodes the value at its assembled Value; encoding
+    encodes the value at its ``first`` segment and writes each segment's
+    share."""
+
+    local: Local
+    bits: int
+    total: int
+    shift: int = 0
+    first: bool = False
 
 
 @dataclass
@@ -571,7 +592,7 @@ class Fill:
                 else self.size)
 
 
-Item = Union[Seek, Mark, Value, Fixed, Pad, Cond, Require, Fill]
+Item = Union[Seek, Mark, Value, Segment, Fixed, Pad, Cond, Require, Fill]
 
 
 def walk(items: list) -> list:

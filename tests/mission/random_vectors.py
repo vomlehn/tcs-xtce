@@ -304,7 +304,7 @@ def main() -> None:
             apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
-                               430, 440, 450, rng.randrange(1 << 11)])
+                               430, 440, 450, 460, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -383,7 +383,7 @@ def main() -> None:
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
             opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
-                                 12, 13, 13, rng.randrange(256)])
+                                 12, 13, 13, 14, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)

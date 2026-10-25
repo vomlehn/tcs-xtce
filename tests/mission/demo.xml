@@ -973,6 +973,11 @@
       <Parameter name="CmpBelow" parameterTypeRef="U8"/>
       <Parameter name="CmpFive" parameterTypeRef="U8"/>
       <Parameter name="CmpNotFive" parameterTypeRef="U8"/>
+      <Parameter name="SegWord" parameterTypeRef="U16"/>
+      <Parameter name="SegMid" parameterTypeRef="U8"/>
+      <Parameter name="SegFloat" parameterTypeRef="F32"/>
+      <Parameter name="SegPart" parameterTypeRef="U16"/>
+      <Parameter name="SegFlag" parameterTypeRef="U8"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1639,6 +1644,34 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <!-- Values in segments: SegWord's 16 bits are split around SegMid,
+           SegFloat's halves come low half first, starting inside a
+           byte, and the packet holds only part of SegPart, a container
+           and a stream, which become fields of their own. -->
+      <SequenceContainer name="Segmented">
+        <EntryList>
+          <ParameterSegmentRefEntry parameterRef="SegWord" sizeInBits="4"/>
+          <ParameterRefEntry parameterRef="SegMid"/>
+          <ParameterSegmentRefEntry parameterRef="SegWord" sizeInBits="12"/>
+          <ParameterSegmentRefEntry parameterRef="SegPart" sizeInBits="4"/>
+          <ParameterSegmentRefEntry parameterRef="SegFloat" sizeInBits="16"
+            order="2"/>
+          <ParameterSegmentRefEntry parameterRef="SegFloat" sizeInBits="16"
+            order="1"/>
+          <ParameterRefEntry parameterRef="SegFlag">
+            <IncludeCondition>
+              <Comparison parameterRef="SegWord" value="4660"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ContainerSegmentRefEntry containerRef="Section" sizeInBits="8"/>
+          <StreamSegmentEntry streamRef="Downlink" sizeInBits="12"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="460"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
     </ContainerSet>
   </TelemetryMetaData>
   <CommandMetaData>
@@ -1649,6 +1682,7 @@
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Checksum" parameterTypeRef="ChecksumType"/>
+      <Parameter name="SplitWord" parameterTypeRef="ChecksumType"/>
     </ParameterSet>
     <ArgumentTypeSet>
       <IntegerArgumentType name="U11Arg" signed="false">
@@ -2165,6 +2199,28 @@
                 <Offset><FixedValue>4</FixedValue></Offset>
               </RepeatEntry>
             </FixedValueEntry>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <!-- SplitWord's bytes, low byte first, around Middle. -->
+      <MetaCommand name="Split">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="14"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Middle" argumentTypeRef="U16Arg"/>
+        </ArgumentList>
+        <CommandContainer name="SplitContainer">
+          <EntryList>
+            <ParameterSegmentRefEntry parameterRef="SplitWord" sizeInBits="8"
+              order="2"/>
+            <ArgumentRefEntry argumentRef="Middle"/>
+            <ParameterSegmentRefEntry parameterRef="SplitWord" sizeInBits="8"
+              order="1"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

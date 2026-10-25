@@ -638,6 +638,24 @@ every language because generated aggregates are plain structs. An
 ``==`` criterion on a member doesn't fix the value, since there is no
 field that holds only the member.
 
+A ``ParameterSegmentRefEntry`` becomes a ``Segment`` item. When the
+segments of a parameter in one entry list add up to its encoding (at most
+64 bits), the compiler gives each one the ``shift`` of its bits within
+the encoding, marks the first in document order, and puts an
+``assembled`` ``Value`` after the last; that value occupies no bits, so
+the size functions count only the segments. Decoding ORs each segment's
+bits into ``s<id>`` and decodes the value from a reader over those bits
+at the start of an 8-byte array (``segment_reader``). Encoding encodes the
+value at its first segment and writes each segment's share. C and Python
+encode it into a scratch writer on an 8-byte array. Rust's writer only
+writes into a managed ``Buffer``, so ``BitWriter::stash`` moves to the
+byte boundary at or before the position, the value is encoded there, and
+``unstash`` reads its bits back and restores what it overwrote, without
+allocating. Either way the value is encoded at a byte boundary, as
+decoding reads it. Segments the entry list doesn't complete, and
+container and stream segments, are replaced by ``Value``\ s of raw
+fields, since the rest is in other packets.
+
 An ``ArrayEnc`` keeps each dimension's first index (``starts``) and,
 when all are fixed, its size (``shape``). An array entry with a
 ``DimensionList`` replaces the value's type with one for the subset,

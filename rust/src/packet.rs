@@ -508,6 +508,28 @@ impl<const N: usize> ByteSink for FixedBytes<N> {
     }
 }
 
+/// What [`BitWriter::stash`] saved while a value split into segments is
+/// encoded.
+#[derive(Debug, Clone, Copy)]
+pub struct Stash {
+    pos: usize,
+    at: usize,
+    len: usize,
+    bits: u32,
+    saved: u64,
+}
+
+/// A reader of a value's `total`-bit encoding, which its segments gathered
+/// into `raw` (the encoding's last bit least significant), held in `buf`.
+pub fn segment_reader(
+    buf: &mut [u8; 8],
+    raw: u64,
+    total: u32,
+) -> BitReader<'_> {
+    *buf = (raw << (64 - total)).to_be_bytes();
+    BitReader::new(buf)
+}
+
 /// Writes big-endian bit fields into a managed [`Buffer`].
 ///
 /// The buffer is cleared when the writer is created and grows (zero filled)
@@ -673,6 +695,45 @@ impl<'a> BitWriter<'a> {
         self.uint_order(bits, le, v & mask(bits));
         self.pos = pos;
         Ok(())
+    }
+
+    /// Prepares to encode a value of `bits` bits (at most 64) that is split
+    /// into segments: the writer moves to the byte boundary at or before
+    /// its position, so the value is encoded as it would be at the start of
+    /// a buffer, over bits that [`BitWriter::unstash`] restores.
+    pub fn stash(&mut self, bits: u32) -> Stash {
+        let at = self.pos / 8 * 8;
+        let s = Stash {
+            pos: self.pos,
+            at,
+            len: self.buf.len(),
+            bits,
+            saved: self.peek(at, bits),
+        };
+        self.pos = at;
+        s
+    }
+
+    /// Returns the value encoded since [`BitWriter::stash`], its last bit
+    /// least significant, and restores the bits and position it saved.
+    pub fn unstash(&mut self, s: Stash) -> u64 {
+        let v = self.peek(s.at, s.bits);
+        self.pos = s.at;
+        self.uint(s.bits, s.saved);
+        if self.buf.len() > s.len {
+            self.buf.resize(s.len);
+        }
+        self.pos = s.pos;
+        v
+    }
+
+    /// The `bits` bits at `pos`; those past the buffer's end are zero.
+    fn peek(&self, pos: usize, bits: u32) -> u64 {
+        let data = self.buf.as_bytes();
+        (pos..pos + bits as usize).fold(0, |v, p| {
+            let b = data.get(p / 8).map_or(0, |b| (b >> (7 - p % 8)) & 1);
+            (v << 1) | u64::from(b)
+        })
     }
 
     /// Writes `bits` zero bits, overwriting whatever a seek left there.

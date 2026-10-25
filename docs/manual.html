@@ -2178,6 +2178,28 @@ The <tt class="docutils literal">RestrictionCriteria</tt> of a <tt class="docuti
 <tt class="docutils literal">BaseContainer</tt> (which XTCE gives on parameters in the command) act
 the same way. The demo's <tt class="docutils literal">Arm</tt> has an optional argument and a
 72-bit pattern sent twice.</dd>
+<dt>Segments</dt>
+<dd><p class="first"><tt class="docutils literal">ParameterSegmentRefEntry</tt>, <tt class="docutils literal">ContainerSegmentRefEntry</tt> and
+<tt class="docutils literal">StreamSegmentEntry</tt>, in telemetry and command containers. When the
+segments of a parameter in one entry list make up its whole encoding,
+of at most 64 bits, the value is assembled: its encoding is the bits
+of its segments, in the order their <tt class="docutils literal">order</tt> attributes give (all or
+none of them must have one) or else in the order they come, decoded as
+if it started at the beginning of a byte. The value becomes a field
+after its last segment, and later entries may use it. Encoding encodes
+the value and writes each segment's share of its bits.</p>
+<p class="last">XTCE's segments may also be spread over several packets, which a
+packet codec can't put together. So a segment of a parameter that the
+entry list doesn't complete (or that varies in size, or has more than
+64 bits, or has an <tt class="docutils literal">IncludeCondition</tt>), and every container or stream
+segment, is a field of its own that holds the segment's bits as they
+are: an unsigned integer of up to 64 bits, or else whole bytes. It is
+named for what it is part of and its <tt class="docutils literal">order</tt>, or its place among
+that thing's segments in the entry list: <tt class="docutils literal">SegPartSegment0</tt>. The demo's
+<tt class="docutils literal">Segmented</tt> packet splits a 16-bit word around another value and
+sends a float's halves low half first; <tt class="docutils literal">Split</tt> sends a command
+parameter's bytes the same way.</p>
+</dd>
 <dt>Name references</dt>
 <dd>Absolute (<tt class="docutils literal">/Root/Sub/name</tt>), relative (<tt class="docutils literal">Sub/name</tt>, <tt class="docutils literal"><span class="pre">../name</span></tt>),
 and unqualified names. An unqualified name, or a relative one that
@@ -2186,8 +2208,8 @@ SpaceSystem, then from each enclosing one. References may cross
 documents (see <a class="reference internal" href="#missions-in-several-documents">Missions in several documents</a>).</dd>
 <dt>Not supported</dt>
 <dd>references to elements of arrays whose count varies in a dimension
-other than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt>, stream and segment
-entries, other instances than 0, <tt class="docutils literal">CustomAlgorithm</tt> criteria, a
+other than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt>, other instances
+than 0, repeated segment entries, <tt class="docutils literal">CustomAlgorithm</tt> criteria, a
 <tt class="docutils literal">SizeInBits</tt> on command containers, transform algorithms, custom
 checksum algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which
 XTCE deprecates) and in included containers with an

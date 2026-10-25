@@ -160,8 +160,8 @@ def gap_bits(n: Node) -> int:
         elif isinstance(it, Fill):
             pos = max(pos, marks[it.start] + it.max_size)
         else:
-            size = (item_bits(it.local.vtype) if isinstance(it, Value)
-                    else it.bits)
+            size = (it.bits if not isinstance(it, Value) else 0 if it.assembled
+                    else item_bits(it.local.vtype))
             spans.append((pos, pos + size))
             pos += size
     covered, end = 0, 0

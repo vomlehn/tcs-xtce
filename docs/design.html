@@ -993,6 +993,23 @@ members' field names (<tt class="docutils literal">path</tt>) and the member's t
 every language because generated aggregates are plain structs. An
 <tt class="docutils literal">==</tt> criterion on a member doesn't fix the value, since there is no
 field that holds only the member.</p>
+<p>A <tt class="docutils literal">ParameterSegmentRefEntry</tt> becomes a <tt class="docutils literal">Segment</tt> item. When the
+segments of a parameter in one entry list add up to its encoding (at most
+64 bits), the compiler gives each one the <tt class="docutils literal">shift</tt> of its bits within
+the encoding, marks the first in document order, and puts an
+<tt class="docutils literal">assembled</tt> <tt class="docutils literal">Value</tt> after the last; that value occupies no bits, so
+the size functions count only the segments. Decoding ORs each segment's
+bits into <tt class="docutils literal">s&lt;id&gt;</tt> and decodes the value from a reader over those bits
+at the start of an 8-byte array (<tt class="docutils literal">segment_reader</tt>). Encoding encodes the
+value at its first segment and writes each segment's share. C and Python
+encode it into a scratch writer on an 8-byte array. Rust's writer only
+writes into a managed <tt class="docutils literal">Buffer</tt>, so <tt class="docutils literal"><span class="pre">BitWriter::stash</span></tt> moves to the
+byte boundary at or before the position, the value is encoded there, and
+<tt class="docutils literal">unstash</tt> reads its bits back and restores what it overwrote, without
+allocating. Either way the value is encoded at a byte boundary, as
+decoding reads it. Segments the entry list doesn't complete, and
+container and stream segments, are replaced by <tt class="docutils literal">Value</tt>s of raw
+fields, since the rest is in other packets.</p>
 <p>An <tt class="docutils literal">ArrayEnc</tt> keeps each dimension's first index (<tt class="docutils literal">starts</tt>) and,
 when all are fixed, its size (<tt class="docutils literal">shape</tt>). An array entry with a
 <tt class="docutils literal">DimensionList</tt> replaces the value's type with one for the subset,

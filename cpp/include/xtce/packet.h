@@ -424,6 +424,26 @@ static inline int xtce_pk_read_bytes(xtce_pk_reader* r, size_t n, const char* f,
         return 0;
 }
 
+/* Puts a value's `total`-bit encoding, which its segments gathered into
+ * `raw` (the encoding's last bit least significant), at the start of `b`. */
+static inline void xtce_pk_segment_bytes(uint8_t* b, uint64_t raw,
+                                         unsigned total) {
+        uint64_t v = raw << (64 - total);
+        unsigned i;
+        for (i = 0; i < 8; ++i)
+                b[i] = (uint8_t)(v >> (56 - 8 * i));
+}
+
+/* The `total`-bit encoding at the start of `b`, as xtce_pk_segment_bytes
+ * takes it. */
+static inline uint64_t xtce_pk_segment_bits(const uint8_t* b, unsigned total) {
+        uint64_t v = 0;
+        unsigned i;
+        for (i = 0; i < 8; ++i)
+                v = (v << 8) | b[i];
+        return v >> (64 - total);
+}
+
 /* --- writing
  * ------------------------------------------------------------------- */
 
