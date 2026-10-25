@@ -504,6 +504,9 @@ class AlarmDef:
     min_violations: int = 1
     min_conformance: int = 1
     change: Optional[Change] = None
+    # A CustomAlarm: (its hook, its InputAlgorithm), the inputs bound (as
+    # Custom's) in a packet's alarms; the level is at least the hook's.
+    custom: Optional[tuple] = None
 
     @property
     def stateful(self) -> bool:
@@ -550,7 +553,12 @@ class Algorithm:
 
     key: str
     name: str
-    expr: tuple
+    expr: Optional[tuple] = None
+    # A CustomAlgorithm's instead: its hook, inputs (as Custom's), and the
+    # index of this output among the hook's outputs.
+    hook: Optional["Hook"] = None
+    inputs: list = field(default_factory=list)
+    index: int = 0
 
 
 @dataclass
@@ -818,13 +826,45 @@ class AnyOf:
     text: str
 
 
+@dataclass(eq=False)
+class Hook:
+    """A CustomAlgorithm that the application supplies as a function,
+    named ``name`` (the algorithm's qualified name) and ``ident`` in the
+    generated code.  ``kind`` says what it computes from its inputs:
+    ``criterion`` (whether it holds), ``algorithm`` (``outputs`` values),
+    ``alarm`` (a level) or ``checksum`` (from the packet's bits)."""
+
+    kind: str
+    name: str
+    ident: str = ""
+    outputs: int = 0
+
+
+@dataclass(eq=False)
+class Custom:
+    """A CustomAlgorithm criterion: it holds when ``hook`` says so for
+    ``inputs``, each ``("value", local, path, vtype)`` or ``("const",
+    x)``."""
+
+    hook: Hook
+    inputs: list
+    text: str
+
+
+def input_locals(inputs: list) -> list:
+    return [x[1] for x in inputs if x[0] == "value"]
+
+
 def term_indexes(t) -> list:
     """(local, path before the step, count) for every array element that
     a term reads, so that encoding can check those arrays' lengths before
     it indexes them."""
-    if isinstance(t, Criterion):
+    if isinstance(t, (Criterion, Custom)):
+        pairs = (((t.local, t.path), (t.other, t.other_path))
+                 if isinstance(t, Criterion)
+                 else [(x[1], x[2]) for x in t.inputs if x[0] == "value"])
         out = []
-        for lc, path in ((t.local, t.path), (t.other, t.other_path)):
+        for lc, path in pairs:
             if lc is not None:
                 out += [(lc, path[:k], s.count) for k, s in enumerate(path)
                         if isinstance(s, Index) and s.count is not None]
@@ -840,18 +880,31 @@ def term_paths(t) -> list:
         if t.other is not None:
             out.append((t.other, t.other_path))
         return out
+    if isinstance(t, Custom):
+        return [(x[1], x[2]) for x in t.inputs if x[0] == "value"]
     return [x for u in t.terms for x in term_paths(u)]
 
 
 # A criterion, or a tree of them.  Lists of terms hold when all of them do.
-Term = Union[Criterion, AllOf, AnyOf]
+Term = Union[Criterion, Custom, AllOf, AnyOf]
 
 
 def term_locals(t: Term) -> list:
     """The values a term reads."""
     if isinstance(t, Criterion):
         return [t.local] + ([t.other] if t.other is not None else [])
+    if isinstance(t, Custom):
+        return input_locals(t.inputs)
     return [lc for x in t.terms for lc in term_locals(x)]
+
+
+def term_hooks(t: Term) -> list:
+    """The hooks a term calls."""
+    if isinstance(t, Custom):
+        return [t.hook]
+    if isinstance(t, Criterion):
+        return []
+    return [h for x in t.terms for h in term_hooks(x)]
 
 
 @dataclass(eq=False)
@@ -890,6 +943,9 @@ class Node:
     # and why any others it triggers can't be.
     algorithms: list = field(default_factory=list)
     algorithm_notes: list = field(default_factory=list)
+    # The hooks that decoding or encoding the packet calls (those of its
+    # bases and children too, for its kind).
+    hooks: list = field(default_factory=list)
 
     def chain(self) -> list["Node"]:
         """This node and its bases, root first."""
@@ -948,3 +1004,4 @@ class Mission:
     # one per parameter whatever packets hold it.
     monitored: list[tuple[str, str, int]] = field(default_factory=list)
     streams: list[Stream] = field(default_factory=list)
+    hooks: list[Hook] = field(default_factory=list)

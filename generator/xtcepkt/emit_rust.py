@@ -6,15 +6,16 @@ import json
 import math
 import textwrap
 
-from .common import (notes, stream_capacity, stream_doc, MATH_OPS, Ref,
-                     fast_order, field_range, flt, header_lines, inputs,
-                     int_enc, invertible, math_value, size_args, str_cap,
-                     string_spec, wire_region)
+from .common import (HOOK_DOCS, checks_hooks, items_hooks, terms_hooks, notes,
+                     stream_capacity, stream_doc, MATH_OPS, Ref, fast_order,
+                     field_range, flt, header_lines, inputs, int_enc,
+                     invertible, math_value, size_args, str_cap, string_spec,
+                     wire_region)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
-                    Value, VType, Require, Fill, Segment, Verify)
+                    Value, VType, Require, Fill, Segment, Verify, Custom)
 
 
 def rstr(s: str) -> str:
@@ -55,6 +56,13 @@ def rflt(x: float) -> str:
     if math.isinf(x):
         return "f64::INFINITY" if x > 0 else "f64::NEG_INFINITY"
     return flt(x) + "_f64"
+
+
+# The Rust type of each kind of hook.
+HOOK_TYPES = {"criterion": "fn(&[f64]) -> bool",
+              "algorithm": "fn(&[f64], &mut [f64]) -> bool",
+              "alarm": "fn(&[f64]) -> u8",
+              "checksum": "fn(&[u8], usize, usize) -> u64"}
 
 
 def literal(vt: VType, v) -> str:
@@ -228,6 +236,11 @@ def checksum_spec(spec: tuple) -> str:
                 f"0x{init:x}, final_xor: 0x{final:x}, reflect_data: "
                 f"{str(ref_in).lower()}, reflect_remainder: "
                 f"{str(ref_out).lower()} }}")
+    if kind == "custom":
+        h = spec[1]
+        return (f"pk::Checksum::Custom(*hooks::{h.ident.upper()}"
+                ".get().ok_or(PacketError::NoAlgorithm { name: "
+                f"{rstr(h.ident)} }})?)")
     names = {"sum": "Sum", "unix_sum": "UnixSum", "fletcher": "Fletcher",
              "adler32": "Adler32", "luhn": "Luhn", "verhoeff": "Verhoeff",
              "damm": "Damm", "xor": "Xor", "parity": "Parity"}
@@ -486,12 +499,23 @@ def term(t, place) -> str:
     if isinstance(t, (AllOf, AnyOf)):
         return (" && " if isinstance(t, AllOf)
                 else " || ").join(f"({term(x, place)})" for x in t.terms)
+    if isinstance(t, Custom):
+        return (f"hooks::{t.hook.ident.upper()}.get().is_some_and(|f| "
+                f"f(&[{hook_args(t.inputs, place)}]))")
     if t.local.optional:
         # An absent value compares as std::optional's does: less than any.
         return (f"{place(t.local)}.as_ref().map_or({EMPTY[t.op]}, |o| "
                 f"{condition(t, '(*o)')})")
     return condition(t, place(t.local),
                      place(t.other) if t.other is not None else None)
+
+
+def hook_args(inputs: list, place) -> str:
+    """A slice's items: a custom algorithm's inputs, as f64s."""
+    return ", ".join(rflt(x[1]) if x[0] == "const"
+                     else math_value(x[3],
+                                     reach(place(x[1]), x[2], rstr(x[1].name)),
+                                     "rust") for x in inputs)
 
 
 # What ``<absent value> op <value>`` gives, as with std::optional in C++.
@@ -554,6 +578,7 @@ class RustEmitter:
             self.enum_type(vt)
         for vt in m.aggregates:
             self.aggregate_type(vt)
+        self.hooks()
         self.alarm_monitor()
         for n in m.nodes:
             self.node(n)
@@ -628,6 +653,31 @@ class RustEmitter:
                   1)
         self.line("self.0.push(data, f);", 2)
         self.line("}", 1)
+        self.line("}")
+
+    def need_hooks(self, hooks: list, depth: int) -> None:
+        for h in hooks:
+            self.line(f"if hooks::{h.ident.upper()}.get().is_none() {{", depth)
+            self.line("return Err(PacketError::NoAlgorithm { name: "
+                      f"{rstr(h.ident)} }});", depth + 1)
+            self.line("}", depth)
+
+    def hooks(self) -> None:
+        self.line()
+        self.line("/// The functions the application supplies for the "
+                  "document's custom")
+        self.line("/// algorithms: set them before decoding or encoding a "
+                  "packet that needs")
+        self.line("/// them, or it fails with `NoAlgorithm`.")
+        self.line("pub mod hooks {")
+        if self.m.hooks:
+            self.line("use std::sync::OnceLock;", 1)
+        for h in self.m.hooks:
+            self.line()
+            for text in textwrap.wrap(f"`{h.name}`, {HOOK_DOCS[h.kind]}", 72):
+                self.line(f"/// {text}", 1)
+            self.line(f"pub static {h.ident.upper()}: OnceLock"
+                      f"<{HOOK_TYPES[h.kind]}> = OnceLock::new();", 1)
         self.line("}")
 
     def alarm_monitor(self) -> None:
@@ -955,6 +1005,7 @@ class RustEmitter:
         self.line(f"const MAX_BYTES: usize = {n.max_bytes};", 1)
         self.line()
         self.line("fn decode(data: &[u8]) -> Result<Self> {", 1)
+        self.need_hooks(n.hooks, 2)
         # A packet without entries, such as a meta-command without a command
         # container, reads and writes nothing.
         empty = not any(node.items for node in n.chain())
@@ -976,6 +1027,7 @@ class RustEmitter:
         self.line()
         self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> "
                   "{", 1)
+        self.need_hooks(n.hooks, 2)
         names = {lc: name for name, lc in n.fields}
         for lc, (c, d) in n.derived.items():
             # Sizes and counts come from the lengths of what they size.
@@ -1106,6 +1158,15 @@ class RustEmitter:
         self.line(f"pub fn algorithms(&self) -> pk::Outputs<{count}> {{", 1)
         self.line("let mut o = pk::Outputs::new();", 2)
         for alg in n.algorithms:
+            if alg.hook is not None:
+                h = alg.hook
+                self.line(f"o.push({rstr(alg.name)}, (|| -> Option<f64> {{", 2)
+                self.line(f"let f = hooks::{h.ident.upper()}.get()?;", 3)
+                self.line(f"let mut out = [0.0f64; {h.outputs}];", 3)
+                self.line(f"f(&[{hook_args(alg.inputs, place)}], &mut "
+                          f"out).then_some(out[{alg.index}])", 3)
+                self.line("})());", 2)
+                continue
             opt = [lc for lc in inputs(alg.expr) if lc.optional]
 
             def at(lc):
@@ -1201,6 +1262,10 @@ class RustEmitter:
                              for dfa, lv in ad.patterns)
             self.line(f"lv = lv.max(pk::pattern_alarm(x, &[{pats}], "
                       f"{ad.default}));", depth)
+        if ad.custom is not None:
+            h, ins = ad.custom
+            self.line(f"lv = lv.max(hooks::{h.ident.upper()}.get().map_or(0, |"
+                      f"f| f(&[{hook_args(ins, place)}]).min(5)));", depth)
         for level, terms in ad.conditions:
             self.line(f"if {conjunction([term(c, place) for c in terms])} {{",
                       depth)
@@ -1250,6 +1315,7 @@ class RustEmitter:
                   "(in", 1)
         self.line("/// document order) whose criteria match, recursively.", 1)
         self.line("fn decode(data: &[u8]) -> Result<Self> {", 1)
+        self.need_hooks(items_hooks(k.root.items), 2)
         self.line("let mut r = BitReader::new(data);", 2)
         self.read_items(k.root.items, 2, k.root.key)
         self.dispatch(k, k.root, 2)
@@ -1344,7 +1410,9 @@ class RustEmitter:
                 continue
             test = conjunction([term(x, lambda lc: f"v{lc.id}")
                                 for x in c.criteria])
+            self.need_hooks(terms_hooks(c.criteria), depth)
             self.line(f"if {test} {{", depth)
+            self.need_hooks(items_hooks(c.items), depth + 1)
             self.read_items(c.items, depth + 1, c.key)
             self.dispatch(k, c, depth + 1)
             self.line("}", depth)
@@ -1352,6 +1420,7 @@ class RustEmitter:
             self.line("return Err(PacketError::NoMatch { container: "
                       f"{rstr(n.key)} }});", depth)
         else:
+            self.need_hooks(checks_hooks(n.checks), depth)
             self.finish(n, depth)
             self.line(f"return Ok(Self::{n.ident}({self.construct(n)}));",
                       depth)

@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import textwrap
 
-from .common import (notes, stream_doc, Ref, fast_order, field_range, flt,
+from .common import (HOOK_DOCS, checks_hooks, items_hooks, terms_hooks, notes,
+                     stream_doc, Ref, fast_order, field_range, flt,
                      header_lines, inputs, invertible, math_value, size_args,
                      string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
-                    Require, Fill, Segment, Verify)
+                    Require, Fill, Segment, Verify, Custom)
 
 
 def pstr(s: str) -> str:
@@ -336,12 +337,31 @@ def term(t, place) -> str:
     if isinstance(t, (AllOf, AnyOf)):
         return (" and " if isinstance(t, AllOf)
                 else " or ").join(f"({term(x, place)})" for x in t.terms)
+    if isinstance(t, Custom):
+        return (f"pk.criterion_hook(HOOKS, {pstr(t.hook.ident)}, "
+                f"({hook_args(t.inputs, place)}))")
     if t.local.optional:
         # An absent value compares as std::optional's does: less than any.
         x = place(t.local)
         return f"({EMPTY[t.op]} if {x} is None else {condition(t, x)})"
     return condition(t, place(t.local),
                      place(t.other) if t.other is not None else None)
+
+
+def pspec(spec: tuple) -> str:
+    """The runtime's checksum spec: the tuple, but for a custom checksum,
+    whose function is the application's."""
+    if spec[0] == "custom":
+        return f"(\"custom\", HOOKS.get({pstr(spec[1].ident)}))"
+    return repr(spec)
+
+
+def hook_args(inputs: list, place) -> str:
+    """A tuple's items: a custom algorithm's inputs, as floats."""
+    out = [flt(x[1]) if x[0] == "const"
+           else math_value(x[3], reach(place(x[1]), x[2], pstr(x[1].name)),
+                           "python") for x in inputs]
+    return "".join(f"{a}, " for a in out).rstrip()
 
 
 # What ``<absent value> op <value>`` gives, as with std::optional in C++.
@@ -422,6 +442,7 @@ class PythonEmitter:
             self.enum_type(vt)
         for vt in m.aggregates:
             self.aggregate_type(vt)
+        self.hooks()
         self.alarm_monitor()
         for n in m.nodes:
             self.node(n)
@@ -478,6 +499,25 @@ class PythonEmitter:
         if line:
             self.line(line.rstrip(), depth + 1)
         self.line("),", depth)
+
+    def need_hooks(self, hooks: list, depth: int) -> None:
+        if hooks:
+            names = "".join(f"{pstr(h.ident)}, " for h in hooks).rstrip()
+            self.line(f"pk.need_hooks(HOOKS, ({names}))", depth)
+
+    def hooks(self) -> None:
+        self.line()
+        self.line()
+        self.line("# The functions the application supplies for the document's "
+                  "custom")
+        self.line("# algorithms, by name: set them before decoding or encoding "
+                  "a packet")
+        self.line("# that needs them, or it raises NoAlgorithm.")
+        for h in self.m.hooks:
+            for text in textwrap.wrap(f"{h.ident}: {h.name}, "
+                                      f"{HOOK_DOCS[h.kind]}", 76):
+                self.line(f"# {text}")
+        self.line("HOOKS: dict = {}")
 
     def alarm_monitor(self) -> None:
         self.line()
@@ -733,15 +773,15 @@ class PythonEmitter:
         f = pstr(c.local.name)
         start, end = self.region(c, "r")
         mask = hex((1 << c.local.vtype.enc.bits) - 1)
-        self.line(f"if r.checksum({c.spec!r}, {start}, {end}, {f}) & {mask} != "
-                  f"v{c.local.id}:", depth)
+        self.line(f"if r.checksum({pspec(c.spec)}, {start}, {end}, {f}) & "
+                  f"{mask} != v{c.local.id}:", depth)
         self.line(f'raise pk.PacketError("BadChecksum", {f})', depth + 1)
 
     def patch(self, c, depth: int) -> None:
         """Writes the value of check ``c`` into its field."""
         enc = c.local.vtype.enc
         start, end = self.region(c, "w")
-        self.line(f"w.patch_checksum({c.spec!r}, {start}, {end}, "
+        self.line(f"w.patch_checksum({pspec(c.spec)}, {start}, {end}, "
                   f"l{c.local.id}, {enc.bits}, {enc.little_endian}, "
                   f"{pstr(c.local.name)})", depth)
 
@@ -812,6 +852,7 @@ class PythonEmitter:
         self.line(f"def decode(cls, data) -> {n.ident}:", 1)
         self.line('"""Decode a packet that starts at the first byte of '
                   '``data``."""', 2)
+        self.need_hooks(n.hooks, 2)
         self.line("r = pk.BitReader(data)", 2)
         for node in n.chain():
             for c in node.criteria:
@@ -824,6 +865,7 @@ class PythonEmitter:
         self.line()
         self.line("def encode_into(self, w: pk.BitWriter) -> None:", 1)
         body = len(self.out)
+        self.need_hooks(n.hooks, 2)
         names = {lc: name for name, lc in n.fields}
         for lc, (c, d) in n.derived.items():
             # Sizes and counts come from the lengths of what they size.
@@ -936,6 +978,12 @@ class PythonEmitter:
         self.line('is None when an input is absent."""', 2)
         self.line("return [", 2)
         for alg in n.algorithms:
+            if alg.hook is not None:
+                h = alg.hook
+                self.line(f"({pstr(alg.name)}, pk.algorithm_hook(HOOKS, "
+                          f"{pstr(h.ident)}, ({hook_args(alg.inputs, place)}), "
+                          f"{h.outputs}, {alg.index})),", 3)
+                continue
             value = math_expr(alg.expr, "x", place)
             absent = [f"{place(lc)} is None" for lc in inputs(alg.expr)
                       if lc.optional]
@@ -1024,6 +1072,10 @@ class PythonEmitter:
                            for dfa, lv in ad.patterns)
             self.line(f"lv = max(lv, pk.pattern_alarm(x, ({pats.rstrip()}), "
                       f"{ad.default}))", depth)
+        if ad.custom is not None:
+            h, ins = ad.custom
+            self.line(f"lv = max(lv, pk.alarm_hook(HOOKS, {pstr(h.ident)}, "
+                      f"({hook_args(ins, place)})))", depth)
         for level, terms in ad.conditions:
             cond = " and ".join(f"({term(c, place)})" for c in terms)
             self.line(f"if {cond}:", depth)
@@ -1057,6 +1109,7 @@ class PythonEmitter:
         self.line('"""Decode the root\'s entries, then pick the first child '
                   '(in', 2)
         self.line('document order) whose criteria match, recursively."""', 2)
+        self.need_hooks(items_hooks(k.root.items), 2)
         self.line("r = pk.BitReader(data)", 2)
         self.read_items(k.root.items, 2, k.root.key)
         self.dispatch(k.root, 2)
@@ -1067,12 +1120,15 @@ class PythonEmitter:
                 continue
             cond = (" and ".join(f"({term(x, lambda lc: f'v{lc.id}')})"
                                  for x in c.criteria) or "True")
+            self.need_hooks(terms_hooks(c.criteria), depth)
             self.line(f"if {cond}:", depth)
+            self.need_hooks(items_hooks(c.items), depth + 1)
             self.read_items(c.items, depth + 1, c.key)
             self.dispatch(c, depth + 1)
         if n.abstract:
             self.line(f'raise pk.PacketError("NoMatch", {pstr(n.key)})', depth)
         else:
+            self.need_hooks(checks_hooks(n.checks), depth)
             self.finish(n, depth)
             self.line(f"return {self.construct(n)}", depth)
 

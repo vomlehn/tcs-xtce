@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define DEMO_HOOKS /* this file defines the hooks of the demo mission */
 #include "mission/demo.h"
 
 static int failures = 0;

@@ -13,9 +13,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
 import demo  # noqa: E402
 from xtce import ManagedBuffer  # noqa: E402
 from xtce.packet import (  # noqa: E402
-    BitReader, BitWriter, Codec, PacketError, bcd_decode, bcd_encode, checksum,
-    decode_text, encode_text, enum_value, float_decode, float_encode,
-    float_to_raw, math_op, spline_orders)
+    AlarmLevel, BitReader, BitWriter, Codec, PacketError, bcd_decode,
+    bcd_encode, checksum, decode_text, encode_text, enum_value, float_decode,
+    float_encode, float_to_raw, math_op, spline_orders)
 
 
 def with_length(data, length: int) -> bytes:
@@ -610,3 +610,37 @@ class ChecksumTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HookTests(unittest.TestCase):
+    """The Hooked packet's custom algorithms, which the application
+    supplies."""
+
+    DATA = bytes.fromhex("0a1cc02a0003640307dc")
+
+    def setUp(self):
+        self.saved = dict(demo.HOOKS)
+        demo.HOOKS.clear()
+
+    def tearDown(self):
+        demo.HOOKS.clear()
+        demo.HOOKS.update(self.saved)
+
+    def test_missing(self):
+        for decode in (demo.Hooked.decode, demo.CCSDSPacketKind.decode):
+            with self.assertRaises(PacketError) as cm:
+                decode(self.DATA)
+            self.assertEqual(cm.exception.kind, "NoAlgorithm")
+
+    def test_supplied(self):
+        demo.HOOKS.update(is_even=lambda v: v[0] % 2 == 0,
+                          twice=lambda d, a, b: 2 * sum(d[a // 8:b // 8]))
+        p = demo.Hooked.decode(self.DATA)
+        self.assertEqual((p.hk_a, p.hk_c, p.hk_b), (100, 3, 7))
+        self.assertEqual(p.to_bytes(), self.DATA)
+        # Alarms and algorithms without their functions give nothing.
+        self.assertEqual(p.alarms(), [("hk_a", AlarmLevel.NORMAL)])
+        self.assertEqual(p.algorithms(), [("hk_min", None), ("hk_max", None)])
+        demo.HOOKS.update(bands=lambda v: 9, min_max=lambda v: None)
+        self.assertEqual(p.alarms(), [("hk_a", AlarmLevel.SEVERE)])
+        self.assertEqual(p.algorithms(), [("hk_min", None), ("hk_max", None)])

@@ -988,6 +988,18 @@
           <SizeInBits><FixedValue>88</FixedValue></SizeInBits>
         </BinaryDataEncoding>
       </BinaryParameterType>
+      <IntegerParameterType name="HkAType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <DefaultAlarm>
+          <CustomAlarm>
+            <InputAlgorithm name="Bands">
+              <InputSet>
+                <InputParameterInstanceRef parameterRef="HkA" inputName="a"/>
+              </InputSet>
+            </InputAlgorithm>
+          </CustomAlarm>
+        </DefaultAlarm>
+      </IntegerParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -1181,6 +1193,12 @@
       <Parameter name="DlSync" parameterTypeRef="U32"/>
       <Parameter name="DlCount" parameterTypeRef="U8"/>
       <Parameter name="DlData" parameterTypeRef="DlDataType"/>
+      <Parameter name="HkA" parameterTypeRef="HkAType"/>
+      <Parameter name="HkB" parameterTypeRef="U8"/>
+      <Parameter name="HkC" parameterTypeRef="U8"/>
+      <Parameter name="HkSum" parameterTypeRef="U8"/>
+      <Parameter name="HkMin" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="HkMax" parameterTypeRef="DrDoubleType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -2020,6 +2038,38 @@
           <ParameterRefEntry parameterRef="DlData"/>
         </EntryList>
       </SequenceContainer>
+      <!-- Custom algorithms, which the application supplies: IsEven
+           decides whether HkB is there, Twice computes HkSum, Bands is
+           HkA's alarm and MinMax computes HkMin and HkMax. -->
+      <SequenceContainer name="Hooked">
+        <BinaryEncoding>
+          <ErrorDetectCorrect>
+            <Checksum name="custom" parameterRef="HkSum"
+              bitsFromReference="48">
+              <InputAlgorithm name="Twice"/>
+            </Checksum>
+          </ErrorDetectCorrect>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="HkA"/>
+          <ParameterRefEntry parameterRef="HkC"/>
+          <ParameterRefEntry parameterRef="HkB">
+            <IncludeCondition>
+              <CustomAlgorithm name="IsEven">
+                <InputSet>
+                  <InputParameterInstanceRef parameterRef="HkA"/>
+                </InputSet>
+              </CustomAlgorithm>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="HkSum"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="540"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
     </ContainerSet>
     <MessageSet>
       <Message name="PulseStart">
@@ -2086,6 +2136,20 @@
           </TriggerSet>
         </MathOperation>
       </MathAlgorithm>
+      <CustomAlgorithm name="MinMax">
+        <InputSet>
+          <InputParameterInstanceRef parameterRef="HkA"/>
+          <InputParameterInstanceRef parameterRef="HkC"/>
+          <Constant constantName="ten" value="10"/>
+        </InputSet>
+        <OutputSet>
+          <OutputParameterRef parameterRef="HkMin" outputName="min"/>
+          <OutputParameterRef parameterRef="HkMax" outputName="max"/>
+        </OutputSet>
+        <TriggerSet>
+          <OnContainerUpdateTrigger containerRef="Hooked"/>
+        </TriggerSet>
+      </CustomAlgorithm>
     </AlgorithmSet>
   </TelemetryMetaData>
   <CommandMetaData>

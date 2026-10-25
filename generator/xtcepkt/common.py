@@ -8,8 +8,9 @@ import textwrap
 
 from xtcegen import CRATE, REPOSITORY
 
-from .model import (BinaryEnc, ContextCal, Criterion, FloatEnc, IntEnc, MathOp,
-                    Node, Polynomial, Spline, StringEnc, Value, VType)
+from .model import (BinaryEnc, Cond, ContextCal, Criterion, DynSize, Fill,
+                    FloatEnc, IntEnc, MathOp, Node, Polynomial, Require, Seek,
+                    Spline, StringEnc, Value, Verify, VType, term_hooks, walk)
 
 # The runtimes' integer encodings.  BCD values are decoded to unsigned ones.
 ENCODINGS = {"unsigned": "Unsigned", "twosComplement": "TwosComplement",
@@ -213,6 +214,60 @@ def stream_doc(st) -> str:
     what = "Fixed" if st.fixed else "Variable"
     return (f"{what} frame stream {st.key}: finds its frames, each a "
             f"{st.container} packet.")
+
+
+# What each kind of hook computes, for the generated documentation; the
+# manual gives each language's signatures.
+HOOK_DOCS = {
+    "criterion": "a criterion: whether it holds for the inputs.",
+    "algorithm": "an algorithm: its outputs from the inputs.",
+    "alarm": "an alarm: the level for the inputs, 0 (normal) to 5 (severe).",
+    "checksum": "a checksum: the value of a range of the packet's bits."}
+
+
+def terms_hooks(terms: list) -> list:
+    """The hooks that criteria call."""
+    out: list = []
+    for t in terms:
+        out += [h for h in term_hooks(t) if h not in out]
+    return out
+
+
+def checks_hooks(checks: list) -> list:
+    """The hooks of custom checksums."""
+    out: list = []
+    for c in checks:
+        if c.spec[0] == "custom" and c.spec[1] not in out:
+            out.append(c.spec[1])
+    return out
+
+
+def items_hooks(items: list) -> list:
+    """The hooks that reading or writing ``items`` calls: in include
+    conditions, a container's restriction criteria, lookups and the checks
+    of conditionally included containers."""
+    def conds(it) -> list:
+        return (it.criteria + [c for x in it.items for c in conds(x)]
+                if isinstance(it, Cond) else [])
+
+    terms: list = [c for it in items for c in conds(it)]
+    checks: list = []
+    for it in walk(items):
+        if isinstance(it, Require):
+            terms += it.criteria
+        if isinstance(it, Verify):
+            checks.append(it.check)
+        dyns = []
+        if isinstance(it, Seek) and isinstance(it.offset, DynSize):
+            dyns.append(it.offset)
+        if isinstance(it, Fill) and isinstance(it.size, DynSize):
+            dyns.append(it.size)
+        if isinstance(it, Value):
+            dyns += [t.dyn for t in it.local.vtype.tree() if t.dyn]
+        for d in dyns:
+            terms += [c for crit, _ in d.lookup or [] for c in crit]
+    out = terms_hooks(terms)
+    return out + [h for h in checks_hooks(checks) if h not in out]
 
 
 def notes(n: Node) -> list[str]:

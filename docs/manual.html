@@ -1654,6 +1654,10 @@ a DEC reserved operand, or a digit above 9 for a check digit</td>
 <td>A checksum field (see &quot;Error detection&quot; under <a class="reference internal" href="#supported-xtce">Supported XTCE</a>)
 doesn't match the data it checks</td>
 </tr>
+<tr><td><tt class="docutils literal">NoAlgorithm</tt></td>
+<td>No function is registered for a custom algorithm the packet needs
+(see &quot;Custom algorithms&quot; under <a class="reference internal" href="#supported-xtce">Supported XTCE</a>)</td>
+</tr>
 <tr><td><tt class="docutils literal">NoSpace</tt></td>
 <td>C/C++ only: the output buffer is smaller than the packet</td>
 </tr>
@@ -2130,8 +2134,9 @@ BSD and GNU <tt class="docutils literal">sum</tt>; <tt class="docutils literal">
 <tt class="docutils literal">fletcher32</tt>, Fletcher's checksum of that many bits, on words of
 half as many bits; <tt class="docutils literal">adler32</tt>; and <tt class="docutils literal">luhn</tt>, <tt class="docutils literal">verhoeff</tt> and
 <tt class="docutils literal">damm</tt>, the check digit of the decimal digits in every 4 bits (a
-digit above 9 fails with <tt class="docutils literal">InvalidValue</tt>). <tt class="docutils literal">custom</tt> is not
-supported. <tt class="docutils literal">hashSizeInBits</tt> changes nothing.</li>
+digit above 9 fails with <tt class="docutils literal">InvalidValue</tt>). <tt class="docutils literal">custom</tt> is the
+application's function (see Custom algorithms).
+<tt class="docutils literal">hashSizeInBits</tt> changes nothing.</li>
 <li><tt class="docutils literal">XOR</tt>: the exclusive or of the words the size of the field.</li>
 <li><tt class="docutils literal">Parity</tt>: the bit that makes the number of one bits even
 (<tt class="docutils literal">Even</tt>) or odd (<tt class="docutils literal">Odd</tt>), with the field's bit.</li>
@@ -2308,8 +2313,9 @@ levels after the packet (and the monitor's, when they differ):
 <p class="last">A packet leaves out an alarm that it can't evaluate, and its generated
 documentation says why: one whose criteria use a value the packet
 doesn't hold, or one the packet computes (a size or length field); a
-change range with a <tt class="docutils literal">spanOfInterestInSeconds</tt> or on an array; a
-<tt class="docutils literal">CustomAlarm</tt>; and alarms inside aggregates and arrays of arrays.</p>
+change range with a <tt class="docutils literal">spanOfInterestInSeconds</tt> or on an array; and
+alarms inside aggregates and arrays of arrays. A <tt class="docutils literal">CustomAlarm</tt> is
+its hook's (see Custom algorithms).</p>
 </dd>
 <dt>Algorithms</dt>
 <dd><p class="first">An <tt class="docutils literal">AlgorithmSet</tt>'s <tt class="docutils literal">MathAlgorithm</tt>, a postfix expression like a
@@ -2328,8 +2334,70 @@ its generated documentation says why: one whose inputs it doesn't
 hold, or computes, or that uses <tt class="docutils literal">ThisParameterOperand</tt>, the output's
 own earlier value, like the demo's <tt class="docutils literal">Count</tt>. Evaluating algorithms
 across packets, on a <tt class="docutils literal">OnPeriodicRateTrigger</tt>, or at a
-<tt class="docutils literal">triggerRate</tt>, is a processor's work, not a codec's; a
-<tt class="docutils literal">CustomAlgorithm</tt> is not supported.</p>
+<tt class="docutils literal">triggerRate</tt>, is a processor's work, not a codec's. A
+<tt class="docutils literal">CustomAlgorithm</tt> is evaluated the same way, by its hook (see
+Custom algorithms).</p>
+</dd>
+<dt>Custom algorithms</dt>
+<dd><p class="first">A <tt class="docutils literal">CustomAlgorithm</tt> names code that the document doesn't hold, so
+the application supplies each one as a function, a <em>hook</em>, named in
+snake case from the algorithm's name (<tt class="docutils literal">IsEven</tt> gives <tt class="docutils literal">is_even</tt>):</p>
+<ul class="simple">
+<li>a criterion (a <tt class="docutils literal">CustomAlgorithm</tt> in a <tt class="docutils literal">RestrictionCriteria</tt>,
+<tt class="docutils literal">IncludeCondition</tt>, <tt class="docutils literal">ContextMatch</tt> or other match criteria):
+whether it holds for its inputs;</li>
+<li>a <tt class="docutils literal">CustomAlgorithm</tt> of an <tt class="docutils literal">AlgorithmSet</tt>: its outputs, which
+<tt class="docutils literal">algorithms()</tt> gives as it gives a <tt class="docutils literal">MathAlgorithm</tt>'s;</li>
+<li>a <tt class="docutils literal">CustomAlarm</tt>: the alarm level, 0 (normal) to 5 (severe),
+raised to at least that;</li>
+<li>a <tt class="docutils literal">Checksum</tt> named <tt class="docutils literal">custom</tt>, by its <tt class="docutils literal">InputAlgorithm</tt>: the
+value of the bits it covers.</li>
+</ul>
+<p>Inputs are the <tt class="docutils literal">InputSet</tt>'s values of the packet (integers, floats,
+enumerations and booleans, which must be present) and <tt class="docutils literal">Constant</tt>s,
+in order, as doubles. The generated code has a place for each hook:</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Hook</th>
+<th class="head">Rust (<tt class="docutils literal"><span class="pre">hooks::IS_EVEN.set(f)</span></tt>)</th>
+<th class="head">C/C++ (<tt class="docutils literal">P_hook_is_even = f</tt>)</th>
+<th class="head">Python (<tt class="docutils literal"><span class="pre">HOOKS[&quot;is_even&quot;]</span> = f</tt>)</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>criterion</td>
+<td><tt class="docutils literal"><span class="pre">fn(&amp;[f64])</span> <span class="pre">-&gt;</span> bool</tt></td>
+<td><tt class="docutils literal">bool f(xtce_pk_inputs)</tt></td>
+<td><tt class="docutils literal">f(inputs) <span class="pre">-&gt;</span> bool</tt></td>
+</tr>
+<tr><td>algorithm</td>
+<td><tt class="docutils literal"><span class="pre">fn(&amp;[f64],</span> &amp;mut [f64]) <span class="pre">-&gt;</span> bool</tt></td>
+<td><tt class="docutils literal">bool f(xtce_pk_inputs, double* out)</tt></td>
+<td><tt class="docutils literal">f(inputs) <span class="pre">-&gt;</span> outputs or None</tt></td>
+</tr>
+<tr><td>alarm</td>
+<td><tt class="docutils literal"><span class="pre">fn(&amp;[f64])</span> <span class="pre">-&gt;</span> u8</tt></td>
+<td><tt class="docutils literal">int f(xtce_pk_inputs)</tt></td>
+<td><tt class="docutils literal">f(inputs) <span class="pre">-&gt;</span> int</tt></td>
+</tr>
+<tr><td>checksum</td>
+<td><tt class="docutils literal"><span class="pre">fn(&amp;[u8],</span> usize, usize) <span class="pre">-&gt;</span> u64</tt></td>
+<td><tt class="docutils literal">uint64_t f(const uint8_t*, size_t, size_t)</tt></td>
+<td><tt class="docutils literal">f(data, start, end) <span class="pre">-&gt;</span> int</tt></td>
+</tr>
+</tbody>
+</table>
+<p class="last">A checksum hook gets the packet's bytes and the range of bits, from
+<tt class="docutils literal">start</tt> to <tt class="docutils literal">end</tt>; an algorithm hook returns false (or None) when it
+has no outputs. In C, <tt class="docutils literal">xtce_pk_inputs</tt> holds <tt class="docutils literal">n</tt> inputs in <tt class="docutils literal">v</tt>,
+and the hooks are variables that one file defines: define
+<tt class="docutils literal">P_HOOKS</tt> (<tt class="docutils literal">DEMO_HOOKS</tt> for a prefix <tt class="docutils literal">demo_</tt>) before it includes
+the generated header. Decoding or encoding a packet whose criteria or
+checksums need a hook that isn't set fails with <tt class="docutils literal">NoAlgorithm</tt>;
+<tt class="docutils literal">alarms()</tt> and <tt class="docutils literal">algorithms()</tt> count a missing hook as raising
+nothing and giving no outputs. The demo's <tt class="docutils literal">Hooked</tt> packet uses one
+of each, and the test tools supply them. The algorithms' text and
+<tt class="docutils literal">ExternalAlgorithmSet</tt> only document them.</p>
 </dd>
 <dt>Streams</dt>
 <dd><p class="first">A <tt class="docutils literal">StreamSet</tt>'s <tt class="docutils literal">FixedFrameStream</tt> and <tt class="docutils literal">VariableFrameStream</tt>
@@ -2406,8 +2474,7 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer or
 string without an <tt class="docutils literal">aliasNameSpace</tt>, the stream constructs listed under
 Streams, instances of values in other packets, repeated segment entries,
-commands that include another meta-command's container,
-<tt class="docutils literal">CustomAlgorithm</tt> criteria, transform algorithms, custom checksum
+commands that include another meta-command's container, transform
 algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
 deprecates), calibrators inside aggregate types that use other values,
 least-significant-bit-first strings and binary data that may not start on

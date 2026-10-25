@@ -26,6 +26,12 @@ DECODERS = {"tm": demo.CCSDSPacketKind, "tc": demo.CCSDSCommandKind,
 
 
 MONITOR = demo.AlarmMonitor()
+# The demo mission's custom algorithms, the same in every version of this
+# tool.
+demo.HOOKS.update(is_even=lambda v: v[0] % 2.0 == 0.0,
+                  min_max=lambda v: (min(v), max(v)),
+                  bands=lambda v: int(v[0] / 50.0),
+                  twice=lambda d, start, end: 2 * sum(d[start // 8:end // 8]))
 
 
 def run(kind: str, data: bytes, t: float) -> str:

@@ -20,6 +20,7 @@
 
 #include <float.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -50,6 +51,7 @@ enum {
         XTCE_PK_BAD_LENGTH,
         XTCE_PK_INVALID_VALUE,
         XTCE_PK_BAD_CHECKSUM,
+        XTCE_PK_NO_ALGORITHM,
         XTCE_PK_NO_SPACE,
 };
 
@@ -66,7 +68,8 @@ static inline const char* xtce_pk_error_kind(int code) {
                 "Ok",          "Truncated",     "BadPosition",   "NoMatch",
                 "Mismatch",    "OutOfRange",    "InvalidString", "TooLong",
                 "Calibration", "NotInvertible", "Missing",       "BadSize",
-                "BadLength",   "InvalidValue",  "BadChecksum",   "NoSpace"};
+                "BadLength",   "InvalidValue",  "BadChecksum",   "NoAlgorithm",
+                "NoSpace"};
         return code >= 0 && code <= XTCE_PK_NO_SPACE ? kinds[code] : "Unknown";
 }
 
@@ -128,6 +131,11 @@ static inline int xtce_pk_error_message(const xtce_pk_error* e, char* buf,
                 case XTCE_PK_BAD_CHECKSUM:
                         return snprintf(buf, cap,
                                         "%s does not match the data it checks",
+                                        f);
+                case XTCE_PK_NO_ALGORITHM:
+                        return snprintf(buf, cap,
+                                        "no function is registered for the "
+                                        "custom algorithm %s",
                                         f);
                 case XTCE_PK_NO_SPACE:
                         return snprintf(buf, cap,
@@ -644,13 +652,20 @@ enum {
         XTCE_PK_DAMM,
         XTCE_PK_XOR,    /* the exclusive or of `bits`-bit words */
         XTCE_PK_PARITY, /* the parity bit; `odd` for odd parity */
+        XTCE_PK_CUSTOM, /* the application's function `custom` */
 };
+
+/* A custom checksum: the value of the bits from `start` to `end` of the
+ * packet at `data`. */
+typedef uint64_t (*xtce_pk_checksum_fn)(const uint8_t* data, size_t start,
+                                        size_t end);
 
 typedef struct xtce_pk_checksum_spec {
         int kind;
         unsigned bits; /* CRC width, or the bits of a sum, Fletcher or XOR */
         uint64_t poly, init, final_xor;
         bool reflect_data, reflect_remainder, odd;
+        xtce_pk_checksum_fn custom;
 } xtce_pk_checksum_spec;
 
 static const uint8_t xtce_pk_verhoeff_d[10][10] = {
@@ -798,6 +813,12 @@ static inline int xtce_pk_checksum(const xtce_pk_checksum_spec* s,
                                 *out = xtce_pk_verhoeff_inv[c];
                         else
                                 *out = c;
+                        return 0;
+                case XTCE_PK_CUSTOM:
+                        if (!s->custom)
+                                return xtce_pk_fail(err, XTCE_PK_NO_ALGORITHM,
+                                                    f, NULL);
+                        *out = s->custom(data, start, end);
                         return 0;
                 case XTCE_PK_XOR:
                         for (q = start; q < end; q += got)
@@ -2392,6 +2413,41 @@ static inline int xtce_pk_bytes_cmp(const void* a, size_t na, const void* b,
 
 /* --- canonical text (identical in every runtime)
  * ------------------------------------------ */
+
+/* --- custom algorithms -------------------------------------------------------
+ */
+
+/* The inputs of a custom algorithm, for the functions the application
+ * supplies (see the generated header's hooks). */
+#define XTCE_PK_MAX_INPUTS 32
+typedef struct xtce_pk_inputs {
+        size_t n;
+        double v[XTCE_PK_MAX_INPUTS];
+} xtce_pk_inputs;
+
+/* Inputs from `n` doubles. */
+static inline xtce_pk_inputs xtce_pk_inputs_of(size_t n, ...) {
+        xtce_pk_inputs in;
+        va_list ap;
+        size_t i;
+        memset(&in, 0, sizeof in);
+        in.n = n;
+        va_start(ap, n);
+        for (i = 0; i < n && i < XTCE_PK_MAX_INPUTS; ++i)
+                in.v[i] = va_arg(ap, double);
+        va_end(ap);
+        return in;
+}
+
+/* A CustomAlgorithm criterion: whether it holds. */
+typedef bool (*xtce_pk_criterion_fn)(xtce_pk_inputs in);
+
+/* A CustomAlgorithm of an AlgorithmSet: stores its outputs in `out` and
+ * returns true, or returns false when it gives none. */
+typedef bool (*xtce_pk_algorithm_fn)(xtce_pk_inputs in, double* out);
+
+/* A CustomAlarm: the level, XTCE_PK_NORMAL to XTCE_PK_SEVERE. */
+typedef int (*xtce_pk_alarm_fn)(xtce_pk_inputs in);
 
 /* --- alarms ------------------------------------------------------------------
  */

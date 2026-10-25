@@ -534,6 +534,33 @@ then absent, which the emitters test before computing it. The output is a
 double whatever the output parameter's type, since there is no encoding
 to round it to.
 
+Custom algorithms
+-----------------
+
+A custom algorithm is the application's code, so the generated code only
+calls it: each one becomes a ``Hook`` of the mission, with a typed place
+for the function (a ``OnceLock`` in Rust, a variable in C, an entry of a
+dictionary in Python), one signature per kind of hook. Criteria become
+``Custom`` terms beside ``Criterion``, so every place that renders,
+binds or scans terms handles them; algorithm outputs, alarm levels and
+checksums are new cases of things the emitters already render.
+
+A criterion hook is called in the middle of an expression, where C can't
+return an error, so a missing hook is caught before anything is read:
+each packet records the hooks that decoding or encoding it calls
+(``Node.hooks``, from its criteria, conditions, lookups and checks), and
+the generated functions check them first and fail with ``NoAlgorithm``.
+Decoding a kind checks a member's hooks only when it gets to that member
+(before its criteria, its entries and its checks), so that one packet's
+custom algorithm doesn't keep the others from decoding. The calls
+themselves then can't fail. ``alarms()`` and ``algorithms()``
+return values, not errors, so for them a missing hook raises nothing and
+gives nothing. C's hooks take their inputs as a fixed-size struct by
+value (``xtce_pk_inputs``, built by a variadic function), because C++ has
+no compound literals to pass an array in an expression; that caps the
+inputs at 32. C has no inline variables, so one file defines the hook
+variables, the way single-header libraries define their implementation.
+
 Streams
 -------
 

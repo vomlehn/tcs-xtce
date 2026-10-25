@@ -32,8 +32,8 @@ class PacketError(ValueError):
     ``kind`` names the error and is the same in every runtime: ``Truncated``,
     ``BadPosition``, ``NoMatch``, ``Mismatch``, ``OutOfRange``,
     ``InvalidString``, ``TooLong``, ``Calibration``, ``NotInvertible``,
-    ``Missing``, ``BadSize``, ``BadLength``, ``InvalidValue`` or
-    ``BadChecksum``.
+    ``Missing``, ``BadSize``, ``BadLength``, ``InvalidValue``,
+    ``BadChecksum`` or ``NoAlgorithm``.
     """
 
     MESSAGES = {"Truncated": "packet too short for {0}",
@@ -51,7 +51,9 @@ class PacketError(ValueError):
                 "BadLength": "{0} does not match the length of the packet",
                 "InvalidValue": ("the bits of {0} are not a value of its "
                                  "encoding"),
-                "BadChecksum": "{0} does not match the data it checks"}
+                "BadChecksum": "{0} does not match the data it checks",
+                "NoAlgorithm": ("no function is registered for the custom "
+                                "algorithm {0}")}
 
     def __init__(self, kind: str, *what: str) -> None:
         super().__init__(self.MESSAGES[kind].format(*what))
@@ -544,6 +546,10 @@ def checksum(spec: tuple, data, start: int, end: int, field: str) -> int:
         for w in _words(data, start, end, spec[1]):
             c ^= w
         return c
+    if kind == "custom":  # the application's function, or None
+        if spec[1] is None:
+            raise PacketError("NoAlgorithm", field)
+        return int(spec[1](bytes(data), start, end))
     ones = sum(bin(w).count("1") for w in _words(data, start, end, 8))
     return (ones + spec[1]) & 1  # parity: odd adds one
 
@@ -1767,6 +1773,38 @@ class FlagSync:
                 self.hunting = True
                 self.frame = []
         self.run = 0
+
+
+def need_hooks(hooks: dict, names: tuple) -> None:
+    """Raises NoAlgorithm unless ``hooks`` has a function for each of
+    ``names``."""
+    for name in names:
+        if name not in hooks:
+            raise PacketError("NoAlgorithm", name)
+
+
+def criterion_hook(hooks: dict, name: str, inputs: tuple) -> bool:
+    """Whether the CustomAlgorithm criterion ``name`` holds for ``inputs``;
+    False without a function for it."""
+    f = hooks.get(name)
+    return f is not None and bool(f(inputs))
+
+
+def algorithm_hook(hooks: dict, name: str, inputs: tuple, outputs: int,
+                   index: int) -> Optional[float]:
+    """Output ``index`` of the CustomAlgorithm ``name``, whose function
+    returns its ``outputs`` outputs for ``inputs``, or None; None without a
+    function for it."""
+    f = hooks.get(name)
+    out = f(inputs) if f is not None else None
+    return None if out is None else float(out[index])
+
+
+def alarm_hook(hooks: dict, name: str, inputs: tuple) -> int:
+    """The level, 0 to 5, that the CustomAlarm ``name`` gives ``inputs``; 0
+    without a function for it."""
+    f = hooks.get(name)
+    return 0 if f is None else min(max(int(f(inputs)), 0), 5)
 
 
 def describe_alarms(alarms) -> str:

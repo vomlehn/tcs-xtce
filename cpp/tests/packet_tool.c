@@ -11,12 +11,41 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define DEMO_HOOKS
 #include "mission/demo.h"
 
 /* Buffers for the largest packet and description, allocated once. */
 static uint8_t input[4096];
 static uint8_t output[4096];
 static char text[8192];
+
+/* The demo mission's custom algorithms, the same in every version of this
+ * tool. */
+static bool is_even(xtce_pk_inputs in) {
+        return fmod(in.v[0], 2.0) == 0.0;
+}
+
+static bool min_max(xtce_pk_inputs in, double* out) {
+        size_t i;
+        out[0] = HUGE_VAL;
+        out[1] = -HUGE_VAL;
+        for (i = 0; i < in.n; ++i) {
+                if (in.v[i] < out[0]) out[0] = in.v[i];
+                if (in.v[i] > out[1]) out[1] = in.v[i];
+        }
+        return true;
+}
+
+static int bands(xtce_pk_inputs in) {
+        return (int)(in.v[0] / 50.0);
+}
+
+static uint64_t twice(const uint8_t* data, size_t start, size_t end) {
+        uint64_t sum = 0;
+        size_t i;
+        for (i = start / 8; i < end / 8; ++i) sum += data[i];
+        return 2 * sum;
+}
 
 static xtce_pk_alarm alarms[64];
 static xtce_pk_alarm monitored[64];
@@ -94,6 +123,10 @@ int main(int argc, char** argv) {
                 return 1;
         }
         demo_AlarmMonitor_init(&mon);
+        demo_hook_is_even = is_even;
+        demo_hook_min_max = min_max;
+        demo_hook_bands = bands;
+        demo_hook_twice = twice;
         while (fgets(line, sizeof line, in)) {
                 char kind[16], hex[sizeof line];
                 size_t n = 0, i;

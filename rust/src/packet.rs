@@ -59,6 +59,8 @@ pub enum PacketError {
     InvalidValue { field: &'static str },
     /// The checksum field `field` does not match the data it checks.
     BadChecksum { field: &'static str },
+    /// No function is registered for the custom algorithm `name`.
+    NoAlgorithm { name: &'static str },
 }
 
 impl PacketError {
@@ -79,6 +81,7 @@ impl PacketError {
             Self::BadLength { .. } => "BadLength",
             Self::InvalidValue { .. } => "InvalidValue",
             Self::BadChecksum { .. } => "BadChecksum",
+            Self::NoAlgorithm { .. } => "NoAlgorithm",
         }
     }
 }
@@ -132,6 +135,10 @@ impl fmt::Display for PacketError {
             Self::BadChecksum { field } => {
                 write!(f, "{field} does not match the data it checks")
             }
+            Self::NoAlgorithm { name } => write!(
+                f,
+                "no function is registered for the custom algorithm {name}"
+            ),
         }
     }
 }
@@ -824,7 +831,7 @@ fn split(v: u128, lengths: &[u32], j: usize, order: ByteOrder) -> u8 {
 // --- error detection ---------------------------------------------------------
 
 /// An XTCE ErrorDetectCorrect algorithm; the manual describes each.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub enum Checksum {
     /// A CRC of `width` (1 to 64) bits.
     Crc {
@@ -850,6 +857,9 @@ pub enum Checksum {
     Xor(u32),
     /// The parity bit; true for odd parity.
     Parity(bool),
+    /// The application's function, given the packet's bytes and the range
+    /// of bits it covers.
+    Custom(fn(&[u8], usize, usize) -> u64),
 }
 
 const VERHOEFF_D: [[u8; 10]; 10] = [
@@ -1066,6 +1076,7 @@ pub fn checksum(
             });
             ones & 1
         }
+        Checksum::Custom(f) => f(data, start, end),
     })
 }
 

@@ -13,7 +13,8 @@ import math
 import textwrap
 from typing import Optional
 
-from .common import (notes, stream_capacity, stream_doc, Ref, c_op, fast_order,
+from .common import (HOOK_DOCS, checks_hooks, items_hooks, terms_hooks, notes,
+                     stream_capacity, stream_doc, Ref, c_op, fast_order,
                      field_range, flt, header_lines, inputs, int_enc,
                      invertible, leaf_calibrators, math_value, size_args,
                      str_cap, string_spec)
@@ -22,7 +23,7 @@ from .model import (
     term_indexes, term_locals, term_paths, walk, Index, AggregateEnc, AllOf,
     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, DynSize, Criterion, Fixed,
     FloatEnc, IntEnc, Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
-    Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify)
+    Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify, Custom)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -44,19 +45,29 @@ FLOATS = {"IEEE754": "XTCE_PK_IEEE", "MILSTD_1750A": "XTCE_PK_MIL1750A",
 I64_MIN, I64_MAX, U64_MAX = -(2**63), 2**63 - 1, 2**64 - 1
 
 
-def checksum_spec(spec: tuple) -> str:
+def checksum_spec(spec: tuple, prefix: str = "") -> str:
     """The initializer of an xtce_pk_checksum_spec: kind, bits, polynomial,
-    init, final XOR, reflect data, reflect remainder and odd."""
+    init, final XOR, reflect data, reflect remainder, odd and custom
+    function (a hook's, named with ``prefix``)."""
     kind = spec[0]
     if kind == "crc":
         width, poly, init, final, ref_in, ref_out = spec[1:]
         return (f"{{XTCE_PK_CRC, {width}, UINT64_C(0x{poly:x}), "
                 f"UINT64_C(0x{init:x}), UINT64_C(0x{final:x}), "
-                f"{bool_lit(ref_in)}, {bool_lit(ref_out)}, false}}")
+                f"{bool_lit(ref_in)}, {bool_lit(ref_out)}, false, NULL}}")
+    if kind == "custom":
+        return ("{XTCE_PK_CUSTOM, 0, 0, 0, 0, false, false, false, "
+                f"{prefix}hook_{spec[1].ident}}}")
     bits = spec[1] if len(spec) > 1 and kind != "parity" else 0
     odd = kind == "parity" and spec[1]
     return (f"{{XTCE_PK_{kind.upper()}, {bits}, 0, 0, 0, false, false, "
-            f"{bool_lit(odd)}}}")
+            f"{bool_lit(odd)}, NULL}}")
+
+
+def spec_decl(spec: tuple) -> str:
+    """The declaration of xtce_pk_checksum_spec ``k``: a constant, but for a
+    custom checksum, whose function is the application's."""
+    return ("const" if spec[0] == "custom" else "static const")
 
 # What `<empty optional> op <value>` gives, as with std::optional in C++.
 EMPTY = {"==": False, "!=": True, "<": True, "<=": True, ">": False,
@@ -88,6 +99,12 @@ def slit(v: int) -> str:
 
 def ulit(v: int) -> str:
     return f"UINT64_C({v})"
+
+
+# The C type of each kind of hook.
+HOOK_TYPES = {"criterion": "xtce_pk_criterion_fn",
+              "algorithm": "xtce_pk_algorithm_fn", "alarm": "xtce_pk_alarm_fn",
+              "checksum": "xtce_pk_checksum_fn"}
 
 
 def cflt(x: float) -> str:
@@ -741,6 +758,9 @@ class CEmitter:
             return (" && " if isinstance(t, AllOf)
                     else " || ").join(f"({self.term(x, place)})"
                                       for x in t.terms)
+        if isinstance(t, Custom):
+            f = f"{self.p}hook_{t.hook.ident}"
+            return f"({f} && {f}({self.hook_inputs(t.inputs, place)}))"
         return self.condition(t, place(t.local),
                               place(t.other) if t.other is not None else None)
 
@@ -815,6 +835,7 @@ class CEmitter:
         self.declare_buffers()
         self.declare_composites()
         self.declare_consts()
+        self.declare_hooks()
         self.declare_monitor()
         for n in m.nodes:
             self.declare(n)
@@ -1257,8 +1278,8 @@ class CEmitter:
         f = cstr(c.local.name)
         self.line("{", depth)
         d = depth + 1
-        self.line("static const xtce_pk_checksum_spec k = "
-                  f"{checksum_spec(c.spec)};", d)
+        self.line(f"{spec_decl(c.spec)} xtce_pk_checksum_spec k = "
+                  f"{checksum_spec(c.spec, self.p)};", d)
         start, end = self.region(c, "r")
         self.line("uint64_t c;", d)
         self.line(f"XTCE_PK_TRY(xtce_pk_read_checksum(r, &k, {start}, {end}, "
@@ -1273,8 +1294,8 @@ class CEmitter:
         """Writes the value of check ``c`` into its field."""
         enc = c.local.vtype.enc
         self.line("{", depth)
-        self.line("static const xtce_pk_checksum_spec k = "
-                  f"{checksum_spec(c.spec)};", depth + 1)
+        self.line(f"{spec_decl(c.spec)} xtce_pk_checksum_spec k = "
+                  f"{checksum_spec(c.spec, self.p)};", depth + 1)
         start, end = self.region(c, "w")
         self.line(f"XTCE_PK_TRY(xtce_pk_patch_checksum(w, &k, {start}, {end}, "
                   f"l{c.local.id}, {enc.bits}, {bool_lit(enc.little_endian)}, "
@@ -1318,6 +1339,7 @@ class CEmitter:
         self.line(f"static inline int {t}_decode({t}* out, const uint8_t* "
                   "data, size_t len, xtce_pk_error* err) {")
         self.reader()
+        self.need_hooks(n.hooks, "err", 1)
         self.line("(void)out;", 1)
         for node in n.chain():
             for c in node.criteria:
@@ -1336,6 +1358,7 @@ class CEmitter:
                   "xtce_pk_writer* w) {")
         self.line("(void)p;", 1)
         self.line("(void)w;", 1)
+        self.need_hooks(n.hooks, "w->err", 1)
         names = {
             lc: Acc(f"p->{name}", f"p->has_{name}" if lc.optional else None)
             for name, lc in n.fields}
@@ -1428,9 +1451,19 @@ class CEmitter:
         self.line("(void)p;", 1)
         self.line("(void)out;", 1)
         for i, alg in enumerate(n.algorithms):
+            self.line(f"out[{i}].name = {cstr(alg.name)};", 1)
+            if alg.hook is not None:
+                f = f"{self.p}hook_{alg.hook.ident}"
+                self.line("{", 1)
+                self.line(f"double o[{alg.hook.outputs}];", 2)
+                self.line(f"out[{i}].present = {f} && "
+                          f"{f}({self.hook_inputs(alg.inputs, place)}, o);", 2)
+                self.line(f"out[{i}].value = out[{i}].present ? o[{alg.index}] "
+                          ": 0.0;", 2)
+                self.line("}", 1)
+                continue
             present = [place(lc).present for lc in inputs(alg.expr)
                        if lc.optional]
-            self.line(f"out[{i}].name = {cstr(alg.name)};", 1)
             self.line(f"out[{i}].present = "
                       f"{' && '.join(present) if present else 'true'};", 1)
             value = self.math_expr(alg.expr, "x", place)
@@ -1578,6 +1611,15 @@ class CEmitter:
                       f"{ad.default});", depth + 1)
             self.line("if (l > lv) lv = l;", depth + 1)
             self.line("}", depth)
+        if ad.custom is not None:
+            h, ins = ad.custom
+            f = f"{self.p}hook_{h.ident}"
+            self.line(f"if ({f}) {{", depth)
+            self.line(f"int l = {f}({self.hook_inputs(ins, place)});",
+                      depth + 1)
+            self.line("if (l > 5) l = 5;", depth + 1)
+            self.line("if (l > lv) lv = l;", depth + 1)
+            self.line("}", depth)
         for level, terms in ad.conditions:
             cond = " && ".join(f"({self.term(c, place)})" for c in terms)
             self.line(f"if ({cond}) {{", depth)
@@ -1650,6 +1692,43 @@ class CEmitter:
                   "size_t len, xtce_pk_frame_fn f, void* ctx) {")
         self.line(f"xtce_pk_{sync}_sync_push(&s->sync, data, len, f, ctx);", 1)
         self.line("}")
+
+    def hook_inputs(self, inputs: list, place) -> str:
+        """An xtce_pk_inputs of a custom algorithm's inputs."""
+        args = "".join(f", {flt(x[1])}" if x[0] == "const"
+                       else ", (double)"
+                       + math_value(x[3], place(x[1]).expr + access(x[2]), "c")
+                       for x in inputs)
+        return f"xtce_pk_inputs_of({len(inputs)}{args})"
+
+    def need_hooks(self, hooks: list, err: str, depth: int) -> None:
+        for h in hooks:
+            self.line(f"if (!{self.p}hook_{h.ident}) return "
+                      f"xtce_pk_fail({err}, XTCE_PK_NO_ALGORITHM, "
+                      f"{cstr(h.ident)}, NULL);", depth)
+
+    def declare_hooks(self) -> None:
+        macro = self.p.upper() + "HOOKS"
+        self.line()
+        self.line("/* The functions the application supplies for the "
+                  "document's custom algorithms:")
+        self.line(" * set them before decoding or encoding a packet that needs "
+                  "them, or it fails")
+        self.line(f" * with XTCE_PK_NO_ALGORITHM.  Define {macro} in exactly "
+                  "one file before it")
+        self.line(" * includes this header, to define them there. */")
+        self.line(f"#ifdef {macro}")
+        self.line(f"#define {self.p.upper()}HOOK")
+        self.line("#else")
+        self.line(f"#define {self.p.upper()}HOOK extern")
+        self.line("#endif")
+        for h in self.m.hooks:
+            for k, text in enumerate(textwrap.wrap(f"{h.name}, "
+                                                   f"{HOOK_DOCS[h.kind]}", 72)):
+                self.line(("/* " if k == 0 else " * ") + text)
+            self.line(" */")
+            self.line(f"{self.p.upper()}HOOK {HOOK_TYPES[h.kind]} "
+                      f"{self.p}hook_{h.ident};")
 
     def declare_monitor(self) -> None:
         t = self.p + "AlarmMonitor"
@@ -1759,6 +1838,7 @@ class CEmitter:
         self.line(f"static inline int {t}_decode({t}* out, const uint8_t* "
                   "data, size_t len, xtce_pk_error* err) {")
         self.reader()
+        self.need_hooks(items_hooks(k.root.items), "err", 1)
         self.read_items(k.root.items, 1, k.root.key)
         self.dispatch(k, k.root, 1)
         self.line("}")
@@ -1837,7 +1917,9 @@ class CEmitter:
             conds = [self.term(x, self.read_acc) for x in c.criteria]
             cond = (" && ".join(f"({x})" for x in conds) if len(conds) > 1
                     else (conds or ["1"])[0])
+            self.need_hooks(terms_hooks(c.criteria), "err", depth)
             self.line(f"if ({cond}) {{", depth)
+            self.need_hooks(items_hooks(c.items), "err", depth + 1)
             self.read_items(c.items, depth + 1, c.key)
             self.dispatch(k, c, depth + 1)
             self.line("}", depth)
@@ -1846,6 +1928,7 @@ class CEmitter:
                       f"{cstr(n.key)}, NULL);", depth)
         else:
             t = self.p + k.ident
+            self.need_hooks(checks_hooks(n.checks), "err", depth)
             self.finish(n, depth)
             self.line(f"out->tag = {t}_{n.ident}_tag;", depth)
             self.line("{", depth)

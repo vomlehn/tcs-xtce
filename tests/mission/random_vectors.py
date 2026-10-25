@@ -23,6 +23,12 @@ sys.path[:0] = [str(TOP / "python"), str(TOP / "python" / "tests" / "mission")]
 import demo  # noqa: E402
 from xtce.packet import PacketError  # noqa: E402
 
+# The custom algorithms the packet tools register.
+demo.HOOKS.update(is_even=lambda v: v[0] % 2.0 == 0.0,
+                  min_max=lambda v: (min(v), max(v)),
+                  bands=lambda v: int(v[0] / 50.0),
+                  twice=lambda d, start, end: 2 * sum(d[start // 8:end // 8]))
+
 
 def header(rng, packet_type, apid):
     """A primary header; packet_length() fills in its length."""

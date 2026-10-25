@@ -1530,8 +1530,6 @@ class ErrorDetectionTests(unittest.TestCase):
 
     def test_rejected(self):
         cases = [
-            (checked_mission('<Checksum name="custom" parameterRef="K"/>'),
-             "a custom checksum algorithm"),
             (checked_mission('<XOR parameterRef="K"/>', ctype="S8"),
              "checksum field K must be an uncalibrated unsigned"),
             (checked_mission('<XOR parameterRef="K"/>',

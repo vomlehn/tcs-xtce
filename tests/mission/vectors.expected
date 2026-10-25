@@ -182,5 +182,8 @@ Trend{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_c
 Derive{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, dr_speed=10.0, dr_has=true, dr_a=6, dr_b=4} | 0a12c02a0008412000000100060004 | derived: dr_speed_kph=36.0, dr_ratio=1.5
 Derive{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, dr_speed=2.5, dr_has=false, dr_a=7, dr_b=none} | 0a12c02a000640200000000007 | derived: dr_speed_kph=9.0, dr_ratio=none
 Derive{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, dr_speed=1.0, dr_has=true, dr_a=3, dr_b=0} | 0a12c02a00083f8000000100030000 | derived: dr_speed_kph=3.6, dr_ratio=INF
+Hooked{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, hk_a=100, hk_c=3, hk_b=7} | 0a1cc02a0003640307dc | alarms: hk_a=warning | derived: hk_min=3.0, hk_max=100.0
+Hooked{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, hk_a=255, hk_c=20, hk_b=none} | 0a1cc02a0002ff1426 | alarms: hk_a=severe | derived: hk_min=10.0, hk_max=255.0
+error:BadChecksum | -
 Arm{seq_count=5, force=true, level=7} | 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50
 Arm{seq_count=5, force=false, level=none} | 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50

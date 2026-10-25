@@ -19,16 +19,17 @@ import math
 import re
 from typing import Callable, Optional
 
-from .common import (code_unit, encode_text, fast_order, find_unit, wire_cap)
+from .common import (checks_hooks, code_unit, encode_text, fast_order,
+                     find_unit, items_hooks, terms_hooks, wire_cap)
 from .regex import compile_pattern
-from .model import (MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc,
-                    BinaryEnc, Cond, Criterion, DynSize, EnumLabel, FloatEnc,
-                    Fixed, Index, IntEnc, Item, Kind, Local, Mark, Member,
-                    Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
-                    Term, Unsupported, Value, VType, ref_text, term_locals,
-                    walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp,
-                    Require, ValueRef, needs_binding, Fill, Segment, Verify,
-                    Alarm, AlarmDef, Band, LEVELS, Change, Algorithm, Stream)
+from .model import (
+    MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
+    Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index, IntEnc, Item, Kind,
+    Local, Mark, Member, Mission, Node, Pad, Polynomial, Seek, Spline,
+    StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk,
+    MATH_UNARY, Check, ContextCal, EndSeek, MathOp, Require, ValueRef,
+    needs_binding, Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change,
+    Algorithm, Stream, Hook, Custom, term_hooks, input_locals)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -414,6 +415,8 @@ class Compiler:
         self.messages: dict[Key, tuple] = {}
         self.algorithms: dict[Key, tuple] = {}
         self.streams: dict[Key, tuple] = {}
+        # (kind, name) -> Hook, for the custom algorithms used
+        self.hooks: dict[tuple, Hook] = {}
         self.mcs: dict[Key, tuple] = {}
         # CommandContainer -> MetaCommand
         self.mc_containers: dict[Key, Key] = {}
@@ -453,9 +456,7 @@ class Compiler:
                 continue
             if md.algorithm_set:
                 for ch in md.algorithm_set.items:
-                    if ch.name == "MathAlgorithm":
-                        self.algorithms[path + (ch.value.name,)] = (path,
-                                                                    ch.value)
+                    self.algorithms[path + (ch.value.name,)] = (path, ch.value)
             if md.parameter_type_set:
                 for ch in md.parameter_type_set.items:
                     self.ptypes[path + (ch.value.name,)] = (path, ch.name,
@@ -560,18 +561,22 @@ class Compiler:
         if da is None and cl is None:
             return None
         try:
-            return Alarm(path, self.alarm_def(da, vt, where) if da else None,
-                         [(ca.context_match, self.alarm_def(ca, vt, where))
-                          for ca in (cl.context_alarm if cl else [])])
+            return Alarm(
+                path, self.alarm_def(da, vt, path, where) if da else None,
+                [(ca.context_match, self.alarm_def(ca, vt, path, where))
+                 for ca in (cl.context_alarm if cl else [])])
         except Unsupported as e:
             return Alarm(path, None, note=str(e))
 
-    def alarm_def(self, a, vt: VType, where: str) -> AlarmDef:
+    def alarm_def(self, a, vt: VType, path: Key, where: str) -> AlarmDef:
         d = AlarmDef(min_violations=a.min_violations or 1,
                      min_conformance=a.min_conformance or 1)
         if a.disabled:
             return d
-        if a.choice is not None:
+        if a.choice is not None and a.choice.name == "CustomAlarm":
+            alg = a.choice.value.input_algorithm
+            d.custom = (self.hook("alarm", qname(path + (alg.name,))), alg)
+        elif a.choice is not None:
             if a.choice.name != "AlarmConditions":
                 raise Unsupported(f"{where}: a {a.choice.name}")
             ac = a.choice.value
@@ -1977,9 +1982,12 @@ class Compiler:
         elif name == "Checksum":
             algo = v.name.value
             if algo == "custom":
-                raise Unsupported(f"{where}: a custom checksum algorithm")
+                name = (v.input_algorithm.name if v.input_algorithm
+                        else f"{pkey.rsplit('/', 1)[-1]}Checksum")
+                spec = ("custom", self.hook("checksum", qname(path + (name,))))
             m = re.fullmatch(r"(sum|fletcher)(\d+)", algo)
-            spec = (m.group(1), int(m.group(2))) if m else (algo,)
+            if algo != "custom":
+                spec = (m.group(1), int(m.group(2))) if m else (algo,)
         elif name == "XOR":
             spec = ("xor", vt.enc.bits)
         else:
@@ -2031,6 +2039,11 @@ class Compiler:
         c = mc.choice
         if c.name == "BooleanExpression":
             return [self.boolean(c.value.choice, path, scope, where, arg_key)]
+        if c.name == "CustomAlgorithm":
+            alg = c.value
+            hook = self.hook("criterion", qname(path + (alg.name,)))
+            inputs = self.hook_inputs(alg, path, scope, where, arg_key)
+            return [Custom(hook, inputs, f"{alg.name}(...)")]
         if c.name == "Comparison":
             comps = [c.value]
         elif c.name == "ComparisonList":
@@ -2551,6 +2564,10 @@ class Compiler:
                      + [n.max_bytes for n in concrete if n.key == st.container])
             st.max_bits = 8 * max(sizes, default=MAX_FIELD_BITS // 8)
         mnames = Namer()
+        hnames = Namer()
+        for h in self.hooks.values():
+            h.ident = hnames.take(snake(h.name.rsplit("/", 1)[-1]),
+                                  snake(h.name))
         # The mission is named for its last document, which by convention
         # is its own: the documents it builds on come first.
         return Mission(
@@ -2559,7 +2576,8 @@ class Compiler:
             aggregates=list(aggregates.values()), nodes=concrete, kinds=kinds,
             roots=roots, skipped=msgs,
             monitored=[(k, mnames.take(snake(k.rsplit("/", 1)[-1]), snake(k)),
-                        h) for k, h in monitored.items()], streams=streams)
+                        h) for k, h in monitored.items()], streams=streams,
+            hooks=list(self.hooks.values()))
 
     def stream(self, key: Key) -> Stream:
         """A FixedFrameStream or VariableFrameStream."""
@@ -2620,6 +2638,45 @@ class Compiler:
                                  or 1024) * out.frame_bits)
         return out
 
+    def hook(self, kind: str, name: str, outputs: int = 0) -> Hook:
+        """The hook for custom algorithm ``name``, which computes ``kind``."""
+        h = self.hooks.get((kind, name))
+        if h is None:
+            h = self.hooks[kind, name] = Hook(kind, name, outputs=outputs)
+        return h
+
+    def hook_inputs(self, alg, path: Key, scope: list, where: str,
+                    arg_key=None) -> list:
+        """The inputs of a custom algorithm, in order: values of the packet,
+        which must be present, and constants."""
+        out: list = []
+        items = alg.input_set.items if alg.input_set else []
+        if len(items) > MAX_HOOK_INPUTS:
+            raise Unsupported(f"{where}: a custom algorithm with more than "
+                              f"{MAX_HOOK_INPUTS} inputs")
+        for ch in items:
+            v = ch.value
+            if ch.name == "Constant":
+                try:
+                    out.append(("const", float(v.value)))
+                except ValueError:
+                    raise Unsupported(f"{where}: constant {v.constant_name} "
+                                      f"{v.value!r} is not a number") from None
+                continue
+            local, member, vt, name = self.value_ref(
+                "ParameterInstanceRef", v, path, scope, where, arg_key)
+            if local.optional:
+                raise Unsupported(f"{where}: custom algorithm input {name} has "
+                                  "an IncludeCondition")
+            if vt.kind not in ("int", "float", "enum", "bool"):
+                raise Unsupported(f"{where}: custom algorithm input {name} is "
+                                  f"a {vt.kind} value")
+            if v.use_calibrated_value is False and vt.calibrator is not None:
+                raise Unsupported(f"{where}: the raw value of calibrated "
+                                  f"{name}")
+            out.append(("value", local, member, vt))
+        return out
+
     def bind_algorithms(self, n: Node) -> None:
         """The MathAlgorithms that packet ``n`` triggers, by holding a value
         of a parameter that triggers it or being (or deriving from) a
@@ -2631,10 +2688,13 @@ class Compiler:
         chain = {x.key for x in n.chain()}
         names = Namer()
         for key, (path, alg) in self.algorithms.items():
-            mo = alg.math_operation
-            where = f"{n.key}: MathAlgorithm {qname(key)}"
+            custom = not hasattr(alg, "math_operation")
+            mo = alg if custom else alg.math_operation
+            where = (f"{n.key}: "
+                     f"{'CustomAlgorithm' if custom else 'MathAlgorithm'} "
+                     f"{qname(key)}")
             triggered = False
-            for ch in mo.trigger_set.items:
+            for ch in mo.trigger_set.items if mo.trigger_set else []:
                 try:
                     if ch.name == "OnParameterUpdateTrigger":
                         triggered |= (qname(self.resolve(ch.value.parameter_ref,
@@ -2648,6 +2708,10 @@ class Compiler:
                     pass
             if not triggered:
                 continue
+            if custom:
+                self.custom_algorithm(n, key, path, alg, scope, fields, names,
+                                      where)
+                continue
             try:
                 out = qname(self.resolve(mo.output_parameter_ref, path,
                                          self.params, "parameter"))
@@ -2660,6 +2724,31 @@ class Compiler:
                 Algorithm(out,
                           names.take(snake(out.rsplit("/", 1)[-1]), snake(out)),
                           expr))
+
+    def custom_algorithm(self, n: Node, key: Key, path: Key, alg, scope: list,
+                         fields: set, names, where: str) -> None:
+        """The outputs of a CustomAlgorithm that packet ``n`` triggers."""
+        try:
+            inputs = self.hook_inputs(alg, path, scope, where)
+            for x in input_locals(inputs):
+                if x not in fields and x not in n.fixed:
+                    raise Unsupported(f"{where}: input {x.name} is computed by "
+                                      "the packet")
+            outs = [qname(self.resolve(o.parameter_ref, path, self.params,
+                                       "parameter"))
+                    for o in (alg.output_set.output_parameter_ref
+                              if alg.output_set else [])]
+            if not outs:
+                raise Unsupported(f"{where}: no outputs")
+        except Unsupported as e:
+            n.algorithm_notes.append(str(e))
+            return
+        hook = self.hook("algorithm", qname(key), len(outs))
+        for i, out in enumerate(outs):
+            n.algorithms.append(
+                Algorithm(out,
+                          names.take(snake(out.rsplit("/", 1)[-1]), snake(out)),
+                          hook=hook, inputs=inputs, index=i))
 
     def bind_inputs(self, e: tuple, scope: list, fields: set, n: Node,
                     where: str) -> tuple:
@@ -2718,8 +2807,18 @@ class Compiler:
                 return ts
 
             def bound(d):
+                custom = None
+                if d.custom is not None:
+                    custom = (d.custom[0],
+                              self.hook_inputs(d.custom[1], a.path, scope,
+                                               where))
+                    for x in input_locals(custom[1]):
+                        if x not in fields and x not in n.fixed:
+                            raise Unsupported(f"{where}: input {x.name}, which "
+                                              "the packet computes")
                 return dataclasses.replace(
-                    d, conditions=[(lv, terms(mc)) for lv, mc in d.conditions])
+                    d, conditions=[(lv, terms(mc)) for lv, mc in d.conditions],
+                    custom=custom)
 
             if vt.kind == "array" and a.history:
                 n.alarm_notes.append(f"{where}: change ranges on an array")
@@ -2732,6 +2831,15 @@ class Compiler:
                                         for mc, d in a.contexts], key=lc.key)))
             except Unsupported as e:
                 n.alarm_notes.append(str(e))
+
+    @staticmethod
+    def node_hooks(n: Node) -> list:
+        """The hooks that decoding or encoding ``n`` calls."""
+        out = terms_hooks(n.all_criteria())
+        for h in items_hooks(n.all_items()) + checks_hooks(n.checks):
+            if h not in out:
+                out.append(h)
+        return out
 
     def _finish(self, n: Node) -> None:
         fixed = {}
@@ -2748,6 +2856,7 @@ class Compiler:
                     and it.local not in fixed and not it.local.computed
                     and it.local not in n.derived]
         n.max_bytes = (max_bits(n.all_items()) + 7) // 8
+        n.hooks = self.node_hooks(n)
 
 
 def edc_items(container) -> list:
@@ -2995,6 +3104,10 @@ def check_aligned(items: list[Item], where: str) -> None:
 
     walk_items(items, 0)
 
+
+# The most inputs a custom algorithm may have, which keeps the C runtime's
+# xtce_pk_inputs a fixed size.
+MAX_HOOK_INPUTS = 32
 
 SEGMENTS = ("ParameterSegmentRefEntry", "ContainerSegmentRefEntry",
             "StreamSegmentEntry")

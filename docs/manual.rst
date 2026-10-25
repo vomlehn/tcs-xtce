@@ -1190,6 +1190,9 @@ formats the message.
    * - ``BadChecksum``
      - A checksum field (see "Error detection" under `Supported XTCE`_)
        doesn't match the data it checks
+   * - ``NoAlgorithm``
+     - No function is registered for a custom algorithm the packet needs
+       (see "Custom algorithms" under `Supported XTCE`_)
    * - ``NoSpace``
      - C/C++ only: the output buffer is smaller than the packet
 
@@ -1696,8 +1699,9 @@ Error detection
      ``fletcher32``, Fletcher's checksum of that many bits, on words of
      half as many bits; ``adler32``; and ``luhn``, ``verhoeff`` and
      ``damm``, the check digit of the decimal digits in every 4 bits (a
-     digit above 9 fails with ``InvalidValue``). ``custom`` is not
-     supported. ``hashSizeInBits`` changes nothing.
+     digit above 9 fails with ``InvalidValue``). ``custom`` is the
+     application's function (see Custom algorithms).
+     ``hashSizeInBits`` changes nothing.
    * ``XOR``: the exclusive or of the words the size of the field.
    * ``Parity``: the bit that makes the number of one bits even
      (``Even``) or odd (``Odd``), with the field's bit.
@@ -1882,8 +1886,9 @@ Alarms
    A packet leaves out an alarm that it can't evaluate, and its generated
    documentation says why: one whose criteria use a value the packet
    doesn't hold, or one the packet computes (a size or length field); a
-   change range with a ``spanOfInterestInSeconds`` or on an array; a
-   ``CustomAlarm``; and alarms inside aggregates and arrays of arrays.
+   change range with a ``spanOfInterestInSeconds`` or on an array; and
+   alarms inside aggregates and arrays of arrays. A ``CustomAlarm`` is
+   its hook's (see Custom algorithms).
 
 Algorithms
    An ``AlgorithmSet``'s ``MathAlgorithm``, a postfix expression like a
@@ -1903,8 +1908,65 @@ Algorithms
    hold, or computes, or that uses ``ThisParameterOperand``, the output's
    own earlier value, like the demo's ``Count``. Evaluating algorithms
    across packets, on a ``OnPeriodicRateTrigger``, or at a
-   ``triggerRate``, is a processor's work, not a codec's; a
-   ``CustomAlgorithm`` is not supported.
+   ``triggerRate``, is a processor's work, not a codec's. A
+   ``CustomAlgorithm`` is evaluated the same way, by its hook (see
+   Custom algorithms).
+
+Custom algorithms
+   A ``CustomAlgorithm`` names code that the document doesn't hold, so
+   the application supplies each one as a function, a *hook*, named in
+   snake case from the algorithm's name (``IsEven`` gives ``is_even``):
+
+   * a criterion (a ``CustomAlgorithm`` in a ``RestrictionCriteria``,
+     ``IncludeCondition``, ``ContextMatch`` or other match criteria):
+     whether it holds for its inputs;
+   * a ``CustomAlgorithm`` of an ``AlgorithmSet``: its outputs, which
+     ``algorithms()`` gives as it gives a ``MathAlgorithm``'s;
+   * a ``CustomAlarm``: the alarm level, 0 (normal) to 5 (severe),
+     raised to at least that;
+   * a ``Checksum`` named ``custom``, by its ``InputAlgorithm``: the
+     value of the bits it covers.
+
+   Inputs are the ``InputSet``'s values of the packet (integers, floats,
+   enumerations and booleans, which must be present) and ``Constant``\ s,
+   in order, as doubles. The generated code has a place for each hook:
+
+   .. list-table::
+      :header-rows: 1
+      :widths: auto
+
+      * - Hook
+        - Rust (``hooks::IS_EVEN.set(f)``)
+        - C/C++ (``P_hook_is_even = f``)
+        - Python (``HOOKS["is_even"] = f``)
+      * - criterion
+        - ``fn(&[f64]) -> bool``
+        - ``bool f(xtce_pk_inputs)``
+        - ``f(inputs) -> bool``
+      * - algorithm
+        - ``fn(&[f64], &mut [f64]) -> bool``
+        - ``bool f(xtce_pk_inputs, double* out)``
+        - ``f(inputs) -> outputs or None``
+      * - alarm
+        - ``fn(&[f64]) -> u8``
+        - ``int f(xtce_pk_inputs)``
+        - ``f(inputs) -> int``
+      * - checksum
+        - ``fn(&[u8], usize, usize) -> u64``
+        - ``uint64_t f(const uint8_t*, size_t, size_t)``
+        - ``f(data, start, end) -> int``
+
+   A checksum hook gets the packet's bytes and the range of bits, from
+   ``start`` to ``end``; an algorithm hook returns false (or None) when it
+   has no outputs. In C, ``xtce_pk_inputs`` holds ``n`` inputs in ``v``,
+   and the hooks are variables that one file defines: define
+   ``P_HOOKS`` (``DEMO_HOOKS`` for a prefix ``demo_``) before it includes
+   the generated header. Decoding or encoding a packet whose criteria or
+   checksums need a hook that isn't set fails with ``NoAlgorithm``;
+   ``alarms()`` and ``algorithms()`` count a missing hook as raising
+   nothing and giving no outputs. The demo's ``Hooked`` packet uses one
+   of each, and the test tools supply them. The algorithms' text and
+   ``ExternalAlgorithmSet`` only document them.
 
 Streams
    A ``StreamSet``'s ``FixedFrameStream`` and ``VariableFrameStream``
@@ -1988,8 +2050,7 @@ Not supported
    than the first, ``IndirectParameterRefEntry`` chosen by an integer or
    string without an ``aliasNameSpace``, the stream constructs listed under
    Streams, instances of values in other packets, repeated segment entries,
-   commands that include another meta-command's container,
-   ``CustomAlgorithm`` criteria, transform algorithms, custom checksum
+   commands that include another meta-command's container, transform
    algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
    deprecates), calibrators inside aggregate types that use other values,
    least-significant-bit-first strings and binary data that may not start on

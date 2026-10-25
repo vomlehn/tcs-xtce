@@ -102,7 +102,30 @@ fn run<P: Packet + Display>(
     }
 }
 
+/// The demo mission's custom algorithms, the same in every version of this
+/// tool.
+fn set_hooks() {
+    demo::hooks::IS_EVEN.set(|v| v[0] % 2.0 == 0.0).ok();
+    demo::hooks::MIN_MAX
+        .set(|v, out| {
+            out[0] = v.iter().copied().fold(f64::INFINITY, f64::min);
+            out[1] = v.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            true
+        })
+        .ok();
+    demo::hooks::BANDS.set(|v| (v[0] / 50.0) as u8).ok();
+    demo::hooks::TWICE
+        .set(|d, start, end| {
+            2 * d[start / 8..end / 8]
+                .iter()
+                .map(|&b| u64::from(b))
+                .sum::<u64>()
+        })
+        .ok();
+}
+
 fn main() {
+    set_hooks();
     let path = std::env::args()
         .nth(1)
         .expect("usage: packet_tool_fixed VECTORS");
