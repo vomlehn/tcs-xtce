@@ -178,6 +178,25 @@ def probe(rng) -> bytes:
     return head + rng.randbytes(size) + rng.randbytes(rng.choice([0, 1]))
 
 
+def tally(rng) -> bytes:
+    """A Tally body: a count mostly in range, then the tallies, data sized
+    by the first, an extra byte when the second is 7 and another when there
+    are three or more.  Short counts leave those elements missing."""
+    n = rng.choice([0, 1, 2, 2, 3, 3, 4, rng.randrange(8)])
+    tallies = [rng.choice([0, 1, 2, 7, rng.randrange(256)])
+               for _ in range(min(n, 4))]
+    if tallies and rng.random() < 0.8:
+        tallies[0] = rng.randrange(4)  # mostly data that is there
+    body = bytes([n] + tallies)
+    if tallies:
+        body += rng.randbytes(min(tallies[0], 4))
+    if len(tallies) > 1 and tallies[1] == 7:
+        body += rng.randbytes(1)
+    if n >= 3:
+        body += rng.randbytes(1)
+    return body
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -195,7 +214,7 @@ def main() -> None:
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
             apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
-                               280, 290, 310, 320, 330, 340, 350, 360,
+                               280, 290, 310, 320, 330, 340, 350, 360, 370,
                                rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
@@ -231,6 +250,8 @@ def main() -> None:
                 data += rng.randbytes(rng.choice([0, 1]))
             elif apid == 350 and rng.random() < 0.8:
                 data += probe(rng)
+            elif apid == 370 and rng.random() < 0.8:
+                data += tally(rng)
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
             elif apid == 340 and rng.random() < 0.8:
