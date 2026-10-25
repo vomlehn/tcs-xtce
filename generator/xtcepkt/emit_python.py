@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import textwrap
 
-from .common import (HOOK_DOCS, checks_hooks, items_hooks, terms_hooks, notes,
-                     stream_doc, Ref, fast_order, field_range, flt,
+from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
+                     notes, stream_doc, Ref, fast_order, field_range, flt,
                      header_lines, inputs, invertible, math_value, size_args,
                      string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
@@ -348,6 +348,20 @@ def term(t, place) -> str:
                      place(t.other) if t.other is not None else None)
 
 
+def valid_test(vt: VType, x: str) -> str:
+    """Whether value ``x`` lies in one of its type's valid ranges."""
+    tests = []
+    for b in vt.valid:
+        if vt.kind == "int":
+            lo = f"{b.lo} <= " if b.lo is not None else ""
+            hi = f" <= {b.hi}" if b.hi is not None else ""
+            tests.append(f"{lo}{x}{hi}" if lo or hi else "True")
+        else:
+            tests.append(f"pk.in_band({x}, {b.lo!r}, {b.lo_incl}, {b.hi!r}, "
+                         f"{b.hi_incl})")
+    return " or ".join(f"({t})" for t in tests)
+
+
 def pspec(spec: tuple) -> str:
     """The runtime's checksum spec: the tuple, but for a custom checksum,
     whose function is the application's."""
@@ -552,6 +566,14 @@ class PythonEmitter:
                   2)
         self.line(f"return pk.find_label(int(self), _LABELS_{vt.ident})", 2)
         self.line()
+        self.line("@staticmethod", 1)
+        self.line("def label_of(value: int) -> Optional[str]:", 1)
+        self.line('"""The label of ``value``, which needn\'t be a member: a '
+                  'value in a', 2)
+        self.line("label's range, or one the enumeration doesn't list (which "
+                  'has none)."""', 2)
+        self.line(f"return pk.find_label(int(value), _LABELS_{vt.ident})", 2)
+        self.line()
         self.line()
         labels = ", ".join(f"({pstr(lab.label)}, {lab.value}, {lab.max_value})"
                            for lab in vt.labels)
@@ -681,7 +703,7 @@ class PythonEmitter:
                     self.line(f"if {x} is None:", depth)
                     self.line('raise pk.PacketError("Missing", '
                               f'{pstr(lc.name)})', depth + 1)
-                self.write_value(lc.vtype, x, pstr(lc.name),
+                self.write_value(written(n, lc), x, pstr(lc.name),
                                  self.write_ref(n, names), depth)
 
     def write_value(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
@@ -711,6 +733,9 @@ class PythonEmitter:
                       f"{f})", depth)
             self.line(f"w.bytes({data})", depth)
         else:
+            if vt.valid and vt.kind in ("int", "float"):
+                self.line(f"if not ({valid_test(vt, x)}):", depth)
+                self.line(f'raise pk.PacketError("OutOfRange", {f})', depth + 1)
             self.line(write_stmt(vt, x, f, ref), depth)
 
     # The value a size or location uses, and the expression for a Local,
@@ -997,7 +1022,7 @@ class PythonEmitter:
         """The body of a method giving a field's alarm level; with
         ``state``, the AlarmMonitor field that keeps its parameter's
         earlier samples."""
-        self.line(f"x = self.{name}", 2)
+        self.line(f"x = {place(lc)}", 2)
         if lc.optional:
             self.line("if x is None:", 2)
             self.line("return None", 3)

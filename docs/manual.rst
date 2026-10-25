@@ -580,7 +580,8 @@ one of the packet header, and one per service or application, each building
 on the others. Yamcs loads such a mission from a list of documents, and
 ``tcs-xtce`` reads it the same way. The root SpaceSystem of each document
 sits at the top of one tree, so a reference in one document can name a
-definition in another:
+definition in another (the ``split-mission`` example, under `Examples`_,
+is one such mission):
 
 .. code-block:: xml
 
@@ -1167,7 +1168,9 @@ formats the message.
    * - ``Mismatch``
      - A restriction criterion or argument assignment doesn't hold
    * - ``OutOfRange``
-     - A value doesn't fit its encoding, or a binary value is too short
+     - A value doesn't fit its encoding or is outside its type's
+       ``ValidRange`` (or an argument's ``ValidRangeSet``), or a binary
+       value is too short
    * - ``InvalidString``
      - A string isn't valid in its character set, or contains its
        termination character
@@ -1542,6 +1545,13 @@ Calibrators
    decodes as 1 too. The type's ``ValidRange`` applies to the calibrated
    value; with ``validRangeAppliesToCalibrated="false"`` it is ignored. A
    size or count taken from it is bounded through the calibrator.
+
+   Encoding an integer or a float outside its type's ``ValidRange``, or an
+   argument outside every range of its ``ValidRangeSet``, fails with
+   ``OutOfRange``, as a range check for commanding should. A size or count
+   that encoding computes from what it sizes is checked through that
+   instead: too many elements fail with ``BadSize``. Decoding takes any
+   value the encoding holds, but a size or count above its range.
    Comparisons with ``useCalibratedValue="false"`` are not supported on
    it, as the generated code keeps only the calibrated value.
 
@@ -2238,6 +2248,10 @@ example and for ``examples/README.rst``, the `index of examples
 
 The examples are:
 
+* `enum-labels <../examples/enum-labels/README.html>`__: a status whose
+  mode is an enumeration that its include conditions, a derived packet
+  and an alarm all compare by label, with a label for a range of values
+  and a value that no label names.
 * `housekeeping <../examples/housekeeping/README.html>`__: status packets
   with a packet length field, calibrated temperatures, voltages and powers,
   and a field present only when a heater is on, stored one after another
@@ -2245,6 +2259,10 @@ The examples are:
 * `simple-string <../examples/simple-string/README.html>`__: a structure
   holding one string of up to 8 bytes, serialized into and deserialized
   from managed buffers.
+* `split-mission <../examples/split-mission/README.html>`__: a rover's
+  PUS telemetry described in three documents (data types, packet headers
+  and the rover's packets), with types derived by ``baseType``, recorded
+  after the digest of the set of documents.
 * `to-from <../examples/to-from/README.html>`__: words of varying
   length, with a leading size tag, written by the program in one language
   and read by the program in another, for any pair of C, C++, Rust and
@@ -2463,6 +2481,80 @@ find where each packet ends, since a TCP stream doesn't keep writes apart:
    cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
 
 See the `variable-array README <../examples/variable-array/README.html>`__
+for more.
+
+``enum-labels``
+---------------
+
+``examples/enum-labels/modes.xml`` describes a probe's ``Status``, whose
+``Mode`` is an enumeration (``SAFE``, ``IDLE``, ``SCIENCE``,
+``DOWNLINK``, and ``TEST`` for the values 16 to 31). Everything that
+depends on the mode names a label: ``Target`` is there only in
+``SCIENCE`` mode and ``Station`` only in ``DOWNLINK`` mode, a
+``SafeStatus`` is a ``Status`` in ``SAFE`` mode (so its structure has no
+mode field), and the mode's alarm is a warning in ``SAFE`` mode and a
+watch in ``TEST`` mode:
+
+.. code-block:: xml
+
+   <ParameterRefEntry parameterRef="Target">
+     <IncludeCondition>
+       <Comparison parameterRef="Mode" value="SCIENCE"/>
+     </IncludeCondition>
+   </ParameterRefEntry>
+
+The programs name labels too, through the generated constants
+(``ModeType::SCIENCE``, ``probe_ModeType_SCIENCE``,
+``ModeType.SCIENCE``), so renumbering the modes changes the bytes on the
+wire and nothing else. They print the labels of a few values, encode a
+status in each mode, decode each as a ``StatusKind`` with its alarm, and
+decode a value in ``TEST``'s range and one that no label names, which
+decoding keeps:
+
+::
+
+   mode 20 is TEST
+   mode 40 has no label
+   ...
+   decode 000901 -> SafeStatus{battery=9, target=none, station=none, reason=LOW_POWER} | alarms: mode=warning
+   decode 2850 -> Status{mode=40, battery=80, target=none, station=none} | alarms: mode=normal
+
+See the `enum-labels README <../examples/enum-labels/README.html>`__ for
+more.
+
+``split-mission``
+-----------------
+
+``examples/split-mission`` describes a rover's PUS telemetry in three
+documents, as Yamcs's PUS example lays them out: ``dt.xml`` holds data
+types, ``pus.xml`` the CCSDS primary header and PUS telemetry secondary
+header, and ``rover.xml`` the rover's housekeeping and event packets,
+derived from ``/PUS/pus-tm`` and picked by ``/PUS/pus-service`` and
+``/PUS/pus-subservice`` (see `Missions in several documents`_). Its types
+derive from ``dt.xml``'s with ``baseType``, adding units and a
+``ValidRange``:
+
+.. code-block:: xml
+
+   <IntegerParameterType name="turns" baseType="/dt/uint16">
+     <ValidRange minInclusive="0" maxInclusive="1000"/>
+   </IntegerParameterType>
+
+The generator reads the three together, the documents others build on
+first, and names the mission ``Rover`` for the last. Each program checks
+that the digest of the set doesn't depend on the order of the
+documents, records three packets after it, and decodes them again as a
+``CcsdsKind``; a wheel turned 1001 times can't be encoded:
+
+::
+
+   set digest: 65a49b2e175af6ee41498f1a0b8dd37b (dt.xml, pus.xml, rover.xml)
+   set digest: the same for rover.xml, dt.xml, pus.xml
+   ...
+   decode at 39: 14 bytes -> Event{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=2, pus_version=2, pus_time_ref=0, pus_counter=2, event=OVERHEAT, event_data=85}
+   encode Hk{..., left_turns=1001, right_turns=0} -> error:OutOfRange (value of left-turns is outside its valid range or encoding)
+
+See the `split-mission README <../examples/split-mission/README.html>`__
 for more.
 
 

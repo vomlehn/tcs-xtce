@@ -396,6 +396,10 @@ class VType:
     eng: Optional[tuple[int, bool]] = None
     # The type's DefaultAlarm and ContextAlarmList, if it has either.
     alarm: Optional["Alarm"] = None
+    # Integers and floats: the ranges of a ValidRange (or an argument's
+    # ValidRangeSet), as Bands inside which the value must lie when it is
+    # encoded; integer ones whole and inclusive (see compile.int_band).
+    valid: list = field(default_factory=list)
 
     @property
     def width(self) -> int:

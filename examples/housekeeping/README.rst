@@ -260,7 +260,7 @@ that they print the same thing:
    decode at 28: 7 bytes -> Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
    decode at 35: 5 bytes -> Status{heater_on=false, temperature=5.0, bus_voltage=28.0, heater_power=none}
    encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=none} -> error:Missing (HeaterPower is required by its include condition)
-   encode Status{heater_on=false, temperature=300.0, bus_voltage=28.0, heater_power=none} -> error:OutOfRange (value of Temperature does not fit its encoding)
+   encode Status{heater_on=false, temperature=300.0, bus_voltage=28.0, heater_power=none} -> error:OutOfRange (value of Temperature is outside its valid range or encoding)
    decode 0005125c (cut short) -> error:Truncated (packet too short for PacketLength)
    decode 00040478e200 (PacketLength one too many) -> error:BadLength (PacketLength does not match the length of the packet)
    housekeeping: Rust, C, C++ and Python output identical

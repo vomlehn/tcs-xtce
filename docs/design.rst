@@ -492,6 +492,16 @@ a value the packet computes (a size, a length) leaves the alarm out, with
 a note in the packet's documentation; so does anything that needs earlier
 packets, which a codec doesn't keep.
 
+A value that its inheritance fixes still has its alarm, of the constant,
+so a derived packet such as a ``SafeStatus`` reports the mode it fixes.
+
+A type's ``ValidRange`` (an argument's ``ValidRangeSet``) becomes Bands
+too (``VType.valid``), and encoding checks each integer and float against
+them where it writes it, failing with ``OutOfRange``. Sizes and counts that
+encoding computes skip the check (``common.written``): what they size is
+checked with a better error, ``BadSize``. Decoding doesn't check, since a
+receiver should see what was sent.
+
 Every runtime must give the same level, so integer ranges become whole,
 inclusive bounds clamped to the field's type when they are compiled
 (``int_band``): Python compares an integer with a float exactly, and Rust

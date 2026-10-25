@@ -861,6 +861,14 @@ generated <tt class="docutils literal">alarms()</tt> methods read the struct's f
 a value the packet computes (a size, a length) leaves the alarm out, with
 a note in the packet's documentation; so does anything that needs earlier
 packets, which a codec doesn't keep.</p>
+<p>A value that its inheritance fixes still has its alarm, of the constant,
+so a derived packet such as a <tt class="docutils literal">SafeStatus</tt> reports the mode it fixes.</p>
+<p>A type's <tt class="docutils literal">ValidRange</tt> (an argument's <tt class="docutils literal">ValidRangeSet</tt>) becomes Bands
+too (<tt class="docutils literal">VType.valid</tt>), and encoding checks each integer and float against
+them where it writes it, failing with <tt class="docutils literal">OutOfRange</tt>. Sizes and counts that
+encoding computes skip the check (<tt class="docutils literal">common.written</tt>): what they size is
+checked with a better error, <tt class="docutils literal">BadSize</tt>. Decoding doesn't check, since a
+receiver should see what was sent.</p>
 <p>Every runtime must give the same level, so integer ranges become whole,
 inclusive bounds clamped to the field's type when they are compiled
 (<tt class="docutils literal">int_band</tt>): Python compares an integer with a float exactly, and Rust

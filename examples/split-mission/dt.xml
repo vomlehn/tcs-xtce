@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Data types shared by the documents of a mission, as Yamcs's PUS
+     example keeps them in their own SpaceSystem: rover.xml and pus.xml
+     name them as /dt/uint16 and so on. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="dt">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <BooleanParameterType name="bool1">
+        <IntegerDataEncoding sizeInBits="1"/>
+      </BooleanParameterType>
+      <IntegerParameterType name="uint2" signed="false">
+        <IntegerDataEncoding sizeInBits="2"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="uint3" signed="false">
+        <IntegerDataEncoding sizeInBits="3"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="uint4" signed="false">
+        <IntegerDataEncoding sizeInBits="4"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="uint8" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="uint11" signed="false">
+        <IntegerDataEncoding sizeInBits="11"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="uint14" signed="false">
+        <IntegerDataEncoding sizeInBits="14"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="uint16" signed="false">
+        <IntegerDataEncoding sizeInBits="16"/>
+      </IntegerParameterType>
+      <FloatParameterType name="float32">
+        <FloatDataEncoding sizeInBits="32"/>
+      </FloatParameterType>
+    </ParameterTypeSet>
+  </TelemetryMetaData>
+</SpaceSystem>

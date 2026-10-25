@@ -136,3 +136,28 @@ class AlarmTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ValidRangeTests(unittest.TestCase):
+    def test_bands(self):
+        m = compile_xml(mission(tm="""
+            <ParameterTypeSet>
+              <IntegerParameterType name="I" signed="false">
+              <IntegerDataEncoding sizeInBits="8"/>
+              <ValidRange minInclusive="2" maxInclusive="300"/>
+              </IntegerParameterType>
+              <FloatParameterType name="F">
+              <FloatDataEncoding sizeInBits="32"/>
+              <ValidRange minExclusive="-1.5" maxInclusive="2.5"/>
+              </FloatParameterType>
+            </ParameterTypeSet>
+            <ParameterSet><Parameter name="A" parameterTypeRef="I"/>
+              <Parameter name="B" parameterTypeRef="F"/></ParameterSet>
+            <ContainerSet><SequenceContainer name="P"><EntryList>
+              <ParameterRefEntry parameterRef="A"/>
+              <ParameterRefEntry parameterRef="B"/></EntryList>
+            </SequenceContainer></ContainerSet>"""))
+        (_, a), (_, b) = m.nodes[0].fields
+        # 300 is beyond what the field holds, so the top is no bound.
+        self.assertEqual(a.vtype.valid, [Band(0, 2, True, None, True, True)])
+        self.assertEqual(b.vtype.valid, [Band(0, -1.5, False, 2.5, True, True)])

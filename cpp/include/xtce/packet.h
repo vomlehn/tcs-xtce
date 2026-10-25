@@ -95,7 +95,8 @@ static inline int xtce_pk_error_message(const xtce_pk_error* e, char* buf,
                                         e->detail ? e->detail : "");
                 case XTCE_PK_OUT_OF_RANGE:
                         return snprintf(buf, cap,
-                                        "value of %s does not fit its encoding",
+                                        "value of %s is outside its valid "
+                                        "range or encoding",
                                         f);
                 case XTCE_PK_INVALID_STRING:
                         return snprintf(buf, cap, "invalid string in %s", f);

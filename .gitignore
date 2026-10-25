@@ -60,6 +60,14 @@ __pycache__/
 /examples/variable-array/c/variable_array.h
 /examples/variable-array/cxx/variable_array.h
 /examples/variable-array/python/variable_array.py
+/examples/enum-labels/rust/src/probe.rs
+/examples/enum-labels/c/probe.h
+/examples/enum-labels/cxx/probe.h
+/examples/enum-labels/python/probe.py
+/examples/split-mission/rust/src/rover.rs
+/examples/split-mission/c/rover.h
+/examples/split-mission/cxx/rover.h
+/examples/split-mission/python/rover.py
 
 # Downloaded by make references
 /references/*

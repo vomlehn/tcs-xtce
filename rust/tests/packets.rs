@@ -293,8 +293,11 @@ fn arrays_and_sizes_from_other_fields() {
     s.valid.pop();
     assert_eq!(bad(&s), Err("invalid size or count for Valid".into()));
     s.valid.push(true);
-    s.label_size = 11; // beyond the ValidRange that bounds the label
-    assert_eq!(bad(&s), Err("invalid size or count for Label".into()));
+    s.label_size = 11; // beyond its ValidRange, which bounds the label
+    assert_eq!(
+        bad(&s),
+        Err("value of LabelSize is outside its valid range or encoding".into())
+    );
     s.label_size = 4;
     s.label_ = "abcde".into();
     assert_eq!(bad(&s), Err("Label is too long for its encoding".into()));

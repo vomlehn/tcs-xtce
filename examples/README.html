@@ -394,6 +394,11 @@ file and every example's.</p>
 </tr>
 </thead>
 <tbody valign="top">
+<tr><td><a class="reference external" href="enum-labels/README.html">enum-labels</a></td>
+<td>A status whose mode is an enumeration that its include conditions,
+a derived packet and an alarm all compare by label, so that
+renumbering the modes changes nothing but the bytes</td>
+</tr>
 <tr><td><a class="reference external" href="housekeeping/README.html">housekeeping</a></td>
 <td>Status packets with a packet length field, calibrated values and a
 field present only when the heater is on, stored one after another
@@ -402,6 +407,11 @@ in a stream and split apart again</td>
 <tr><td><a class="reference external" href="simple-string/README.html">simple-string</a></td>
 <td>A structure holding one string of up to 8 bytes, serialized into
 and deserialized from managed buffers</td>
+</tr>
+<tr><td><a class="reference external" href="split-mission/README.html">split-mission</a></td>
+<td>A rover's PUS telemetry described in three documents (data types,
+packet headers and the rover's packets), with types derived by
+<tt class="docutils literal">baseType</tt>, recorded after the digest of the set of documents</td>
 </tr>
 <tr><td><a class="reference external" href="to-from/README.html">to-from</a></td>
 <td>Words of varying length, with a leading size tag, written by the

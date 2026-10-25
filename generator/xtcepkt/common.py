@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import re
 import textwrap
@@ -268,6 +269,15 @@ def items_hooks(items: list) -> list:
             terms += [c for crit, _ in d.lookup or [] for c in crit]
     out = terms_hooks(terms)
     return out + [h for h in checks_hooks(checks) if h not in out]
+
+
+def written(n: Node, lc) -> VType:
+    """The type of a value as packet ``n`` writes it: a size or count it
+    computes from what it sizes isn't checked against its valid ranges,
+    since what it sizes is, with a better error (BadSize)."""
+    if lc in n.derived and lc.vtype.valid:
+        return dataclasses.replace(lc.vtype, valid=[])
+    return lc.vtype
 
 
 def notes(n: Node) -> list[str]:

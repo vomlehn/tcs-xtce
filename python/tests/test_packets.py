@@ -172,7 +172,7 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(self.kind(dataclasses.replace(s, valid=[True])),
                          "BadSize")
         self.assertEqual(self.kind(dataclasses.replace(s, label_size=11)),
-                         "BadSize")
+                         "OutOfRange")
         self.assertEqual(self.kind(dataclasses.replace(s, label_="abcde")),
                          "TooLong")
         full = dataclasses.replace(s, label_="abcd")

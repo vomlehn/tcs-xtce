@@ -315,6 +315,32 @@ def integer_range(t, calibrated: bool = False) -> Optional[tuple[int, int]]:
             max(r.max_inclusive for r in ranges))
 
 
+def valid_bands(t, vt: "VType", calibrated: bool) -> list:
+    """The ranges of type ``t``'s ValidRange, or of an argument type's
+    ValidRangeSet, as Bands a value must lie in (any of them).  None when
+    a calibrated type's range applies to the raw value, which the generated
+    code doesn't keep."""
+    if getattr(t, "valid_range", None) is not None:
+        ranges = [t.valid_range]
+    elif getattr(t, "valid_range_set", None) is not None:
+        ranges = list(t.valid_range_set.valid_range)
+    else:
+        return []
+    if calibrated and any(getattr(r, "valid_range_applies_to_calibrated",
+                                  None) is False for r in ranges):
+        return []
+    out = []
+    for r in ranges:
+        lo_excl = getattr(r, "min_exclusive", None)
+        hi_excl = getattr(r, "max_exclusive", None)
+        b = Band(0, r.min_inclusive if r.min_inclusive is not None else lo_excl,
+                 r.min_inclusive is not None or lo_excl is None,
+                 r.max_inclusive if r.max_inclusive is not None else hi_excl,
+                 r.max_inclusive is not None or hi_excl is None, True)
+        out.append(int_band(b, vt) if vt.kind == "int" else b)
+    return out
+
+
 def snake(name: str) -> str:
     s = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
     s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", s)
@@ -667,6 +693,7 @@ class Compiler:
             if not isinstance(enc, (IntEnc, FloatEnc)):
                 raise Unsupported(f"{where}: float with {enc_name}")
             vt.kind = "float"
+            vt.valid = valid_bands(t, vt, cal is not None)
         elif base in ("Integer", "Enumerated", "Boolean"):
             # A boolean may also be one of two strings.
             if (not isinstance(enc, IntEnc)
@@ -687,6 +714,7 @@ class Compiler:
                         raise Unsupported(f"{where}: {bits}-bit integers")
                     vt.eng = (bits, t.signed is not False)
                 vt.valid_range = integer_range(t, cal is not None)
+                vt.valid = valid_bands(t, vt, cal is not None)
         elif base == "String":
             # A string encoded as binary is its UTF-8 bytes, filling the field.
             if not isinstance(enc, (StringEnc, BinaryEnc)):
@@ -2781,7 +2809,11 @@ class Compiler:
         evaluated are left out, and ``alarm_notes`` says why."""
         fields = {lc for _, lc in n.fields}
         scope = self.scope_of(n)
-        for name, lc in n.fields:
+        # A value its inheritance fixes has an alarm too, of that value.
+        names = Namer([name for name, _ in n.fields])
+        fixed = [(names.take(snake(lc.name)), lc) for lc in n.fixed
+                 if lc.vtype.kind in ("int", "float", "enum", "bool")]
+        for name, lc in n.fields + fixed:
             vt = lc.vtype
             target = vt.elem if vt.kind == "array" else vt
             if target.kind in ("array", "aggregate"):

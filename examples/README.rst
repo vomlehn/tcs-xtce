@@ -35,6 +35,10 @@ file and every example's.
 
    * - Example
      - Shows
+   * - `enum-labels <enum-labels/README.html>`__
+     - A status whose mode is an enumeration that its include conditions,
+       a derived packet and an alarm all compare by label, so that
+       renumbering the modes changes nothing but the bytes
    * - `housekeeping <housekeeping/README.html>`__
      - Status packets with a packet length field, calibrated values and a
        field present only when the heater is on, stored one after another
@@ -42,6 +46,10 @@ file and every example's.
    * - `simple-string <simple-string/README.html>`__
      - A structure holding one string of up to 8 bytes, serialized into
        and deserialized from managed buffers
+   * - `split-mission <split-mission/README.html>`__
+     - A rover's PUS telemetry described in three documents (data types,
+       packet headers and the rover's packets), with types derived by
+       ``baseType``, recorded after the digest of the set of documents
    * - `to-from <to-from/README.html>`__
      - Words of varying length, with a leading size tag, written by the
        program in one language and read by the program in another, for

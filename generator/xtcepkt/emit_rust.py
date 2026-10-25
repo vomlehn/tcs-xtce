@@ -6,11 +6,11 @@ import json
 import math
 import textwrap
 
-from .common import (HOOK_DOCS, checks_hooks, items_hooks, terms_hooks, notes,
-                     stream_capacity, stream_doc, MATH_OPS, Ref, fast_order,
-                     field_range, flt, header_lines, inputs, int_enc,
-                     invertible, math_value, size_args, str_cap, string_spec,
-                     wire_region)
+from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
+                     notes, stream_capacity, stream_doc, MATH_OPS, Ref,
+                     fast_order, field_range, flt, header_lines, inputs,
+                     int_enc, invertible, math_value, size_args, str_cap,
+                     string_spec, wire_region)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
@@ -367,7 +367,31 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
 
 def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     """Statement writing value ``x`` (a place or literal) with BitWriter ``w``;
-    ``ref`` gives the expression for a value that gives a size or count."""
+    ``ref`` gives the expression for a value that gives a size or count.  A
+    value outside its type's valid ranges fails with OutOfRange."""
+    stmt = write_value_stmt(vt, x, f, ref)
+    if not (vt.valid and vt.kind in ("int", "float")):
+        return stmt
+    tests = []
+    for b in vt.valid:
+        if vt.kind == "int":
+            parts = ([f"{b.lo}i128 <= {x} as i128"] if b.lo is not None
+                     else []) + ([f"{x} as i128 <= {b.hi}i128"]
+                                 if b.hi is not None else [])
+            tests.append(" && ".join(parts) or "true")
+        else:
+            def opt(v):
+                return "None" if v is None else f"Some({rflt(v)})"
+            tests.append(f"pk::in_band({x}, {opt(b.lo)}, "
+                         f"{str(b.lo_incl).lower()}, {opt(b.hi)}, "
+                         f"{str(b.hi_incl).lower()})")
+    test = " || ".join(f"({t})" for t in tests)
+    return (f"{{ if !({test}) {{ return Err(PacketError::OutOfRange {{ field: "
+            f"{f} }}); }} {stmt} }}")
+
+
+def write_value_stmt(vt: VType, x: str, f: str, ref) -> str:
+    """write_stmt's statement, without the check of the valid ranges."""
     e = vt.enc
     bad = f"return Err(PacketError::BadSize {{ field: {f} }});"
     if isinstance(e, AggregateEnc):
@@ -860,8 +884,8 @@ class RustEmitter:
                                               "aggregate") else f"*o{lc.id}")
                 else:
                     x = self.place(n, lc, names)
-                self.line(write_stmt(lc.vtype, x, f, self.write_ref(n, names)),
-                          depth)
+                self.line(write_stmt(written(n, lc), x, f,
+                                     self.write_ref(n, names)), depth)
 
     # The value a size or location uses, and the expression for a Local,
     # when decoding.
@@ -1189,7 +1213,7 @@ class RustEmitter:
         earlier samples."""
         vt = lc.vtype
         kind = vt.elem.kind if vt.kind == "array" else vt.kind
-        x = f"self.{name}"
+        x = place(lc)
         if lc.optional:
             x = (f"{x}.as_ref()?" if kind == "string" or vt.kind == "array"
                  else f"{x}?")

@@ -286,9 +286,9 @@ int main(void) {
                 s.valid.len = 1;
                 CHECK(strcmp(ENCODE(demo_Samples, &s), "BadSize") == 0);
                 s.valid.len = 4;
-                s.label_size =
-                        11; /* beyond the ValidRange that bounds the label */
-                CHECK(strcmp(ENCODE(demo_Samples, &s), "BadSize") == 0);
+                /* beyond its ValidRange, which bounds the label */
+                s.label_size = 11;
+                CHECK(strcmp(ENCODE(demo_Samples, &s), "OutOfRange") == 0);
                 s.label_size = 4;
                 SET_STR(s.label_, "abcde");
                 CHECK(strcmp(ENCODE(demo_Samples, &s), "TooLong") == 0);

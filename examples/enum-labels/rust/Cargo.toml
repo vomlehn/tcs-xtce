@@ -1,0 +1,15 @@
+[package]
+name = "enum-labels"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = """\
+    Encodes and decodes a status whose mode, an enumeration, is compared by \
+    label\
+"""
+
+[dependencies]
+tcs-xtce = { path = "../../../rust" }
+
+# A stand-alone crate, not part of any enclosing workspace.
+[workspace]

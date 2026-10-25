@@ -1,0 +1,15 @@
+[package]
+name = "split-mission"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = """\
+    Records and decodes PUS telemetry described in three XTCE documents, \
+    after the digest of the set\
+"""
+
+[dependencies]
+tcs-xtce = { path = "../../../rust" }
+
+# A stand-alone crate, not part of any enclosing workspace.
+[workspace]

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The rover's own packets, which are PUS telemetry packets
+     (/PUS/pus-tm, from pus.xml): housekeeping (service 3, subservice 25)
+     and events (service 5, subservice 1).  Its types derive from those of
+     dt.xml with baseType, adding units and valid ranges. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Rover">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <FloatParameterType name="volts" baseType="/dt/float32">
+        <UnitSet><Unit>V</Unit></UnitSet>
+      </FloatParameterType>
+      <FloatParameterType name="celsius" baseType="/dt/float32">
+        <UnitSet><Unit>degC</Unit></UnitSet>
+      </FloatParameterType>
+      <!-- A wheel turns at most 1000 times between reports. -->
+      <IntegerParameterType name="turns" baseType="/dt/uint16">
+        <ValidRange minInclusive="0" maxInclusive="1000"/>
+      </IntegerParameterType>
+      <EnumeratedParameterType name="event-type">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <EnumerationList>
+          <Enumeration value="1" label="WHEEL_STALL"/>
+          <Enumeration value="2" label="OVERHEAT"/>
+          <Enumeration value="3" label="LOW_BATTERY"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="battery" parameterTypeRef="volts"/>
+      <Parameter name="motor-temp" parameterTypeRef="celsius"/>
+      <Parameter name="left-turns" parameterTypeRef="turns"/>
+      <Parameter name="right-turns" parameterTypeRef="turns"/>
+      <Parameter name="event" parameterTypeRef="event-type"/>
+      <Parameter name="event-data" parameterTypeRef="/dt/uint16"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="hk">
+        <EntryList>
+          <ParameterRefEntry parameterRef="battery"/>
+          <ParameterRefEntry parameterRef="motor-temp"/>
+          <ParameterRefEntry parameterRef="left-turns"/>
+          <ParameterRefEntry parameterRef="right-turns"/>
+        </EntryList>
+        <BaseContainer containerRef="/PUS/pus-tm">
+          <RestrictionCriteria>
+            <ComparisonList>
+              <Comparison parameterRef="/PUS/pus-service" value="3"/>
+              <Comparison parameterRef="/PUS/pus-subservice" value="25"/>
+            </ComparisonList>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="event">
+        <EntryList>
+          <ParameterRefEntry parameterRef="event"/>
+          <ParameterRefEntry parameterRef="event-data"/>
+        </EntryList>
+        <BaseContainer containerRef="/PUS/pus-tm">
+          <RestrictionCriteria>
+            <ComparisonList>
+              <Comparison parameterRef="/PUS/pus-service" value="5"/>
+              <Comparison parameterRef="/PUS/pus-subservice" value="1"/>
+            </ComparisonList>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

@@ -13,8 +13,8 @@ import math
 import textwrap
 from typing import Optional
 
-from .common import (HOOK_DOCS, checks_hooks, items_hooks, terms_hooks, notes,
-                     stream_capacity, stream_doc, Ref, c_op, fast_order,
+from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
+                     notes, stream_capacity, stream_doc, Ref, c_op, fast_order,
                      field_range, flt, header_lines, inputs, int_enc,
                      invertible, leaf_calibrators, math_value, size_args,
                      str_cap, string_spec)
@@ -669,6 +669,10 @@ class CEmitter:
             self.line(f"XTCE_PK_TRY({put});", depth + 1)
             self.line("}", depth)
             return
+        if vt.valid and vt.kind in ("int", "float"):
+            self.line(f"if (!({self.valid_test(vt, x)}))", depth)
+            self.line(f"return xtce_pk_fail(w->err, XTCE_PK_OUT_OF_RANGE, {f}, "
+                      "NULL);", depth + 1)
         if (isinstance(e, (IntEnc, FloatEnc)) and vt.kind in ("float", "int")
                 and not invertible(vt)):
             self.line("return xtce_pk_fail(w->err, XTCE_PK_NOT_INVERTIBLE, "
@@ -1200,7 +1204,7 @@ class CEmitter:
                           f"XTCE_PK_MISSING, {f}, NULL);", depth)
             self.write_value(lc.vtype, acc.expr, f, depth, ref)
         elif lc in n.derived:
-            self.write_value(lc.vtype, f"d{lc.id}", f, depth, ref)
+            self.write_value(written(n, lc), f"d{lc.id}", f, depth, ref)
         else:
             self.write_value(lc.vtype, self.literal(lc.vtype, n.fixed[lc]), f,
                              depth, ref, n.fixed[lc])
@@ -1516,7 +1520,7 @@ class CEmitter:
             d += 1
             self.line(f"{self.ctype(elem)} x = p->{name}.data[k];", d)
         else:
-            self.line(f"{self.ctype(elem)} x = p->{name};", d)
+            self.line(f"{self.ctype(elem)} x = {place(lc).expr};", d)
         self.line("int lv = 0;", d)
         self.line("(void)x;", d)
         live = None if state is None else (state, a.history)
@@ -1692,6 +1696,25 @@ class CEmitter:
                   "size_t len, xtce_pk_frame_fn f, void* ctx) {")
         self.line(f"xtce_pk_{sync}_sync_push(&s->sync, data, len, f, ctx);", 1)
         self.line("}")
+
+    @staticmethod
+    def valid_test(vt: VType, x: str) -> str:
+        """Whether value ``x`` lies in one of its type's valid ranges."""
+        tests = []
+        for b in vt.valid:
+            if vt.kind == "int":
+                lit = slit if vt.signed else ulit
+                parts = (([f"{x} >= {lit(b.lo)}"] if b.lo is not None else [])
+                         + ([f"{x} <= {lit(b.hi)}"] if b.hi is not None
+                            else []))
+                tests.append(" && ".join(parts) or "true")
+            else:
+                def bound(v):
+                    return "false, 0.0" if v is None else f"true, {cflt(v)}"
+                tests.append(f"xtce_pk_in_band({x}, {bound(b.lo)}, "
+                             f"{bool_lit(b.lo_incl)}, {bound(b.hi)}, "
+                             f"{bool_lit(b.hi_incl)})")
+        return " || ".join(f"({t})" for t in tests)
 
     def hook_inputs(self, inputs: list, place) -> str:
         """An xtce_pk_inputs of a custom algorithm's inputs."""

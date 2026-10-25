@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A probe's status, whose mode is an enumeration.  Everything that
+     depends on the mode names it by its label: the include conditions, the
+     restriction that picks out a SafeStatus, and the alarm.  Renumbering the
+     modes changes the bytes on the wire but not what the packets mean, nor
+     the programs that use them. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Probe">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <EnumeratedParameterType name="ModeType">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <EnumerationList>
+          <Enumeration value="0" label="SAFE"/>
+          <Enumeration value="1" label="IDLE"/>
+          <Enumeration value="2" label="SCIENCE"/>
+          <Enumeration value="3" label="DOWNLINK"/>
+          <!-- One label for a range of values. -->
+          <Enumeration value="16" maxValue="31" label="TEST"/>
+        </EnumerationList>
+        <DefaultAlarm>
+          <EnumerationAlarmList>
+            <EnumerationAlarm alarmLevel="warning" enumerationLabel="SAFE"/>
+            <EnumerationAlarm alarmLevel="watch" enumerationLabel="TEST"/>
+          </EnumerationAlarmList>
+        </DefaultAlarm>
+      </EnumeratedParameterType>
+      <EnumeratedParameterType name="ReasonType">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <EnumerationList>
+          <Enumeration value="1" label="LOW_POWER"/>
+          <Enumeration value="2" label="OVER_TEMPERATURE"/>
+          <Enumeration value="3" label="COMMANDED"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+      <IntegerParameterType name="PercentType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="U16" signed="false">
+        <IntegerDataEncoding sizeInBits="16"/>
+      </IntegerParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="Mode" parameterTypeRef="ModeType"/>
+      <Parameter name="Battery" parameterTypeRef="PercentType"/>
+      <Parameter name="Target" parameterTypeRef="U16"/>
+      <Parameter name="Station" parameterTypeRef="U16"/>
+      <Parameter name="Reason" parameterTypeRef="ReasonType"/>
+    </ParameterSet>
+    <ContainerSet>
+      <!-- Target is there only in SCIENCE mode, and Station only in
+           DOWNLINK mode: each condition names a label. -->
+      <SequenceContainer name="Status">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Mode"/>
+          <ParameterRefEntry parameterRef="Battery"/>
+          <ParameterRefEntry parameterRef="Target">
+            <IncludeCondition>
+              <Comparison parameterRef="Mode" value="SCIENCE"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="Station">
+            <IncludeCondition>
+              <Comparison parameterRef="Mode" value="DOWNLINK"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+      </SequenceContainer>
+      <!-- A Status in SAFE mode, with the reason: the restriction names the
+           label too, and fixes Mode when encoding. -->
+      <SequenceContainer name="SafeStatus">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Reason"/>
+        </EntryList>
+        <BaseContainer containerRef="Status">
+          <RestrictionCriteria>
+            <Comparison parameterRef="Mode" value="SAFE"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

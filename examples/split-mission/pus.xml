@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The packet headers: the CCSDS primary header, and the secondary header
+     of a PUS telemetry packet, which names its service and subservice.
+     Its types come from dt.xml; rover.xml derives its packets from
+     /PUS/pus-tm. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="PUS">
+  <TelemetryMetaData>
+    <ParameterSet>
+      <Parameter name="ccsds-version" parameterTypeRef="/dt/uint3"/>
+      <!-- false for telemetry, true for a telecommand -->
+      <Parameter name="ccsds-type" parameterTypeRef="/dt/bool1"/>
+      <Parameter name="ccsds-sec-hdr" parameterTypeRef="/dt/bool1"/>
+      <Parameter name="ccsds-apid" parameterTypeRef="/dt/uint11"/>
+      <Parameter name="ccsds-seq-flags" parameterTypeRef="/dt/uint2"/>
+      <Parameter name="ccsds-seq-count" parameterTypeRef="/dt/uint14"/>
+      <!-- The bytes after the primary header, minus one. -->
+      <Parameter name="ccsds-length" parameterTypeRef="/dt/uint16">
+        <AncillaryDataSet>
+          <AncillaryData name="tcs-xtce.length">-1</AncillaryData>
+        </AncillaryDataSet>
+      </Parameter>
+      <Parameter name="pus-version" parameterTypeRef="/dt/uint4"/>
+      <Parameter name="pus-time-ref" parameterTypeRef="/dt/uint4"/>
+      <Parameter name="pus-service" parameterTypeRef="/dt/uint8"/>
+      <Parameter name="pus-subservice" parameterTypeRef="/dt/uint8"/>
+      <Parameter name="pus-counter" parameterTypeRef="/dt/uint16"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="ccsds" abstract="true">
+        <EntryList>
+          <ParameterRefEntry parameterRef="ccsds-version"/>
+          <ParameterRefEntry parameterRef="ccsds-type"/>
+          <ParameterRefEntry parameterRef="ccsds-sec-hdr"/>
+          <ParameterRefEntry parameterRef="ccsds-apid"/>
+          <ParameterRefEntry parameterRef="ccsds-seq-flags"/>
+          <ParameterRefEntry parameterRef="ccsds-seq-count"/>
+          <ParameterRefEntry parameterRef="ccsds-length"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="pus-tm" abstract="true">
+        <EntryList>
+          <ParameterRefEntry parameterRef="pus-version"/>
+          <ParameterRefEntry parameterRef="pus-time-ref"/>
+          <ParameterRefEntry parameterRef="pus-service"/>
+          <ParameterRefEntry parameterRef="pus-subservice"/>
+          <ParameterRefEntry parameterRef="pus-counter"/>
+        </EntryList>
+        <BaseContainer containerRef="ccsds">
+          <RestrictionCriteria>
+            <ComparisonList>
+              <Comparison parameterRef="ccsds-type" value="false"/>
+              <Comparison parameterRef="ccsds-sec-hdr" value="true"/>
+            </ComparisonList>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

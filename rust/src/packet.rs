@@ -37,7 +37,8 @@ pub enum PacketError {
         container: &'static str,
         criterion: &'static str,
     },
-    /// A value does not fit its encoding.
+    /// A value is outside its type's valid range or does not fit its
+    /// encoding.
     OutOfRange { field: &'static str },
     /// A string is not valid UTF-8 or contains its termination character.
     InvalidString { field: &'static str },
@@ -103,7 +104,10 @@ impl fmt::Display for PacketError {
                 criterion,
             } => write!(f, "{container} requires {criterion}"),
             Self::OutOfRange { field } => {
-                write!(f, "value of {field} does not fit its encoding")
+                write!(
+                    f,
+                    "value of {field} is outside its valid range or encoding"
+                )
             }
             Self::InvalidString { field } => {
                 write!(f, "invalid string in {field}")

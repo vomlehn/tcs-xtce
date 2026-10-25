@@ -36,24 +36,24 @@ class PacketError(ValueError):
     ``BadChecksum`` or ``NoAlgorithm``.
     """
 
-    MESSAGES = {"Truncated": "packet too short for {0}",
-                "BadPosition": "{0} is placed before the packet start",
-                "NoMatch": "no container derived from {0} matches",
-                "Mismatch": "{0} requires {1}",
-                "OutOfRange": "value of {0} does not fit its encoding",
-                "InvalidString": "invalid string in {0}",
-                "TooLong": "{0} is too long for its encoding",
-                "Calibration": "{0} is outside its calibration range",
-                "NotInvertible": ("the calibrator of {0} cannot be inverted "
-                                  "for encoding"),
-                "Missing": "{0} is required by its include condition",
-                "BadSize": "invalid size or count for {0}",
-                "BadLength": "{0} does not match the length of the packet",
-                "InvalidValue": ("the bits of {0} are not a value of its "
-                                 "encoding"),
-                "BadChecksum": "{0} does not match the data it checks",
-                "NoAlgorithm": ("no function is registered for the custom "
-                                "algorithm {0}")}
+    MESSAGES = {
+        "Truncated": "packet too short for {0}",
+        "BadPosition": "{0} is placed before the packet start",
+        "NoMatch": "no container derived from {0} matches",
+        "Mismatch": "{0} requires {1}",
+        "OutOfRange": ("value of {0} is outside its valid range or encoding"),
+        "InvalidString": "invalid string in {0}",
+        "TooLong": "{0} is too long for its encoding",
+        "Calibration": "{0} is outside its calibration range",
+        "NotInvertible": ("the calibrator of {0} cannot be inverted for "
+                          "encoding"),
+        "Missing": "{0} is required by its include condition",
+        "BadSize": "invalid size or count for {0}",
+        "BadLength": "{0} does not match the length of the packet",
+        "InvalidValue": ("the bits of {0} are not a value of its encoding"),
+        "BadChecksum": "{0} does not match the data it checks",
+        "NoAlgorithm": ("no function is registered for the custom algorithm "
+                        "{0}")}
 
     def __init__(self, kind: str, *what: str) -> None:
         super().__init__(self.MESSAGES[kind].format(*what))
