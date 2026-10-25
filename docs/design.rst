@@ -678,6 +678,12 @@ binary value with ``bitOrder="leastSignificantBitFirst"`` must start at
 0: its bytes then read as they do in the usual order, so the emitters and
 runtimes ignore its bit order.
 
+A reference's ``instance`` picks among the values with its key in the
+scope, latest first (``instance_of``); a size keeps it in its
+``DynSize`` until binding. Only values already decoded in the packet can
+be named, so a positive instance, or one that reaches past the start of
+the packet, is unsupported.
+
 An ``IndirectParameterRefEntry`` needs no item of its own: each
 parameter its selector can name (by an enumeration label, or by an alias
 in its ``aliasNameSpace``) becomes a ``Cond`` on ``selector == name``

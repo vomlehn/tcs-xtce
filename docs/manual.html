@@ -2236,6 +2236,16 @@ again by their <tt class="docutils literal">dwell</tt> aliases, as <tt class="do
 <tt class="docutils literal">dwell_volt2</tt>. Without an <tt class="docutils literal">aliasNameSpace</tt>, an integer or string
 selector is not supported, since the parameters it may name can't be
 known.</dd>
+<dt>Instances</dt>
+<dd>A <tt class="docutils literal">ParameterInstanceRef</tt> (in a criterion, a size, a location or a
+calibrator) names the value of a parameter decoded last before it, its
+<tt class="docutils literal">instance</tt> 0. A negative <tt class="docutils literal">instance</tt> looks further back: -1 is the
+value decoded before that one, in the same packet. A packet that
+doesn't hold the value that many times before the reference, or a
+positive <tt class="docutils literal">instance</tt> (a value yet to come), is not supported, since
+that value would come from another packet. The demo's <tt class="docutils literal">History</tt>
+holds <tt class="docutils literal">HistVal</tt> twice, and the first decides whether <tt class="docutils literal">HistPrev</tt> is
+there and gives <tt class="docutils literal">HistData</tt>'s size.</dd>
 <dt>Name references</dt>
 <dd>Absolute (<tt class="docutils literal">/Root/Sub/name</tt>), relative (<tt class="docutils literal">Sub/name</tt>, <tt class="docutils literal"><span class="pre">../name</span></tt>),
 and unqualified names. An unqualified name, or a relative one that
@@ -2245,14 +2255,15 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 <dt>Not supported</dt>
 <dd>references to elements of arrays whose count varies in a dimension other
 than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer or
-string without an <tt class="docutils literal">aliasNameSpace</tt>, other instances than 0, repeated
-segment entries, commands that include another meta-command's container,
-<tt class="docutils literal">CustomAlgorithm</tt> criteria, transform algorithms, custom checksum
-algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
-deprecates), calibrators inside aggregate types that use other values,
-least-significant-bit-first strings and binary data that may not start on
-a byte boundary, integers of more than 64 bits, <tt class="docutils literal">nextEntry</tt> locations,
-and a <tt class="docutils literal">containerEnd</tt> location in a container without a fixed size.</dd>
+string without an <tt class="docutils literal">aliasNameSpace</tt>, instances of values in other
+packets, repeated segment entries, commands that include another
+meta-command's container, <tt class="docutils literal">CustomAlgorithm</tt> criteria, transform
+algorithms, custom checksum algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data
+encoding (which XTCE deprecates), calibrators inside aggregate types that
+use other values, least-significant-bit-first strings and binary data
+that may not start on a byte boundary, integers of more than 64 bits,
+<tt class="docutils literal">nextEntry</tt> locations, and a <tt class="docutils literal">containerEnd</tt> location in a container
+without a fixed size.</dd>
 </dl>
 </div>
 <div class="section" id="known-limitations">

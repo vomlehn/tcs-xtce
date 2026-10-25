@@ -823,9 +823,10 @@ class Compiler:
             ref, kind = dv.parameter_instance_ref, "ParameterInstanceRef"
         else:
             ref, kind = dv.choice.value, dv.choice.name
-        if getattr(ref, "instance", None):
-            raise Unsupported(f"{where}: {what} from instance {ref.instance} "
-                              "of a parameter")
+        instance = getattr(ref, "instance", None) or 0
+        if instance > 0:
+            raise Unsupported(f"{where}: {what} from instance {instance} of a "
+                              "parameter, a value yet to come")
         adj = dv.linear_adjustment
         slope = adj.slope if adj is not None and adj.slope is not None else 1.0
         intercept = (adj.intercept if adj is not None
@@ -841,7 +842,7 @@ class Compiler:
             except Unsupported:
                 key = None  # an error unless it names an aggregate member
             return DynSize(key=key, name=name, members=members, slope=slope,
-                           intercept=intercept)
+                           intercept=intercept, instance=instance)
         name = ref.argument_ref.strip()
         base, members = member_path(name)
         return DynSize(arg=base, name=name, members=members, slope=slope,
@@ -1306,7 +1307,7 @@ class Compiler:
                               f"{d.name!r}")
         else:
             key = name = d.key
-        ref = next((lc for lc in reversed(scope) if lc.key == key), None)
+        ref = instance_of(scope, key, d.instance, where)
         if ref is None:
             raise Unsupported(f"{where}: size or count from {name}, which is "
                               "not decoded before it")
@@ -1980,7 +1981,8 @@ class Compiler:
         else:
             base, members = member_path(ref.parameter_ref)
             pkey = qname(self.resolve(base, path, self.params, "parameter"))
-        local = next((lc for lc in reversed(scope) if lc.key == pkey), None)
+        local = instance_of(scope, pkey, getattr(ref, "instance", None) or 0,
+                            where)
         if local is None:
             raise Unsupported(f"{where}: criterion on {pkey}, which is not "
                               "decoded before it")
@@ -1990,8 +1992,6 @@ class Compiler:
         if vt.kind in ("array", "aggregate"):
             raise Unsupported(f"{where}: criterion on {pkey}, which is an "
                               f"{vt.kind}")
-        if getattr(ref, "instance", None):
-            raise Unsupported(f"{where}: comparison of instance {ref.instance}")
         return local, member, vt, pkey
 
     def comparison(self, kind: str, ref, op: str, text, path: Key, scope: list,
@@ -2523,6 +2523,25 @@ def bounded(vt: VType, b: DynSize, rng: tuple[int, int]) -> VType:
         b.max = min(units, MAX_FIELD_BITS // 8)
         enc = dataclasses.replace(e, bits=b.max * 8, dyn=b)
     return dataclasses.replace(vt, enc=enc)
+
+
+def instance_of(scope: list, key: str, instance: int,
+                where: str) -> Optional[Local]:
+    """The value ``key`` of ``scope`` that a ParameterInstanceRef's
+    ``instance`` names: 0 is the one decoded last, -1 the one before it,
+    and so on, within the packet.  Positive instances are values yet to
+    come, and so are other packets' values: they aren't supported."""
+    if instance > 0:
+        raise Unsupported(f"{where}: instance {instance} of {key}, a value yet "
+                          "to come")
+    found = [lc for lc in reversed(scope) if lc.key == key]
+    if not found:
+        return None
+    if -instance >= len(found):
+        raise Unsupported(f"{where}: instance {instance} of {key}, which the "
+                          f"packet holds {len(found)} "
+                          f"time{'s' if len(found) > 1 else ''} before it")
+    return found[-instance]
 
 
 def check_aligned(items: list[Item], where: str) -> None:

@@ -838,6 +838,16 @@
           <Enumeration value="2" label="V1"/>
         </EnumerationList>
       </EnumeratedParameterType>
+      <BinaryParameterType name="HistDataType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="HistVal" instance="-1"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -1005,6 +1015,9 @@
       <Parameter name="DwellEnd" parameterTypeRef="U8"/>
       <Parameter name="GuardOn" parameterTypeRef="Flag8Type"/>
       <Parameter name="GuardEnd" parameterTypeRef="U8"/>
+      <Parameter name="HistVal" parameterTypeRef="U8"/>
+      <Parameter name="HistPrev" parameterTypeRef="U8"/>
+      <Parameter name="HistData" parameterTypeRef="HistDataType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1744,6 +1757,25 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="480"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- HistVal twice: instance -1 is the first, which decides whether
+           HistPrev is there and gives HistData's size in bytes. -->
+      <SequenceContainer name="History">
+        <EntryList>
+          <ParameterRefEntry parameterRef="HistVal"/>
+          <ParameterRefEntry parameterRef="HistVal"/>
+          <ParameterRefEntry parameterRef="HistPrev">
+            <IncludeCondition>
+              <Comparison parameterRef="HistVal" instance="-1" value="5"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="HistData"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="490"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

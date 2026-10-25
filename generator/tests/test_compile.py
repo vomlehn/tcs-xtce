@@ -2068,3 +2068,37 @@ class LsbFirstTests(unittest.TestCase):
                     compile_xml(lsb_mission(entries))
                 self.assertIn("has bitOrder leastSignificantBitFirst but may "
                               "not start on a byte boundary", str(cm.exception))
+
+
+class InstanceTests(unittest.TestCase):
+    def mission(self, instance: str) -> str:
+        """A twice, then B when instance ``instance`` of A is 1."""
+        return gate_mission('<Comparison parameterRef="S" '
+                            'value="0"/>').replace(
+            '<ParameterRefEntry parameterRef="B"/>',
+            '<ParameterRefEntry parameterRef="A"/><ParameterRefEntry '
+            'parameterRef="B"><IncludeCondition><Comparison parameterRef="A" '
+            f'instance="{instance}" value="1"/></IncludeCondition>'
+            '</ParameterRefEntry>')
+
+    def test_previous(self):
+        base = compile_xml(self.mission("-1")).nodes[0]
+        first, second = [it.local for it in base.all_items()
+                         if isinstance(it, Value) and it.local.name == "A"]
+        (cond,) = [it for it in base.all_items() if isinstance(it, Cond)]
+        self.assertIs(cond.criteria[0].local, first)
+        base = compile_xml(self.mission("0")).nodes[0]
+        (cond,) = [it for it in base.all_items() if isinstance(it, Cond)]
+        self.assertEqual(cond.criteria[0].local.name, "A")
+        self.assertIsNot(cond.criteria[0].local, first)
+
+    def test_rejected(self):
+        for instance, why in (
+                ("1", "instance 1 of /Sat/A, a value yet to come"),
+                ("-2",
+                 "instance -2 of /Sat/A, which the packet holds 2 times before "
+                 "it")):
+            with self.subTest(instance=instance):
+                with self.assertRaises(Unsupported) as cm:
+                    compile_xml(self.mission(instance))
+                self.assertIn(why, str(cm.exception))

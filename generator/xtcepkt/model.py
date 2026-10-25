@@ -104,6 +104,7 @@ class DynSize:
     intercept: float = 0.0
     factor: int = 1
     unit: int = 1  # 8 when the value is a size in bits, used in whole bytes
+    instance: int = 0  # of the value: 0 the last decoded, -1 the one before
     local: Optional["Local"] = None
     max: int = 0
 

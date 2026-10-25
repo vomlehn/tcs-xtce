@@ -1030,6 +1030,11 @@ conditional block whose size isn't a whole number of bytes). A string or
 binary value with <tt class="docutils literal"><span class="pre">bitOrder=&quot;leastSignificantBitFirst&quot;</span></tt> must start at
 0: its bytes then read as they do in the usual order, so the emitters and
 runtimes ignore its bit order.</p>
+<p>A reference's <tt class="docutils literal">instance</tt> picks among the values with its key in the
+scope, latest first (<tt class="docutils literal">instance_of</tt>); a size keeps it in its
+<tt class="docutils literal">DynSize</tt> until binding. Only values already decoded in the packet can
+be named, so a positive instance, or one that reaches past the start of
+the packet, is unsupported.</p>
 <p>An <tt class="docutils literal">IndirectParameterRefEntry</tt> needs no item of its own: each
 parameter its selector can name (by an enumeration label, or by an alias
 in its <tt class="docutils literal">aliasNameSpace</tt>) becomes a <tt class="docutils literal">Cond</tt> on <tt class="docutils literal">selector == name</tt>

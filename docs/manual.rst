@@ -1811,6 +1811,17 @@ Indirect entries
    selector is not supported, since the parameters it may name can't be
    known.
 
+Instances
+   A ``ParameterInstanceRef`` (in a criterion, a size, a location or a
+   calibrator) names the value of a parameter decoded last before it, its
+   ``instance`` 0. A negative ``instance`` looks further back: -1 is the
+   value decoded before that one, in the same packet. A packet that
+   doesn't hold the value that many times before the reference, or a
+   positive ``instance`` (a value yet to come), is not supported, since
+   that value would come from another packet. The demo's ``History``
+   holds ``HistVal`` twice, and the first decides whether ``HistPrev`` is
+   there and gives ``HistData``'s size.
+
 Name references
    Absolute (``/Root/Sub/name``), relative (``Sub/name``, ``../name``),
    and unqualified names. An unqualified name, or a relative one that
@@ -1821,14 +1832,15 @@ Name references
 Not supported
    references to elements of arrays whose count varies in a dimension other
    than the first, ``IndirectParameterRefEntry`` chosen by an integer or
-   string without an ``aliasNameSpace``, other instances than 0, repeated
-   segment entries, commands that include another meta-command's container,
-   ``CustomAlgorithm`` criteria, transform algorithms, custom checksum
-   algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
-   deprecates), calibrators inside aggregate types that use other values,
-   least-significant-bit-first strings and binary data that may not start on
-   a byte boundary, integers of more than 64 bits, ``nextEntry`` locations,
-   and a ``containerEnd`` location in a container without a fixed size.
+   string without an ``aliasNameSpace``, instances of values in other
+   packets, repeated segment entries, commands that include another
+   meta-command's container, ``CustomAlgorithm`` criteria, transform
+   algorithms, custom checksum algorithms, ``ErrorDetectCorrect`` in a data
+   encoding (which XTCE deprecates), calibrators inside aggregate types that
+   use other values, least-significant-bit-first strings and binary data
+   that may not start on a byte boundary, integers of more than 64 bits,
+   ``nextEntry`` locations, and a ``containerEnd`` location in a container
+   without a fixed size.
 
 Known limitations
 -----------------
