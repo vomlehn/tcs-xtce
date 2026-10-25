@@ -1904,12 +1904,15 @@ for each document:
   report unsupported constructs, and never crash;
 * the generated code compiles, without warnings: the C header as C11 and
   as C++, the Rust module against the ``tcs-xtce`` crate, and the Python
-  module.
+  module;
+* the Rust, C, C++ and Python runtimes give it the same XTCE digest (or
+  all reject it).
 
 It prints a summary per document, with the constructs it found
-unsupported, which must equal ``tests/external/expected.txt``. A crash, a
-disagreement with the schema, a failed round trip or a failed compile
-always fails the check. After an intended change, ``python3 -I
+unsupported and its digest, which must equal
+``tests/external/expected.txt``. A crash, a disagreement with the schema,
+a failed round trip, a failed compile or digests that differ always fails
+the check. After an intended change, ``python3 -I
 tests/samples_check.py --update`` rewrites ``expected.txt``; review its
 diff.
 

@@ -1,56 +1,90 @@
 yamcs/BogusSAT-1.xml: schema invalid; rejected by the binding
+  digest bb3f0aa70d79e61213b48a0dd5e04769
 yamcs/BogusSAT-2.xml: schema invalid; rejected by the binding
+  digest da4c0fa02dac76749bb8f5abc316751a
 yamcs/VariableBinary.xml: schema valid; loaded by the binding
   2 packets, 1 not supported
     unsupported: /VariableBinaryTest/Command1: meta-command /VariableBinaryTest/Command1: data takes the rest of the packet but is not last
+  digest 5202e1a10e6c6019564ec93ef3453cf8
 yamcs/a1.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
+  digest 05e642a7244c06705dbc8da64c1e6e8a
 yamcs/a2.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
+  digest c5f0036f64ff95f593fcf55c10e4145b
 yamcs/arg-locations.xml: schema valid; loaded by the binding
   1 packet, 0 not supported
+  digest 2c1e49e2dc1a09fcfd52986e41533d7b
 yamcs/array-arg.xml: schema valid; loaded by the binding
   1 packet, 0 not supported
+  digest db63d2ac9e4f6475456c7f956c48fa43
 yamcs/array-in-array-arg.xml: schema valid; loaded by the binding
   1 packet, 0 not supported
+  digest 0e619e214ae176428e20314d56278a5c
 yamcs/array-tm.xml: schema valid; loaded by the binding
   4 packets, 0 not supported
+  digest 15c3f57998b3b0e13cd1a0f46d6de508
 yamcs/b.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
+  digest eaeaf8e407e5c200eb1c01b27a13b836
 yamcs/booleans.xml: schema valid; loaded by the binding
   4 packets, 0 not supported
+  digest 67749fd5f2f4420d4d862cf86ae870c0
 yamcs/ccsds-green-book.xml: schema invalid; rejected by the binding
+  digest 3394e6935b006a927780006ac08fd0bc
 yamcs/container-entry.xml: schema invalid; rejected by the binding
+  digest b1ef9b15ff10fb93de6c899532d7378a
 yamcs/embedded-tc.xml: schema valid; loaded by the binding
   2 packets, 2 not supported
     unsupported: /EmbeddedTcTest/single: meta-command /EmbeddedTcTest/single: tc takes the rest of the packet but is not last
     unsupported: /EmbeddedTcTest/list: type /EmbeddedTcTest/ActivityType: member tc takes the rest of the packet
+  digest 54fa721a8c5b8f84f8a1f1fba2e83703
 yamcs/empty-match-criteria.xml: schema valid; loaded by the binding
   2 packets, 0 not supported
+  digest 32d35128ba15e823f67a9c0984d2302a
 yamcs/enum-arg.xml: schema valid; loaded by the binding
   1 packet, 0 not supported
+  digest 2e09ba15413087ac27bdb167e793ea86
 yamcs/ref-xtce.xml: schema invalid; rejected by the binding
+  digest 8520442fad4876228a50d34dcf4568fb
 yamcs/refsolver1.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
+  digest 1ff30bb773b6adc83203cbc12af39814
 yamcs/refsolver2.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
+  digest 5108351672d0a7da326d859f827b300c
 yamcs/refsolver3.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
+  digest 93b25335dd27b35ec8b947814009786c
 yamcs/strings-cmd.xml: schema valid; loaded by the binding
   4 packets, 2 not supported
     unsupported: /StringsCmd/command3: meta-command /StringsCmd/command3: unresolved parameter reference '_yamcs_ignore'
     unsupported: /StringsCmd/command5: meta-command /StringsCmd/command5: unresolved parameter reference '_yamcs_ignore'
+  digest ff23a09fefa83eff320e82e722b31b53
 yamcs/strings-tm.xml: schema invalid; rejected by the binding
+  digest 268da767ca1b981a0422dc5693a5eb3d
 yamcs/test_float_add_js.xml: schema invalid; rejected by the binding
+  digest 393b70b40d66ffef3eb5fb788f85d872
 xtcetools/BogusSAT-2.xml: schema invalid; rejected by the binding
+  digest 0815c3843111c49bd96f7ac85bb1d777
 xtcetools/ccsds_sana_registrations_scid.xml: schema invalid; rejected by the binding
+  digest error
 xtcetools/Diagnostic_Log_Packets.xml: schema valid; loaded by the binding
   3 packets, 0 not supported
+  digest 0e2165422143c20cae1344e482a49f16
 xtcetools/GovSat_2_0_1.xml: schema invalid; rejected by the binding
+  digest 8f08b46e1af0b99a56fc074007bfadfd
 xtcetools/BogusSAT-1-Bad.xml: schema invalid; rejected by the binding
+  digest d8f592b50e45a88726db6b6faaf16546
 xtcetools/BogusSAT-1.xml: schema invalid; rejected by the binding
+  digest af3089575c0ce062d27411ce23fe6528
 xtcetools/UnitTest-BadAttr.xml: schema invalid; rejected by the binding
+  digest 4f75f5dc040cf63c508c4842617ea36f
 xtcetools/UnitTest-BadForm.xml: schema invalid; rejected by the binding
+  digest error
 xtcetools/UnitTest-Convert-DefNS.xml: schema invalid; rejected by the binding
+  digest 868987f9e7479c92789f02923147836c
 xtcetools/UnitTest-Convert-NS.xml: schema invalid; rejected by the binding
+  digest 868987f9e7479c92789f02923147836c
 xtcetools/UnitTests.xml: schema invalid; rejected by the binding
+  digest d8da0089d63dbc83c07df665a81244f5

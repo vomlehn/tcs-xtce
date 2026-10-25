@@ -159,7 +159,7 @@ digest-check: rust cpp
 EXTERNAL := tests/external/files
 
 .PHONY: samples-check
-samples-check: rust $(PY_GEN)
+samples-check: rust cpp $(PY_GEN)
 	@mkdir -p $(EXTERNAL)
 	@grep -v '^#' tests/external/sources.txt | \
 	while read -r name sha url; do \

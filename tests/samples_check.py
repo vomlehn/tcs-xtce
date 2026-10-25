@@ -11,6 +11,7 @@ which for each document checks that
    they either produce output or report an unsupported construct;
 4. the generated code compiles: the C header as C11 and as C++, the Rust
    module against the tcs-xtce crate, and the Python module;
+5. the Rust, C, C++ and Python runtimes give it the same XTCE digest;
 
 and prints one summary per document, which must equal
 tests/external/expected.txt.  ``--update`` rewrites expected.txt instead.
@@ -39,12 +40,17 @@ from xtcegen.__main__ import rustfmt  # noqa: E402
 from xtcepkt import emit_c, emit_python, emit_rust, report  # noqa: E402
 from xtcepkt.compile import compile_document  # noqa: E402
 from xtcepkt.model import Unsupported  # noqa: E402
+from xtce.digest import digest_file  # noqa: E402
 
 XSD = TOP / "references" / "SpaceSystem.xsd"
 CATALOG = TOP / "references" / "catalog.xml"
 NS13 = b"http://www.omg.org/spec/XTCE/20250214"
 OLD_NS = re.compile(rb"http://www\.omg\.org/(space/xtce|spec/XTCE/\d{8})")
 RLIB = TOP / "rust" / "target" / "release" / "libtcs_xtce.rlib"
+# The digest tools of the other runtimes, which print one digest per file.
+DIGEST_TOOLS = [TOP / "rust" / "target" / "release" / "examples"
+                / "digest_tool", TOP / "cpp" / "build" / "digest_tool",
+                TOP / "cpp" / "build" / "digest_tool_cxx"]
 
 
 def sources() -> list[tuple[str, str]]:
@@ -113,6 +119,26 @@ def build(mission, stem: str, out: Path) -> list[str]:
     return bad
 
 
+def digests(paths: list[Path]) -> dict:
+    """Each document's digest line: the digest, or that the runtimes
+    disagree about it."""
+    results = [subprocess.run([str(t)] + [str(p) for p in paths],
+                              capture_output=True, text=True,
+                              check=True).stdout.split()
+               for t in DIGEST_TOOLS]
+    out = {}
+    for i, p in enumerate(paths):
+        try:
+            mine = digest_file(p)
+        except (OSError, xtce.XtceError):
+            mine = "error"
+        others = {r[i] for r in results}
+        out[p] = (f"digest {mine}" if others == {mine}
+                  else f"DIGESTS DIFFER: Python {mine}, others "
+                       f"{' '.join(sorted(others))}")
+    return out
+
+
 def check(path: Path, out: Path) -> list[str]:
     """The summary lines of one document."""
     valid = schema_valid(path)
@@ -144,12 +170,14 @@ def check(path: Path, out: Path) -> list[str]:
 
 def main() -> int:
     update = sys.argv[1:] == ["--update"]
-    if not RLIB.exists():
-        print(f"samples_check: {RLIB} is missing; run make rust",
-              file=sys.stderr)
-        return 1
+    for need in [RLIB] + DIGEST_TOOLS:
+        if not need.exists():
+            print(f"samples_check: {need} is missing; run make rust cpp",
+                  file=sys.stderr)
+            return 1
     files = EXTERNAL / "files"
     out_lines = []
+    digest_of = digests([files / name for name, _ in sources()])
     with tempfile.TemporaryDirectory() as tmp:
         for name, digest in sources():
             path = files / name
@@ -163,6 +191,7 @@ def main() -> int:
                 lines = [f"CRASH {type(e).__name__}: {e}"]
             out_lines.append(f"{name}: {lines[0]}")
             out_lines += [f"  {x}" for x in lines[1:]]
+            out_lines.append(f"  {digest_of[path]}")
     text = "\n".join(out_lines) + "\n"
     expected = EXTERNAL / "expected.txt"
     if update:

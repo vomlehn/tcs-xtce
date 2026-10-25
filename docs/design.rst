@@ -688,8 +688,9 @@ Testing strategy
 **Public documents**
    ``make samples-check`` runs the binding and compiler on 34 public
    XTCE documents from Yamcs and the XTCE Toolkit, pinned by commit and
-   SHA-256. Generated code is compiled in every language, and each
-   document's summary is compared with ``tests/external/expected.txt``.
+   SHA-256. Generated code is compiled in every language, every runtime
+   digests each document, and each document's summary, digest included,
+   is compared with ``tests/external/expected.txt``.
    This catches crashes and disagreements with ``xmllint``, which
    hand-written tests can miss, and shows which unsupported constructs
    real documents use.

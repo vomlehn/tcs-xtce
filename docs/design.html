@@ -1033,8 +1033,9 @@ C and as C++.</p>
 <dt><strong>Public documents</strong></dt>
 <dd><tt class="docutils literal">make <span class="pre">samples-check</span></tt> runs the binding and compiler on 34 public
 XTCE documents from Yamcs and the XTCE Toolkit, pinned by commit and
-SHA-256. Generated code is compiled in every language, and each
-document's summary is compared with <tt class="docutils literal">tests/external/expected.txt</tt>.
+SHA-256. Generated code is compiled in every language, every runtime
+digests each document, and each document's summary, digest included,
+is compared with <tt class="docutils literal">tests/external/expected.txt</tt>.
 This catches crashes and disagreements with <tt class="docutils literal">xmllint</tt>, which
 hand-written tests can miss, and shows which unsupported constructs
 real documents use.</dd>
