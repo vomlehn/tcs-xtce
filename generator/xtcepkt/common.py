@@ -198,6 +198,24 @@ def criteria_by_node(node: Node) -> list[tuple[Node, list[Criterion]]]:
     return [(n, n.criteria) for n in node.chain()[1:]]
 
 
+def notes(n: Node) -> list[str]:
+    """What the generated documentation of packet ``n`` says it leaves
+    out."""
+    return ([f"Alarm left out: {x}." for x in n.alarm_notes]
+            + [f"MathAlgorithm left out: {x}." for x in n.algorithm_notes])
+
+
+def inputs(e: tuple) -> list:
+    """The values (Locals, each once) that a MathOp tree uses."""
+    out: list = []
+    if e[0] == "value":
+        out.append(e[1].local)
+    elif e[0] not in ("const", "raw"):
+        for a in e[1:]:
+            out += [lc for lc in inputs(a) if lc not in out]
+    return out
+
+
 def values(node: Node) -> list:
     return [it.local for it in node.all_items() if isinstance(it, Value)]
 

@@ -35,6 +35,16 @@ static void print_alarms(const xtce_pk_alarm* a, size_t n,
         if (strcmp(text, other) != 0) printf(" | monitor: %s", other);
 }
 
+static xtce_pk_output outputs[64];
+
+/* Prints ` | derived: output=value, ...` for a packet that triggers
+ * MathAlgorithms. */
+static void print_outputs(size_t n) {
+        if (!n) return;
+        xtce_pk_describe_outputs(outputs, n, text, sizeof text);
+        printf(" | derived: %s", text);
+}
+
 static void print_hex(const uint8_t* b, size_t n) {
         size_t i;
         for (i = 0; i < n; ++i) printf("%02x", b[i]);
@@ -67,6 +77,7 @@ static void print_hex(const uint8_t* b, size_t n) {
                 }                                                           \
                 print_alarms(alarms, type##_alarms(&packet, alarms),        \
                              type##_monitor(&packet, &mon, now, monitored)); \
+                print_outputs(type##_algorithms(&packet, outputs));         \
                 printf("\n");                                               \
         } while (0)
 

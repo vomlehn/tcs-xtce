@@ -13,9 +13,10 @@ import math
 import textwrap
 from typing import Optional
 
-from .common import (Ref, c_op, fast_order, field_range, flt, header_lines,
-                     int_enc, invertible, leaf_calibrators, math_value,
-                     size_args, str_cap, string_spec)
+from .common import (notes, Ref, c_op, fast_order, field_range, flt,
+                     header_lines, inputs, int_enc, invertible,
+                     leaf_calibrators, math_value, size_args, str_cap,
+                     string_spec)
 from .compile import snake
 from .model import (
     term_indexes, term_locals, term_paths, walk, Index, AggregateEnc, AllOf,
@@ -880,8 +881,8 @@ class CEmitter:
         for lc, (c, _) in n.derived.items():
             self.line(f" * {lc.name} gives the size of {c.name}: computed from "
                       "its length when encoding.")
-        for note in n.alarm_notes:
-            for text in textwrap.wrap(f"Alarm left out: {note}.", 72):
+        for note in notes(n):
+            for text in textwrap.wrap(note, 72):
                 self.line(f" * {text.replace('*/', '* /')}")
         self.line(" */")
         self.line(f"#define {t}_NAME {cstr(n.key)}")
@@ -899,6 +900,8 @@ class CEmitter:
         self.line(f"}} {t};")
         self.line(f"/* The number of fields with an alarm. */")
         self.line(f"#define {t}_ALARMS {len(n.alarms)}")
+        self.line("/* The number of MathAlgorithms it triggers. */")
+        self.line(f"#define {t}_ALGORITHMS {len(n.algorithms)}")
         self.packet_prototypes(t)
 
     def packet_prototypes(self, t: str, kind: bool = False) -> None:
@@ -939,6 +942,11 @@ class CEmitter:
         self.line(" * time in seconds. */")
         self.line(f"static inline size_t {t}_monitor(const {t}* p, "
                   f"{self.p}AlarmMonitor* m, double t, xtce_pk_alarm* out);")
+        self.line("/* Stores the output of each MathAlgorithm the packet "
+                  f"triggers in `out` ({t}_ALGORITHMS")
+        self.line(" * of them at most) and returns how many there are. */")
+        self.line(f"static inline size_t {t}_algorithms(const {t}* p, "
+                  "xtce_pk_output* out);")
 
     def declare_kind(self, k: Kind) -> None:
         t = self.p + k.ident
@@ -960,6 +968,9 @@ class CEmitter:
         self.line(f"/* The most fields with an alarm that a member has. */")
         self.line(f"#define {t}_ALARMS "
                   f"{max(len(mem.alarms) for mem in k.members)}")
+        self.line("/* The most MathAlgorithms that a member triggers. */")
+        self.line(f"#define {t}_ALGORITHMS "
+                  f"{max(len(mem.algorithms) for mem in k.members)}")
         self.packet_prototypes(t, kind=True)
 
     def size_source(self, d: DynSize, place) -> str:
@@ -1409,6 +1420,25 @@ class CEmitter:
             for name, lc in n.fields}
         place = lambda lc: self.place(n, lc, names)  # noqa: E731
         monitored = {k: ident for k, ident, _ in self.m.monitored}
+        self.line()
+        self.line(f"static inline size_t {t}_algorithms(const {t}* p, "
+                  "xtce_pk_output* out) {")
+        self.line("(void)p;", 1)
+        self.line("(void)out;", 1)
+        for i, alg in enumerate(n.algorithms):
+            present = [place(lc).present for lc in inputs(alg.expr)
+                       if lc.optional]
+            self.line(f"out[{i}].name = {cstr(alg.name)};", 1)
+            self.line(f"out[{i}].present = "
+                      f"{' && '.join(present) if present else 'true'};", 1)
+            value = self.math_expr(alg.expr, "x", place)
+            if present:
+                self.line(f"out[{i}].value = out[{i}].present ? {value} : 0.0;",
+                          1)
+            else:
+                self.line(f"out[{i}].value = {value};", 1)
+        self.line(f"return {len(n.algorithms)};", 1)
+        self.line("}")
         for live in (False, True):
             self.line()
             if live:
@@ -1719,6 +1749,19 @@ class CEmitter:
         for mem in k.members:
             self.line(f"case {t}_{mem.ident}_tag:", 2)
             self.line(f"return {self.p}{mem.ident}_alarms(&p->u.{mem.ident}, "
+                      "out);", 3)
+        self.line("}", 1)
+        self.line("(void)out;", 1)
+        self.line("return 0;", 1)
+        self.line("}")
+        self.line()
+        self.line(f"static inline size_t {t}_algorithms(const {t}* p, "
+                  "xtce_pk_output* out) {")
+        self.line("switch (p->tag) {", 1)
+        for mem in k.members:
+            self.line(f"case {t}_{mem.ident}_tag:", 2)
+            self.line("return "
+                      f"{self.p}{mem.ident}_algorithms(&p->u.{mem.ident}, "
                       "out);", 3)
         self.line("}", 1)
         self.line("(void)out;", 1)

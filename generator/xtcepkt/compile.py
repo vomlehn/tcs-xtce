@@ -21,13 +21,14 @@ from typing import Callable, Optional
 
 from .common import (code_unit, encode_text, fast_order, find_unit, wire_cap)
 from .regex import compile_pattern
-from .model import (
-    MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
-    Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index, IntEnc, Item, Kind,
-    Local, Mark, Member, Mission, Node, Pad, Polynomial, Seek, Spline,
-    StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk,
-    MATH_UNARY, Check, ContextCal, EndSeek, MathOp, Require, ValueRef,
-    needs_binding, Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change)
+from .model import (MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc,
+                    BinaryEnc, Cond, Criterion, DynSize, EnumLabel, FloatEnc,
+                    Fixed, Index, IntEnc, Item, Kind, Local, Mark, Member,
+                    Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
+                    Term, Unsupported, Value, VType, ref_text, term_locals,
+                    walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp,
+                    Require, ValueRef, needs_binding, Fill, Segment, Verify,
+                    Alarm, AlarmDef, Band, LEVELS, Change, Algorithm)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -411,6 +412,7 @@ class Compiler:
         self.atypes: dict[Key, tuple] = {}
         self.containers: dict[Key, tuple] = {}
         self.messages: dict[Key, tuple] = {}
+        self.algorithms: dict[Key, tuple] = {}
         self.mcs: dict[Key, tuple] = {}
         # CommandContainer -> MetaCommand
         self.mc_containers: dict[Key, Key] = {}
@@ -448,6 +450,11 @@ class Compiler:
         for md in (tm, tc):
             if md is None:
                 continue
+            if md.algorithm_set:
+                for ch in md.algorithm_set.items:
+                    if ch.name == "MathAlgorithm":
+                        self.algorithms[path + (ch.value.name,)] = (path,
+                                                                    ch.value)
             if md.parameter_type_set:
                 for ch in md.parameter_type_set.items:
                     self.ptypes[path + (ch.value.name,)] = (path, ch.name,
@@ -2505,6 +2512,7 @@ class Compiler:
         for n in concrete:
             self._finish(n)
             self.bind_alarms(n)
+            self.bind_algorithms(n)
             for _, _, a in n.alarms:
                 if a.stateful:
                     monitored[a.key] = max(monitored.get(a.key, 0), a.history)
@@ -2533,6 +2541,72 @@ class Compiler:
             roots=roots, skipped=msgs,
             monitored=[(k, mnames.take(snake(k.rsplit("/", 1)[-1]), snake(k)),
                         h) for k, h in monitored.items()])
+
+    def bind_algorithms(self, n: Node) -> None:
+        """The MathAlgorithms that packet ``n`` triggers, by holding a value
+        of a parameter that triggers it or being (or deriving from) a
+        container that does.  One whose inputs the packet doesn't hold is
+        left out, and ``algorithm_notes`` says why."""
+        scope = self.scope_of(n)
+        fields = {lc for _, lc in n.fields}
+        keys = {lc.key for lc in scope}
+        chain = {x.key for x in n.chain()}
+        names = Namer()
+        for key, (path, alg) in self.algorithms.items():
+            mo = alg.math_operation
+            where = f"{n.key}: MathAlgorithm {qname(key)}"
+            triggered = False
+            for ch in mo.trigger_set.items:
+                try:
+                    if ch.name == "OnParameterUpdateTrigger":
+                        triggered |= (qname(self.resolve(ch.value.parameter_ref,
+                                                         path, self.params,
+                                                         "parameter")) in keys)
+                    elif ch.name == "OnContainerUpdateTrigger":
+                        triggered |= (qname(self.resolve(ch.value.container_ref,
+                                                         path, self.containers,
+                                                         "container")) in chain)
+                except Unsupported:
+                    pass
+            if not triggered:
+                continue
+            try:
+                out = qname(self.resolve(mo.output_parameter_ref, path,
+                                         self.params, "parameter"))
+                expr = self.math_operation(mo, path, where).expr
+                expr = self.bind_inputs(expr, scope, fields, n, where)
+            except Unsupported as e:
+                n.algorithm_notes.append(str(e))
+                continue
+            n.algorithms.append(
+                Algorithm(out,
+                          names.take(snake(out.rsplit("/", 1)[-1]), snake(out)),
+                          expr))
+
+    def bind_inputs(self, e: tuple, scope: list, fields: set, n: Node,
+                    where: str) -> tuple:
+        """A MathAlgorithm's expression bound to the fields of packet ``n``;
+        an input may be absent, which makes the output absent."""
+        if e[0] == "const":
+            return e
+        if e[0] == "raw":
+            raise Unsupported(f"{where}: ThisParameterOperand, the output's "
+                              "own earlier value")
+        if e[0] != "value":
+            return (e[0],
+                    *(self.bind_inputs(a, scope, fields, n, where)
+                      for a in e[1:]))
+        r = e[1]
+        local, member, vt, name = self.value_ref("ParameterInstanceRef", r.ref,
+                                                 r.path, scope, where, None)
+        if local not in fields and local not in n.fixed:
+            raise Unsupported(f"{where}: input {name} is computed by the "
+                              "packet")
+        if vt.kind not in ("int", "float", "enum", "bool"):
+            raise Unsupported(f"{where}: input {name} is a {vt.kind} value")
+        if r.ref.use_calibrated_value is False and vt.calibrator is not None:
+            raise Unsupported(f"{where}: the raw value of calibrated {name}")
+        return ("value", ValueRef(r.ref, r.path, local, member, vt))
 
     def bind_alarms(self, n: Node) -> None:
         """The alarms of a packet's fields, their criteria bound to its

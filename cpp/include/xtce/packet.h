@@ -2697,6 +2697,32 @@ static inline void xtce_pk_text_double(xtce_pk_text* t, double x) {
         }
 }
 
+/* The output of one MathAlgorithm: its value, unless an input is absent. */
+typedef struct xtce_pk_output {
+        const char* name;
+        bool present;
+        double value;
+} xtce_pk_output;
+
+/* Writes `name=value` for each of the `n` outputs, `none` for one that is
+ * absent, as every runtime writes them, like snprintf. */
+static inline size_t xtce_pk_describe_outputs(const xtce_pk_output* o,
+                                              size_t n, char* buf,
+                                              size_t cap) {
+        xtce_pk_text t = xtce_pk_text_init(buf, cap);
+        size_t i;
+        for (i = 0; i < n; ++i) {
+                if (i) xtce_pk_text_puts(&t, ", ");
+                xtce_pk_text_puts(&t, o[i].name);
+                xtce_pk_text_putc(&t, '=');
+                if (o[i].present)
+                        xtce_pk_text_double(&t, o[i].value);
+                else
+                        xtce_pk_text_puts(&t, "none");
+        }
+        return t.len;
+}
+
 static inline void xtce_pk_text_str(xtce_pk_text* t, const char* s, size_t n) {
         static const char hex[] = "0123456789abcdef";
         size_t i;

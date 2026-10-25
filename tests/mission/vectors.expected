@@ -179,5 +179,8 @@ Trend{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_c
 Trend{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tr_rate=20.0, tr_pct=300, tr_sticky=50} | 0a08c02a000641a00000012c32 | alarms: tr_rate=normal, tr_pct=normal, tr_sticky=normal | monitor: tr_rate=warning, tr_pct=critical, tr_sticky=warning
 Trend{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tr_rate=20.0, tr_pct=300, tr_sticky=50} | 0a08c02a000641a00000012c32 | alarms: tr_rate=normal, tr_pct=normal, tr_sticky=normal | monitor: tr_rate=normal, tr_pct=critical, tr_sticky=normal
 Trend{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tr_rate=-1.0, tr_pct=0, tr_sticky=200} | 0a08c02a0006bf8000000000c8 | alarms: tr_rate=normal, tr_pct=normal, tr_sticky=warning | monitor: tr_rate=warning, tr_pct=normal, tr_sticky=normal
+Derive{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, dr_speed=10.0, dr_has=true, dr_a=6, dr_b=4} | 0a12c02a0008412000000100060004 | derived: dr_speed_kph=36.0, dr_ratio=1.5
+Derive{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, dr_speed=2.5, dr_has=false, dr_a=7, dr_b=none} | 0a12c02a000640200000000007 | derived: dr_speed_kph=9.0, dr_ratio=none
+Derive{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, dr_speed=1.0, dr_has=true, dr_a=3, dr_b=0} | 0a12c02a00083f8000000100030000 | derived: dr_speed_kph=3.6, dr_ratio=INF
 Arm{seq_count=5, force=true, level=7} | 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50
 Arm{seq_count=5, force=false, level=none} | 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50

@@ -1045,6 +1045,10 @@ type, shown here for ``T`` = ``demo_Housekeeping``.
      - ``size_t T_monitor(const T*, P_AlarmMonitor*, double t, xtce_pk_alarm* out)``
      - ``monitor(m, t)``
      - The same, counting earlier samples
+   * - ``algorithms() -> pk::Outputs<N>``, ``ALGORITHMS``
+     - ``size_t T_algorithms(const T*, xtce_pk_output* out)``, ``T_ALGORITHMS``
+     - ``algorithms()``
+     - The output of each MathAlgorithm it triggers
 
 The C/C++ functions return ``0`` on success, or an ``XTCE_PK_*`` error
 code after filling in ``*err`` (``err`` may be ``NULL``). ``T_describe``
@@ -1880,6 +1884,27 @@ Alarms
    doesn't hold, or one the packet computes (a size or length field); a
    change range with a ``spanOfInterestInSeconds`` or on an array; a
    ``CustomAlarm``; and alarms inside aggregates and arrays of arrays.
+
+Algorithms
+   An ``AlgorithmSet``'s ``MathAlgorithm``, a postfix expression like a
+   ``MathOperationCalibrator``'s (see Calibrators) that computes its
+   ``outputParameterRef``. A packet evaluates it when it triggers it,
+   by holding a value of a parameter of an ``OnParameterUpdateTrigger``
+   or being, or deriving from, the container of an
+   ``OnContainerUpdateTrigger``, and holds every input.
+   ``algorithms()`` lists each output, by the output parameter's name, as
+   a double, or none when an input is absent. The demo's ``Derive``
+   packet triggers ``SpeedToKph`` by ``DrSpeed`` and ``Ratio`` by its
+   container (``Ratio``'s ``DrB`` may be absent), and the test tools
+   print the outputs: ``... | derived: dr_speed_kph=36.0, dr_ratio=1.5``.
+
+   A packet leaves out an algorithm it triggers but can't evaluate, and
+   its generated documentation says why: one whose inputs it doesn't
+   hold, or computes, or that uses ``ThisParameterOperand``, the output's
+   own earlier value, like the demo's ``Count``. Evaluating algorithms
+   across packets, on a ``OnPeriodicRateTrigger``, or at a
+   ``triggerRate``, is a processor's work, not a codec's; a
+   ``CustomAlgorithm`` is not supported.
 
 Messages
    A ``MessageSet``'s ``Message`` picks out its container by its

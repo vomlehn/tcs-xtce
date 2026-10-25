@@ -521,6 +521,19 @@ each language. Only regular constructs compile; whole-string matching
 makes ``^`` and ``$`` at the ends redundant, and anything else raises
 ``Unsupported`` for that alarm.
 
+Algorithms
+----------
+
+A ``MathAlgorithm`` is a calibrator's postfix expression with an output,
+so ``math_operation`` compiles it to the same tree and the emitters'
+``math_expr`` renders it. ``bind_algorithms`` decides per packet whether
+the packet triggers it (a parameter it holds, or a container in its
+chain) and binds its inputs to the packet's fields, as alarms bind their
+criteria. Unlike a calibrator's, an input may be absent: the output is
+then absent, which the emitters test before computing it. The output is a
+double whatever the output parameter's type, since there is no encoding
+to round it to.
+
 Times
 -----
 

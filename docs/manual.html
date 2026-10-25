@@ -1505,6 +1505,11 @@ type, shown here for <tt class="docutils literal">T</tt> = <tt class="docutils l
 <td><tt class="docutils literal">monitor(m, t)</tt></td>
 <td>The same, counting earlier samples</td>
 </tr>
+<tr><td><tt class="docutils literal">algorithms() <span class="pre">-&gt;</span> <span class="pre">pk::Outputs&lt;N&gt;</span></tt>, <tt class="docutils literal">ALGORITHMS</tt></td>
+<td><tt class="docutils literal">size_t T_algorithms(const T*, xtce_pk_output* out)</tt>, <tt class="docutils literal">T_ALGORITHMS</tt></td>
+<td><tt class="docutils literal">algorithms()</tt></td>
+<td>The output of each MathAlgorithm it triggers</td>
+</tr>
 </tbody>
 </table>
 <p>The C/C++ functions return <tt class="docutils literal">0</tt> on success, or an <tt class="docutils literal">XTCE_PK_*</tt> error
@@ -2305,6 +2310,26 @@ documentation says why: one whose criteria use a value the packet
 doesn't hold, or one the packet computes (a size or length field); a
 change range with a <tt class="docutils literal">spanOfInterestInSeconds</tt> or on an array; a
 <tt class="docutils literal">CustomAlarm</tt>; and alarms inside aggregates and arrays of arrays.</p>
+</dd>
+<dt>Algorithms</dt>
+<dd><p class="first">An <tt class="docutils literal">AlgorithmSet</tt>'s <tt class="docutils literal">MathAlgorithm</tt>, a postfix expression like a
+<tt class="docutils literal">MathOperationCalibrator</tt>'s (see Calibrators) that computes its
+<tt class="docutils literal">outputParameterRef</tt>. A packet evaluates it when it triggers it,
+by holding a value of a parameter of an <tt class="docutils literal">OnParameterUpdateTrigger</tt>
+or being, or deriving from, the container of an
+<tt class="docutils literal">OnContainerUpdateTrigger</tt>, and holds every input.
+<tt class="docutils literal">algorithms()</tt> lists each output, by the output parameter's name, as
+a double, or none when an input is absent. The demo's <tt class="docutils literal">Derive</tt>
+packet triggers <tt class="docutils literal">SpeedToKph</tt> by <tt class="docutils literal">DrSpeed</tt> and <tt class="docutils literal">Ratio</tt> by its
+container (<tt class="docutils literal">Ratio</tt>'s <tt class="docutils literal">DrB</tt> may be absent), and the test tools
+print the outputs: <tt class="docutils literal">... | derived: dr_speed_kph=36.0, dr_ratio=1.5</tt>.</p>
+<p class="last">A packet leaves out an algorithm it triggers but can't evaluate, and
+its generated documentation says why: one whose inputs it doesn't
+hold, or computes, or that uses <tt class="docutils literal">ThisParameterOperand</tt>, the output's
+own earlier value, like the demo's <tt class="docutils literal">Count</tt>. Evaluating algorithms
+across packets, on a <tt class="docutils literal">OnPeriodicRateTrigger</tt>, or at a
+<tt class="docutils literal">triggerRate</tt>, is a processor's work, not a codec's; a
+<tt class="docutils literal">CustomAlgorithm</tt> is not supported.</p>
 </dd>
 <dt>Messages</dt>
 <dd>A <tt class="docutils literal">MessageSet</tt>'s <tt class="docutils literal">Message</tt> picks out its container by its

@@ -4,8 +4,10 @@ For each vector prints ``<description of the decoded packet> | <hex of the
 re-encoded packet>``, with ``error:<kind>`` in place of either on failure,
 then `` | alarms: <field=level, ...>`` for a packet with alarms, and
 `` | monitor: <field=level, ...>`` when one alarm monitor, kept across the
-vectors (each at the time of its index), gives other levels.  The Rust and
-C/C++ versions of this tool print identical output.
+vectors (each at the time of its index), gives other levels, then
+`` | derived: <output=value, ...>`` for a packet that triggers
+MathAlgorithms.  The Rust and C/C++ versions of this tool print identical
+output.
 
 Usage: python3 packet_tool.py VECTORS
 """
@@ -16,7 +18,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
 
 import demo  # noqa: E402
-from xtce.packet import Codec, PacketError, describe_alarms  # noqa: E402
+from xtce.packet import (  # noqa: E402
+    Codec, PacketError, describe_alarms, describe_outputs)
 
 DECODERS = {"tm": demo.CCSDSPacketKind, "tc": demo.CCSDSCommandKind,
             "hk": demo.Housekeeping}
@@ -43,6 +46,9 @@ def run(kind: str, data: bytes, t: float) -> str:
     tail = f" | alarms: {alarms}" if alarms else ""
     if alarms and monitored != alarms:
         tail += f" | monitor: {monitored}"
+    outputs = packet.algorithms()
+    if outputs:
+        tail += f" | derived: {describe_outputs(outputs)}"
     return f"{packet.describe()} | {again}{tail}"
 
 

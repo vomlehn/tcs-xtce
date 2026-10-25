@@ -1566,6 +1566,13 @@ def describe_alarms(alarms) -> str:
                      for name, level in alarms)
 
 
+def describe_outputs(outputs) -> str:
+    """``name=value`` for each MathAlgorithm output, ``none`` when it is
+    absent, as every runtime writes it."""
+    return ", ".join(f"{name}={'none' if v is None else describe_float(v)}"
+                     for name, v in outputs)
+
+
 def describe_optional(v, describe) -> str:
     return "none" if v is None else describe(v)
 

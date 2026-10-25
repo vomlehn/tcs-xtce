@@ -11,7 +11,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::fmt::{Display, Write as _};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tcs_xtce::fixed::{FixedBytes, FixedString};
-use tcs_xtce::packet::{Alarms, Codec, Packet};
+use tcs_xtce::packet::{Alarms, Codec, Outputs, Packet};
 
 /// The system allocator, counting the allocations made through it.
 struct Counting;
@@ -60,6 +60,12 @@ fn alarm_text<const N: usize>(a: &Alarms<N>, m: &Alarms<N>, t: &mut Text) {
         if x.as_str() != y.as_str() {
             write!(t, " | monitor: {m}").expect("alarms too long");
         }
+    }
+}
+
+fn derived_text<const N: usize>(o: &Outputs<N>, t: &mut Text) {
+    if !o.as_slice().is_empty() {
+        write!(t, " | derived: {o}").expect("outputs too long");
     }
 }
 
@@ -121,13 +127,16 @@ fn main() {
         index += 1;
         let out = match kind {
             "tm" => run(&mut tm, &data, |p: &demo::CCSDSPacketKind, t| {
-                alarm_text(&p.alarms(), &p.monitor(&mut mon, time), t)
+                alarm_text(&p.alarms(), &p.monitor(&mut mon, time), t);
+                derived_text(&p.algorithms(), t)
             }),
             "tc" => run(&mut tc, &data, |p: &demo::CCSDSCommandKind, t| {
-                alarm_text(&p.alarms(), &p.monitor(&mut mon, time), t)
+                alarm_text(&p.alarms(), &p.monitor(&mut mon, time), t);
+                derived_text(&p.algorithms(), t)
             }),
             "hk" => run(&mut hk, &data, |p: &demo::Housekeeping, t| {
-                alarm_text(&p.alarms(), &p.monitor(&mut mon, time), t)
+                alarm_text(&p.alarms(), &p.monitor(&mut mon, time), t);
+                derived_text(&p.algorithms(), t)
             }),
             _ => panic!("unknown vector kind {kind}"),
         };

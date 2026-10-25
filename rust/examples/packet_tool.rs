@@ -4,8 +4,10 @@
 //! re-encoded packet>`, with `error:<kind>` in place of either on failure,
 //! then ` | alarms: <field=level, ...>` for a packet with alarms, and
 //! ` | monitor: <field=level, ...>` when one alarm monitor, kept across the
-//! vectors (each at the time of its index), gives other levels.  The C++
-//! and Python versions of this tool print identical output.
+//! vectors (each at the time of its index), gives other levels, then
+//! ` | derived: <output=value, ...>` for a packet that triggers
+//! MathAlgorithms.  The C++ and Python versions of this tool print identical
+//! output.
 //!
 //! Usage: `packet_tool VECTORS`
 
@@ -13,7 +15,7 @@
 mod demo;
 
 use std::fmt::Display;
-use tcs_xtce::packet::{Alarms, Codec, Packet};
+use tcs_xtce::packet::{Alarms, Codec, Outputs, Packet};
 
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
@@ -28,6 +30,14 @@ fn alarm_text<const N: usize>(a: &Alarms<N>, m: &Alarms<N>) -> String {
         }
     }
     s
+}
+
+fn derived_text<const N: usize>(o: &Outputs<N>) -> String {
+    if o.as_slice().is_empty() {
+        String::new()
+    } else {
+        format!(" | derived: {o}")
+    }
 }
 
 fn run<P: Packet + Display>(
@@ -67,12 +77,15 @@ fn main() {
         let out = match kind {
             "tm" => run(&data, |p: &demo::CCSDSPacketKind| {
                 alarm_text(&p.alarms(), &p.monitor(&mut mon, t))
+                    + &derived_text(&p.algorithms())
             }),
             "tc" => run(&data, |p: &demo::CCSDSCommandKind| {
                 alarm_text(&p.alarms(), &p.monitor(&mut mon, t))
+                    + &derived_text(&p.algorithms())
             }),
             "hk" => run(&data, |p: &demo::Housekeeping| {
                 alarm_text(&p.alarms(), &p.monitor(&mut mon, t))
+                    + &derived_text(&p.algorithms())
             }),
             _ => panic!("unknown vector kind {kind}"),
         };

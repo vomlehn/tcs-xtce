@@ -6,9 +6,9 @@ import json
 import math
 import textwrap
 
-from .common import (MATH_OPS, Ref, fast_order, field_range, flt, header_lines,
-                     int_enc, invertible, math_value, size_args, str_cap,
-                     string_spec, wire_region)
+from .common import (notes, MATH_OPS, Ref, fast_order, field_range, flt,
+                     header_lines, inputs, int_enc, invertible, math_value,
+                     size_args, str_cap, string_spec, wire_region)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
@@ -874,9 +874,9 @@ class RustEmitter:
             self.line("///")
             self.line(f"/// `{lc.name}` gives the size of `{c.name}`: computed "
                       "from its length when encoding.")
-        for note in n.alarm_notes:
+        for note in notes(n):
             self.line("///")
-            for text in textwrap.wrap(f"Alarm left out: {note}.", 72):
+            for text in textwrap.wrap(note, 72):
                 self.line(f"/// {text}")
         self.line("#[derive(Debug, Clone, PartialEq, Default)]")
         self.line(f"pub struct {n.ident} {{")
@@ -1021,6 +1021,7 @@ class RustEmitter:
             self.line(f"a.push({rstr(name)}, {call});", 2)
         self.line("a", 2)
         self.line("}", 1)
+        self.algorithms(n, place)
         for name, lc, a in n.alarms:
             self.line()
             self.line(f"fn alarm_{name}(&self) -> Option<pk::AlarmLevel> {{", 1)
@@ -1031,6 +1032,36 @@ class RustEmitter:
                           "f64) -> Option<pk::AlarmLevel> {", 1)
                 self.alarm_body(name, lc, a, place, monitored[a.key])
         self.line("}")
+
+    def algorithms(self, n: Node, place) -> None:
+        """``algorithms()``: the output of each MathAlgorithm the packet
+        triggers."""
+        count = len(n.algorithms)
+        self.line()
+        self.line("/// The number of MathAlgorithms this packet triggers.", 1)
+        self.line(f"pub const ALGORITHMS: usize = {count};", 1)
+        self.line()
+        self.line("/// The output of each MathAlgorithm this packet triggers "
+                  "(`None` when", 1)
+        self.line("/// an input is absent).", 1)
+        self.line(f"pub fn algorithms(&self) -> pk::Outputs<{count}> {{", 1)
+        self.line("let mut o = pk::Outputs::new();", 2)
+        for alg in n.algorithms:
+            opt = [lc for lc in inputs(alg.expr) if lc.optional]
+
+            def at(lc):
+                return f"i{lc.id}" if lc.optional else place(lc)
+            value = math_expr(alg.expr, "x", at, rstr(alg.name))
+            if not opt:
+                self.line(f"o.push({rstr(alg.name)}, Some({value}));", 2)
+                continue
+            self.line(f"o.push({rstr(alg.name)}, (|| -> Option<f64> {{", 2)
+            for lc in opt:
+                self.line(f"let i{lc.id} = {place(lc)}?;", 3)
+            self.line(f"Some({value})", 3)
+            self.line("})());", 2)
+        self.line("o", 2)
+        self.line("}", 1)
 
     def alarm_body(self, name: str, lc, a, place, state) -> None:
         """The body of a method giving a field's alarm level; with
@@ -1199,6 +1230,25 @@ class RustEmitter:
             self.line(f"Self::{m.ident}(p) => {{", 3)
             self.line("for a in p.alarms().as_slice() {", 4)
             self.line("out.push(a.field, a.level);", 5)
+            self.line("}", 4)
+            self.line("}", 3)
+        self.line("}", 2)
+        self.line("out", 2)
+        self.line("}", 1)
+        algs = max(len(m.algorithms) for m in k.members)
+        self.line()
+        self.line("/// The most MathAlgorithms that a member triggers.", 1)
+        self.line(f"pub const ALGORITHMS: usize = {algs};", 1)
+        self.line()
+        self.line("/// The output of each MathAlgorithm the packet triggers.",
+                  1)
+        self.line(f"pub fn algorithms(&self) -> pk::Outputs<{algs}> {{", 1)
+        self.line("let mut out = pk::Outputs::new();", 2)
+        self.line("match self {", 2)
+        for m in k.members:
+            self.line(f"Self::{m.ident}(p) => {{", 3)
+            self.line("for o in p.algorithms().as_slice() {", 4)
+            self.line("out.push(o.name, o.value);", 5)
             self.line("}", 4)
             self.line("}", 3)
         self.line("}", 2)

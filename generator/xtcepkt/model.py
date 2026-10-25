@@ -542,6 +542,17 @@ class Alarm:
                    default=0)
 
 
+@dataclass
+class Algorithm:
+    """A MathAlgorithm that a packet evaluates: its output parameter
+    (``key``, the qualified name, and ``name``, as ``algorithms()`` lists
+    it) and its expression, a MathOp tree bound to the packet's values."""
+
+    key: str
+    name: str
+    expr: tuple
+
+
 # --- containers --------------------------------------------------------------
 
 
@@ -833,6 +844,10 @@ class Node:
     # for each field with an alarm, and why any others were left out.
     alarms: list = field(default_factory=list)
     alarm_notes: list = field(default_factory=list)
+    # Concrete only: the MathAlgorithms the packet triggers and can evaluate,
+    # and why any others it triggers can't be.
+    algorithms: list = field(default_factory=list)
+    algorithm_notes: list = field(default_factory=list)
 
     def chain(self) -> list["Node"]:
         """This node and its bases, root first."""

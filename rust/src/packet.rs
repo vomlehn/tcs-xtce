@@ -2711,6 +2711,66 @@ impl<const H: usize> AlarmState<H> {
     }
 }
 
+/// The output of one MathAlgorithm: its value, or `None` when an input is
+/// absent.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Output {
+    pub name: &'static str,
+    pub value: Option<f64>,
+}
+
+/// The outputs of the MathAlgorithms a packet evaluates, at most `N`.
+#[derive(Debug, Clone, Copy)]
+pub struct Outputs<const N: usize> {
+    items: [Output; N],
+    len: usize,
+}
+
+impl<const N: usize> Default for Outputs<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize> Outputs<N> {
+    pub fn new() -> Self {
+        Self {
+            items: [Output {
+                name: "",
+                value: None,
+            }; N],
+            len: 0,
+        }
+    }
+
+    pub fn push(&mut self, name: &'static str, value: Option<f64>) {
+        self.items[self.len] = Output { name, value };
+        self.len += 1;
+    }
+
+    pub fn as_slice(&self) -> &[Output] {
+        &self.items[..self.len]
+    }
+}
+
+/// `name=value` for each output, `none` when it is absent, as every runtime
+/// writes it.
+impl<const N: usize> fmt::Display for Outputs<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, o) in self.as_slice().iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            write!(f, "{}=", o.name)?;
+            match o.value {
+                Some(v) => write_double(v, f)?,
+                None => f.write_str("none")?,
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Whether `x` lies in an alarm range; a bound of `None` is infinite.
 pub fn in_band(
     x: f64,

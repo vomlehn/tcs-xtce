@@ -977,6 +977,9 @@
           </StaticAlarmRanges>
         </DefaultAlarm>
       </IntegerParameterType>
+      <FloatParameterType name="DrDoubleType" sizeInBits="64">
+        <FloatDataEncoding sizeInBits="64"/>
+      </FloatParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -1160,6 +1163,13 @@
       <Parameter name="TrRate" parameterTypeRef="TrRateType"/>
       <Parameter name="TrPct" parameterTypeRef="TrPctType"/>
       <Parameter name="TrSticky" parameterTypeRef="TrStickyType"/>
+      <Parameter name="DrSpeed" parameterTypeRef="F32"/>
+      <Parameter name="DrHas" parameterTypeRef="Flag8Type"/>
+      <Parameter name="DrA" parameterTypeRef="U16"/>
+      <Parameter name="DrB" parameterTypeRef="U16"/>
+      <Parameter name="DrSpeedKph" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="DrRatio" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="DrCount" parameterTypeRef="DrDoubleType"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1970,6 +1980,26 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <!-- Triggers the MathAlgorithms SpeedToKph (by DrSpeed) and Ratio
+           (by the container), whose input DrB may be absent; Count, which
+           needs its own earlier output, is left out. -->
+      <SequenceContainer name="Derive">
+        <EntryList>
+          <ParameterRefEntry parameterRef="DrSpeed"/>
+          <ParameterRefEntry parameterRef="DrHas"/>
+          <ParameterRefEntry parameterRef="DrA"/>
+          <ParameterRefEntry parameterRef="DrB">
+            <IncludeCondition>
+              <Comparison parameterRef="DrHas" value="true"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="530"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
     </ContainerSet>
     <MessageSet>
       <Message name="PulseStart">
@@ -1985,6 +2015,38 @@
         <ContainerRef containerRef="Pulse"/>
       </Message>
     </MessageSet>
+    <AlgorithmSet>
+      <MathAlgorithm name="SpeedToKph">
+        <MathOperation outputParameterRef="DrSpeedKph">
+          <ParameterInstanceRefOperand parameterRef="DrSpeed"/>
+          <ValueOperand>3.6</ValueOperand>
+          <Operator>*</Operator>
+          <TriggerSet>
+            <OnParameterUpdateTrigger parameterRef="DrSpeed"/>
+          </TriggerSet>
+        </MathOperation>
+      </MathAlgorithm>
+      <MathAlgorithm name="Ratio">
+        <MathOperation outputParameterRef="DrRatio">
+          <ParameterInstanceRefOperand parameterRef="DrA"/>
+          <ParameterInstanceRefOperand parameterRef="DrB"/>
+          <Operator>/</Operator>
+          <TriggerSet>
+            <OnContainerUpdateTrigger containerRef="Derive"/>
+          </TriggerSet>
+        </MathOperation>
+      </MathAlgorithm>
+      <MathAlgorithm name="Count">
+        <MathOperation outputParameterRef="DrCount">
+          <ThisParameterOperand/>
+          <ValueOperand>1</ValueOperand>
+          <Operator>+</Operator>
+          <TriggerSet>
+            <OnParameterUpdateTrigger parameterRef="DrSpeed"/>
+          </TriggerSet>
+        </MathOperation>
+      </MathAlgorithm>
+    </AlgorithmSet>
   </TelemetryMetaData>
   <CommandMetaData>
     <ParameterTypeSet>

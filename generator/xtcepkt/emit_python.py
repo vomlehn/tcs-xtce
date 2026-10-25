@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import textwrap
 
-from .common import (Ref, fast_order, field_range, flt, header_lines,
-                     invertible, math_value, size_args, string_spec)
+from .common import (notes, Ref, fast_order, field_range, flt, header_lines,
+                     inputs, invertible, math_value, size_args, string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
@@ -758,9 +758,9 @@ class PythonEmitter:
             self.line()
             self.line(f"``{lc.name}`` gives the size of ``{c.name}``: computed "
                       "from its length when encoding.", 1)
-        for note in n.alarm_notes:
+        for note in notes(n):
             self.line()
-            for text in textwrap.wrap(f"Alarm left out: {note}.", 72):
+            for text in textwrap.wrap(note, 72):
                 self.line(text, 1)
         self.line('"""', 1)
         self.line()
@@ -836,6 +836,7 @@ class PythonEmitter:
             self.line("pass", 2)
         self.line()
         self.alarms(n)
+        self.algorithms(n)
         self.line("def describe(self) -> str:", 1)
         self.line('"""Canonical text form, identical in every generated '
                   'language."""', 2)
@@ -894,6 +895,26 @@ class PythonEmitter:
                 self.line(f"def _monitor_{name}(self, m: AlarmMonitor, t: "
                           "float) -> Optional[pk.AlarmLevel]:", 1)
                 self.alarm_body(name, lc, a, place, monitored[a.key])
+
+    def algorithms(self, n: Node) -> None:
+        """``algorithms()``: the output of each MathAlgorithm the packet
+        triggers."""
+        names = dict((lc, name) for name, lc in n.fields)
+        place = lambda lc: self.place(n, lc, names)  # noqa: E731
+        self.line("def algorithms(self) -> list:", 1)
+        self.line('"""(output, value) for each MathAlgorithm this packet '
+                  'triggers; the value', 2)
+        self.line('is None when an input is absent."""', 2)
+        self.line("return [", 2)
+        for alg in n.algorithms:
+            value = math_expr(alg.expr, "x", place)
+            absent = [f"{place(lc)} is None" for lc in inputs(alg.expr)
+                      if lc.optional]
+            if absent:
+                value = f"None if {' or '.join(absent)} else {value}"
+            self.line(f"({pstr(alg.name)}, {value}),", 3)
+        self.line("]", 2)
+        self.line()
 
     def alarm_body(self, name: str, lc, a, place, state) -> None:
         """The body of a method giving a field's alarm level; with

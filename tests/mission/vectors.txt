@@ -179,5 +179,8 @@ tm 0a08c02a000641400000006496  # trend: a change of 2; two samples over 100
 tm 0a08c02a000641a00000012c32  # trend: a change of 8; 100% a second; one sample in range
 tm 0a08c02a000641a00000012c32  # trend: no change; 100% a second; two samples in range
 tm 0a08c02a0006bf8000000000c8  # trend: a change of -21; -50% a second; one sample over 100
+tm 0a12c02a0008412000000100060004  # derive: 10 m/s; 6 / 4
+tm 0a12c02a000640200000000007  # derive: 2.5 m/s; no DrB
+tm 0a12c02a00083f8000000100030000  # derive: 1 m/s; 3 / 0
 tc 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: forced, level 7
 tc 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: not forced, so no level
