@@ -690,6 +690,12 @@ Testing strategy
      that it needs no formatting. ``generator/tests/test_wrap.py`` checks
      that wrapped code fits in 80 columns and keeps its meaning.
 
+   ``tests/line_width.py``, the last step of ``make test``, enforces the
+   limit: it checks every source file, Makefile and script in git, and
+   the generated code, and fails naming each line that is too wide.
+   Prose and data (reStructuredText, Markdown, XML, TOML) aren't
+   checked.
+
 Limitations and future work
 ============================
 

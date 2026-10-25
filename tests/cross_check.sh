@@ -22,7 +22,8 @@ trap 'rm -rf "$out"' EXIT INT TERM
 
 validate() {
     XML_CATALOG_FILES="$top/references/catalog.xml" \
-        xmllint --noout --nonet --schema "$top/references/SpaceSystem.xsd" "$@" 2>&1 |
+        xmllint --noout --nonet \
+            --schema "$top/references/SpaceSystem.xsd" "$@" 2>&1 |
         grep -v ' validates$' || true
 }
 
@@ -38,7 +39,9 @@ for f in "$@"; do
     "$rust_tool" "$f" "$out/$b.rust.xml"
     "$cpp_tool" "$f" "$out/$b.cpp.xml"
     PYTHONPATH="$top/python" python3 -c \
-        'import sys, xtce; xtce.Document.from_file(sys.argv[1]).write_to(open(sys.argv[2], "wb"))' \
+        'import sys, xtce
+doc = xtce.Document.from_file(sys.argv[1])
+doc.write_to(open(sys.argv[2], "wb"))' \
         "$f" "$out/$b.py.xml"
     for lang in cpp py; do
         if ! cmp -s "$out/$b.rust.xml" "$out/$b.$lang.xml"; then
@@ -55,5 +58,7 @@ if [ -n "$errors" ]; then
     status=1
 fi
 
-[ $status -eq 0 ] && echo "cross_check: $# samples identical across Rust, C++ and Python, all schema-valid"
+[ $status -eq 0 ] &&
+    echo "cross_check: $# samples identical across Rust, C++ and Python," \
+        "all schema-valid"
 exit $status

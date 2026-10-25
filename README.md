@@ -57,7 +57,8 @@ make              # fetch references if missing, generate, build, run all tests
 make references   # re-check OMG and pull the latest XTCE documents
 make generate     # regenerate the bindings after the schema or generator changes
 make packets      # regenerate the demo mission's packet codecs
-make test         # per-language tests, both cross-language checks and the examples
+make test         # per-language tests, both cross-language checks, the examples
+                  # and the 80-column check
 make examples     # build and run the examples in examples/
 make fmt-check    # verify Rust formatting (also run by every `make rust`)
 ```

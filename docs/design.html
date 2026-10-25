@@ -1023,7 +1023,7 @@ real documents use.</dd>
 as it is written, and rejects the edit if formatting differs.
 Code keeps its lines within 80 columns, so that it reads the same in
 any editor or terminal and side by side in a diff:</p>
-<ul class="last simple">
+<ul class="simple">
 <li>Rust: <tt class="docutils literal">rustfmt</tt> with <tt class="docutils literal">max_width = 80</tt> (<tt class="docutils literal">rustfmt.toml</tt>), and by
 hand where <tt class="docutils literal">rustfmt</tt> leaves a line long, such as string literals
 and macro bodies.</li>
@@ -1036,6 +1036,11 @@ bracket they continue. No formatter is used, since black and
 that it needs no formatting. <tt class="docutils literal">generator/tests/test_wrap.py</tt> checks
 that wrapped code fits in 80 columns and keeps its meaning.</li>
 </ul>
+<p class="last"><tt class="docutils literal">tests/line_width.py</tt>, the last step of <tt class="docutils literal">make test</tt>, enforces the
+limit: it checks every source file, Makefile and script in git, and
+the generated code, and fails naming each line that is too wide.
+Prose and data (reStructuredText, Markdown, XML, TOML) aren't
+checked.</p>
 </dd>
 </dl>
 </div>

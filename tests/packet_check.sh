@@ -31,7 +31,8 @@ py_tool() {
 }
 
 XML_CATALOG_FILES="$top/references/catalog.xml" \
-    xmllint --noout --nonet --schema "$top/references/SpaceSystem.xsd" "$mission/demo.xml" 2>/dev/null || {
+    xmllint --noout --nonet --schema "$top/references/SpaceSystem.xsd" \
+        "$mission/demo.xml" 2>/dev/null || {
     echo "tests/mission/demo.xml does not validate against the XTCE schema" >&2
     exit 1
 }
@@ -64,7 +65,9 @@ run_all "$out/random.txt" random
 
 # Fixed point: feed every successful re-encoding back in.
 paste -d'|' "$out/random.txt" "$out/random.rust" |
-    awk -F'|' '$3 ~ /^ [0-9a-f]+$/ { split($1, v, " "); print v[1], substr($3, 2) }' >"$out/again.txt"
+    awk -F'|' '$3 ~ /^ [0-9a-f]+$/ {
+        split($1, v, " "); print v[1], substr($3, 2)
+    }' >"$out/again.txt"
 paste -d'|' "$out/random.txt" "$out/random.rust" |
     awk -F'|' '$3 ~ /^ [0-9a-f]+$/ { print $2 "|" $3 }' >"$out/again.expected"
 run_all "$out/again.txt" again
@@ -75,8 +78,9 @@ if ! cmp -s "$out/again.rust" "$out/again.expected"; then
 fi
 
 if [ $status -eq 0 ]; then
-    echo "packet_check: $(wc -l <"$out/vectors.rust") vectors match vectors.expected;" \
-        "$count random and $(wc -l <"$out/again.txt") re-encoded packets identical across Rust" \
-        "(with and without dynamic allocation), C, C++ and Python"
+    echo "packet_check: $(wc -l <"$out/vectors.rust") vectors match" \
+        "vectors.expected; $count random and $(wc -l <"$out/again.txt")" \
+        "re-encoded packets identical across Rust (with and without" \
+        "dynamic allocation), C, C++ and Python"
 fi
 exit $status

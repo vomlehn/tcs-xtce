@@ -48,7 +48,8 @@ three emitters (`generator/xtcepkt/emit_rust.py`, `emit_c.py`,
 
 **Line width and indentation.** All code, generated and hand-written, in
 every language, keeps its lines within 80 columns; so do Makefiles and
-scripts.
+scripts. `make test` checks this (`make line-width` checks it alone),
+counting a tab as 8 columns, and names each line that is too wide.
 
 * C and C++ indent with 8 spaces, never tabs. `.clang-format` at the top
   level sets this, so format hand-written C and C++ with `clang-format -i`.

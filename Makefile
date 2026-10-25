@@ -6,8 +6,9 @@
 #   make samples         regenerate the schema-covering test documents
 #   make packets         regenerate the demo mission's packet codecs
 #   make rust|cpp|python build one library
-#   make test            run every language's tests and the cross-language
-#                        checks
+#   make test            run every language's tests, the cross-language
+#                        checks and the line-width check
+#   make line-width      check that no line of code is wider than 80 columns
 #   make samples-check   check tcs-xtce against public XTCE documents
 #                        (downloads them)
 #   make examples        build and run every example in examples/
@@ -113,7 +114,13 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
 .PHONY: test
 test: test-generator test-rust test-cpp test-python cross-check packet-check \
-      examples
+      examples line-width
+
+# Every line of code, hand-written or generated, fits in 80 columns.  It comes
+# last in `test` so that the code the examples generate exists by then.
+.PHONY: line-width
+line-width:
+	$(PYTHON) -I tests/line_width.py
 
 # The packet compiler reads XTCE with the generated Python binding.
 .PHONY: test-generator
