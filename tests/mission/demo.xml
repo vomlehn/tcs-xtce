@@ -819,6 +819,9 @@
           </Variable>
         </StringDataEncoding>
       </StringParameterType>
+      <BooleanParameterType name="Flag8Type">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </BooleanParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -963,6 +966,13 @@
       <Parameter name="BagItem" parameterTypeRef="U8"/>
       <Parameter name="TrayFirst" parameterTypeRef="U8"/>
       <Parameter name="TrayLast" parameterTypeRef="U8"/>
+      <Parameter name="CmpHas" parameterTypeRef="Flag8Type"/>
+      <Parameter name="CmpOpt" parameterTypeRef="U8"/>
+      <Parameter name="CmpNeg" parameterTypeRef="S8"/>
+      <Parameter name="CmpPos" parameterTypeRef="U8"/>
+      <Parameter name="CmpBelow" parameterTypeRef="U8"/>
+      <Parameter name="CmpFive" parameterTypeRef="U8"/>
+      <Parameter name="CmpNotFive" parameterTypeRef="U8"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1585,6 +1595,47 @@
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="440"/>
             <NextContainer containerRef="Framed"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Criteria on an optional value, and comparing a signed value
+           with an unsigned one. -->
+      <SequenceContainer name="Compared">
+        <EntryList>
+          <ParameterRefEntry parameterRef="CmpHas"/>
+          <ParameterRefEntry parameterRef="CmpOpt">
+            <IncludeCondition>
+              <Comparison parameterRef="CmpHas" value="true"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="CmpNeg"/>
+          <ParameterRefEntry parameterRef="CmpPos"/>
+          <ParameterRefEntry parameterRef="CmpBelow">
+            <IncludeCondition>
+              <BooleanExpression>
+                <Condition>
+                  <ParameterInstanceRef parameterRef="CmpNeg"/>
+                  <ComparisonOperator>&lt;</ComparisonOperator>
+                  <ParameterInstanceRef parameterRef="CmpPos"/>
+                </Condition>
+              </BooleanExpression>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="CmpFive">
+            <IncludeCondition>
+              <Comparison parameterRef="CmpOpt" value="5"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="CmpNotFive">
+            <IncludeCondition>
+              <Comparison parameterRef="CmpOpt" value="5"
+                comparisonOperator="!="/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="450"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

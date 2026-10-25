@@ -602,6 +602,7 @@ class Criterion:
     target: Optional["VType"] = None
     other: Optional[Local] = None
     other_path: tuple = ()
+    other_target: Optional["VType"] = None  # the other value's type there
 
     @property
     def vtype(self) -> "VType":

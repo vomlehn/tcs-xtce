@@ -1255,6 +1255,9 @@ class Compiler:
         r = e[1]
         local, member, vt, name = self.value_ref("ParameterInstanceRef", r.ref,
                                                  r.path, scope, where, arg_key)
+        if local.optional:
+            raise Unsupported(f"{where}: MathOperationCalibrator uses {name}, "
+                              "which has an IncludeCondition")
         if vt.kind not in ("int", "float", "enum", "bool"):
             raise Unsupported(f"{where}: MathOperationCalibrator uses "
                               f"{vt.kind} value {name}")
@@ -1787,9 +1790,6 @@ class Compiler:
         if local is None:
             raise Unsupported(f"{where}: criterion on {pkey}, which is not "
                               "decoded before it")
-        if local.optional:
-            raise Unsupported(f"{where}: criterion on {pkey}, which has an "
-                              "IncludeCondition")
         member, vt = walk_members(local.vtype, members,
                                   f"{where}: criterion on {pkey}")
         pkey = ref_text(pkey, members)
@@ -1810,9 +1810,15 @@ class Compiler:
         if op not in ("==", "!=") and vt.kind in ("bool", "string", "binary"):
             raise Unsupported(f"{where}: {op} on {vt.kind} parameter {pkey}")
         target = vt if member else None
+        if other is not None and local.optional:
+            raise Unsupported(f"{where}: comparison of {pkey}, which has an "
+                              "IncludeCondition, with another value")
         if other is not None:
             olocal, opath, ovt, okey = self.value_ref(other[0], other[1], path,
                                                       scope, where, arg_key)
+            if olocal.optional:
+                raise Unsupported(f"{where}: comparison with {okey}, which has "
+                                  "an IncludeCondition")
             if raw or getattr(other[1], "use_calibrated_value", None) is False:
                 raise Unsupported(f"{where}: raw comparison of {pkey} and "
                                   f"{okey}")
@@ -1821,11 +1827,8 @@ class Compiler:
                                        "string")):
                 raise Unsupported(f"{where}: comparison of {vt.kind} {pkey} "
                                   f"and {ovt.kind} {okey}")
-            if vt.kind == "int" and vt.signed != ovt.signed:
-                raise Unsupported(f"{where}: comparison of signed and unsigned "
-                                  f"values {pkey} and {okey}")
-            return Criterion(local, op, None, f"{pkey} {op} {okey}", member,
-                             target, olocal, opath)
+            return Criterion(local, op, None, f"{pkey} {op} {okey}", member, vt,
+                             olocal, opath, ovt)
         if raw and (vt.kind not in ("int", "enum", "bool")
                     or vt.calibrator is not None
                     or isinstance(vt.enc, StringEnc)):

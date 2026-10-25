@@ -333,8 +333,17 @@ def term(t, place) -> str:
     if isinstance(t, (AllOf, AnyOf)):
         return (" and " if isinstance(t, AllOf)
                 else " or ").join(f"({term(x, place)})" for x in t.terms)
+    if t.local.optional:
+        # An absent value compares as std::optional's does: less than any.
+        x = place(t.local)
+        return f"({EMPTY[t.op]} if {x} is None else {condition(t, x)})"
     return condition(t, place(t.local),
                      place(t.other) if t.other is not None else None)
+
+
+# What ``<absent value> op <value>`` gives, as with std::optional in C++.
+EMPTY = {"==": False, "!=": True, "<": True, "<=": True, ">": False,
+         ">=": False}
 
 
 def condition(c: Criterion, x: str, y=None) -> str:

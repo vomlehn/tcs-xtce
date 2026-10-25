@@ -147,5 +147,9 @@ Framed{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_
 Framed{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, section_kind=2, section_value=15, section_extra=1, carton_note="abcd", bag_bits=40, bag_item=1, tray_first=2, tray_last=3} | 09aec02a00112f0161626364000028010000000002000003
 error:Mismatch | -
 error:BadSize | -
+Compared{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, cmp_has=true, cmp_opt=5, cmp_neg=-1, cmp_pos=0, cmp_below=17, cmp_five=34, cmp_not_five=none} | 09c2c02a00050105ff001122
+Compared{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, cmp_has=false, cmp_opt=none, cmp_neg=1, cmp_pos=255, cmp_below=51, cmp_five=none, cmp_not_five=68} | 09c2c02a00040001ff3344
+Compared{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, cmp_has=true, cmp_opt=7, cmp_neg=5, cmp_pos=3, cmp_below=none, cmp_five=none, cmp_not_five=85} | 09c2c02a00040107050355
+Compared{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, cmp_has=false, cmp_opt=none, cmp_neg=-128, cmp_pos=128, cmp_below=102, cmp_five=none, cmp_not_five=119} | 09c2c02a00040080806677
 Arm{seq_count=5, force=true, level=7} | 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50
 Arm{seq_count=5, force=false, level=none} | 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50

@@ -2117,7 +2117,7 @@ kinds, and an included <tt class="docutils literal">Block</tt> with its own chec
 command has a Luhn check digit.</p>
 </dd>
 <dt>Criteria</dt>
-<dd><tt class="docutils literal">RestrictionCriteria</tt>, <tt class="docutils literal">IncludeCondition</tt> and <tt class="docutils literal">DiscreteLookup</tt>
+<dd><p class="first"><tt class="docutils literal">RestrictionCriteria</tt>, <tt class="docutils literal">IncludeCondition</tt> and <tt class="docutils literal">DiscreteLookup</tt>
 take a <tt class="docutils literal">Comparison</tt>, a <tt class="docutils literal">ComparisonList</tt> (all must hold) or a
 <tt class="docutils literal">BooleanExpression</tt>: a <tt class="docutils literal">Condition</tt>, or <tt class="docutils literal">ANDedConditions</tt> and
 <tt class="docutils literal">ORedConditions</tt> nested to any depth. Comparisons use the operators
@@ -2125,19 +2125,30 @@ take a <tt class="docutils literal">Comparison</tt>, a <tt class="docutils liter
 for booleans, strings and binary), on values that are not arrays or
 aggregates. A <tt class="docutils literal">Condition</tt> may compare two values of the packet
 instead of a value and a constant: both of the same kind (integer,
-enumeration, float, boolean or string), calibrated, and for integers
-both signed or both unsigned. In the demo, <tt class="docutils literal">Gate</tt>'s <tt class="docutils literal">GateSpan</tt> is
-included when <tt class="docutils literal">GateLo &lt; GateHi</tt> or both are zero, and <tt class="docutils literal">Open</tt>'s
-<tt class="docutils literal">Data</tt> is 2 bytes when its <tt class="docutils literal">Lo &lt; Hi</tt>. Only a plain <tt class="docutils literal">==</tt>
+enumeration, float, boolean or string) and calibrated; a signed
+integer may be compared with an unsigned one, by value. In the demo,
+<tt class="docutils literal">Gate</tt>'s <tt class="docutils literal">GateSpan</tt> is included when <tt class="docutils literal">GateLo &lt; GateHi</tt> or both
+are zero, <tt class="docutils literal">Open</tt>'s <tt class="docutils literal">Data</tt> is 2 bytes when its <tt class="docutils literal">Lo &lt; Hi</tt>, and
+<tt class="docutils literal">Compared</tt>'s <tt class="docutils literal">CmpBelow</tt> is included when the signed <tt class="docutils literal">CmpNeg</tt> is
+below the unsigned <tt class="docutils literal">CmpPos</tt>.</p>
+<p class="last">A comparison with a constant may read a value that may be absent.
+As with C++'s <tt class="docutils literal"><span class="pre">std::optional</span></tt>, an absent value is below every
+value: it is <tt class="docutils literal">!=</tt>, <tt class="docutils literal">&lt;</tt> and <tt class="docutils literal">&lt;=</tt> any constant, and not <tt class="docutils literal">==</tt>,
+<tt class="docutils literal">&gt;</tt> or <tt class="docutils literal">&gt;=</tt> it. <tt class="docutils literal">Compared</tt>'s <tt class="docutils literal">CmpFive</tt> is included when
+<tt class="docutils literal">CmpOpt</tt> is present and 5, and <tt class="docutils literal">CmpNotFive</tt> otherwise. Values that
+may be absent can't be compared with another value of the packet or
+used by a calibrator. Only a plain <tt class="docutils literal">==</tt>
 comparison with a constant fixes a field's value, so derived packets
-chosen by other criteria keep those fields, and encoding checks them.</dd>
+chosen by other criteria keep those fields, and encoding checks them.</p>
+</dd>
 <dt>Locations</dt>
 <dd><tt class="docutils literal">LocationInContainerInBits</tt> relative to <tt class="docutils literal">previousEntry</tt> (the
 default), <tt class="docutils literal">containerStart</tt> or <tt class="docutils literal">containerEnd</tt>. A <tt class="docutils literal">containerEnd</tt>
 location puts the end of the entry that many bits before the end of its
 container, which must have a fixed <tt class="docutils literal">SizeInBits</tt> (otherwise its end
 would depend on where its entries are), and the entry a fixed size.
-<tt class="docutils literal">nextEntry</tt>, which XTCE proposes to deprecate, is not supported. <tt class="docutils literal">containerStart</tt> is the start of the
+<tt class="docutils literal">nextEntry</tt>, which XTCE proposes to deprecate, is not supported.
+<tt class="docutils literal">containerStart</tt> is the start of the
 packet for inherited entries, and the inclusion point for entries of
 an included container. A <tt class="docutils literal">FixedValue</tt> offset may be negative. A
 <tt class="docutils literal">DynamicValue</tt> or <tt class="docutils literal">DiscreteLookupList</tt> offset is computed like a
@@ -2148,7 +2159,7 @@ body. Repeated and fixed-size containers need fixed offsets.</dd>
 <dt>Include conditions</dt>
 <dd><tt class="docutils literal">IncludeCondition</tt> (see Criteria) on
 <tt class="docutils literal">ParameterRefEntry</tt> and <tt class="docutils literal">ContainerRefEntry</tt>, on values decoded
-earlier that are not themselves conditional. The affected fields
+earlier, which may themselves be conditional. The affected fields
 become optional. They are decoded when the condition holds, and
 encoded when the condition holds on the struct's fields. Encoding
 fails with <tt class="docutils literal">Missing</tt> if the condition holds but the value is

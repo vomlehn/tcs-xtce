@@ -975,6 +975,15 @@ emitter renders a term recursively with a callback that gives the
 expression for a value: the decoded local, the struct field, or the
 fixed constant when encoding. Only a top-level <tt class="docutils literal">==</tt> against a
 constant fixes a field, since nothing else pins down one value.</p>
+<p>A value that may be absent can be compared with a constant. Absent
+compares below every value, as <tt class="docutils literal"><span class="pre">std::optional</span></tt> does in C++. The
+emitters give an absent value the result of that comparison directly
+(<tt class="docutils literal">EMPTY</tt> in the Rust and Python emitters, and the presence flag in C)
+instead of reading it. Two-value comparisons keep both values' types
+(<tt class="docutils literal">target</tt> and <tt class="docutils literal">other_target</tt>), so an integer of one signedness can
+be compared with one of the other: Rust widens both to <tt class="docutils literal">i128</tt>, Python
+integers are exact, and C calls <tt class="docutils literal">xtce_pk_cmp_iu</tt> or
+<tt class="docutils literal">xtce_pk_cmp_ui</tt>, which order a negative value first.</p>
 <p>A reference to an aggregate member (XTCE's <tt class="docutils literal">P.a.b</tt>) is split into the
 parameter or argument and the member names; names can't contain dots,
 so that is unambiguous. Binding a <tt class="docutils literal">DynSize</tt>, or compiling a

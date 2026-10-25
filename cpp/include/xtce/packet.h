@@ -978,6 +978,13 @@ static inline int xtce_pk_cmp_u(uint64_t a, uint64_t b) {
 static inline int xtce_pk_cmp_i(int64_t a, int64_t b) {
         return a < b ? -1 : a > b;
 }
+/* Three-way comparisons of a signed and an unsigned value. */
+static inline int xtce_pk_cmp_iu(int64_t a, uint64_t b) {
+        return a < 0 ? -1 : xtce_pk_cmp_u((uint64_t)a, b);
+}
+static inline int xtce_pk_cmp_ui(uint64_t a, int64_t b) {
+        return -xtce_pk_cmp_iu(b, a);
+}
 
 /* --- floats
  * ----------------------------------------------------------------------- */

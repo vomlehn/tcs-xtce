@@ -1693,10 +1693,20 @@ Criteria
    for booleans, strings and binary), on values that are not arrays or
    aggregates. A ``Condition`` may compare two values of the packet
    instead of a value and a constant: both of the same kind (integer,
-   enumeration, float, boolean or string), calibrated, and for integers
-   both signed or both unsigned. In the demo, ``Gate``'s ``GateSpan`` is
-   included when ``GateLo < GateHi`` or both are zero, and ``Open``'s
-   ``Data`` is 2 bytes when its ``Lo < Hi``. Only a plain ``==``
+   enumeration, float, boolean or string) and calibrated; a signed
+   integer may be compared with an unsigned one, by value. In the demo,
+   ``Gate``'s ``GateSpan`` is included when ``GateLo < GateHi`` or both
+   are zero, ``Open``'s ``Data`` is 2 bytes when its ``Lo < Hi``, and
+   ``Compared``'s ``CmpBelow`` is included when the signed ``CmpNeg`` is
+   below the unsigned ``CmpPos``.
+
+   A comparison with a constant may read a value that may be absent.
+   As with C++'s ``std::optional``, an absent value is below every
+   value: it is ``!=``, ``<`` and ``<=`` any constant, and not ``==``,
+   ``>`` or ``>=`` it. ``Compared``'s ``CmpFive`` is included when
+   ``CmpOpt`` is present and 5, and ``CmpNotFive`` otherwise. Values that
+   may be absent can't be compared with another value of the packet or
+   used by a calibrator. Only a plain ``==``
    comparison with a constant fixes a field's value, so derived packets
    chosen by other criteria keep those fields, and encoding checks them.
 
@@ -1706,7 +1716,8 @@ Locations
    location puts the end of the entry that many bits before the end of its
    container, which must have a fixed ``SizeInBits`` (otherwise its end
    would depend on where its entries are), and the entry a fixed size.
-   ``nextEntry``, which XTCE proposes to deprecate, is not supported. ``containerStart`` is the start of the
+   ``nextEntry``, which XTCE proposes to deprecate, is not supported.
+   ``containerStart`` is the start of the
    packet for inherited entries, and the inclusion point for entries of
    an included container. A ``FixedValue`` offset may be negative. A
    ``DynamicValue`` or ``DiscreteLookupList`` offset is computed like a
@@ -1718,7 +1729,7 @@ Locations
 Include conditions
    ``IncludeCondition`` (see Criteria) on
    ``ParameterRefEntry`` and ``ContainerRefEntry``, on values decoded
-   earlier that are not themselves conditional. The affected fields
+   earlier, which may themselves be conditional. The affected fields
    become optional. They are decoded when the condition holds, and
    encoded when the condition holds on the struct's fields. Encoding
    fails with ``Missing`` if the condition holds but the value is

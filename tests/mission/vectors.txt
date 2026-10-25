@@ -147,5 +147,9 @@ tm 09aec02a000d200000000000000008ff000000ff  # framed: an empty note, an 8-bit b
 tm 09aec02a00112f0161626364000028010000000002000003  # framed: the longest note, a 40-bit bag
 tm 09aec02a000e35ab68690000000010110022000033  # framed, a section whose kind isn't 2
 tm 09aec02a000d25ab686900000000041122000033  # framed, a bag smaller than its item
+tm 09c2c02a00050105ff001122  # compared: opt 5, -1 below 0
+tm 09c2c02a00040001ff3344  # compared: no opt, 1 below 255
+tm 09c2c02a00040107050355  # compared: opt 7, 5 not below 3
+tm 09c2c02a00040080806677  # compared: no opt, -128 below 128
 tc 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: forced, level 7
 tc 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50  # arm: not forced, so no level

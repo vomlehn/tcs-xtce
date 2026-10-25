@@ -900,15 +900,18 @@ class BooleanExpressionTests(unittest.TestCase):
         self.assertEqual(n.fixed, {})
 
     def test_rejected(self):
-        for cond, why in (
-                (check("A", "<", "S"),
-                 "comparison of signed and unsigned values /Sat/A and /Sat/S"),
-                (check("A", "==", "X"),
-                 "comparison of int /Sat/A and float /Sat/X")):
-            with self.subTest(why=why), self.assertRaises(Unsupported) as cm:
-                compile_xml(gate_mission(f"<BooleanExpression>{cond}"
-                                         "</BooleanExpression>"))
-            self.assertIn(why, str(cm.exception))
+        cond = check("A", "==", "X")
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(gate_mission(f"<BooleanExpression>{cond}"
+                                     "</BooleanExpression>"))
+        self.assertIn("comparison of int /Sat/A and float /Sat/X",
+                      str(cm.exception))
+
+    def test_mixed_signs(self):
+        be = f"<BooleanExpression>{check('A', '<', 'S')}</BooleanExpression>"
+        (t,) = compile_xml(gate_mission(be)).nodes[0].criteria
+        self.assertFalse(t.target.signed)
+        self.assertTrue(t.other_target.signed)
 
 
 

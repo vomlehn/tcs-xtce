@@ -618,6 +618,16 @@ expression for a value: the decoded local, the struct field, or the
 fixed constant when encoding. Only a top-level ``==`` against a
 constant fixes a field, since nothing else pins down one value.
 
+A value that may be absent can be compared with a constant. Absent
+compares below every value, as ``std::optional`` does in C++. The
+emitters give an absent value the result of that comparison directly
+(``EMPTY`` in the Rust and Python emitters, and the presence flag in C)
+instead of reading it. Two-value comparisons keep both values' types
+(``target`` and ``other_target``), so an integer of one signedness can
+be compared with one of the other: Rust widens both to ``i128``, Python
+integers are exact, and C calls ``xtce_pk_cmp_iu`` or
+``xtce_pk_cmp_ui``, which order a negative value first.
+
 A reference to an aggregate member (XTCE's ``P.a.b``) is split into the
 parameter or argument and the member names; names can't contain dots,
 so that is unambiguous. Binding a ``DynSize``, or compiling a

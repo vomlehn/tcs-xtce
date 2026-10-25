@@ -742,9 +742,11 @@ class CEmitter:
             # Both values are present: the compiler rejects optional ones.
             y = other.expr + access(c.other_path)
             if k in ("int", "enum"):
-                return ("xtce_pk_cmp_"
-                        f"{'i' if k == 'enum' or vt.signed else 'u'}({x}, {y}) "
-                        f"{op} 0")
+                ovt = c.other_target or c.other.vtype
+                a = "i" if k == "enum" or vt.signed else "u"
+                b = "i" if k == "enum" or ovt.signed else "u"
+                return (f"xtce_pk_cmp_{a if a == b else a + b}({x}, {y}) {op} "
+                        "0")
             if k == "string":
                 return (f"xtce_pk_bytes_cmp({x}.data, {x}.len, {y}.data, "
                         f"{y}.len) {op} 0")
