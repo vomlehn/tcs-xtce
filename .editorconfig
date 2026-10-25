@@ -1,0 +1,21 @@
+# Editor settings for this repository: https://editorconfig.org
+root = true
+
+# No line of code is wider than 80 columns, counting a tab as eight.
+[{*.c,*.h,*.cpp,*.hpp,*.rs,*.py,*.sh,*.toml,*.yml,Makefile}]
+max_line_length = 80
+tab_width = 8
+
+# C and C++ indent with eight spaces, as .clang-format says.
+[*.{c,h,cpp,hpp}]
+indent_style = space
+indent_size = 8
+
+# rustfmt, the Python and the shell scripts indent with four spaces.
+[*.{rs,py,sh}]
+indent_style = space
+indent_size = 4
+
+# Recipes must start with a tab.
+[Makefile]
+indent_style = tab
