@@ -77,7 +77,8 @@ def run(cmd: list[str]) -> str:
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode == 0:
         return ""
-    lines = [x for x in (r.stderr + r.stdout).splitlines() if "error" in x] or (r.stderr + r.stdout).splitlines()
+    lines = ([x for x in (r.stderr + r.stdout).splitlines() if "error" in x]
+             or (r.stderr + r.stdout).splitlines())
     return lines[0].strip() if lines else f"exit {r.returncode}"
 
 
@@ -88,16 +89,21 @@ def build(mission, stem: str, out: Path) -> list[str]:
     header.write_text(emit_c.emit(mission, stem))
     for lang, compiler in (("c", "cc"), ("c++", "c++")):
         std = "-std=c11" if lang == "c" else "-std=c++20"
-        cmd = [os.environ.get("CC" if lang == "c" else "CXX", compiler), std, "-Wall", "-Wextra", "-Werror"]
-        cmd += [f"-I{TOP / 'cpp' / 'include'}", "-fsyntax-only", "-x", lang, str(header)]
+        cmd = [os.environ.get("CC" if lang == "c" else "CXX", compiler), std,
+               "-Wall", "-Wextra", "-Werror"]
+        cmd += [f"-I{TOP / 'cpp' / 'include'}", "-fsyntax-only", "-x", lang,
+                str(header)]
         err = run(cmd)
         if err:
             bad.append(f"C header as {lang}: {err}")
     module = out / f"{stem}.rs"
     module.write_text(rustfmt(emit_rust.emit(mission, stem)))
-    cmd = ["rustc", "--edition", "2021", "--crate-type", "lib", "--crate-name", "sample", "-D", "warnings"]
-    cmd += ["--extern", f"tcs_xtce={RLIB}", "-L", f"dependency={RLIB.parent / 'deps'}"]
-    cmd += ["--emit", "metadata", "-o", str(out / f"lib{stem}.rmeta"), str(module)]
+    cmd = ["rustc", "--edition", "2021", "--crate-type", "lib", "--crate-name",
+           "sample", "-D", "warnings"]
+    cmd += ["--extern", f"tcs_xtce={RLIB}", "-L",
+            f"dependency={RLIB.parent / 'deps'}"]
+    cmd += ["--emit", "metadata", "-o", str(out / f"lib{stem}.rmeta"),
+            str(module)]
     err = run(cmd)
     if err:
         bad.append(f"Rust module: {err}")
@@ -114,9 +120,9 @@ def check(path: Path, out: Path) -> list[str]:
     try:
         doc = xtce.Document.from_file(str(path))
     except xtce.XtceError:
-        return [f"schema {'valid' if valid else 'invalid'}; rejected by the binding"] + (
-            ["DISAGREE: the schema accepts it"] if valid else []
-        )
+        verdict = "valid" if valid else "invalid"
+        return ([f"schema {verdict}; rejected by the binding"]
+                + (["DISAGREE: the schema accepts it"] if valid else []))
     lines = [f"schema {'valid' if valid else 'invalid'}; loaded by the binding"]
     if not valid:
         lines.append("DISAGREE: the schema rejects it")
@@ -128,7 +134,8 @@ def check(path: Path, out: Path) -> list[str]:
     except Unsupported as e:
         return lines + [f"not compiled: {e}"]
     n = len(mission.nodes)
-    lines.append(f"{n} {'packet' if n == 1 else 'packets'}, {len(mission.skipped)} not supported")
+    lines.append(f"{n} {'packet' if n == 1 else 'packets'}, "
+                 f"{len(mission.skipped)} not supported")
     lines += [f"  unsupported: {m}" for m in mission.skipped]
     if mission.nodes:
         stem = re.sub(r"\W", "_", path.stem).lower()
@@ -139,7 +146,8 @@ def check(path: Path, out: Path) -> list[str]:
 def main() -> int:
     update = sys.argv[1:] == ["--update"]
     if not RLIB.exists():
-        print(f"samples_check: {RLIB} is missing; run make rust", file=sys.stderr)
+        print(f"samples_check: {RLIB} is missing; run make rust",
+              file=sys.stderr)
         return 1
     files = EXTERNAL / "files"
     out_lines = []
@@ -147,7 +155,8 @@ def main() -> int:
         for name, digest in sources():
             path = files / name
             if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
-                print(f"samples_check: {path} does not have the SHA-256 in sources.txt", file=sys.stderr)
+                print(f"samples_check: {path} does not have the SHA-256 in "
+                      "sources.txt", file=sys.stderr)
                 return 1
             try:
                 lines = check(path, Path(tmp))
@@ -164,16 +173,19 @@ def main() -> int:
     if text != expected.read_text():
         got = EXTERNAL / "files" / "results.txt"
         got.write_text(text)
-        print(f"samples_check: results differ from {expected}:", file=sys.stderr)
+        print(f"samples_check: results differ from {expected}:",
+              file=sys.stderr)
         subprocess.run(["diff", str(expected), str(got)])
         return 1
     # These are failures even when expected.txt records them.
-    flagged = [x for x in out_lines if re.search(r"CRASH|DISAGREE|DIFFERS|FAILED", x)]
+    flagged = [x for x in out_lines
+               if re.search(r"CRASH|DISAGREE|DIFFERS|FAILED", x)]
     for x in flagged:
         print(f"samples_check: {x.strip()}", file=sys.stderr)
     if flagged:
         return 1
-    print(f"samples_check: {len(sources())} documents match {expected.relative_to(TOP)}")
+    print(f"samples_check: {len(sources())} documents match "
+          f"{expected.relative_to(TOP)}")
     return 0
 
 

@@ -15,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
 import demo  # noqa: E402
 from xtce.packet import Codec, PacketError  # noqa: E402
 
-DECODERS = {"tm": demo.CCSDSPacketKind, "tc": demo.CCSDSCommandKind, "hk": demo.Housekeeping}
+DECODERS = {"tm": demo.CCSDSPacketKind, "tc": demo.CCSDSCommandKind,
+            "hk": demo.Housekeeping}
 
 
 def run(kind: str, data: bytes) -> str:

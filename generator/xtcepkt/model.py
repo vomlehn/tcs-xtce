@@ -24,7 +24,8 @@ class IntEnc:
     """Integer on the wire."""
 
     bits: int
-    encoding: str = "unsigned"  # unsigned | twosComplement | signMagnitude | onesComplement
+    # unsigned | twosComplement | signMagnitude | onesComplement
+    encoding: str = "unsigned"
     little_endian: bool = False
 
     @property
@@ -144,7 +145,8 @@ class ArrayEnc:
 
     @property
     def max_count(self) -> int:
-        return self.count if isinstance(self.count, int) else self.count.max_total
+        return (self.count if isinstance(self.count, int)
+                else self.count.max_total)
 
 
 @dataclass(frozen=True)
@@ -238,7 +240,8 @@ class Spline:
 Calibrator = Union[Polynomial, Spline]
 
 
-# --- value types ---------------------------------------------------------------
+# --- value types
+# ---------------------------------------------------------------
 
 
 @dataclass
@@ -294,7 +297,8 @@ class VType:
         """For a calibrated integer: the smallest value, and one more than
         the largest, that its generated field holds."""
         bits = self.width
-        return (-(1 << (bits - 1)), 1 << (bits - 1)) if self.signed else (0, 1 << bits)
+        return ((-(1 << (bits - 1)), 1 << (bits - 1)) if self.signed
+                else (0, 1 << bits))
 
     @property
     def dyn(self) -> Optional[DynSize]:
@@ -313,7 +317,9 @@ class VType:
         """This type and every type inside it (array elements, aggregate
         members), inner types first."""
         e = self.enc
-        inner = [e.elem] if isinstance(e, ArrayEnc) else [m.vtype for m in e.members] if isinstance(e, AggregateEnc) else []
+        inner = ([e.elem] if isinstance(e, ArrayEnc)
+                 else [m.vtype for m in e.members]
+                 if isinstance(e, AggregateEnc) else [])
         return [t for i in inner for t in i.tree()] + [self]
 
 
@@ -344,7 +350,8 @@ class Seek:
 
     @property
     def max_offset(self) -> int:
-        return self.offset.max_total if isinstance(self.offset, DynSize) else self.offset
+        return (self.offset.max_total if isinstance(self.offset, DynSize)
+                else self.offset)
 
 
 @dataclass
@@ -402,7 +409,8 @@ class Criterion:
     """``local <op> value``; ``value`` is an engineering value.  With a
     ``path`` (field names of aggregate members and Index steps into
     arrays, from a reference such as ``P.a[2]``) the criterion is on that
-    part of ``local``, of type ``target``.  With ``other`` (and ``other_path``) it compares two
+    part of ``local``, of type ``target``.  With ``other`` (and ``other_path``)
+    it compares two
     values of the packet instead, and ``value`` is unused."""
 
     local: Local
@@ -443,7 +451,8 @@ def term_indexes(t) -> list:
         out = []
         for lc, path in ((t.local, t.path), (t.other, t.other_path)):
             if lc is not None:
-                out += [(lc, path[:k], s.count) for k, s in enumerate(path) if isinstance(s, Index)]
+                out += [(lc, path[:k], s.count) for k, s in enumerate(path)
+                        if isinstance(s, Index)]
         return out
     return [x for u in t.terms for x in term_indexes(u)]
 
@@ -472,7 +481,8 @@ class Node:
     items: list[Item] = field(default_factory=list)
     children: list["Node"] = field(default_factory=list)
     ident: str = ""  # generated struct name
-    fields: list[tuple[str, Local]] = field(default_factory=list)  # concrete only
+    # concrete only
+    fields: list[tuple[str, Local]] = field(default_factory=list)
     fixed: dict = field(default_factory=dict)  # Local -> engineering value
     # Values that only give the size or count of another value: Local ->
     # (the value whose size it gives, its DynSize).  They are not fields;
@@ -498,10 +508,9 @@ class Node:
 
     def length_field(self) -> Optional[Local]:
         """The packet length field, if the packet has one."""
-        return next(
-            (it.local for it in walk(self.all_items()) if isinstance(it, Value) and it.local.length is not None),
-            None,
-        )
+        return next((it.local for it in walk(self.all_items())
+                     if isinstance(it, Value) and it.local.length is not None),
+                    None)
 
     def descendants(self) -> list["Node"]:
         out = []
@@ -526,7 +535,8 @@ class Mission:
     name: str
     source: str
     types: list[VType]  # enumerations used by generated code
-    aggregates: list[VType]  # aggregates used by generated code, inner ones first
+    # aggregates used by generated code, inner ones first
+    aggregates: list[VType]
     nodes: list[Node]  # supported concrete nodes, document order
     kinds: list[Kind]
     roots: list[Node]  # roots of the trees behind ``kinds``

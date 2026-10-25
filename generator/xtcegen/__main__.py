@@ -62,10 +62,15 @@ def main() -> None:
     p = argparse.ArgumentParser(prog="xtcegen", description=__doc__)
     p.add_argument("--xsd", required=True, help="path to SpaceSystem.xsd")
     p.add_argument("--rust", help="output path of the generated Rust module")
-    p.add_argument("--cpp-header", help="output path of the generated C++ header")
-    p.add_argument("--cpp-source", help="output path of the generated C++ source")
-    p.add_argument("--python", help="output path of the generated Python module")
-    p.add_argument("--sample", help="write schema-covering sample documents to this directory")
+    p.add_argument("--cpp-header",
+                   help="output path of the generated C++ header")
+    p.add_argument("--cpp-source",
+                   help="output path of the generated C++ source")
+    p.add_argument("--python",
+                   help="output path of the generated Python module")
+    p.add_argument("--sample",
+                   help="write schema-covering sample documents to this "
+                        "directory")
     args = p.parse_args()
 
     schema = xsd.parse(args.xsd)

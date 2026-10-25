@@ -24,7 +24,8 @@ XML     := to_from.xml
 GEN     := rust/src/to_from.rs c/to_from.h cxx/to_from.h \
            python/to_from.py
 GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py \
-                     $(TOP)/generator/tcs_xtce/*.py)
+                     $(TOP)/generator/tcs_xtce/*.py \
+                     $(TOP)/generator/xtcegen/*.py)
 PKT_H   := $(TOP)/cpp/include/xtce/packet.h
 TCS_XTCE := cd $(TOP)/generator && \
             $(PYTHON) -m tcs_xtce ../examples/to-from/$(XML) \

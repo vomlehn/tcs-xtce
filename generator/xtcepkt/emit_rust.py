@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import json
 
-from .common import field_range, flt, header_lines, int_enc, invertible, le, size_args, str_cap, string_spec
-from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc, Value, VType
+from .common import (field_range, flt, header_lines, int_enc, invertible, le,
+                     size_args, str_cap, string_spec)
+from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
+                    AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed,
+                    FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad,
+                    Polynomial, Seek, Spline, StringEnc, Value, VType)
 
 
 def rstr(s: str) -> str:
@@ -28,7 +32,8 @@ def field_type(vt: VType, alloc: bool, optional: bool = False) -> str:
     k = vt.kind
     if k == "array":
         elem = field_type(vt.elem, alloc)
-        return f"Vec<{elem}>" if alloc else f"pk::FixedVec<{elem}, {vt.enc.max_count}>"
+        return (f"Vec<{elem}>" if alloc
+                else f"pk::FixedVec<{elem}, {vt.enc.max_count}>")
     if k == "aggregate":
         return vt.ident
     if k == "int":
@@ -56,7 +61,8 @@ def literal(vt: VType, v) -> str:
 
 
 def points(cal: Spline) -> str:
-    return "&[" + ", ".join(f"({flt(a)}, {flt(b)})" for a, b in cal.points) + "]"
+    return ("&[" + ", ".join(f"({flt(a)}, {flt(b)})" for a, b in cal.points)
+            + "]")
 
 
 def calibrate(vt: VType, x: str, f: str) -> str:
@@ -66,7 +72,8 @@ def calibrate(vt: VType, x: str, f: str) -> str:
     if isinstance(cal, Polynomial):
         terms = ", ".join(f"({flt(c)}, {e})" for c, e in cal.terms)
         return f"pk::polynomial({x}, &[{terms}])"
-    return f"pk::spline({x}, {points(cal)}, {cal.order}, {str(cal.extrapolate).lower()}, {f})?"
+    return (f"pk::spline({x}, {points(cal)}, {cal.order}, "
+            f"{str(cal.extrapolate).lower()}, {f})?")
 
 
 def uncalibrate(vt: VType, y: str, f: str) -> str:
@@ -74,8 +81,10 @@ def uncalibrate(vt: VType, y: str, f: str) -> str:
     if cal is None:
         return y
     if isinstance(cal, Polynomial):
-        return f"pk::polynomial_inverse({y}, {flt(cal.intercept)}, {flt(cal.slope)})"
-    return f"pk::spline_inverse({y}, {points(cal)}, {str(cal.extrapolate).lower()}, {f})?"
+        return (f"pk::polynomial_inverse({y}, {flt(cal.intercept)}, "
+                f"{flt(cal.slope)})")
+    return (f"pk::spline_inverse({y}, {points(cal)}, "
+            f"{str(cal.extrapolate).lower()}, {f})?")
 
 
 def spec(vt: VType, ref, f: str) -> str:
@@ -84,7 +93,8 @@ def spec(vt: VType, ref, f: str) -> str:
     fixed, mx, term, tag = string_spec(vt)
     fixed = f"Some({fixed})" if fixed is not None else "None"
     term = f"Some({term})" if term is not None else "None"
-    s = f"StringSpec {{ fixed_bits: {fixed}, max_bits: {mx}, terminator: {term}, size_tag_bits: {tag} }}"
+    s = (f"StringSpec {{ fixed_bits: {fixed}, max_bits: {mx}, terminator: "
+         f"{term}, size_tag_bits: {tag} }}")
     d = vt.enc.dyn
     return f"&({s}).sized({size(d, ref(d), f)})" if d is not None else "&" + s
 
@@ -97,7 +107,8 @@ def source(d: DynSize, place) -> str:
         return place(d.local) + access(d.path)
     x = f"{d.default}i64"
     for criteria, v in reversed(d.lookup):
-        x = f"if {conjunction([term(c, place) for c in criteria])} {{ {v}i64 }} else {{ {x} }}"
+        x = (f"if {conjunction([term(c, place) for c in criteria])} {{ {v}i64 "
+             f"}} else {{ {x} }}")
     return f"({x})"
 
 
@@ -111,7 +122,8 @@ def offset(s: Seek, ref, f: str) -> str:
 
 def size(d: DynSize, x: str, f: str) -> str:
     """Expression for a size or count that the value ``x`` gives."""
-    n = f"pk::dynamic_size({x} as f64, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, {f})?"
+    n = (f"pk::dynamic_size({x} as f64, {flt(d.slope)}, {flt(d.intercept)}, "
+         f"{d.unit}, {d.max}, {f})?")
     return f"{n} * {d.factor}" if d.factor != 1 else n
 
 
@@ -137,7 +149,8 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
         reads = []
         for m in e.members:
             x = read_expr(m.vtype, f, inner, alloc, depth + 1)
-            reads.append((m.ident, f"{{ r.pad({m.skip}, {f})?; {x} }}" if m.skip else x))
+            reads.append((m.ident,
+                          f"{{ r.pad({m.skip}, {f})?; {x} }}" if m.skip else x))
         if member_sizes(e):
             # Read members into locals, in order, so later ones can use them.
             lets = " ".join(f"let {a}{i} = {x};" for i, x in reads)
@@ -150,19 +163,22 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
         gap = f"if i > 0 {{ r.skip({e.gap}, {f})?; }}" if e.gap else ""
         elem = read_expr(e.elem, f, ref, alloc, depth + 1)
         if alloc:
-            return f"{{ let n = {count(vt, ref, f)}; let mut a = Vec::with_capacity(n); for i in 0..n {{ {gap} a.push({elem}); }} a }}"
+            return (f"{{ let n = {count(vt, ref, f)}; let mut a = "
+                    f"Vec::with_capacity(n); for i in 0..n {{ {gap} "
+                    f"a.push({elem}); }} a }}")
         full = f"return Err(PacketError::BadSize {{ field: {f} }})"
-        return (
-            f"{{ let n = {count(vt, ref, f)}; let mut a = pk::FixedVec::<{field_type(e.elem, alloc)}, {e.max_count}>::new(); "
-            f"for i in 0..n {{ {gap} if a.push({elem}).is_err() {{ {full} }} }} a }}"
-        )
+        return (f"{{ let n = {count(vt, ref, f)}; let mut a = pk::FixedVec::"
+                f"<{field_type(e.elem, alloc)}, {e.max_count}>::new(); for i "
+                f"in 0..n {{ {gap} if a.push({elem}).is_err() {{ {full} }} }} "
+                "a }")
     if isinstance(e, IntEnc):
         raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
         enc = f"IntEncoding::{int_enc(vt)}"
         if vt.kind == "int" and vt.calibrator is not None:
             y = calibrate(vt, f"pk::int_to_f64({raw}, {e.bits}, {enc})", f)
             lo, lim = vt.eng_limits
-            return f"pk::round_to_int({y}, {flt(lo)}, {flt(lim)}, {f})? as {field_type(vt, alloc)}"
+            return (f"pk::round_to_int({y}, {flt(lo)}, {flt(lim)}, {f})? as "
+                    f"{field_type(vt, alloc)}")
         if vt.kind == "int":
             if vt.signed:
                 return f"pk::to_signed({raw}, {e.bits}, {enc}) as i{vt.width}"
@@ -180,7 +196,8 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
     if isinstance(e, BinaryEnc):
         read = "bytes" if alloc else f"fixed_bytes::<{e.bits // 8}>"
         if e.rest:
-            return f"{{ let n = r.rest_bytes({e.bits // 8}, {f})?; r.{read}(n, {f})? }}"
+            return (f"{{ let n = r.rest_bytes({e.bits // 8}, {f})?; "
+                    f"r.{read}(n, {f})? }}")
         n = size(e.dyn, ref(e.dyn), f) if e.dyn else e.bits // 8
         b = f"r.{read}({n}, {f})?"
         if vt.kind != "string":
@@ -190,7 +207,8 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
     s = f"pk::{read}(&mut r, {spec(vt, ref, f)}, {f})?"
     if vt.kind == "bool":
         bad = f"return Err(PacketError::OutOfRange {{ field: {f} }})"
-        return f"match {s}.as_str() {{ {rstr(vt.one_string)} => true, {rstr(vt.zero_string)} => false, _ => {bad} }}"
+        return (f"match {s}.as_str() {{ {rstr(vt.one_string)} => true, "
+                f"{rstr(vt.zero_string)} => false, _ => {bad} }}")
     return s
 
 
@@ -200,7 +218,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     e = vt.enc
     bad = f"return Err(PacketError::BadSize {{ field: {f} }});"
     if isinstance(e, AggregateEnc):
-        inner = lambda d: f"{x}.{d.member}" if d.member else ref(d)  # noqa: E731
+        def inner(d):
+            return f"{x}.{d.member}" if d.member else ref(d)
         parts = []
         for m in e.members:
             if m.skip:
@@ -211,42 +230,50 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         return "{ " + " ".join(parts) + " }"
     if isinstance(e, ArrayEnc):
         gap = f"if i > 0 {{ w.skip({e.gap}, {f})?; }}" if e.gap else ""
-        return (
-            f"{{ let n = {count(vt, ref, f)}; if {x}.len() != n {{ {bad} }} "
-            f"for (i, {elem_pattern(e.elem)}) in {x}.iter().enumerate() {{ {gap} {write_stmt(e.elem, 'e', f, ref)} }} }}"
-        )
+        return (f"{{ let n = {count(vt, ref, f)}; if {x}.len() != n {{ {bad} "
+                f"}} for (i, {elem_pattern(e.elem)}) in {x}.iter().enumerate() "
+                f"{{ {gap} {write_stmt(e.elem, 'e', f, ref)} }} }}")
     data = f"{x}.as_bytes()" if vt.kind == "string" else f"&{x}"
     if isinstance(e, BinaryEnc) and e.dyn is not None:
         n = size(e.dyn, ref(e.dyn), f)
-        return f"{{ let n = {n}; if {x}.len() != n {{ {bad} }} w.bytes({data}); }}"
+        return (f"{{ let n = {n}; if {x}.len() != n {{ {bad} }} "
+                f"w.bytes({data}); }}")
     if isinstance(e, IntEnc):
         bits, order = e.bits, str(le(vt)).lower()
         enc = f"IntEncoding::{int_enc(vt)}"
         if vt.kind == "int" and vt.calibrator is not None:
             if not invertible(vt):
-                return f"return Err(PacketError::NotInvertible {{ field: {f} }});"
-            raw = f"pk::f64_to_int({uncalibrate(vt, f'{x} as f64', f)}, {bits}, {enc}, {f})?"
+                return (f"return Err(PacketError::NotInvertible {{ field: {f} "
+                        "});")
+            raw = (f"pk::f64_to_int({uncalibrate(vt, f'{x} as f64', f)}, "
+                   f"{bits}, {enc}, {f})?")
         elif vt.kind == "int":
-            raw = f"pk::from_signed({x} as i64, {bits}, {enc}, {f})?" if vt.signed else f"pk::from_unsigned({x} as u64, {bits}, {f})?"
+            raw = (f"pk::from_signed({x} as i64, {bits}, {enc}, {f})?"
+                   if vt.signed
+                   else f"pk::from_unsigned({x} as u64, {bits}, {f})?")
         elif vt.kind == "enum":
             raw = f"pk::from_signed({x}.0, {bits}, {enc}, {f})?"
         elif vt.kind == "bool":
             raw = f"{x} as u64"
         else:
             if not invertible(vt):
-                return f"return Err(PacketError::NotInvertible {{ field: {f} }});"
-            raw = f"pk::f64_to_int({uncalibrate(vt, x, f)}, {bits}, {enc}, {f})?"
+                return (f"return Err(PacketError::NotInvertible {{ field: {f} "
+                        "});")
+            raw = (f"pk::f64_to_int({uncalibrate(vt, x, f)}, {bits}, {enc}, "
+                   f"{f})?")
         return f"w.uint_order({bits}, {order}, {raw});"
     if isinstance(e, FloatEnc):
         if not invertible(vt):
             return f"return Err(PacketError::NotInvertible {{ field: {f} }});"
-        return f"w.uint_order({e.bits}, {str(le(vt)).lower()}, pk::float_to_raw({uncalibrate(vt, x, f)}, {e.bits}));"
+        return (f"w.uint_order({e.bits}, {str(le(vt)).lower()}, "
+                f"pk::float_to_raw({uncalibrate(vt, x, f)}, {e.bits}));")
     if isinstance(e, BinaryEnc) and e.rest:
         return f"pk::write_rest(w, &{x}, {e.bits // 8}, {f})?;"
     if isinstance(e, BinaryEnc):
         return f"pk::write_binary(w, {data}, {e.bits // 8}, {f})?;"
     if vt.kind == "bool":
-        s = f"if {x} {{ {rstr(vt.one_string)} }} else {{ {rstr(vt.zero_string)} }}"
+        s = (f"if {x} {{ {rstr(vt.one_string)} }} else {{ "
+             f"{rstr(vt.zero_string)} }}")
         return f"pk::write_string(w, {spec(vt, ref, f)}, {s}, {f})?;"
     return f"pk::write_string(w, {spec(vt, ref, f)}, &{x}, {f})?;"
 
@@ -264,13 +291,17 @@ def describe(vt: VType, x: str) -> str:
     if k == "aggregate":
         parts = []
         for i, m in enumerate(vt.enc.members):
-            parts.append(f"f.write_str({rstr((', ' if i else '') + m.ident + '=')})?;")
+            parts.append("f.write_str("
+                         f"{rstr((', ' if i else '') + m.ident + '=')})?;")
             parts.append(describe(m.vtype, f"({x}).{m.ident}") + ";")
-        return "{ f.write_char('{')?; " + " ".join(parts) + " f.write_char('}')? }"
+        return ("{ f.write_char('{')?; " + " ".join(parts)
+                + " f.write_char('}')? }")
     if k == "array":
         el = describe(vt.elem, "e")
         pat = elem_pattern(vt.elem)
-        return f"{{ f.write_char('[')?; for (i, {pat}) in ({x}).iter().enumerate() {{ if i > 0 {{ f.write_str(\", \")?; }} {el}; }} f.write_char(']')? }}"
+        return (f"{{ f.write_char('[')?; for (i, {pat}) in "
+                f"({x}).iter().enumerate() {{ if i > 0 {{ f.write_str(\", "
+                f"\")?; }} {el}; }} f.write_char(']')? }}")
     if k == "float":
         return f"pk::describe_f64({x}, f)?"
     if k == "string":
@@ -288,15 +319,18 @@ def conjunction(conds: list) -> str:
 
 def access(path) -> str:
     """The expression suffix for a member and element path."""
-    return "".join(f"[{p.i}]" if isinstance(p, Index) else "." + p for p in path)
+    return "".join(f"[{p.i}]" if isinstance(p, Index) else "." + p
+                   for p in path)
 
 
 def term(t, place) -> str:
     """Expression for a criterion or a tree of them; ``place`` gives the
     expression for a Local."""
     if isinstance(t, (AllOf, AnyOf)):
-        return (" && " if isinstance(t, AllOf) else " || ").join(f"({term(x, place)})" for x in t.terms)
-    return condition(t, place(t.local), place(t.other) if t.other is not None else None)
+        return (" && " if isinstance(t, AllOf)
+                else " || ").join(f"({term(x, place)})" for x in t.terms)
+    return condition(t, place(t.local),
+                     place(t.other) if t.other is not None else None)
 
 
 def condition(c: Criterion, x: str, y=None) -> str:
@@ -337,13 +371,17 @@ class RustEmitter:
         self.line(f"//! Packet codecs for the `{m.name}` mission.")
         if not self.alloc:
             self.line("//!")
-            self.line("//! Generated with `--dynamic-allocations false`: arrays, strings and binary")
-            self.line("//! fields have fixed capacities, and decoding, encoding and describing a")
+            self.line("//! Generated with `--dynamic-allocations false`: "
+                      "arrays, strings and binary")
+            self.line("//! fields have fixed capacities, and decoding, "
+                      "encoding and describing a")
             self.line("//! packet never allocate.")
-        self.line("#![allow(dead_code, unused_imports, unused_variables, unreachable_code, clippy::all)]")
+        self.line("#![allow(dead_code, unused_imports, unused_variables, "
+                  "unreachable_code, clippy::all)]")
         self.line()
         self.line("use std::fmt::{self, Write as _};")
-        self.line("use tcs_xtce::packet::{self as pk, BitReader, BitWriter, IntEncoding, Packet, PacketError, Result, StringSpec};")
+        self.line("use tcs_xtce::packet::{self as pk, BitReader, BitWriter, "
+                  "IntEncoding, Packet, PacketError, Result, StringSpec};")
         for vt in m.types:
             self.enum_type(vt)
         for vt in m.aggregates:
@@ -356,7 +394,8 @@ class RustEmitter:
 
     def enum_type(self, vt: VType) -> None:
         self.line()
-        self.line(f"/// Enumeration `{vt.key}`; holds the raw value so unlisted values survive decoding.")
+        self.line(f"/// Enumeration `{vt.key}`; holds the raw value so "
+                  "unlisted values survive decoding.")
         self.line("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]")
         self.line(f"pub struct {vt.ident}(pub i64);")
         self.line()
@@ -364,11 +403,13 @@ class RustEmitter:
         for lab in vt.labels:
             self.line(f"pub const {lab.ident}: Self = Self({lab.value});", 1)
         self.line()
-        self.line("/// The label of this value, if the enumeration lists it.", 1)
+        self.line("/// The label of this value, if the enumeration lists it.",
+                  1)
         self.line("pub fn label(self) -> Option<&'static str> {", 1)
         self.line("match self.0 {", 2)
         for lab in vt.labels:
-            pat = str(lab.value) if lab.value == lab.max_value else f"{lab.value}..={lab.max_value}"
+            pat = (str(lab.value) if lab.value == lab.max_value
+                   else f"{lab.value}..={lab.max_value}")
             self.line(f"{pat} => Some({rstr(lab.label)}),", 3)
         self.line("_ => None,", 3)
         self.line("}", 2)
@@ -376,7 +417,8 @@ class RustEmitter:
         self.line("}")
         self.line()
         self.line(f"impl fmt::Display for {vt.ident} {{")
-        self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {", 1)
+        self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {",
+                  1)
         self.line("match self.label() {", 2)
         self.line("Some(l) => f.write_str(l),", 3)
         self.line("None => write!(f, \"{}\", self.0),", 3)
@@ -386,7 +428,8 @@ class RustEmitter:
 
     def aggregate_type(self, vt: VType) -> None:
         self.line()
-        self.line(f"/// Aggregate `{vt.key}`; its members are encoded in this order.")
+        self.line(f"/// Aggregate `{vt.key}`; its members are encoded in this "
+                  "order.")
         self.line("#[derive(Debug, Clone, PartialEq, Default)]")
         self.line(f"pub struct {vt.ident} {{")
         for m in vt.enc.members:
@@ -396,46 +439,54 @@ class RustEmitter:
 
     # -- decoding --
 
-    def read_items(self, items, depth: int, where: str, assign: bool = False) -> None:
+    def read_items(self, items, depth: int, where: str,
+                   assign: bool = False) -> None:
         for it in items:
             if isinstance(it, Seek):
                 off = offset(it, self.read_ref, rstr(where))
                 if it.from_start is None:
                     self.line(f"r.skip({off}, {rstr(where)})?;", depth)
                 else:
-                    self.line(f"r.seek({self.mark(it.from_start)}, {off}, {rstr(where)})?;", depth)
+                    self.line(f"r.seek({self.mark(it.from_start)}, {off}, "
+                              f"{rstr(where)})?;", depth)
             elif isinstance(it, Mark):
                 self.line(f"let m{it.id} = r.position();", depth)
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
             elif isinstance(it, Value):
                 lc = it.local
-                expr = read_expr(lc.vtype, rstr(lc.name), self.read_ref, self.alloc)
+                expr = read_expr(lc.vtype, rstr(lc.name), self.read_ref,
+                                 self.alloc)
                 if assign:
                     self.line(f"v{lc.id} = Some({expr});", depth)
                 else:
                     self.line(f"let v{lc.id} = {expr};", depth)
                 if lc.length is not None:
-                    self.line(f"r.limit(v{lc.id} as u64, {lc.length}, {rstr(lc.name)})?;", depth)
+                    self.line(f"r.limit(v{lc.id} as u64, {lc.length}, "
+                              f"{rstr(lc.name)})?;", depth)
             elif isinstance(it, Cond):
                 if not assign:
                     for v in walk(it.items):
                         if isinstance(v, Value):
                             self.line(f"let mut v{v.local.id} = None;", depth)
-                self.line(f"if {conjunction([term(c, lambda lc: f'v{lc.id}') for c in it.criteria])} {{", depth)
+                test = conjunction([term(c, lambda lc: f"v{lc.id}")
+                                    for c in it.criteria])
+                self.line(f"if {test} {{", depth)
                 self.read_items(it.items, depth + 1, where, True)
                 self.line("}", depth)
             else:
                 self.line(f"r.uint({it.bits}, {rstr(where)})?;", depth)
 
-    def write_items(self, n: Node, items, depth: int, where: str, names: dict) -> None:
+    def write_items(self, n: Node, items, depth: int, where: str,
+                    names: dict) -> None:
         for it in items:
             if isinstance(it, Seek):
                 off = offset(it, self.write_ref(n, names), rstr(where))
                 if it.from_start is None:
                     self.line(f"w.skip({off}, {rstr(where)})?;", depth)
                 else:
-                    self.line(f"w.seek({self.mark(it.from_start)}, {off}, {rstr(where)})?;", depth)
+                    self.line(f"w.seek({self.mark(it.from_start)}, {off}, "
+                              f"{rstr(where)})?;", depth)
             elif isinstance(it, Mark):
                 self.line(f"let m{it.id} = w.position();", depth)
             elif isinstance(it, Fixed):
@@ -443,7 +494,8 @@ class RustEmitter:
             elif isinstance(it, Pad):
                 self.line(f"w.zeros({it.bits});", depth)
             elif isinstance(it, Cond):
-                conds = [term(c, lambda lc: self.place(n, lc, names)) for c in it.criteria]
+                conds = [term(c, lambda lc: self.place(n, lc, names))
+                         for c in it.criteria]
                 self.line(f"if {conjunction(conds)} {{", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
                 self.line("}", depth)
@@ -455,14 +507,16 @@ class RustEmitter:
                 lc = it.local
                 f = rstr(lc.name)
                 if lc.optional:
-                    self.line(
-                        f"let o{lc.id} = self.{names[lc]}.as_ref().ok_or(PacketError::Missing {{ field: {f} }})?;",
-                        depth,
-                    )
-                    x = f"o{lc.id}" if lc.vtype.kind in ("string", "binary", "array", "aggregate") else f"*o{lc.id}"
+                    self.line(f"let o{lc.id} = self.{names[lc]}"
+                              ".as_ref().ok_or(PacketError::Missing { field: "
+                              f"{f} }})?;", depth)
+                    x = (f"o{lc.id}"
+                         if lc.vtype.kind in ("string", "binary", "array",
+                                              "aggregate") else f"*o{lc.id}")
                 else:
                     x = self.place(n, lc, names)
-                self.line(write_stmt(lc.vtype, x, f, self.write_ref(n, names)), depth)
+                self.line(write_stmt(lc.vtype, x, f, self.write_ref(n, names)),
+                          depth)
 
     @staticmethod
     def read_ref(d: DynSize) -> str:
@@ -509,17 +563,21 @@ class RustEmitter:
         length = n.length_field()
         if length is not None:
             self.line("///")
-            self.line(f"/// `{length.name}` is the packet length: computed when encoding, checked when decoding.")
+            self.line(f"/// `{length.name}` is the packet length: computed "
+                      "when encoding, checked when decoding.")
         for lc, (c, _) in n.derived.items():
             self.line("///")
-            self.line(f"/// `{lc.name}` gives the size of `{c.name}`: computed from its length when encoding.")
+            self.line(f"/// `{lc.name}` gives the size of `{c.name}`: computed "
+                      "from its length when encoding.")
         self.line("#[derive(Debug, Clone, PartialEq, Default)]")
         self.line(f"pub struct {n.ident} {{")
         for name, lc in n.fields:
             doc = f"; {lc.vtype.doc}" if lc.vtype.doc else ""
-            cond = "; present only when its include condition holds" if lc.optional else ""
+            cond = ("; present only when its include condition holds"
+                    if lc.optional else "")
             self.line(f"/// `{lc.key}` ({lc.vtype.key}{doc}{cond})", 1)
-            self.line(f"pub {name}: {field_type(lc.vtype, self.alloc, lc.optional)},", 1)
+            self.line(f"pub {name}: "
+                      f"{field_type(lc.vtype, self.alloc, lc.optional)},", 1)
         self.line("}")
         self.line()
         self.line(f"impl Packet for {n.ident} {{")
@@ -531,51 +589,63 @@ class RustEmitter:
         for i, node in enumerate(n.chain()):
             for c in node.criteria:
                 self.line(f"if !({term(c, lambda lc: f'v{lc.id}')}) {{", 2)
-                self.line(f"return Err(PacketError::Mismatch {{ container: {rstr(node.key)}, criterion: {rstr(c.text)} }});", 3)
+                self.line("return Err(PacketError::Mismatch { container: "
+                          f"{rstr(node.key)}, criterion: {rstr(c.text)} }});",
+                          3)
                 self.line("}", 2)
             self.read_items(node.items, 2, node.key)
         self.finish(n, 2)
         self.line(f"Ok({self.construct(n)})", 2)
         self.line("}", 1)
         self.line()
-        self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> {", 1)
+        self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> "
+                  "{", 1)
         names = {lc: name for name, lc in n.fields}
         for lc, (c, d) in n.derived.items():
             # Sizes and counts come from the lengths of what they size.
-            x = f"pk::size_source(self.{names[c]}.len(), {size_args(d)}, {rstr(c.name)})?"
-            self.line(f"let d{lc.id} = {field_type(lc.vtype, self.alloc)}::try_from({x})", 2)
-            self.line(f".map_err(|_| PacketError::OutOfRange {{ field: {rstr(lc.name)} }})?;", 3)
+            x = (f"pk::size_source(self.{names[c]}.len(), {size_args(d)}, "
+                 f"{rstr(c.name)})?")
+            self.line(f"let d{lc.id} = "
+                      f"{field_type(lc.vtype, self.alloc)}::try_from({x})", 2)
+            self.line(".map_err(|_| PacketError::OutOfRange { field: "
+                      f"{rstr(lc.name)} }})?;", 3)
         guards = {}
         for node in n.chain():
             for c in node.criteria:
                 for lc, prefix, count in term_indexes(c):
                     if lc in names:
-                        guards[(f"self.{names[lc]}{access(prefix)}", count)] = lc.name
+                        guards[(f"self.{names[lc]}{access(prefix)}",
+                                count)] = (lc.name)
         for (x, count), name in guards.items():
             # Criteria are checked before the arrays they index are written.
             self.line(f"if {x}.len() != {count} {{", 2)
-            self.line(f"return Err(PacketError::BadSize {{ field: {rstr(name)} }});", 3)
+            self.line(f"return Err(PacketError::BadSize {{ field: {rstr(name)} "
+                      "});", 3)
             self.line("}", 2)
         for node in n.chain():
             for c in node.criteria:
                 if any(lc in names for lc in term_locals(c)):
-                    self.line(f"if !({term(c, lambda lc: self.place(n, lc, names))}) {{", 2)
-                    self.line(f"return Err(PacketError::Mismatch {{ container: {rstr(node.key)}, criterion: {rstr(c.text)} }});", 3)
+                    self.line("if !("
+                              f"{term(c, lambda lc: self.place(n, lc, names))}"
+                              ") {", 2)
+                    self.line("return Err(PacketError::Mismatch { container: "
+                              f"{rstr(node.key)}, criterion: {rstr(c.text)} "
+                              "});", 3)
                     self.line("}", 2)
         for node in n.chain():
             self.write_items(n, node.items, 2, node.key, names)
         if length is not None:
             enc = length.vtype.enc
-            self.line(
-                f"w.patch_length(l{length.id}, {enc.bits}, {str(enc.little_endian).lower()}, {length.length}, {rstr(length.name)})?;",
-                2,
-            )
+            self.line(f"w.patch_length(l{length.id}, {enc.bits}, "
+                      f"{str(enc.little_endian).lower()}, {length.length}, "
+                      f"{rstr(length.name)})?;", 2)
         self.line("Ok(())", 2)
         self.line("}", 1)
         self.line("}")
         self.line()
         self.line(f"impl fmt::Display for {n.ident} {{")
-        self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {", 1)
+        self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {",
+                  1)
         self.line(f"f.write_str({rstr(n.ident + '{')})?;", 2)
         for i, (name, lc) in enumerate(n.fields):
             sep = ", " if i else ""
@@ -606,7 +676,8 @@ class RustEmitter:
         self.line(f"const NAME: &'static str = {rstr(k.root.key)};", 1)
         self.line(f"const MAX_BYTES: usize = {k.max_bytes};", 1)
         self.line()
-        self.line("/// Decodes the root's entries, then picks the first child (in", 1)
+        self.line("/// Decodes the root's entries, then picks the first child "
+                  "(in", 1)
         self.line("/// document order) whose criteria match, recursively.", 1)
         self.line("fn decode(data: &[u8]) -> Result<Self> {", 1)
         self.line("let mut r = BitReader::new(data);", 2)
@@ -614,7 +685,8 @@ class RustEmitter:
         self.dispatch(k, k.root, 2)
         self.line("}", 1)
         self.line()
-        self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> {", 1)
+        self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> "
+                  "{", 1)
         self.line("match self {", 2)
         for m in k.members:
             self.line(f"Self::{m.ident}(p) => p.encode_into(w),", 3)
@@ -623,7 +695,8 @@ class RustEmitter:
         self.line("}")
         self.line()
         self.line(f"impl fmt::Display for {k.ident} {{")
-        self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {", 1)
+        self.line("fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {",
+                  1)
         self.line("match self {", 2)
         for m in k.members:
             self.line(f"Self::{m.ident}(p) => p.fmt(f),", 3)
@@ -642,15 +715,19 @@ class RustEmitter:
         for c in n.children:
             if c.error:
                 continue
-            self.line(f"if {conjunction([term(x, lambda lc: f'v{lc.id}') for x in c.criteria])} {{", depth)
+            test = conjunction([term(x, lambda lc: f"v{lc.id}")
+                                for x in c.criteria])
+            self.line(f"if {test} {{", depth)
             self.read_items(c.items, depth + 1, c.key)
             self.dispatch(k, c, depth + 1)
             self.line("}", depth)
         if n.abstract:
-            self.line(f"return Err(PacketError::NoMatch {{ container: {rstr(n.key)} }});", depth)
+            self.line("return Err(PacketError::NoMatch { container: "
+                      f"{rstr(n.key)} }});", depth)
         else:
             self.finish(n, depth)
-            self.line(f"return Ok(Self::{n.ident}({self.construct(n)}));", depth)
+            self.line(f"return Ok(Self::{n.ident}({self.construct(n)}));",
+                      depth)
 
 
 def emit(mission: Mission, source: str, alloc: bool = True) -> str:

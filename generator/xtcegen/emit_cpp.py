@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from . import header_lines
-from .binding import MANY, ONE, OPT, Binding, ChoiceType, ElemField, Record, pascal_ident
-from .model import BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED, ComplexRef, EnumRef, ScalarRef, TypeRef
+from .binding import (MANY, ONE, OPT, Binding, ChoiceType, ElemField, Record,
+                      pascal_ident)
+from .model import (BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED,
+                    ComplexRef, EnumRef, ScalarRef, TypeRef)
 
 SCALARS = {
     STRING: "std::string",
@@ -14,20 +16,23 @@ SCALARS = {
     USHORT: "std::uint16_t",
     DOUBLE: "double",
 }
-ZERO = {BOOL: " = false", INT: " = 0", LONG: " = 0", USHORT: " = 0", DOUBLE: " = 0.0", STRING: ""}
+ZERO = {BOOL: " = false", INT: " = 0", LONG: " = 0", USHORT: " = 0",
+        DOUBLE: " = 0.0", STRING: ""}
 
 KEYWORDS = set(
-    "alignas alignof and and_eq asm auto bitand bitor bool break case catch char char8_t char16_t "
-    "char32_t class compl concept const consteval constexpr constinit const_cast continue co_await "
-    "co_return co_yield decltype default delete do double dynamic_cast else enum explicit export "
-    "extern false float for friend goto if inline int long mutable namespace new noexcept not "
-    "not_eq nullptr operator or or_eq private protected public register reinterpret_cast requires "
-    "return short signed sizeof static static_assert static_cast struct switch template this "
-    "thread_local throw true try typedef typeid typename union unsigned using virtual void "
-    "volatile wchar_t while xor xor_eq read_xml write_xml".split()
-)
+    "alignas alignof and and_eq asm auto bitand bitor bool break case catch "
+    "char char8_t char16_t char32_t class compl concept const consteval "
+    "constexpr constinit const_cast continue co_await co_return co_yield "
+    "decltype default delete do double dynamic_cast else enum explicit export "
+    "extern false float for friend goto if inline int long mutable namespace "
+    "new noexcept not not_eq nullptr operator or or_eq private protected "
+    "public register reinterpret_cast requires return short signed sizeof "
+    "static static_assert static_cast struct switch template this thread_local "
+    "throw true try typedef typeid typename union unsigned using virtual void "
+    "volatile wchar_t while xor xor_eq read_xml write_xml".split())
 # Names that commonly collide with C/POSIX macros.
-MACROS = {"EOF", "NULL", "TRUE", "FALSE", "DOMAIN", "OVERFLOW", "UNDERFLOW", "ERROR", "DEBUG", "IN", "OUT"}
+MACROS = {"EOF", "NULL", "TRUE", "FALSE", "DOMAIN", "OVERFLOW", "UNDERFLOW",
+          "ERROR", "DEBUG", "IN", "OUT"}
 
 
 def ident(name: str) -> str:
@@ -64,7 +69,8 @@ def enum_idents(values: list[str]) -> list[str]:
     out, used = [], set()
     for v in values:
         base = pascal_ident(v)
-        if base in MACROS or base.upper() == base and len(base) > 1 and base.upper() in MACROS:
+        if (base in MACROS or base.upper() == base and len(base) > 1
+                and base.upper() in MACROS):
             base = "k" + base
         i, n = base, 2
         while i in used:
@@ -80,7 +86,8 @@ class CppEmitter:
         self.b = b
         self.h: list[str] = []
         self.c: list[str] = []
-        self.enum_ids = {n: enum_idents(e.values) for n, e in b.schema.enums.items()}
+        self.enum_ids = {n: enum_idents(e.values)
+                         for n, e in b.schema.enums.items()}
 
     def emit(self) -> tuple[str, str]:
         s = self.b.schema
@@ -89,27 +96,19 @@ class CppEmitter:
         header = ["// " + line for line in header_lines()]
         h += header + [
             f"// Data structures for XTCE {s.version} ({s.namespace}).",
-            "#pragma once",
-            "",
-            "#include <cstdint>",
-            "#include <optional>",
-            "#include <string>",
-            "#include <string_view>",
-            "#include <variant>",
-            "#include <vector>",
-            "",
-            '#include "xtce/xml.hpp"',
-            "",
-            "namespace xtce {",
-            "",
-            "// XML namespace of the XTCE schema these types were generated from.",
-            f"inline constexpr std::string_view kNamespace = {lit(s.namespace)};",
+            "#pragma once", "", "#include <cstdint>", "#include <optional>",
+            "#include <string>", "#include <string_view>", "#include <variant>",
+            "#include <vector>", "", '#include "xtce/xml.hpp"', "",
+            "namespace xtce {", "",
+            "// XML namespace of the XTCE schema these types were generated "
+            "from.",
+            "inline constexpr std::string_view kNamespace = "
+            f"{lit(s.namespace)};",
             "// XTCE version of the schema these types were generated from.",
-            f"inline constexpr std::string_view kSchemaVersion = {lit(s.version)};",
-            "// Name of the document root element.",
-            f"inline constexpr std::string_view kRootElement = {lit(root_tag)};",
-            "",
-        ]
+            "inline constexpr std::string_view kSchemaVersion = "
+            f"{lit(s.version)};", "// Name of the document root element.",
+            "inline constexpr std::string_view kRootElement = "
+            f"{lit(root_tag)};", ""]
         self.c += header + [
             '#include "xtce/generated.hpp"',
             "",
@@ -161,7 +160,8 @@ class CppEmitter:
         c.append('        return "";')
         c.append("}")
         c.append("")
-        c.append(f"void format_value(std::string& out, {name} v) {{ out += to_string(v); }}")
+        c.append(f"void format_value(std::string& out, {name} v) {{ out += "
+                 "to_string(v); }")
         c.append("")
         c.append(f"void parse_value(std::string_view s, {name}& v) {{")
         c.append("        std::string_view t = trim(s);")
@@ -170,7 +170,8 @@ class CppEmitter:
             c.append(f"                v = {name}::{i};")
             c.append("                return;")
             c.append("        }")
-        c.append(f'        throw std::invalid_argument("invalid {name} \\"" + std::string(s) + "\\"");')
+        c.append(f'        throw std::invalid_argument("invalid {name} \\"" + '
+                 'std::string(s) + "\\"");')
         c.append("}")
         c.append("")
 
@@ -186,13 +187,15 @@ class CppEmitter:
                 h.append(f"        // Schema default: `{a.default}`.")
             t = base_type(a.type)
             if a.required:
-                init = ZERO[a.type.kind] if isinstance(a.type, ScalarRef) else self.enum_init(a.type)
+                init = (ZERO[a.type.kind] if isinstance(a.type, ScalarRef)
+                        else self.enum_init(a.type))
                 h.append(f"        {t} {ident(a.ident)}{init};")
             else:
                 h.append(f"        std::optional<{t}> {ident(a.ident)};")
         if r.text is not None:
             h.append("        // Text content.")
-            h.append(f"        {base_type(r.text.type)} {ident(r.text.ident)}{ZERO[r.text.type.kind]};")
+            h.append(f"        {base_type(r.text.type)} "
+                     f"{ident(r.text.ident)}{ZERO[r.text.type.kind]};")
         for f in r.content:
             if isinstance(f, ElemField):
                 h += comment(f.doc or f"Element `{f.xml}`.", "        ")
@@ -202,13 +205,20 @@ class CppEmitter:
                         init = ZERO[f.type.kind]
                     elif isinstance(f.type, EnumRef):
                         init = self.enum_init(f.type)
-                h.append(f"        {field_type(base_type(f.type), f.card, f.boxed)} {ident(f.ident)}{init};")
+                h.append("        "
+                         f"{field_type(base_type(f.type), f.card, f.boxed)} "
+                         f"{ident(f.ident)}{init};")
             else:
-                h.append(f"        // One of: {', '.join(v.xml for v in f.choice.variants)}.")
-                h.append(f"        {field_type(f.choice.name, f.card, f.boxed)} {ident(f.ident)};")
+                h.append("        // One of: "
+                         f"{', '.join(v.xml for v in f.choice.variants)}.")
+                h.append("        "
+                         f"{field_type(f.choice.name, f.card, f.boxed)} "
+                         f"{ident(f.ident)};")
         h.append("")
-        h.append("        void write_xml(Writer& w, std::string_view tag) const;")
-        h.append(f"        static {r.name} read_xml(Reader& r, const Tag& tag);")
+        h.append("        void write_xml(Writer& w, std::string_view tag) "
+                 "const;")
+        h.append(f"        static {r.name} read_xml(Reader& r, const Tag& "
+                 "tag);")
         h.append(f"        bool operator==(const {r.name}&) const = default;")
         h.append("};")
         h.append("")
@@ -227,11 +237,13 @@ class CppEmitter:
     def count_check(self, r: Record, f, what: str) -> None:
         if f.min == 0 and f.max == UNBOUNDED:
             return
-        self.c.append(f"        check_count(v.{ident(f.ident)}.size(), {f.min}, {f.max}, {lit(r.name + '.' + what)});")
+        self.c.append(f"        check_count(v.{ident(f.ident)}.size(), "
+                      f"{f.min}, {f.max}, {lit(r.name + '.' + what)});")
 
     def write_fn(self, r: Record) -> None:
         c = self.c
-        c.append(f"void {r.name}::write_xml(Writer& w, std::string_view tag) const {{")
+        c.append(f"void {r.name}::write_xml(Writer& w, std::string_view tag) "
+                 "const {")
         if r.content:
             c.append("        const auto& v = *this;")
         c.append("        w.start(tag);")
@@ -248,10 +260,12 @@ class CppEmitter:
             unbox = ".get()" if f.boxed else ""
             if isinstance(f, ElemField):
                 if f.card == ONE:
-                    self.write_value(f.type, f.xml, f"v.{name}{unbox}", "        ")
+                    self.write_value(f.type, f.xml, f"v.{name}{unbox}",
+                                     "        ")
                 elif f.card == OPT:
                     c.append(f"        if (v.{name}) {{")
-                    self.write_value(f.type, f.xml, f"(*v.{name}){unbox}", "                ")
+                    self.write_value(f.type, f.xml, f"(*v.{name}){unbox}",
+                                     "                ")
                     c.append("        }")
                 else:
                     self.count_check(r, f, f.xml)
@@ -262,10 +276,12 @@ class CppEmitter:
                 if f.card == ONE:
                     c.append(f"        v.{name}{unbox}.write_xml(w);")
                 elif f.card == OPT:
-                    c.append(f"        if (v.{name}) (*v.{name}){unbox}.write_xml(w);")
+                    c.append(f"        if (v.{name}) "
+                             f"(*v.{name}){unbox}.write_xml(w);")
                 else:
                     self.count_check(r, f, f.choice.name)
-                    c.append(f"        for (const auto& e : v.{name}) e.write_xml(w);")
+                    c.append(f"        for (const auto& e : v.{name}) "
+                             "e.write_xml(w);")
         c.append("        w.end(tag);")
         c.append("}")
         c.append("")
@@ -291,10 +307,12 @@ class CppEmitter:
             f = ident(a.ident)
             c.append(f"                {kw} (k == {lit(a.xml)}) {{")
             if a.required:
-                c.append(f"                        r.attr_value(tag, it.value(), v.{f});")
+                c.append("                        r.attr_value(tag, "
+                         f"it.value(), v.{f});")
                 c.append(f"                        seen_{a.ident} = true;")
             else:
-                c.append(f"                        r.attr_value(tag, it.value(), v.{f}.emplace());")
+                c.append("                        r.attr_value(tag, "
+                         f"it.value(), v.{f}.emplace());")
         if r.attrs:
             c.append("                } else {")
             c.append("                        r.unknown_attr(tag, k);")
@@ -303,9 +321,11 @@ class CppEmitter:
             c.append("                r.unknown_attr(tag, k);")
         c.append("        }")
         for a in required:
-            c.append(f"        if (!seen_{a.ident}) r.missing_attr(tag, {lit(a.xml)});")
+            c.append(f"        if (!seen_{a.ident}) r.missing_attr(tag, "
+                     f"{lit(a.xml)});")
         if r.text is not None:
-            c.append(f"        v.{ident(r.text.ident)} = r.read_value<{base_type(r.text.type)}>();")
+            c.append(f"        v.{ident(r.text.ident)} = r.read_value"
+                     f"<{base_type(r.text.type)}>();")
             c.append("        return v;")
             c.append("}")
             c.append("")
@@ -315,17 +335,22 @@ class CppEmitter:
             if isinstance(f, ElemField):
                 x = lit(f.xml)
                 if f.card == ONE:
-                    c.append(f"        if (r.peek_child() != {x}) throw r.expected({x});")
+                    c.append(f"        if (r.peek_child() != {x}) throw "
+                             f"r.expected({x});")
                     c.append(f"        v.{name} = {self.read_expr(f.type)};")
                 elif f.card == OPT:
-                    c.append(f"        if (r.peek_child() == {x}) v.{name} = {self.read_expr(f.type)};")
+                    c.append(f"        if (r.peek_child() == {x}) v.{name} = "
+                             f"{self.read_expr(f.type)};")
                 else:
                     cond = f"r.peek_child() == {x}"
                     if f.max != UNBOUNDED:
                         cond = f"v.{name}.size() < {f.max} && {cond}"
-                    c.append(f"        while ({cond}) v.{name}.push_back({self.read_expr(f.type)});")
+                    c.append(f"        while ({cond}) "
+                             f"v.{name}.push_back({self.read_expr(f.type)});")
                     if f.min > 0:
-                        c.append(f"        if (v.{name}.size() < {f.min}) throw r.too_few({x}, {f.min}, v.{name}.size());")
+                        c.append(f"        if (v.{name}.size() < {f.min}) "
+                                 f"throw r.too_few({x}, {f.min}, "
+                                 f"v.{name}.size());")
             else:
                 cn = f.choice.name
                 if f.card == ONE:
@@ -333,19 +358,25 @@ class CppEmitter:
                 elif f.card == OPT:
                     c.append("        {")
                     c.append("                auto n = r.peek_child();")
-                    c.append(f"                if (n && {cn}::accepts(*n)) v.{name} = {cn}::read_xml(r);")
+                    c.append(f"                if (n && {cn}::accepts(*n)) "
+                             f"v.{name} = {cn}::read_xml(r);")
                     c.append("        }")
                 else:
                     c.append("        for (;;) {")
                     if f.max != UNBOUNDED:
-                        c.append(f"                if (v.{name}.size() >= {f.max}) break;")
+                        c.append(f"                if (v.{name}.size() >= "
+                                 f"{f.max}) break;")
                     c.append("                auto n = r.peek_child();")
-                    c.append(f"                if (!n || !{cn}::accepts(*n)) break;")
-                    c.append(f"                v.{name}.push_back({cn}::read_xml(r));")
+                    c.append(f"                if (!n || !{cn}::accepts(*n)) "
+                             "break;")
+                    c.append("                "
+                             f"v.{name}.push_back({cn}::read_xml(r));")
                     c.append("        }")
                     if f.min > 0:
                         what = lit("|".join(v.xml for v in f.choice.variants))
-                        c.append(f"        if (v.{name}.size() < {f.min}) throw r.too_few({what}, {f.min}, v.{name}.size());")
+                        c.append(f"        if (v.{name}.size() < {f.min}) "
+                                 f"throw r.too_few({what}, {f.min}, "
+                                 f"v.{name}.size());")
         c.append("        r.close();")
         c.append("        return v;")
         c.append("}")
@@ -359,13 +390,17 @@ class CppEmitter:
         for v in ch.variants:
             t = base_type(v.type)
             alts.append(f"Box<{t}>" if v.boxed else t)
-        h.append(f"// Alternatives of a <choice> in {ch.owner}; the variant index is the Kind.")
+        h.append(f"// Alternatives of a <choice> in {ch.owner}; the variant "
+                 "index is the Kind.")
         h.append(f"struct {ch.name} {{")
-        h.append(f"        enum class Kind {{ {', '.join(v.ident for v in ch.variants)} }};")
-        init = "" if ch.default_variant == 0 else f"{{std::in_place_index<{ch.default_variant}>}}"
+        h.append("        enum class Kind { "
+                 f"{', '.join(v.ident for v in ch.variants)} }};")
+        init = ("" if ch.default_variant == 0
+                else f"{{std::in_place_index<{ch.default_variant}>}}")
         h.append(f"        std::variant<{', '.join(alts)}> value{init};")
         h.append("")
-        h.append("        Kind kind() const { return static_cast<Kind>(value.index()); }")
+        h.append("        Kind kind() const { return static_cast"
+                 "<Kind>(value.index()); }")
         h.append("        // The element name of the selected alternative.")
         h.append("        std::string_view xml_name() const;")
         h.append("        // Whether `name` starts one of the alternatives.")
@@ -391,7 +426,9 @@ class CppEmitter:
         c.append("}")
         c.append("")
         c.append(f"bool {ch.name}::accepts(std::string_view name) {{")
-        c.append(f"        return {' || '.join(f'name == {lit(v.xml)}' for v in ch.variants)};")
+        c.append("        return "
+                 f"{' || '.join(f'name == {lit(v.xml)}' for v in ch.variants)}"
+                 ";")
         c.append("}")
         c.append("")
         for k, v in enumerate(ch.variants):
@@ -425,9 +462,11 @@ class CppEmitter:
         for k, v in enumerate(ch.variants):
             kw = "if" if k == 0 else "} else if"
             c.append(f"        {kw} (n == {lit(v.xml)}) {{")
-            c.append(f"                c.value.emplace<{k}>({self.read_expr(v.type)});")
+            c.append("                c.value.emplace"
+                     f"<{k}>({self.read_expr(v.type)});")
         c.append("        } else {")
-        c.append(f"                throw r.expected({lit('|'.join(v.xml for v in ch.variants))});")
+        c.append("                throw "
+                 f"r.expected({lit('|'.join(v.xml for v in ch.variants))});")
         c.append("        }")
         c.append("        return c;")
         c.append("}")

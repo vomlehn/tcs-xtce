@@ -39,20 +39,19 @@ class PacketError(ValueError):
     ``Missing``, ``BadSize`` or ``BadLength``.
     """
 
-    MESSAGES = {
-        "Truncated": "packet too short for {0}",
-        "BadPosition": "{0} is placed before the packet start",
-        "NoMatch": "no container derived from {0} matches",
-        "Mismatch": "{0} requires {1}",
-        "OutOfRange": "value of {0} does not fit its encoding",
-        "InvalidString": "invalid string in {0}",
-        "TooLong": "{0} is too long for its encoding",
-        "Calibration": "{0} is outside its calibration range",
-        "NotInvertible": "the calibrator of {0} cannot be inverted for encoding",
-        "Missing": "{0} is required by its include condition",
-        "BadSize": "invalid size or count for {0}",
-        "BadLength": "{0} does not match the length of the packet",
-    }
+    MESSAGES = {"Truncated": "packet too short for {0}",
+                "BadPosition": "{0} is placed before the packet start",
+                "NoMatch": "no container derived from {0} matches",
+                "Mismatch": "{0} requires {1}",
+                "OutOfRange": "value of {0} does not fit its encoding",
+                "InvalidString": "invalid string in {0}",
+                "TooLong": "{0} is too long for its encoding",
+                "Calibration": "{0} is outside its calibration range",
+                "NotInvertible": ("the calibrator of {0} cannot be inverted "
+                                  "for encoding"),
+                "Missing": "{0} is required by its include condition",
+                "BadSize": "invalid size or count for {0}",
+                "BadLength": "{0} does not match the length of the packet"}
 
     def __init__(self, kind: str, *what: str) -> None:
         super().__init__(self.MESSAGES[kind].format(*what))
@@ -67,7 +66,8 @@ class Packet:
     NAME = ""
     MAX_BYTES = 0
 
-    def encode_into(self, w: "BitWriter") -> None:  # pragma: no cover - generated
+    # Generated packet classes override this.
+    def encode_into(self, w: "BitWriter") -> None:  # pragma: no cover
         raise NotImplementedError
 
     def encode(self, buf: ManagedBuffer) -> None:
@@ -188,7 +188,8 @@ class BitReader:
 
     def uint_order(self, bits: int, le: bool, field: str) -> int:
         v = self.uint(bits, field)
-        return int.from_bytes(v.to_bytes(bits // 8, "big"), "little") if le else v
+        return (int.from_bytes(v.to_bytes(bits // 8, "big"), "little") if le
+                else v)
 
     def pad(self, bits: int, field: str) -> None:
         """Skip ``bits`` bits of padding, which must be in the packet."""
@@ -276,7 +277,8 @@ class BitWriter:
             v = int.from_bytes(v.to_bytes(bits // 8, "big"), "little")
         self.uint(bits, v)
 
-    def patch_length(self, at: int, bits: int, le: bool, adjust: int, field: str) -> None:
+    def patch_length(self, at: int, bits: int, le: bool, adjust: int,
+                     field: str) -> None:
         """Fill in the packet length field ``field`` of ``bits`` bits at bit
         ``at``, once the whole packet is written: the number of bytes after
         the field plus ``adjust``."""
@@ -297,7 +299,8 @@ class BitWriter:
             self.uint(len(data) * 8, int.from_bytes(data, "big"))
 
 
-# -- integers -------------------------------------------------------------------
+# -- integers
+# -------------------------------------------------------------------
 
 
 def to_signed(raw: int, bits: int, enc: str) -> int:
@@ -345,7 +348,8 @@ def int_to_float(raw: int, bits: int, enc: str) -> float:
 
 
 def _round(x: float) -> int:
-    """Round half away from zero, like Rust's ``f64::round`` and C++'s ``std::round``."""
+    """Round half away from zero, like Rust's ``f64::round`` and C++'s
+    ``std::round``."""
     i = math.trunc(x)
     frac = x - i
     if frac >= 0.5:
@@ -360,7 +364,8 @@ def float_to_int(x: float, bits: int, enc: str, field: str) -> int:
     if not math.isfinite(x):
         raise PacketError("OutOfRange", field)
     r = _round(x)
-    if abs(r) >= 1 << 64 or (enc != "unsigned" and not -(1 << 63) <= r < 1 << 63):
+    if (abs(r) >= 1 << 64
+            or (enc != "unsigned" and not -(1 << 63) <= r < 1 << 63)):
         raise PacketError("OutOfRange", field)
     return from_signed(r, bits, enc, field)
 
@@ -376,7 +381,8 @@ def round_to_int(y: float, lo: float, lim: float, field: str) -> int:
     return r
 
 
-# -- floats ---------------------------------------------------------------------
+# -- floats
+# ---------------------------------------------------------------------
 
 
 def float_from_raw(raw: int, bits: int) -> float:
@@ -395,7 +401,8 @@ def float_to_raw(v: float, bits: int) -> int:
     return int.from_bytes(struct.pack(">d", v), "big")
 
 
-# -- calibrators -------------------------------------------------------------------
+# -- calibrators
+# -------------------------------------------------------------------
 
 
 def polynomial(x: float, terms) -> float:
@@ -414,17 +421,20 @@ def _lerp(x: float, p0, p1) -> float:
     return y0 + (x - x0) * (y1 - y0) / (x1 - x0)
 
 
-def spline(x: float, points, order: int, extrapolate: bool, field: str) -> float:
+def spline(x: float, points, order: int, extrapolate: bool,
+           field: str) -> float:
     first, last = points[0], points[-1]
     if x < first[0] or x > last[0]:
         if not extrapolate:
             raise PacketError("Calibration", field)
         if order == 0:
             return first[1] if x < first[0] else last[1]
-        return _lerp(x, first, points[1]) if x < first[0] else _lerp(x, points[-2], last)
+        return (_lerp(x, first, points[1]) if x < first[0]
+                else _lerp(x, points[-2], last))
     for i in range(len(points) - 1):
         if x < points[i + 1][0]:
-            return points[i][1] if order == 0 else _lerp(x, points[i], points[i + 1])
+            return (points[i][1] if order == 0
+                    else _lerp(x, points[i], points[i + 1]))
     return last[1]
 
 
@@ -442,21 +452,25 @@ def spline_inverse(y: float, points, extrapolate: bool, field: str) -> float:
     return _lerp(y, flip[-2], flip[-1])
 
 
-# -- sizes from other fields ----------------------------------------------------------
+# -- sizes from other fields
+# ----------------------------------------------------------
 
 
-def dynamic_size(x, slope: float, intercept: float, unit: int, max_: int, field: str) -> int:
+def dynamic_size(x, slope: float, intercept: float, unit: int, max_: int,
+                 field: str) -> int:
     """A size or count that another field gives (an XTCE ``DynamicValue``):
     ``(slope * x + intercept) / unit``, where ``x`` is that field's value and
     ``unit`` is 8 for a size in bits used in whole bytes.  Raises ``BadSize``
     unless the result is a whole number from 0 to ``max_``."""
     y = slope * float(x) + intercept
-    if not (y >= 0.0) or not y.is_integer() or not (y / unit).is_integer() or y / unit > max_:
+    if (not (y >= 0.0) or not y.is_integer() or not (y / unit).is_integer() or y
+            / unit > max_):
         raise PacketError("BadSize", field)
     return int(y / unit)
 
 
-def size_source(n: int, slope: float, intercept: float, unit: int, factor: int, field: str) -> int:
+def size_source(n: int, slope: float, intercept: float, unit: int, factor: int,
+                field: str) -> int:
     """The value of the field that gives a size or count of ``n`` (the
     inverse of ``dynamic_size`` followed by multiplying by ``factor``), for
     encoding a field computed from the length of the value it sizes.  Raises
@@ -492,15 +506,18 @@ def check_size(v, n: int, field: str) -> None:
 
 
 def sized(spec: tuple, n: int) -> tuple:
-    """The spec of a string whose size another field gives: exactly ``n`` bytes."""
+    """The spec of a string whose size another field gives: exactly ``n`` bytes.
+    """
     return (n * 8, n * 8, spec[2], spec[3])
 
 
-# -- strings and binary -------------------------------------------------------------
+# -- strings and binary
+# -------------------------------------------------------------
 
 
 def read_string(r: BitReader, spec: tuple, field: str) -> str:
-    """Read a string; ``spec`` is (fixed_bits, max_bits, terminator, size_tag_bits)."""
+    """Read a string; ``spec`` is (fixed_bits, max_bits, terminator,
+    size_tag_bits)."""
     fixed, max_bits, term, tag = spec
     start = r.pos
     if fixed is not None and term is not None:
@@ -597,7 +614,8 @@ def write_rest(w: BitWriter, b: bytes, max_: int, field: str) -> None:
 
 
 def enum_value(cls, v: int):
-    """``cls(v)`` for an IntEnum, keeping values the enumeration does not list."""
+    """``cls(v)`` for an IntEnum, keeping values the enumeration does not list.
+    """
     try:
         return cls(v)
     except ValueError:
@@ -607,7 +625,8 @@ def enum_value(cls, v: int):
         return m
 
 
-# -- canonical text (identical in every runtime) ---------------------------------------
+# -- canonical text (identical in every runtime)
+# ---------------------------------------
 
 
 def describe_float(x: float) -> str:

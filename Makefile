@@ -35,7 +35,9 @@ CPP_TOOL  := cpp/build/xtce_roundtrip
 # mission exercises them in every language.
 MISSION  := tests/mission/demo.xml
 PKT      := $(PYTHON) -m tcs_xtce ../$(MISSION) --source-name $(MISSION)
-PKT_SRC  := $(wildcard generator/xtcepkt/*.py generator/tcs_xtce/*.py)
+# tcs-xtce also uses xtcegen, which formats and wraps what it writes.
+PKT_SRC  := $(wildcard generator/xtcepkt/*.py generator/tcs_xtce/*.py \
+                      generator/xtcegen/*.py)
 PKT_RUST := rust/tests/mission/demo.rs rust/tests/mission/demo_fixed.rs
 PKT_CPP  := cpp/tests/mission/demo.h
 PKT_PY   := python/tests/mission/demo.py

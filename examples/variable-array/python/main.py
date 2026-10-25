@@ -22,17 +22,16 @@ from variable_array import Length, Line, Paragraph
 
 # The lorem ipsum paragraph in five lines, as two arrays: three lines, then
 # two.
-PARAGRAPHS = [
-    [
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut",
-        "labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco",
-        "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in",
-    ],
-    [
-        "voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat",
-        "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
-    ],
-]
+PARAGRAPHS = [["Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed "
+               "do eiusmod tempor incididunt ut",
+               "labore et dolore magna aliqua. Ut enim ad minim veniam, quis "
+               "nostrud exercitation ullamco",
+               "laboris nisi ut aliquip ex ea commodo consequat. Duis aute "
+               "irure dolor in reprehenderit in"],
+              ["voluptate velit esse cillum dolore eu fugiat nulla pariatur. "
+               "Excepteur sint occaecat",
+               "cupidatat non proident, sunt in culpa qui officia deserunt "
+               "mollit anim id est laborum."]]
 
 
 class Failed(Exception):
@@ -74,7 +73,8 @@ def send(address, errors: list) -> None:
             length_codec = Codec.for_packet(Length)
             for p in range(len(PARAGRAPHS)):
                 with codec.encode(paragraph(p)) as view:
-                    with length_codec.encode(Length(byte_count=len(view))) as length:
+                    with length_codec.encode(
+                            Length(byte_count=len(view))) as length:
                         sock.sendall(length)
                     n = sock.send(view)
                     if n != len(view):
@@ -102,7 +102,8 @@ def receive(listener: socket.socket) -> None:
             length_codec.load(length)
             size = length_codec.decode(Length).byte_count
             if size > Paragraph.MAX_BYTES:
-                raise Failed(f"length {size} is more than a Paragraph's {Paragraph.MAX_BYTES}")
+                raise Failed(f"length {size} is more than a Paragraph's "
+                             f"{Paragraph.MAX_BYTES}")
             packet = stream.read(size)
             if len(packet) != size:
                 raise Failed("stream closed in the middle of an array")
@@ -128,7 +129,8 @@ def main() -> None:
     # Listen on a port the system chooses, on the loopback interface only.
     with socket.create_server(("127.0.0.1", 0)) as listener:
         errors: list = []
-        sender = threading.Thread(target=send, args=(listener.getsockname(), errors))
+        sender = threading.Thread(target=send,
+                                  args=(listener.getsockname(), errors))
         sender.start()
         try:
             receive(listener)

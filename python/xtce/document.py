@@ -6,11 +6,14 @@ from typing import Any, BinaryIO, Optional
 
 from . import _xml as X
 from ._buffer import DEFAULT_CAPACITY, ManagedBuffer
-from .generated import NAMESPACE, READERS, ROOT_ELEMENT, WRITERS, SpaceSystemType
+from .generated import (NAMESPACE, READERS, ROOT_ELEMENT, WRITERS,
+                        SpaceSystemType)
 
 
-def to_xml(value: Any, tag: str, buf: ManagedBuffer, indent: bool = True, writer: Optional[X.Writer] = None) -> None:
-    """Serialize ``value`` as the element ``tag`` into ``buf`` (replacing it)."""
+def to_xml(value: Any, tag: str, buf: ManagedBuffer, indent: bool = True,
+           writer: Optional[X.Writer] = None) -> None:
+    """Serialize ``value`` as the element ``tag`` into ``buf`` (replacing it).
+    """
     w = writer if writer is not None else X.Writer(indent)
     w.reset()
     w.indent = indent
@@ -21,10 +24,12 @@ def to_xml(value: Any, tag: str, buf: ManagedBuffer, indent: bool = True, writer
 
 
 def from_xml(data, cls: type, tag: str):
-    """Deserialize an element ``tag`` of type ``cls`` from bytes-like ``data``."""
+    """Deserialize an element ``tag`` of type ``cls`` from bytes-like ``data``.
+    """
     root = X.parse(data)
     if root.name != tag:
-        raise X.XtceError(f"root element is <{root.name}>, expected <{tag}>", root.line)
+        raise X.XtceError(f"root element is <{root.name}>, expected <{tag}>",
+                          root.line)
     return READERS[cls](root)
 
 
@@ -66,7 +71,8 @@ class Document:
         return doc
 
     def load(self, data) -> None:
-        """Replace the root by deserializing ``data`` (copied into the input buffer)."""
+        """Replace the root by deserializing ``data`` (copied into the input
+        buffer)."""
         self._input.load(data)
         self._parse_input()
 

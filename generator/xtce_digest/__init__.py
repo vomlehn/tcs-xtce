@@ -93,7 +93,8 @@ def text_item(text) -> list[bytes]:
 
 def encode(elem: ET.Element) -> bytes:
     """The canonical encoding of an element and everything inside it."""
-    attrs = b"".join(field(k.encode()) + field(v.encode()) for k, v in sorted(elem.attrib.items()))
+    attrs = b"".join(field(k.encode()) + field(v.encode())
+                     for k, v in sorted(elem.attrib.items()))
     items = text_item(elem.text)
     for child in elem:
         items.append(encode(child))

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from .common import field_range, flt, header_lines, invertible, le, size_args, string_spec
-from .model import term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType
+from .common import (field_range, flt, header_lines, invertible, le, size_args,
+                     string_spec)
+from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
+                    AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed,
+                    FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad,
+                    Polynomial, Seek, Spline, Value, VType)
 
 
 def pstr(s: str) -> str:
@@ -23,7 +27,9 @@ def field_type(vt: VType) -> str:
         return f"list[{field_type(vt.elem)}]"
     if vt.kind == "aggregate":
         return vt.ident
-    return {"int": "int", "float": "float", "bool": "bool", "string": "str", "binary": "bytes"}.get(vt.kind) or vt.ident
+    builtin = {"int": "int", "float": "float", "bool": "bool", "string": "str",
+               "binary": "bytes"}
+    return builtin.get(vt.kind) or vt.ident
 
 
 def default(vt: VType) -> str:
@@ -31,7 +37,9 @@ def default(vt: VType) -> str:
         return "dataclasses.field(default_factory=list)"
     if vt.kind == "aggregate":
         return f"dataclasses.field(default_factory={vt.ident})"
-    return {"int": "0", "float": "0.0", "bool": "False", "string": '""', "binary": 'b""'}.get(vt.kind) or f"pk.enum_value({vt.ident}, 0)"
+    zero = {"int": "0", "float": "0.0", "bool": "False", "string": '""',
+            "binary": 'b""'}
+    return zero.get(vt.kind) or f"pk.enum_value({vt.ident}, 0)"
 
 
 def literal(vt: VType, v) -> str:
@@ -50,7 +58,8 @@ def literal(vt: VType, v) -> str:
 
 
 def points(cal: Spline) -> str:
-    return "(" + ", ".join(f"({flt(a)}, {flt(b)})" for a, b in cal.points) + ",)"
+    return ("(" + ", ".join(f"({flt(a)}, {flt(b)})" for a, b in cal.points)
+            + ",)")
 
 
 def calibrate(vt: VType, x: str, f: str) -> str:
@@ -68,7 +77,8 @@ def uncalibrate(vt: VType, y: str, f: str) -> str:
     if cal is None:
         return y
     if isinstance(cal, Polynomial):
-        return f"pk.polynomial_inverse({y}, {flt(cal.intercept)}, {flt(cal.slope)})"
+        return (f"pk.polynomial_inverse({y}, {flt(cal.intercept)}, "
+                f"{flt(cal.slope)})")
     return f"pk.spline_inverse({y}, {points(cal)}, {cal.extrapolate}, {f})"
 
 
@@ -80,18 +90,21 @@ def source(d: DynSize, place) -> str:
         return place(d.local) + access(d.path)
     x = str(d.default)
     for criteria, v in reversed(d.lookup):
-        x = f"({v} if {' and '.join(f'({term(c, place)})' for c in criteria)} else {x})"
+        x = (f"({v} if {' and '.join(f'({term(c, place)})' for c in criteria)} "
+             f"else {x})")
     return x
 
 
 def offset(s: Seek, ref, f: str) -> str:
     """Expression for the offset of a Seek."""
-    return str(s.offset) if isinstance(s.offset, int) else size(s.offset, ref(s.offset), f)
+    return (str(s.offset) if isinstance(s.offset, int)
+            else size(s.offset, ref(s.offset), f))
 
 
 def size(d: DynSize, x: str, f: str) -> str:
     """Expression for a size or count that the value ``x`` gives."""
-    n = f"pk.dynamic_size({x}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, {f})"
+    n = (f"pk.dynamic_size({x}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, "
+         f"{d.max}, {f})")
     return f"{n} * {d.factor}" if d.factor != 1 else n
 
 
@@ -114,18 +127,22 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         # Arguments and tuple items are evaluated in order.
         # Members that give the size of a later one are kept in locals.
         a = f"_a{depth}_"
-        sizes = {m.vtype.dyn.member for m in e.members if m.vtype.dyn is not None}
+        sizes = {m.vtype.dyn.member for m in e.members
+                 if m.vtype.dyn is not None}
         inner = lambda d: a + d.member if d.member else ref(d)  # noqa: E731
         parts = []
         for m in e.members:
             x = read_expr(m.vtype, f, inner, depth + 1)
             if m.ident in sizes:
                 x = f"({a}{m.ident} := {x})"
-            parts.append(f"{m.ident}=" + (f"(r.pad({m.skip}, {f}), {x})[1]" if m.skip else x))
+            if m.skip:
+                x = f"(r.pad({m.skip}, {f}), {x})[1]"
+            parts.append(f"{m.ident}={x}")
         agg = f"{vt.ident}({', '.join(parts)})"
         return f"({agg}, r.pad({e.pad}, {f}))[0]" if e.pad else agg
     if isinstance(e, ArrayEnc):
-        return f"pk.read_list(r, {count(vt, ref, f)}, {e.gap}, {f}, lambda: {read_expr(e.elem, f, ref, depth + 1)})"
+        return (f"pk.read_list(r, {count(vt, ref, f)}, {e.gap}, {f}, lambda: "
+                f"{read_expr(e.elem, f, ref, depth + 1)})")
     if isinstance(e, IntEnc):
         raw = f"r.uint_order({e.bits}, {le(vt)}, {f})"
         enc = repr(e.encoding)
@@ -142,7 +159,9 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
             return f"{raw} != 0"
         return calibrate(vt, f"pk.int_to_float({raw}, {e.bits}, {enc})", f)
     if isinstance(e, FloatEnc):
-        return calibrate(vt, f"pk.float_from_raw(r.uint_order({e.bits}, {le(vt)}, {f}), {e.bits})", f)
+        return calibrate(vt,
+                         f"pk.float_from_raw(r.uint_order({e.bits}, {le(vt)}, "
+                         f"{f}), {e.bits})", f)
     if isinstance(e, BinaryEnc):
         if e.rest:
             return f"r.bytes(r.rest_bytes({e.bits // 8}, {f}), {f})"
@@ -151,7 +170,8 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         return f"pk.string_from_bytes({b}, {f})" if vt.kind == "string" else b
     s = f"pk.read_string(r, {spec(vt, ref, f)}, {f})"
     if vt.kind == "bool":
-        return f"pk.bool_from_string({s}, {pstr(vt.one_string)}, {pstr(vt.zero_string)}, {f})"
+        return (f"pk.bool_from_string({s}, {pstr(vt.one_string)}, "
+                f"{pstr(vt.zero_string)}, {f})")
     return s
 
 
@@ -164,7 +184,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         if vt.kind == "int" and vt.calibrator is not None:
             if not invertible(vt):
                 return f'raise pk.PacketError("NotInvertible", {f})'
-            raw = f"pk.float_to_int({uncalibrate(vt, f'float({x})', f)}, {bits}, {enc}, {f})"
+            raw = (f"pk.float_to_int({uncalibrate(vt, f'float({x})', f)}, "
+                   f"{bits}, {enc}, {f})")
         elif vt.kind == "int":
             raw = f"pk.from_signed({x}, {bits}, {enc}, {f})"
         elif vt.kind == "enum":
@@ -174,12 +195,14 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         else:
             if not invertible(vt):
                 return f'raise pk.PacketError("NotInvertible", {f})'
-            raw = f"pk.float_to_int({uncalibrate(vt, x, f)}, {bits}, {enc}, {f})"
+            raw = (f"pk.float_to_int({uncalibrate(vt, x, f)}, {bits}, {enc}, "
+                   f"{f})")
         return f"w.uint_order({bits}, {le(vt)}, {raw})"
     if isinstance(e, FloatEnc):
         if not invertible(vt):
             return f'raise pk.PacketError("NotInvertible", {f})'
-        return f"w.uint_order({e.bits}, {le(vt)}, pk.float_to_raw({uncalibrate(vt, x, f)}, {e.bits}))"
+        return (f"w.uint_order({e.bits}, {le(vt)}, "
+                f"pk.float_to_raw({uncalibrate(vt, x, f)}, {e.bits}))")
     if isinstance(e, BinaryEnc) and e.rest:
         return f"pk.write_rest(w, {x}, {e.bits // 8}, {f})"
     if isinstance(e, BinaryEnc):
@@ -193,15 +216,18 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
 
 def access(path) -> str:
     """The expression suffix for a member and element path."""
-    return "".join(f"[{p.i}]" if isinstance(p, Index) else "." + p for p in path)
+    return "".join(f"[{p.i}]" if isinstance(p, Index) else "." + p
+                   for p in path)
 
 
 def term(t, place) -> str:
     """Expression for a criterion or a tree of them; ``place`` gives the
     expression for a Local."""
     if isinstance(t, (AllOf, AnyOf)):
-        return (" and " if isinstance(t, AllOf) else " or ").join(f"({term(x, place)})" for x in t.terms)
-    return condition(t, place(t.local), place(t.other) if t.other is not None else None)
+        return (" and " if isinstance(t, AllOf)
+                else " or ").join(f"({term(x, place)})" for x in t.terms)
+    return condition(t, place(t.local),
+                     place(t.other) if t.other is not None else None)
 
 
 def condition(c: Criterion, x: str, y=None) -> str:
@@ -221,7 +247,9 @@ def describer(vt: VType) -> str:
     if k == "array":
         return f"lambda v: pk.describe_list(v, {describer(vt.elem)})"
     if k == "aggregate":
-        parts = ", ".join(f"{pstr(m.ident + '=')} + ({describer(m.vtype)})(v.{m.ident})" for m in vt.enc.members)
+        parts = ", ".join(f"{pstr(m.ident + '=')} + "
+                          f"({describer(m.vtype)})(v.{m.ident})"
+                          for m in vt.enc.members)
         return f'lambda v: "{{" + ", ".join(({parts},)) + "}}"'
     if k == "float":
         return "pk.describe_float"
@@ -264,7 +292,8 @@ class PythonEmitter:
         self.line("def _describe_bool(v: bool) -> str:")
         self.line('return "true" if v else "false"', 1)
         self.line()
-        names = [vt.ident for vt in m.types + m.aggregates] + [n.ident for n in m.nodes] + [k.ident for k in m.kinds]
+        names = ([vt.ident for vt in m.types + m.aggregates]
+                 + [n.ident for n in m.nodes] + [k.ident for k in m.kinds])
         self.line()
         self.line("__all__ = [" + ", ".join(pstr(n) for n in names) + "]")
         for vt in m.types:
@@ -291,11 +320,13 @@ class PythonEmitter:
         self.line()
         self.line("@property", 1)
         self.line("def label(self) -> Optional[str]:", 1)
-        self.line('"""The label of this value, if the enumeration lists it."""', 2)
+        self.line('"""The label of this value, if the enumeration lists it."""',
+                  2)
         self.line(f"return pk.find_label(int(self), _LABELS_{vt.ident})", 2)
         self.line()
         self.line()
-        labels = ", ".join(f"({pstr(lab.label)}, {lab.value}, {lab.max_value})" for lab in vt.labels)
+        labels = ", ".join(f"({pstr(lab.label)}, {lab.value}, {lab.max_value})"
+                           for lab in vt.labels)
         self.line(f"_LABELS_{vt.ident} = ({labels},)")
         self.line()
         self.line()
@@ -307,48 +338,59 @@ class PythonEmitter:
         self.line()
         self.line("@dataclass(slots=True)")
         self.line(f"class {vt.ident}:")
-        self.line(f'"""Aggregate ``{vt.key}``; its members are encoded in this order."""', 1)
+        self.line(f'"""Aggregate ``{vt.key}``; its members are encoded in this '
+                  'order."""', 1)
         self.line()
         for m in vt.enc.members:
-            self.line(f"{m.ident}: {field_type(m.vtype)} = {default(m.vtype)}", 1)
+            self.line(f"{m.ident}: {field_type(m.vtype)} = {default(m.vtype)}",
+                      1)
             self.line(f'"""``{m.name}`` ({m.vtype.key})"""', 1)
 
-    def read_items(self, items, depth: int, where: str, nested: bool = False) -> None:
+    def read_items(self, items, depth: int, where: str,
+                   nested: bool = False) -> None:
         for it in items:
             if isinstance(it, Seek):
                 off = offset(it, self.read_ref, pstr(where))
                 if it.from_start is None:
                     self.line(f"r.skip({off}, {pstr(where)})", depth)
                 else:
-                    self.line(f"r.seek({self.mark(it.from_start)}, {off}, {pstr(where)})", depth)
+                    self.line(f"r.seek({self.mark(it.from_start)}, {off}, "
+                              f"{pstr(where)})", depth)
             elif isinstance(it, Mark):
                 self.line(f"m{it.id} = r.pos", depth)
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
             elif isinstance(it, Value):
                 lc = it.local
-                self.line(f"v{lc.id} = {read_expr(lc.vtype, pstr(lc.name), self.read_ref)}", depth)
+                self.line(
+                    f"v{lc.id} = "
+                    f"{read_expr(lc.vtype, pstr(lc.name), self.read_ref)}",
+                    depth)
                 if lc.length is not None:
-                    self.line(f"r.limit(v{lc.id}, {lc.length}, {pstr(lc.name)})", depth)
+                    self.line(f"r.limit(v{lc.id}, {lc.length}, "
+                              f"{pstr(lc.name)})", depth)
             elif isinstance(it, Cond):
                 if not nested:
                     for v in walk(it.items):
                         if isinstance(v, Value):
                             self.line(f"v{v.local.id} = None", depth)
-                cond = " and ".join(f"({term(c, lambda lc: f'v{lc.id}')})" for c in it.criteria)
+                cond = " and ".join(f"({term(c, lambda lc: f'v{lc.id}')})"
+                                    for c in it.criteria)
                 self.line(f"if {cond}:", depth)
                 self.read_items(it.items, depth + 1, where, True)
             else:
                 self.line(f"r.uint({it.bits}, {pstr(where)})", depth)
 
-    def write_items(self, n: Node, items, depth: int, where: str, names: dict) -> None:
+    def write_items(self, n: Node, items, depth: int, where: str,
+                    names: dict) -> None:
         for it in items:
             if isinstance(it, Seek):
                 off = offset(it, self.write_ref(n, names), pstr(where))
                 if it.from_start is None:
                     self.line(f"w.skip({off}, {pstr(where)})", depth)
                 else:
-                    self.line(f"w.seek({self.mark(it.from_start)}, {off}, {pstr(where)})", depth)
+                    self.line(f"w.seek({self.mark(it.from_start)}, {off}, "
+                              f"{pstr(where)})", depth)
             elif isinstance(it, Mark):
                 self.line(f"m{it.id} = w.pos", depth)
             elif isinstance(it, Fixed):
@@ -356,7 +398,9 @@ class PythonEmitter:
             elif isinstance(it, Pad):
                 self.line(f"w.zeros({it.bits})", depth)
             elif isinstance(it, Cond):
-                cond = " and ".join(f"({term(c, lambda lc: self.place(n, lc, names))})" for c in it.criteria)
+                cond = " and ".join(
+                    f"({term(c, lambda lc: self.place(n, lc, names))})"
+                    for c in it.criteria)
                 self.line(f"if {cond}:", depth)
                 self.write_items(n, it.items, depth + 1, where, names)
             elif it.local.length is not None:
@@ -368,13 +412,16 @@ class PythonEmitter:
                 x = self.place(n, lc, names)
                 if lc.optional:
                     self.line(f"if {x} is None:", depth)
-                    self.line(f'raise pk.PacketError("Missing", {pstr(lc.name)})', depth + 1)
-                self.write_value(lc.vtype, x, pstr(lc.name), self.write_ref(n, names), depth)
+                    self.line('raise pk.PacketError("Missing", '
+                              f'{pstr(lc.name)})', depth + 1)
+                self.write_value(lc.vtype, x, pstr(lc.name),
+                                 self.write_ref(n, names), depth)
 
     def write_value(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
         e = vt.enc
         if isinstance(e, AggregateEnc):
-            inner = lambda d: f"{x}.{d.member}" if d.member else ref(d)  # noqa: E731
+            def inner(d):
+                return f"{x}.{d.member}" if d.member else ref(d)
             for m in e.members:
                 if m.skip:
                     self.line(f"w.zeros({m.skip})", depth)
@@ -393,7 +440,8 @@ class PythonEmitter:
             self.write_value(e.elem, el, f, ref, depth + 1)
         elif isinstance(e, BinaryEnc) and e.dyn is not None:
             data = f"{x}.encode()" if vt.kind == "string" else x
-            self.line(f"pk.check_size({data}, {size(e.dyn, ref(e.dyn), f)}, {f})", depth)
+            self.line(f"pk.check_size({data}, {size(e.dyn, ref(e.dyn), f)}, "
+                      f"{f})", depth)
             self.line(f"w.bytes({data})", depth)
         else:
             self.line(write_stmt(vt, x, f, ref), depth)
@@ -429,7 +477,8 @@ class PythonEmitter:
 
     @staticmethod
     def construct(n: Node) -> str:
-        return f"{n.ident}(" + ", ".join(f"{name}=v{lc.id}" for name, lc in n.fields) + ")"
+        return (f"{n.ident}("
+                + ", ".join(f"{name}=v{lc.id}" for name, lc in n.fields) + ")")
 
     def node(self, n: Node) -> None:
         what = "Sequence container" if n.kind == "tm" else "Meta-command"
@@ -440,15 +489,18 @@ class PythonEmitter:
         self.line(f'"""{what} ``{n.key}``.', 1)
         if n.fixed:
             self.line()
-            fixed = ", ".join(f"``{lc.name}`` = {v!r}" for lc, v in n.fixed.items())
+            fixed = ", ".join(f"``{lc.name}`` = {v!r}"
+                              for lc, v in n.fixed.items())
             self.line(f"Fixed by its inheritance: {fixed}.", 1)
         length = n.length_field()
         if length is not None:
             self.line()
-            self.line(f"``{length.name}`` is the packet length: computed when encoding, checked when decoding.", 1)
+            self.line(f"``{length.name}`` is the packet length: computed when "
+                      "encoding, checked when decoding.", 1)
         for lc, (c, _) in n.derived.items():
             self.line()
-            self.line(f"``{lc.name}`` gives the size of ``{c.name}``: computed from its length when encoding.", 1)
+            self.line(f"``{lc.name}`` gives the size of ``{c.name}``: computed "
+                      "from its length when encoding.", 1)
         self.line('"""', 1)
         self.line()
         self.line(f"NAME: ClassVar[str] = {pstr(n.key)}", 1)
@@ -459,19 +511,23 @@ class PythonEmitter:
             if lc.optional:
                 self.line(f"{name}: Optional[{field_type(lc.vtype)}] = None", 1)
             else:
-                self.line(f"{name}: {field_type(lc.vtype)} = {default(lc.vtype)}", 1)
+                self.line(f"{name}: {field_type(lc.vtype)} = "
+                          f"{default(lc.vtype)}", 1)
             doc = f"; {lc.vtype.doc}" if lc.vtype.doc else ""
-            cond = "; present only when its include condition holds" if lc.optional else ""
+            cond = ("; present only when its include condition holds"
+                    if lc.optional else "")
             self.line(f'"""``{lc.key}`` ({lc.vtype.key}{doc}{cond})"""', 1)
         self.line()
         self.line("@classmethod", 1)
         self.line(f"def decode(cls, data) -> {n.ident}:", 1)
-        self.line('"""Decode a packet that starts at the first byte of ``data``."""', 2)
+        self.line('"""Decode a packet that starts at the first byte of '
+                  '``data``."""', 2)
         self.line("r = pk.BitReader(data)", 2)
         for node in n.chain():
             for c in node.criteria:
                 self.line(f"if not ({term(c, lambda lc: f'v{lc.id}')}):", 2)
-                self.line(f'raise pk.PacketError("Mismatch", {pstr(node.key)}, {pstr(c.text)})', 3)
+                self.line(f'raise pk.PacketError("Mismatch", {pstr(node.key)}, '
+                          f'{pstr(c.text)})', 3)
             self.read_items(node.items, 2, node.key)
         self.finish(n, 2)
         self.line(f"return {self.construct(n)}", 2)
@@ -480,7 +536,8 @@ class PythonEmitter:
         names = {lc: name for name, lc in n.fields}
         for lc, (c, d) in n.derived.items():
             # Sizes and counts come from the lengths of what they size.
-            self.line(f"d{lc.id} = pk.size_source(len(self.{names[c]}), {size_args(d)}, {pstr(c.name)})", 2)
+            self.line(f"d{lc.id} = pk.size_source(len(self.{names[c]}), "
+                      f"{size_args(d)}, {pstr(c.name)})", 2)
             lo, hi = field_range(lc.vtype)
             self.line(f"if not {lo} <= d{lc.id} <= {hi}:", 2)
             self.line(f'raise pk.PacketError("OutOfRange", {pstr(lc.name)})', 3)
@@ -489,7 +546,8 @@ class PythonEmitter:
             for c in node.criteria:
                 for lc, prefix, count in term_indexes(c):
                     if lc in names:
-                        guards[(f"self.{names[lc]}{access(prefix)}", count)] = lc.name
+                        guards[(f"self.{names[lc]}{access(prefix)}",
+                                count)] = (lc.name)
         for (x, count), name in guards.items():
             # Criteria are checked before the arrays they index are written.
             self.line(f"if len({x}) != {count}:", 2)
@@ -497,16 +555,21 @@ class PythonEmitter:
         for node in n.chain():
             for c in node.criteria:
                 if any(lc in names for lc in term_locals(c)):
-                    self.line(f"if not ({term(c, lambda lc: self.place(n, lc, names))}):", 2)
-                    self.line(f'raise pk.PacketError("Mismatch", {pstr(node.key)}, {pstr(c.text)})', 3)
+                    test = term(c, lambda lc: self.place(n, lc, names))
+                    self.line(f"if not ({test}):", 2)
+                    self.line('raise pk.PacketError("Mismatch", '
+                              f'{pstr(node.key)}, {pstr(c.text)})', 3)
         for node in n.chain():
             self.write_items(n, node.items, 2, node.key, names)
         if length is not None:
             enc = length.vtype.enc
-            self.line(f"w.patch_length(l{length.id}, {enc.bits}, {enc.little_endian}, {length.length}, {pstr(length.name)})", 2)
+            self.line(f"w.patch_length(l{length.id}, {enc.bits}, "
+                      f"{enc.little_endian}, {length.length}, "
+                      f"{pstr(length.name)})", 2)
         self.line()
         self.line("def describe(self) -> str:", 1)
-        self.line('"""Canonical text form, identical in every generated language."""', 2)
+        self.line('"""Canonical text form, identical in every generated '
+                  'language."""', 2)
         parts = []
         for name, lc in n.fields:
             fn = describer(lc.vtype)
@@ -514,7 +577,8 @@ class PythonEmitter:
             if lc.optional:
                 parts.append(f"pk.describe_optional({v}, {fn})")
             else:
-                parts.append(f"({fn})({v})" if fn.startswith("lambda") else f"{fn}({v})")
+                parts.append(f"({fn})({v})" if fn.startswith("lambda")
+                             else f"{fn}({v})")
         if not parts:
             self.line(f"return {pstr(n.ident + '{}')}", 2)
             return
@@ -527,7 +591,8 @@ class PythonEmitter:
         self.line()
         self.line()
         self.line(f"class {k.ident}(pk.PacketKind):")
-        self.line(f'"""Every concrete packet derived from ``{k.root.key}``."""', 1)
+        self.line(f'"""Every concrete packet derived from ``{k.root.key}``."""',
+                  1)
         self.line()
         self.line(f"NAME: ClassVar[str] = {pstr(k.root.key)}", 1)
         self.line(f"MAX_BYTES: ClassVar[int] = {k.max_bytes}", 1)
@@ -536,7 +601,8 @@ class PythonEmitter:
         self.line()
         self.line("@staticmethod", 1)
         self.line(f"def decode(data) -> Union[{members}]:", 1)
-        self.line('"""Decode the root\'s entries, then pick the first child (in', 2)
+        self.line('"""Decode the root\'s entries, then pick the first child '
+                  '(in', 2)
         self.line('document order) whose criteria match, recursively."""', 2)
         self.line("r = pk.BitReader(data)", 2)
         self.read_items(k.root.items, 2, k.root.key)
@@ -546,7 +612,8 @@ class PythonEmitter:
         for c in n.children:
             if c.error:
                 continue
-            cond = " and ".join(f"({term(x, lambda lc: f'v{lc.id}')})" for x in c.criteria) or "True"
+            cond = (" and ".join(f"({term(x, lambda lc: f'v{lc.id}')})"
+                                 for x in c.criteria) or "True")
             self.line(f"if {cond}:", depth)
             self.read_items(c.items, depth + 1, c.key)
             self.dispatch(c, depth + 1)

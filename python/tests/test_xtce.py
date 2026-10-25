@@ -12,7 +12,8 @@ import xtce
 from xtce import Document, ManagedBuffer, SpaceSystemType, XtceError
 from xtce import _xml as X
 
-SAMPLES = sorted(glob.glob(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "samples", "*.xml")))
+SAMPLES = sorted(glob.glob(os.path.join(os.path.dirname(__file__), "..", "..",
+                                        "tests", "samples", "*.xml")))
 
 
 class RoundTrip(unittest.TestCase):
@@ -29,7 +30,8 @@ class RoundTrip(unittest.TestCase):
                 self.assertEqual(again.to_bytes(), first)
 
     def test_build_and_serialize(self):
-        ss = SpaceSystemType(name="Built", short_description='a "quoted" <desc>')
+        ss = SpaceSystemType(name="Built",
+                             short_description='a "quoted" <desc>')
         doc = Document(ss)
         back = Document.from_bytes(doc.to_bytes())
         self.assertEqual(back.root, ss)
@@ -99,7 +101,8 @@ class Buffers(unittest.TestCase):
 class Errors(unittest.TestCase):
     def test_unknown_element_has_line(self):
         with self.assertRaises(XtceError) as cm:
-            Document.from_bytes(b"<SpaceSystem name='a'>\n<Bogus/></SpaceSystem>")
+            Document.from_bytes(b"<SpaceSystem name='a'>\n<Bogus/>"
+                                b"</SpaceSystem>")
         self.assertEqual(cm.exception.line, 2)
         self.assertIn("Bogus", cm.exception.message)
 
@@ -118,7 +121,8 @@ class Errors(unittest.TestCase):
 
 class Scalars(unittest.TestCase):
     def test_doubles_match_other_languages(self):
-        cases = {1.0: "1.0", 1.5: "1.5", 0.0001: "0.0001", 0.00001: "1e-05", 1e16: "1e+16", float("inf"): "INF"}
+        cases = {1.0: "1.0", 1.5: "1.5", 0.0001: "0.0001", 0.00001: "1e-05",
+                 1e16: "1e+16", float("inf"): "INF"}
         for v, s in cases.items():
             self.assertEqual(X.f_double(v), s)
             self.assertEqual(X.p_double(s), v)

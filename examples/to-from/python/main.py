@@ -77,13 +77,15 @@ def read() -> None:
         if count >= len(expected):
             raise Failed(f"unexpected extra word {word.text!r}")
         if word.text != expected[count]:
-            raise Failed(f"word {count + 1} is {word.text!r}, expected {expected[count]!r}")
+            raise Failed(f"word {count + 1} is {word.text!r}, expected "
+                         f"{expected[count]!r}")
 
         print(("" if count == 0 else " ") + word.text, end="", flush=True)
         count += 1
 
     if count != len(expected):
-        raise Failed(f"input ended after {count} words, before {expected[count]!r}")
+        raise Failed(f"input ended after {count} words, before "
+                     f"{expected[count]!r}")
     print()
 
 

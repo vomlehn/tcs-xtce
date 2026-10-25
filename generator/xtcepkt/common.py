@@ -6,7 +6,8 @@ import math
 
 from xtcegen import CRATE, REPOSITORY
 
-from .model import BinaryEnc, Criterion, FloatEnc, IntEnc, Node, Polynomial, Spline, StringEnc, Value, VType
+from .model import (BinaryEnc, Criterion, FloatEnc, IntEnc, Node, Polynomial,
+                    Spline, StringEnc, Value, VType)
 
 ENCODINGS = {
     "unsigned": "Unsigned",
@@ -65,7 +66,8 @@ def str_cap(vt: VType) -> int:
 def field_range(vt: VType) -> tuple[int, int]:
     """The smallest and largest value of an integer's generated field."""
     bits = vt.width
-    return (-(1 << (bits - 1)), (1 << (bits - 1)) - 1) if vt.signed else (0, (1 << bits) - 1)
+    return ((-(1 << (bits - 1)), (1 << (bits - 1)) - 1) if vt.signed
+            else (0, (1 << bits) - 1))
 
 
 def size_args(d) -> str:
@@ -84,14 +86,14 @@ def values(node: Node) -> list:
 
 
 def header_lines(mission, source: str) -> list:
-    """The notice at the top of every generated file, without comment markers."""
-    return [
-        f"@generated automatically by tcs-xtce from {source} (SpaceSystem {mission.name!r}).",
-        "Any changes made to this file will be lost when it is regenerated;",
-        "change the XTCE document instead and rerun `python3 -m tcs_xtce`.",
-        f"tcs-xtce: {REPOSITORY}",
-        f"Rust crate: {CRATE}",
-    ]
+    """The notice at the top of every generated file, without comment markers.
+    """
+    return [f"@generated automatically by tcs-xtce from {source} (SpaceSystem "
+            f"{mission.name!r}).",
+            "Any changes made to this file will be lost when it is "
+            "regenerated;",
+            "change the XTCE document instead and rerun `python3 -m tcs_xtce`.",
+            f"tcs-xtce: {REPOSITORY}", f"Rust crate: {CRATE}"]
 
 
 __all__ = [

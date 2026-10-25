@@ -20,7 +20,8 @@ XML     := simple_string.xml
 GEN     := rust/src/simple_string.rs c/simple_string.h cxx/simple_string.h \
            python/simple_string.py
 GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py \
-                     $(TOP)/generator/tcs_xtce/*.py)
+                     $(TOP)/generator/tcs_xtce/*.py \
+                     $(TOP)/generator/xtcegen/*.py)
 PKT_H   := $(TOP)/cpp/include/xtce/packet.h
 TCS_XTCE := cd $(TOP)/generator && \
             $(PYTHON) -m tcs_xtce ../examples/simple-string/$(XML) \

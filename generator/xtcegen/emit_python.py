@@ -5,17 +5,24 @@ from __future__ import annotations
 from . import header_lines
 import keyword
 
-from .binding import MANY, ONE, OPT, Binding, ChoiceType, ElemField, Record, pascal_ident, snake
-from .model import BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED, ComplexRef, EnumRef, ScalarRef, TypeRef
+from .binding import (MANY, ONE, OPT, Binding, ChoiceType, ElemField, Record,
+                      pascal_ident, snake)
+from .model import (BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED,
+                    ComplexRef, EnumRef, ScalarRef, TypeRef)
 
-PY_TYPES = {STRING: "str", BOOL: "bool", INT: "int", LONG: "int", USHORT: "int", DOUBLE: "float"}
-PARSE = {STRING: "X.p_str", BOOL: "X.p_bool", INT: "X.p_i32", LONG: "X.p_i64", USHORT: "X.p_u16", DOUBLE: "X.p_double"}
-FORMAT = {STRING: "", BOOL: "X.f_bool", INT: "X.f_int", LONG: "X.f_int", USHORT: "X.f_int", DOUBLE: "X.f_double"}
-ZERO = {STRING: '""', BOOL: "False", INT: "0", LONG: "0", USHORT: "0", DOUBLE: "0.0"}
+PY_TYPES = {STRING: "str", BOOL: "bool", INT: "int", LONG: "int", USHORT: "int",
+            DOUBLE: "float"}
+PARSE = {STRING: "X.p_str", BOOL: "X.p_bool", INT: "X.p_i32", LONG: "X.p_i64",
+         USHORT: "X.p_u16", DOUBLE: "X.p_double"}
+FORMAT = {STRING: "", BOOL: "X.f_bool", INT: "X.f_int", LONG: "X.f_int",
+          USHORT: "X.f_int", DOUBLE: "X.f_double"}
+ZERO = {STRING: '""', BOOL: "False", INT: "0", LONG: "0", USHORT: "0",
+        DOUBLE: "0.0"}
 
 
 def ident(name: str) -> str:
-    return name + "_" if keyword.iskeyword(name) or name in ("self", "cls") else name
+    return (name + "_" if keyword.iskeyword(name) or name in ("self", "cls")
+            else name)
 
 
 def doc(text: str, indent: str) -> list[str]:
@@ -61,7 +68,8 @@ class PythonEmitter:
     def __init__(self, b: Binding):
         self.b = b
         self.out: list[str] = []
-        self.enum_members = {n: member_names(e.values) for n, e in b.schema.enums.items()}
+        self.enum_members = {n: member_names(e.values)
+                             for n, e in b.schema.enums.items()}
 
     def w(self, line: str = "") -> None:
         self.out.append(line)
@@ -71,7 +79,8 @@ class PythonEmitter:
         root_tag, root_type = next(iter(s.roots.items()))
         for line in header_lines():
             self.w("# " + line)
-        self.w(f'"""Data structures for XTCE {s.version} (``{s.namespace}``)."""')
+        self.w(f'"""Data structures for XTCE {s.version} '
+               f'(``{s.namespace}``)."""')
         self.w("")
         self.w("from __future__ import annotations")
         self.w("")
@@ -114,9 +123,12 @@ class PythonEmitter:
             self.w(f"    {name}: _w_{name},")
         self.w("}")
         self.w("")
-        names = sorted(s.enums) + sorted(self.b.records) + sorted(self.b.choices)
+        names = (sorted(s.enums) + sorted(self.b.records)
+                 + sorted(self.b.choices))
         self.w("__all__ = [")
-        for n in ["NAMESPACE", "SCHEMA_VERSION", "ROOT_ELEMENT", "READERS", "WRITERS"] + names:
+        fixed = ["NAMESPACE", "SCHEMA_VERSION", "ROOT_ELEMENT", "READERS",
+                 "WRITERS"]
+        for n in fixed + names:
             self.w(f"    {n!r},")
         self.w("]")
         return "\n".join(self.out) + "\n"
@@ -170,25 +182,29 @@ class PythonEmitter:
         lines = []
         for a in r.attrs:
             card = ONE if a.required else OPT
-            note = f"  # attribute {a.xml!r}" + (f", schema default {a.default!r}" if a.default is not None else "")
-            lines.append(
-                f"    {ident(a.ident)}: {self.annotation(py_type(a.type), card)} = {self.default(a.type, card)}{note}"
-            )
+            note = (f"  # attribute {a.xml!r}"
+                    + (f", schema default {a.default!r}"
+                       if a.default is not None else ""))
+            lines.append(f"    {ident(a.ident)}: "
+                         f"{self.annotation(py_type(a.type), card)} = "
+                         f"{self.default(a.type, card)}{note}")
         if r.text is not None:
-            lines.append(f"    {ident(r.text.ident)}: {py_type(r.text.type)} = {ZERO[r.text.type.kind]}  # text content")
+            lines.append(f"    {ident(r.text.ident)}: {py_type(r.text.type)} = "
+                         f"{ZERO[r.text.type.kind]}  # text content")
         for f in r.content:
             if isinstance(f, ElemField):
-                lines.append(
-                    f"    {ident(f.ident)}: {self.annotation(py_type(f.type), f.card)} = "
-                    f"{self.default(f.type, f.card)}  # element {f.xml!r}"
-                )
+                lines.append(f"    {ident(f.ident)}: "
+                             f"{self.annotation(py_type(f.type), f.card)} = "
+                             f"{self.default(f.type, f.card)}  # element "
+                             f"{f.xml!r}")
             else:
                 c = f.choice
                 if f.card == ONE:
                     dflt = f"field(default_factory=lambda: {c.name}())"
                 else:
                     dflt = self.default(None, f.card)
-                lines.append(f"    {ident(f.ident)}: {self.annotation(c.name, f.card)} = {dflt}")
+                lines.append(f"    {ident(f.ident)}: "
+                             f"{self.annotation(c.name, f.card)} = {dflt}")
         if lines:
             self.w("")
             self.out += lines
@@ -199,18 +215,22 @@ class PythonEmitter:
         self.w("")
         self.w("@dataclass(slots=True)")
         self.w(f"class {c.name}:")
-        self.w(f'    """One alternative of a ``<choice>`` in :class:`{c.owner}`.')
+        self.w('    """One alternative of a ``<choice>`` in '
+               f':class:`{c.owner}`.')
         self.w("")
-        self.w("    ``name`` is the element name of the alternative and ``value`` its value;")
+        self.w("    ``name`` is the element name of the alternative and "
+               "``value`` its value;")
         self.w("    use the class-method constructors to build one.")
         self.w('    """')
         self.w("")
         self.w(f"    name: str = {d.xml!r}")
         if isinstance(d.type, ComplexRef):
-            self.w(f"    value: Any = field(default_factory=lambda: {d.type.name}())")
+            self.w("    value: Any = field(default_factory=lambda: "
+                   f"{d.type.name}())")
         else:
             self.w(f"    value: Any = {self.default(d.type, ONE)}")
-        self.w(f"    NAMES: ClassVar[frozenset[str]] = frozenset({{{', '.join(repr(v.xml) for v in c.variants)}}})")
+        self.w("    NAMES: ClassVar[frozenset[str]] = "
+               f"frozenset({{{', '.join(repr(v.xml) for v in c.variants)}}})")
         used = set()
         for v in c.variants:
             m = ident(v.snake)
@@ -233,7 +253,8 @@ class PythonEmitter:
     def reader(self, r: Record) -> None:
         self.w("")
         self.w("")
-        self.w(f"_A_{r.name} = frozenset({{{', '.join(repr(a.xml) for a in r.attrs)}}})")
+        self.w(f"_A_{r.name} = "
+               f"frozenset({{{', '.join(repr(a.xml) for a in r.attrs)}}})")
         self.w("")
         self.w("")
         self.w(f"def _r_{r.name}(n: X.Node) -> {r.name}:")
@@ -241,9 +262,11 @@ class PythonEmitter:
         self.w(f"    v = {r.name}.__new__({r.name})")
         for a in r.attrs:
             fn = "req_attr" if a.required else "opt_attr"
-            self.w(f"    v.{ident(a.ident)} = X.{fn}(n, {a.xml!r}, {parse_fn(a.type)})")
+            self.w(f"    v.{ident(a.ident)} = X.{fn}(n, {a.xml!r}, "
+                   f"{parse_fn(a.type)})")
         if r.text is not None:
-            self.w(f"    v.{ident(r.text.ident)} = X.value(n, X.text_of(n), {parse_fn(r.text.type)})")
+            self.w(f"    v.{ident(r.text.ident)} = X.value(n, X.text_of(n), "
+                   f"{parse_fn(r.text.type)})")
             self.w("    return v")
             return
         self.w("    c = X.Cursor(n)")
@@ -254,26 +277,32 @@ class PythonEmitter:
                 if f.card == ONE:
                     self.w(f"    if c.peek() != {x}:")
                     self.w(f"        raise c.expected({x})")
-                    self.w(f"    v.{name} = {self.read_expr(f.type, 'c.take()')}")
+                    self.w(f"    v.{name} = "
+                           f"{self.read_expr(f.type, 'c.take()')}")
                 elif f.card == OPT:
-                    self.w(f"    v.{name} = {self.read_expr(f.type, 'c.take()')} if c.peek() == {x} else None")
+                    self.w(f"    v.{name} = "
+                           f"{self.read_expr(f.type, 'c.take()')} if c.peek() "
+                           f"== {x} else None")
                 else:
                     cond = f"c.peek() == {x}"
                     if f.max != UNBOUNDED:
                         cond = f"len(items) < {f.max} and {cond}"
                     self.w("    items = []")
                     self.w(f"    while {cond}:")
-                    self.w(f"        items.append({self.read_expr(f.type, 'c.take()')})")
+                    self.w("        items.append("
+                           f"{self.read_expr(f.type, 'c.take()')})")
                     if f.min > 0:
                         self.w(f"    if len(items) < {f.min}:")
-                        self.w(f"        raise c.too_few({x}, {f.min}, len(items))")
+                        self.w(f"        raise c.too_few({x}, {f.min}, "
+                               "len(items))")
                     self.w(f"    v.{name} = items")
             else:
                 cn = f.choice.name
                 if f.card == ONE:
                     self.w(f"    v.{name} = _r_{cn}(c)")
                 elif f.card == OPT:
-                    self.w(f"    v.{name} = _r_{cn}(c) if c.peek() in {cn}.NAMES else None")
+                    self.w(f"    v.{name} = _r_{cn}(c) if c.peek() in "
+                           f"{cn}.NAMES else None")
                 else:
                     cond = f"c.peek() in {cn}.NAMES"
                     if f.max != UNBOUNDED:
@@ -284,7 +313,8 @@ class PythonEmitter:
                     if f.min > 0:
                         what = repr("|".join(v.xml for v in f.choice.variants))
                         self.w(f"    if len(items) < {f.min}:")
-                        self.w(f"        raise c.too_few({what}, {f.min}, len(items))")
+                        self.w(f"        raise c.too_few({what}, {f.min}, "
+                               "len(items))")
                     self.w(f"    v.{name} = items")
         self.w("    c.end()")
         self.w("    return v")
@@ -297,7 +327,8 @@ class PythonEmitter:
             if isinstance(v.type, ComplexRef):
                 self.w(f"    {v.xml!r}: _r_{v.type.name},")
             else:
-                self.w(f"    {v.xml!r}: lambda n: X.leaf(n, {parse_fn(v.type)}),")
+                self.w(f"    {v.xml!r}: lambda n: X.leaf(n, "
+                       f"{parse_fn(v.type)}),")
         self.w("}")
         self.w("")
         self.w("")
@@ -305,7 +336,8 @@ class PythonEmitter:
         self.w("    k = c.peek()")
         self.w(f"    fn = _RC_{c.name}.get(k)")
         self.w("    if fn is None:")
-        self.w(f"        raise c.expected({'|'.join(v.xml for v in c.variants)!r})")
+        self.w("        raise "
+               f"c.expected({'|'.join(v.xml for v in c.variants)!r})")
         self.w(f"    return {c.name}(k, fn(c.take()))")
 
     # -- writers ------------------------------------------------------------
@@ -319,7 +351,8 @@ class PythonEmitter:
     def count_check(self, r: Record, f, what: str) -> None:
         if f.min == 0 and f.max == UNBOUNDED:
             return
-        self.w(f"    X.check_count(len(v.{ident(f.ident)}), {f.min}, {f.max}, {r.name + '.' + what!r})")
+        self.w(f"    X.check_count(len(v.{ident(f.ident)}), {f.min}, {f.max}, "
+               f"{r.name + '.' + what!r})")
 
     def writer(self, r: Record) -> None:
         self.w("")
@@ -334,7 +367,8 @@ class PythonEmitter:
                 self.w(f"    if v.{f} is not None:")
                 self.w(f"        w.attr({a.xml!r}, {fmt(a.type, 'v.' + f)})")
         if r.text is not None:
-            self.w(f"    w.text({fmt(r.text.type, 'v.' + ident(r.text.ident))})")
+            self.w("    "
+                   f"w.text({fmt(r.text.type, 'v.' + ident(r.text.ident))})")
         for f in r.content:
             name = ident(f.ident)
             if isinstance(f, ElemField):
@@ -368,14 +402,16 @@ class PythonEmitter:
             if isinstance(v.type, ComplexRef):
                 self.w(f"    {v.xml!r}: _w_{v.type.name},")
             else:
-                self.w(f"    {v.xml!r}: lambda w, x, t: w.leaf(t, {fmt(v.type, 'x')}),")
+                self.w(f"    {v.xml!r}: lambda w, x, t: w.leaf(t, "
+                       f"{fmt(v.type, 'x')}),")
         self.w("}")
         self.w("")
         self.w("")
         self.w(f"def _w_{c.name}(w: X.Writer, v: {c.name}) -> None:")
         self.w(f"    fn = _WC_{c.name}.get(v.name)")
         self.w("    if fn is None:")
-        self.w(f'        raise X.XtceError(f"{c.name}: unknown alternative {{v.name!r}}")')
+        self.w(f'        raise X.XtceError(f"{c.name}: unknown alternative '
+               '{v.name!r}")')
         self.w("    fn(w, v.value, v.name)")
 
 

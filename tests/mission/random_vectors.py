@@ -39,7 +39,8 @@ def header(rng, packet_type, apid):
 def with_length(data: bytes, total: int) -> bytes:
     """The first ``total`` bytes of ``data``, with the CCSDS packet length
     (bytes after the header, minus 1) saying so."""
-    return data[:4] + ((total - 7) % (1 << 16)).to_bytes(2, "big") + data[6:total]
+    return (data[:4] + ((total - 7) % (1 << 16)).to_bytes(2, "big")
+            + data[6:total])
 
 
 def decoded_size(kind, data: bytes) -> int:
@@ -84,9 +85,11 @@ def samples(rng, sec_hdr):
     if sec_hdr:
         f += [(4, rng.randrange(16)) for _ in range(6)]
     for i in range(4):
-        f += ([(1, rng.randrange(2))] if i == 0 else [(1, rng.randrange(2)), (1, rng.randrange(2))])
+        n = 1 if i == 0 else 2
+        f += [(1, rng.randrange(2)) for _ in range(n)]
     size = rng.choice([0, 2, 5, 10, rng.randrange(12)])
-    text = b"".join(rng.choice([b"a", b"z", b"\0", b"\xc3\xa9", b"\xff"]) for _ in range(size))
+    text = b"".join(rng.choice([b"a", b"z", b"\0", b"\xc3\xa9", b"\xff"])
+                    for _ in range(size))
     f += [(8, size)] + [(8, c) for c in text[:size]]
     size = rng.choice([0, 3, 8, rng.randrange(10)])
     f += [(8, size)] + [(8, rng.randrange(256)) for _ in range(min(size, 8))]
@@ -98,10 +101,12 @@ def targets(rng, sec_hdr):
     n = rng.choice([0, 1, 3, rng.randrange(5)])
     f = [(16, rng.randrange(1 << 16)), (16, rng.randrange(1 << 16)), (8, n)]
     for _ in range(min(n, 4)):
-        name = bytes(rng.choice(b"ab\xc3\xa9\xff") for _ in range(rng.choice([0, 3, 15, 16])))
+        name = bytes(rng.choice(b"ab\xc3\xa9\xff")
+                     for _ in range(rng.choice([0, 3, 15, 16])))
         f += [(4, rng.randrange(16)), (8, rng.choice([0, 2, 20, 200]))]
         f += [(8, c) for c in name + b"\0"]
-        f += [(16, rng.randrange(1 << 16)) for _ in range(2)] + [(4, rng.randrange(16)) for _ in range(2)]
+        f += ([(16, rng.randrange(1 << 16)) for _ in range(2)]
+              + [(4, rng.randrange(16)) for _ in range(2)])
     if sec_hdr:
         f += [(16, rng.randrange(1 << 16)) for _ in range(2)]
     return bits(f)
@@ -127,16 +132,20 @@ def batches(rng) -> bytes:
     f = [(8, n)]
     for _ in range(min(n, 7)):
         size = rng.choice([0, 1, 3, rng.randrange(16)])
-        f += [(4, size)] + [(8, rng.randrange(256)) for _ in range(min(size, 4))]
+        f += ([(4, size)]
+              + [(8, rng.randrange(256)) for _ in range(min(size, 4))])
     return bits(f)
 
 
 def reply(rng) -> bytes:
     """A Reply body: mostly valid answers, codes and notes."""
-    answer = rng.choice([b"yes\0", b"yes\0", b"no\0\0", b"no\0z", b"yes!", rng.randbytes(4)])
-    code = rng.choice([b"ABC", b"ABC", b"\xc3\xa9a", b"a\xff\0", rng.randbytes(3)])
+    answer = rng.choice([b"yes\0", b"yes\0", b"no\0\0", b"no\0z", b"yes!",
+                         rng.randbytes(4)])
+    code = rng.choice([b"ABC", b"ABC", b"\xc3\xa9a", b"a\xff\0",
+                       rng.randbytes(3)])
     size = rng.choice([0, 2, 8, rng.randrange(12)])
-    note = b"".join(rng.choice([b"h", b"i", b"\xc3\xa9"]) for _ in range(size))[: min(size, 8)]
+    note = b"".join(rng.choice([b"h", b"i", b"\xc3\xa9"])
+                    for _ in range(size))[: min(size, 8)]
     if note and rng.random() < 0.2:
         note = note[:-1] + b"\xff"
     return answer + code + bytes([size]) + note
@@ -154,15 +163,18 @@ def frame(rng) -> bytes:
 def route(rng) -> bytes:
     """A Route body: a header whose members give the stop count and
     whether there is a detour."""
-    kind, n = rng.choice([1, 2, rng.randrange(16)]), rng.choice([0, 1, 3, rng.randrange(16)])
+    kind, n = (rng.choice([1, 2, rng.randrange(16)]),
+               rng.choice([0, 1, 3, rng.randrange(16)]))
     return bytes([kind << 4 | n]) + rng.randbytes(min(n, 4) + (kind == 2))
 
 
 def probe(rng) -> bytes:
     """A probe body: two probes, the first mostly with Id 1, and data
     sized by the second probe's first gain."""
-    ident, size = rng.choice([1, 1, rng.randrange(16)]), rng.choice([0, 2, rng.randrange(16)])
-    head = bits([(4, ident), (8, rng.randrange(256)), (4, rng.randrange(16)), (4, size), (4, rng.randrange(16))])
+    ident, size = (rng.choice([1, 1, rng.randrange(16)]),
+                   rng.choice([0, 2, rng.randrange(16)]))
+    head = bits([(4, ident), (8, rng.randrange(256)), (4, rng.randrange(16)),
+                 (4, size), (4, rng.randrange(16))])
     return head + rng.randbytes(size) + rng.randbytes(rng.choice([0, 1]))
 
 
@@ -182,16 +194,22 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
-            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290, 310, 320, 330, 340, 350, 360, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
+                               280, 290, 310, 320, 330, 340, 350, 360,
+                               rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
             elif apid == 200 and rng.random() < 0.7:
-                data += rng.randbytes(2) + rng.choice([b"ORBIT\0\0\0", rng.randbytes(8)])
+                data += (rng.randbytes(2)
+                         + rng.choice([b"ORBIT\0\0\0", rng.randbytes(8)]))
                 n = rng.randrange(34)
-                data += bytes([n]) + bytes(rng.choice(b"abc \x00\x7f\xc3\xa9") for _ in range(n))
+                data += bytes([n]) + bytes(rng.choice(b"abc \x00\x7f\xc3\xa9")
+                                           for _ in range(n))
                 if rng.random() < 0.8:
-                    data += bytes(rng.choice(b"xyz\x01") for _ in range(rng.randrange(17))) + b"\0"
+                    n = rng.randrange(17)
+                    data += bytes(rng.choice(b"xyz\x01") for _ in range(n))
+                    data += b"\0"
             elif apid == 250 and rng.random() < 0.8:
                 data += samples(rng, data[0] & 0x08)
             elif apid == 260 and rng.random() < 0.8:
@@ -207,22 +225,28 @@ def main() -> None:
             elif apid == 320 and rng.random() < 0.8:
                 data += frame(rng)
             elif apid == 360 and rng.random() < 0.8:
-                data += bits([(4, rng.choice([7, 7, rng.randrange(16)]) if i == 1 else rng.randrange(16)) for i in range(4)])
+                data += bits([(4, rng.choice([7, 7, rng.randrange(16)]))
+                              if i == 1 else (4, rng.randrange(16))
+                              for i in range(4)])
                 data += rng.randbytes(rng.choice([0, 1]))
             elif apid == 350 and rng.random() < 0.8:
                 data += probe(rng)
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
             elif apid == 340 and rng.random() < 0.8:
-                data += rng.choice([bytes([1, 2]), bytes([0, 0]), bytes([2, 1]), rng.randbytes(2)]) + rng.randbytes(rng.choice([0, 1, 2]))
+                fixed = [bytes([1, 2]), bytes([0, 0]), bytes([2, 1])]
+                data += rng.choice(fixed + [rng.randbytes(2)])
+                data += rng.randbytes(rng.choice([0, 1, 2]))
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
-            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, rng.randrange(256)])
+            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10,
+                                 rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
-                data += rng.randbytes(3) + n.to_bytes(2, "big") + bytes(rng.choice(b"ab\xc3\xa9") for _ in range(n))
+                data += (rng.randbytes(3) + n.to_bytes(2, "big")
+                         + bytes(rng.choice(b"ab\xc3\xa9") for _ in range(n)))
             elif opcode == 4 and rng.random() < 0.8:
                 data += upload(rng)
             elif opcode == 7 and rng.random() < 0.8:
@@ -236,10 +260,13 @@ def main() -> None:
                 data += bytes([lo, hi]) + rng.randbytes(2 if lo < hi else 0)
             elif opcode == 8 and rng.random() < 0.8:
                 n = rng.choice([1, 2, 4, rng.randrange(6)])
-                data += bytes([rng.randrange(3), n]) + rng.randbytes(2 * min(n, 4))
+                data += (bytes([rng.randrange(3), n])
+                         + rng.randbytes(2 * min(n, 4)))
             kind = "tc"
         data += rng.randbytes(rng.randrange(40))
-        data = packet_length(rng, demo.CCSDSPacketKind if kind == "tm" else demo.CCSDSCommandKind, data)
+        data = packet_length(rng,
+                             demo.CCSDSPacketKind if kind == "tm"
+                             else demo.CCSDSCommandKind, data)
         if rng.random() < 0.1:
             data = data[: rng.randrange(len(data) + 1)]
         print(kind, data.hex() or "00")

@@ -22,8 +22,8 @@ from xtce_digest import digest  # noqa: E402
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        prog="xtce-digest", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+        prog="xtce-digest", description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="+", metavar="FILE", help="an XTCE document")
     args = ap.parse_args(argv)
     for name in args.files:

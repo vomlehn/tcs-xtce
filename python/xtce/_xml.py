@@ -114,40 +114,43 @@ class Cursor:
         if self.i < self.n:
             c = self.node.children[self.i]
             return XtceError(f"expected <{what}>, found <{c.name}>", c.line)
-        return XtceError(f"expected <{what}> in <{self.node.name}>", self.node.line)
+        return XtceError(f"expected <{what}> in <{self.node.name}>",
+                         self.node.line)
 
     def too_few(self, what: str, lo: int, found: int) -> XtceError:
-        return XtceError(
-            f"expected at least {lo} <{what}> elements in <{self.node.name}>, found {found}",
-            self.node.line,
-        )
+        return XtceError(f"expected at least {lo} <{what}> elements in "
+                         f"<{self.node.name}>, found {found}", self.node.line)
 
     def end(self) -> None:
         if self.i < self.n:
             c = self.node.children[self.i]
             raise XtceError(f"unexpected element <{c.name}>", c.line)
         if any(t.strip() for t in self.node.text):
-            raise XtceError(f"unexpected text in <{self.node.name}>", self.node.line)
+            raise XtceError(f"unexpected text in <{self.node.name}>",
+                            self.node.line)
 
 
 def text_of(node: Node) -> str:
     if node.children:
         c = node.children[0]
-        raise XtceError(f"unexpected element <{c.name}> in text content", c.line)
+        raise XtceError(f"unexpected element <{c.name}> in text content",
+                        c.line)
     return "".join(node.text)
 
 
 def check_attrs(node: Node, allowed: frozenset) -> None:
     for k in node.attrs:
         if k not in allowed and not k.startswith("xml:"):
-            raise XtceError(f"unexpected attribute {k!r} on <{node.name}>", node.line)
+            raise XtceError(f"unexpected attribute {k!r} on <{node.name}>",
+                            node.line)
 
 
 def req_attr(node: Node, name: str, parse_fn: Callable):
     try:
         raw = node.attrs[name]
     except KeyError:
-        raise XtceError(f"missing required attribute {name!r} on <{node.name}>", node.line) from None
+        raise XtceError(f"missing required attribute {name!r} on <{node.name}>",
+                        node.line) from None
     return value(node, raw, parse_fn)
 
 
@@ -166,7 +169,8 @@ def value(node: Node, raw: str, parse_fn: Callable):
 def leaf(node: Node, parse_fn: Callable):
     for k in node.attrs:
         if not k.startswith("xml:"):
-            raise XtceError(f"unexpected attribute {k!r} on <{node.name}>", node.line)
+            raise XtceError(f"unexpected attribute {k!r} on <{node.name}>",
+                            node.line)
     return value(node, text_of(node), parse_fn)
 
 
@@ -245,10 +249,11 @@ def f_double(v: float) -> str:
 
 # -- writing -------------------------------------------------------------------
 
-_TEXT_ESC = str.maketrans({"&": "&amp;", "<": "&lt;", ">": "&gt;", "\r": "&#13;"})
-_ATTR_ESC = str.maketrans(
-    {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "\n": "&#10;", "\r": "&#13;", "\t": "&#9;"}
-)
+_TEXT_ESC = str.maketrans({"&": "&amp;", "<": "&lt;", ">": "&gt;",
+                           "\r": "&#13;"})
+_ATTR_ESC = str.maketrans({"&": "&amp;", "<": "&lt;", ">": "&gt;",
+                           '"': "&quot;", "\n": "&#10;", "\r": "&#13;",
+                           "\t": "&#9;"})
 
 _NOTHING, _START, _TEXT, _END = range(4)
 

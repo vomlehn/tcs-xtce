@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from . import header_lines
-from .binding import MANY, ONE, OPT, Binding, ChoiceField, ChoiceType, ElemField, Record
-from .model import BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED, ComplexRef, EnumRef, ScalarRef, TypeRef
+from .binding import (MANY, ONE, OPT, Binding, ChoiceField, ChoiceType,
+                      ElemField, Record)
+from .model import (BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED,
+                    ComplexRef, EnumRef, ScalarRef, TypeRef)
 from .binding import pascal_ident
 
-SCALARS = {STRING: "String", BOOL: "bool", INT: "i32", LONG: "i64", USHORT: "u16", DOUBLE: "f64"}
+SCALARS = {STRING: "String", BOOL: "bool", INT: "i32", LONG: "i64",
+           USHORT: "u16", DOUBLE: "f64"}
 
-KEYWORDS = set(
-    "as async await break const continue crate dyn else enum extern false fn for if impl in let loop "
-    "match mod move mut pub ref return self static struct super trait true type unsafe use where while "
-    "abstract become box do final gen macro override priv try typeof unsized virtual yield".split()
-)
+KEYWORDS = set("as async await break const continue crate dyn else enum extern "
+               "false fn for if impl in let loop match mod move mut pub ref "
+               "return self static struct super trait true type unsafe use "
+               "where while abstract become box do final gen macro override "
+               "priv try typeof unsized virtual yield".split())
 
 
 def ident(name: str) -> str:
@@ -65,14 +68,18 @@ class RustEmitter:
         self.w("")
         self.w(f"//! Data structures for XTCE {s.version} (`{s.namespace}`).")
         self.w("")
-        self.w("#![allow(clippy::all, non_camel_case_types, clippy::upper_case_acronyms)]")
+        self.w("#![allow(clippy::all, non_camel_case_types, "
+               "clippy::upper_case_acronyms)]")
         self.w("")
         self.w("use crate::value::Value;")
-        self.w("use crate::xml::{check_count, Reader, Result, Tag, Writer, XmlElement};")
+        self.w("use crate::xml::{check_count, Reader, Result, Tag, Writer, "
+               "XmlElement};")
         self.w("")
-        self.w("/// XML namespace of the XTCE schema these types were generated from.")
+        self.w("/// XML namespace of the XTCE schema these types were "
+               "generated from.")
         self.w(f"pub const NAMESPACE: &str = {lit(s.namespace)};")
-        self.w("/// XTCE version of the schema these types were generated from.")
+        self.w("/// XTCE version of the schema these types were generated "
+               "from.")
         self.w(f"pub const SCHEMA_VERSION: &str = {lit(s.version)};")
         self.w("/// Name of the document root element.")
         root = next(iter(s.roots))
@@ -110,7 +117,8 @@ class RustEmitter:
         self.w("}")
         self.w("")
         self.w(f"impl {name} {{")
-        self.w(f"    pub const ALL: &'static [Self] = &[{', '.join('Self::' + i for i in idents)}];")
+        self.w("    pub const ALL: &'static [Self] = "
+               f"&[{', '.join('Self::' + i for i in idents)}];")
         self.w("")
         self.w("    /// The XML lexical value.")
         self.w("    pub fn as_str(self) -> &'static str {")
@@ -122,11 +130,13 @@ class RustEmitter:
         self.w("}")
         self.w("")
         self.w(f"impl Value for {name} {{")
-        self.w("    fn parse_xml(s: &str) -> std::result::Result<Self, String> {")
+        self.w("    fn parse_xml(s: &str) -> std::result::Result<Self, String> "
+               "{")
         self.w("        Ok(match s.trim() {")
         for i, v in zip(idents, e.values):
             self.w(f"            {lit(v.strip())} => Self::{i},")
-        self.w(f'            other => return Err(format!("invalid {name} {{other:?}}")),')
+        self.w(f'            other => return Err(format!("invalid {name} '
+               '{other:?}")),')
         self.w("        })")
         self.w("    }")
         self.w("")
@@ -136,7 +146,8 @@ class RustEmitter:
         self.w("}")
         self.w("")
         self.w(f"impl std::fmt::Display for {name} {{")
-        self.w("    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {")
+        self.w("    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> "
+               "std::fmt::Result {")
         self.w("        f.write_str(self.as_str())")
         self.w("    }")
         self.w("}")
@@ -154,17 +165,21 @@ class RustEmitter:
                 self.w(f"    ///")
                 self.w(f"    /// Schema default: `{a.default}`.")
             t = base_type(a.type)
-            self.w(f"    pub {ident(a.ident)}: {t if a.required else f'Option<{t}>'},")
+            self.w(f"    pub {ident(a.ident)}: "
+                   f"{t if a.required else f'Option<{t}>'},")
         if r.text is not None:
             self.w("    /// Text content.")
             self.w(f"    pub {ident(r.text.ident)}: {base_type(r.text.type)},")
         for f in r.content:
             if isinstance(f, ElemField):
                 self.out += doc(f.doc or f"Element `{f.xml}`.", "    ")
-                self.w(f"    pub {ident(f.ident)}: {field_type(base_type(f.type), f.card, f.boxed)},")
+                self.w(f"    pub {ident(f.ident)}: "
+                       f"{field_type(base_type(f.type), f.card, f.boxed)},")
             else:
-                self.w(f"    /// One of: {', '.join(f'`{v.xml}`' for v in f.choice.variants)}.")
-                self.w(f"    pub {ident(f.ident)}: {field_type(f.choice.name, f.card, f.boxed)},")
+                self.w("    /// One of: "
+                       f"{', '.join(f'`{v.xml}`' for v in f.choice.variants)}.")
+                self.w(f"    pub {ident(f.ident)}: "
+                       f"{field_type(f.choice.name, f.card, f.boxed)},")
         self.w("}")
         self.w("")
         self.w(f"impl XmlElement for {r.name} {{")
@@ -181,7 +196,8 @@ class RustEmitter:
             self.w(f"{ind}w.leaf({lit(xml)}, {expr});")
 
     def write_fn(self, r: Record) -> None:
-        self.w("    fn write_xml(&self, w: &mut Writer<'_>, tag: &str) -> Result<()> {")
+        self.w("    fn write_xml(&self, w: &mut Writer<'_>, tag: &str) -> "
+               "Result<()> {")
         self.w("        w.start(tag);")
         for a in r.attrs:
             f = ident(a.ident)
@@ -197,7 +213,8 @@ class RustEmitter:
             name = ident(f.ident)
             if isinstance(f, ElemField):
                 if f.card == ONE:
-                    expr = f"self.{name}" if is_complex(f.type) else f"&self.{name}"
+                    expr = (f"self.{name}" if is_complex(f.type)
+                            else f"&self.{name}")
                     self.write_value(f.xml, f.type, expr, "        ")
                 elif f.card == OPT:
                     self.w(f"        if let Some(v) = &self.{name} {{")
@@ -228,15 +245,18 @@ class RustEmitter:
         if f.min == 0 and f.max == UNBOUNDED:
             return
         mx = "None" if f.max == UNBOUNDED else f"Some({f.max})"
-        self.w(f"        check_count(self.{ident(f.ident)}.len(), {f.min}, {mx}, {lit(r.name + '.' + what)})?;")
+        self.w(f"        check_count(self.{ident(f.ident)}.len(), {f.min}, "
+               f"{mx}, {lit(r.name + '.' + what)})?;")
 
     def read_value(self, t: TypeRef) -> str:
         return "r.read_child()?" if is_complex(t) else "r.read_leaf()?"
 
     def read_fn(self, r: Record) -> None:
         has_fields = bool(r.attrs or r.text or r.content)
-        self.w("    fn read_xml<'a>(r: &mut Reader<'a>, tag: &Tag<'a>) -> Result<Self> {")
-        self.w(f"        let {'mut ' if has_fields else ''}v = Self::default();")
+        self.w("    fn read_xml<'a>(r: &mut Reader<'a>, tag: &Tag<'a>) -> "
+               "Result<Self> {")
+        self.w(f"        let {'mut ' if has_fields else ''}v = "
+               "Self::default();")
         required = [a for a in r.attrs if a.required]
         for a in required:
             self.w(f"        let mut seen_{a.ident} = false;")
@@ -248,11 +268,13 @@ class RustEmitter:
                 f = ident(a.ident)
                 if a.required:
                     self.w(f"                {lit(a.xml)} => {{")
-                    self.w(f"                    v.{f} = r.attr_value(tag, raw)?;")
+                    self.w(f"                    v.{f} = r.attr_value(tag, "
+                           "raw)?;")
                     self.w(f"                    seen_{a.ident} = true;")
                     self.w("                }")
                 else:
-                    self.w(f"                {lit(a.xml)} => v.{f} = Some(r.attr_value(tag, raw)?),")
+                    self.w(f"                {lit(a.xml)} => v.{f} = "
+                           "Some(r.attr_value(tag, raw)?),")
             self.w("                _ => r.unknown_attr(tag, k)?,")
             self.w("            }")
         else:
@@ -261,7 +283,8 @@ class RustEmitter:
         self.w("        }")
         for a in required:
             self.w(f"        if !seen_{a.ident} {{")
-            self.w(f"            return Err(r.missing_attr(tag, {lit(a.xml)}));")
+            self.w("            return Err(r.missing_attr(tag, "
+                   f"{lit(a.xml)}));")
             self.w("        }")
         if r.text is not None:
             self.w(f"        v.{ident(r.text.ident)} = r.read_value()?;")
@@ -279,19 +302,22 @@ class RustEmitter:
                     self.w(f"        v.{name} = {self.read_value(f.type)};")
                 elif f.card == OPT:
                     self.w(f"        if r.peek_child()? == Some({x}) {{")
-                    self.w(f"            v.{name} = Some({self.read_value(f.type)});")
+                    self.w(f"            v.{name} = "
+                           f"Some({self.read_value(f.type)});")
                     self.w("        }")
                 else:
                     cond = f"r.peek_child()? == Some({x})"
                     if f.max != UNBOUNDED:
                         cond = f"v.{name}.len() < {f.max} && {cond}"
                     self.w(f"        while {cond} {{")
-                    self.w(f"            v.{name}.push({self.read_value(f.type)});")
+                    self.w("            "
+                           f"v.{name}.push({self.read_value(f.type)});")
                     self.w("        }")
                     if f.min > 0:
                         self.w(f"        if v.{name}.len() < {f.min} {{")
                         self.w(f"            let n = v.{name}.len();")
-                        self.w(f"            return Err(r.too_few({x}, {f.min}, n));")
+                        self.w(f"            return Err(r.too_few({x}, "
+                               f"{f.min}, n));")
                         self.w("        }")
             else:
                 c = f.choice.name
@@ -301,7 +327,8 @@ class RustEmitter:
                 if f.card == ONE:
                     self.w(f"        v.{name} = {rd};")
                 elif f.card == OPT:
-                    self.w(f"        if r.peek_child()?.is_some_and({c}::accepts) {{")
+                    self.w("        if "
+                           f"r.peek_child()?.is_some_and({c}::accepts) {{")
                     self.w(f"            v.{name} = Some({rd});")
                     self.w("        }")
                 else:
@@ -315,7 +342,8 @@ class RustEmitter:
                         what = lit("|".join(v.xml for v in f.choice.variants))
                         self.w(f"        if v.{name}.len() < {f.min} {{")
                         self.w(f"            let n = v.{name}.len();")
-                        self.w(f"            return Err(r.too_few({what}, {f.min}, n));")
+                        self.w(f"            return Err(r.too_few({what}, "
+                               f"{f.min}, n));")
                         self.w("        }")
         self.w("        r.close()?;")
         self.w("        Ok(v)")
@@ -355,13 +383,16 @@ class RustEmitter:
         self.w("        }")
         self.w("    }")
         self.w("")
-        self.w("    pub fn write_xml(&self, w: &mut Writer<'_>) -> Result<()> {")
+        self.w("    pub fn write_xml(&self, w: &mut Writer<'_>) -> Result<()> "
+               "{")
         self.w("        match self {")
         for v in c.variants:
             if is_complex(v.type):
-                self.w(f"            Self::{v.ident}(v) => v.write_xml(w, {lit(v.xml)})?,")
+                self.w(f"            Self::{v.ident}(v) => v.write_xml(w, "
+                       f"{lit(v.xml)})?,")
             else:
-                self.w(f"            Self::{v.ident}(v) => w.leaf({lit(v.xml)}, v),")
+                self.w(f"            Self::{v.ident}(v) => "
+                       f"w.leaf({lit(v.xml)}, v),")
         self.w("        }")
         self.w("        Ok(())")
         self.w("    }")
@@ -369,8 +400,10 @@ class RustEmitter:
         self.w("    pub fn read_xml(r: &mut Reader<'_>) -> Result<Self> {")
         self.w("        Ok(match r.peek_child()? {")
         for v in c.variants:
-            self.w(f"            Some({lit(v.xml)}) => Self::{v.ident}({self.read_value(v.type)}),")
-        self.w(f"            _ => return Err(r.expected({lit('|'.join(v.xml for v in c.variants))})),")
+            self.w(f"            Some({lit(v.xml)}) => "
+                   f"Self::{v.ident}({self.read_value(v.type)}),")
+        self.w("            _ => return "
+               f"Err(r.expected({lit('|'.join(v.xml for v in c.variants))})),")
         self.w("        })")
         self.w("    }")
         self.w("}")

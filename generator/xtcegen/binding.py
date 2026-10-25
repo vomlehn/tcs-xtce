@@ -5,7 +5,8 @@ Every complex type becomes a record ("struct") whose fields are:
 * attributes                       -> ``AttrField``
 * simple/mixed text content        -> ``TextField``
 * child elements                   -> ``ElemField``
-* ``<choice>`` groups              -> ``ChoiceField`` referring to a ``ChoiceType``
+* ``<choice>`` groups              -> ``ChoiceField`` referring to a
+``ChoiceType``
 
 Cardinalities are one of ONE (exactly one), OPT (zero or one) and MANY.
 The analysis also decides which value-embedded fields must be boxed to break
@@ -53,13 +54,15 @@ def snake(name: str) -> str:
 
 
 def pascal_ident(value: str) -> str:
-    """Identifier for an enumeration value, keeping its spelling recognisable."""
+    """Identifier for an enumeration value, keeping its spelling recognisable.
+    """
     parts = [p for p in re.split(r"[^A-Za-z0-9]+", value) if p]
     if not parts:
         return "Empty"
     out = parts[0][0].upper() + parts[0][1:]
     for p in parts[1:]:
-        out += ("_" if p[0].isdigit() or out[-1].isdigit() else "") + p[0].upper() + p[1:]
+        sep = "_" if p[0].isdigit() or out[-1].isdigit() else ""
+        out += sep + p[0].upper() + p[1:]
     if out[0].isdigit():
         out = "V" + out
     return out
@@ -185,7 +188,8 @@ class _Builder:
         self.schema = schema
         self.records: dict[str, Record] = {}
         self.choices: dict[str, ChoiceType] = {}
-        self.names = set(schema.complex) | set(schema.enums) | set(schema.simple)
+        self.names = (set(schema.complex) | set(schema.enums)
+                      | set(schema.simple))
 
     def unique_type_name(self, base: str) -> str:
         name, n = base, 2
@@ -216,15 +220,16 @@ class _Builder:
 
         for a in ct.attributes:
             xml = a.name
-            rec.attrs.append(
-                AttrField(ident(snake(xml.replace("xml:", "xml_"))), xml, a.type, a.required, a.default, a.doc)
-            )
+            rec.attrs.append(AttrField(ident(snake(xml.replace("xml:",
+                                                               "xml_"))), xml,
+                                       a.type, a.required, a.default, a.doc))
         if ct.text is not None:
             rec.text = TextField(ident("value"), ct.text)
         if ct.content is None:
             return rec
         content = _normalize(ct.content)
-        if not isinstance(content, Sequence) or content.min != 1 or content.max != 1:
+        if (not isinstance(content, Sequence) or content.min != 1
+                or content.max != 1):
             content = Sequence([content])
         nchoices = sum(isinstance(i, Choice) for i in content.items)
         cindex = 0
@@ -247,13 +252,16 @@ class _Builder:
                 cindex += 1
                 suffix = "" if nchoices == 1 else str(cindex)
                 stem = ct.name[:-4] if ct.name.endswith("Type") else ct.name
-                ch = ChoiceType(self.unique_type_name(f"{stem}Choice{suffix}"), ct.name, [])
+                ch = ChoiceType(self.unique_type_name(f"{stem}Choice{suffix}"),
+                                ct.name, [])
                 vused: set[str] = set()
                 for v in item.items:
                     if not isinstance(v, Element) or v.min != 1 or v.max != 1:
-                        raise BindingError(f"{ct.name}: choice alternatives must be single elements")
+                        raise BindingError(f"{ct.name}: choice alternatives "
+                                           "must be single elements")
                     if v.name in vused:
-                        raise BindingError(f"{ct.name}: duplicate choice alternative {v.name}")
+                        raise BindingError(f"{ct.name}: duplicate choice "
+                                           f"alternative {v.name}")
                     vused.add(v.name)
                     ch.variants.append(Variant(
                             v.name[0].upper() + v.name[1:],
@@ -266,9 +274,11 @@ class _Builder:
                 self.choices[ch.name] = ch
                 card = cardinality(item.min, item.max)
                 base = ("items" if card == MANY else "choice") + suffix
-                rec.content.append(ChoiceField(ident(base), ch, card, item.min, item.max))
+                rec.content.append(ChoiceField(ident(base), ch, card, item.min,
+                                               item.max))
             else:
-                raise BindingError(f"{ct.name}: nested sequences are not supported")
+                raise BindingError(f"{ct.name}: nested sequences are not "
+                                   "supported")
         _check_deterministic(rec)
         return rec
 
@@ -280,10 +290,12 @@ def _check_deterministic(rec: Record) -> None:
     # item has been read.
     open_names: set[str] = set()
     for f in rec.content:
-        names = [f.xml] if isinstance(f, ElemField) else [v.xml for v in f.choice.variants]
+        names = ([f.xml] if isinstance(f, ElemField)
+                 else [v.xml for v in f.choice.variants])
         clash = open_names.intersection(names)
         if clash:
-            raise BindingError(f"{rec.name}: ambiguous content model at {sorted(clash)}")
+            raise BindingError(f"{rec.name}: ambiguous content model at "
+                               f"{sorted(clash)}")
         if f.min == f.max:
             open_names = set()
         else:
@@ -368,7 +380,8 @@ def _analyze(b: Binding) -> None:
 
 
 def _defaults(b: Binding) -> None:
-    """Pick, for each choice, the alternative with the smallest finite default."""
+    """Pick, for each choice, the alternative with the smallest finite default.
+    """
     inf = float("inf")
     cost = {n: inf for n in list(b.records) + list(b.choices)}
 

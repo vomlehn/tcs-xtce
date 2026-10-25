@@ -19,7 +19,8 @@ class BitsFor(unittest.TestCase):
         self.assertEqual(bits_for(-128, 127, "twosComplement"), 8)
         self.assertEqual(bits_for(-129, 127, "twosComplement"), 9)
         self.assertEqual(bits_for(-128, 128, "twosComplement"), 9)
-        self.assertEqual(bits_for(-1, 0, "twosComplement"), 2)  # no 1-bit signed
+        # no 1-bit signed
+        self.assertEqual(bits_for(-1, 0, "twosComplement"), 2)
 
     def test_sign_magnitude_and_ones_complement(self):
         for enc in ("signMagnitude", "onesComplement"):
@@ -27,8 +28,7 @@ class BitsFor(unittest.TestCase):
             self.assertEqual(bits_for(-128, 0, enc), 9)
 
 
-MISSION = mission(
-    tm="""
+MISSION = mission(tm="""
     <ParameterTypeSet>
       <IntegerParameterType name="Count" signed="false">
         <IntegerDataEncoding sizeInBits="32"/>
@@ -43,7 +43,8 @@ MISSION = mission(
         <ValidRange minInclusive="0" maxInclusive="100"/>
       </IntegerParameterType>
       <IntegerParameterType name="Little" signed="false">
-        <IntegerDataEncoding sizeInBits="32" byteOrder="leastSignificantByteFirst"/>
+        <IntegerDataEncoding sizeInBits="32"
+          byteOrder="leastSignificantByteFirst"/>
         <ValidRange minInclusive="0" maxInclusive="300"/>
       </IntegerParameterType>
       <IntegerParameterType name="Open" signed="false">
@@ -61,7 +62,8 @@ MISSION = mission(
       </BooleanParameterType>
       <StringParameterType name="Name">
         <StringDataEncoding>
-          <SizeInBits><Fixed><FixedValue>64</FixedValue></Fixed><TerminationChar>00</TerminationChar></SizeInBits>
+          <SizeInBits><Fixed><FixedValue>64</FixedValue></Fixed>
+          <TerminationChar>00</TerminationChar></SizeInBits>
         </StringDataEncoding>
       </StringParameterType>
     </ParameterTypeSet>
@@ -93,7 +95,7 @@ MISSION = mission(
         </EntryList>
       </SequenceContainer>
     </ContainerSet>""",
-    tc="""
+                  tc="""
     <ArgumentTypeSet>
       <IntegerArgumentType name="Arg" signed="false">
         <IntegerDataEncoding sizeInBits="16"/>
@@ -104,9 +106,9 @@ MISSION = mission(
       </IntegerArgumentType>
     </ArgumentTypeSet>
     <MetaCommandSet>"""
-    + command("Go", '<Argument name="A" argumentTypeRef="Arg"/>', '<ArgumentRefEntry argumentRef="A"/>')
-    + "</MetaCommandSet>",
-)
+                  + command("Go", '<Argument name="A" argumentTypeRef="Arg"/>',
+                            '<ArgumentRefEntry argumentRef="A"/>')
+                  + "</MetaCommandSet>")
 
 
 class Report(unittest.TestCase):
@@ -123,13 +125,13 @@ class Report(unittest.TestCase):
                 "C": (32, 10),  # 0..1000
                 "D": (16, 8),  # -100..100, two's complement
                 "L": (16, 7),  # 0..100: unsigned would do
-                "LE": (32, 16),  # 0..300 needs 9 bits; little-endian: whole bytes
+                # 0..300 needs 9 bits; little-endian: whole bytes
+                "LE": (32, 16),
                 "O": (16, None),  # no ValidRange
                 "M": (8, 3),  # values 0..5
                 "F": (8, 1),  # boolean
-                "N": (64, None),  # fixed-size string: flagged, no figure
-            },
-        )
+                "N": (64, None)  # fixed-size string: flagged, no figure
+            })
         notes = {r.name: r.note for r in rows(self.nodes["Status"])}
         self.assertIn("as unsigned", notes["L"])
         self.assertIn("padded", notes["N"])
@@ -141,7 +143,8 @@ class Report(unittest.TestCase):
     def test_text(self):
         text = report(self.mission)
         self.assertIn("4 bits are skipped by location offsets or padding", text)
-        # 32+16+16+32+16+8+8 = 128 bits of integers etc. save 22+8+9+16+5+7 = 67.
+        # 32+16+16+32+16+8+8 = 128 bits of integers etc. save 22+8+9+16+5+7 =
+        # 67.
         self.assertIn("right-sized fields save 67 bits", text)
         self.assertIn("/Sat/Status: 25 -> 17 bytes", text)
         self.assertIn("/Sat/Go: 2 -> 1 byte", text)

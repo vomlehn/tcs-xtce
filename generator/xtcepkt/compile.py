@@ -65,34 +65,162 @@ def qname(key: Key) -> str:
 # so the union is avoided everywhere.
 RESERVED = set(keyword.kwlist) | {
     # Rust
-    "as", "async", "await", "box", "const", "crate", "dyn", "enum", "extern",
-    "fn", "impl", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
-    "self", "static", "struct", "super", "trait", "type", "unsafe", "use",
-    "where", "abstract", "become", "do", "final", "macro", "override", "priv",
-    "typeof", "unsized", "virtual", "yield", "try", "gen",
+    "as",
+    "async",
+    "await",
+    "box",
+    "const",
+    "crate",
+    "dyn",
+    "enum",
+    "extern",
+    "fn",
+    "impl",
+    "let",
+    "loop",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "pub",
+    "ref",
+    "self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "type",
+    "unsafe",
+    "use",
+    "where",
+    "abstract",
+    "become",
+    "do",
+    "final",
+    "macro",
+    "override",
+    "priv",
+    "typeof",
+    "unsized",
+    "virtual",
+    "yield",
+    "try",
+    "gen",
     # C++
-    "alignas", "alignof", "and_eq", "asm", "auto", "bitand", "bitor", "bool",
-    "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class",
-    "compl", "concept", "consteval", "constexpr", "constinit", "const_cast",
-    "co_await", "co_return", "co_yield", "decltype", "default", "delete",
-    "double", "dynamic_cast", "explicit", "export", "float", "friend", "goto",
-    "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not_eq",
-    "nullptr", "operator", "or_eq", "private", "protected", "public", "register",
-    "reinterpret_cast", "requires", "short", "signed", "sizeof", "static_assert",
-    "static_cast", "switch", "template", "this", "thread_local", "throw",
-    "typedef", "typeid", "typename", "union", "unsigned", "using", "void",
-    "volatile", "wchar_t", "xor", "xor_eq", "main",
+    "alignas",
+    "alignof",
+    "and_eq",
+    "asm",
+    "auto",
+    "bitand",
+    "bitor",
+    "bool",
+    "case",
+    "catch",
+    "char",
+    "char8_t",
+    "char16_t",
+    "char32_t",
+    "class",
+    "compl",
+    "concept",
+    "consteval",
+    "constexpr",
+    "constinit",
+    "const_cast",
+    "co_await",
+    "co_return",
+    "co_yield",
+    "decltype",
+    "default",
+    "delete",
+    "double",
+    "dynamic_cast",
+    "explicit",
+    "export",
+    "float",
+    "friend",
+    "goto",
+    "inline",
+    "int",
+    "long",
+    "mutable",
+    "namespace",
+    "new",
+    "noexcept",
+    "not_eq",
+    "nullptr",
+    "operator",
+    "or_eq",
+    "private",
+    "protected",
+    "public",
+    "register",
+    "reinterpret_cast",
+    "requires",
+    "short",
+    "signed",
+    "sizeof",
+    "static_assert",
+    "static_cast",
+    "switch",
+    "template",
+    "this",
+    "thread_local",
+    "throw",
+    "typedef",
+    "typeid",
+    "typename",
+    "union",
+    "unsigned",
+    "using",
+    "void",
+    "volatile",
+    "wchar_t",
+    "xor",
+    "xor_eq",
+    "main",
     # C keywords and standard macros a struct member cannot be named
-    "restrict", "errno", "assert", "stdin", "stdout", "stderr", "offsetof",
-    "true", "false", "NULL", "EOF",
+    "restrict",
+    "errno",
+    "assert",
+    "stdin",
+    "stdout",
+    "stderr",
+    "offsetof",
+    "true",
+    "false",
+    "NULL",
+    "EOF",
     # Python builtins that would shadow useful names in dataclasses, and the
     # modules generated Python uses in class bodies
-    "bytes", "int", "float", "str", "list", "dict", "type", "id", "len",
-    "pk", "dataclasses",
+    "bytes",
+    "int",
+    "float",
+    "str",
+    "list",
+    "dict",
+    "type",
+    "id",
+    "len",
+    "pk",
+    "dataclasses",
     # generated members
-    "decode", "encode", "encode_into", "describe", "label", "value", "raw",
-    "name", "max_bytes", "data", "buf", "r", "w", "init", "to_bytes",
-}
+    "decode",
+    "encode",
+    "encode_into",
+    "describe",
+    "label",
+    "value",
+    "raw",
+    "name",
+    "max_bytes",
+    "data",
+    "buf",
+    "r",
+    "w",
+    "init",
+    "to_bytes"}
 
 
 def hex_bytes(text: str, where: str) -> bytes:
@@ -139,28 +267,34 @@ def walk_members(vt: VType, members: tuple, what: str) -> tuple[tuple, VType]:
         if isinstance(step, int):
             e = vt.enc
             if vt.kind != "array":
-                raise Unsupported(f"{what}: {vt.kind} type {vt.key} is not an array")
+                raise Unsupported(f"{what}: {vt.kind} type {vt.key} is not an "
+                                  "array")
             if not e.shape:
-                raise Unsupported(f"{what}: element of an array whose count varies")
+                raise Unsupported(f"{what}: element of an array whose count "
+                                  "varies")
             # One index per dimension, flattened with the last fastest.
             index = [step]
             while len(index) < e.dims and steps and isinstance(steps[0], int):
                 index.append(steps.pop(0))
             if len(index) < e.dims:
-                raise Unsupported(f"{what}: {len(index)} indexes for a {e.dims}-dimensional array")
+                raise Unsupported(f"{what}: {len(index)} indexes for a "
+                                  f"{e.dims}-dimensional array")
             flat = 0
             for i, start, size in zip(index, e.starts, e.shape):
                 if not start <= i < start + size:
-                    raise Unsupported(f"{what}: index {i} is outside {start}..{start + size - 1}")
+                    raise Unsupported(f"{what}: index {i} is outside "
+                                      f"{start}..{start + size - 1}")
                 flat = flat * size + i - start
             path.append(Index(flat, e.count))
             vt = e.elem
             continue
         if vt.kind != "aggregate":
-            raise Unsupported(f"{what}: {vt.kind} type {vt.key} has no member {step!r}")
+            raise Unsupported(f"{what}: {vt.kind} type {vt.key} has no member "
+                              f"{step!r}")
         m = next((m for m in vt.enc.members if m.name == step), None)
         if m is None:
-            raise Unsupported(f"{what}: aggregate type {vt.key} has no member {step!r}")
+            raise Unsupported(f"{what}: aggregate type {vt.key} has no member "
+                              f"{step!r}")
         path.append(m.ident)
         vt = m.vtype
     return tuple(path), vt
@@ -177,11 +311,16 @@ def integer_range(t, calibrated: bool = False) -> Optional[tuple[int, int]]:
         ranges = t.valid_range_set.valid_range
     else:
         return None
-    if not ranges or any(r.min_inclusive is None or r.max_inclusive is None for r in ranges):
+    if (not ranges
+            or any(r.min_inclusive is None or r.max_inclusive is None
+                   for r in ranges)):
         return None
-    if calibrated and any(getattr(r, "valid_range_applies_to_calibrated", None) is False for r in ranges):
+    if (calibrated
+            and any(getattr(r, "valid_range_applies_to_calibrated",
+                            None) is False for r in ranges)):
         return None
-    return min(r.min_inclusive for r in ranges), max(r.max_inclusive for r in ranges)
+    return (min(r.min_inclusive for r in ranges),
+            max(r.max_inclusive for r in ranges))
 
 
 def snake(name: str) -> str:
@@ -246,7 +385,8 @@ def length_adjust(item, vt: VType, where: str) -> Optional[int]:
     """The adjustment of a packet length field, or None if ``item`` (a
     Parameter or Argument) isn't one."""
     ads = item.ancillary_data_set
-    tags = [a for a in (ads.ancillary_data if ads else []) if a.name == LENGTH_TAG]
+    tags = [a for a in (ads.ancillary_data if ads else [])
+            if a.name == LENGTH_TAG]
     if not tags:
         return None
     if len(tags) > 1:
@@ -254,13 +394,17 @@ def length_adjust(item, vt: VType, where: str) -> Optional[int]:
     try:
         adjust = int(tags[0].value.strip())
     except ValueError:
-        raise Unsupported(f"{where}: {LENGTH_TAG} {tags[0].value!r} is not an integer") from None
-    if vt.kind != "int" or not isinstance(vt.enc, IntEnc) or vt.enc.signed or vt.calibrator is not None:
-        raise Unsupported(f"{where}: a packet length field must be an uncalibrated unsigned integer")
+        raise Unsupported(f"{where}: {LENGTH_TAG} {tags[0].value!r} is not an "
+                          "integer") from None
+    if (vt.kind != "int" or not isinstance(vt.enc, IntEnc) or vt.enc.signed
+            or vt.calibrator is not None):
+        raise Unsupported(f"{where}: a packet length field must be an "
+                          "uncalibrated unsigned integer")
     return adjust
 
 
-# --- the compiler ---------------------------------------------------------------
+# --- the compiler
+# ---------------------------------------------------------------
 
 
 class Compiler:
@@ -272,15 +416,18 @@ class Compiler:
         self.atypes: dict[Key, tuple] = {}
         self.containers: dict[Key, tuple] = {}
         self.mcs: dict[Key, tuple] = {}
-        self.mc_containers: dict[Key, Key] = {}  # CommandContainer -> MetaCommand
+        # CommandContainer -> MetaCommand
+        self.mc_containers: dict[Key, Key] = {}
         # Parameter and argument types are separate namespaces, so the cache
         # key says which one a type comes from: (is_argument_type, key).
         self.vtypes: dict[tuple[bool, Key], VType] = {}
         self.nodes: dict[Key, Node] = {}
         self.order: list[Node] = []
         self._ids = 0
-        self._aggregating: set = set()  # aggregates being compiled, to find cycles
-        self.ctypes: dict = {}  # container key -> aggregate of a repeated container
+        # aggregates being compiled, to find cycles
+        self._aggregating: set = set()
+        # container key -> aggregate of a repeated container
+        self.ctypes: dict = {}
         self._index(root, ())
 
     # -- indexing and name resolution --
@@ -293,7 +440,8 @@ class Compiler:
                 continue
             if md.parameter_type_set:
                 for ch in md.parameter_type_set.items:
-                    self.ptypes[path + (ch.value.name,)] = (path, ch.name, ch.value)
+                    self.ptypes[path + (ch.value.name,)] = (path, ch.name,
+                                                            ch.value)
             if md.parameter_set:
                 for ch in md.parameter_set.items:
                     if ch.name == "Parameter":
@@ -304,14 +452,16 @@ class Compiler:
         if tc:
             if tc.argument_type_set:
                 for ch in tc.argument_type_set.items:
-                    self.atypes[path + (ch.value.name,)] = (path, ch.name, ch.value)
+                    self.atypes[path + (ch.value.name,)] = (path, ch.name,
+                                                            ch.value)
             if tc.meta_command_set:
                 for ch in tc.meta_command_set.items:
                     if ch.name == "MetaCommand":
                         key = path + (ch.value.name,)
                         self.mcs[key] = (path, ch.value)
                         if ch.value.command_container is not None:
-                            self.mc_containers[path + (ch.value.command_container.name,)] = key
+                            name = ch.value.command_container.name
+                            self.mc_containers[path + (name,)] = key
         for child in ss.space_system:
             self._index(child, path)
 
@@ -344,7 +494,8 @@ class Compiler:
             key = tuple(base) + (parts[-1],)
             if key in table:
                 return key
-        raise Unsupported(f"unresolved {what} reference {ref!r} in {qname(cur)}")
+        raise Unsupported(f"unresolved {what} reference {ref!r} in "
+                          f"{qname(cur)}")
 
     def _id(self) -> int:
         self._ids += 1
@@ -373,25 +524,30 @@ class Compiler:
             vt = self.aggregate_type(key, table, path, t, where, cache)
             self.vtypes[cache] = vt
             return vt
-        if base not in ("Integer", "Float", "Enumerated", "Boolean", "String", "Binary"):
+        if base not in ("Integer", "Float", "Enumerated", "Boolean", "String",
+                        "Binary"):
             raise Unsupported(f"{where}: {kind} is not supported")
         if t.choice is None:
             raise Unsupported(f"{where}: no data encoding")
         enc_name, e = t.choice.name, t.choice.value
         enc, cal = self.encoding(enc_name, e, path, where)
-        vt = VType(key=qname(key), name=t.name, kind="", enc=enc, calibrator=cal)
+        vt = VType(key=qname(key), name=t.name, kind="", enc=enc,
+                   calibrator=cal)
         if base == "Float":
             if not isinstance(enc, (IntEnc, FloatEnc)):
                 raise Unsupported(f"{where}: float with {enc_name}")
             vt.kind = "float"
         elif base in ("Integer", "Enumerated", "Boolean"):
             # A boolean may also be one of two strings.
-            if not isinstance(enc, IntEnc) and not (base == "Boolean" and isinstance(enc, StringEnc)):
+            if (not isinstance(enc, IntEnc)
+                    and not (base == "Boolean" and isinstance(enc, StringEnc))):
                 raise Unsupported(f"{where}: {base.lower()} with {enc_name}")
             if cal is not None and base != "Integer":
                 article = "an" if base[0] in "AEIOU" else "a"
-                raise Unsupported(f"{where}: calibrator on {article} {base.lower()} type")
-            vt.kind = {"Integer": "int", "Enumerated": "enum", "Boolean": "bool"}[base]
+                raise Unsupported(f"{where}: calibrator on {article} "
+                                  f"{base.lower()} type")
+            vt.kind = {"Integer": "int", "Enumerated": "enum",
+                       "Boolean": "bool"}[base]
             if base == "Integer":
                 if cal is not None:
                     # The calibrated value is rounded to an integer of the
@@ -416,10 +572,14 @@ class Compiler:
             names = Namer()
             for ev in t.enumeration_list.enumeration:
                 hi = ev.max_value if ev.max_value is not None else ev.value
-                vt.labels.append(EnumLabel(ev.label, names.take(upper(ev.label)), ev.value, hi))
+                vt.labels.append(EnumLabel(ev.label,
+                                           names.take(upper(ev.label)),
+                                           ev.value, hi))
         if vt.kind == "bool":
-            vt.one_string = t.one_string_value if t.one_string_value is not None else "True"
-            vt.zero_string = t.zero_string_value if t.zero_string_value is not None else "False"
+            vt.one_string = (t.one_string_value
+                             if t.one_string_value is not None else "True")
+            vt.zero_string = (t.zero_string_value
+                              if t.zero_string_value is not None else "False")
             if isinstance(enc, StringEnc):
                 self.check_bool_strings(vt, where)
         self.vtypes[cache] = vt
@@ -430,17 +590,20 @@ class Compiler:
         """A boolean encoded as a string: its two strings must differ and
         fit the encoding."""
         if vt.one_string == vt.zero_string:
-            raise Unsupported(f"{where}: oneStringValue and zeroStringValue are both {vt.one_string!r}")
+            raise Unsupported(f"{where}: oneStringValue and zeroStringValue "
+                              f"are both {vt.one_string!r}")
         e = vt.enc
         for s in (vt.one_string, vt.zero_string):
             b = s.encode("utf-8")
             if e.terminator is not None and e.terminator in b:
-                raise Unsupported(f"{where}: {s!r} contains the termination character")
+                raise Unsupported(f"{where}: {s!r} contains the termination "
+                                  "character")
             if e.dyn is None and len(b) > str_cap(vt):
                 raise Unsupported(f"{where}: {s!r} does not fit its encoding")
 
     def time_type(self, key: Key, base: str, t, path: Key, where: str) -> VType:
-        """Times are seconds: ``scale * raw + offset`` from the reference time."""
+        """Times are seconds: ``scale * raw + offset`` from the reference time.
+        """
         enc = t.encoding
         if enc is None:
             raise Unsupported(f"{where}: time type without Encoding")
@@ -464,9 +627,11 @@ class Compiler:
             elif ref.choice.name == "OffsetFrom":
                 doc = f"seconds after {ref.choice.value.parameter_ref}"
         what = "absolute" if base == "AbsoluteTime" else "relative"
-        return VType(key=qname(key), name=t.name, kind="float", enc=e, calibrator=cal, doc=f"{what} time, {doc}")
+        return VType(key=qname(key), name=t.name, kind="float", enc=e,
+                     calibrator=cal, doc=f"{what} time, {doc}")
 
-    def array_type(self, key: Key, table: dict, path: Key, t, where: str) -> VType:
+    def array_type(self, key: Key, table: dict, path: Key, t,
+                   where: str) -> VType:
         """An array type: its elements in the order they are encoded, which
         for several dimensions is the order of the DimensionList."""
         ekey = self.resolve(t.array_type_ref, path, table, "array element type")
@@ -474,10 +639,13 @@ class Compiler:
             raise Unsupported(f"{where}: arrays of arrays")
         elem = self.vtype(ekey, table)
         if elem.dyn is not None:
-            raise Unsupported(f"{where}: elements whose size another value gives")
+            raise Unsupported(f"{where}: elements whose size another value "
+                              "gives")
         if is_rest(elem):
-            raise Unsupported(f"{where}: elements that take the rest of the packet")
-        return VType(key=qname(key), name=t.name, kind="array", enc=self.dimensions(elem, t.dimension_list, path, where))
+            raise Unsupported(f"{where}: elements that take the rest of the "
+                              "packet")
+        return VType(key=qname(key), name=t.name, kind="array",
+                     enc=self.dimensions(elem, t.dimension_list, path, where))
 
     def dimensions(self, elem: VType, dl, path: Key, where: str) -> ArrayEnc:
         """The ArrayEnc of a DimensionList's elements, flattened with the
@@ -487,18 +655,22 @@ class Compiler:
             raise Unsupported(f"{where}: array without dimensions")
         fixed, dyn, starts, sizes = 1, None, [], []
         for d in dims:
-            start = self.int_value(d.starting_index, path, "array StartingIndex", where)
-            end = self.int_value(d.ending_index, path, "array EndingIndex", where)
+            start = self.int_value(d.starting_index, path,
+                                   "array StartingIndex", where)
+            end = self.int_value(d.ending_index, path, "array EndingIndex",
+                                 where)
             if isinstance(start, DynSize):
                 raise Unsupported(f"{where}: StartingIndex from DynamicValue")
             starts.append(start)
             if isinstance(end, int):
                 if end < start - 1:
-                    raise Unsupported(f"{where}: EndingIndex {end} is before StartingIndex {start}")
+                    raise Unsupported(f"{where}: EndingIndex {end} is before "
+                                      f"StartingIndex {start}")
                 fixed *= end - start + 1
                 sizes.append(end - start + 1)
             elif dyn is not None:
-                raise Unsupported(f"{where}: more than one dimension from DynamicValue")
+                raise Unsupported(f"{where}: more than one dimension from "
+                                  "DynamicValue")
             else:
                 end.intercept += 1 - start  # the count is end - start + 1
                 dyn = end
@@ -506,7 +678,8 @@ class Compiler:
             dyn.factor = fixed
         count = dyn if dyn is not None else fixed
         shape = tuple(sizes) if dyn is None else ()
-        return ArrayEnc(elem, count, dims=len(dims), starts=tuple(starts), shape=shape)
+        return ArrayEnc(elem, count, dims=len(dims), starts=tuple(starts),
+                        shape=shape)
 
     def subset(self, local: Local, e, path: Key, where: str) -> Local:
         """Turns the value of an array entry with a DimensionList into the
@@ -516,21 +689,29 @@ class Compiler:
             return local
         vt = local.vtype
         if vt.kind != "array":
-            raise Unsupported(f"{where}: DimensionList on {vt.kind} value {local.name}")
+            raise Unsupported(f"{where}: DimensionList on {vt.kind} value "
+                              f"{local.name}")
         full = vt.enc
         enc = self.dimensions(full.elem, dl, path, where)
         if enc.dims != full.dims:
-            raise Unsupported(f"{where}: {enc.dims} dimensions for {full.dims}-dimensional {local.name}")
+            raise Unsupported(f"{where}: {enc.dims} dimensions for "
+                              f"{full.dims}-dimensional {local.name}")
         for k, start in enumerate(enc.starts):
             if start < full.starts[k]:
-                raise Unsupported(f"{where}: subset of {local.name} starts before its index {full.starts[k]}")
-            if full.shape and enc.shape and start + enc.shape[k] > full.starts[k] + full.shape[k]:
-                raise Unsupported(f"{where}: subset of {local.name} ends after its index {full.starts[k] + full.shape[k] - 1}")
+                raise Unsupported(f"{where}: subset of {local.name} starts "
+                                  f"before its index {full.starts[k]}")
+            if (full.shape and enc.shape and start
+                    + enc.shape[k] > full.starts[k] + full.shape[k]):
+                raise Unsupported(f"{where}: subset of {local.name} ends after "
+                                  "its index "
+                                  f"{full.starts[k] + full.shape[k] - 1}")
         doc = f"a subset of {vt.key}" + (f"; {vt.doc}" if vt.doc else "")
-        local.vtype = VType(key=vt.key, name=vt.name, kind="array", enc=enc, doc=doc)
+        local.vtype = VType(key=vt.key, name=vt.name, kind="array", enc=enc,
+                            doc=doc)
         return local
 
-    def aggregate_type(self, key: Key, table: dict, path: Key, t, where: str, cache) -> VType:
+    def aggregate_type(self, key: Key, table: dict, path: Key, t, where: str,
+                       cache) -> VType:
         """An aggregate type: its members, encoded one after another."""
         if cache in self._aggregating:
             raise Unsupported(f"{where}: aggregate contains itself")
@@ -545,25 +726,29 @@ class Compiler:
                 mt = self.vtype(mkey, table)
                 d = mt.dyn
                 if d is not None and d.table is not None:
-                    raise Unsupported(f"{where}: member {m.name} has a size from a DiscreteLookupList")
+                    raise Unsupported(f"{where}: member {m.name} has a size "
+                                      "from a DiscreteLookupList")
                 if d is not None:
                     # Like Yamcs, a reference to an earlier member's name
                     # means that member of the same aggregate value.
                     sib = next((x for x in members if x.name == d.name), None)
                     if sib is None:
-                        raise Unsupported(
-                            f"{where}: member {m.name} has a size that another value gives, "
-                            f"and {d.name} is not an earlier member"
-                        )
+                        raise Unsupported(f"{where}: member {m.name} has a "
+                                          "size that another value gives, and "
+                                          f"{d.name} is not an earlier member")
                     if sib.vtype.kind != "int":
-                        raise Unsupported(f"{where}: size or count from {sib.vtype.kind} member {sib.name}")
-                    mt = bounded(mt, dataclasses.replace(d, member=sib.ident), int_bounds(sib.vtype))
+                        raise Unsupported(f"{where}: size or count from "
+                                          f"{sib.vtype.kind} member {sib.name}")
+                    mt = bounded(mt, dataclasses.replace(d, member=sib.ident),
+                                 int_bounds(sib.vtype))
                 if is_rest(mt):
-                    raise Unsupported(f"{where}: member {m.name} takes the rest of the packet")
+                    raise Unsupported(f"{where}: member {m.name} takes the "
+                                      "rest of the packet")
                 members.append(Member(m.name, names.take(snake(m.name)), mt))
         finally:
             self._aggregating.discard(cache)
-        return VType(key=qname(key), name=t.name, kind="aggregate", enc=AggregateEnc(members))
+        return VType(key=qname(key), name=t.name, kind="aggregate",
+                     enc=AggregateEnc(members))
 
     def int_value(self, iv, path: Key, what: str, where: str):
         """An IntegerValueType: a number, or an unbound DynSize."""
@@ -583,12 +768,15 @@ class Compiler:
         else:
             ref, kind = dv.choice.value, dv.choice.name
         if getattr(ref, "instance", None):
-            raise Unsupported(f"{where}: {what} from instance {ref.instance} of a parameter")
+            raise Unsupported(f"{where}: {what} from instance {ref.instance} "
+                              "of a parameter")
         adj = dv.linear_adjustment
         slope = adj.slope if adj is not None and adj.slope is not None else 1.0
-        intercept = adj.intercept if adj is not None and adj.intercept is not None else 0.0
+        intercept = (adj.intercept if adj is not None
+                     and adj.intercept is not None else 0.0)
         if not (math.isfinite(slope) and math.isfinite(intercept)):
-            raise Unsupported(f"{where}: {what} with a non-finite LinearAdjustment")
+            raise Unsupported(f"{where}: {what} with a non-finite "
+                              "LinearAdjustment")
         if kind == "ParameterInstanceRef":
             name = ref.parameter_ref.strip()
             base, members = member_path(name)
@@ -596,13 +784,16 @@ class Compiler:
                 key = qname(self.resolve(base, path, self.params, "parameter"))
             except Unsupported:
                 key = None  # an error unless it names an aggregate member
-            return DynSize(key=key, name=name, members=members, slope=slope, intercept=intercept)
+            return DynSize(key=key, name=name, members=members, slope=slope,
+                           intercept=intercept)
         name = ref.argument_ref.strip()
         base, members = member_path(name)
-        return DynSize(arg=base, name=name, members=members, slope=slope, intercept=intercept)
+        return DynSize(arg=base, name=name, members=members, slope=slope,
+                       intercept=intercept)
 
     def encoding(self, name: str, e, path: Key, where: str):
-        if getattr(e, "bit_order", None) and e.bit_order.value != "mostSignificantBitFirst":
+        if (getattr(e, "bit_order", None)
+                and e.bit_order.value != "mostSignificantBitFirst"):
             raise Unsupported(f"{where}: bitOrder {e.bit_order.value}")
         if getattr(e, "error_detect_correct", None):
             raise Unsupported(f"{where}: ErrorDetectCorrect")
@@ -613,12 +804,14 @@ class Compiler:
         if name == "IntegerDataEncoding":
             bits = e.size_in_bits if e.size_in_bits is not None else 8
             kind = e.encoding.value if e.encoding else "unsigned"
-            if kind not in ("unsigned", "twosComplement", "signMagnitude", "onesComplement"):
+            if kind not in ("unsigned", "twosComplement", "signMagnitude",
+                            "onesComplement"):
                 raise Unsupported(f"{where}: integer encoding {kind}")
             if not 1 <= bits <= 64:
                 raise Unsupported(f"{where}: {bits}-bit integers")
             if le and bits % 8:
-                raise Unsupported(f"{where}: little-endian size {bits} is not whole bytes")
+                raise Unsupported(f"{where}: little-endian size {bits} is not "
+                                  "whole bytes")
             if kind != "unsigned" and bits < 2:
                 raise Unsupported(f"{where}: 1-bit signed integer")
             return IntEnc(bits, kind, le), self.calibrator(e, where)
@@ -638,28 +831,37 @@ class Compiler:
             if c.name == "SizeInBits":
                 bits = self._size(c.value.fixed.fixed_value, "string", where)
                 if bits % 8:
-                    raise Unsupported(f"{where}: string size {bits} is not whole bytes")
+                    raise Unsupported(f"{where}: string size {bits} is not "
+                                      "whole bytes")
                 if c.value.leading_size is not None:
                     tag = c.value.leading_size.size_in_bits_of_size_tag or 16
-                    return StringEnc(bits, bits, None, self._tag(tag, where)), None
-                return StringEnc(bits, bits, self._term(c.value.termination_char, where)), None
+                    return (StringEnc(bits, bits, None, self._tag(tag, where)),
+                            None)
+                return (StringEnc(bits, bits,
+                                  self._term(c.value.termination_char, where)),
+                        None)
             v = c.value
             dyn = None
             if v.choice1 is not None:
                 if v.choice1.name == "DynamicValue":
-                    dyn = self.dyn_size(v.choice1.value, path, "string size", where)
+                    dyn = self.dyn_size(v.choice1.value, path, "string size",
+                                        where)
                 elif v.choice1.name == "DiscreteLookupList":
                     dyn = DynSize(table=(path, v.choice1.value))
                 else:
-                    raise Unsupported(f"{where}: string size from {v.choice1.name}")
+                    raise Unsupported(f"{where}: string size from "
+                                      f"{v.choice1.name}")
                 dyn.unit = 8
             mx = self._size(v.max_size_in_bits, "string", where)
             if v.choice2.name == "LeadingSize":
                 tag = v.choice2.value.size_in_bits_of_size_tag or 16
-                return StringEnc(None, mx, None, self._tag(tag, where), dyn), None
-            return StringEnc(None, mx, self._term(v.choice2.value, where), dyn=dyn), None
+                return (StringEnc(None, mx, None, self._tag(tag, where), dyn),
+                        None)
+            return (StringEnc(None, mx, self._term(v.choice2.value, where),
+                              dyn=dyn), None)
         if name == "BinaryDataEncoding":
-            if e.from_binary_transform_algorithm or e.to_binary_transform_algorithm:
+            if (e.from_binary_transform_algorithm
+                    or e.to_binary_transform_algorithm):
                 raise Unsupported(f"{where}: binary transform algorithms")
             c = e.size_in_bits.choice
             if c.name in ("DynamicValue", "DiscreteLookupList"):
@@ -674,7 +876,8 @@ class Compiler:
                 return BinaryEnc(MAX_FIELD_BITS, rest=True), None
             bits = self._size(c.value, "binary", where)
             if bits % 8:
-                raise Unsupported(f"{where}: binary size {bits} is not whole bytes")
+                raise Unsupported(f"{where}: binary size {bits} is not whole "
+                                  "bytes")
             return BinaryEnc(bits), None
         raise Unsupported(f"{where}: {name}")
 
@@ -706,7 +909,8 @@ class Compiler:
         if c is None:
             return None
         if c.choice.name == "PolynomialCalibrator":
-            return Polynomial([(t.coefficient, t.exponent) for t in c.choice.value.term])
+            return Polynomial([(t.coefficient, t.exponent)
+                               for t in c.choice.value.term])
         if c.choice.name == "SplineCalibrator":
             s = c.choice.value
             order = s.order if s.order is not None else 1
@@ -723,10 +927,12 @@ class Compiler:
     def literal(self, vt: VType, text: str, raw: bool, where: str):
         s = text.strip()
         if vt.kind in ("array", "aggregate"):
-            raise Unsupported(f"{where}: value {text!r} for {vt.kind} type {vt.key}")
+            raise Unsupported(f"{where}: value {text!r} for {vt.kind} type "
+                              f"{vt.key}")
         try:
             if raw or vt.kind == "int":
-                v = int(s, 0) if s.lower().startswith(("0x", "0b", "0o")) else int(s)
+                v = (int(s, 0) if s.lower().startswith(("0x", "0b", "0o"))
+                     else int(s))
                 return bool(v) if vt.kind == "bool" else v
             if vt.kind == "float":
                 return float(s)
@@ -745,19 +951,22 @@ class Compiler:
                 return text
             return bytes.fromhex(s)
         except ValueError:
-            raise Unsupported(f"{where}: value {text!r} does not fit {vt.kind} type {vt.key}") from None
+            raise Unsupported(f"{where}: value {text!r} does not fit {vt.kind} "
+                              f"type {vt.key}") from None
 
     # -- containers --
 
     def local(self, name: str, key: str, vt: VType) -> Local:
         return Local(self._id(), name, key, vt)
 
-    def location(self, loc, start: int, path: Key, scope: list, where: str, arg_key=None) -> list[Item]:
+    def location(self, loc, start: int, path: Key, scope: list, where: str,
+                 arg_key=None) -> list[Item]:
         """The Seek for an entry's location; one from other values is bound
         to ``scope`` and must not move backwards."""
         if loc is None:
             return []
-        ref = loc.reference_location.value if loc.reference_location else "previousEntry"
+        ref = (loc.reference_location.value if loc.reference_location
+               else "previousEntry")
         c = loc.choice
         if c.name == "FixedValue":
             off = c.value
@@ -782,32 +991,41 @@ class Compiler:
         if rp is None:
             return local
         if local.length is not None:
-            raise Unsupported(f"{where}: RepeatEntry on packet length field {local.name}")
+            raise Unsupported(f"{where}: RepeatEntry on packet length field "
+                              f"{local.name}")
         vt = local.vtype
         if vt.kind == "array":
             raise Unsupported(f"{where}: RepeatEntry on an array")
         if vt.dyn is not None:
-            raise Unsupported(f"{where}: RepeatEntry on a value whose size another value gives")
+            raise Unsupported(f"{where}: RepeatEntry on a value whose size "
+                              "another value gives")
         if is_rest(vt):
-            raise Unsupported(f"{where}: RepeatEntry on a value that takes the rest of the packet")
+            raise Unsupported(f"{where}: RepeatEntry on a value that takes the "
+                              "rest of the packet")
         count = self.int_value(rp.count, path, "RepeatEntry Count", where)
         gap = 0
         if rp.offset is not None:
             gap = self.int_value(rp.offset, path, "RepeatEntry Offset", where)
             if isinstance(gap, DynSize):
-                raise Unsupported(f"{where}: RepeatEntry Offset from DynamicValue")
+                raise Unsupported(f"{where}: RepeatEntry Offset from "
+                                  "DynamicValue")
             if gap < 0:
-                raise Unsupported(f"{where}: RepeatEntry Offset {gap} is negative")
+                raise Unsupported(f"{where}: RepeatEntry Offset {gap} is "
+                                  "negative")
         if isinstance(count, int):
             if count < 1:
-                raise Unsupported(f"{where}: RepeatEntry Count {count} is not positive")
+                raise Unsupported(f"{where}: RepeatEntry Count {count} is not "
+                                  "positive")
             if count == 1:
                 return local
         shape = (count,) if isinstance(count, int) else ()
-        local.vtype = VType(key=vt.key, name=vt.name, kind="array", enc=ArrayEnc(vt, count, gap, shape=shape), doc=vt.doc)
+        local.vtype = VType(key=vt.key, name=vt.name, kind="array",
+                            enc=ArrayEnc(vt, count, gap, shape=shape),
+                            doc=vt.doc)
         return local
 
-    def bind(self, local: Local, scope: list, where: str, arg_key: Optional[Callable] = None) -> Local:
+    def bind(self, local: Local, scope: list, where: str,
+             arg_key: Optional[Callable] = None) -> Local:
         """Binds the size or count of a value to what gives it, which must
         be decoded before it, and bounds it."""
         vt = local.vtype
@@ -817,75 +1035,97 @@ class Compiler:
         local.vtype = bounded(vt, b, rng)
         return local
 
-    def bind_dyn(self, d: DynSize, scope: list, where: str, arg_key: Optional[Callable] = None):
+    def bind_dyn(self, d: DynSize, scope: list, where: str,
+                 arg_key: Optional[Callable] = None):
         """A copy of ``d`` bound to the values in ``scope``, and the range
         (lo, hi) of the value it adjusts."""
         if d.table is not None:
             path, table = d.table
-            lookup = [(self.match(lk, path, scope, where, arg_key), lk.value) for lk in table.discrete_lookup]
+            lookup = [(self.match(lk, path, scope, where, arg_key), lk.value)
+                      for lk in table.discrete_lookup]
             for crit, _ in lookup:
                 for lc in (x for c in crit for x in term_locals(c)):
                     if lc.length is not None:
-                        raise Unsupported(f"{where}: size or count from packet length field {lc.name}")
+                        raise Unsupported(f"{where}: size or count from packet "
+                                          f"length field {lc.name}")
             values = [v for _, v in lookup] + [table.default_value]
-            return dataclasses.replace(d, lookup=lookup, default=table.default_value), (min(values), max(values))
+            return (dataclasses.replace(d, lookup=lookup,
+                                        default=table.default_value),
+                    (min(values), max(values)))
         if d.arg is not None:
             if arg_key is None:
-                raise Unsupported(f"{where}: size from argument {d.arg!r} outside a command")
+                raise Unsupported(f"{where}: size from argument {d.arg!r} "
+                                  "outside a command")
             key, name = arg_key(d.arg), d.arg
         elif d.key is None:
-            raise Unsupported(f"{where}: unresolved parameter reference {d.name!r}")
+            raise Unsupported(f"{where}: unresolved parameter reference "
+                              f"{d.name!r}")
         else:
             key = name = d.key
         ref = next((lc for lc in reversed(scope) if lc.key == key), None)
         if ref is None:
-            raise Unsupported(f"{where}: size or count from {name}, which is not decoded before it")
+            raise Unsupported(f"{where}: size or count from {name}, which is "
+                              "not decoded before it")
         if ref.optional:
-            raise Unsupported(f"{where}: size or count from {name}, which has an IncludeCondition")
+            raise Unsupported(f"{where}: size or count from {name}, which has "
+                              "an IncludeCondition")
         if ref.length is not None:
-            raise Unsupported(f"{where}: size or count from packet length field {name}")
-        member, vt = walk_members(ref.vtype, d.members, f"{where}: size or count from {d.name}")
+            raise Unsupported(f"{where}: size or count from packet length "
+                              f"field {name}")
+        member, vt = walk_members(ref.vtype, d.members,
+                                  f"{where}: size or count from {d.name}")
         if vt.kind != "int":
-            raise Unsupported(f"{where}: size or count from {vt.kind} value {d.name or name}")
+            raise Unsupported(f"{where}: size or count from {vt.kind} value "
+                              f"{d.name or name}")
         return dataclasses.replace(d, local=ref, path=member), int_bounds(vt)
 
     def param_local(self, ref: str, path: Key) -> Local:
         pkey = self.resolve(ref, path, self.params, "parameter")
         ppath, p = self.params[pkey]
-        tkey = self.resolve(p.parameter_type_ref, ppath, self.ptypes, "parameter type")
+        tkey = self.resolve(p.parameter_type_ref, ppath, self.ptypes,
+                            "parameter type")
         local = self.local(p.name, qname(pkey), self.vtype(tkey, self.ptypes))
         local.length = length_adjust(p, local.vtype, f"parameter {qname(pkey)}")
         return local
 
-    def tm_items(self, sc, path: Key, stack: list, start: int, scope: list) -> list[Item]:
+    def tm_items(self, sc, path: Key, stack: list, start: int,
+                 scope: list) -> list[Item]:
         """Items for a container's entries.  ``scope`` lists the values read
         so far (base containers first) and grows as entries are added."""
         items: list[Item] = []
         for ch in sc.entry_list.items:
             e = ch.value
             where = f"container {qname(stack[-1])}"
-            if ch.name not in ("ParameterRefEntry", "ContainerRefEntry", "ArrayParameterRefEntry"):
+            if ch.name not in ("ParameterRefEntry", "ContainerRefEntry",
+                               "ArrayParameterRefEntry"):
                 raise Unsupported(f"{where}: {ch.name}")
             cond = None
             if e.include_condition is not None:
                 cond = self.match(e.include_condition, path, scope, where)
             out = items if cond is None else []
-            out += self.location(e.location_in_container_in_bits, start, path, scope, where)
+            out += self.location(e.location_in_container_in_bits, start, path,
+                                 scope, where)
             if ch.name != "ContainerRefEntry":
-                local = self.subset(self.param_local(e.parameter_ref, path), e, path, where)
-                local = self.bind(self.repeat(local, e, path, where), scope, where)
+                local = self.subset(self.param_local(e.parameter_ref, path), e,
+                                    path, where)
+                local = self.bind(self.repeat(local, e, path, where), scope,
+                                  where)
                 out.append(Value(local))
                 scope.append(local)
             else:
-                ckey = self.resolve(e.container_ref, path, self.containers, "container")
+                ckey = self.resolve(e.container_ref, path, self.containers,
+                                    "container")
                 if ckey in stack:
                     raise Unsupported(f"{where}: container includes itself")
                 cpath, inc = self.containers[ckey]
                 if inc.base_container is not None:
-                    raise Unsupported(f"{where}: included container {qname(ckey)} has a BaseContainer")
+                    raise Unsupported(f"{where}: included container "
+                                      f"{qname(ckey)} has a BaseContainer")
                 if e.repeat_entry is not None:
-                    local = self.local(inc.name, qname(ckey), self.container_type(ckey, stack, where))
-                    local = self.bind(self.repeat(local, e, path, where), scope, where)
+                    local = self.local(inc.name, qname(ckey),
+                                       self.container_type(ckey, stack, where))
+                    local = self.bind(self.repeat(local, e, path, where), scope,
+                                      where)
                     out.append(Value(local))
                     scope.append(local)
                 else:
@@ -908,22 +1148,29 @@ class Compiler:
             return []
         if be.error_detect_correct is not None:
             raise Unsupported(f"{where}: ErrorDetectCorrect")
-        if be.from_binary_transform_algorithm or be.to_binary_transform_algorithm:
+        if (be.from_binary_transform_algorithm
+                or be.to_binary_transform_algorithm):
             raise Unsupported(f"{where}: container transform algorithms")
         if be.size_in_bits is None:
-            raise Unsupported(f"{where}: container BinaryEncoding without SizeInBits")
-        size = self.int_value(be.size_in_bits, (), "container SizeInBits", where)
+            raise Unsupported(f"{where}: container BinaryEncoding without "
+                              "SizeInBits")
+        size = self.int_value(be.size_in_bits, (), "container SizeInBits",
+                              where)
         if isinstance(size, DynSize):
-            raise Unsupported(f"{where}: container SizeInBits from DynamicValue")
+            raise Unsupported(f"{where}: container SizeInBits from "
+                              "DynamicValue")
         size = self._size(size, "container", where)
         end = static_end(items, start)
         if end is None:
-            raise Unsupported(f"{where}: a container size with entries whose size or position varies")
+            raise Unsupported(f"{where}: a container size with entries whose "
+                              "size or position varies")
         pos, extent = end
         if extent > size:
-            raise Unsupported(f"{where}: entries take {extent} bits, more than the container size {size}")
+            raise Unsupported(f"{where}: entries take {extent} bits, more than "
+                              f"the container size {size}")
         if pos != extent:
-            raise Unsupported(f"{where}: a container size after entries that overlap")
+            raise Unsupported(f"{where}: a container size after entries that "
+                              "overlap")
         return [Pad(size - pos)] if size > pos else []
 
     def container_type(self, ckey: Key, stack: list, where: str) -> VType:
@@ -948,12 +1195,15 @@ class Compiler:
                 raise Unsupported(f"{what} has an IncludeCondition")
             if isinstance(it, Seek):
                 if isinstance(it.offset, DynSize):
-                    raise Unsupported(f"{what} has a location that other values give")
+                    raise Unsupported(f"{what} has a location that other "
+                                      "values give")
                 if it.from_start is not None:
                     if it.from_start not in marks:
-                        raise Unsupported(f"{what} has a location relative to the start of another container")
+                        raise Unsupported(f"{what} has a location relative to "
+                                          "the start of another container")
                     if marks[it.from_start] is None or pos is None:
-                        raise Unsupported(f"{what} has a location after a value whose size varies")
+                        raise Unsupported(f"{what} has a location after a "
+                                          "value whose size varies")
                     delta = marks[it.from_start] + it.offset - pos
                 else:
                     delta = it.offset
@@ -969,16 +1219,22 @@ class Compiler:
             else:
                 vt = it.local.vtype
                 if vt.dyn is not None:
-                    raise Unsupported(f"{what}: {it.local.name} has a size that another value gives")
+                    raise Unsupported(f"{what}: {it.local.name} has a size "
+                                      "that another value gives")
                 if it.local.length is not None:
-                    raise Unsupported(f"{what}: {it.local.name} is a packet length field")
-                members.append(Member(it.local.name, names.take(snake(it.local.name)), vt, skip))
+                    raise Unsupported(f"{what}: {it.local.name} is a packet "
+                                      "length field")
+                members.append(Member(it.local.name,
+                                      names.take(snake(it.local.name)), vt,
+                                      skip))
                 skip = 0
                 bits = fixed_bits(vt)
-                pos = pos + bits if pos is not None and bits is not None else None
+                pos = (pos + bits if pos is not None and bits is not None
+                       else None)
         if not members:
             raise Unsupported(f"{what} has no entries")
-        vt = VType(key=qname(ckey), name=inc.name, kind="aggregate", enc=AggregateEnc(members, skip))
+        vt = VType(key=qname(ckey), name=inc.name, kind="aggregate",
+                   enc=AggregateEnc(members, skip))
         vt.doc = "one copy of a repeated container"
         self.ctypes[ckey] = vt
         return vt
@@ -987,7 +1243,8 @@ class Compiler:
         if key in self.nodes:
             n = self.nodes[key]
             if getattr(n, "_building", False):
-                raise Unsupported(f"container inheritance cycle through {qname(key)}")
+                raise Unsupported("container inheritance cycle through "
+                                  f"{qname(key)}")
             return n
         path, sc = self.containers[key]
         node = Node("tm", qname(key), sc.name, bool(sc.abstract))
@@ -997,21 +1254,27 @@ class Compiler:
             base = None
             scope: list[Local] = []
             if sc.base_container is not None:
-                bkey = self.resolve(sc.base_container.container_ref, path, self.containers, "container")
+                bkey = self.resolve(sc.base_container.container_ref, path,
+                                    self.containers, "container")
                 base = self.tm_node(bkey)
                 if base.error:
-                    raise Unsupported(f"base container {base.key} is not supported")
+                    raise Unsupported(f"base container {base.key} is not "
+                                      "supported")
                 node.base = base
                 scope = self.scope_of(base)
                 rc = sc.base_container.restriction_criteria
                 if rc is not None:
                     if rc.next_container is not None:
-                        raise Unsupported(f"container {node.key}: NextContainer")
-                    node.criteria = self.match(rc, path, scope, f"container {node.key}")
+                        raise Unsupported(f"container {node.key}: "
+                                          "NextContainer")
+                    node.criteria = self.match(rc, path, scope,
+                                               f"container {node.key}")
             if sc.binary_encoding is not None and base is not None:
-                raise Unsupported(f"container {node.key}: BinaryEncoding with a BaseContainer")
+                raise Unsupported(f"container {node.key}: BinaryEncoding with "
+                                  "a BaseContainer")
             node.items = self.tm_items(sc, path, [key], 0, scope)
-            node.items += self.size_pad(sc, node.items, 0, f"container {node.key}")
+            node.items += self.size_pad(sc, node.items, 0,
+                                        f"container {node.key}")
             self.check_rest(node, f"container {node.key}")
             self.check_length(node, f"container {node.key}")
             if base is not None:
@@ -1029,30 +1292,36 @@ class Compiler:
         items = walk(node.all_items())
         for i, it in enumerate(items[:-1]):
             if isinstance(it, Value) and is_rest(it.local.vtype):
-                raise Unsupported(f"{where}: {it.local.name} takes the rest of the packet but is not last")
+                raise Unsupported(f"{where}: {it.local.name} takes the rest of "
+                                  "the packet but is not last")
 
     @staticmethod
     def check_length(node: Node, where: str) -> None:
         """A packet has at most one length field, which is always present
         and which nothing compares or takes a size from."""
         items = node.all_items()
-        lengths = [it.local for it in walk(items) if isinstance(it, Value) and it.local.length is not None]
+        lengths = [it.local for it in walk(items) if isinstance(it, Value)
+                   and it.local.length is not None]
         if len(lengths) > 1:
             raise Unsupported(f"{where}: more than one packet length field")
         if not lengths:
             return
         lc = lengths[0]
         if lc.optional:
-            raise Unsupported(f"{where}: packet length field {lc.name} has an IncludeCondition")
+            raise Unsupported(f"{where}: packet length field {lc.name} has an "
+                              "IncludeCondition")
         criteria = node.all_criteria() + [c for it in items for c in conds(it)]
         if any(x is lc for c in criteria for x in term_locals(c)):
-            raise Unsupported(f"{where}: a criterion or assignment on packet length field {lc.name}")
+            raise Unsupported(f"{where}: a criterion or assignment on packet "
+                              f"length field {lc.name}")
 
     @staticmethod
     def scope_of(node: Node) -> list[Local]:
-        return [it.local for it in walk(node.all_items()) if isinstance(it, Value)]
+        return [it.local for it in walk(node.all_items())
+                if isinstance(it, Value)]
 
-    def match(self, mc, path: Key, scope: list, where: str, arg_key: Optional[Callable] = None) -> list:
+    def match(self, mc, path: Key, scope: list, where: str,
+              arg_key: Optional[Callable] = None) -> list:
         """Terms of a RestrictionCriteria, IncludeCondition or
         DiscreteLookup, on values in ``scope``; ``arg_key`` resolves
         argument names in commands."""
@@ -1067,12 +1336,16 @@ class Compiler:
             raise Unsupported(f"{where}: {c.name} criteria")
         out = []
         for cmp in comps:
-            op = cmp.comparison_operator.value if cmp.comparison_operator else "=="
+            op = (cmp.comparison_operator.value if cmp.comparison_operator
+                  else "==")
             if hasattr(cmp, "choice"):  # an ArgumentComparison
                 ref = cmp.choice.value
-                out.append(self.comparison(cmp.choice.name, ref, op, cmp.value, path, scope, where, arg_key))
+                out.append(self.comparison(cmp.choice.name, ref, op, cmp.value,
+                                           path, scope, where, arg_key))
             else:
-                out.append(self.comparison("ParameterInstanceRef", cmp, op, cmp.value, path, scope, where, arg_key))
+                out.append(self.comparison("ParameterInstanceRef", cmp, op,
+                                           cmp.value, path, scope, where,
+                                           arg_key))
         return out
 
     def boolean(self, c, path: Key, scope: list, where: str, arg_key) -> Term:
@@ -1081,26 +1354,33 @@ class Compiler:
         if c.name == "Condition":
             cc = c.value
             if hasattr(cc, "parameter_instance_ref"):
-                lhs, ref, rhs = "ParameterInstanceRef", cc.parameter_instance_ref, cc.choice
+                lhs, ref, rhs = ("ParameterInstanceRef",
+                                 cc.parameter_instance_ref, cc.choice)
             else:  # an ArgumentComparisonCheck
                 lhs, ref, rhs = cc.choice1.name, cc.choice1.value, cc.choice2
             op = cc.comparison_operator.value
             if rhs.name == "Value":
-                return self.comparison(lhs, ref, op, rhs.value, path, scope, where, arg_key)
-            return self.comparison(lhs, ref, op, None, path, scope, where, arg_key, (rhs.name, rhs.value))
+                return self.comparison(lhs, ref, op, rhs.value, path, scope,
+                                       where, arg_key)
+            return self.comparison(lhs, ref, op, None, path, scope, where,
+                                   arg_key, (rhs.name, rhs.value))
         if c.name not in ("ANDedConditions", "ORedConditions"):
             raise Unsupported(f"{where}: {c.name} in a BooleanExpression")
-        terms = [self.boolean(x, path, scope, where, arg_key) for x in c.value.items]
+        terms = [self.boolean(x, path, scope, where, arg_key)
+                 for x in c.value.items]
         joiner = " and " if c.name == "ANDedConditions" else " or "
         text = "(" + joiner.join(t.text for t in terms) + ")"
-        return AllOf(terms, text) if c.name == "ANDedConditions" else AnyOf(terms, text)
+        return (AllOf(terms, text) if c.name == "ANDedConditions"
+                else AnyOf(terms, text))
 
-    def value_ref(self, kind: str, ref, path: Key, scope: list, where: str, arg_key):
+    def value_ref(self, kind: str, ref, path: Key, scope: list, where: str,
+                  arg_key):
         """(local, member path, type, name) of the value that a
         ParameterInstanceRef, ArgumentInstanceRef or Comparison names."""
         if kind == "ArgumentInstanceRef":
             if arg_key is None:
-                raise Unsupported(f"{where}: comparison of argument {ref.argument_ref!r} outside a command")
+                raise Unsupported(f"{where}: comparison of argument "
+                                  f"{ref.argument_ref!r} outside a command")
             base, members = member_path(ref.argument_ref)
             pkey = arg_key(base)
         else:
@@ -1108,49 +1388,69 @@ class Compiler:
             pkey = qname(self.resolve(base, path, self.params, "parameter"))
         local = next((lc for lc in reversed(scope) if lc.key == pkey), None)
         if local is None:
-            raise Unsupported(f"{where}: criterion on {pkey}, which is not decoded before it")
+            raise Unsupported(f"{where}: criterion on {pkey}, which is not "
+                              "decoded before it")
         if local.optional:
-            raise Unsupported(f"{where}: criterion on {pkey}, which has an IncludeCondition")
-        member, vt = walk_members(local.vtype, members, f"{where}: criterion on {pkey}")
+            raise Unsupported(f"{where}: criterion on {pkey}, which has an "
+                              "IncludeCondition")
+        member, vt = walk_members(local.vtype, members,
+                                  f"{where}: criterion on {pkey}")
         pkey = ref_text(pkey, members)
         if vt.kind in ("array", "aggregate"):
-            raise Unsupported(f"{where}: criterion on {pkey}, which is an {vt.kind}")
+            raise Unsupported(f"{where}: criterion on {pkey}, which is an "
+                              f"{vt.kind}")
         if getattr(ref, "instance", None):
             raise Unsupported(f"{where}: comparison of instance {ref.instance}")
         return local, member, vt, pkey
 
-    def comparison(self, kind: str, ref, op: str, text, path: Key, scope: list, where: str, arg_key, other=None):
+    def comparison(self, kind: str, ref, op: str, text, path: Key, scope: list,
+                   where: str, arg_key, other=None):
         """``ref <op> text`` (a value as written), or with ``other`` (the
         kind and reference of a second value) ``ref <op> other``."""
-        local, member, vt, pkey = self.value_ref(kind, ref, path, scope, where, arg_key)
+        local, member, vt, pkey = self.value_ref(kind, ref, path, scope, where,
+                                                 arg_key)
         raw = getattr(ref, "use_calibrated_value", None) is False
         if op not in ("==", "!=") and vt.kind in ("bool", "string", "binary"):
             raise Unsupported(f"{where}: {op} on {vt.kind} parameter {pkey}")
         target = vt if member else None
         if other is not None:
-            olocal, opath, ovt, okey = self.value_ref(other[0], other[1], path, scope, where, arg_key)
+            olocal, opath, ovt, okey = self.value_ref(other[0], other[1], path,
+                                                      scope, where, arg_key)
             if raw or getattr(other[1], "use_calibrated_value", None) is False:
-                raise Unsupported(f"{where}: raw comparison of {pkey} and {okey}")
-            if vt.kind != ovt.kind or vt.kind not in ("int", "enum", "float", "bool", "string"):
-                raise Unsupported(f"{where}: comparison of {vt.kind} {pkey} and {ovt.kind} {okey}")
+                raise Unsupported(f"{where}: raw comparison of {pkey} and "
+                                  f"{okey}")
+            if (vt.kind != ovt.kind
+                    or vt.kind not in ("int", "enum", "float", "bool",
+                                       "string")):
+                raise Unsupported(f"{where}: comparison of {vt.kind} {pkey} "
+                                  f"and {ovt.kind} {okey}")
             if vt.kind == "int" and vt.signed != ovt.signed:
-                raise Unsupported(f"{where}: comparison of signed and unsigned values {pkey} and {okey}")
-            return Criterion(local, op, None, f"{pkey} {op} {okey}", member, target, olocal, opath)
-        if raw and (vt.kind not in ("int", "enum", "bool") or vt.calibrator is not None or isinstance(vt.enc, StringEnc)):
-            raise Unsupported(f"{where}: raw comparison on {vt.kind} parameter {pkey}")
+                raise Unsupported(f"{where}: comparison of signed and unsigned "
+                                  f"values {pkey} and {okey}")
+            return Criterion(local, op, None, f"{pkey} {op} {okey}", member,
+                             target, olocal, opath)
+        if raw and (vt.kind not in ("int", "enum", "bool")
+                    or vt.calibrator is not None
+                    or isinstance(vt.enc, StringEnc)):
+            raise Unsupported(f"{where}: raw comparison on {vt.kind} parameter "
+                              f"{pkey}")
         value = self.literal(vt, text, raw, where)
-        return Criterion(local, op, value, f"{pkey} {op} {text}", member, target)
+        return Criterion(local, op, value, f"{pkey} {op} {text}", member,
+                         target)
 
     # -- commands --
 
     def arg_scope(self, key: Key, seen: tuple = ()) -> dict:
-        """Argument name -> (MetaCommand key, Argument) visible in a MetaCommand."""
+        """Argument name -> (MetaCommand key, Argument) visible in a
+        MetaCommand."""
         if key in seen:
-            raise Unsupported(f"meta-command inheritance cycle through {qname(key)}")
+            raise Unsupported("meta-command inheritance cycle through "
+                              f"{qname(key)}")
         path, mc = self.mcs[key]
         scope = {}
         if mc.base_meta_command is not None:
-            bkey = self.resolve(mc.base_meta_command.meta_command_ref, path, self.mcs, "meta-command")
+            bkey = self.resolve(mc.base_meta_command.meta_command_ref, path,
+                                self.mcs, "meta-command")
             scope.update(self.arg_scope(bkey, seen + (key,)))
         if mc.argument_list is not None:
             for a in mc.argument_list.argument:
@@ -1161,8 +1461,10 @@ class Compiler:
         if name not in scope:
             raise Unsupported(f"{where}: unknown argument {name!r}")
         owner, a = scope[name]
-        tkey = self.resolve(a.argument_type_ref, self.mcs[owner][0], self.atypes, "argument type")
-        local = self.local(a.name, f"{qname(owner)}#{a.name}", self.vtype(tkey, self.atypes))
+        tkey = self.resolve(a.argument_type_ref, self.mcs[owner][0],
+                            self.atypes, "argument type")
+        local = self.local(a.name, f"{qname(owner)}#{a.name}",
+                           self.vtype(tkey, self.atypes))
         local.length = length_adjust(a, local.vtype, f"argument {local.key}")
         return local
 
@@ -1170,7 +1472,8 @@ class Compiler:
         if key in self.nodes:
             n = self.nodes[key]
             if getattr(n, "_building", False):
-                raise Unsupported(f"meta-command inheritance cycle through {qname(key)}")
+                raise Unsupported("meta-command inheritance cycle through "
+                                  f"{qname(key)}")
             return n
         path, mc = self.mcs[key]
         node = Node("tc", qname(key), mc.name, bool(mc.abstract))
@@ -1181,27 +1484,36 @@ class Compiler:
             base = None
             scope = self.arg_scope(key)
             if mc.base_meta_command is not None:
-                bkey = self.resolve(mc.base_meta_command.meta_command_ref, path, self.mcs, "meta-command")
+                bkey = self.resolve(mc.base_meta_command.meta_command_ref, path,
+                                    self.mcs, "meta-command")
                 base = self.tc_node(bkey)
                 if base.error:
-                    raise Unsupported(f"base meta-command {base.key} is not supported")
+                    raise Unsupported(f"base meta-command {base.key} is not "
+                                      "supported")
                 node.base = base
                 al = mc.base_meta_command.argument_assignment_list
                 for asg in al.argument_assignment if al else []:
                     if asg.argument_name not in scope:
-                        raise Unsupported(f"{where}: assignment to unknown argument {asg.argument_name!r}")
-                    akey = f"{qname(scope[asg.argument_name][0])}#{asg.argument_name}"
-                    local = next((lc for lc in reversed(self.scope_of(base)) if lc.key == akey), None)
+                        raise Unsupported(f"{where}: assignment to unknown "
+                                          f"argument {asg.argument_name!r}")
+                    akey = (f"{qname(scope[asg.argument_name][0])}#"
+                            f"{asg.argument_name}")
+                    local = next((lc for lc in reversed(self.scope_of(base))
+                                  if lc.key == akey), None)
                     if local is None:
                         continue  # the argument is not encoded in the packet
-                    value = self.literal(local.vtype, asg.argument_value, False, where)
-                    node.criteria.append(Criterion(local, "==", value, f"{asg.argument_name} = {asg.argument_value}"))
+                    value = self.literal(local.vtype, asg.argument_value, False,
+                                         where)
+                    node.criteria.append(Criterion(local, "==", value,
+                                                   f"{asg.argument_name} = "
+                                                   f"{asg.argument_value}"))
             cc = mc.command_container
             if cc is not None:
                 if cc.binary_encoding is not None:
                     raise Unsupported(f"{where}: container BinaryEncoding")
                 if cc.base_container is not None:
-                    bc = self.resolve(cc.base_container.container_ref, path, self.mc_containers, "command container")
+                    bc = self.resolve(cc.base_container.container_ref, path,
+                                      self.mc_containers, "command container")
                     owner = self.mc_containers[bc]
                     if base is None or self.nodes.get(owner) is not base:
                         raise Unsupported(
@@ -1209,10 +1521,13 @@ class Compiler:
                             "which is not the container of its BaseMetaCommand"
                         )
                     if cc.base_container.restriction_criteria is not None:
-                        raise Unsupported(f"{where}: RestrictionCriteria on a CommandContainer")
+                        raise Unsupported(f"{where}: RestrictionCriteria on a "
+                                          "CommandContainer")
                 elif base is not None and base.all_items():
-                    raise Unsupported(f"{where}: CommandContainer does not extend its base's container")
-                node.items = self.tc_items(cc, scope, path, where, self.scope_of(base) if base else [])
+                    raise Unsupported(f"{where}: CommandContainer does not "
+                                      "extend its base's container")
+                node.items = self.tc_items(cc, scope, path, where,
+                                           self.scope_of(base) if base else [])
             self.check_rest(node, where)
             self.check_length(node, where)
             if base is not None:
@@ -1224,7 +1539,8 @@ class Compiler:
         self.order.append(node)
         return node
 
-    def tc_items(self, cc, scope: dict, path: Key, where: str, values: list) -> list[Item]:
+    def tc_items(self, cc, scope: dict, path: Key, where: str,
+                 values: list) -> list[Item]:
         """Items for a CommandContainer's entries.  ``values`` lists the
         values encoded so far (base meta-commands first) and grows."""
 
@@ -1236,28 +1552,35 @@ class Compiler:
         items: list[Item] = []
         for ch in cc.entry_list.items:
             e = ch.value
-            entries = ("ArgumentRefEntry", "ArrayArgumentRefEntry", "ParameterRefEntry", "ArrayParameterRefEntry")
+            entries = ("ArgumentRefEntry", "ArrayArgumentRefEntry",
+                       "ParameterRefEntry", "ArrayParameterRefEntry")
             if ch.name not in entries + ("FixedValueEntry",):
                 raise Unsupported(f"{where}: {ch.name} in a CommandContainer")
             if e.include_condition is not None:
-                raise Unsupported(f"{where}: IncludeCondition in a CommandContainer")
-            items += self.location(e.location_in_container_in_bits, 0, path, values, where, arg_key)
+                raise Unsupported(f"{where}: IncludeCondition in a "
+                                  "CommandContainer")
+            items += self.location(e.location_in_container_in_bits, 0, path,
+                                   values, where, arg_key)
             if ch.name in entries:
                 if "Argument" in ch.name:
                     local = self.arg_local(scope, e.argument_ref, where)
                 else:
                     local = self.param_local(e.parameter_ref, path)
                 local = self.subset(local, e, path, where)
-                local = self.bind(self.repeat(local, e, path, where), values, where, arg_key)
+                local = self.bind(self.repeat(local, e, path, where), values,
+                                  where, arg_key)
                 items.append(Value(local))
                 values.append(local)
             else:
                 if e.repeat_entry is not None:
-                    raise Unsupported(f"{where}: RepeatEntry on a FixedValueEntry")
+                    raise Unsupported(f"{where}: RepeatEntry on a "
+                                      "FixedValueEntry")
                 bits = e.size_in_bits
-                value = int.from_bytes(hex_bytes(e.binary_value.strip() or "0", where), "big")
+                value = int.from_bytes(hex_bytes(e.binary_value.strip() or "0",
+                                                 where), "big")
                 if not 1 <= bits <= 64 or value >> bits:
-                    raise Unsupported(f"{where}: FixedValueEntry {e.binary_value} in {bits} bits")
+                    raise Unsupported(f"{where}: FixedValueEntry "
+                                      f"{e.binary_value} in {bits} bits")
                 items.append(Fixed(bits, value))
         return items
 
@@ -1273,12 +1596,15 @@ class Compiler:
         roots, derived = [], []
         for n in self.order:
             if n.error:
-                (derived if n.error.startswith("base ") else roots).append(f"{n.key}: {n.error}")
+                (derived if n.error.startswith("base ")
+                 else roots).append(f"{n.key}: {n.error}")
         msgs = roots + derived
         if msgs and not self.skip_unsupported:
             if derived:
-                roots.append(f"and {len(derived)} containers or meta-commands derived from them")
-            raise Unsupported("unsupported XTCE constructs:\n  " + "\n  ".join(roots))
+                roots.append(f"and {len(derived)} containers or meta-commands "
+                             "derived from them")
+            raise Unsupported("unsupported XTCE constructs:\n  "
+                              + "\n  ".join(roots))
 
         ok = [n for n in self.order if not n.error]
         pos = {id(n): i for i, n in enumerate(self.nodes.values())}
@@ -1292,7 +1618,9 @@ class Compiler:
         for r in roots:
             members = [m for m in [r] + r.descendants() if not m.abstract]
             if members:
-                kinds.append(Kind(names.take(camel(r.name) + "Kind", camel(r.key) + "Kind"), r, members, 0))
+                kinds.append(Kind(names.take(camel(r.name) + "Kind",
+                                             camel(r.key) + "Kind"), r, members,
+                                  0))
         concrete = [n for n in ok if not n.abstract]
         used, aggregates = {}, {}
         for n in concrete:
@@ -1308,7 +1636,8 @@ class Compiler:
             vt.ident = names.take(camel(vt.name), camel(vt.key))
         for vt in aggregates.values():
             # A repeated container is often a packet too.
-            vt.ident = names.take(camel(vt.name), camel(vt.name) + "Item", camel(vt.key))
+            vt.ident = names.take(camel(vt.name), camel(vt.name) + "Item",
+                                  camel(vt.key))
         for k in kinds:
             k.max_bytes = max(m.max_bytes for m in k.members)
         return Mission(
@@ -1325,17 +1654,17 @@ class Compiler:
     def _finish(self, n: Node) -> None:
         fixed = {}
         for c in n.all_criteria():
-            fixes = isinstance(c, Criterion) and c.op == "==" and not c.path and c.other is None
+            fixes = (isinstance(c, Criterion) and c.op == "==" and not c.path
+                     and c.other is None)
             if fixes and c.local not in fixed:
                 fixed[c.local] = c.value
         n.fixed = fixed
         n.derived = derived_sizes(n)
         names = Namer()
-        n.fields = [
-            (names.take(snake(it.local.name)), it.local)
-            for it in walk(n.all_items())
-            if isinstance(it, Value) and it.local not in fixed and it.local.length is None and it.local not in n.derived
-        ]
+        n.fields = [(names.take(snake(it.local.name)), it.local)
+                    for it in walk(n.all_items()) if isinstance(it, Value)
+                    and it.local not in fixed and it.local.length is None
+                    and it.local not in n.derived]
         n.max_bytes = (max_bits(n.all_items()) + 7) // 8
 
 
@@ -1377,7 +1706,8 @@ def dyn_units(b: DynSize, rng: tuple[int, int]) -> int:
     """The largest ``(slope * x + intercept) / unit`` for x in ``rng``."""
     lo, hi = rng
     top = max(b.slope * lo, b.slope * hi) + b.intercept
-    return max(math.floor(top), 0) // b.unit if math.isfinite(top) else MAX_FIELD_BITS
+    return (max(math.floor(top), 0) // b.unit if math.isfinite(top)
+            else MAX_FIELD_BITS)
 
 
 def bounded(vt: VType, b: DynSize, rng: tuple[int, int]) -> VType:
@@ -1408,7 +1738,8 @@ def fixed_bits(vt: VType) -> Optional[int]:
         return e.count * b + max(e.count - 1, 0) * e.gap
     if isinstance(e, AggregateEnc):
         bs = [fixed_bits(m.vtype) for m in e.members]
-        return None if None in bs else sum(bs) + sum(m.skip for m in e.members) + e.pad
+        return (None if None in bs else sum(bs) + sum(m.skip for m in e.members)
+                + e.pad)
     if isinstance(e, StringEnc):
         return e.fixed_bits if e.dyn is None else None
     if isinstance(e, BinaryEnc):
@@ -1429,11 +1760,13 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
                 return None
             if it.from_start is not None and it.from_start not in marks:
                 return None
-            pos = (marks[it.from_start] if it.from_start is not None else pos) + it.offset
+            pos = ((marks[it.from_start] if it.from_start is not None else pos)
+                   + it.offset)
         elif isinstance(it, Mark):
             marks[it.id] = pos
         else:
-            bits = fixed_bits(it.local.vtype) if isinstance(it, Value) else it.bits
+            bits = (fixed_bits(it.local.vtype) if isinstance(it, Value)
+                    else it.bits)
             if bits is None:
                 return None
             pos += bits
@@ -1475,8 +1808,10 @@ def derived_sizes(n: Node) -> dict:
             for t in vt.tree():
                 if t.dyn is None:
                     continue
-                top = t is vt and t.kind in ("array", "binary") and not is_rest(t)
-                consumer = it.local if top and not it.local.optional and it.local not in n.fixed else None
+                top = (t is vt and t.kind in ("array", "binary")
+                       and not is_rest(t))
+                consumer = (it.local if top and not it.local.optional
+                            and it.local not in n.fixed else None)
                 dyn_uses(t.dyn, consumer)
     derived = {}
     for it in items:
@@ -1484,7 +1819,8 @@ def derived_sizes(n: Node) -> dict:
             continue
         lc = it.local
         vt = lc.vtype
-        if lc.optional or lc in n.fixed or lc.length is not None or vt.kind != "int" or vt.calibrator is not None:
+        if (lc.optional or lc in n.fixed or lc.length is not None
+                or vt.kind != "int" or vt.calibrator is not None):
             continue
         found = uses.get(lc, [])
         if found and all(u is not None for u in found):
@@ -1523,7 +1859,8 @@ def max_bits(items: list[Item]) -> int:
     marks = {0: 0}
     for it in walk(items):
         if isinstance(it, Seek):
-            pos = (marks[it.from_start] if it.from_start is not None else pos) + it.max_offset
+            pos = ((marks[it.from_start] if it.from_start is not None else pos)
+                   + it.max_offset)
         elif isinstance(it, Mark):
             marks[it.id] = pos
         elif isinstance(it, Value):

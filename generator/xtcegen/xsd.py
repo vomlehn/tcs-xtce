@@ -75,7 +75,8 @@ class _Parser:
     def simple_ref(self, name: str) -> TypeRef:
         """Resolve a named simple type (XSD builtin or schema-defined)."""
         prefix, local = _local(name)
-        if prefix is None and local in BUILTINS and local not in self.simple_nodes:
+        if (prefix is None and local in BUILTINS
+                and local not in self.simple_nodes):
             return ScalarRef(BUILTINS[local], builtin=local)
         if local in self.schema.enums:
             return EnumRef(local)
@@ -91,7 +92,8 @@ class _Parser:
     def define_simple(self, name: str, node: ET.Element) -> TypeRef:
         restriction = node.find(f"{XS}restriction")
         if restriction is not None:
-            values = [e.get("value", "") for e in restriction.findall(f"{XS}enumeration")]
+            values = [e.get("value", "")
+                      for e in restriction.findall(f"{XS}enumeration")]
             if values:
                 self.schema.enums[name] = EnumType(name, values, _doc(node))
                 return EnumRef(name)
@@ -105,7 +107,8 @@ class _Parser:
             ref = ScalarRef(inner.kind, name, inner.builtin)
             self.schema.simple[name] = ref
             return ref
-        if node.find(f"{XS}union") is not None or node.find(f"{XS}list") is not None:
+        if (node.find(f"{XS}union") is not None
+                or node.find(f"{XS}list") is not None):
             # Unions mix enumerations and patterns; keep the lexical form.
             ref = ScalarRef(STRING, name)
             self.schema.simple[name] = ref
@@ -154,7 +157,8 @@ class _Parser:
         ref = node.get("ref")
         if ref is not None:
             # Only xml:base is referenced by XTCE.
-            return Attribute(ref, ScalarRef(STRING), node.get("use") == "required")
+            return Attribute(ref, ScalarRef(STRING),
+                             node.get("use") == "required")
         name = node.get("name")
         if name is None:
             raise XsdError(f"attribute without name in {owner}")
@@ -174,7 +178,8 @@ class _Parser:
             if ref is not None:
                 _, local = _local(ref)
                 target = self.element_nodes[local]
-                return Element(local, self.type_of(target, owner), lo, hi, doc=_doc(node))
+                return Element(local, self.type_of(target, owner), lo, hi,
+                               doc=_doc(node))
             return Element(
                 node.get("name", ""),
                 self.type_of(node, owner),
@@ -200,13 +205,16 @@ class _Parser:
                 ct.attributes.append(self.parse_attribute(child, ct.name))
             elif child.tag in (f"{XS}sequence", f"{XS}choice"):
                 p = self.parse_particle(child, ct.name)
-                ct.content = p if isinstance(p, Sequence) and p.min == p.max == 1 else Sequence([p])
+                ct.content = (p if isinstance(p, Sequence)
+                              and p.min == p.max == 1 else Sequence([p]))
             elif child.tag == f"{XS}annotation":
                 pass
-            elif child.tag in (f"{XS}anyAttribute", f"{XS}group", f"{XS}attributeGroup"):
+            elif child.tag in (f"{XS}anyAttribute", f"{XS}group",
+                               f"{XS}attributeGroup"):
                 raise XsdError(f"unsupported {child.tag} in {ct.name}")
 
-    def parse_complex(self, name: str, node: ET.Element, anonymous: bool = False) -> ComplexType:
+    def parse_complex(self, name: str, node: ET.Element,
+                      anonymous: bool = False) -> ComplexType:
         ct = ComplexType(
             name=name,
             abstract=node.get("abstract") == "true",
@@ -218,13 +226,15 @@ class _Parser:
         if cc is not None:
             ext = cc.find(f"{XS}extension")
             if ext is None:
-                raise XsdError(f"complexContent restriction unsupported in {name}")
+                raise XsdError("complexContent restriction unsupported in "
+                               f"{name}")
             _, ct.base = _local(ext.get("base", ""))
             self.parse_body(ct, ext)
         elif sc is not None:
             ext = sc.find(f"{XS}extension")
             if ext is None:
-                raise XsdError(f"simpleContent restriction unsupported in {name}")
+                raise XsdError("simpleContent restriction unsupported in "
+                               f"{name}")
             base = self.simple_ref(ext.get("base", ""))
             if not isinstance(base, ScalarRef):
                 base = ScalarRef(STRING)
@@ -234,7 +244,8 @@ class _Parser:
             self.parse_body(ct, node)
             if node.get("mixed") == "true":
                 if ct.content is not None:
-                    raise XsdError(f"mixed content with elements unsupported in {name}")
+                    raise XsdError("mixed content with elements unsupported "
+                                   f"in {name}")
                 ct.text = ScalarRef(STRING)
         return ct
 
