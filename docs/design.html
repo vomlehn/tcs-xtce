@@ -389,8 +389,9 @@ ul.auto-toc {
 <li><a class="reference internal" href="#runtime" id="toc-entry-18">Runtime</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing-strategy" id="toc-entry-19">Testing strategy</a></li>
-<li><a class="reference internal" href="#limitations-and-future-work" id="toc-entry-20">Limitations and future work</a></li>
+<li><a class="reference internal" href="#the-digest-xtce-digest" id="toc-entry-19">The digest (xtce-digest)</a></li>
+<li><a class="reference internal" href="#testing-strategy" id="toc-entry-20">Testing strategy</a></li>
+<li><a class="reference internal" href="#limitations-and-future-work" id="toc-entry-21">Limitations and future work</a></li>
 </ul>
 </div>
 <div class="section" id="goals">
@@ -399,6 +400,12 @@ ul.auto-toc {
 <ol class="arabic simple">
 <li>Libraries in Rust, C/C++ and Python that serialize and deserialize
 XTCE data, with data structures and functions in each language.</li>
+<li><strong>Data structures that programs in different languages can
+exchange</strong>, defined once in XTCE. The packets are bit-packed, with
+nothing in them but the field values, and both ends check that they
+use the same definition by comparing digests (<tt class="docutils literal"><span class="pre">xtce-digest</span></tt>),
+rather than describing the data in every message as JSON and
+Protocol Buffers do.</li>
 <li>Serialization into <strong>managed buffers</strong>. These are preallocated and
 kept alive for exactly as long as the data structures that use them.</li>
 <li>Everything comes from the <strong>official XTCE documents</strong>. A top-level
@@ -939,8 +946,35 @@ own. In C the writer fills a caller-owned array and fails with
 </ul>
 </div>
 </div>
+<div class="section" id="the-digest-xtce-digest">
+<h1><a class="toc-backref" href="#toc-entry-19">The digest (xtce-digest)</a></h1>
+<p>Packets carry no field names, tags or lengths, so two programs can read
+each other's packets only if they were built from documents that define
+the same packets. <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> gives them a way to check: an MD5
+digest of what a document means, which they can compare once, when they
+start talking, instead of describing the data in every message.</p>
+<p>The digest is computed over a canonical encoding of the document's
+elements, attributes and text, read with ElementTree, which drops
+comments and processing instructions and names elements by namespace
+URI rather than prefix. Whitespace around text is dropped, attributes
+are sorted, and the children of elements that hold unordered collections
+(<tt class="docutils literal">UNORDERED</tt>: the <tt class="docutils literal">…Set</tt> elements, <tt class="docutils literal">ComparisonList</tt> and the like)
+are sorted by their encoding, so reordering a <tt class="docutils literal">ParameterSet</tt> changes
+nothing. Everything else keeps its order, since entry and member order
+is the packet layout. Each item of the encoding is length-prefixed, so
+different documents can't run together into the same bytes.</p>
+<p>The digest errs on the side of changing: anything that changes the
+document's meaning changes it, and so do some edits that change nothing
+tcs-xtce generates, such as a description. A false alarm costs a look at
+the document; a missed change would cost corrupted data. MD5 is used for
+its speed and ubiquity, not for security: it detects accidental
+differences, not deliberate collisions.</p>
+<p><tt class="docutils literal">digest_file</tt> and <tt class="docutils literal">digest_string</tt> in <tt class="docutils literal">generator/xtce_digest</tt> read
+and validate a document from a file or a string and return its digest;
+the command is a loop over <tt class="docutils literal">digest_file</tt>.</p>
+</div>
 <div class="section" id="testing-strategy">
-<h1><a class="toc-backref" href="#toc-entry-19">Testing strategy</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-20">Testing strategy</a></h1>
 <dl class="docutils">
 <dt><strong>Schema coverage</strong></dt>
 <dd>21 generated sample documents cover every element slot and every
@@ -1006,7 +1040,7 @@ that wrapped code fits in 80 columns and keeps its meaning.</li>
 </dl>
 </div>
 <div class="section" id="limitations-and-future-work">
-<h1><a class="toc-backref" href="#toc-entry-20">Limitations and future work</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-21">Limitations and future work</a></h1>
 <ul>
 <li><p class="first"><strong>XML binding:</strong></p>
 <ul class="simple">

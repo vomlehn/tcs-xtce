@@ -10,14 +10,8 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
-# Documents are checked with the generated `xtce` Python package.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
-
-import xtce  # noqa: E402
-
-from xtce_digest import digest  # noqa: E402
+from xtce_digest import XtceError, digest_file
 
 
 def main(argv=None) -> int:
@@ -28,11 +22,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     for name in args.files:
         try:
-            data = Path(name).read_bytes()
-            # Only valid XTCE has a meaning to digest.
-            xtce.Document.from_bytes(data)
-            print(f"{name}: {digest(data)}", flush=True)
-        except (OSError, xtce.XtceError) as e:
+            print(f"{name}: {digest_file(name)}", flush=True)
+        except (OSError, XtceError) as e:
             print(f"xtce-digest: {name}: {e}", file=sys.stderr)
             return 1
     return 0

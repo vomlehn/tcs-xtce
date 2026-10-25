@@ -12,6 +12,18 @@ Command Exchange) data into managed, preallocated buffers, in two layers:
   typed telemetry and command structs, with binary encoders and decoders
   for the packets it describes.
 
+XTCE defines the data structures once, and the code generated for each
+language exchanges them: what one language writes, any other reads, byte for
+byte. The packets are bit-packed, so a field takes only the bits its encoding
+gives, with none of the padding a language's own structures have; the
+housekeeping example's status packet is 7 bytes, where the C structure is 40.
+Packets carry no field names or tags. Instead, programs check that they were
+built from the same definition by comparing digests from `xtce-digest` (or its
+`digest_file` and `digest_string` library functions), which guarantees that
+they agree on every field's type and order. That avoids the per-message cost
+of self-describing formats: the same packet is 77 bytes as JSON and 29 as
+Protocol Buffers.
+
 The full documentation is in [`docs/manual.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/manual.rst) (user
 manual, including every data structure and method) and
 [`docs/design.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/design.rst) (design and rationale), each rendered

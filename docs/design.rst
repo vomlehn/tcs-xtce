@@ -13,12 +13,18 @@ tcs-xtce is flight software, and these goals are set with that in mind.
 
 1. Libraries in Rust, C/C++ and Python that serialize and deserialize
    XTCE data, with data structures and functions in each language.
-2. Serialization into **managed buffers**. These are preallocated and
+2. **Data structures that programs in different languages can
+   exchange**, defined once in XTCE. The packets are bit-packed, with
+   nothing in them but the field values, and both ends check that they
+   use the same definition by comparing digests (``xtce-digest``),
+   rather than describing the data in every message as JSON and
+   Protocol Buffers do.
+3. Serialization into **managed buffers**. These are preallocated and
    kept alive for exactly as long as the data structures that use them.
-3. Everything comes from the **official XTCE documents**. A top-level
+4. Everything comes from the **official XTCE documents**. A top-level
    ``make`` downloads them into ``references/``, and code is generated
    from them rather than written by hand.
-4. All code keeps its lines within 80 columns, generated or not. Rust
+5. All code keeps its lines within 80 columns, generated or not. Rust
    follows ``rustfmt`` (with ``max_width = 80``), checked as code is
    added; C and C++ indent 8 spaces, as ``.clang-format`` sets.
 
@@ -585,6 +591,37 @@ significant bit first, at any bit position:
   ``Packet::encode`` takes the buffer to fill, and ``Codec`` supplies its
   own. In C the writer fills a caller-owned array and fails with
   ``NoSpace`` rather than grow it.
+
+The digest (xtce-digest)
+========================
+
+Packets carry no field names, tags or lengths, so two programs can read
+each other's packets only if they were built from documents that define
+the same packets. ``xtce-digest`` gives them a way to check: an MD5
+digest of what a document means, which they can compare once, when they
+start talking, instead of describing the data in every message.
+
+The digest is computed over a canonical encoding of the document's
+elements, attributes and text, read with ElementTree, which drops
+comments and processing instructions and names elements by namespace
+URI rather than prefix. Whitespace around text is dropped, attributes
+are sorted, and the children of elements that hold unordered collections
+(``UNORDERED``: the ``…Set`` elements, ``ComparisonList`` and the like)
+are sorted by their encoding, so reordering a ``ParameterSet`` changes
+nothing. Everything else keeps its order, since entry and member order
+is the packet layout. Each item of the encoding is length-prefixed, so
+different documents can't run together into the same bytes.
+
+The digest errs on the side of changing: anything that changes the
+document's meaning changes it, and so do some edits that change nothing
+tcs-xtce generates, such as a description. A false alarm costs a look at
+the document; a missed change would cost corrupted data. MD5 is used for
+its speed and ubiquity, not for security: it detects accidental
+differences, not deliberate collisions.
+
+``digest_file`` and ``digest_string`` in ``generator/xtce_digest`` read
+and validate a document from a file or a string and return its digest;
+the command is a loop over ``digest_file``.
 
 Testing strategy
 ================

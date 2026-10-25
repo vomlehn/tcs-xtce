@@ -38,6 +38,18 @@ methods that encode them to the bytes that go on the wire and decode
 them from those bytes. It presently generates code for C/C++, Rust and
 Python 3.
 
+The key use of XTCE here is to define data structures that programs
+written in different languages can exchange. The code generated for
+each language writes exactly the same bytes, and reads the bytes any of
+the others wrote. The packets are bit-packed: each field takes the bits
+its encoding gives, and nothing more, so they are much smaller than the
+languages' own data structures, which pad their fields for alignment.
+And when both programs use the same XTCE document, which ``xtce-digest``
+can check, each knows every field's type and position in advance, so
+nothing on the wire has to describe them. That avoids the overhead of
+self-describing formats such as JSON and Google Protocol Buffers. See
+`Exchanging data between programs`_.
+
 The generated code is written for flight software, where dynamic
 memory allocation is often not allowed. tcs-xtce has a flag,
 ``--dynamic-allocations false``, that leaves out code that allocates
@@ -72,6 +84,48 @@ owns them goes away.
 
 All three languages are generated from the same model and produce
 byte-identical output. The test suite checks this on every build.
+
+Exchanging data between programs
+--------------------------------
+
+An XTCE document defines data structures once, for every language. The
+packet codecs generated from it are interchangeable: a packet that the
+Rust code encodes, the C, C++ or Python code decodes to the same values,
+and encoding those values again gives the same bytes. The ``to-from``
+example (see `Examples`_) runs each of the four languages' writers
+against each of their readers.
+
+**Bit packing.** Each field occupies exactly the bits its XTCE encoding
+gives: a 4-bit flag takes 4 bits and a 12-bit raw temperature 12 bits,
+packed one after another with no padding between them. A language's own
+data structures can't do this. A C compiler pads each field to its
+alignment, and sending a structure as it is in memory also ties its
+layout to one compiler, byte order and word size. In the ``housekeeping``
+example, a ``Status`` with its heater on is 7 bytes on the wire, while
+the C structure that holds it is 40 bytes, 14 of them padding.
+
+**Agreeing on the definition.** The encoding has no field names, tags or
+lengths in it: it is the field values and nothing else. That works
+because both programs are built from the same XTCE document, so each
+knows what every field is and where it is. To make sure they are, compare
+the digests of their documents: ``xtce-digest`` (see `xtce-digest`_), or
+its library functions ``digest_file`` and ``digest_string``, gives two
+documents the same digest only when they say the same thing, and so
+define the same packets, with the same fields, types and order. (It errs
+the other way: some edits that change nothing it generates still change
+the digest.) A program can check this once,
+for example when two programs connect, rather than in every message.
+
+**Compared with self-describing formats.** JSON and Google Protocol
+Buffers carry part of the definition in every message, so a reader can
+cope with a writer it wasn't built with. They pay for it in every
+message. The same ``Status`` is 77 bytes as compact JSON, which repeats
+each field's name and writes numbers as text, and 29 bytes as Protocol
+Buffers with ``double`` fields, which put a tag before each field and
+use whole bytes for every value. Both must also be parsed field by field
+to find what the message holds. With a shared, verified XTCE document,
+none of that is needed: the 7 bytes are the whole message, and decoding
+reads each field from where the document says it is.
 
 .. list-table::
    :header-rows: 1
@@ -1423,6 +1477,11 @@ it means, so that a change to a mission database that would change the
 generated data structures and methods can be noticed, and an edit that
 only rearranges the document can be told apart from one that doesn't.
 
+Two programs that exchange packets can use it to check that they were
+built from the same definition: if their documents have the same
+digest, they agree on every packet's fields, types and order (see
+`Exchanging data between programs`_).
+
 .. code-block:: sh
 
    cd generator
@@ -1435,7 +1494,7 @@ name as given, a colon, a space and the digest, in hex:
 
 .. code-block:: text
 
-   ../tests/mission/demo.xml: 4c4a919fe4ac21b2dadf9c03ba547347
+   ../tests/mission/demo.xml: 6d2d1d775d75a68089fddade8e95c585
 
 Each file gets its own digest, computed afresh, so a file gives the same
 digest wherever it appears in the list. A file that can't be read, isn't
@@ -1443,6 +1502,21 @@ well-formed XML or isn't valid XTCE is reported on standard error and
 ends the command with status 1; the files before it have been printed,
 and the ones after it are not read. Status 0 means every file was
 digested.
+
+The same digest is available to Python programs from the
+``xtce_digest`` package (in ``generator/``), which needs only the
+``xtce`` package in ``python/``:
+
+.. code-block:: python
+
+   from xtce_digest import XtceError, digest_file, digest_string
+
+   digest_file("../tests/mission/demo.xml")    # '6d2d1d775d75a68089fddade8e95c585'
+   digest_string(xml_text)                     # the XML itself, str or bytes
+
+Both check that the document is valid XTCE first, and raise
+``XtceError`` if it isn't; ``digest_file`` also raises ``OSError`` if the
+file can't be read. ``xtce-digest`` calls ``digest_file`` for each file.
 
 The digest covers every element, attribute and piece of text, but not
 what leaves the document meaning the same:

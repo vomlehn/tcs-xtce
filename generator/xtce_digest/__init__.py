@@ -18,13 +18,34 @@ children of every other element, such as the entries of an
 
 The digest is meant to show that the data structures and methods
 generated from a document have not changed unexpectedly: it changes
-whenever the document says something different.
+whenever the document says something different.  Two programs whose
+documents give the same digest agree on every packet's fields, their
+types and their order, so they can exchange packets without describing
+them on the wire.
+
+``digest_file`` and ``digest_string`` read an XTCE document from a file
+or a string, check that it is valid XTCE, and return its digest;
+``xtce-digest`` uses ``digest_file``.  ``digest`` digests bytes without
+checking them.
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
+import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import Union
+
+# Documents are checked with the generated `xtce` Python package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
+
+import xtce  # noqa: E402
+
+# Raised for a document that isn't valid XTCE; reading a file can also
+# raise OSError.
+XtceError = xtce.XtceError
 
 # Elements whose children may appear in any order without changing what the
 # document means: collections of named things that are referred to by name,
@@ -102,8 +123,26 @@ def encode(elem: ET.Element) -> bytes:
     return b"E" + field(elem.tag.encode()) + field(attrs) + field(body)
 
 
+def digest_string(text: Union[str, bytes]) -> str:
+    """The MD5 digest, in hex, of the XTCE document ``text`` (the XML
+    itself, as a string or as bytes).  Raises ``XtceError`` unless it is
+    valid XTCE."""
+    data = text.encode() if isinstance(text, str) else bytes(text)
+    # Only valid XTCE has a meaning to digest.
+    xtce.Document.from_bytes(data)
+    return digest(data)
+
+
+def digest_file(path: Union[str, os.PathLike]) -> str:
+    """The MD5 digest, in hex, of the XTCE document in the file ``path``.
+    Raises ``OSError`` if the file can't be read, and ``XtceError`` unless
+    it holds valid XTCE."""
+    return digest_string(Path(path).read_bytes())
+
+
 def digest(data: bytes) -> str:
-    """The MD5 digest, in hex, of the XTCE document ``data``."""
+    """The MD5 digest, in hex, of the XTCE document ``data``, which isn't
+    checked: ``digest_string`` checks it first."""
     # ElementTree drops comments and processing instructions, and names
     # elements and attributes by namespace URI rather than prefix.
     root = ET.fromstring(data)

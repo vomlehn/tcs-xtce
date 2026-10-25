@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from xtce_digest import digest
+from xtce_digest import XtceError, digest, digest_file, digest_string
 from xtce_digest.__main__ import main
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
@@ -82,6 +82,25 @@ class DigestTests(unittest.TestCase):
         base = md5(described("hot"))
         self.assertEqual(md5(described("\n   hot  ")), base)
         self.assertNotEqual(md5(described("cold")), base)
+
+
+class LibraryTests(unittest.TestCase):
+    def test_string_and_file_give_the_digest(self):
+        text = doc()
+        self.assertEqual(digest_string(text), md5(text))
+        self.assertEqual(digest_string(text.encode()), md5(text))
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "sat.xml"
+            p.write_text(text)
+            self.assertEqual(digest_file(p), md5(text))
+            self.assertEqual(digest_file(str(p)), md5(text))
+
+    def test_only_valid_xtce_is_digested(self):
+        for text in ("<SpaceSystem", "<other/>"):
+            with self.subTest(text=text), self.assertRaises(XtceError):
+                digest_string(text)
+        with self.assertRaises(OSError):
+            digest_file("/nonexistent/x.xml")
 
 
 class CommandLineTests(unittest.TestCase):
