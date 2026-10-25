@@ -469,6 +469,14 @@ pretend to evaluate it.
 A command container's ``IncludeCondition`` and ``RestrictionCriteria``
 reuse the telemetry machinery: conditional items, and criteria that fix
 the values they compare with ``==``, like argument assignments.
+Containers a command includes, from a ``CommandContainerSet`` or from
+telemetry, are flattened by ``tc_include`` the same way, with a ``Mark``
+at their start and a ``Require`` for each base's criteria. The compiler
+looks them up in ``tc_containers``, which holds the
+``CommandContainerSet``\ s' containers and then telemetry's. A
+``CommandContainer`` whose ``BaseContainer`` names one of them, rather
+than its base meta-command's container, starts with that container's
+items. A ``SizeInBits`` adds the same ``Pad`` or ``Fill`` as in telemetry.
 
 Times
 -----

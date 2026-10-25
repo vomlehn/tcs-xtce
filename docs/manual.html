@@ -2165,7 +2165,7 @@ encoded when the condition holds on the struct's fields. Encoding
 fails with <tt class="docutils literal">Missing</tt> if the condition holds but the value is
 absent.</dd>
 <dt>Commands</dt>
-<dd><tt class="docutils literal">MetaCommand</tt> with <tt class="docutils literal">ArgumentList</tt>, <tt class="docutils literal">BaseMetaCommand</tt> and
+<dd><p class="first"><tt class="docutils literal">MetaCommand</tt> with <tt class="docutils literal">ArgumentList</tt>, <tt class="docutils literal">BaseMetaCommand</tt> and
 <tt class="docutils literal">ArgumentAssignmentList</tt>, and a <tt class="docutils literal">CommandContainer</tt> that extends
 the base meta-command's container: through a <tt class="docutils literal">BaseContainer</tt> naming
 it, or, as Yamcs reads it, with no <tt class="docutils literal">BaseContainer</tt> at all. The container
@@ -2177,7 +2177,17 @@ they fix the value when encoding and select the command when decoding.
 The <tt class="docutils literal">RestrictionCriteria</tt> of a <tt class="docutils literal">CommandContainer</tt>'s
 <tt class="docutils literal">BaseContainer</tt> (which XTCE gives on parameters in the command) act
 the same way. The demo's <tt class="docutils literal">Arm</tt> has an optional argument and a
-72-bit pattern sent twice.</dd>
+72-bit pattern sent twice.</p>
+<p class="last">A command container may also hold <tt class="docutils literal">ContainerRefEntry</tt>, naming a
+container of a <tt class="docutils literal">CommandContainerSet</tt> or of telemetry, whose entries
+(and its bases', each base's <tt class="docutils literal">RestrictionCriteria</tt> checked after its
+entries) are included as in telemetry. A <tt class="docutils literal">CommandContainer</tt> of a
+meta-command without a <tt class="docutils literal">BaseMetaCommand</tt> may extend such a container
+through its <tt class="docutils literal">BaseContainer</tt>. A <tt class="docutils literal">SizeInBits</tt> pads a command, or an
+included container, as in telemetry. The demo's <tt class="docutils literal">Stamp</tt> includes
+<tt class="docutils literal">Trailer</tt>, which extends <tt class="docutils literal">TrailerBase</tt> and must have a
+<tt class="docutils literal">TrailerKind</tt> of 7, and is padded to 16 bytes.</p>
+</dd>
 <dt>Segments</dt>
 <dd><p class="first"><tt class="docutils literal">ParameterSegmentRefEntry</tt>, <tt class="docutils literal">ContainerSegmentRefEntry</tt> and
 <tt class="docutils literal">StreamSegmentEntry</tt>, in telemetry and command containers. When the
@@ -2209,8 +2219,9 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 <dt>Not supported</dt>
 <dd>references to elements of arrays whose count varies in a dimension
 other than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt>, other instances
-than 0, repeated segment entries, <tt class="docutils literal">CustomAlgorithm</tt> criteria, a
-<tt class="docutils literal">SizeInBits</tt> on command containers, transform algorithms, custom
+than 0, repeated segment entries, repeated containers in commands,
+commands that include another meta-command's container,
+<tt class="docutils literal">CustomAlgorithm</tt> criteria, transform algorithms, custom
 checksum algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which
 XTCE deprecates) and in included containers with an
 <tt class="docutils literal">IncludeCondition</tt>, calibrators inside aggregate types that use other

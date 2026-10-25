@@ -1750,6 +1750,16 @@ Commands
    the same way. The demo's ``Arm`` has an optional argument and a
    72-bit pattern sent twice.
 
+   A command container may also hold ``ContainerRefEntry``, naming a
+   container of a ``CommandContainerSet`` or of telemetry, whose entries
+   (and its bases', each base's ``RestrictionCriteria`` checked after its
+   entries) are included as in telemetry. A ``CommandContainer`` of a
+   meta-command without a ``BaseMetaCommand`` may extend such a container
+   through its ``BaseContainer``. A ``SizeInBits`` pads a command, or an
+   included container, as in telemetry. The demo's ``Stamp`` includes
+   ``Trailer``, which extends ``TrailerBase`` and must have a
+   ``TrailerKind`` of 7, and is padded to 16 bytes.
+
 Segments
    ``ParameterSegmentRefEntry``, ``ContainerSegmentRefEntry`` and
    ``StreamSegmentEntry``, in telemetry and command containers. When the
@@ -1783,8 +1793,9 @@ Name references
 Not supported
    references to elements of arrays whose count varies in a dimension
    other than the first, ``IndirectParameterRefEntry``, other instances
-   than 0, repeated segment entries, ``CustomAlgorithm`` criteria, a
-   ``SizeInBits`` on command containers, transform algorithms, custom
+   than 0, repeated segment entries, repeated containers in commands,
+   commands that include another meta-command's container,
+   ``CustomAlgorithm`` criteria, transform algorithms, custom
    checksum algorithms, ``ErrorDetectCorrect`` in a data encoding (which
    XTCE deprecates) and in included containers with an
    ``IncludeCondition``, calibrators inside aggregate types that use other

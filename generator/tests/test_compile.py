@@ -1872,9 +1872,8 @@ class SegmentTests(unittest.TestCase):
 
     def test_raw(self):
         # Half of W, and a segment of a value that varies in size.
-        n = compile_xml(segment_mission(
-            '<ParameterRefEntry parameterRef="W"/>' + seg("W", 8)
-            + seg("V", 8))).nodes[0]
+        n = compile_xml(segment_mission('<ParameterRefEntry parameterRef="W"/>'
+                                        + seg("W", 8) + seg("V", 8))).nodes[0]
         self.assertEqual([lc.name for _, lc in n.fields],
                          ["W", "WSegment0", "VSegment0"])
         self.assertEqual(n.fields[1][1].vtype.enc.bits, 8)
@@ -1890,3 +1889,79 @@ class SegmentTests(unittest.TestCase):
                 with self.assertRaises(Unsupported) as cm:
                     self.items(entries)
                 self.assertIn(why, str(cm.exception))
+
+
+def shared_mission(base: str, entries: str = "", base_meta: str = "") -> str:
+    """Commands with a CommandContainerSet holding Head (parameter K) and
+    Body (extending Head, with parameter T); meta-command C's container
+    has ``entries`` and extends ``base``."""
+    bc = f'<BaseContainer containerRef="{base}"/>' if base else ""
+    return mission(tc=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+          <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="K" parameterTypeRef="U8"/>
+          <Parameter name="T" parameterTypeRef="U8"/>
+        </ParameterSet>
+        <ArgumentTypeSet>
+          <IntegerArgumentType name="A8" signed="false">
+          <IntegerDataEncoding sizeInBits="8"/></IntegerArgumentType>
+        </ArgumentTypeSet>
+        <MetaCommandSet>
+          <MetaCommand name="B">
+            <CommandContainer name="BC"><EntryList/></CommandContainer>
+          </MetaCommand>
+          <MetaCommand name="C">{base_meta}
+            <ArgumentList><Argument name="X" argumentTypeRef="A8"/>
+            </ArgumentList>
+            <CommandContainer name="CC">
+              <BinaryEncoding><SizeInBits><FixedValue>40</FixedValue>
+              </SizeInBits></BinaryEncoding>
+              <EntryList><ArgumentRefEntry argumentRef="X"/>{entries}
+              </EntryList>{bc}
+            </CommandContainer>
+          </MetaCommand>
+        </MetaCommandSet>
+        <CommandContainerSet>
+          <CommandContainer name="Head"><EntryList>
+            <ParameterRefEntry parameterRef="K"/></EntryList>
+          </CommandContainer>
+          <CommandContainer name="Body"><EntryList>
+            <ParameterRefEntry parameterRef="T"/></EntryList>
+            <BaseContainer containerRef="Head"><RestrictionCriteria>
+            <Comparison parameterRef="K" value="3"/></RestrictionCriteria>
+            </BaseContainer>
+          </CommandContainer>
+        </CommandContainerSet>""")
+
+
+class CommandContainerSetTests(unittest.TestCase):
+    def node(self, text: str):
+        return next(n for n in compile_xml(text).nodes if n.name == "C")
+
+    def test_extends_shared(self):
+        n = self.node(shared_mission("Body"))
+        self.assertEqual([lc.name for _, lc in n.fields], ["K", "T", "X"])
+        self.assertTrue(any(isinstance(it, Require) for it in n.items))
+        # Padded up to the container's 40 bits.
+        self.assertEqual(n.max_bytes, 5)
+        self.assertIsInstance(n.items[-1], Pad)
+
+    def test_includes_shared(self):
+        n = self.node(
+            shared_mission("", '<ContainerRefEntry containerRef="Body"/>'))
+        self.assertEqual([lc.name for _, lc in n.fields], ["X", "K", "T"])
+
+    def test_rejected(self):
+        meta = '<BaseMetaCommand metaCommandRef="B"/>'
+        for text, why in (
+                (shared_mission("Body", base_meta=meta),
+                 "extends a container other than its BaseMetaCommand's"),
+                (shared_mission("", '<ContainerRefEntry containerRef="CC"/>'),
+                 "unresolved container reference 'CC'")):
+            with self.subTest(why=why):
+                c = compile_xml(text, skip_unsupported=True)
+                self.assertFalse(any(n.name == "C" for n in c.nodes))
+                self.assertTrue(any(why in m for m in c.skipped), c.skipped)

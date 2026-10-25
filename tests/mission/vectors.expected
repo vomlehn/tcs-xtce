@@ -154,5 +154,7 @@ Compared{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, se
 Segmented{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, seg_mid=171, seg_word=4660, seg_part_segment0=5, seg_float=2.5, seg_flag=119, section_segment0=107, downlink_segment0=1992} | 09ccc02a000a1ab234500004020776b7c8
 Segmented{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, seg_mid=1, seg_word=4095, seg_part_segment0=1, seg_float=-1.0, seg_flag=none, section_segment0=2, downlink_segment0=3} | 09ccc02a0009001fff10000bf8002003
 Split{seq_count=5, middle=48879, split_word=4660} | 112ec00500040e34beef12
+Stamp{seq_count=5, count=258, trailer_kind=7, trailer_tag=43981} | 112ec00500090f010207abcd00000000
+error:Mismatch | -
 Arm{seq_count=5, force=true, level=7} | 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50
 Arm{seq_count=5, force=false, level=none} | 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50

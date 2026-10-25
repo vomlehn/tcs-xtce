@@ -1679,10 +1679,15 @@
       <IntegerParameterType name="ChecksumType" signed="false">
         <IntegerDataEncoding sizeInBits="16"/>
       </IntegerParameterType>
+      <IntegerParameterType name="TrailerKindType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </IntegerParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Checksum" parameterTypeRef="ChecksumType"/>
       <Parameter name="SplitWord" parameterTypeRef="ChecksumType"/>
+      <Parameter name="TrailerKind" parameterTypeRef="TrailerKindType"/>
+      <Parameter name="TrailerTag" parameterTypeRef="ChecksumType"/>
     </ParameterSet>
     <ArgumentTypeSet>
       <IntegerArgumentType name="U11Arg" signed="false">
@@ -2225,7 +2230,51 @@
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>
       </MetaCommand>
+      <!-- Includes Trailer, from the CommandContainerSet, and is padded
+           to 16 bytes. -->
+      <MetaCommand name="Stamp">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="15"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Count" argumentTypeRef="U16Arg"/>
+        </ArgumentList>
+        <CommandContainer name="StampContainer">
+          <BinaryEncoding>
+            <SizeInBits><FixedValue>128</FixedValue></SizeInBits>
+          </BinaryEncoding>
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Count"/>
+            <ContainerRefEntry containerRef="Trailer"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
     </MetaCommandSet>
+    <CommandContainerSet>
+      <CommandContainer name="TrailerBase">
+        <EntryList>
+          <ParameterRefEntry parameterRef="TrailerKind"/>
+        </EntryList>
+      </CommandContainer>
+      <!-- 32 bits: TrailerKind, which must be 7, TrailerTag and a pad. -->
+      <CommandContainer name="Trailer">
+        <BinaryEncoding>
+          <SizeInBits><FixedValue>32</FixedValue></SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="TrailerTag"/>
+        </EntryList>
+        <BaseContainer containerRef="TrailerBase">
+          <RestrictionCriteria>
+            <Comparison parameterRef="TrailerKind" value="7"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </CommandContainer>
+    </CommandContainerSet>
   </CommandMetaData>
   <SpaceSystem name="Power">
     <TelemetryMetaData>

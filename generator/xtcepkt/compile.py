@@ -412,6 +412,9 @@ class Compiler:
         self.mcs: dict[Key, tuple] = {}
         # CommandContainer -> MetaCommand
         self.mc_containers: dict[Key, Key] = {}
+        # The containers a CommandContainer may include or extend: those of
+        # CommandContainerSets, then telemetry's.
+        self.tc_containers: dict[Key, tuple] = {}
         # Parameter and argument types are separate namespaces, so the cache
         # key says which one a type comes from: (is_argument_type, key).
         self.vtypes: dict[tuple[bool, Key], VType] = {}
@@ -432,6 +435,8 @@ class Compiler:
                                   f"{root.name!r}")
             seen.add(root.name)
             self._index(root, ())
+        for k, v in self.containers.items():
+            self.tc_containers.setdefault(k, v)
 
     # -- indexing and name resolution --
 
@@ -457,6 +462,9 @@ class Compiler:
                 for ch in tc.argument_type_set.items:
                     self.atypes[path + (ch.value.name,)] = (path, ch.name,
                                                             ch.value)
+            if tc.command_container_set:
+                for c in tc.command_container_set.command_container:
+                    self.tc_containers[path + (c.name,)] = (path, c)
             if tc.meta_command_set:
                 for ch in tc.meta_command_set.items:
                     if ch.name == "MetaCommand":
@@ -2017,14 +2025,40 @@ class Compiler:
             cc = mc.command_container
             if cc is not None:
                 be = cc.binary_encoding
-                if be is not None and (be.size_in_bits is not None
-                                       or be.from_binary_transform_algorithm
+                if be is not None and (be.from_binary_transform_algorithm
                                        or be.to_binary_transform_algorithm):
-                    raise Unsupported(f"{where}: container BinaryEncoding")
+                    raise Unsupported(f"{where}: container transform "
+                                      "algorithms")
                 node._edc = (cc, path)
+                values = self.scope_of(base) if base else []
+                prefix: list[Item] = []
+                shared = None
                 if cc.base_container is not None:
-                    bc = self.resolve(cc.base_container.container_ref, path,
-                                      self.mc_containers, "command container")
+                    try:
+                        bc = self.resolve(cc.base_container.container_ref, path,
+                                          self.mc_containers,
+                                          "command container")
+                    except Unsupported:
+                        # A container of a CommandContainerSet, or of
+                        # telemetry: its entries come first.
+                        shared = self.resolve(cc.base_container.container_ref,
+                                              path, self.tc_containers,
+                                              "container")
+                if shared is not None:
+                    if base is not None:
+                        raise Unsupported(f"{where}: a CommandContainer that "
+                                          "extends a container other than its "
+                                          "BaseMetaCommand's")
+                    prefix = self.tc_include(shared, scope, where, values, ())
+                    rc = cc.base_container.restriction_criteria
+                    if rc is not None:
+                        terms = self.match(
+                            rc, path, values, where,
+                            lambda name: self.arg_key_of(scope, name, where))
+                        prefix.append(Require(terms, qname(shared),
+                                              " and ".join(t.text
+                                                           for t in terms)))
+                elif cc.base_container is not None:
                     owner = self.mc_containers[bc]
                     if base is None or self.nodes.get(owner) is not base:
                         raise Unsupported(f"{where}: CommandContainer extends "
@@ -2042,8 +2076,12 @@ class Compiler:
                             lambda name: self.arg_key_of(scope, name, where))
                 # A CommandContainer without a BaseContainer still extends
                 # the container of its BaseMetaCommand, as Yamcs reads it.
-                node.items = self.tc_items(cc, scope, path, where,
-                                           self.scope_of(base) if base else [])
+                node.items = (prefix
+                              + self.tc_items(cc, scope, path, where, values))
+                # A size covers the whole command, base containers' entries
+                # too.
+                node.items += self.size_pad(cc, node.all_items(), 0, where,
+                                            values, path)
             self.check_rest(node, where)
             self.check_length(node, where)
             if not node.abstract:
@@ -2057,10 +2095,12 @@ class Compiler:
         self.order.append(node)
         return node
 
-    def tc_items(self, cc, scope: dict, path: Key, where: str,
-                 values: list) -> list[Item]:
-        """Items for a CommandContainer's entries.  ``values`` lists the
-        values encoded so far (base meta-commands first) and grows."""
+    def tc_items(self, cc, scope: dict, path: Key, where: str, values: list,
+                 start: int = 0, stack: tuple = ()) -> list[Item]:
+        """Items for a CommandContainer's entries, or those of a container
+        it includes (from mark ``start``; ``stack`` lists the containers
+        being included).  ``values`` lists the values encoded so far (base
+        meta-commands first) and grows."""
 
         def arg_key(name: str) -> str:
             if name not in scope:
@@ -2073,18 +2113,26 @@ class Compiler:
             e = ch.value
             entries = ("ArgumentRefEntry", "ArrayArgumentRefEntry",
                        "ParameterRefEntry", "ArrayParameterRefEntry")
-            if ch.name not in entries + ("FixedValueEntry",) + SEGMENTS:
+            if (ch.name not in entries
+                    + ("FixedValueEntry", "ContainerRefEntry") + SEGMENTS):
                 raise Unsupported(f"{where}: {ch.name} in a CommandContainer")
             cond = None
             if e.include_condition is not None:
                 cond = self.match(e.include_condition, path, values, where,
                                   arg_key)
             out = items if cond is None else []
-            out += self.location(e.location_in_container_in_bits, 0, path,
+            out += self.location(e.location_in_container_in_bits, start, path,
                                  values, where, arg_key)
             if ch.name in SEGMENTS:
                 out += self.segment(ch.name, e, path, where, segs,
                                     cond is not None, values)
+            elif ch.name == "ContainerRefEntry":
+                if e.repeat_entry is not None:
+                    raise Unsupported(f"{where}: a repeated container in a "
+                                      "CommandContainer")
+                ckey = self.resolve(e.container_ref, path, self.tc_containers,
+                                    "container")
+                out += self.tc_include(ckey, scope, where, values, stack)
             elif ch.name in entries:
                 if "Argument" in ch.name:
                     local = self.arg_local(scope, e.argument_ref, where)
@@ -2104,6 +2152,42 @@ class Compiler:
                 items.append(Cond(cond, out))
         self.raw_segments(items, segs, values)
         return items
+
+    def tc_include(self, ckey: Key, scope: dict, where: str, values: list,
+                   stack: tuple) -> list[Item]:
+        """Items for a container that a command includes: its bases'
+        entries, then its own, each base's RestrictionCriteria checked
+        after its entries, and padding up to its size."""
+        m = self._id()
+        items: list[Item] = [Mark(m)]
+        arg_key = lambda name: self.arg_key_of(scope, name, where)  # noqa
+        chain, key = [], ckey
+        while True:
+            if key in stack or key in (k for _, _, k in chain):
+                raise Unsupported(f"{where}: container {qname(key)} includes "
+                                  "itself")
+            kpath, c = self.tc_containers[key]
+            chain.append((kpath, c, key))
+            if c.base_container is None:
+                break
+            key = self.resolve(c.base_container.container_ref, kpath,
+                               self.tc_containers, "container")
+        inner: list[Item] = []
+        for kpath, c, key in chain[::-1]:
+            if edc_items(c):
+                raise Unsupported(f"{where}: ErrorDetectCorrect in container "
+                                  f"{qname(key)}, which a command includes")
+            inner += self.tc_items(c, scope, kpath, where, values, m,
+                                   stack + (key,))
+            rc = (c.base_container.restriction_criteria
+                  if c.base_container is not None else None)
+            if rc is not None:
+                terms = self.match(rc, kpath, values, where, arg_key)
+                inner.append(Require(terms, qname(key),
+                                     " and ".join(t.text for t in terms)))
+        cpath, inc = self.tc_containers[ckey]
+        return (items + inner
+                + self.size_pad(inc, inner, m, where, values, cpath))
 
     def arg_key_of(self, scope: dict, name: str, where: str) -> str:
         if name not in scope:
