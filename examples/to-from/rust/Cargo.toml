@@ -3,7 +3,10 @@ name = "to-from"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Writes and reads words of varying length, described in XTCE, so that any language can read what any other wrote"
+description = """\
+    Writes and reads words of varying length, described in XTCE, so that any \
+    language can read what any other wrote\
+"""
 
 [dependencies]
 tcs-xtce = { path = "../../../rust" }
