@@ -37,6 +37,12 @@ encoding of the root element:
 
 As XML requires, line ends are normalized to line feeds before anything
 else, and tabs and line feeds in attribute values become spaces.
+
+A mission whose definitions are split across several documents has one
+digest for the set (``digest_set``, ``digest_files``): the MD5 digest of
+the documents' encodings, sorted by their bytes and concatenated.  It
+doesn't depend on the order the documents are given in, and the digest of
+a set of one document is that document's digest.
 """
 
 from __future__ import annotations
@@ -45,7 +51,7 @@ import hashlib
 import os
 import xml.parsers.expat
 from pathlib import Path
-from typing import Union
+from typing import Iterable, Union
 
 from ._xml import XtceError
 
@@ -207,3 +213,31 @@ def digest_file(path: Union[str, os.PathLike]) -> str:
     """The digest of the XTCE document in the file ``path``, in lowercase
     hex."""
     return digest_file_bytes(path).hex()
+
+
+def digest_set_bytes(documents: Iterable[Union[str, bytes]]) -> bytes:
+    """The MD5 digest of the set of XTCE documents ``documents`` (each the
+    XML itself, as a string or as UTF-8 bytes), as 16 bytes.  Raises
+    ``XtceError`` if any can't be read."""
+    codes = sorted(encoding(d.encode() if isinstance(d, str) else bytes(d))
+                   for d in documents)
+    return hashlib.md5(b"".join(codes), usedforsecurity=False).digest()
+
+
+def digest_set(documents: Iterable[Union[str, bytes]]) -> str:
+    """The digest of the set of XTCE documents ``documents``, in lowercase
+    hex."""
+    return digest_set_bytes(documents).hex()
+
+
+def digest_files_bytes(paths: Iterable[Union[str, os.PathLike]]) -> bytes:
+    """The digest of the set of XTCE documents in the files ``paths``, as 16
+    bytes.  Raises ``OSError`` if a file can't be read, and ``XtceError`` if
+    a document can't."""
+    return digest_set_bytes([Path(p).read_bytes() for p in paths])
+
+
+def digest_files(paths: Iterable[Union[str, os.PathLike]]) -> str:
+    """The digest of the set of XTCE documents in the files ``paths``, in
+    lowercase hex."""
+    return digest_files_bytes(paths).hex()

@@ -8,7 +8,8 @@ Command Exchange) data into managed, preallocated buffers, in two layers:
   code that reads and writes XTCE documents. The code for all three
   languages is generated from the official schema, which is downloaded
   into `references/`.
-* **Packet codecs**: `tcs-xtce` compiles one mission's XTCE document into
+* **Packet codecs**: `tcs-xtce` compiles one mission's XTCE document, or
+  the several documents it is split across, as Yamcs loads them, into
   typed telemetry and command structs, with binary encoders and decoders
   for the packets it describes.
 

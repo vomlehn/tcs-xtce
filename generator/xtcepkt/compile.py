@@ -1,9 +1,14 @@
-"""Compile a mission's XTCE document into the packet model.
+"""Compile a mission's XTCE documents into the packet model.
 
-The document is loaded with the ``xtce`` Python package (the XML binding
+The documents are loaded with the ``xtce`` Python package (the XML binding
 generated from the XTCE schema), so anything that package accepts can be
 compiled.  The compiler resolves names, fills in schema defaults, flattens
 included containers and records which XTCE constructs it does not support.
+
+A mission may be split across several documents, as Yamcs allows: the root
+SpaceSystem of each document sits at the top of one tree, so a reference
+such as ``/PUS/pus-tm`` in one document can name a container defined in
+another whose root SpaceSystem is ``PUS``.
 """
 
 from __future__ import annotations
@@ -389,8 +394,10 @@ def length_adjust(item, vt: VType, where: str) -> Optional[int]:
 
 
 class Compiler:
-    def __init__(self, root, skip_unsupported: bool = False):
-        self.root = root
+    def __init__(self, roots: list, skip_unsupported: bool = False):
+        """``roots`` is the root SpaceSystem of each of the mission's
+        documents."""
+        self.roots = list(roots)
         self.skip_unsupported = skip_unsupported
         self.ptypes: dict[Key, tuple] = {}
         self.params: dict[Key, tuple] = {}
@@ -409,7 +416,13 @@ class Compiler:
         self._aggregating: set = set()
         # container key -> aggregate of a repeated container
         self.ctypes: dict = {}
-        self._index(root, ())
+        seen = set()
+        for root in self.roots:
+            if root.name in seen:
+                raise Unsupported("two documents have the root SpaceSystem "
+                                  f"{root.name!r}")
+            seen.add(root.name)
+            self._index(root, ())
 
     # -- indexing and name resolution --
 
@@ -449,9 +462,12 @@ class Compiler:
     def resolve(self, ref: str, cur: Key, table: dict, what: str) -> Key:
         """Resolve an XTCE name reference relative to SpaceSystem ``cur``.
 
-        Absolute paths start with ``/`` and the root SpaceSystem's name.
-        Relative paths may use ``.`` and ``..``.  An unqualified name is looked
-        up in ``cur`` and then in each enclosing SpaceSystem.
+        Absolute paths start with ``/`` and the name of a document's root
+        SpaceSystem.  Relative paths may use ``.`` and ``..``.  An unqualified
+        name, or a relative path that doesn't start with ``.`` or ``..``, is
+        looked up from ``cur`` and then from each enclosing SpaceSystem, as
+        Yamcs does, so ``cfs-ccsds/cfs-cmd`` can name a meta-command in
+        another document whose root SpaceSystem is ``cfs-ccsds``.
         """
         ref = ref.strip()
         parts = ref.split("/")
@@ -465,16 +481,20 @@ class Compiler:
                 if key in table:
                     return key
         else:
-            base = list(cur)
-            for p in parts[:-1]:
-                if p == "..":
-                    if base:
-                        base.pop()
-                elif p and p != ".":
-                    base.append(p)
-            key = tuple(base) + (parts[-1],)
-            if key in table:
-                return key
+            starts = [cur]
+            if parts[0] not in (".", ".."):
+                starts = [cur[:i] for i in range(len(cur), -1, -1)]
+            for start in starts:
+                base = list(start)
+                for p in parts[:-1]:
+                    if p == "..":
+                        if base:
+                            base.pop()
+                    elif p and p != ".":
+                        base.append(p)
+                key = tuple(base) + (parts[-1],)
+                if key in table:
+                    return key
         raise Unsupported(f"unresolved {what} reference {ref!r} in "
                           f"{qname(cur)}")
 
@@ -488,10 +508,9 @@ class Compiler:
         cache = (table is self.atypes, key)
         if cache in self.vtypes:
             return self.vtypes[cache]
-        path, kind, t = table[key]
+        path, kind, _ = table[key]
         where = f"type {qname(key)}"
-        if getattr(t, "base_type", None):
-            raise Unsupported(f"{where}: baseType inheritance is not supported")
+        t = self.inherited(key, table)
         base = kind.replace("ParameterType", "").replace("ArgumentType", "")
         if base in ("AbsoluteTime", "RelativeTime"):
             vt = self.time_type(key, base, t, path, where)
@@ -565,6 +584,28 @@ class Compiler:
                 self.check_bool_strings(vt, where)
         self.vtypes[cache] = vt
         return vt
+
+    def inherited(self, key: Key, table: dict, seen: tuple = ()):
+        """The type ``key`` with what it inherits from its ``baseType``, if
+        it has one, filled in: every attribute and child element it leaves
+        out comes from its base type, which must be the same kind of type,
+        and those it gives replace the base's.  (References in what it
+        inherits are resolved from its own SpaceSystem.)"""
+        path, kind, t = table[key]
+        if not getattr(t, "base_type", None):
+            return t
+        where = f"type {qname(key)}"
+        if key in seen:
+            raise Unsupported(f"{where}: its baseType chain is a cycle")
+        bkey = self.resolve(t.base_type, path, table, "base type")
+        if table[bkey][1] != kind:
+            raise Unsupported(f"{where}: its baseType {qname(bkey)} is another "
+                              f"kind of type, {table[bkey][1]}")
+        base = self.inherited(bkey, table, seen + (key,))
+        own = {f.name: getattr(t, f.name) for f in dataclasses.fields(t)
+               if getattr(t, f.name) is not None}
+        own["base_type"] = None
+        return dataclasses.replace(base, **own)
 
     @staticmethod
     def check_bool_strings(vt: VType, where: str) -> None:
@@ -1506,9 +1547,8 @@ class Compiler:
                     if cc.base_container.restriction_criteria is not None:
                         raise Unsupported(f"{where}: RestrictionCriteria on a "
                                           "CommandContainer")
-                elif base is not None and base.all_items():
-                    raise Unsupported(f"{where}: CommandContainer does not "
-                                      "extend its base's container")
+                # A CommandContainer without a BaseContainer still extends
+                # the container of its BaseMetaCommand, as Yamcs reads it.
                 node.items = self.tc_items(cc, scope, path, where,
                                            self.scope_of(base) if base else [])
             self.check_rest(node, where)
@@ -1623,7 +1663,10 @@ class Compiler:
                                   camel(vt.key))
         for k in kinds:
             k.max_bytes = max(m.max_bytes for m in k.members)
-        return Mission(name=self.root.name, source="",
+        # The mission is named for its last document, which by convention
+        # is its own: the documents it builds on come first.
+        return Mission(name=self.roots[-1].name,
+                       spaces=[r.name for r in self.roots], source="",
                        types=list(used.values()),
                        aggregates=list(aggregates.values()), nodes=concrete,
                        kinds=kinds, roots=roots, skipped=msgs)
@@ -1862,4 +1905,11 @@ def max_bits(items: list[Item]) -> int:
 
 
 def compile_document(root, skip_unsupported: bool = False) -> Mission:
-    return Compiler(root, skip_unsupported).compile()
+    """Compile the mission whose definitions are all in one document."""
+    return Compiler([root], skip_unsupported).compile()
+
+
+def compile_documents(roots: list, skip_unsupported: bool = False) -> Mission:
+    """Compile the mission whose definitions are in several documents:
+    ``roots`` is the root SpaceSystem of each, in the order given."""
+    return Compiler(roots, skip_unsupported).compile()

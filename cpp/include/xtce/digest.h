@@ -14,6 +14,12 @@
  * malformed, to declare another encoding, to have a DOCTYPE, or to have a
  * root element other than SpaceSystem.
  *
+ * A mission whose definitions are split across several documents has one
+ * digest for the set (xtce_digest_set, xtce_digest_files): the MD5 digest of
+ * the documents' encodings, sorted by their bytes and concatenated.  It
+ * doesn't depend on the order the documents are given in, and the digest of a
+ * set of one document is that document's digest.
+ *
  * This header needs no library, like xtce/packet.h.  Computing a digest
  * allocates memory with malloc, so do it at start-up, not in code that must
  * not allocate.  The functions return 0 on success, or -1 after filling in
@@ -32,6 +38,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 #endif
 
 typedef struct xtce_digest_error {
@@ -884,11 +891,11 @@ static inline int xtce_digest_string(const char* text, char hex[33],
         return xtce_digest((const uint8_t*)text, strlen(text), hex, err);
 }
 
-/* The digest of the XTCE document in the file `path`, as 16 bytes. */
-static inline int xtce_digest_file_bytes(const char* path, uint8_t out[16],
-                                         xtce_digest_error* err) {
+/* The contents of the file `path`, in *data (which the caller frees with
+ * xtce_dbuf_free). */
+static inline int xtce_digest_read(const char* path, xtce_dbuf* data,
+                                   xtce_digest_error* err) {
         FILE* f = fopen(path, "rb");
-        xtce_dbuf data = {NULL, 0, 0, 0};
         uint8_t chunk[4096];
         size_t got;
         int rc;
@@ -901,8 +908,8 @@ static inline int xtce_digest_file_bytes(const char* path, uint8_t out[16],
                 return -1;
         }
         while ((got = fread(chunk, 1, sizeof chunk, f)) > 0)
-                xtce_dbuf_put(&data, chunk, got);
-        rc = ferror(f) || data.failed ? -1 : 0;
+                xtce_dbuf_put(data, chunk, got);
+        rc = ferror(f) || data->failed ? -1 : 0;
         fclose(f);
         if (rc) {
                 if (err) {
@@ -910,10 +917,19 @@ static inline int xtce_digest_file_bytes(const char* path, uint8_t out[16],
                                  "%s: cannot read", path);
                         err->line = 0;
                 }
-        } else {
-                rc = xtce_digest_bytes(data.p ? data.p : (const uint8_t*)"",
-                                       data.n, out, err);
+                xtce_dbuf_free(data);
         }
+        return rc;
+}
+
+/* The digest of the XTCE document in the file `path`, as 16 bytes. */
+static inline int xtce_digest_file_bytes(const char* path, uint8_t out[16],
+                                         xtce_digest_error* err) {
+        xtce_dbuf data = {NULL, 0, 0, 0};
+        int rc;
+        if (xtce_digest_read(path, &data, err)) return -1;
+        rc = xtce_digest_bytes(data.p ? data.p : (const uint8_t*)"", data.n,
+                               out, err);
         xtce_dbuf_free(&data);
         return rc;
 }
@@ -923,6 +939,100 @@ static inline int xtce_digest_file(const char* path, char hex[33],
                                    xtce_digest_error* err) {
         uint8_t d[16];
         if (xtce_digest_file_bytes(path, d, err)) return -1;
+        xtce_digest_hex(d, hex);
+        return 0;
+}
+
+/* The MD5 digest of the set of `n` XTCE documents, the ith at docs[i] with
+ * lens[i] bytes, as 16 bytes. */
+static inline int xtce_digest_set_bytes(const uint8_t* const* docs,
+                                        const size_t* lens, size_t n,
+                                        uint8_t out[16],
+                                        xtce_digest_error* err) {
+        xtce_dbuf* codes = (xtce_dbuf*)calloc(n ? n : 1, sizeof *codes);
+        xtce_dbuf all = {NULL, 0, 0, 0};
+        size_t i;
+        int rc = 0;
+        if (!codes) {
+                if (err) {
+                        snprintf(err->message, sizeof err->message,
+                                 "out of memory");
+                        err->line = 0;
+                }
+                return -1;
+        }
+        for (i = 0; i < n && rc == 0; ++i)
+                rc = xtce_digest_encoding(docs[i], lens[i], &codes[i], err);
+        if (rc == 0) {
+                qsort(codes, n, sizeof *codes, xtce_dbuf_cmp);
+                for (i = 0; i < n; ++i)
+                        xtce_dbuf_put(&all, codes[i].p, codes[i].n);
+                if (all.failed) {
+                        if (err) {
+                                snprintf(err->message, sizeof err->message,
+                                         "out of memory");
+                                err->line = 0;
+                        }
+                        rc = -1;
+                } else {
+                        xtce_md5(all.p, all.n, out);
+                }
+        }
+        for (i = 0; i < n; ++i) xtce_dbuf_free(&codes[i]);
+        xtce_dbuf_free(&all);
+        free(codes);
+        return rc;
+}
+
+/* The digest of the set of `n` XTCE documents, as lowercase hex. */
+static inline int xtce_digest_set(const uint8_t* const* docs,
+                                  const size_t* lens, size_t n, char hex[33],
+                                  xtce_digest_error* err) {
+        uint8_t d[16];
+        if (xtce_digest_set_bytes(docs, lens, n, d, err)) return -1;
+        xtce_digest_hex(d, hex);
+        return 0;
+}
+
+/* The digest of the set of XTCE documents in the `n` files `paths`, as 16
+ * bytes. */
+static inline int xtce_digest_files_bytes(const char* const* paths, size_t n,
+                                          uint8_t out[16],
+                                          xtce_digest_error* err) {
+        xtce_dbuf* data = (xtce_dbuf*)calloc(n ? n : 1, sizeof *data);
+        const uint8_t** docs = (const uint8_t**)calloc(n ? n : 1,
+                                                       sizeof *docs);
+        size_t* lens = (size_t*)calloc(n ? n : 1, sizeof *lens);
+        size_t i;
+        int rc = 0;
+        if (!data || !docs || !lens) {
+                if (err) {
+                        snprintf(err->message, sizeof err->message,
+                                 "out of memory");
+                        err->line = 0;
+                }
+                rc = -1;
+        }
+        for (i = 0; i < n && rc == 0; ++i) {
+                rc = xtce_digest_read(paths[i], &data[i], err);
+                docs[i] = data[i].p ? data[i].p : (const uint8_t*)"";
+                lens[i] = data[i].n;
+        }
+        if (rc == 0) rc = xtce_digest_set_bytes(docs, lens, n, out, err);
+        if (data)
+                for (i = 0; i < n; ++i) xtce_dbuf_free(&data[i]);
+        free(data);
+        free((void*)docs);
+        free(lens);
+        return rc;
+}
+
+/* The digest of the set of XTCE documents in the `n` files `paths`, as
+ * lowercase hex. */
+static inline int xtce_digest_files(const char* const* paths, size_t n,
+                                    char hex[33], xtce_digest_error* err) {
+        uint8_t d[16];
+        if (xtce_digest_files_bytes(paths, n, d, err)) return -1;
         xtce_digest_hex(d, hex);
         return 0;
 }
@@ -946,6 +1056,35 @@ inline std::string digest_file(const std::string& path) {
         char hex[33];
         xtce_digest_error err;
         if (::xtce_digest_file(path.c_str(), hex, &err))
+                throw std::runtime_error(err.message);
+        return hex;
+}
+
+/* The digest of the set of XTCE documents `texts`, as lowercase hex; throws
+ * std::runtime_error if one can't be read. */
+inline std::string digest_set(const std::vector<std::string>& texts) {
+        std::vector<const uint8_t*> docs;
+        std::vector<size_t> lens;
+        for (const std::string& t : texts) {
+                docs.push_back((const uint8_t*)t.data());
+                lens.push_back(t.size());
+        }
+        char hex[33];
+        xtce_digest_error err;
+        if (::xtce_digest_set(docs.data(), lens.data(), docs.size(), hex,
+                              &err))
+                throw std::runtime_error(err.message);
+        return hex;
+}
+
+/* The digest of the set of XTCE documents in the files `paths`, as lowercase
+ * hex; throws std::runtime_error if one can't be read. */
+inline std::string digest_files(const std::vector<std::string>& paths) {
+        std::vector<const char*> names;
+        for (const std::string& p : paths) names.push_back(p.c_str());
+        char hex[33];
+        xtce_digest_error err;
+        if (::xtce_digest_files(names.data(), names.size(), hex, &err))
                 throw std::runtime_error(err.message);
         return hex;
 }

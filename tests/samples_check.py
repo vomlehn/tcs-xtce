@@ -16,7 +16,11 @@ which for each document checks that
    module against the tcs-xtce crate, and the Python module;
 5. the Rust, C, C++ and Python runtimes give it the same XTCE digest;
 
-and prints one summary per document, which must equal
+It also compiles the missions in tests/external/missions.txt, each split
+across several of the documents, together as one, and checks 3 to 5 for
+each (5 for the set's one digest).
+
+It prints one summary per document and per mission, which must equal
 tests/external/expected.txt.  ``--update`` rewrites expected.txt instead.
 
 The documents are only parsed, never executed.
@@ -41,9 +45,9 @@ sys.path[:0] = [str(TOP / "python"), str(TOP / "generator")]
 import xtce  # noqa: E402
 from xtcegen.__main__ import rustfmt  # noqa: E402
 from xtcepkt import emit_c, emit_python, emit_rust, report  # noqa: E402
-from xtcepkt.compile import compile_document  # noqa: E402
+from xtcepkt.compile import compile_documents  # noqa: E402
 from xtcepkt.model import Unsupported  # noqa: E402
-from xtce.digest import digest_file  # noqa: E402
+from xtce.digest import digest_file, digest_files  # noqa: E402
 
 XSD = TOP / "references" / "SpaceSystem.xsd"
 CATALOG = TOP / "references" / "catalog.xml"
@@ -51,7 +55,8 @@ NS13 = b"http://www.omg.org/spec/XTCE/20250214"
 OLD_NS = re.compile(rb"https?://www\.omg\.org/(space/xtce|spec/XTCE/\d{8})"
                     rb"(/SpaceSystem\.xsd)?")
 RLIB = TOP / "rust" / "target" / "release" / "libtcs_xtce.rlib"
-# The digest tools of the other runtimes, which print one digest per file.
+# The digest tools of the other runtimes, which print one digest per file,
+# or with --set, the digest of the set.
 DIGEST_TOOLS = [TOP / "rust" / "target" / "release" / "examples"
                 / "digest_tool", TOP / "cpp" / "build" / "digest_tool",
                 TOP / "cpp" / "build" / "digest_tool_cxx"]
@@ -64,6 +69,20 @@ def sources() -> list[tuple[str, str]]:
         if line.strip() and not line.startswith("#"):
             name, digest, _url = line.split()
             out.append((name, digest))
+    return out
+
+
+def missions() -> list[tuple[str, list[str]]]:
+    """(name, local names of its documents) of every mission in
+    missions.txt."""
+    out = []
+    for line in (EXTERNAL / "missions.txt").read_text().splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        if line[0].isspace():
+            out[-1][1].append(line.strip())
+        else:
+            out.append((line.strip().removesuffix(":"), []))
     return out
 
 
@@ -154,6 +173,48 @@ def digests(paths: list[Path]) -> dict:
     return out
 
 
+def set_digest(paths: list[Path]) -> str:
+    """The digest line of a set of documents."""
+    try:
+        mine = digest_files(paths)
+    except (OSError, xtce.XtceError):
+        mine = "error"
+    others = {subprocess.run([str(t), "--set"] + [str(p) for p in paths],
+                             capture_output=True, text=True,
+                             check=True).stdout.strip() for t in DIGEST_TOOLS}
+    return (f"digest {mine}" if others == {mine}
+            else f"DIGESTS DIFFER: Python {mine}, others "
+                 f"{' '.join(sorted(others))}")
+
+
+def compiled(roots: list, stem: str, out: Path) -> list[str]:
+    """The summary lines of compiling the documents with root SpaceSystems
+    ``roots`` together, and building the code generated from them."""
+    try:
+        mission = compile_documents(roots, skip_unsupported=True)
+        report.report(mission)
+    except Unsupported as e:
+        return [f"not compiled: {e}"]
+    n = len(mission.nodes)
+    lines = [f"{n} {'packet' if n == 1 else 'packets'}, {len(mission.skipped)} "
+             "not supported"]
+    lines += [f"  unsupported: {m}" for m in mission.skipped]
+    if mission.nodes:
+        lines += [f"  FAILED: {x}" for x in build(mission, stem, out)]
+    return lines
+
+
+def check_mission(paths: list[Path], stem: str, out: Path) -> list[str]:
+    """The summary lines of one mission split across several documents."""
+    roots = []
+    for p in paths:
+        try:
+            roots.append(xtce.Document.from_file(str(p)).root)
+        except xtce.XtceError:
+            return [f"not compiled: the binding rejects {p.name}"]
+    return compiled(roots, stem, out)
+
+
 def check(path: Path, out: Path) -> list[str]:
     """The summary lines of one document."""
     verdict = schema_verdict(path)
@@ -170,19 +231,8 @@ def check(path: Path, out: Path) -> list[str]:
         lines.append("DISAGREE: the schema rejects it")
     if xtce.Document.from_bytes(doc.to_bytes()).root != doc.root:
         lines.append("ROUND TRIP DIFFERS")
-    try:
-        mission = compile_document(doc.root, skip_unsupported=True)
-        report.report(mission)
-    except Unsupported as e:
-        return lines + [f"not compiled: {e}"]
-    n = len(mission.nodes)
-    lines.append(f"{n} {'packet' if n == 1 else 'packets'}, "
-                 f"{len(mission.skipped)} not supported")
-    lines += [f"  unsupported: {m}" for m in mission.skipped]
-    if mission.nodes:
-        stem = re.sub(r"\W", "_", path.stem).lower()
-        lines += [f"  FAILED: {x}" for x in build(mission, stem, out)]
-    return lines
+    stem = re.sub(r"\W", "_", path.stem).lower()
+    return lines + compiled([doc.root], stem, out)
 
 
 def main() -> int:
@@ -209,6 +259,17 @@ def main() -> int:
             out_lines.append(f"{name}: {lines[0]}")
             out_lines += [f"  {x}" for x in lines[1:]]
             out_lines.append(f"  {digest_of[path]}")
+        for name, docs in missions():
+            paths = [files / d for d in docs]
+            try:
+                lines = check_mission(
+                    paths, "mission_" + re.sub(r"\W", "_", name), Path(tmp))
+            except Exception as e:  # a crash is a finding, so keep going
+                lines = [f"CRASH {type(e).__name__}: {e}"]
+            out_lines.append(f"mission {name} ({len(docs)} documents): "
+                             f"{lines[0]}")
+            out_lines += [f"  {x}" for x in lines[1:]]
+            out_lines.append(f"  {set_digest(paths)}")
     text = "\n".join(out_lines) + "\n"
     expected = EXTERNAL / "expected.txt"
     if update:
@@ -229,8 +290,8 @@ def main() -> int:
         print(f"samples_check: {x.strip()}", file=sys.stderr)
     if flagged:
         return 1
-    print(f"samples_check: {len(sources())} documents match "
-          f"{expected.relative_to(TOP)}")
+    print(f"samples_check: {len(sources())} documents and {len(missions())} "
+          f"missions match {expected.relative_to(TOP)}")
     return 0
 
 

@@ -17,7 +17,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 
 from xtce import Document, XtceError  # noqa: E402,F401
 from xtce.digest import (  # noqa: E402,F401
-    UNORDERED, digest, digest_file, digest_string, encoding)
+    UNORDERED, digest, digest_file, digest_files, digest_set, digest_string,
+    encoding)
 
 
 def checked_digest(data: bytes) -> str:
@@ -25,3 +26,4 @@ def checked_digest(data: bytes) -> str:
     ``XtceError`` if it isn't."""
     Document.from_bytes(data)
     return digest(data)
+

@@ -8,6 +8,8 @@ from pathlib import Path
 
 from tcs_xtce.__main__ import main
 
+from .test_compile import APP, HEADER, TYPES
+
 DEMO = str(Path(__file__).resolve().parents[2] / "tests" / "mission"
            / "demo.xml")
 
@@ -53,6 +55,53 @@ class DynamicAllocationTests(unittest.TestCase):
         with (contextlib.redirect_stderr(io.StringIO()),
               self.assertRaises(SystemExit)):
             generate("--lang", "rust", "--dynamic-allocations", "no")
+
+
+class InputTests(unittest.TestCase):
+    """Several input documents, and where the output goes."""
+
+    def run_main(self, *args: str):
+        out, err = io.StringIO(), io.StringIO()
+        with (contextlib.redirect_stdout(out), contextlib.redirect_stderr(err)):
+            status = main(list(args))
+        return status, out.getvalue(), err.getvalue()
+
+    def test_several_documents(self):
+        with tempfile.TemporaryDirectory() as d:
+            names = []
+            for name, text in (("dt", TYPES), ("hdr", HEADER), ("app", APP)):
+                names.append(str(Path(d) / f"{name}.xml"))
+                Path(names[-1]).write_text(text)
+            status, out, err = self.run_main(*names, "-", "--lang", "rust")
+            self.assertEqual((status, err), (0, ""))
+            self.assertTrue(out.startswith("// @generated automatically by "
+                                           "tcs-xtce from dt.xml, hdr.xml, "
+                                           "app.xml\n// (SpaceSystems 'dt', "
+                                           "'hdr', 'app').\n"), out)
+            self.assertIn("change the XTCE documents instead", out)
+            self.assertIn("pub struct Status", out)
+            self.assertIn("pub struct Ping", out)
+            # Without the document of types, references fail, and the error
+            # names no one file.
+            status, _, err = self.run_main(*names[1:], "-", "--lang", "rust")
+            self.assertEqual(status, 1)
+            self.assertTrue(err.startswith("tcs-xtce: unsupported"), err)
+
+    def test_output_is_not_a_document(self):
+        # Forgetting OUTPUT must not overwrite the last document.
+        with self.assertRaises(SystemExit):
+            self.run_main(DEMO, DEMO, "--lang", "rust")
+
+    def test_size_report_output(self):
+        status, out, _ = self.run_main(DEMO, "--size-report")
+        self.assertEqual(status, 0)
+        self.assertTrue(out.startswith("Size report for SpaceSystem 'Demo'"),
+                        out[:80])
+        with tempfile.TemporaryDirectory() as d:
+            report = Path(d) / "report.txt"
+            self.assertEqual(self.run_main(DEMO, str(report),
+                                           "--size-report")[:2], (0, ""))
+            self.assertEqual(report.read_text(), out)
 
 
 if __name__ == "__main__":

@@ -548,6 +548,8 @@ class Kind:
 @dataclass
 class Mission:
     name: str
+    # the root SpaceSystem of each document, in the order given
+    spaces: list[str]
     source: str
     types: list[VType]  # enumerations used by generated code
     # aggregates used by generated code, inner ones first

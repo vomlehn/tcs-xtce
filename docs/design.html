@@ -622,7 +622,7 @@ XML at run time.</li>
 <p>The cost is that a database change requires regenerating the code, as
 for the XML binding.</p>
 <p>The command line, <tt class="docutils literal">generator/tcs_xtce</tt>, writes one language per run
-(<tt class="docutils literal"><span class="pre">tcs-xtce</span> INPUT OUTPUT <span class="pre">--lang</span> LANG</tt>). The compiler and the emitters it
+(<tt class="docutils literal"><span class="pre">tcs-xtce</span> <span class="pre">INPUT...</span> OUTPUT <span class="pre">--lang</span> LANG</tt>). The compiler and the emitters it
 calls live in <tt class="docutils literal">generator/xtcepkt</tt>.</p>
 </div>
 <div class="section" id="one-header-for-c-and-c">
@@ -657,19 +657,36 @@ which matches Python's <tt class="docutils literal">repr</tt>.</li>
 </div>
 <div class="section" id="compiler-pipeline">
 <h2><a class="toc-backref" href="#toc-entry-12">Compiler pipeline</a></h2>
-<p><tt class="docutils literal">compile.py</tt> turns the mission document, loaded with <tt class="docutils literal">python/xtce</tt>,
+<p><tt class="docutils literal">compile.py</tt> turns the mission's documents, loaded with <tt class="docutils literal">python/xtce</tt>,
 into the model in <tt class="docutils literal">model.py</tt>:</p>
 <dl class="docutils">
 <dt><strong>Indexing and name resolution.</strong></dt>
 <dd><p class="first">Parameter types, parameters, argument types, containers and
-meta-commands are indexed by SpaceSystem path. References are resolved
+meta-commands are indexed by SpaceSystem path. A mission may be split
+across several documents; the root SpaceSystem of each is indexed at
+the top of one tree, as Yamcs loads a list of documents, so a path's
+first name is a document's root SpaceSystem. References are resolved
 in the following order:</p>
-<ul class="last simple">
+<ul class="simple">
 <li>absolute paths;</li>
-<li>relative paths with <tt class="docutils literal">.</tt> and <tt class="docutils literal">..</tt>;</li>
-<li>unqualified names in the current SpaceSystem, then in each
-enclosing one.</li>
+<li>relative paths that start with <tt class="docutils literal">.</tt> or <tt class="docutils literal">..</tt>, from the current
+SpaceSystem only;</li>
+<li>unqualified names, and other relative paths, from the current
+SpaceSystem, then from each enclosing one. Yamcs looks relative
+paths up this way, and missions such as the cFS ones for Yamcs rely
+on it (<tt class="docutils literal"><span class="pre">cfs-ccsds/cfs-cmd</span></tt> from <tt class="docutils literal">/CFE_EVS</tt>).</li>
 </ul>
+<p>The mission is named for its last document, so that the documents it
+builds on can be listed first; otherwise the order of the documents
+changes nothing.</p>
+<p class="last">A type with a <tt class="docutils literal">baseType</tt> is its base type with the attributes and
+child elements it gives replacing the base's, whole: nothing is merged
+below a child element, which keeps the rule simple to state and
+matches how the PUS mission uses it (a type that only renames
+another). A <tt class="docutils literal">CommandContainer</tt> without a <tt class="docutils literal">BaseContainer</tt> in a
+meta-command with a base extends the base meta-command's container, as
+Yamcs reads it; XTCE doesn't say, and the alternative, a command that
+drops its base's header, isn't useful.</p>
 </dd>
 <dt><strong>Types</strong> (<tt class="docutils literal">VType</tt>).</dt>
 <dd><p class="first">Each parameter or argument type becomes an engineering kind (<tt class="docutils literal">int</tt>,
@@ -1000,6 +1017,14 @@ requires. <tt class="docutils literal">tests/digest_check.sh</tt> runs all four 
 documents, including edge cases in <tt class="docutils literal">tests/digest</tt>, and checks them
 against each other and against known digests. The <tt class="docutils literal">UNORDERED</tt> list is
 written out in each runtime and must stay the same in all of them.</p>
+<p>A mission split across several documents has one digest for the set:
+the MD5 digest of the documents' encodings, sorted by their bytes and
+joined. Each encoding is self-delimiting (it is one length-prefixed
+element), so joining them is unambiguous; sorting makes the order of the
+files irrelevant, as it is to the compiler; and a set of one document has
+that document's digest, so nothing changes for single-document missions.
+<tt class="docutils literal">tests/digest/sets.txt</tt> pins sets' digests, which every runtime must
+reproduce.</p>
 <p>The runtimes don't check documents against the schema; the
 <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> command, in <tt class="docutils literal">generator/xtce_digest</tt>, does, then digests
 each file with the Python runtime. Computing a digest allocates memory,
@@ -1047,7 +1072,9 @@ XTCE documents from Yamcs, its quickstart, yamcs-cfs and the XTCE
 Toolkit, pinned by commit and
 SHA-256. Generated code is compiled in every language, every runtime
 digests each document, and each document's summary, digest included,
-is compared with <tt class="docutils literal">tests/external/expected.txt</tt>.
+is compared with <tt class="docutils literal">tests/external/expected.txt</tt>. The missions in
+<tt class="docutils literal">tests/external/missions.txt</tt>, each split across several of the
+documents, are compiled and digested as sets the same way.
 This catches crashes and disagreements with <tt class="docutils literal">xmllint</tt>, which
 hand-written tests can miss, and shows which unsupported constructs
 real documents use.</dd>

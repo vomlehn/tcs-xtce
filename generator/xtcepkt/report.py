@@ -231,7 +231,9 @@ def summary(mission: Mission) -> list[str]:
 
 
 def report(mission: Mission) -> str:
-    out = [f"Size report for SpaceSystem {mission.name!r}", "",
+    plural = "s" if len(mission.spaces) > 1 else ""
+    spaces = ", ".join(repr(s) for s in mission.spaces)
+    out = [f"Size report for SpaceSystem{plural} {spaces}", "",
            "bits: on the wire now; needs: what the document says the values "
            "need;",
            "'=' marks constants (fixed by a criterion or a FixedValueEntry)."]

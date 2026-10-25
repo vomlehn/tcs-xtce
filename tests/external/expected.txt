@@ -278,3 +278,45 @@ yamcs-cfs/tutorial.xml: schema invalid; rejected by the binding
   digest 51d78ba9ef5ab2f366459606f42a5ff5
 yamcs-cfs/ocpoc.xml: schema invalid; rejected by the binding
   digest 2c8841271cb1758d2684ad621de8c618
+mission pus (9 documents): 55 packets, 33 not supported
+    unsupported: /PUS/pus-tm: type /PUS/PusTimeType: binary transform algorithms
+    unsupported: /PUS11/DETAIL_REPORT/DETAIL_REPORT_ELEMENT: type /PUS/PusTimeType: binary transform algorithms
+    unsupported: /PUS11/SUMMARY_REPORT/SUMMARY_REPORT_ELEMENT: type /PUS/PusTimeType: binary transform algorithms
+    unsupported: /PUS11/INSERT_ACTIVITIES: type /PUS/PusTimeType: binary transform algorithms
+    unsupported: /PUS11/DELETE_ACTIVITIES_BY_FILTER: type /PUS/PusTimeType: binary transform algorithms
+    unsupported: /PUS11/TIME_SHIFT_ACTIVITIES_BY_FILTER: type /PUS/PusTimeType: binary transform algorithms
+    unsupported: /PUS11/GET_DETAIL_REPORT_BY_FILTER: type /PUS/PusTimeType: binary transform algorithms
+    unsupported: /PUS11/GET_SUMMARY_REPORT_BY_FILTER: type /PUS/PusTimeType: binary transform algorithms
+    unsupported: /PUS19/ADD_EVENT_ACTIONS: type /PUS19/EventActionType: member tc takes the rest of the packet
+    unsupported: /PUS/pus-tc-ack: base container /PUS/pus-tm is not supported
+    unsupported: /PUS/pus-tc-ack-acceptance-failure: base container /PUS/pus-tc-ack is not supported
+    unsupported: /PUS/pus-tc-ack-start-failure: base container /PUS/pus-tc-ack is not supported
+    unsupported: /PUS/pus-tc-ack-completion-failure: base container /PUS/pus-tc-ack is not supported
+    unsupported: /PUS/hk: base container /PUS/pus-tm is not supported
+    unsupported: /PUS/hk25: base container /PUS/hk is not supported
+    unsupported: /PUS5/pus5-tm: base container /PUS/pus-tm is not supported
+    unsupported: /PUS5/event1: base container /PUS5/pus5-tm is not supported
+    unsupported: /PUS5/event2: base container /PUS5/pus5-tm is not supported
+    unsupported: /PUS11/pus11-tm: base container /PUS/pus-tm is not supported
+    unsupported: /PUS11/SUBSCHEDULE_STATUS_REPORT: base container /PUS11/pus11-tm is not supported
+    unsupported: /PUS11/GROUP_STATUS_REPORT: base container /PUS11/pus11-tm is not supported
+    unsupported: /PUS11/DETAIL_REPORT/DETAIL_REPORT: base container /PUS11/pus11-tm is not supported
+    unsupported: /PUS11/SUMMARY_REPORT/SUMMARY_REPORT: base container /PUS11/pus11-tm is not supported
+    unsupported: /PUS17/pus17-tm: base container /PUS/pus-tm is not supported
+    unsupported: /PUS17/are-you-alive-report: base container /PUS17/pus17-tm is not supported
+    unsupported: /PUS19/pus19-tm: base container /PUS/pus-tm is not supported
+    unsupported: /PUS19/EVENT_ACTION_STATUS_REPORT: base container /PUS19/pus19-tm is not supported
+    unsupported: /PUS20/TM(20,2)_parameter_value_report: base container /PUS/pus-tm is not supported
+    unsupported: /PUS22/pus22-tm: base container /PUS/pus-tm is not supported
+    unsupported: /PUS22/SUBSCHEDULE_STATUS_REPORT: base container /PUS22/pus22-tm is not supported
+    unsupported: /PUS22/GROUP_STATUS_REPORT: base container /PUS22/pus22-tm is not supported
+    unsupported: /PUS22/DETAIL_REPORT/DETAIL_REPORT: base container /PUS22/pus22-tm is not supported
+    unsupported: /PUS22/SUMMARY_REPORT/SUMMARY_REPORT: base container /PUS22/pus22-tm is not supported
+  digest 98800cd14e818edf63bdfb4168bf7632
+mission pus-verifiers (2 documents): 9 packets, 0 not supported
+  digest 6aada7e9d6a206b424f7360fa678e71e
+mission cfs-evs (2 documents): 4 packets, 3 not supported
+    unsupported: /cfs-ccsds/cfs-tlm-hdr: type /cfs-ccsds/BaseType/uint1_LE: little-endian size 1 is not whole bytes
+    unsupported: /CFE_EVS/CFE_EVS_TlmPkt_t: base container /cfs-ccsds/cfs-tlm-hdr is not supported
+    unsupported: /CFE_EVS/CFE_EVS_TlmPkt_Payload_t: base container /CFE_EVS/CFE_EVS_TlmPkt_t is not supported
+  digest 41d1d27c9d7d408db62e317c0b938349

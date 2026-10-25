@@ -1,0 +1,10 @@
+# Sets of documents whose one digest every runtime must compute: each line
+# is the expected digest, or "error", then the documents of the set.  A set
+# of one document has that document's digest, and the order of the
+# documents doesn't change the digest.
+267a6d6fc7efeac862b75b9d9827ec5f tests/digest/plain.xml
+1ec5865d73403e1a4ad58f7738857b84 tests/digest/plain.xml tests/digest/unordered.xml
+1ec5865d73403e1a4ad58f7738857b84 tests/digest/unordered.xml tests/digest/plain.xml
+da5b11515a6e6cff50652c3631be9d79 tests/digest/attrs.xml tests/digest/text.xml tests/digest/unicode.xml
+da5b11515a6e6cff50652c3631be9d79 tests/digest/unicode.xml tests/digest/attrs.xml tests/digest/text.xml
+error tests/digest/plain.xml tests/digest/bad-root.xml

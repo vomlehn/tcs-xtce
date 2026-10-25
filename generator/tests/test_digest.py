@@ -6,7 +6,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from xtce_digest import XtceError, digest, digest_file, digest_string
+import hashlib
+
+from xtce_digest import (XtceError, digest, digest_file, digest_files,
+                         digest_set, digest_string, encoding)
 from xtce_digest.__main__ import main
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
@@ -103,8 +106,37 @@ class LibraryTests(unittest.TestCase):
             digest_file("/nonexistent/x.xml")
 
 
+class SetTests(unittest.TestCase):
+    """The digest of a mission split across several documents."""
+
+    def test_definition(self):
+        a, b = doc(), doc(root=f'xmlns="{NS}" name="Other"')
+        codes = sorted([encoding(a.encode()), encoding(b.encode())])
+        self.assertEqual(digest_set([a, b]),
+                         hashlib.md5(b"".join(codes)).hexdigest())
+
+    def test_one_document_has_its_own_digest(self):
+        self.assertEqual(digest_set([doc()]), md5(doc()))
+
+    def test_order_does_not_matter(self):
+        a, b = doc(), doc(root=f'xmlns="{NS}" name="Other"')
+        self.assertEqual(digest_set([a, b]), digest_set([b.encode(), a]))
+        self.assertNotEqual(digest_set([a, b]), digest_set([a]))
+        with tempfile.TemporaryDirectory() as d:
+            pa, pb = Path(d) / "a.xml", Path(d) / "b.xml"
+            pa.write_text(a)
+            pb.write_text(b)
+            self.assertEqual(digest_files([pb, str(pa)]), digest_set([a, b]))
+
+    def test_every_document_must_be_read(self):
+        with self.assertRaises(XtceError):
+            digest_set([doc(), "<other/>"])
+        with self.assertRaises(OSError):
+            digest_files(["/nonexistent/x.xml"])
+
+
 class CommandLineTests(unittest.TestCase):
-    def run_main(self, *texts_or_paths):
+    def run_main(self, *texts_or_paths, opts=()):
         """Runs xtce-digest on documents (strings) or paths (Path), and
         returns its status, its output, and the names it was given."""
         with tempfile.TemporaryDirectory() as d:
@@ -119,7 +151,7 @@ class CommandLineTests(unittest.TestCase):
             out, err = io.StringIO(), io.StringIO()
             with (contextlib.redirect_stdout(out),
                   contextlib.redirect_stderr(err)):
-                status = main(names)
+                status = main([*opts, *names])
             return status, out.getvalue(), err.getvalue(), names
 
     def test_prints_each_file_and_its_digest_in_order(self):
@@ -143,6 +175,14 @@ class CommandLineTests(unittest.TestCase):
             # The files before it are reported, and none after it.
             self.assertEqual(out.splitlines(), [f"{names[0]}: {md5(doc())}"])
             self.assertTrue(err.startswith(f"xtce-digest: {names[1]}: "), err)
+
+    def test_set(self):
+        a, b = doc(), doc(root=f'xmlns="{NS}" name="Other"')
+        status, out, _, _ = self.run_main(b, a, opts=["--set"])
+        self.assertEqual((status, out), (0, digest_set([a, b]) + "\n"))
+        status, out, err, names = self.run_main(a, "<other/>", opts=["--set"])
+        self.assertEqual((status, out), (1, ""))
+        self.assertTrue(err.startswith(f"xtce-digest: {names[1]}: "), err)
 
     def test_needs_a_file(self):
         with (contextlib.redirect_stderr(io.StringIO()),

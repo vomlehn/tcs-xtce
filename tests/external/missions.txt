@@ -1,0 +1,28 @@
+# Missions split across several of the documents in sources.txt, which
+# `make samples-check` also compiles together, as Yamcs loads them: a line
+# "NAME:" names a mission, and the indented lines after it are its
+# documents, those that others build on first.
+
+# Yamcs's PUS example: data types, the PUS packets and its services.  The
+# lander simulation (pus-landing.xml) builds on them too, but isn't valid
+# XTCE, so it is left out.
+pus:
+    yamcs-examples/pus-dt.xml
+    yamcs-examples/pus.xml
+    yamcs-examples/pus5.xml
+    yamcs-examples/pus11.xml
+    yamcs-examples/pus17.xml
+    yamcs-examples/pus19.xml
+    yamcs-examples/pus20.xml
+    yamcs-examples/pus22.xml
+    yamcs-examples/pus23.xml
+
+# The same example's PUS packets with their command verifiers.
+pus-verifiers:
+    yamcs-examples/pus-dt.xml
+    yamcs-examples/pus-xtce-verif.xml
+
+# cFS's CCSDS headers and the event service built on them.
+cfs-evs:
+    yamcs-cfs/cfs-ccsds.xml
+    yamcs-cfs/CFE_EVS.xml

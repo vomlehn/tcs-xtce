@@ -11,7 +11,7 @@ import xtce  # noqa: E402
 
 from xtcepkt import emit_c  # noqa: E402
 from xtcepkt.compile import (  # noqa: E402
-    compile_document, item_bits, member_path, value_range)
+    compile_document, compile_documents, item_bits, member_path, value_range)
 from xtcepkt.model import (  # noqa: E402
     MAX_FIELD_BITS, AnyOf, Index, Pad, Seek, Unsupported)
 
@@ -1030,6 +1030,203 @@ class ElementTests(unittest.TestCase):
             with self.subTest(why=why), self.assertRaises(Unsupported) as cm:
                 compile_xml(self.condition(dims, ref))
             self.assertIn(why, str(cm.exception))
+
+
+def space(name: str, tm: str = "", tc: str = "") -> str:
+    """A document whose root SpaceSystem is ``name``."""
+    return mission(tm, tc).replace('name="Sat"', f'name="{name}"', 1)
+
+
+def compile_xmls(*texts: str, **kw):
+    return compile_documents([xtce.Document.from_bytes(t.encode()).root
+                              for t in texts], **kw)
+
+
+# A mission in three documents, as Yamcs's PUS example is split: data types,
+# a packet header and command that build on them, and an application's
+# packets that build on both.
+TYPES = space("dt", tm="""<ParameterTypeSet>
+                    <IntegerParameterType name="U8" signed="false">
+                      <IntegerDataEncoding sizeInBits="8"/>
+                    </IntegerParameterType></ParameterTypeSet>""",
+              tc="""<ArgumentTypeSet>
+                    <IntegerArgumentType name="U8" signed="false">
+                      <IntegerDataEncoding sizeInBits="8"/>
+                    </IntegerArgumentType></ArgumentTypeSet>""")
+HEADER = space(
+    "hdr", tm="""<ParameterSet>
+                     <Parameter name="Id" parameterTypeRef="/dt/U8"/>
+                     </ParameterSet>
+                     <ContainerSet>
+                       <SequenceContainer name="Packet" abstract="true">
+                         <EntryList><ParameterRefEntry parameterRef="Id"/>
+                         </EntryList>
+                       </SequenceContainer>
+                     </ContainerSet>""",
+    tc="<MetaCommandSet>"
+    + command("Cmd", '<Argument name="Op" argumentTypeRef="/dt/U8"/>',
+              '<ArgumentRefEntry argumentRef="Op"/>').replace(
+        "<MetaCommand ", '<MetaCommand abstract="true" ') + "</MetaCommandSet>")
+# The application's references: an absolute path, a relative path that
+# climbs with .., and one that is found from an enclosing SpaceSystem, as
+# yamcs-cfs's cfs-ccsds/cfs-cmd is.
+APP = space("app", tm="""<ParameterSet>
+                  <Parameter name="Temp" parameterTypeRef="../dt/U8"/>
+                  </ParameterSet>
+                  <ContainerSet>
+                    <SequenceContainer name="Status">
+                      <EntryList><ParameterRefEntry parameterRef="Temp"/>
+                      </EntryList>
+                      <BaseContainer containerRef="hdr/Packet">
+                        <RestrictionCriteria>
+                          <Comparison parameterRef="/hdr/Id" value="5"/>
+                        </RestrictionCriteria>
+                      </BaseContainer>
+                    </SequenceContainer>
+                  </ContainerSet>""", tc="""<MetaCommandSet>
+                  <MetaCommand name="Ping">
+                    <BaseMetaCommand metaCommandRef="/hdr/Cmd">
+                      <ArgumentAssignmentList>
+                        <ArgumentAssignment argumentName="Op"
+                          argumentValue="1"/>
+                      </ArgumentAssignmentList>
+                    </BaseMetaCommand>
+                  </MetaCommand>
+                  </MetaCommandSet>""")
+
+
+class MultiDocumentTests(unittest.TestCase):
+    def test_references_reach_other_documents(self):
+        m = compile_xmls(TYPES, HEADER, APP)
+        nodes = {n.key: n for n in m.nodes}
+        self.assertEqual(sorted(nodes), ["/app/Ping", "/app/Status"])
+        status = nodes["/app/Status"]
+        self.assertEqual([name for name, _ in status.fields], ["temp"])
+        self.assertEqual(status.base.key, "/hdr/Packet")
+        self.assertEqual(status.max_bytes, 2)
+        self.assertEqual(nodes["/app/Ping"].max_bytes, 1)
+
+    def test_named_for_the_last_document(self):
+        m = compile_xmls(TYPES, HEADER, APP)
+        self.assertEqual(m.name, "app")
+        self.assertEqual(m.spaces, ["dt", "hdr", "app"])
+
+    def test_order_does_not_matter(self):
+        a = compile_xmls(TYPES, HEADER, APP)
+        b = compile_xmls(APP, TYPES, HEADER)
+        self.assertEqual(sorted(n.key for n in a.nodes),
+                         sorted(n.key for n in b.nodes))
+
+    def test_a_missing_document_leaves_references_unresolved(self):
+        with self.assertRaises(Unsupported) as cm:
+            compile_xmls(HEADER, APP)
+        self.assertIn("unresolved parameter type reference '/dt/U8'",
+                      str(cm.exception))
+
+    def test_root_names_differ(self):
+        with self.assertRaises(Unsupported) as cm:
+            compile_xmls(TYPES, HEADER, TYPES)
+        self.assertIn("two documents have the root SpaceSystem 'dt'",
+                      str(cm.exception))
+
+    def test_one_document_is_the_same_as_before(self):
+        m = compile_xmls(mission())
+        self.assertEqual((m.name, m.spaces), ("Sat", ["Sat"]))
+
+    def test_dot_paths_are_not_searched_upward(self):
+        # ./Packet names only a container in the current SpaceSystem.
+        app = APP.replace('containerRef="hdr/Packet"',
+                          'containerRef="./Packet"')
+        with self.assertRaises(Unsupported) as cm:
+            compile_xmls(TYPES, HEADER, app)
+        self.assertIn("unresolved container reference './Packet'",
+                      str(cm.exception))
+
+
+def typed(types: str, ref: str = "T") -> str:
+    """A mission with the parameter types ``types`` and one packet holding a
+    parameter of type ``ref``."""
+    return mission(tm=f"""
+        <ParameterTypeSet>{types}</ParameterTypeSet>
+        <ParameterSet><Parameter name="X" parameterTypeRef="{ref}"/>
+        </ParameterSet>
+        <ContainerSet><SequenceContainer name="P">
+          <EntryList><ParameterRefEntry parameterRef="X"/></EntryList>
+        </SequenceContainer></ContainerSet>""")
+
+
+U16 = ('<IntegerParameterType name="U16" signed="false"><IntegerDataEncoding '
+       'sizeInBits="16"/></IntegerParameterType>')
+
+
+class BaseTypeTests(unittest.TestCase):
+    def vtype(self, text: str):
+        return compile_xml(text).nodes[0].fields[0][1].vtype
+
+    def test_everything_is_inherited(self):
+        vt = self.vtype(
+            typed(U16 + '<IntegerParameterType name="T" baseType="U16"/>'))
+        self.assertEqual((vt.kind, vt.enc.bits, vt.signed), ("int", 16, False))
+
+    def test_what_a_type_gives_replaces_its_base(self):
+        vt = self.vtype(typed(U16
+                              + '<IntegerParameterType name="T" baseType="U16" '
+                                'signed="true"><IntegerDataEncoding '
+                                'sizeInBits="8" encoding="twosComplement"/>'
+                                '</IntegerParameterType>'))
+        self.assertEqual((vt.enc.bits, vt.signed), (8, True))
+
+    def test_chains_and_other_documents(self):
+        types = space("dt", tm=f"<ParameterTypeSet>{U16}</ParameterTypeSet>")
+        app = typed('<IntegerParameterType name="M" baseType="/dt/U16"/>'
+                    '<IntegerParameterType name="T" baseType="M"/>')
+        vt = compile_xmls(types, app).nodes[0].fields[0][1].vtype
+        self.assertEqual((vt.enc.bits, vt.signed), (16, False))
+
+    def test_rejected(self):
+        cases = [("is another kind of type, FloatParameterType",
+                  '<FloatParameterType name="F"/><IntegerParameterType '
+                  'name="T" baseType="F"/>'),
+                 ("its baseType chain is a cycle",
+                  '<IntegerParameterType name="T" baseType="T2"/>'
+                  '<IntegerParameterType name="T2" baseType="T"/>'),
+                 ("unresolved base type reference 'Nope'",
+                  '<IntegerParameterType name="T" baseType="Nope"/>')]
+        for msg, types in cases:
+            with self.subTest(msg=msg), self.assertRaises(Unsupported) as cm:
+                compile_xml(typed(types))
+            self.assertIn(msg, str(cm.exception))
+
+
+class CommandContainerTests(unittest.TestCase):
+    def test_container_extends_its_base_commands_container(self):
+        # Without a BaseContainer, a command's container still follows its
+        # base command's, as Yamcs reads it: Ping is Op, then Level.
+        u8 = ('<IntegerArgumentType name="U8" signed="false">'
+              '<IntegerDataEncoding sizeInBits="8"/></IntegerArgumentType>')
+        text = mission(tc=f"""
+            <ArgumentTypeSet>{u8}</ArgumentTypeSet>
+            <MetaCommandSet>
+            {command("Cmd", '<Argument name="Op" argumentTypeRef="U8"/>',
+                     '<ArgumentRefEntry argumentRef="Op"/>')}
+            <MetaCommand name="Ping">
+              <BaseMetaCommand metaCommandRef="Cmd">
+                <ArgumentAssignmentList>
+                  <ArgumentAssignment argumentName="Op" argumentValue="1"/>
+                </ArgumentAssignmentList>
+              </BaseMetaCommand>
+              <ArgumentList>
+                <Argument name="Level" argumentTypeRef="U8"/>
+              </ArgumentList>
+              <CommandContainer name="PingC"><EntryList>
+                <ArgumentRefEntry argumentRef="Level"/>
+              </EntryList></CommandContainer>
+            </MetaCommand>
+            </MetaCommandSet>""")
+        ping = next(n for n in compile_xml(text).nodes if n.name == "Ping")
+        self.assertEqual(ping.base.name, "Cmd")
+        self.assertEqual([name for name, _ in ping.fields], ["level"])
+        self.assertEqual(ping.max_bytes, 2)
 
 
 if __name__ == "__main__":

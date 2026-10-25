@@ -250,7 +250,7 @@ The cost is that a database change requires regenerating the code, as
 for the XML binding.
 
 The command line, ``generator/tcs_xtce``, writes one language per run
-(``tcs-xtce INPUT OUTPUT --lang LANG``). The compiler and the emitters it
+(``tcs-xtce INPUT... OUTPUT --lang LANG``). The compiler and the emitters it
 calls live in ``generator/xtcepkt``.
 
 One header for C and C++
@@ -286,18 +286,37 @@ header means:
 Compiler pipeline
 -----------------
 
-``compile.py`` turns the mission document, loaded with ``python/xtce``,
+``compile.py`` turns the mission's documents, loaded with ``python/xtce``,
 into the model in ``model.py``:
 
 **Indexing and name resolution.**
    Parameter types, parameters, argument types, containers and
-   meta-commands are indexed by SpaceSystem path. References are resolved
+   meta-commands are indexed by SpaceSystem path. A mission may be split
+   across several documents; the root SpaceSystem of each is indexed at
+   the top of one tree, as Yamcs loads a list of documents, so a path's
+   first name is a document's root SpaceSystem. References are resolved
    in the following order:
 
    * absolute paths;
-   * relative paths with ``.`` and ``..``;
-   * unqualified names in the current SpaceSystem, then in each
-     enclosing one.
+   * relative paths that start with ``.`` or ``..``, from the current
+     SpaceSystem only;
+   * unqualified names, and other relative paths, from the current
+     SpaceSystem, then from each enclosing one. Yamcs looks relative
+     paths up this way, and missions such as the cFS ones for Yamcs rely
+     on it (``cfs-ccsds/cfs-cmd`` from ``/CFE_EVS``).
+
+   The mission is named for its last document, so that the documents it
+   builds on can be listed first; otherwise the order of the documents
+   changes nothing.
+
+   A type with a ``baseType`` is its base type with the attributes and
+   child elements it gives replacing the base's, whole: nothing is merged
+   below a child element, which keeps the rule simple to state and
+   matches how the PUS mission uses it (a type that only renames
+   another). A ``CommandContainer`` without a ``BaseContainer`` in a
+   meta-command with a base extends the base meta-command's container, as
+   Yamcs reads it; XTCE doesn't say, and the alternative, a command that
+   drops its base's header, isn't useful.
 
 **Types** (``VType``).
    Each parameter or argument type becomes an engineering kind (``int``,
@@ -653,6 +672,15 @@ documents, including edge cases in ``tests/digest``, and checks them
 against each other and against known digests. The ``UNORDERED`` list is
 written out in each runtime and must stay the same in all of them.
 
+A mission split across several documents has one digest for the set:
+the MD5 digest of the documents' encodings, sorted by their bytes and
+joined. Each encoding is self-delimiting (it is one length-prefixed
+element), so joining them is unambiguous; sorting makes the order of the
+files irrelevant, as it is to the compiler; and a set of one document has
+that document's digest, so nothing changes for single-document missions.
+``tests/digest/sets.txt`` pins sets' digests, which every runtime must
+reproduce.
+
 The runtimes don't check documents against the schema; the
 ``xtce-digest`` command, in ``generator/xtce_digest``, does, then digests
 each file with the Python runtime. Computing a digest allocates memory,
@@ -703,7 +731,9 @@ Testing strategy
    Toolkit, pinned by commit and
    SHA-256. Generated code is compiled in every language, every runtime
    digests each document, and each document's summary, digest included,
-   is compared with ``tests/external/expected.txt``.
+   is compared with ``tests/external/expected.txt``. The missions in
+   ``tests/external/missions.txt``, each split across several of the
+   documents, are compiled and digested as sets the same way.
    This catches crashes and disagreements with ``xmllint``, which
    hand-written tests can miss, and shows which unsupported constructs
    real documents use.

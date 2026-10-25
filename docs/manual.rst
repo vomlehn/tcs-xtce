@@ -506,8 +506,8 @@ Packet codecs
 Overview
 --------
 
-``tcs-xtce`` reads a mission's XTCE document and generates, for one
-language:
+``tcs-xtce`` reads a mission's XTCE document, or the documents it is split
+across, and generates, for one language:
 
 * a **struct per concrete container or meta-command** with one field
   per value the user supplies;
@@ -526,21 +526,27 @@ Running the compiler
 .. code-block:: sh
 
    cd generator
-   python3 -m tcs_xtce INPUT OUTPUT --lang LANG
+   python3 -m tcs_xtce INPUT... OUTPUT --lang LANG
 
    python3 -m tcs_xtce demo.xml demo.rs --lang rust
    python3 -m tcs_xtce demo.xml demo.h  --lang c
    python3 -m tcs_xtce demo.xml demo.py --lang python
+   python3 -m tcs_xtce dt.xml pus.xml pus17.xml pus.rs --lang rust
 
 Each run writes one language. Run it once per language you need.
 
 .. list-table::
    :widths: auto
 
-   * - ``INPUT``
-     - The mission's XTCE document, read with the ``xtce`` Python package
+   * - ``INPUT...``
+     - The mission's XTCE documents, read with the ``xtce`` Python package:
+       usually one, or several when the mission is split across documents
+       (see `Missions in several documents`_)
    * - ``OUTPUT``
-     - The file to write (optional with ``--size-report``)
+     - The file to write, always the last name; ``-`` writes to standard
+       output. It may be left out with ``--size-report`` and one
+       ``INPUT``. A name ending in ``.xml`` is refused, so that leaving
+       ``OUTPUT`` out can't overwrite the last document
    * - ``--lang LANG``
      - Required, except with ``--size-report``. ``rust`` writes a Rust module, formatted with ``rustfmt``
        (which must be installed). ``python`` writes a Python module.
@@ -548,8 +554,8 @@ Each run writes one language. Run it once per language you need.
        as C11 and as C++.
    * - ``--prefix P``
      - C/C++ only: prefix of every name the header defines (default: the
-       root SpaceSystem name in snake_case followed by ``_``, such as
-       ``demo_``)
+       root SpaceSystem name, of the last document when there are several,
+       in snake_case followed by ``_``, such as ``demo_``)
    * - ``--skip-unsupported``
      - Leave out containers and meta-commands that use unsupported XTCE features, with a warning, instead of failing
    * - ``--size-report``
@@ -560,10 +566,50 @@ Each run writes one language. Run it once per language you need.
        (``true``, the default) or only during initialization (``false``).
        See `Code without dynamic allocation`_
    * - ``--source-name NAME``
-     - Mission file name recorded in the generated headers
+     - Mission file name recorded in the generated headers (default: the
+       ``INPUT`` file names)
 
 By default the compiler stops if any container or meta-command uses an
 unsupported construct, and lists every such construct with its cause.
+
+Missions in several documents
+-----------------------------
+
+Large missions often split their XTCE across documents: one of data types,
+one of the packet header, and one per service or application, each building
+on the others. Yamcs loads such a mission from a list of documents, and
+``tcs-xtce`` reads it the same way. The root SpaceSystem of each document
+sits at the top of one tree, so a reference in one document can name a
+definition in another:
+
+.. code-block:: xml
+
+   <!-- dt.xml -->
+   <SpaceSystem name="dt"> ... <IntegerParameterType name="uint16"> ...
+
+   <!-- pus.xml -->
+   <SpaceSystem name="PUS"> ... <SequenceContainer name="pus-tm"> ...
+
+   <!-- pus17.xml -->
+   <SpaceSystem name="PUS17"> ...
+     <SequenceContainer name="are-you-alive-report">
+       <BaseContainer containerRef="/PUS/pus-tm"> ...
+       <ParameterRefEntry parameterRef="..."/> <!-- of type /dt/uint16 -->
+
+* An absolute reference, such as ``/PUS/pus-tm``, starts with the name of a
+  document's root SpaceSystem.
+* A relative reference, such as ``cfs-ccsds/cfs-cmd``, is looked up from
+  the SpaceSystem it appears in and then from each enclosing one, up to
+  the top of the tree, as an unqualified name is. A reference that starts
+  with ``.`` or ``..`` is relative to where it appears only.
+* Two documents can't have root SpaceSystems with the same name.
+
+Code is generated for the packets of every document, in one file. List the
+documents in the order they build on each other (types, headers, then
+services), since the mission, the default C ``--prefix`` and the generated
+module's description are named for the last; the order changes nothing
+else. Two programs agree on the mission's packets when they used the same
+set of documents, which the digest of the set checks (see `xtce-digest`_).
 
 Code without dynamic allocation
 -------------------------------
@@ -600,7 +646,7 @@ describing a packet.
 Size report
 -----------
 
-``python3 -m tcs_xtce INPUT --size-report`` writes no code. For each
+``python3 -m tcs_xtce INPUT... --size-report`` writes no code. For each
 packet it lists every field with the bits it takes on the wire and the
 bits the XTCE document says its values need, to show where the mission
 database could make packets smaller. It changes nothing: the codecs
@@ -1240,8 +1286,10 @@ unsupported, naming the construct and its location.
 
 Parameter and argument types
    Integer, Float, Enumerated, Boolean, String, Binary, AbsoluteTime,
-   RelativeTime, Array and Aggregate. Types that use ``baseType`` are not
-   supported.
+   RelativeTime, Array and Aggregate. A type with a ``baseType``
+   inherits every attribute and child element it leaves out from its base
+   type, which must be the same kind of type, possibly in another document;
+   those it gives replace the base's, whole.
 
 Ancillary data
    ``tcs-xtce.length`` on a parameter or argument marks a packet length
@@ -1432,8 +1480,9 @@ Include conditions
 
 Commands
    ``MetaCommand`` with ``ArgumentList``, ``BaseMetaCommand`` and
-   ``ArgumentAssignmentList``, and a ``CommandContainer`` whose
-   ``BaseContainer`` is the base meta-command's container. The container
+   ``ArgumentAssignmentList``, and a ``CommandContainer`` that extends
+   the base meta-command's container: through a ``BaseContainer`` naming
+   it, or, as Yamcs reads it, with no ``BaseContainer`` at all. The container
    may hold ``ArgumentRefEntry``, ``ArrayArgumentRefEntry``,
    ``ParameterRefEntry``, ``ArrayParameterRefEntry`` and
    ``FixedValueEntry`` (at most 64 bits). Argument assignments act like
@@ -1442,8 +1491,10 @@ Commands
 
 Name references
    Absolute (``/Root/Sub/name``), relative (``Sub/name``, ``../name``),
-   and unqualified names. An unqualified name is looked up in the
-   current SpaceSystem, then in each enclosing one.
+   and unqualified names. An unqualified name, or a relative one that
+   doesn't start with ``.`` or ``..``, is looked up from the current
+   SpaceSystem, then from each enclosing one. References may cross
+   documents (see `Missions in several documents`_).
 
 Not supported
    references to elements of arrays whose count varies in a dimension
@@ -1489,6 +1540,7 @@ digest, they agree on every packet's fields, types and order (see
 
    cd generator
    python3 -m xtce_digest FILE...
+   python3 -m xtce_digest --set FILE...
 
    python3 -m xtce_digest ../tests/mission/demo.xml ../examples/simple-string/simple_string.xml
 
@@ -1506,6 +1558,16 @@ ends the command with status 1; the files before it have been printed,
 and the ones after it are not read. Status 0 means every file was
 digested.
 
+A mission split across several documents (see `Missions in several
+documents`_) has one digest for the whole set, which ``--set`` prints,
+alone on a line. It is the MD5 digest of the documents' canonical
+encodings (described below), sorted by their bytes and joined. So the
+order the files are given in doesn't matter, a set of one document has
+that document's digest, and changing any document of the set changes it.
+Two programs built from the same set of documents get the same digest
+for it, though the digests of the individual documents would not tell
+them that a document is missing from one of the sets.
+
 Every runtime computes the same digest, so that a program in any
 language can compute its document's digest, send it, and compare it with
 the digest it receives. Each has functions that give the digest of a
@@ -1522,7 +1584,10 @@ hex digits (to print):
    * - Rust (``tcs_xtce::digest``)
      - ``digest_bytes(&[u8]) -> [u8; 16]``, ``digest(&[u8])``,
        ``digest_string(&str)``, ``digest_file_bytes(path)``,
-       ``digest_file(path)``, ``hex(&[u8; 16])``
+       ``digest_file(path)``, ``hex(&[u8; 16])``; for a set,
+       ``digest_set_bytes(&[D])``, ``digest_set(&[D])`` (each ``D`` bytes),
+       ``digest_files_bytes(&[P])`` and ``digest_files(&[P])`` (each ``P``
+       a path)
      - ``Err(tcs_xtce::Error)``
    * - C and C++ (``xtce/digest.h``, which needs no library)
      - ``xtce_digest_bytes(data, len, out, &err)``,
@@ -1530,13 +1595,21 @@ hex digits (to print):
        ``xtce_digest_string(text, hex, &err)``,
        ``xtce_digest_file_bytes(path, out, &err)``,
        ``xtce_digest_file(path, hex, &err)``,
-       ``xtce_digest_hex(out, hex)``; in C++ also
-       ``xtce::digest(std::string_view)`` and
-       ``xtce::digest_file(path)``, returning ``std::string``
+       ``xtce_digest_hex(out, hex)``; for a set,
+       ``xtce_digest_set_bytes(docs, lens, n, out, &err)``,
+       ``xtce_digest_set(docs, lens, n, hex, &err)``,
+       ``xtce_digest_files_bytes(paths, n, out, &err)`` and
+       ``xtce_digest_files(paths, n, hex, &err)``; in C++ also
+       ``xtce::digest(std::string_view)``,
+       ``xtce::digest_file(path)``, ``xtce::digest_set(texts)`` and
+       ``xtce::digest_files(paths)`` (each a
+       ``std::vector<std::string>``), returning ``std::string``
      - ``-1`` and ``err.message``; C++ throws ``std::runtime_error``
    * - Python (``xtce.digest``)
      - ``digest_bytes(data)``, ``digest(data)``, ``digest_string(text)``,
-       ``digest_file_bytes(path)``, ``digest_file(path)``
+       ``digest_file_bytes(path)``, ``digest_file(path)``; for a set,
+       ``digest_set_bytes(documents)``, ``digest_set(documents)``,
+       ``digest_files_bytes(paths)`` and ``digest_files(paths)``
      - ``XtceError``, and ``OSError`` for a file that can't be read
 
 .. code-block:: python
@@ -1914,6 +1987,11 @@ for each document:
   module;
 * the Rust, C, C++ and Python runtimes give it the same XTCE digest (or
   all reject it).
+
+``tests/external/missions.txt`` lists missions split across several of
+the documents (Yamcs's PUS example and the cFS event service), which are
+compiled together as one, with the same checks of their compiler output,
+generated code and set digest.
 
 It prints a summary per document, with the constructs it found
 unsupported and its digest, which must equal

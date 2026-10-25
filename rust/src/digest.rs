@@ -14,6 +14,12 @@
 //! malformed, to declare another encoding, to have a DOCTYPE, or to have a
 //! root element other than `SpaceSystem`.  Computing the digest allocates
 //! memory, so do it at start-up, not in code that must not allocate.
+//!
+//! A mission whose definitions are split across several documents has one
+//! digest for the set ([`digest_set`], [`digest_files`]): the MD5 digest of
+//! the documents' encodings, sorted by their bytes and concatenated.  It
+//! doesn't depend on the order the documents are given in, and the digest
+//! of a set of one document is that document's digest.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -90,6 +96,42 @@ pub fn digest_file_bytes(path: impl AsRef<Path>) -> Result<[u8; 16]> {
 /// The digest of the XTCE document in the file `path`, in lowercase hex.
 pub fn digest_file(path: impl AsRef<Path>) -> Result<String> {
     Ok(hex(&digest_file_bytes(path)?))
+}
+
+/// The MD5 digest of the set of XTCE documents `documents` (each UTF-8
+/// bytes), as 16 bytes.
+pub fn digest_set_bytes<D: AsRef<[u8]>>(documents: &[D]) -> Result<[u8; 16]> {
+    let mut codes = documents
+        .iter()
+        .map(|d| encoding(d.as_ref()))
+        .collect::<Result<Vec<_>>>()?;
+    codes.sort();
+    Ok(md5(&codes.concat()))
+}
+
+/// The digest of the set of XTCE documents `documents`, in lowercase hex.
+pub fn digest_set<D: AsRef<[u8]>>(documents: &[D]) -> Result<String> {
+    Ok(hex(&digest_set_bytes(documents)?))
+}
+
+/// The digest of the set of XTCE documents in the files `paths`, as 16
+/// bytes.
+pub fn digest_files_bytes<P: AsRef<Path>>(paths: &[P]) -> Result<[u8; 16]> {
+    let documents = paths
+        .iter()
+        .map(|p| {
+            let p = p.as_ref();
+            std::fs::read(p)
+                .map_err(|e| Error::new(format!("{}: {e}", p.display())))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    digest_set_bytes(&documents)
+}
+
+/// The digest of the set of XTCE documents in the files `paths`, in
+/// lowercase hex.
+pub fn digest_files<P: AsRef<Path>>(paths: &[P]) -> Result<String> {
+    Ok(hex(&digest_files_bytes(paths)?))
 }
 
 /// 16 bytes as lowercase hex.
@@ -573,6 +615,18 @@ mod tests {
             encoding(a.as_bytes()).unwrap(),
             b"E14:{u}SpaceSystem15:1:b1:24:name1:S16:E4:{u}x0:5:T2:hi"
         );
+    }
+
+    #[test]
+    fn set_digest_is_of_the_sorted_encodings() {
+        let a = "<SpaceSystem name='A'/>";
+        let b = "<SpaceSystem name='B'/>";
+        let mut both = encoding(b.as_bytes()).unwrap();
+        both.extend(encoding(a.as_bytes()).unwrap());
+        assert_eq!(digest_set(&[a]).unwrap(), digest_string(a).unwrap());
+        assert_eq!(digest_set(&[b, a]).unwrap(), digest_set(&[a, b]).unwrap());
+        assert_ne!(digest_set(&[a, b]).unwrap(), hex(&md5(&both)));
+        assert!(digest_set(&[a, "<other/>"]).is_err());
     }
 
     #[test]

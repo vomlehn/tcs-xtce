@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import textwrap
 
 from xtcegen import CRATE, REPOSITORY
 
@@ -85,12 +86,17 @@ def values(node: Node) -> list:
 def header_lines(mission, source: str) -> list:
     """The notice at the top of every generated file, without comment markers.
     """
-    return [f"@generated automatically by tcs-xtce from {source} (SpaceSystem "
-            f"{mission.name!r}).",
-            "Any changes made to this file will be lost when it is "
+    spaces = ", ".join(repr(s) for s in mission.spaces)
+    plural = "s" if len(mission.spaces) > 1 else ""
+    # The names of several documents may not fit one line.
+    first = textwrap.wrap(f"@generated automatically by tcs-xtce from {source} "
+                          f"(SpaceSystem{plural} {spaces}).", 76,
+                          break_long_words=False, break_on_hyphens=False)
+    rest = ["Any changes made to this file will be lost when it is "
             "regenerated;",
-            "change the XTCE document instead and rerun `python3 -m tcs_xtce`.",
-            f"tcs-xtce: {REPOSITORY}", f"Rust crate: {CRATE}"]
+            f"change the XTCE document{plural} instead and rerun `python3 -m "
+            "tcs_xtce`.", f"tcs-xtce: {REPOSITORY}", f"Rust crate: {CRATE}"]
+    return first + rest
 
 
 __all__ = ["Criterion", "FloatEnc", "IntEnc", "Polynomial", "Spline",
