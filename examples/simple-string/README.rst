@@ -105,8 +105,114 @@ compiled twice, once as C and once as C++.
    buffers reused without reallocation: true
    simple-string: Rust, C, C++ and Python output identical
 
-``make html`` turns this file into ``README.html``.
+Each program can also be run on its own, from this directory, after
+``make generate``. Each prints the lines above, without the last, which
+``make`` prints, and fails (exits with a nonzero status) if a string
+doesn't come back unchanged. Its last line says whether the buffers were
+reused.
+
+Rust
+~~~~
+
+`rust/src/main.rs <rust/src/main.rs>`__ is a stand-alone Cargo crate that
+depends on the ``tcs-xtce`` crate in ``../../rust``:
+
+.. code-block:: sh
+
+   cd rust && cargo run --release
+
+or ``make rust``, then ``rust/target/release/simple-string``. Its ``Codec``
+owns both buffers, preallocated to ``SimpleString::MAX_BYTES``.
+
+C and C++
+~~~~~~~~~
+
+`c/main.c <c/main.c>`__ is built twice, once as C11 and once as C++20. It
+needs only the header ``../../cpp/include/xtce/packet.h`` and the generated
+header; it links with no tcs-xtce library.
+
+.. code-block:: sh
+
+   make c
+   build/simple_string_c        # the C build
+   build/simple_string_cxx      # the C++ build
+
+or, by hand:
+
+.. code-block:: sh
+
+   cc  -std=c11   -I../../cpp/include -Ic   c/main.c -lm -o simple_string_c
+   c++ -std=c++20 -I../../cpp/include -Icxx -x c++ c/main.c -o simple_string_cxx
+
+Its two buffers are plain arrays of ``simple_string_SimpleString_MAX_BYTES``
+bytes.
+
+Python
+~~~~~~
+
+`python/main.py <python/main.py>`__ needs Python 3.10 or later and the
+``xtce`` package in ``../../python``:
+
+.. code-block:: sh
+
+   PYTHONPATH=../../python:python python3 python/main.py
+
+Its ``Codec`` owns both buffers, preallocated to ``SimpleString.MAX_BYTES``.
+
+Makefile targets
+----------------
+
+``make``, or ``make run``
+   Generate the code if needed, build every program, run it and check
+   the output, as above.
+``make generate``
+   Run ``tcs-xtce`` on ``simple_string.xml`` for every language, if the XTCE
+   file or the generator changed since the code was last generated.
+``make rust``
+   Check the Rust program's formatting with ``cargo fmt --check`` and build
+   ``rust/target/release/simple-string``.
+``make c``
+   Build ``build/simple_string_c`` (C11) and ``build/simple_string_cxx`` (C++20).
+``make python``
+   Generate the Python module. The Python program needs no building.
+``make html``
+   Convert this file, ``README.rst``, to ``README.html``.
+``make clean``
+   Remove ``build/`` and ``rust/target/``. The generated code and
+   ``README.html`` stay.
+
+Files
+-----
+
+The generated files aren't kept in git; building generates them.
+
+.. list-table::
+   :widths: auto
+
+   * - ``simple_string.xml``
+     - The XTCE description
+   * - ``rust/Cargo.toml``, ``rust/src/main.rs``
+     - The Rust program
+   * - ``rust/src/simple_string.rs``
+     - Generated Rust module
+   * - ``c/main.c``
+     - The C and C++ program
+   * - ``c/simple_string.h``, ``cxx/simple_string.h``
+     - Generated header, from ``--lang c`` and ``--lang c++``
+   * - ``python/main.py``
+     - The Python program
+   * - ``python/simple_string.py``
+     - Generated Python module
+   * - ``Makefile``
+     - Generates, builds, runs and checks; see above
+   * - ``README.rst``, ``README.html``
+     - This document
+   * - ``build/``
+     - The C and C++ programs and the programs' output
+
+Requirements
+------------
 
 Building needs what the top-level build needs: Rust with ``rustfmt``, a C11
-compiler, a C++20 compiler, and Python 3.10 or later. The C/C++ program needs
-only the header ``../../cpp/include/xtce/packet.h``; it links with no library.
+compiler, a C++20 compiler, and Python 3.10 or later. ``make html`` needs
+``rst2html``, from Docutils.

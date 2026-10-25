@@ -489,10 +489,115 @@ serialize &quot;ABCDEFGHI&quot; -&gt; error:TooLong (Text is too long for its en
 buffers reused without reallocation: true
 simple-string: Rust, C, C++ and Python output identical
 </pre>
-<p><tt class="docutils literal">make html</tt> turns this file into <tt class="docutils literal">README.html</tt>.</p>
+<p>Each program can also be run on its own, from this directory, after
+<tt class="docutils literal">make generate</tt>. Each prints the lines above, without the last, which
+<tt class="docutils literal">make</tt> prints, and fails (exits with a nonzero status) if a string
+doesn't come back unchanged. Its last line says whether the buffers were
+reused.</p>
+<div class="section" id="rust">
+<h2>Rust</h2>
+<p><a class="reference external" href="rust/src/main.rs">rust/src/main.rs</a> is a stand-alone Cargo crate that
+depends on the <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> crate in <tt class="docutils literal"><span class="pre">../../rust</span></tt>:</p>
+<pre class="code sh literal-block">
+<span class="name builtin">cd</span><span class="whitespace"> </span>rust<span class="whitespace"> </span><span class="operator">&amp;&amp;</span><span class="whitespace"> </span>cargo<span class="whitespace"> </span>run<span class="whitespace"> </span>--release
+</pre>
+<p>or <tt class="docutils literal">make rust</tt>, then <tt class="docutils literal"><span class="pre">rust/target/release/simple-string</span></tt>. Its <tt class="docutils literal">Codec</tt>
+owns both buffers, preallocated to <tt class="docutils literal"><span class="pre">SimpleString::MAX_BYTES</span></tt>.</p>
+</div>
+<div class="section" id="c-and-c">
+<h2>C and C++</h2>
+<p><a class="reference external" href="c/main.c">c/main.c</a> is built twice, once as C11 and once as C++20. It
+needs only the header <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt> and the generated
+header; it links with no tcs-xtce library.</p>
+<pre class="code sh literal-block">
+make<span class="whitespace"> </span>c<span class="whitespace">
+</span>build/simple_string_c<span class="whitespace">        </span><span class="comment single"># the C build
+</span>build/simple_string_cxx<span class="whitespace">      </span><span class="comment single"># the C++ build</span>
+</pre>
+<p>or, by hand:</p>
+<pre class="code sh literal-block">
+cc<span class="whitespace">  </span>-std<span class="operator">=</span>c11<span class="whitespace">   </span>-I../../cpp/include<span class="whitespace"> </span>-Ic<span class="whitespace">   </span>c/main.c<span class="whitespace"> </span>-lm<span class="whitespace"> </span>-o<span class="whitespace"> </span>simple_string_c<span class="whitespace">
+</span>c++<span class="whitespace"> </span>-std<span class="operator">=</span>c++20<span class="whitespace"> </span>-I../../cpp/include<span class="whitespace"> </span>-Icxx<span class="whitespace"> </span>-x<span class="whitespace"> </span>c++<span class="whitespace"> </span>c/main.c<span class="whitespace"> </span>-o<span class="whitespace"> </span>simple_string_cxx
+</pre>
+<p>Its two buffers are plain arrays of <tt class="docutils literal">simple_string_SimpleString_MAX_BYTES</tt>
+bytes.</p>
+</div>
+<div class="section" id="python">
+<h2>Python</h2>
+<p><a class="reference external" href="python/main.py">python/main.py</a> needs Python 3.10 or later and the
+<tt class="docutils literal">xtce</tt> package in <tt class="docutils literal"><span class="pre">../../python</span></tt>:</p>
+<pre class="code sh literal-block">
+<span class="name variable">PYTHONPATH</span><span class="operator">=</span>../../python:python<span class="whitespace"> </span>python3<span class="whitespace"> </span>python/main.py
+</pre>
+<p>Its <tt class="docutils literal">Codec</tt> owns both buffers, preallocated to <tt class="docutils literal">SimpleString.MAX_BYTES</tt>.</p>
+</div>
+</div>
+<div class="section" id="makefile-targets">
+<h1>Makefile targets</h1>
+<dl class="docutils">
+<dt><tt class="docutils literal">make</tt>, or <tt class="docutils literal">make run</tt></dt>
+<dd>Generate the code if needed, build every program, run it and check
+the output, as above.</dd>
+<dt><tt class="docutils literal">make generate</tt></dt>
+<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">simple_string.xml</tt> for every language, if the XTCE
+file or the generator changed since the code was last generated.</dd>
+<dt><tt class="docutils literal">make rust</tt></dt>
+<dd>Check the Rust program's formatting with <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt> and build
+<tt class="docutils literal"><span class="pre">rust/target/release/simple-string</span></tt>.</dd>
+<dt><tt class="docutils literal">make c</tt></dt>
+<dd>Build <tt class="docutils literal">build/simple_string_c</tt> (C11) and <tt class="docutils literal">build/simple_string_cxx</tt> (C++20).</dd>
+<dt><tt class="docutils literal">make python</tt></dt>
+<dd>Generate the Python module. The Python program needs no building.</dd>
+<dt><tt class="docutils literal">make html</tt></dt>
+<dd>Convert this file, <tt class="docutils literal">README.rst</tt>, to <tt class="docutils literal">README.html</tt>.</dd>
+<dt><tt class="docutils literal">make clean</tt></dt>
+<dd>Remove <tt class="docutils literal">build/</tt> and <tt class="docutils literal">rust/target/</tt>. The generated code and
+<tt class="docutils literal">README.html</tt> stay.</dd>
+</dl>
+</div>
+<div class="section" id="files">
+<h1>Files</h1>
+<p>The generated files aren't kept in git; building generates them.</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">simple_string.xml</tt></td>
+<td>The XTCE description</td>
+</tr>
+<tr><td><tt class="docutils literal">rust/Cargo.toml</tt>, <tt class="docutils literal">rust/src/main.rs</tt></td>
+<td>The Rust program</td>
+</tr>
+<tr><td><tt class="docutils literal">rust/src/simple_string.rs</tt></td>
+<td>Generated Rust module</td>
+</tr>
+<tr><td><tt class="docutils literal">c/main.c</tt></td>
+<td>The C and C++ program</td>
+</tr>
+<tr><td><tt class="docutils literal">c/simple_string.h</tt>, <tt class="docutils literal">cxx/simple_string.h</tt></td>
+<td>Generated header, from <tt class="docutils literal"><span class="pre">--lang</span> c</tt> and <tt class="docutils literal"><span class="pre">--lang</span> c++</tt></td>
+</tr>
+<tr><td><tt class="docutils literal">python/main.py</tt></td>
+<td>The Python program</td>
+</tr>
+<tr><td><tt class="docutils literal">python/simple_string.py</tt></td>
+<td>Generated Python module</td>
+</tr>
+<tr><td><tt class="docutils literal">Makefile</tt></td>
+<td>Generates, builds, runs and checks; see above</td>
+</tr>
+<tr><td><tt class="docutils literal">README.rst</tt>, <tt class="docutils literal">README.html</tt></td>
+<td>This document</td>
+</tr>
+<tr><td><tt class="docutils literal">build/</tt></td>
+<td>The C and C++ programs and the programs' output</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="requirements">
+<h1>Requirements</h1>
 <p>Building needs what the top-level build needs: Rust with <tt class="docutils literal">rustfmt</tt>, a C11
-compiler, a C++20 compiler, and Python 3.10 or later. The C/C++ program needs
-only the header <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt>; it links with no library.</p>
+compiler, a C++20 compiler, and Python 3.10 or later. <tt class="docutils literal">make html</tt> needs
+<tt class="docutils literal">rst2html</tt>, from Docutils.</p>
 </div>
 </div>
 </body>

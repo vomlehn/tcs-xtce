@@ -46,12 +46,33 @@ three emitters (`generator/xtcepkt/emit_rust.py`, `emit_c.py`,
 `examples/` has a Rust, C/C++ and Python version, a `README.rst`, and a
 `Makefile` that runs it and, with `make html`, makes `README.html`.
 
-**Line width and C and C++ style.** Code keeps lines within 80 columns.
-C and C++ indent with 8 spaces; `.clang-format` at the top level sets this,
-so format hand-written C and C++ with `clang-format -i`. Rust is formatted
-by `make fmt` with `max_width = 80`. The generators emit the same
-indentation and wrap their output at 80 columns
-(`generator/xtcegen/wrap.py`).
+**Line width and indentation.** All code, generated and hand-written, in
+every language, keeps its lines within 80 columns; so do Makefiles and
+scripts.
+
+* C and C++ indent with 8 spaces, never tabs. `.clang-format` at the top
+  level sets this, so format hand-written C and C++ with `clang-format -i`.
+* Rust is formatted by `make fmt` (`rustfmt.toml` sets `max_width = 80`).
+  Wrap by hand what rustfmt leaves long: comments, string literals (split
+  them with a backslash at the end of the line, which keeps their value),
+  and code inside `macro_rules!` bodies and macros such as `matches!`.
+* Python indents 4 spaces. Wrap a long line inside brackets, lining the
+  continuation up under the opening bracket, packing items, and keeping
+  the closing bracket at the end of the last line:
+
+  ```python
+  self.line(f"XTCE_PK_TRY(xtce_pk_read_utf8(r, n, {f}, "
+            f"{dst}.data, &{dst}.len));", depth + 1)
+  ```
+
+  When the bracket is too far right for that, or holds comments, use a
+  hanging indent of 4 instead, still with the closer on the last line. Put
+  a long value after `=` or `return` in parentheses so it can break. Don't
+  run black or `ruff format`, which would rewrite this style. Keep `# noqa`
+  and `# pragma` comments on the line they apply to.
+* The generators emit the same indentation and wrap their output at 80
+  columns (`generator/xtcegen/wrap.py`), so generated code needs no
+  formatting.
 
 **Don't edit generated files.** Files that start with `@generated` are
 rewritten by `make generate` (the XML binding, from `generator/xtcegen`) or
@@ -75,9 +96,9 @@ served by GitHub Pages, so run `make html` and commit the HTML with any
 change to them.
 
 **Match the code around you.** Rust is formatted with `rustfmt`
-(`make fmt`, checked by `make rust`). Python follows the style of the
-existing generator. Commit messages have a short summary line and a body
-that says why the change was made.
+(`make fmt`, checked by `make rust`), C and C++ with `clang-format`, and
+Python by hand in the style above. Commit messages have a short summary
+line and a body that says why the change was made.
 
 ## License
 

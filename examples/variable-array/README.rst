@@ -219,7 +219,7 @@ that they print the same thing:
    ...
    variable-array: Rust, C, C++ and Python output identical
 
-``make html`` turns this file into ``README.html``.
+`Makefile targets`_ lists the other targets.
 
 To run one program on its own, generate the code first with
 ``make generate``, then run the commands below from this directory. Each
@@ -281,6 +281,57 @@ Python
 It sends from a ``threading.Thread`` and receives in the main thread, over
 the ``socket`` module. Each thread has its own ``Codec``, whose buffer is
 preallocated to ``Paragraph.MAX_BYTES`` and reused for both arrays.
+
+Makefile targets
+----------------
+
+``make``, or ``make run``
+   Generate the code if needed, build every program, run it and check
+   the output, as above.
+``make generate``
+   Run ``tcs-xtce`` on ``variable_array.xml`` for every language, if the XTCE
+   file or the generator changed since the code was last generated.
+``make rust``
+   Check the Rust program's formatting with ``cargo fmt --check`` and build
+   ``rust/target/release/variable-array``.
+``make c``
+   Build ``build/variable_array_c`` (C11) and ``build/variable_array_cxx`` (C++20).
+``make python``
+   Generate the Python module. The Python program needs no building.
+``make html``
+   Convert this file, ``README.rst``, to ``README.html``.
+``make clean``
+   Remove ``build/`` and ``rust/target/``. The generated code and
+   ``README.html`` stay.
+
+Files
+-----
+
+The generated files aren't kept in git; building generates them.
+
+.. list-table::
+   :widths: auto
+
+   * - ``variable_array.xml``
+     - The XTCE description
+   * - ``rust/Cargo.toml``, ``rust/src/main.rs``
+     - The Rust program
+   * - ``rust/src/variable_array.rs``
+     - Generated Rust module
+   * - ``c/main.c``
+     - The C and C++ program
+   * - ``c/variable_array.h``, ``cxx/variable_array.h``
+     - Generated header, from ``--lang c`` and ``--lang c++``
+   * - ``python/main.py``
+     - The Python program
+   * - ``python/variable_array.py``
+     - Generated Python module
+   * - ``Makefile``
+     - Generates, builds, runs and checks; see above
+   * - ``README.rst``, ``README.html``
+     - This document
+   * - ``build/``
+     - The C and C++ programs and the programs' output
 
 Requirements
 ------------

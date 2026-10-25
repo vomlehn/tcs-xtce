@@ -18,8 +18,9 @@ tcs-xtce is flight software, and these goals are set with that in mind.
 3. Everything comes from the **official XTCE documents**. A top-level
    ``make`` downloads them into ``references/``, and code is generated
    from them rather than written by hand.
-4. All Rust code follows standard ``rustfmt`` formatting, checked as
-   code is added.
+4. All code keeps its lines within 80 columns, generated or not. Rust
+   follows ``rustfmt`` (with ``max_width = 80``), checked as code is
+   added; C and C++ indent 8 spaces, as ``.clang-format`` sets.
 
 There are two meanings of "serialize XTCE data", and the project
 implements both:
@@ -111,6 +112,14 @@ Pipeline
    Generate the types, enumerations with their lexical forms, and one
    reader and one writer per record and choice. The Rust output is run
    through ``rustfmt``.
+
+``wrap.py`` — wrap
+   Keeps generated code within 80 columns, for every language, after the
+   emitters (and ``rustfmt``) have run. It breaks long lines inside
+   brackets, splits string literals into adjacent literals (Rust: with
+   backslash-newline continuations, which ``rustfmt`` keeps), moves
+   trailing comments above their line and rewraps comments and
+   docstrings. ``tcs-xtce`` uses it too, for the packet codecs.
 
 ``sample.py`` — sample
    Generates test documents from the model. Together they use every
@@ -629,6 +638,20 @@ Testing strategy
    Every ``make rust`` runs ``cargo fmt --check``. A Claude Code
    ``PostToolUse`` hook runs ``rustfmt --check`` on each ``.rs`` file
    as it is written, and rejects the edit if formatting differs.
+   Code keeps its lines within 80 columns, so that it reads the same in
+   any editor or terminal and side by side in a diff:
+
+   * Rust: ``rustfmt`` with ``max_width = 80`` (``rustfmt.toml``), and by
+     hand where ``rustfmt`` leaves a line long, such as string literals
+     and macro bodies.
+   * C and C++: 8-space indents and 80 columns, set by ``.clang-format``.
+   * Python: wrapped by hand, with continuation lines lined up under the
+     bracket they continue. No formatter is used, since black and
+     ``ruff format`` would put every item on its own line.
+   * Makefiles and scripts: wrapped by hand.
+   * Generated code: wrapped by ``wrap.py`` after the emitters run, so
+     that it needs no formatting. ``generator/tests/test_wrap.py`` checks
+     that wrapped code fits in 80 columns and keeps its meaning.
 
 Limitations and future work
 ============================

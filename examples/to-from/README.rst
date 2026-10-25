@@ -64,7 +64,7 @@ The XTCE description
 
 `to_from.xml <to_from.xml>`__ defines:
 
-* a string type, ``WordType``, of varying length (``Variable``), with an
+* a string type, ``WordType``, of varying length (``Variable``), with a
   32-bit size tag before the string
   (``LeadingSize sizeInBitsOfSizeTag="32"``). The tag and the string
   together occupy at most 288 bits, so a word holds up to 32 bytes of UTF-8;
@@ -161,7 +161,7 @@ Building and running
    to-from: the 4 writers wrote the same bytes, and the 16 reader/writer pairs printed the same words
 
 ``make build`` only generates the code and builds the programs, for
-``./to-from``. ``make html`` turns this file into ``README.html``.
+``./to-from``. `Makefile targets`_ lists the others.
 
 Each program can also be run on its own, from this directory, after
 ``make build``. Its writer's output is binary, so send it to a file or
@@ -216,6 +216,62 @@ Python
 
 Its ``Codec`` has a buffer preallocated to ``Word.MAX_BYTES`` and reused for
 every word.
+
+Makefile targets
+----------------
+
+``make``, or ``make run``
+   Generate the code if needed, build every program, run it and check
+   the output, as above.
+``make build``
+   Generate the code if needed and build every program, without running
+   them, so that ``./to-from`` can.
+``make generate``
+   Run ``tcs-xtce`` on ``to_from.xml`` for every language, if the XTCE
+   file or the generator changed since the code was last generated.
+``make rust``
+   Check the Rust program's formatting with ``cargo fmt --check`` and build
+   ``rust/target/release/to-from``.
+``make c``
+   Build ``build/to_from_c`` (C11) and ``build/to_from_cxx`` (C++20).
+``make python``
+   Generate the Python module. The Python program needs no building.
+``make html``
+   Convert this file, ``README.rst``, to ``README.html``.
+``make clean``
+   Remove ``build/`` and ``rust/target/``. The generated code and
+   ``README.html`` stay.
+
+Files
+-----
+
+The generated files aren't kept in git; building generates them.
+
+.. list-table::
+   :widths: auto
+
+   * - ``to_from.xml``
+     - The XTCE description
+   * - ``to-from``
+     - The script that pipes a writer to a reader
+   * - ``rust/Cargo.toml``, ``rust/src/main.rs``
+     - The Rust program
+   * - ``rust/src/to_from.rs``
+     - Generated Rust module
+   * - ``c/main.c``
+     - The C and C++ program
+   * - ``c/to_from.h``, ``cxx/to_from.h``
+     - Generated header, from ``--lang c`` and ``--lang c++``
+   * - ``python/main.py``
+     - The Python program
+   * - ``python/to_from.py``
+     - Generated Python module
+   * - ``Makefile``
+     - Generates, builds, runs and checks; see above
+   * - ``README.rst``, ``README.html``
+     - This document
+   * - ``build/``
+     - The C and C++ programs and the programs' output
 
 Requirements
 ------------

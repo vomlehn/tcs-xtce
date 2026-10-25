@@ -404,8 +404,9 @@ kept alive for exactly as long as the data structures that use them.</li>
 <li>Everything comes from the <strong>official XTCE documents</strong>. A top-level
 <tt class="docutils literal">make</tt> downloads them into <tt class="docutils literal">references/</tt>, and code is generated
 from them rather than written by hand.</li>
-<li>All Rust code follows standard <tt class="docutils literal">rustfmt</tt> formatting, checked as
-code is added.</li>
+<li>All code keeps its lines within 80 columns, generated or not. Rust
+follows <tt class="docutils literal">rustfmt</tt> (with <tt class="docutils literal">max_width = 80</tt>), checked as code is
+added; C and C++ indent 8 spaces, as <tt class="docutils literal"><span class="pre">.clang-format</span></tt> sets.</li>
 </ol>
 <p>There are two meanings of &quot;serialize XTCE data&quot;, and the project
 implements both:</p>
@@ -492,6 +493,13 @@ that default values are finite and schema-valid.</li>
 <dd>Generate the types, enumerations with their lexical forms, and one
 reader and one writer per record and choice. The Rust output is run
 through <tt class="docutils literal">rustfmt</tt>.</dd>
+<dt><tt class="docutils literal">wrap.py</tt> — wrap</dt>
+<dd>Keeps generated code within 80 columns, for every language, after the
+emitters (and <tt class="docutils literal">rustfmt</tt>) have run. It breaks long lines inside
+brackets, splits string literals into adjacent literals (Rust: with
+backslash-newline continuations, which <tt class="docutils literal">rustfmt</tt> keeps), moves
+trailing comments above their line and rewraps comments and
+docstrings. <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> uses it too, for the packet codecs.</dd>
 <dt><tt class="docutils literal">sample.py</tt> — sample</dt>
 <dd>Generates test documents from the model. Together they use every
 element slot of every type reachable from <tt class="docutils literal">&lt;SpaceSystem&gt;</tt> (834 of
@@ -976,9 +984,25 @@ This catches crashes and disagreements with <tt class="docutils literal">xmllint
 hand-written tests can miss, and shows which unsupported constructs
 real documents use.</dd>
 <dt><strong>Formatting</strong></dt>
-<dd>Every <tt class="docutils literal">make rust</tt> runs <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt>. A Claude Code
+<dd><p class="first">Every <tt class="docutils literal">make rust</tt> runs <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt>. A Claude Code
 <tt class="docutils literal">PostToolUse</tt> hook runs <tt class="docutils literal">rustfmt <span class="pre">--check</span></tt> on each <tt class="docutils literal">.rs</tt> file
-as it is written, and rejects the edit if formatting differs.</dd>
+as it is written, and rejects the edit if formatting differs.
+Code keeps its lines within 80 columns, so that it reads the same in
+any editor or terminal and side by side in a diff:</p>
+<ul class="last simple">
+<li>Rust: <tt class="docutils literal">rustfmt</tt> with <tt class="docutils literal">max_width = 80</tt> (<tt class="docutils literal">rustfmt.toml</tt>), and by
+hand where <tt class="docutils literal">rustfmt</tt> leaves a line long, such as string literals
+and macro bodies.</li>
+<li>C and C++: 8-space indents and 80 columns, set by <tt class="docutils literal"><span class="pre">.clang-format</span></tt>.</li>
+<li>Python: wrapped by hand, with continuation lines lined up under the
+bracket they continue. No formatter is used, since black and
+<tt class="docutils literal">ruff format</tt> would put every item on its own line.</li>
+<li>Makefiles and scripts: wrapped by hand.</li>
+<li>Generated code: wrapped by <tt class="docutils literal">wrap.py</tt> after the emitters run, so
+that it needs no formatting. <tt class="docutils literal">generator/tests/test_wrap.py</tt> checks
+that wrapped code fits in 80 columns and keeps its meaning.</li>
+</ul>
+</dd>
 </dl>
 </div>
 <div class="section" id="limitations-and-future-work">

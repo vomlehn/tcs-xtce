@@ -565,7 +565,7 @@ cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est la
 ...
 variable-array: Rust, C, C++ and Python output identical
 </pre>
-<p><tt class="docutils literal">make html</tt> turns this file into <tt class="docutils literal">README.html</tt>.</p>
+<p><a class="reference internal" href="#makefile-targets">Makefile targets</a> lists the other targets.</p>
 <p>To run one program on its own, generate the code first with
 <tt class="docutils literal">make generate</tt>, then run the commands below from this directory. Each
 program prints the five lines and exits with status 0 if both arrays
@@ -615,6 +615,67 @@ long.</p>
 the <tt class="docutils literal">socket</tt> module. Each thread has its own <tt class="docutils literal">Codec</tt>, whose buffer is
 preallocated to <tt class="docutils literal">Paragraph.MAX_BYTES</tt> and reused for both arrays.</p>
 </div>
+</div>
+<div class="section" id="makefile-targets">
+<h1>Makefile targets</h1>
+<dl class="docutils">
+<dt><tt class="docutils literal">make</tt>, or <tt class="docutils literal">make run</tt></dt>
+<dd>Generate the code if needed, build every program, run it and check
+the output, as above.</dd>
+<dt><tt class="docutils literal">make generate</tt></dt>
+<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">variable_array.xml</tt> for every language, if the XTCE
+file or the generator changed since the code was last generated.</dd>
+<dt><tt class="docutils literal">make rust</tt></dt>
+<dd>Check the Rust program's formatting with <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt> and build
+<tt class="docutils literal"><span class="pre">rust/target/release/variable-array</span></tt>.</dd>
+<dt><tt class="docutils literal">make c</tt></dt>
+<dd>Build <tt class="docutils literal">build/variable_array_c</tt> (C11) and <tt class="docutils literal">build/variable_array_cxx</tt> (C++20).</dd>
+<dt><tt class="docutils literal">make python</tt></dt>
+<dd>Generate the Python module. The Python program needs no building.</dd>
+<dt><tt class="docutils literal">make html</tt></dt>
+<dd>Convert this file, <tt class="docutils literal">README.rst</tt>, to <tt class="docutils literal">README.html</tt>.</dd>
+<dt><tt class="docutils literal">make clean</tt></dt>
+<dd>Remove <tt class="docutils literal">build/</tt> and <tt class="docutils literal">rust/target/</tt>. The generated code and
+<tt class="docutils literal">README.html</tt> stay.</dd>
+</dl>
+</div>
+<div class="section" id="files">
+<h1>Files</h1>
+<p>The generated files aren't kept in git; building generates them.</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">variable_array.xml</tt></td>
+<td>The XTCE description</td>
+</tr>
+<tr><td><tt class="docutils literal">rust/Cargo.toml</tt>, <tt class="docutils literal">rust/src/main.rs</tt></td>
+<td>The Rust program</td>
+</tr>
+<tr><td><tt class="docutils literal">rust/src/variable_array.rs</tt></td>
+<td>Generated Rust module</td>
+</tr>
+<tr><td><tt class="docutils literal">c/main.c</tt></td>
+<td>The C and C++ program</td>
+</tr>
+<tr><td><tt class="docutils literal">c/variable_array.h</tt>, <tt class="docutils literal">cxx/variable_array.h</tt></td>
+<td>Generated header, from <tt class="docutils literal"><span class="pre">--lang</span> c</tt> and <tt class="docutils literal"><span class="pre">--lang</span> c++</tt></td>
+</tr>
+<tr><td><tt class="docutils literal">python/main.py</tt></td>
+<td>The Python program</td>
+</tr>
+<tr><td><tt class="docutils literal">python/variable_array.py</tt></td>
+<td>Generated Python module</td>
+</tr>
+<tr><td><tt class="docutils literal">Makefile</tt></td>
+<td>Generates, builds, runs and checks; see above</td>
+</tr>
+<tr><td><tt class="docutils literal">README.rst</tt>, <tt class="docutils literal">README.html</tt></td>
+<td>This document</td>
+</tr>
+<tr><td><tt class="docutils literal">build/</tt></td>
+<td>The C and C++ programs and the programs' output</td>
+</tr>
+</tbody>
+</table>
 </div>
 <div class="section" id="requirements">
 <h1>Requirements</h1>

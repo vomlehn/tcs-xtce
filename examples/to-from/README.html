@@ -418,7 +418,7 @@ after a usage message, if its arguments are wrong. Build the programs with
 <h1>The XTCE description</h1>
 <p><a class="reference external" href="to_from.xml">to_from.xml</a> defines:</p>
 <ul class="simple">
-<li>a string type, <tt class="docutils literal">WordType</tt>, of varying length (<tt class="docutils literal">Variable</tt>), with an
+<li>a string type, <tt class="docutils literal">WordType</tt>, of varying length (<tt class="docutils literal">Variable</tt>), with a
 32-bit size tag before the string
 (<tt class="docutils literal">LeadingSize <span class="pre">sizeInBitsOfSizeTag=&quot;32&quot;</span></tt>). The tag and the string
 together occupy at most 288 bits, so a word holds up to 32 bytes of UTF-8;</li>
@@ -512,7 +512,7 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor .
 to-from: the 4 writers wrote the same bytes, and the 16 reader/writer pairs printed the same words
 </pre>
 <p><tt class="docutils literal">make build</tt> only generates the code and builds the programs, for
-<tt class="docutils literal"><span class="pre">./to-from</span></tt>. <tt class="docutils literal">make html</tt> turns this file into <tt class="docutils literal">README.html</tt>.</p>
+<tt class="docutils literal"><span class="pre">./to-from</span></tt>. <a class="reference internal" href="#makefile-targets">Makefile targets</a> lists the others.</p>
 <p>Each program can also be run on its own, from this directory, after
 <tt class="docutils literal">make build</tt>. Its writer's output is binary, so send it to a file or
 a pipe rather than a terminal.</p>
@@ -555,6 +555,73 @@ cc<span class="whitespace">  </span>-std<span class="operator">=</span>c11<span 
 <p>Its <tt class="docutils literal">Codec</tt> has a buffer preallocated to <tt class="docutils literal">Word.MAX_BYTES</tt> and reused for
 every word.</p>
 </div>
+</div>
+<div class="section" id="makefile-targets">
+<h1>Makefile targets</h1>
+<dl class="docutils">
+<dt><tt class="docutils literal">make</tt>, or <tt class="docutils literal">make run</tt></dt>
+<dd>Generate the code if needed, build every program, run it and check
+the output, as above.</dd>
+<dt><tt class="docutils literal">make build</tt></dt>
+<dd>Generate the code if needed and build every program, without running
+them, so that <tt class="docutils literal"><span class="pre">./to-from</span></tt> can.</dd>
+<dt><tt class="docutils literal">make generate</tt></dt>
+<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">to_from.xml</tt> for every language, if the XTCE
+file or the generator changed since the code was last generated.</dd>
+<dt><tt class="docutils literal">make rust</tt></dt>
+<dd>Check the Rust program's formatting with <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt> and build
+<tt class="docutils literal"><span class="pre">rust/target/release/to-from</span></tt>.</dd>
+<dt><tt class="docutils literal">make c</tt></dt>
+<dd>Build <tt class="docutils literal">build/to_from_c</tt> (C11) and <tt class="docutils literal">build/to_from_cxx</tt> (C++20).</dd>
+<dt><tt class="docutils literal">make python</tt></dt>
+<dd>Generate the Python module. The Python program needs no building.</dd>
+<dt><tt class="docutils literal">make html</tt></dt>
+<dd>Convert this file, <tt class="docutils literal">README.rst</tt>, to <tt class="docutils literal">README.html</tt>.</dd>
+<dt><tt class="docutils literal">make clean</tt></dt>
+<dd>Remove <tt class="docutils literal">build/</tt> and <tt class="docutils literal">rust/target/</tt>. The generated code and
+<tt class="docutils literal">README.html</tt> stay.</dd>
+</dl>
+</div>
+<div class="section" id="files">
+<h1>Files</h1>
+<p>The generated files aren't kept in git; building generates them.</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">to_from.xml</tt></td>
+<td>The XTCE description</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">to-from</span></tt></td>
+<td>The script that pipes a writer to a reader</td>
+</tr>
+<tr><td><tt class="docutils literal">rust/Cargo.toml</tt>, <tt class="docutils literal">rust/src/main.rs</tt></td>
+<td>The Rust program</td>
+</tr>
+<tr><td><tt class="docutils literal">rust/src/to_from.rs</tt></td>
+<td>Generated Rust module</td>
+</tr>
+<tr><td><tt class="docutils literal">c/main.c</tt></td>
+<td>The C and C++ program</td>
+</tr>
+<tr><td><tt class="docutils literal">c/to_from.h</tt>, <tt class="docutils literal">cxx/to_from.h</tt></td>
+<td>Generated header, from <tt class="docutils literal"><span class="pre">--lang</span> c</tt> and <tt class="docutils literal"><span class="pre">--lang</span> c++</tt></td>
+</tr>
+<tr><td><tt class="docutils literal">python/main.py</tt></td>
+<td>The Python program</td>
+</tr>
+<tr><td><tt class="docutils literal">python/to_from.py</tt></td>
+<td>Generated Python module</td>
+</tr>
+<tr><td><tt class="docutils literal">Makefile</tt></td>
+<td>Generates, builds, runs and checks; see above</td>
+</tr>
+<tr><td><tt class="docutils literal">README.rst</tt>, <tt class="docutils literal">README.html</tt></td>
+<td>This document</td>
+</tr>
+<tr><td><tt class="docutils literal">build/</tt></td>
+<td>The C and C++ programs and the programs' output</td>
+</tr>
+</tbody>
+</table>
 </div>
 <div class="section" id="requirements">
 <h1>Requirements</h1>
