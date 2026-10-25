@@ -2196,7 +2196,9 @@ meta-command without a <tt class="docutils literal">BaseMetaCommand</tt> may ext
 through its <tt class="docutils literal">BaseContainer</tt>. A <tt class="docutils literal">SizeInBits</tt> pads a command, or an
 included container, as in telemetry. The demo's <tt class="docutils literal">Stamp</tt> includes
 <tt class="docutils literal">Trailer</tt>, which extends <tt class="docutils literal">TrailerBase</tt> and must have a
-<tt class="docutils literal">TrailerKind</tt> of 7, and is padded to 16 bytes.</p>
+<tt class="docutils literal">TrailerKind</tt> of 7, and is padded to 16 bytes. A repeated container
+is an array of aggregates, as in telemetry: the demo's <tt class="docutils literal">Pairs</tt> sends
+<tt class="docutils literal">PairCount</tt> copies of <tt class="docutils literal">Pair</tt>.</p>
 </dd>
 <dt>Segments</dt>
 <dd><p class="first"><tt class="docutils literal">ParameterSegmentRefEntry</tt>, <tt class="docutils literal">ContainerSegmentRefEntry</tt> and
@@ -2241,17 +2243,16 @@ doesn't start with <tt class="docutils literal">.</tt> or <tt class="docutils li
 SpaceSystem, then from each enclosing one. References may cross
 documents (see <a class="reference internal" href="#missions-in-several-documents">Missions in several documents</a>).</dd>
 <dt>Not supported</dt>
-<dd>references to elements of arrays whose count varies in a dimension
-other than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer
-or string without an <tt class="docutils literal">aliasNameSpace</tt>, other instances than 0,
-repeated segment entries, repeated containers in commands, commands that
-include another meta-command's container, <tt class="docutils literal">CustomAlgorithm</tt> criteria,
-transform algorithms, custom checksum algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt>
-in a data encoding (which XTCE deprecates), calibrators inside aggregate
-types that use other values, least-significant-bit-first strings and
-binary data that may not start on a byte boundary, integers of more than
-64 bits, <tt class="docutils literal">nextEntry</tt> locations, and a <tt class="docutils literal">containerEnd</tt> location in a
-container without a fixed size.</dd>
+<dd>references to elements of arrays whose count varies in a dimension other
+than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer or
+string without an <tt class="docutils literal">aliasNameSpace</tt>, other instances than 0, repeated
+segment entries, commands that include another meta-command's container,
+<tt class="docutils literal">CustomAlgorithm</tt> criteria, transform algorithms, custom checksum
+algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
+deprecates), calibrators inside aggregate types that use other values,
+least-significant-bit-first strings and binary data that may not start on
+a byte boundary, integers of more than 64 bits, <tt class="docutils literal">nextEntry</tt> locations,
+and a <tt class="docutils literal">containerEnd</tt> location in a container without a fixed size.</dd>
 </dl>
 </div>
 <div class="section" id="known-limitations">

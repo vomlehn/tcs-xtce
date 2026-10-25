@@ -1763,6 +1763,8 @@
       <Parameter name="SplitWord" parameterTypeRef="ChecksumType"/>
       <Parameter name="TrailerKind" parameterTypeRef="TrailerKindType"/>
       <Parameter name="TrailerTag" parameterTypeRef="ChecksumType"/>
+      <Parameter name="PairA" parameterTypeRef="TrailerKindType"/>
+      <Parameter name="PairB" parameterTypeRef="ChecksumType"/>
     </ParameterSet>
     <ArgumentTypeSet>
       <IntegerArgumentType name="U11Arg" signed="false">
@@ -2328,8 +2330,41 @@
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>
       </MetaCommand>
+      <!-- PairCount copies of Pair, from the CommandContainerSet. -->
+      <MetaCommand name="Pairs">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="16"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="PairCount" argumentTypeRef="WordCountType"/>
+        </ArgumentList>
+        <CommandContainer name="PairsContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="PairCount"/>
+            <ContainerRefEntry containerRef="Pair">
+              <RepeatEntry>
+                <Count>
+                  <DynamicValue>
+                    <ArgumentInstanceRef argumentRef="PairCount"/>
+                  </DynamicValue>
+                </Count>
+              </RepeatEntry>
+            </ContainerRefEntry>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
     </MetaCommandSet>
     <CommandContainerSet>
+      <CommandContainer name="Pair">
+        <EntryList>
+          <ParameterRefEntry parameterRef="PairA"/>
+          <ParameterRefEntry parameterRef="PairB"/>
+        </EntryList>
+      </CommandContainer>
       <CommandContainer name="TrailerBase">
         <EntryList>
           <ParameterRefEntry parameterRef="TrailerKind"/>

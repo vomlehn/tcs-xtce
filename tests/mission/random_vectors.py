@@ -402,7 +402,7 @@ def main() -> None:
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
             opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
-                                 12, 13, 13, 14, 15, rng.randrange(256)])
+                                 12, 13, 13, 14, 15, 16, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)

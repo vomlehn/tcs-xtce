@@ -163,5 +163,7 @@ Guarded{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq
 Guarded{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, guard_on=false, block_data=none, block_data2=none, guard_end=119} | 09e0c02a00010077
 error:BadChecksum | -
 error:BadChecksum | -
+Pairs{seq_count=5, pair=[{pair_a=1, pair_b=515}, {pair_a=4, pair_b=1286}]} | 112ec00500071002010203040506
+error:BadSize | -
 Arm{seq_count=5, force=true, level=7} | 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50
 Arm{seq_count=5, force=false, level=none} | 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50

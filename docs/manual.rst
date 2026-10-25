@@ -1769,7 +1769,9 @@ Commands
    through its ``BaseContainer``. A ``SizeInBits`` pads a command, or an
    included container, as in telemetry. The demo's ``Stamp`` includes
    ``Trailer``, which extends ``TrailerBase`` and must have a
-   ``TrailerKind`` of 7, and is padded to 16 bytes.
+   ``TrailerKind`` of 7, and is padded to 16 bytes. A repeated container
+   is an array of aggregates, as in telemetry: the demo's ``Pairs`` sends
+   ``PairCount`` copies of ``Pair``.
 
 Segments
    ``ParameterSegmentRefEntry``, ``ContainerSegmentRefEntry`` and
@@ -1817,17 +1819,16 @@ Name references
    documents (see `Missions in several documents`_).
 
 Not supported
-   references to elements of arrays whose count varies in a dimension
-   other than the first, ``IndirectParameterRefEntry`` chosen by an integer
-   or string without an ``aliasNameSpace``, other instances than 0,
-   repeated segment entries, repeated containers in commands, commands that
-   include another meta-command's container, ``CustomAlgorithm`` criteria,
-   transform algorithms, custom checksum algorithms, ``ErrorDetectCorrect``
-   in a data encoding (which XTCE deprecates), calibrators inside aggregate
-   types that use other values, least-significant-bit-first strings and
-   binary data that may not start on a byte boundary, integers of more than
-   64 bits, ``nextEntry`` locations, and a ``containerEnd`` location in a
-   container without a fixed size.
+   references to elements of arrays whose count varies in a dimension other
+   than the first, ``IndirectParameterRefEntry`` chosen by an integer or
+   string without an ``aliasNameSpace``, other instances than 0, repeated
+   segment entries, commands that include another meta-command's container,
+   ``CustomAlgorithm`` criteria, transform algorithms, custom checksum
+   algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
+   deprecates), calibrators inside aggregate types that use other values,
+   least-significant-bit-first strings and binary data that may not start on
+   a byte boundary, integers of more than 64 bits, ``nextEntry`` locations,
+   and a ``containerEnd`` location in a container without a fixed size.
 
 Known limitations
 -----------------

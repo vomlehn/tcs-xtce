@@ -1664,12 +1664,14 @@ class Compiler:
                               "overlap")
         return [Pad(size - pos)] if size > pos else []
 
-    def container_type(self, ckey: Key, stack: list, where: str) -> VType:
+    def container_type(self, ckey: Key, stack: list, where: str,
+                       table: Optional[dict] = None) -> VType:
         """The aggregate holding one copy of a repeated container's entries,
-        with skips and padding from their locations and the container size."""
+        with skips and padding from their locations and the container size.
+        ``table`` holds the container (telemetry's by default)."""
         if ckey in self.ctypes:
             return self.ctypes[ckey]
-        cpath, inc = self.containers[ckey]
+        cpath, inc = (self.containers if table is None else table)[ckey]
         what = f"{where}: repeated container {qname(ckey)}"
         m = self._id()
         # Its entries are values of each copy, so sizes can't come from
@@ -2208,12 +2210,22 @@ class Compiler:
             elif ch.name == "IndirectParameterRefEntry":
                 out += self.indirect(e, path, values, where, arg_key)
             elif ch.name == "ContainerRefEntry":
-                if e.repeat_entry is not None:
-                    raise Unsupported(f"{where}: a repeated container in a "
-                                      "CommandContainer")
                 ckey = self.resolve(e.container_ref, path, self.tc_containers,
                                     "container")
-                out += self.tc_include(ckey, scope, where, values, stack)
+                if e.repeat_entry is None:
+                    out += self.tc_include(ckey, scope, where, values, stack)
+                else:
+                    inc = self.tc_containers[ckey][1]
+                    if inc.base_container is not None:
+                        raise Unsupported(f"{where}: repeated container "
+                                          f"{qname(ckey)} has a BaseContainer")
+                    vt = self.container_type(ckey, list(stack), where,
+                                             self.tc_containers)
+                    local = self.local(inc.name, qname(ckey), vt)
+                    local = self.bind(self.repeat(local, e, path, where),
+                                      values, where, arg_key)
+                    out.append(Value(local))
+                    values.append(local)
             elif ch.name in entries:
                 if "Argument" in ch.name:
                     local = self.arg_local(scope, e.argument_ref, where)
