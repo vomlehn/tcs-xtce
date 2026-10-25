@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import struct
+from fractions import Fraction
 from typing import Optional
 
 from ._buffer import ManagedBuffer
@@ -30,7 +31,7 @@ class PacketError(ValueError):
     ``kind`` names the error and is the same in every runtime: ``Truncated``,
     ``BadPosition``, ``NoMatch``, ``Mismatch``, ``OutOfRange``,
     ``InvalidString``, ``TooLong``, ``Calibration``, ``NotInvertible``,
-    ``Missing``, ``BadSize`` or ``BadLength``.
+    ``Missing``, ``BadSize``, ``BadLength`` or ``InvalidValue``.
     """
 
     MESSAGES = {"Truncated": "packet too short for {0}",
@@ -45,7 +46,9 @@ class PacketError(ValueError):
                                   "for encoding"),
                 "Missing": "{0} is required by its include condition",
                 "BadSize": "invalid size or count for {0}",
-                "BadLength": "{0} does not match the length of the packet"}
+                "BadLength": "{0} does not match the length of the packet",
+                "InvalidValue": ("the bits of {0} are not a value of its "
+                                 "encoding")}
 
     def __init__(self, kind: str, *what: str) -> None:
         super().__init__(self.MESSAGES[kind].format(*what))
@@ -185,6 +188,38 @@ class BitReader:
         return (int.from_bytes(v.to_bytes(bits // 8, "big"), "little") if le
                 else v)
 
+    def uint_bits(self, bits: int, lsb: bool, order, field: str) -> int:
+        """Read an unsigned field of ``bits`` bits in any bit and byte order.
+
+        The field's bits are taken in groups of 8 (the last may be shorter).
+        Within a group, ``lsb`` False numbers the bits of each byte from the
+        most significant (the usual order), and the group's first bit is its
+        most significant; ``lsb`` True numbers them from the least
+        significant, and the group's first bit is its least significant.
+        ``order`` combines the groups: ``"be"`` puts the first group most
+        significant, ``"le"`` least significant, and a tuple gives each
+        (whole) byte's significance, as an XTCE byte order list does."""
+        if self.pos + bits > self.nbits:
+            raise PacketError("Truncated", field)
+        groups = []
+        q = self.pos
+        left = bits
+        while left:
+            n = min(8, left)
+            g = 0
+            for i in range(n):
+                byte = self.data[(q + i) >> 3]
+                if lsb:
+                    g |= ((byte >> ((q + i) & 7)) & 1) << i
+                else:
+                    g = (g << 1) | ((byte >> (7 - ((q + i) & 7))) & 1)
+            groups.append((g, n))
+            q += n
+            left -= n
+        self.pos = q
+        self.end = max(self.end, q)
+        return _combine(groups, order)
+
     def pad(self, bits: int, field: str) -> None:
         """Skip ``bits`` bits of padding, which must be in the packet."""
         if self.pos + bits > self.nbits:
@@ -271,6 +306,24 @@ class BitWriter:
             v = int.from_bytes(v.to_bytes(bits // 8, "big"), "little")
         self.uint(bits, v)
 
+    def uint_bits(self, bits: int, lsb: bool, order, v: int) -> None:
+        """Write the low ``bits`` bits of ``v`` in the bit and byte order that
+        ``BitReader.uint_bits`` reads."""
+        lengths = [8] * (bits // 8) + ([bits % 8] if bits % 8 else [])
+        last = (self.pos + bits + 7) >> 3
+        if len(self.buf) < last:
+            self.buf.resize(last)
+        d = self.buf._data
+        q = self.pos
+        for j, (g, n) in enumerate(_split(v, lengths, order)):
+            for i in range(n):
+                bit = (g >> i) & 1 if lsb else (g >> (n - 1 - i)) & 1
+                shift = (q + i) & 7 if lsb else 7 - ((q + i) & 7)
+                k = (q + i) >> 3
+                d[k] = (d[k] & ~(1 << shift)) | (bit << shift)
+            q += n
+        self.pos = q
+
     def patch_length(self, at: int, bits: int, le: bool, adjust: int,
                      field: str) -> None:
         """Fill in the packet length field ``field`` of ``bits`` bits at bit
@@ -291,6 +344,43 @@ class BitWriter:
     def bytes(self, data) -> None:
         if data:
             self.uint(len(data) * 8, int.from_bytes(data, "big"))
+
+
+def _combine(groups, order) -> int:
+    """The value of groups of bits ((value, length) pairs, in stream order)
+    combined in ``order`` (see ``BitReader.uint_bits``)."""
+    v = 0
+    if order == "be":
+        for g, n in groups:
+            v = (v << n) | g
+    elif order == "le":
+        shift = 0
+        for g, n in groups:
+            v |= g << shift
+            shift += n
+    else:
+        for (g, _), sig in zip(groups, order):
+            v |= g << (8 * sig)
+    return v
+
+
+def _split(v: int, lengths, order) -> list:
+    """The groups (value, length) of ``v`` in stream order: the inverse of
+    ``_combine``."""
+    out = []
+    if order == "be":
+        shift = sum(lengths)
+        for n in lengths:
+            shift -= n
+            out.append(((v >> shift) & ((1 << n) - 1), n))
+    elif order == "le":
+        shift = 0
+        for n in lengths:
+            out.append(((v >> shift) & ((1 << n) - 1), n))
+            shift += n
+    else:
+        out = [((v >> (8 * sig)) & 0xFF, 8) for sig in order]
+    return out
 
 
 # -- integers
@@ -339,6 +429,36 @@ def from_unsigned(v: int, bits: int, field: str) -> int:
 
 def int_to_float(raw: int, bits: int, enc: str) -> float:
     return float(to_signed(raw, bits, enc))
+
+
+def bcd_decode(raw: int, bits: int, packed: bool, field: str) -> int:
+    """The value of a BCD field: packed BCD has a decimal digit in every 4
+    bits, and (unpacked) BCD one in the low 4 bits of every byte, whose high
+    4 bits are zero; the first digit is the most significant.  Raises
+    ``InvalidValue`` for any other bits."""
+    width = 4 if packed else 8
+    v = 0
+    for shift in range(bits - width, -1, -width):
+        d = (raw >> shift) & ((1 << width) - 1)
+        if d > 9:
+            raise PacketError("InvalidValue", field)
+        v = v * 10 + d
+    return v
+
+
+def bcd_encode(v: int, bits: int, packed: bool, field: str) -> int:
+    """The BCD field holding ``v``; raises ``OutOfRange`` unless ``v`` is
+    from 0 to the most the field's digits hold."""
+    v = int(v)
+    width = 4 if packed else 8
+    digits = bits // width
+    if not 0 <= v < 10 ** digits:
+        raise PacketError("OutOfRange", field)
+    raw = 0
+    for i in range(digits):
+        raw |= (v % 10) << (i * width)
+        v //= 10
+    return raw
 
 
 def _round(x: float) -> int:
@@ -393,6 +513,293 @@ def float_to_raw(v: float, bits: int) -> int:
             b = struct.pack(">f", math.copysign(math.inf, v))
         return int.from_bytes(b, "big")
     return int.from_bytes(struct.pack(">d", v), "big")
+
+
+def _to_float(neg: bool, m: int, e: int) -> float:
+    """``(-1)**neg * m * 2**e`` rounded to the nearest double, ties to
+    even; infinite when it is too large."""
+    try:
+        x = float(Fraction(m) * Fraction(2) ** e) if m else 0.0
+    except OverflowError:
+        x = math.inf
+    return -x if neg else x
+
+
+def _parts(x: float, p: int) -> tuple:
+    """(neg, m, e) with ``x == (-1)**neg * m * 2**e`` exactly, ``m`` of
+    exactly ``p`` bits (``p`` at least 53), for finite nonzero ``x``."""
+    m, e = math.frexp(abs(x))  # abs(x) == m * 2**e, 0.5 <= m < 1
+    return x < 0, int(m * (1 << 53)) << (p - 53), e - p
+
+
+def _round_shift(m: int, shift: int) -> int:
+    """``m / 2**shift`` rounded to the nearest integer, ties to even."""
+    if shift <= 0:
+        return m << -shift
+    q, r = divmod(m, 1 << shift)
+    half = 1 << (shift - 1)
+    return q + (1 if r > half or (r == half and q & 1) else 0)
+
+
+# IEEE 754 binary formats: (exponent bits, fraction bits, explicit integer
+# bit) by size.
+_IEEE = {16: (5, 10, False), 32: (8, 23, False), 64: (11, 52, False),
+         80: (15, 64, True), 128: (15, 112, False)}
+
+
+def _ieee_decode(raw: int, bits: int) -> float:
+    ebits, fbits, explicit = _IEEE[bits]
+    neg = raw >> (bits - 1) & 1
+    exp = (raw >> fbits) & ((1 << ebits) - 1)
+    frac = raw & ((1 << fbits) - 1)
+    bias = (1 << (ebits - 1)) - 1
+    if exp == (1 << ebits) - 1:
+        if explicit:
+            frac &= (1 << 63) - 1
+        x = math.nan if frac else math.inf
+        return -x if neg and not frac else x
+    if explicit:
+        # The integer bit is in the significand; an exponent of 0 counts as
+        # 1, as for subnormals.
+        return _to_float(neg, frac, max(exp, 1) - bias - 63)
+    if exp == 0:
+        return _to_float(neg, frac, 1 - bias - fbits)
+    return _to_float(neg, frac | (1 << fbits), exp - bias - fbits)
+
+
+def _ieee_encode(x: float, bits: int) -> int:
+    """The IEEE 754 binary format of ``bits`` bits nearest ``x``, ties to
+    even, overflowing to infinity."""
+    ebits, fbits, explicit = _IEEE[bits]
+    sign = (1 << (bits - 1)) if math.copysign(1.0, x) < 0 else 0
+    top = (1 << ebits) - 1
+    integer = (1 << 63) if explicit else 0  # x87's explicit integer bit
+    if math.isnan(x):
+        # A quiet NaN: the fraction's top bit set.
+        return sign | (top << fbits) | integer | (1 << (fbits - 1 - explicit))
+    if math.isinf(x):
+        return sign | (top << fbits) | integer
+    if x == 0:
+        return sign
+    bias = (1 << (ebits - 1)) - 1
+    p = fbits + (not explicit)  # significand bits, with the integer bit
+    _, m, e = _parts(x, 53)
+    # The exponent of the significand's lowest bit: subnormals share the
+    # smallest normal exponent.
+    low = max(e + 52, 1 - bias) - (p - 1)
+    q = _round_shift(m, low - e)
+    if q >> p:  # rounding carried into a new bit
+        q >>= 1
+        low += 1
+    if not q >> (p - 1):  # subnormal
+        return sign | q
+    biased = low + p - 1 + bias
+    if biased >= top:
+        return sign | (top << fbits) | integer
+    return sign | (biased << fbits) | (q if explicit else q - (1 << fbits))
+
+
+def _magnitude(x: float) -> tuple:
+    """(m, e, power) for finite nonzero ``x``: ``abs(x) == m * 2**e`` with
+    ``m`` of 53 bits, and whether ``abs(x)`` is a power of two."""
+    _, m, e = _parts(x, 53)
+    return m, e, m == 1 << 52
+
+
+def _mil1750a_decode(raw: int, bits: int) -> float:
+    if bits == 32:
+        mant, exp = raw >> 8, raw & 0xFF
+        mbits = 24
+    else:
+        mant = ((raw >> 24) << 16) | (raw & 0xFFFF)
+        exp = (raw >> 16) & 0xFF
+        mbits = 40
+    mant = to_signed(mant, mbits, "twosComplement")
+    exp = to_signed(exp, 8, "twosComplement")
+    return _to_float(mant < 0, abs(mant), exp - (mbits - 1))
+
+
+def _mil1750a_encode(x: float, bits: int, field: str) -> int:
+    mbits = 24 if bits == 32 else 40
+    f = mbits - 1  # fraction bits
+    if x == 0:
+        return 0
+    m, e, power = _magnitude(x)
+    top = e + 52  # abs(x) is in [2**top, 2**(top + 1))
+    if x > 0:
+        exp = top + 1
+        mag = _round_shift(m, exp - f - e)
+        if mag == 1 << f:
+            mag >>= 1
+            exp += 1
+        mant = mag
+    else:
+        # Negative mantissas are normalized to [-1, -1/2).
+        exp = top if power else top + 1
+        mag = _round_shift(m, exp - f - e)
+        if mag == 1 << (f - 1):
+            mag = 1 << f
+            exp -= 1
+        mant = -mag
+    if exp > 127:
+        raise PacketError("OutOfRange", field)
+    if exp < -128:
+        # Too small to normalize: unnormalized at the smallest exponent.
+        exp = -128
+        mag = _round_shift(m, exp - f - e)
+        mant = mag if x > 0 else -mag
+    mant &= (1 << mbits) - 1
+    exp &= 0xFF
+    if bits == 32:
+        return (mant << 8) | exp
+    return ((mant >> 16) << 24) | (exp << 16) | (mant & 0xFFFF)
+
+
+def _dec_decode(raw: int, bits: int, field: str) -> float:
+    f = 23 if bits == 32 else 55
+    neg = raw >> (bits - 1)
+    exp = (raw >> f) & 0xFF
+    if exp == 0:
+        if neg:  # a reserved operand
+            raise PacketError("InvalidValue", field)
+        return 0.0
+    return _to_float(neg, (raw & ((1 << f) - 1)) | (1 << f), exp - 129 - f)
+
+
+def _dec_encode(x: float, bits: int, field: str) -> int:
+    f = 23 if bits == 32 else 55
+    if x == 0:
+        return 0
+    m, e, _ = _magnitude(x)
+    top = e + 52
+    q = _round_shift(m, top - f - e)
+    if q >> (f + 1):
+        q >>= 1
+        top += 1
+    exp = top + 129
+    if exp > 255:
+        raise PacketError("OutOfRange", field)
+    if exp < 1:
+        return 0
+    return ((x < 0) << (bits - 1)) | (exp << f) | (q - (1 << f))
+
+
+def _ibm_decode(raw: int, bits: int) -> float:
+    neg = raw >> (bits - 1)
+    hi = raw >> (bits - 64) if bits == 128 else raw
+    exp = (hi >> (min(bits, 64) - 8)) & 0x7F
+    if bits == 128:
+        frac = ((hi & ((1 << 56) - 1)) << 56) | (raw & ((1 << 56) - 1))
+        f = 112
+    else:
+        f = bits - 8
+        frac = raw & ((1 << f) - 1)
+    return _to_float(neg, frac, 4 * (exp - 64) - f)
+
+
+def _ibm_encode(x: float, bits: int, field: str) -> int:
+    f = 112 if bits == 128 else bits - 8
+    if x == 0:
+        return 0
+    m, e, _ = _magnitude(x)
+    h = (e + 52) // 4 + 1  # abs(x) / 16**h is in [1/16, 1)
+    q = _round_shift(m, 4 * h - f - e)
+    if q >> f:
+        q >>= 4
+        h += 1
+    exp = h + 64
+    if exp > 127:
+        raise PacketError("OutOfRange", field)
+    if exp < 0:
+        # Too small to normalize: unnormalized at the smallest exponent.
+        exp = 0
+        q = _round_shift(m, -256 - f - e)
+    sign = int(x < 0)
+    if bits != 128:
+        return (sign << (bits - 1)) | (exp << f) | q
+    # The low half has the sign, and a characteristic 14 less (modulo 128).
+    hi = (sign << 63) | (exp << 56) | (q >> 56)
+    lo = (sign << 63) | (((exp - 14) & 0x7F) << 56) | (q & ((1 << 56) - 1))
+    return (hi << 64) | lo
+
+
+# TI TMS320C3x formats: (exponent bits, fraction bits) by size.
+_TI = {16: (4, 11), 32: (8, 23), 40: (8, 31)}
+
+
+def _ti_decode(raw: int, bits: int) -> float:
+    ebits, f = _TI[bits]
+    exp = to_signed(raw >> (f + 1), ebits, "twosComplement")
+    if exp == -(1 << (ebits - 1)):
+        return 0.0
+    frac = raw & ((1 << f) - 1)
+    if raw >> f & 1:  # (-2 + frac) * 2**exp
+        return _to_float(True, (2 << f) - frac, exp - f)
+    return _to_float(False, (1 << f) | frac, exp - f)
+
+
+def _ti_encode(x: float, bits: int, field: str) -> int:
+    ebits, f = _TI[bits]
+    lo = -(1 << (ebits - 1))  # the exponent of zero
+    if x == 0:
+        return (lo & ((1 << ebits) - 1)) << (f + 1)
+    m, e, power = _magnitude(x)
+    top = e + 52
+    if x > 0:
+        exp = top
+        q = _round_shift(m, exp - f - e)
+        if q >> (f + 1):
+            q >>= 1
+            exp += 1
+        sign, frac = 0, q - (1 << f)
+    else:
+        # abs(x) / 2**exp is in (1, 2]: x == (-2 + frac) * 2**exp.
+        exp = top - 1 if power else top
+        q = _round_shift(m, exp - f - e)
+        if q == 1 << f:
+            exp -= 1
+            q = 2 << f
+        sign, frac = 1, (2 << f) - q
+    if exp > -lo - 1:
+        raise PacketError("OutOfRange", field)
+    if exp <= lo:
+        return (lo & ((1 << ebits) - 1)) << (f + 1)
+    return ((exp & ((1 << ebits) - 1)) << (f + 1)) | (sign << f) | frac
+
+
+def float_decode(fmt: str, bits: int, raw: int, field: str) -> float:
+    """The value of a float field of ``bits`` bits in the XTCE encoding
+    ``fmt``: ``IEEE754`` (16, 32, 64, 80 or 128 bits), ``MILSTD_1750A`` (32
+    or 48), ``DEC`` (32 for F_floating, 64 for D_floating), ``IBM`` (32, 64
+    or 128) or ``TI`` (16, 32 or 40), rounded to the nearest double."""
+    if fmt == "IEEE754":
+        return _ieee_decode(raw, bits)
+    if fmt == "MILSTD_1750A":
+        return _mil1750a_decode(raw, bits)
+    if fmt == "DEC":
+        return _dec_decode(raw, bits, field)
+    if fmt == "IBM":
+        return _ibm_decode(raw, bits)
+    return _ti_decode(raw, bits)
+
+
+def float_encode(fmt: str, bits: int, x: float, field: str) -> int:
+    """The float field nearest ``x`` (ties to even), as ``float_decode``
+    reads it.  IEEE formats overflow to infinity; the others, which have no
+    infinity or NaN, raise ``OutOfRange`` for values too large for them and
+    for infinities and NaN, and encode values too small for them as zero."""
+    x = float(x)
+    if fmt == "IEEE754":
+        return _ieee_encode(x, bits)
+    if not math.isfinite(x):
+        raise PacketError("OutOfRange", field)
+    if fmt == "MILSTD_1750A":
+        return _mil1750a_encode(x, bits, field)
+    if fmt == "DEC":
+        return _dec_encode(x, bits, field)
+    if fmt == "IBM":
+        return _ibm_encode(x, bits, field)
+    return _ti_encode(x, bits, field)
 
 
 # -- calibrators
@@ -510,21 +917,73 @@ def check_size(v, n: int, field: str) -> None:
 def sized(spec: tuple, n: int) -> tuple:
     """The spec of a string whose size another field gives: exactly ``n`` bytes.
     """
-    return (n * 8, n * 8, spec[2], spec[3])
+    return (n * 8, n * 8) + tuple(spec[2:])
 
 
 # -- strings and binary
 # -------------------------------------------------------------
 
+# Python codecs of the XTCE string encodings.  UTF-16 and UTF-32 without a
+# byte order are read big endian unless they start with a byte order mark,
+# and written big endian without one.
+_CODECS = {"UTF-8": "utf-8", "US-ASCII": "ascii", "ISO-8859-1": "latin-1",
+           "Windows-1252": "cp1252", "UTF-16": "utf-16-be",
+           "UTF-16BE": "utf-16-be", "UTF-16LE": "utf-16-le",
+           "UTF-32": "utf-32-be", "UTF-32BE": "utf-32-be",
+           "UTF-32LE": "utf-32-le"}
+_BOMS = {"UTF-16": ((b"\xfe\xff", "utf-16-be"), (b"\xff\xfe", "utf-16-le")),
+         "UTF-32": ((b"\x00\x00\xfe\xff", "utf-32-be"),
+                    (b"\xff\xfe\x00\x00", "utf-32-le"))}
+
+
+def code_unit(charset: str) -> int:
+    """The bytes in one code unit of the XTCE string encoding ``charset``."""
+    return 2 if "16" in charset else 4 if "32" in charset else 1
+
+
+def decode_text(b: bytes, charset: str, field: str) -> str:
+    """The string whose bytes in ``charset`` are ``b``; raises
+    ``InvalidString`` if they aren't valid."""
+    codec = _CODECS[charset]
+    for bom, c in _BOMS.get(charset, ()):
+        if b.startswith(bom):
+            b, codec = b[len(bom):], c
+            break
+    if len(b) % code_unit(charset):
+        raise PacketError("InvalidString", field)
+    try:
+        return bytes(b).decode(codec)
+    except UnicodeDecodeError:
+        raise PacketError("InvalidString", field) from None
+
+
+def encode_text(s: str, charset: str, field: str) -> bytes:
+    """The bytes of ``s`` in ``charset``; raises ``InvalidString`` if it
+    has characters that ``charset`` can't hold."""
+    try:
+        return s.encode(_CODECS[charset])
+    except UnicodeEncodeError:
+        raise PacketError("InvalidString", field) from None
+
+
+def _find_unit(b: bytes, term: bytes, unit: int) -> int:
+    """The first position of ``term`` in ``b`` that starts a code unit, or
+    -1."""
+    i = b.find(term)
+    while i >= 0 and i % unit:
+        i = b.find(term, i + 1)
+    return i
+
 
 def read_string(r: BitReader, spec: tuple, field: str) -> str:
     """Read a string; ``spec`` is (fixed_bits, max_bits, terminator,
-    size_tag_bits)."""
-    fixed, max_bits, term, tag = spec
+    size_tag_bits, charset), where the terminator is bytes or None."""
+    fixed, max_bits, term, tag, charset = spec
+    unit = code_unit(charset)
     start = r.pos
     if fixed is not None and term is not None:
         b = r.bytes(fixed // 8, field)
-        i = b.find(bytes([term]))
+        i = _find_unit(b, term, unit)
         if i >= 0:
             b = b[:i]
     elif fixed is not None:
@@ -536,42 +995,41 @@ def read_string(r: BitReader, spec: tuple, field: str) -> str:
     elif term is not None:
         out = bytearray()
         while True:
-            if (len(out) + 1) * 8 > max_bits:
+            if (len(out) + unit) * 8 > max_bits:
                 raise PacketError("TooLong", field)
-            c = r.uint(8, field)
-            if c == term:
+            out += r.bytes(unit, field)
+            k = len(out) - len(term)
+            if k >= 0 and k % unit == 0 and out[k:] == term:
+                del out[k:]
                 break
-            out.append(c)
         b = bytes(out)
     else:
         n = r.uint(tag, field)
         if n * 8 + tag > max_bits:
             raise PacketError("TooLong", field)
         b = r.bytes(n, field)
-    try:
-        return b.decode("utf-8")
-    except UnicodeDecodeError:
-        raise PacketError("InvalidString", field) from None
+    return decode_text(b, charset, field)
 
 
 def write_string(w: BitWriter, spec: tuple, s: str, field: str) -> None:
-    fixed, max_bits, term, tag = spec
-    try:
-        b = s.encode("utf-8")
-    except UnicodeEncodeError:
-        raise PacketError("InvalidString", field) from None
+    fixed, max_bits, term, tag, charset = spec
+    b = encode_text(s, charset, field)
     if term is not None:
-        if term in b:
+        if _find_unit(b, term, code_unit(charset)) >= 0:
             raise PacketError("InvalidString", field)
         room = (fixed if fixed is not None else max_bits) // 8
-        need = len(b) if fixed is not None else len(b) + 1
+        # A fixed-size string may fill its field; otherwise the terminator
+        # follows it.
+        need = len(b) + len(term)
+        if fixed is not None and len(b) == room:
+            need = room
         if need > room:
             raise PacketError("TooLong", field)
         w.bytes(b)
         if len(b) < room:
-            w.uint(8, term)
-        if fixed is not None and len(b) + 1 < fixed // 8:
-            w.bytes(bytes(fixed // 8 - len(b) - 1))
+            w.bytes(term)
+        if fixed is not None and need < room:
+            w.bytes(bytes(room - need))
     else:
         room = fixed if fixed is not None else max_bits
         if len(b) * 8 + tag > room or len(b) >= 1 << tag:

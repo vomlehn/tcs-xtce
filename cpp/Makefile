@@ -18,7 +18,8 @@ HEADERS  := $(wildcard include/xtce/*.hpp include/xtce/*.h)
 
 .PHONY: all
 all: lib $(BUILD)/xtce_roundtrip $(BUILD)/packet_tool $(BUILD)/packet_tool_cxx \
-     $(BUILD)/digest_tool $(BUILD)/digest_tool_cxx
+     $(BUILD)/digest_tool $(BUILD)/digest_tool_cxx $(BUILD)/float_tool \
+     $(BUILD)/float_tool_cxx
 
 .PHONY: lib
 lib: $(BUILD)/libxtce.a $(BUILD)/libxtce.so
@@ -62,6 +63,13 @@ $(BUILD)/digest_tool: tests/digest_tool.c include/xtce/digest.h | $(BUILD)
 	$(CC) -std=c11 $(CFLAGS) $(WARN) -Iinclude $< -o $@
 
 $(BUILD)/digest_tool_cxx: tests/digest_tool.c include/xtce/digest.h | $(BUILD)
+	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -x c++ $< -o $@
+
+# Float conversions, from the header xtce/packet.h alone, built both ways.
+$(BUILD)/float_tool: tests/float_tool.c include/xtce/packet.h | $(BUILD)
+	$(CC) -std=c11 $(CFLAGS) $(WARN) -Iinclude $< -lm -o $@
+
+$(BUILD)/float_tool_cxx: tests/float_tool.c include/xtce/packet.h | $(BUILD)
 	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -x c++ $< -o $@
 
 # The C test is compiled as C and linked with the C++ runtime.

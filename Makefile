@@ -116,7 +116,7 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
 .PHONY: test
 test: test-generator test-rust test-cpp test-python cross-check packet-check \
-      digest-check examples line-width
+      digest-check float-check examples line-width
 
 # Every line of code, hand-written or generated, fits in 80 columns.  It comes
 # last in `test` so that the code the examples generate exists by then.
@@ -154,6 +154,11 @@ packet-check: rust cpp python
 digest-check: rust cpp
 	sh tests/digest_check.sh rust/target/release/examples/digest_tool \
 		cpp/build/digest_tool cpp/build/digest_tool_cxx
+
+.PHONY: float-check
+float-check: rust cpp
+	sh tests/float_check.sh rust/target/release/examples/float_tool \
+		cpp/build/float_tool cpp/build/float_tool_cxx
 
 # Public XTCE documents, pinned to commits in tests/external/sources.txt and
 # downloaded on demand; not part of `make test`, which needs no network.

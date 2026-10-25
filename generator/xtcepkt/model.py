@@ -19,26 +19,54 @@ class Unsupported(Exception):
 # --- encodings --------------------------------------------------------------
 
 
+# How the groups of 8 bits of a field combine: "be" (the first group most
+# significant), "le" (least significant), or a tuple giving each whole
+# byte's significance (an XTCE byte order list).
+Order = Union[str, tuple]
+
+
 @dataclass
 class IntEnc:
-    """Integer on the wire."""
+    """Integer on the wire.
+
+    ``lsb`` (XTCE ``bitOrder="leastSignificantBitFirst"``) and ``order``
+    give the bit and byte order; see ``BitReader.uint_bits`` in the
+    runtimes.  BCD and packedBCD values are unsigned decimal digits."""
 
     bits: int
-    # unsigned | twosComplement | signMagnitude | onesComplement
+    # unsigned | twosComplement | signMagnitude | onesComplement | BCD |
+    # packedBCD
     encoding: str = "unsigned"
-    little_endian: bool = False
+    order: Order = "be"
+    lsb: bool = False
 
     @property
     def signed(self) -> bool:
-        return self.encoding != "unsigned"
+        return (self.encoding in ("twosComplement", "signMagnitude",
+                                  "onesComplement"))
+
+    @property
+    def bcd(self) -> bool:
+        return self.encoding in ("BCD", "packedBCD")
+
+    @property
+    def little_endian(self) -> bool:
+        return self.order == "le"
 
 
 @dataclass
 class FloatEnc:
-    """IEEE 754 float on the wire (32 or 64 bits)."""
+    """Float on the wire: ``fmt`` is IEEE754, MILSTD_1750A, DEC, IBM or TI,
+    with the sizes each allows; bit and byte order as for IntEnc."""
 
     bits: int
-    little_endian: bool = False
+    fmt: str = "IEEE754"
+    order: Order = "be"
+    lsb: bool = False
+
+    @property
+    def little_endian(self) -> bool:
+        return self.order == "le"
 
 
 @dataclass
@@ -99,16 +127,18 @@ class StringEnc:
 
     ``fixed_bits`` is set for strings that always occupy that many bits; for
     variable strings ``max_bits`` bounds the whole field.  The content ends at
-    ``terminator`` or is preceded by a ``size_tag_bits`` length in bytes.
-    With ``dyn`` the field occupies the bits another value gives, at most
-    ``max_bits``, and the content ends inside it as for a fixed size.
+    the ``terminator`` bytes (where a code unit of the ``charset`` starts)
+    or is preceded by a ``size_tag_bits`` length in bytes.  With ``dyn`` the
+    field occupies the bits another value gives, at most ``max_bits``, and
+    the content ends inside it as for a fixed size.
     """
 
     fixed_bits: Optional[int]
     max_bits: int
-    terminator: Optional[int] = 0
+    terminator: Optional[bytes] = b"\x00"
     size_tag_bits: Optional[int] = None
     dyn: Optional[DynSize] = None
+    charset: str = "UTF-8"
 
 
 @dataclass

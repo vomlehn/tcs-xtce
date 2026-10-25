@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .common import (field_range, flt, header_lines, invertible, le, size_args,
-                     string_spec)
+from .common import (fast_order, field_range, flt, header_lines, invertible,
+                     size_args, string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed,
                     FloatEnc, IntEnc, Kind, Mark, Mission, Node, Pad,
@@ -115,8 +115,32 @@ def count(vt: VType, ref, f: str) -> str:
 
 def spec(vt: VType, ref, f: str) -> str:
     d = vt.enc.dyn
-    s = repr(string_spec(vt))
+    s = repr(string_spec(vt) + (vt.enc.charset,))
     return f"pk.sized({s}, {size(d, ref(d), f)})" if d is not None else s
+
+
+def order(e) -> str:
+    return repr(e.order)
+
+
+def raw_read(e, f: str) -> str:
+    """Expression reading the raw value of an integer or float encoding."""
+    if fast_order(e):
+        return f"r.uint_order({e.bits}, {e.little_endian}, {f})"
+    return f"r.uint_bits({e.bits}, {e.lsb}, {order(e)}, {f})"
+
+
+def raw_write(e, raw: str) -> str:
+    """Statement writing the raw value of an integer or float encoding."""
+    if fast_order(e):
+        return f"w.uint_order({e.bits}, {e.little_endian}, {raw})"
+    return f"w.uint_bits({e.bits}, {e.lsb}, {order(e)}, {raw})"
+
+
+def int_encoding(e: IntEnc) -> str:
+    """The runtime's name of an integer encoding: BCD is decoded to
+    unsigned."""
+    return repr("unsigned" if e.bcd else e.encoding)
 
 
 def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
@@ -144,8 +168,11 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         return (f"pk.read_list(r, {count(vt, ref, f)}, {e.gap}, {f}, lambda: "
                 f"{read_expr(e.elem, f, ref, depth + 1)})")
     if isinstance(e, IntEnc):
-        raw = f"r.uint_order({e.bits}, {le(vt)}, {f})"
-        enc = repr(e.encoding)
+        raw = raw_read(e, f)
+        if e.bcd:
+            raw = (f"pk.bcd_decode({raw}, {e.bits}, "
+                   f"{e.encoding == 'packedBCD'}, {f})")
+        enc = int_encoding(e)
         if vt.kind == "int" and vt.calibrator is not None:
             y = calibrate(vt, f"pk.int_to_float({raw}, {e.bits}, {enc})", f)
             lo, lim = vt.eng_limits
@@ -159,9 +186,12 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
             return f"{raw} != 0"
         return calibrate(vt, f"pk.int_to_float({raw}, {e.bits}, {enc})", f)
     if isinstance(e, FloatEnc):
+        if e.fmt == "IEEE754" and e.bits in (32, 64):
+            return calibrate(
+                vt, f"pk.float_from_raw({raw_read(e, f)}, {e.bits})", f)
         return calibrate(vt,
-                         f"pk.float_from_raw(r.uint_order({e.bits}, {le(vt)}, "
-                         f"{f}), {e.bits})", f)
+                         f"pk.float_decode({e.fmt!r}, {e.bits}, "
+                         f"{raw_read(e, f)}, {f})", f)
     if isinstance(e, BinaryEnc):
         if e.rest:
             return f"r.bytes(r.rest_bytes({e.bits // 8}, {f}), {f})"
@@ -180,7 +210,7 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     which ``PythonEmitter.write_value`` writes."""
     e = vt.enc
     if isinstance(e, IntEnc):
-        bits, enc = e.bits, repr(e.encoding)
+        bits, enc = e.bits, int_encoding(e)
         if vt.kind == "int" and vt.calibrator is not None:
             if not invertible(vt):
                 return f'raise pk.PacketError("NotInvertible", {f})'
@@ -197,12 +227,17 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
                 return f'raise pk.PacketError("NotInvertible", {f})'
             raw = (f"pk.float_to_int({uncalibrate(vt, x, f)}, {bits}, {enc}, "
                    f"{f})")
-        return f"w.uint_order({bits}, {le(vt)}, {raw})"
+        if e.bcd:
+            raw = (f"pk.bcd_encode({raw}, {bits}, {e.encoding == 'packedBCD'}, "
+                   f"{f})")
+        return raw_write(e, raw)
     if isinstance(e, FloatEnc):
         if not invertible(vt):
             return f'raise pk.PacketError("NotInvertible", {f})'
-        return (f"w.uint_order({e.bits}, {le(vt)}, "
-                f"pk.float_to_raw({uncalibrate(vt, x, f)}, {e.bits}))")
+        y = uncalibrate(vt, x, f)
+        if e.fmt == "IEEE754" and e.bits in (32, 64):
+            return raw_write(e, f"pk.float_to_raw({y}, {e.bits})")
+        return raw_write(e, f"pk.float_encode({e.fmt!r}, {e.bits}, {y}, {f})")
     if isinstance(e, BinaryEnc) and e.rest:
         return f"pk.write_rest(w, {x}, {e.bits // 8}, {f})"
     if isinstance(e, BinaryEnc):

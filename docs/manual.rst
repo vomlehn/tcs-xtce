@@ -660,8 +660,10 @@ A field's need comes only from the document:
 * an enumeration needs the bits for its smallest and largest listed
   values;
 * a boolean needs one bit;
-* a little-endian field is rounded up to whole bytes, which its encoding
-  requires.
+* a BCD field needs 8 bits (4 if packed) per decimal digit of its
+  largest value;
+* a field with a byte order list is rounded up to whole bytes, which its
+  encoding requires.
 
 Integers without a ``ValidRange``, floats and binary fields have no
 stated need and show ``-``. The ``sizeInBits`` and ``signed`` attributes
@@ -676,12 +678,13 @@ counted separately.
      field  type         bits  needs  saves
      C      /Sat/Count     32     10     22  ValidRange 0..1000
      L      /Sat/Level     16      7      9  ValidRange 0..100, as unsigned
+     LE     /Sat/Little    32      9     23  ValidRange 0..300
      O      /Sat/Open      16      -         no ValidRange
      M      /Sat/Mode       8      3      5  values 0..5
      F      /Sat/Flag       8      1      7  boolean
      N      /Sat/Name      64      -         fixed size: strings shorter than 8 bytes are padded
      ...
-     right-sized fields save 67 bits: at most 129 bits, 17 bytes
+     right-sized fields save 74 bits: at most 122 bits, 16 bytes
 
 ``=`` after a field name marks a constant: a value fixed by a
 restriction criterion or argument assignment, or a ``FixedValueEntry``.
@@ -1154,7 +1157,8 @@ formats the message.
    * - ``OutOfRange``
      - A value doesn't fit its encoding, or a binary value is too short
    * - ``InvalidString``
-     - A string isn't valid UTF-8, or contains its termination character
+     - A string isn't valid in its character set, or contains its
+       termination character
    * - ``TooLong``
      - A string or binary value is longer than its encoding allows
    * - ``Calibration``
@@ -1168,6 +1172,9 @@ formats the message.
        bound, or an array or binary value doesn't have it
    * - ``BadLength``
      - The packet's entries end before the end its packet length field gives
+   * - ``InvalidValue``
+     - A field's bits are not a value of its encoding: a BCD digit above 9,
+       or a DEC reserved operand
    * - ``NoSpace``
      - C/C++ only: the output buffer is smaller than the packet
 
@@ -1213,6 +1220,14 @@ return an error code and their result through a pointer. Examples:
    ``position()``, ``seek(start, offset, field)``, ``skip(offset, field)``;
    ``uint(bits, field)`` reads 1–64 bits, most significant bit first;
    ``uint_order(bits, little_endian, field)``; ``bytes(n, field)``.
+   ``uint_bits(bits, lsb, order, field)`` (``xtce_pk_read_ordered``, and
+   ``xtce_pk_read_ordered64`` for at most 64 bits) reads 1–128 bits in any
+   bit and byte order (see "Bit and byte order" under `Supported XTCE`_):
+   ``lsb`` for least significant bit first, and ``order`` big endian, little endian or a byte
+   order list (Rust ``ByteOrder::Big``, ``Little`` or ``List(&[...])``;
+   C ``XTCE_PK_BIG``, ``XTCE_PK_LITTLE`` or ``XTCE_PK_LIST`` with the list;
+   Python ``"be"``, ``"le"`` or a tuple). Values of more than 64 bits are
+   a ``u128`` in Rust and a (``hi``, ``lo``) pair in C.
    ``limit(value, adjust, field)`` (``xtce_pk_read_limit``) ends the packet
    where a packet length field that was just read says, and
    ``finish(field)`` (``xtce_pk_read_finish``) checks that decoding
@@ -1220,8 +1235,9 @@ return an error code and their result through a pointer. Examples:
 
 ``BitWriter(buffer)``
    Clears the buffer, then ``uint(bits, value)``,
-   ``uint_order(bits, little_endian, value)``, ``bytes(data)``, ``seek``
-   and ``skip``. In Rust and C/C++, ``zeros(bits)``
+   ``uint_order(bits, little_endian, value)``,
+   ``uint_bits(bits, lsb, order, value)`` (``xtce_pk_write_ordered``),
+   ``bytes(data)``, ``seek`` and ``skip``. In Rust and C/C++, ``zeros(bits)``
    (``xtce_pk_write_zeros``) writes a run of zero bits. The buffer grows,
    zero filled, to cover the furthest bit written. Writing over earlier
    bits replaces them. Byte-aligned ``bytes`` and ``zeros`` copy or fill
@@ -1237,11 +1253,20 @@ Integers
    ``xtce_pk_int_to_double`` (C/C++) and ``int_to_float`` (Python) convert raw
    values to floats. ``f64_to_int`` / ``double_to_int`` /
    ``float_to_int`` round half away from zero and check the range.
+   ``bcd_decode(raw, bits, packed, field)`` and
+   ``bcd_encode(value, bits, packed, field)`` convert BCD and packed BCD;
+   decoding fails with ``InvalidValue`` for a digit above 9.
 
 Floats
    ``float_from_raw(raw, bits)`` and ``float_to_raw(value, bits)`` for
    IEEE 754 binary32 and binary64. Converting to 32 bits rounds to
-   nearest, and overflows to infinity.
+   nearest, and overflows to infinity. ``float_decode(format, bits, raw,
+   field)`` and ``float_encode(format, bits, value, field)`` convert every
+   float format (see "Float encoding" under `Supported XTCE`_): Rust
+   ``FloatFormat::Ieee``,
+   ``Mil1750a``, ``Dec``, ``Ibm`` or ``Ti``; C ``XTCE_PK_IEEE``,
+   ``XTCE_PK_MIL1750A``, ``XTCE_PK_DEC``, ``XTCE_PK_IBM`` or
+   ``XTCE_PK_TI``; Python the XTCE names.
 
 Calibrators
    ``polynomial(x, terms)``, ``polynomial_inverse(y, intercept, slope)``,
@@ -1252,7 +1277,11 @@ Calibrators
 
 Strings and binary
    ``read_string``, ``write_string`` (with a ``StringSpec``: fixed bits,
-   maximum bits, terminator, size-tag bits) and ``write_binary``.
+   maximum bits, the terminator's bytes, size-tag bits and character set)
+   and ``write_binary``. Rust's ``read_fixed_string::<N, W>`` reads a
+   string of at most ``N`` bytes of UTF-8 from at most ``W`` bytes on the
+   wire. Python's ``decode_text(bytes, charset, field)`` and
+   ``encode_text(string, charset, field)`` convert a character set.
    ``StringSpec::sized(bytes)`` (Rust), ``xtce_pk_string_spec_sized``
    (C/C++) and ``sized(spec, bytes)`` (Python) give the spec of a string
    whose size another field gives. The reader's ``pad(bits, field)``
@@ -1354,12 +1383,51 @@ Sizes and counts from other fields
    bounds.
 
 Integer encoding
-   1–64 bits; ``unsigned``, ``twosComplement``, ``signMagnitude`` and
-   ``onesComplement``; most significant bit first. Little-endian byte
-   order is allowed when the size is a whole number of bytes.
+   1–64 bits; ``unsigned``, ``twosComplement``, ``signMagnitude``,
+   ``onesComplement``, ``BCD`` and ``packedBCD``, in any bit and byte
+   order (see "Bit and byte order" below). Packed BCD has a decimal digit
+   in every 4 bits; BCD has one in the low 4 bits of every byte, whose high 4
+   bits are zero. Both are unsigned, their size must be whole digits, and
+   decoding fails with ``InvalidValue`` for any other bits.
 
 Float encoding
-   ``IEEE754_1985`` or ``IEEE754``, 32 or 64 bits, in either byte order.
+   ``IEEE754_1985`` and ``IEEE754`` (16, 32, 64, 80 or 128 bits: binary16,
+   binary32, binary64, the x87 80-bit extended format and binary128),
+   ``MILSTD_1750A`` (32 or 48 bits), ``DEC`` (32 bits for VAX F_floating,
+   64 for D_floating), ``IBM`` (hexadecimal, 32, 64 or 128 bits) and ``TI``
+   (TMS320C3x, 16, 32 or 40 bits), in any bit and byte order. Engineering
+   values are doubles: decoding rounds to the nearest double, and encoding
+   to the nearest value of the format, ties to even. IEEE formats overflow
+   to infinity; the others have no infinity or NaN, so encoding a value
+   too large for them, an infinity or NaN fails with ``OutOfRange``.
+   MIL-STD-1750A and IBM values too small to normalize are encoded
+   unnormalized at the smallest exponent; DEC and TI values too small for
+   them become zero. Decoding a DEC reserved operand (sign set, exponent
+   zero) fails with ``InvalidValue``. DEC formats are given as the value
+   reads in VAX order; the order of their 16-bit halves in memory is a
+   byte order list (``2,3,0,1`` for F_floating), as the demo's ``VaxF``
+   shows.
+
+Bit and byte order
+   ``bitOrder`` and ``byteOrder`` apply to integer and float encodings of
+   any size. A field's bits are taken in groups of 8 from its start (the
+   last group may be shorter). With ``mostSignificantBitFirst`` (the
+   default), bits are numbered from the most significant bit of each byte
+   and a group's first bit is its most significant; with
+   ``leastSignificantBitFirst``, they are numbered from the least
+   significant bit of each byte and a group's first bit is its least
+   significant. ``mostSignificantByteFirst`` (the default) makes the first
+   group the most significant, ``leastSignificantByteFirst`` the least,
+   and a byte order list (``3,2,1,0`` style, whole bytes only) gives each
+   byte's significance, 0 being the least. So
+   ``leastSignificantBitFirst`` with ``leastSignificantByteFirst`` lays
+   fields out as C bit fields do on a little-endian machine: the demo's
+   ``BitA`` and ``BitB`` are a 3-bit and a 13-bit field sharing a 16-bit
+   word. Fields that share a byte should use the same bit order, as the
+   two orders number its bits differently. String and binary encodings are
+   bytes, which have no byte order: ``leastSignificantByteFirst`` on a
+   ``UTF-16`` or ``UTF-32`` string makes it ``UTF-16LE`` or ``UTF-32LE``,
+   and ``leastSignificantBitFirst`` on them is not supported.
 
 Calibrators
    ``PolynomialCalibrator`` and ``SplineCalibrator`` of order 0 or 1, as
@@ -1384,7 +1452,16 @@ Calibrators
    it, as the generated code keeps only the calibrated value.
 
 Strings
-   UTF-8 or US-ASCII. The supported layouts are:
+   Every character set of XTCE: ``UTF-8``, ``US-ASCII``, ``ISO-8859-1``,
+   ``Windows-1252``, ``UTF-16``, ``UTF-16LE``, ``UTF-16BE``, ``UTF-32``,
+   ``UTF-32LE`` and ``UTF-32BE``. Generated fields hold UTF-8, and
+   decoding and encoding convert. ``UTF-16`` and ``UTF-32`` are read big
+   endian unless they start with a byte order mark, and written big endian
+   without one. Decoding fails with ``InvalidString`` for bytes that aren't
+   valid in the character set (an unpaired surrogate, a byte
+   Windows-1252 leaves undefined, a byte above 127 in US-ASCII), and
+   encoding for a character the character set can't hold. The supported
+   layouts are:
 
    * a fixed size (``SizeInBits/Fixed``) ending at the termination
      character (``00`` by default) or at the end of the field;
@@ -1394,8 +1471,12 @@ Strings
    * either of these within a size that another field gives
      (``Variable`` with a ``DynamicValue``).
 
-   Sizes must be whole bytes, and size tags count bytes. When encoding,
-   fixed fields are padded with the terminator and then zeros.
+   Sizes must be whole code units, and size tags count bytes. The
+   termination character may be several bytes (``0D0A``, say), found
+   only where a code unit starts; it must be a whole number of code
+   units, and ``00`` stands for a zero code unit, so it is ``0000`` in
+   UTF-16. When encoding, fixed fields are padded with the terminator and
+   then zeros.
 
    A string type may also have a ``BinaryDataEncoding`` (fixed, or with a
    size another field gives). The field then holds the string's UTF-8
@@ -1502,10 +1583,10 @@ Not supported
    ``RepeatEntry`` offsets that other values give, other instances than 0,
    ``CustomAlgorithm`` criteria, ``NextContainer``, a container
    ``BinaryEncoding`` on command containers, with a size from a
-   ``DynamicValue`` or with transform algorithms, ``ErrorDetectCorrect``, context calibrators,
-   ``MathOperationCalibrator``, BCD encodings, MIL-STD-1750A floats,
-   byte orders other than big and little endian, least-significant-bit-first
-   bit order, and include conditions in command containers.
+   ``DynamicValue`` or with transform algorithms, ``ErrorDetectCorrect``,
+   context calibrators, ``MathOperationCalibrator``,
+   least-significant-bit-first strings and binary data, integers of more
+   than 64 bits, and include conditions in command containers.
 
 Known limitations
 -----------------
@@ -1950,7 +2031,14 @@ Testing
   schema-covering samples and the documents in ``tests/digest``, which
   cover comments, CDATA, references, line ends, namespaces, unordered
   collections and documents that must be rejected; those also have known
-  digests, in ``tests/digest/expected.txt``.
+  digests, in ``tests/digest/expected.txt``. Each also digests the sets
+  of documents in ``tests/digest/sets.txt``.
+* ``tests/float_check.sh``: the Rust, C, C++ and Python runtimes decode
+  and encode every float format and size, giving the results the
+  formats' standards give for the conversions in
+  ``tests/float/known.txt`` (MIL-STD-1750A's own examples among them),
+  and the same results as each other for random values from
+  ``tests/float_cases.py``.
 
 The ``packet_tool`` programs (``rust/examples``, ``cpp/tests``, built as
 ``cpp/build/packet_tool`` and ``cpp/build/packet_tool_cxx``, and

@@ -197,6 +197,49 @@ def tally(rng) -> bytes:
     return body
 
 
+def bcd(rng, digits: int, packed: bool) -> bytes:
+    """BCD digits, now and then one above 9."""
+    out = []
+    for _ in range(digits):
+        d = rng.randrange(10) if rng.random() < 0.95 else rng.randrange(16)
+        out.append(d if packed else d | (rng.random() < 0.03) << 4)
+    if packed:
+        return bytes((a << 4) | b for a, b in zip(out[::2], out[1::2]))
+    return bytes(out)
+
+
+def text(rng, chars: str, codec: str, n: int) -> bytes:
+    return "".join(rng.choice(chars) for _ in range(n)).encode(codec)
+
+
+def encodings(rng) -> bytes:
+    """An Encodings body: random integers and float bits (every float
+    format's special values among them), BCD digits mostly valid, and
+    strings in each character set, now and then invalid."""
+    body = rng.randbytes(8) + bcd(rng, 4, True) + bcd(rng, 2, False)
+    body += rng.randbytes(2 + 10 + 16 + 4 + 6 + 4 + 8 + 4 + 8 + 16 + 2 + 4 + 5)
+    n = rng.choice([0, 3, 5, 8])
+    body += (text(rng, "aüßÀ", "latin-1", n) + bytes(8))[:8]
+    ansi = text(rng, "a€5ž", "cp1252", rng.randrange(7))
+    body += (ansi + b"\n") if rng.random() < 0.9 else b"\x81\n"
+    wide = text(rng, "aé😀", "utf-16-be", rng.randrange(4))
+    if rng.random() < 0.1:
+        wide = b"\xff\xfe" + text(rng, "aé", "utf-16-le", 2)
+    body += bytes([len(wide)]) + wide
+    name = text(rng, "Zoë", "utf-16-le", rng.randrange(5))
+    body += (name + bytes(8))[:8]
+    body += text(rng, "a😀é", "utf-32-be", rng.randrange(4)) + bytes(4)
+    body += text(rng, "hi\r", "utf-8", rng.randrange(6)) + b"\r\n"
+    return body
+
+
+def configure(rng) -> bytes:
+    """A Configure body: a TI gain, a UTF-16 label, BCD digits, flags."""
+    label = text(rng, "Hié😀", "utf-16-be", rng.randrange(3))
+    return (rng.randbytes(4) + bytes([len(label)]) + label + bcd(rng, 4, True)
+            + rng.randbytes(2))
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -214,8 +257,8 @@ def main() -> None:
     for _ in range(int(sys.argv[2])):
         if rng.random() < 0.6:
             apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
-                               280, 290, 310, 320, 330, 340, 350, 360, 370,
-                               rng.randrange(1 << 11)])
+                               280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
+                               380, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -252,6 +295,8 @@ def main() -> None:
                 data += probe(rng)
             elif apid == 370 and rng.random() < 0.8:
                 data += tally(rng)
+            elif apid == 380 and rng.random() < 0.9:
+                data += encodings(rng)
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
             elif apid == 340 and rng.random() < 0.8:
@@ -261,7 +306,7 @@ def main() -> None:
             kind = "tm"
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
-            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10,
+            opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11,
                                  rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
@@ -279,6 +324,8 @@ def main() -> None:
             elif opcode == 9 and rng.random() < 0.8:
                 lo, hi = rng.randrange(4), rng.randrange(4)
                 data += bytes([lo, hi]) + rng.randbytes(2 if lo < hi else 0)
+            elif opcode == 11 and rng.random() < 0.9:
+                data += configure(rng)
             elif opcode == 8 and rng.random() < 0.8:
                 n = rng.choice([1, 2, 4, rng.randrange(6)])
                 data += (bytes([rng.randrange(3), n])

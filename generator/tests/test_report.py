@@ -125,8 +125,8 @@ class Report(unittest.TestCase):
                 "C": (32, 10),  # 0..1000
                 "D": (16, 8),  # -100..100, two's complement
                 "L": (16, 7),  # 0..100: unsigned would do
-                # 0..300 needs 9 bits; little-endian: whole bytes
-                "LE": (32, 16),
+                # 0..300 needs 9 bits, little endian or not
+                "LE": (32, 9),
                 "O": (16, None),  # no ValidRange
                 "M": (8, 3),  # values 0..5
                 "F": (8, 1),  # boolean
@@ -143,10 +143,10 @@ class Report(unittest.TestCase):
     def test_text(self):
         text = report(self.mission)
         self.assertIn("4 bits are skipped by location offsets or padding", text)
-        # 32+16+16+32+16+8+8 = 128 bits of integers etc. save 22+8+9+16+5+7 =
-        # 67.
-        self.assertIn("right-sized fields save 67 bits", text)
-        self.assertIn("/Sat/Status: 25 -> 17 bytes", text)
+        # 32+16+16+32+16+8+8 = 128 bits of integers etc. save 22+8+9+23+5+7 =
+        # 74.
+        self.assertIn("right-sized fields save 74 bits", text)
+        self.assertIn("/Sat/Status: 25 -> 16 bytes", text)
         self.assertIn("/Sat/Go: 2 -> 1 byte", text)
         self.assertIn("1 integer types have no ValidRange", text)
 

@@ -19,7 +19,7 @@ import math
 import re
 from typing import Callable, Optional
 
-from .common import str_cap
+from .common import (code_unit, encode_text, fast_order, find_unit, wire_cap)
 from .model import (
     MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
     Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index, IntEnc, Item, Kind,
@@ -383,9 +383,13 @@ def length_adjust(item, vt: VType, where: str) -> Optional[int]:
         raise Unsupported(f"{where}: {LENGTH_TAG} {tags[0].value!r} is not an "
                           "integer") from None
     if (vt.kind != "int" or not isinstance(vt.enc, IntEnc) or vt.enc.signed
-            or vt.calibrator is not None):
+            or vt.enc.bcd or vt.calibrator is not None):
         raise Unsupported(f"{where}: a packet length field must be an "
-                          "uncalibrated unsigned integer")
+                          "uncalibrated unsigned binary integer")
+    if not fast_order(vt.enc):
+        raise Unsupported(f"{where}: a packet length field must be big or "
+                          "little endian in whole bytes, most significant bit "
+                          "first")
     return adjust
 
 
@@ -616,11 +620,16 @@ class Compiler:
                               f"are both {vt.one_string!r}")
         e = vt.enc
         for s in (vt.one_string, vt.zero_string):
-            b = s.encode("utf-8")
-            if e.terminator is not None and e.terminator in b:
+            try:
+                b = encode_text(s, e.charset)
+            except ValueError:
+                raise Unsupported(f"{where}: {s!r} is not "
+                                  f"{e.charset}") from None
+            if (e.terminator is not None
+                    and find_unit(b, e.terminator, code_unit(e.charset)) >= 0):
                 raise Unsupported(f"{where}: {s!r} contains the termination "
                                   "character")
-            if e.dyn is None and len(b) > str_cap(vt):
+            if e.dyn is None and len(b) > wire_cap(vt):
                 raise Unsupported(f"{where}: {s!r} does not fit its encoding")
 
     def time_type(self, key: Key, base: str, t, path: Key, where: str) -> VType:
@@ -815,55 +824,85 @@ class Compiler:
         return DynSize(arg=base, name=name, members=members, slope=slope,
                        intercept=intercept)
 
+    @staticmethod
+    def byte_order(e, bits: int, where: str):
+        """The bit order (``lsb``) and byte order (``order``) of an
+        encoding, as IntEnc holds them.  A byte order list must give the
+        significance of each of a whole number of bytes once; a list that
+        amounts to big or little endian is that."""
+        lsb = bool(getattr(e, "bit_order", None)
+                   and e.bit_order.value == "leastSignificantBitFirst")
+        bo = (e.byte_order or "mostSignificantByteFirst").strip()
+        if bo == "mostSignificantByteFirst":
+            return lsb, "be"
+        if bo == "leastSignificantByteFirst":
+            return lsb, "le"
+        sig = tuple(int(x) for x in bo.split(","))
+        if bits % 8 or sorted(sig) != list(range(bits // 8)):
+            raise Unsupported(f"{where}: byteOrder {bo!r} does not give each "
+                              f"of the {bits / 8:g} bytes of the value once")
+        if sig == tuple(range(bits // 8 - 1, -1, -1)):
+            return lsb, "be"
+        if sig == tuple(range(bits // 8)):
+            return lsb, "le"
+        return lsb, sig
+
     def encoding(self, name: str, e, path: Key, where: str):
-        if (getattr(e, "bit_order", None)
-                and e.bit_order.value != "mostSignificantBitFirst"):
-            raise Unsupported(f"{where}: bitOrder {e.bit_order.value}")
         if getattr(e, "error_detect_correct", None):
             raise Unsupported(f"{where}: ErrorDetectCorrect")
-        bo = (e.byte_order or "mostSignificantByteFirst").strip()
-        if bo not in ("mostSignificantByteFirst", "leastSignificantByteFirst"):
-            raise Unsupported(f"{where}: byteOrder {bo!r}")
-        le = bo == "leastSignificantByteFirst"
         if name == "IntegerDataEncoding":
             bits = e.size_in_bits if e.size_in_bits is not None else 8
             kind = e.encoding.value if e.encoding else "unsigned"
-            if (kind not in ("unsigned", "twosComplement", "signMagnitude",
-                             "onesComplement")):
-                raise Unsupported(f"{where}: integer encoding {kind}")
             if not 1 <= bits <= 64:
                 raise Unsupported(f"{where}: {bits}-bit integers")
-            if le and bits % 8:
-                raise Unsupported(f"{where}: little-endian size {bits} is not "
-                                  "whole bytes")
-            if kind != "unsigned" and bits < 2:
+            if kind == "BCD" and bits % 8:
+                raise Unsupported(f"{where}: BCD in {bits} bits, not whole "
+                                  "bytes")
+            if kind == "packedBCD" and bits % 4:
+                raise Unsupported(f"{where}: packedBCD in {bits} bits, not "
+                                  "whole digits")
+            if (kind in ("twosComplement", "signMagnitude", "onesComplement")
+                    and bits < 2):
                 raise Unsupported(f"{where}: 1-bit signed integer")
-            return IntEnc(bits, kind, le), self.calibrator(e, where)
+            lsb, order = self.byte_order(e, bits, where)
+            return (IntEnc(bits, kind, order, lsb), self.calibrator(e, where))
         if name == "FloatDataEncoding":
             kind = e.encoding.value if e.encoding else "IEEE754_1985"
+            kind = "IEEE754" if kind == "IEEE754_1985" else kind
             bits = int(e.size_in_bits.value) if e.size_in_bits else 32
-            if kind not in ("IEEE754_1985", "IEEE754"):
-                raise Unsupported(f"{where}: float encoding {kind}")
-            if bits not in (32, 64):
-                raise Unsupported(f"{where}: {bits}-bit floats")
-            return FloatEnc(bits, le), self.calibrator(e, where)
+            sizes = {"IEEE754": (16, 32, 64, 80, 128), "MILSTD_1750A": (32, 48),
+                     "DEC": (32, 64), "IBM": (32, 64, 128),
+                     "TI": (16, 32, 40)}[kind]
+            if bits not in sizes:
+                raise Unsupported(f"{where}: {kind} has no {bits}-bit format "
+                                  f"(it has {', '.join(map(str, sizes))})")
+            lsb, order = self.byte_order(e, bits, where)
+            return FloatEnc(bits, kind, order, lsb), self.calibrator(e, where)
         if name == "StringDataEncoding":
             cs = e.encoding.value if e.encoding else "UTF-8"
-            if cs not in ("UTF-8", "US-ASCII"):
-                raise Unsupported(f"{where}: string encoding {cs}")
+            if (getattr(e, "bit_order", None)
+                    and e.bit_order.value == "leastSignificantBitFirst"):
+                raise Unsupported(f"{where}: a string with bitOrder "
+                                  "leastSignificantBitFirst")
+            # A string is bytes, so byte order matters only to the code units
+            # of UTF-16 and UTF-32 without a byte order of their own.
+            if ((e.byte_order or "").strip() == "leastSignificantByteFirst"
+                    and cs in ("UTF-16", "UTF-32")):
+                cs += "LE"
+            unit = code_unit(cs)
             c = e.choice
             if c.name == "SizeInBits":
                 bits = self._size(c.value.fixed.fixed_value, "string", where)
-                if bits % 8:
+                if bits % (8 * unit):
                     raise Unsupported(f"{where}: string size {bits} is not "
-                                      "whole bytes")
+                                      f"whole {cs} code units")
                 if c.value.leading_size is not None:
                     tag = c.value.leading_size.size_in_bits_of_size_tag or 16
-                    return (StringEnc(bits, bits, None, self._tag(tag, where)),
-                            None)
+                    return (StringEnc(bits, bits, None, self._tag(tag, where),
+                                      charset=cs), None)
                 return (StringEnc(bits, bits,
-                                  self._term(c.value.termination_char, where)),
-                        None)
+                                  self._term(c.value.termination_char, cs,
+                                             where), charset=cs), None)
             v = c.value
             dyn = None
             if v.choice1 is not None:
@@ -879,11 +918,16 @@ class Compiler:
             mx = self._size(v.max_size_in_bits, "string", where)
             if v.choice2.name == "LeadingSize":
                 tag = v.choice2.value.size_in_bits_of_size_tag or 16
-                return (StringEnc(None, mx, None, self._tag(tag, where), dyn),
-                        None)
-            return (StringEnc(None, mx, self._term(v.choice2.value, where),
-                              dyn=dyn), None)
+                return (StringEnc(None, mx, None, self._tag(tag, where), dyn,
+                                  cs), None)
+            return (StringEnc(None, mx, self._term(v.choice2.value, cs, where),
+                              dyn=dyn, charset=cs), None)
         if name == "BinaryDataEncoding":
+            # Binary data is bytes, which have no byte order.
+            if (getattr(e, "bit_order", None)
+                    and e.bit_order.value == "leastSignificantBitFirst"):
+                raise Unsupported(f"{where}: binary data with bitOrder "
+                                  "leastSignificantBitFirst")
             if (e.from_binary_transform_algorithm
                     or e.to_binary_transform_algorithm):
                 raise Unsupported(f"{where}: binary transform algorithms")
@@ -919,12 +963,18 @@ class Compiler:
         return bits
 
     @staticmethod
-    def _term(hexchar: Optional[str], where: str) -> int:
+    def _term(hexchar: Optional[str], cs: str, where: str) -> bytes:
+        """The bytes that end a string in charset ``cs``: a whole number of
+        its code units, and a zero byte stands for a zero code unit."""
         h = (hexchar or "").strip() or "00"
         b = hex_bytes(h, where)
-        if len(b) != 1:
-            raise Unsupported(f"{where}: multi-byte termination character {h}")
-        return b[0]
+        unit = code_unit(cs)
+        if len(b) < unit and not any(b):
+            b = bytes(unit)
+        if not b or len(b) % unit or len(b) > 16:
+            raise Unsupported(f"{where}: termination character {h} is not 1 to "
+                              f"{16 // unit} {cs} code units")
+        return b
 
     def calibrator(self, e, where: str):
         if getattr(e, "context_calibrator_list", None):

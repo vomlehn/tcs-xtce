@@ -1121,8 +1121,10 @@ or as unsigned when the range has no negative values;</li>
 <li>an enumeration needs the bits for its smallest and largest listed
 values;</li>
 <li>a boolean needs one bit;</li>
-<li>a little-endian field is rounded up to whole bytes, which its encoding
-requires.</li>
+<li>a BCD field needs 8 bits (4 if packed) per decimal digit of its
+largest value;</li>
+<li>a field with a byte order list is rounded up to whole bytes, which its
+encoding requires.</li>
 </ul>
 <p>Integers without a <tt class="docutils literal">ValidRange</tt>, floats and binary fields have no
 stated need and show <tt class="docutils literal">-</tt>. The <tt class="docutils literal">sizeInBits</tt> and <tt class="docutils literal">signed</tt> attributes
@@ -1135,12 +1137,13 @@ counted separately.</p>
   field  type         bits  needs  saves
   C      /Sat/Count     32     10     22  ValidRange 0..1000
   L      /Sat/Level     16      7      9  ValidRange 0..100, as unsigned
+  LE     /Sat/Little    32      9     23  ValidRange 0..300
   O      /Sat/Open      16      -         no ValidRange
   M      /Sat/Mode       8      3      5  values 0..5
   F      /Sat/Flag       8      1      7  boolean
   N      /Sat/Name      64      -         fixed size: strings shorter than 8 bytes are padded
   ...
-  right-sized fields save 67 bits: at most 129 bits, 17 bytes
+  right-sized fields save 74 bits: at most 122 bits, 16 bytes
 </pre>
 <p><tt class="docutils literal">=</tt> after a field name marks a constant: a value fixed by a
 restriction criterion or argument assignment, or a <tt class="docutils literal">FixedValueEntry</tt>.
@@ -1606,7 +1609,8 @@ formats the message.</p>
 <td>A value doesn't fit its encoding, or a binary value is too short</td>
 </tr>
 <tr><td><tt class="docutils literal">InvalidString</tt></td>
-<td>A string isn't valid UTF-8, or contains its termination character</td>
+<td>A string isn't valid in its character set, or contains its
+termination character</td>
 </tr>
 <tr><td><tt class="docutils literal">TooLong</tt></td>
 <td>A string or binary value is longer than its encoding allows</td>
@@ -1626,6 +1630,10 @@ bound, or an array or binary value doesn't have it</td>
 </tr>
 <tr><td><tt class="docutils literal">BadLength</tt></td>
 <td>The packet's entries end before the end its packet length field gives</td>
+</tr>
+<tr><td><tt class="docutils literal">InvalidValue</tt></td>
+<td>A field's bits are not a value of its encoding: a BCD digit above 9,
+or a DEC reserved operand</td>
 </tr>
 <tr><td><tt class="docutils literal">NoSpace</tt></td>
 <td>C/C++ only: the output buffer is smaller than the packet</td>
@@ -1672,14 +1680,23 @@ return an error code and their result through a pointer. Examples:
 <dd><tt class="docutils literal">position()</tt>, <tt class="docutils literal">seek(start, offset, field)</tt>, <tt class="docutils literal">skip(offset, field)</tt>;
 <tt class="docutils literal">uint(bits, field)</tt> reads 1–64 bits, most significant bit first;
 <tt class="docutils literal">uint_order(bits, little_endian, field)</tt>; <tt class="docutils literal">bytes(n, field)</tt>.
+<tt class="docutils literal">uint_bits(bits, lsb, order, field)</tt> (<tt class="docutils literal">xtce_pk_read_ordered</tt>, and
+<tt class="docutils literal">xtce_pk_read_ordered64</tt> for at most 64 bits) reads 1–128 bits in any
+bit and byte order (see &quot;Bit and byte order&quot; under <a class="reference internal" href="#supported-xtce">Supported XTCE</a>):
+<tt class="docutils literal">lsb</tt> for least significant bit first, and <tt class="docutils literal">order</tt> big endian, little endian or a byte
+order list (Rust <tt class="docutils literal"><span class="pre">ByteOrder::Big</span></tt>, <tt class="docutils literal">Little</tt> or <tt class="docutils literal"><span class="pre">List(&amp;[...])</span></tt>;
+C <tt class="docutils literal">XTCE_PK_BIG</tt>, <tt class="docutils literal">XTCE_PK_LITTLE</tt> or <tt class="docutils literal">XTCE_PK_LIST</tt> with the list;
+Python <tt class="docutils literal">&quot;be&quot;</tt>, <tt class="docutils literal">&quot;le&quot;</tt> or a tuple). Values of more than 64 bits are
+a <tt class="docutils literal">u128</tt> in Rust and a (<tt class="docutils literal">hi</tt>, <tt class="docutils literal">lo</tt>) pair in C.
 <tt class="docutils literal">limit(value, adjust, field)</tt> (<tt class="docutils literal">xtce_pk_read_limit</tt>) ends the packet
 where a packet length field that was just read says, and
 <tt class="docutils literal">finish(field)</tt> (<tt class="docutils literal">xtce_pk_read_finish</tt>) checks that decoding
 reached that end.</dd>
 <dt><tt class="docutils literal">BitWriter(buffer)</tt></dt>
 <dd>Clears the buffer, then <tt class="docutils literal">uint(bits, value)</tt>,
-<tt class="docutils literal">uint_order(bits, little_endian, value)</tt>, <tt class="docutils literal">bytes(data)</tt>, <tt class="docutils literal">seek</tt>
-and <tt class="docutils literal">skip</tt>. In Rust and C/C++, <tt class="docutils literal">zeros(bits)</tt>
+<tt class="docutils literal">uint_order(bits, little_endian, value)</tt>,
+<tt class="docutils literal">uint_bits(bits, lsb, order, value)</tt> (<tt class="docutils literal">xtce_pk_write_ordered</tt>),
+<tt class="docutils literal">bytes(data)</tt>, <tt class="docutils literal">seek</tt> and <tt class="docutils literal">skip</tt>. In Rust and C/C++, <tt class="docutils literal">zeros(bits)</tt>
 (<tt class="docutils literal">xtce_pk_write_zeros</tt>) writes a run of zero bits. The buffer grows,
 zero filled, to cover the furthest bit written. Writing over earlier
 bits replaces them. Byte-aligned <tt class="docutils literal">bytes</tt> and <tt class="docutils literal">zeros</tt> copy or fill
@@ -1693,11 +1710,20 @@ two's-complement, sign-magnitude and ones'-complement encodings.
 <tt class="docutils literal">from_unsigned</tt> checks unsigned ranges. <tt class="docutils literal">int_to_f64</tt> (Rust),
 <tt class="docutils literal">xtce_pk_int_to_double</tt> (C/C++) and <tt class="docutils literal">int_to_float</tt> (Python) convert raw
 values to floats. <tt class="docutils literal">f64_to_int</tt> / <tt class="docutils literal">double_to_int</tt> /
-<tt class="docutils literal">float_to_int</tt> round half away from zero and check the range.</dd>
+<tt class="docutils literal">float_to_int</tt> round half away from zero and check the range.
+<tt class="docutils literal">bcd_decode(raw, bits, packed, field)</tt> and
+<tt class="docutils literal">bcd_encode(value, bits, packed, field)</tt> convert BCD and packed BCD;
+decoding fails with <tt class="docutils literal">InvalidValue</tt> for a digit above 9.</dd>
 <dt>Floats</dt>
 <dd><tt class="docutils literal">float_from_raw(raw, bits)</tt> and <tt class="docutils literal">float_to_raw(value, bits)</tt> for
 IEEE 754 binary32 and binary64. Converting to 32 bits rounds to
-nearest, and overflows to infinity.</dd>
+nearest, and overflows to infinity. <tt class="docutils literal">float_decode(format, bits, raw,
+field)</tt> and <tt class="docutils literal">float_encode(format, bits, value, field)</tt> convert every
+float format (see &quot;Float encoding&quot; under <a class="reference internal" href="#supported-xtce">Supported XTCE</a>): Rust
+<tt class="docutils literal"><span class="pre">FloatFormat::Ieee</span></tt>,
+<tt class="docutils literal">Mil1750a</tt>, <tt class="docutils literal">Dec</tt>, <tt class="docutils literal">Ibm</tt> or <tt class="docutils literal">Ti</tt>; C <tt class="docutils literal">XTCE_PK_IEEE</tt>,
+<tt class="docutils literal">XTCE_PK_MIL1750A</tt>, <tt class="docutils literal">XTCE_PK_DEC</tt>, <tt class="docutils literal">XTCE_PK_IBM</tt> or
+<tt class="docutils literal">XTCE_PK_TI</tt>; Python the XTCE names.</dd>
 <dt>Calibrators</dt>
 <dd><tt class="docutils literal">polynomial(x, terms)</tt>, <tt class="docutils literal">polynomial_inverse(y, intercept, slope)</tt>,
 <tt class="docutils literal">spline(x, points, order, extrapolate, field)</tt> and
@@ -1706,7 +1732,11 @@ nearest, and overflows to infinity.</dd>
 from zero and fails with <tt class="docutils literal">OutOfRange</tt> unless <tt class="docutils literal">lo &lt;= result &lt; lim</tt>.</dd>
 <dt>Strings and binary</dt>
 <dd><tt class="docutils literal">read_string</tt>, <tt class="docutils literal">write_string</tt> (with a <tt class="docutils literal">StringSpec</tt>: fixed bits,
-maximum bits, terminator, size-tag bits) and <tt class="docutils literal">write_binary</tt>.
+maximum bits, the terminator's bytes, size-tag bits and character set)
+and <tt class="docutils literal">write_binary</tt>. Rust's <tt class="docutils literal"><span class="pre">read_fixed_string::&lt;N,</span> W&gt;</tt> reads a
+string of at most <tt class="docutils literal">N</tt> bytes of UTF-8 from at most <tt class="docutils literal">W</tt> bytes on the
+wire. Python's <tt class="docutils literal">decode_text(bytes, charset, field)</tt> and
+<tt class="docutils literal">encode_text(string, charset, field)</tt> convert a character set.
 <tt class="docutils literal"><span class="pre">StringSpec::sized(bytes)</span></tt> (Rust), <tt class="docutils literal">xtce_pk_string_spec_sized</tt>
 (C/C++) and <tt class="docutils literal">sized(spec, bytes)</tt> (Python) give the spec of a string
 whose size another field gives. The reader's <tt class="docutils literal">pad(bits, field)</tt>
@@ -1800,11 +1830,49 @@ the same places except aggregate members, with comparisons on values
 decoded earlier. See <a class="reference internal" href="#generated-packet-types">Generated packet types</a> for the checks and
 bounds.</dd>
 <dt>Integer encoding</dt>
-<dd>1–64 bits; <tt class="docutils literal">unsigned</tt>, <tt class="docutils literal">twosComplement</tt>, <tt class="docutils literal">signMagnitude</tt> and
-<tt class="docutils literal">onesComplement</tt>; most significant bit first. Little-endian byte
-order is allowed when the size is a whole number of bytes.</dd>
+<dd>1–64 bits; <tt class="docutils literal">unsigned</tt>, <tt class="docutils literal">twosComplement</tt>, <tt class="docutils literal">signMagnitude</tt>,
+<tt class="docutils literal">onesComplement</tt>, <tt class="docutils literal">BCD</tt> and <tt class="docutils literal">packedBCD</tt>, in any bit and byte
+order (see &quot;Bit and byte order&quot; below). Packed BCD has a decimal digit
+in every 4 bits; BCD has one in the low 4 bits of every byte, whose high 4
+bits are zero. Both are unsigned, their size must be whole digits, and
+decoding fails with <tt class="docutils literal">InvalidValue</tt> for any other bits.</dd>
 <dt>Float encoding</dt>
-<dd><tt class="docutils literal">IEEE754_1985</tt> or <tt class="docutils literal">IEEE754</tt>, 32 or 64 bits, in either byte order.</dd>
+<dd><tt class="docutils literal">IEEE754_1985</tt> and <tt class="docutils literal">IEEE754</tt> (16, 32, 64, 80 or 128 bits: binary16,
+binary32, binary64, the x87 80-bit extended format and binary128),
+<tt class="docutils literal">MILSTD_1750A</tt> (32 or 48 bits), <tt class="docutils literal">DEC</tt> (32 bits for VAX F_floating,
+64 for D_floating), <tt class="docutils literal">IBM</tt> (hexadecimal, 32, 64 or 128 bits) and <tt class="docutils literal">TI</tt>
+(TMS320C3x, 16, 32 or 40 bits), in any bit and byte order. Engineering
+values are doubles: decoding rounds to the nearest double, and encoding
+to the nearest value of the format, ties to even. IEEE formats overflow
+to infinity; the others have no infinity or NaN, so encoding a value
+too large for them, an infinity or NaN fails with <tt class="docutils literal">OutOfRange</tt>.
+MIL-STD-1750A and IBM values too small to normalize are encoded
+unnormalized at the smallest exponent; DEC and TI values too small for
+them become zero. Decoding a DEC reserved operand (sign set, exponent
+zero) fails with <tt class="docutils literal">InvalidValue</tt>. DEC formats are given as the value
+reads in VAX order; the order of their 16-bit halves in memory is a
+byte order list (<tt class="docutils literal">2,3,0,1</tt> for F_floating), as the demo's <tt class="docutils literal">VaxF</tt>
+shows.</dd>
+<dt>Bit and byte order</dt>
+<dd><tt class="docutils literal">bitOrder</tt> and <tt class="docutils literal">byteOrder</tt> apply to integer and float encodings of
+any size. A field's bits are taken in groups of 8 from its start (the
+last group may be shorter). With <tt class="docutils literal">mostSignificantBitFirst</tt> (the
+default), bits are numbered from the most significant bit of each byte
+and a group's first bit is its most significant; with
+<tt class="docutils literal">leastSignificantBitFirst</tt>, they are numbered from the least
+significant bit of each byte and a group's first bit is its least
+significant. <tt class="docutils literal">mostSignificantByteFirst</tt> (the default) makes the first
+group the most significant, <tt class="docutils literal">leastSignificantByteFirst</tt> the least,
+and a byte order list (<tt class="docutils literal">3,2,1,0</tt> style, whole bytes only) gives each
+byte's significance, 0 being the least. So
+<tt class="docutils literal">leastSignificantBitFirst</tt> with <tt class="docutils literal">leastSignificantByteFirst</tt> lays
+fields out as C bit fields do on a little-endian machine: the demo's
+<tt class="docutils literal">BitA</tt> and <tt class="docutils literal">BitB</tt> are a 3-bit and a 13-bit field sharing a 16-bit
+word. Fields that share a byte should use the same bit order, as the
+two orders number its bits differently. String and binary encodings are
+bytes, which have no byte order: <tt class="docutils literal">leastSignificantByteFirst</tt> on a
+<tt class="docutils literal"><span class="pre">UTF-16</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32</span></tt> string makes it <tt class="docutils literal"><span class="pre">UTF-16LE</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32LE</span></tt>,
+and <tt class="docutils literal">leastSignificantBitFirst</tt> on them is not supported.</dd>
 <dt>Calibrators</dt>
 <dd><p class="first"><tt class="docutils literal">PolynomialCalibrator</tt> and <tt class="docutils literal">SplineCalibrator</tt> of order 0 or 1, as
 the <tt class="docutils literal">DefaultCalibrator</tt> of an integer or float encoding on a float
@@ -1827,7 +1895,16 @@ Comparisons with <tt class="docutils literal"><span class="pre">useCalibratedVal
 it, as the generated code keeps only the calibrated value.</p>
 </dd>
 <dt>Strings</dt>
-<dd><p class="first">UTF-8 or US-ASCII. The supported layouts are:</p>
+<dd><p class="first">Every character set of XTCE: <tt class="docutils literal"><span class="pre">UTF-8</span></tt>, <tt class="docutils literal"><span class="pre">US-ASCII</span></tt>, <tt class="docutils literal"><span class="pre">ISO-8859-1</span></tt>,
+<tt class="docutils literal"><span class="pre">Windows-1252</span></tt>, <tt class="docutils literal"><span class="pre">UTF-16</span></tt>, <tt class="docutils literal"><span class="pre">UTF-16LE</span></tt>, <tt class="docutils literal"><span class="pre">UTF-16BE</span></tt>, <tt class="docutils literal"><span class="pre">UTF-32</span></tt>,
+<tt class="docutils literal"><span class="pre">UTF-32LE</span></tt> and <tt class="docutils literal"><span class="pre">UTF-32BE</span></tt>. Generated fields hold UTF-8, and
+decoding and encoding convert. <tt class="docutils literal"><span class="pre">UTF-16</span></tt> and <tt class="docutils literal"><span class="pre">UTF-32</span></tt> are read big
+endian unless they start with a byte order mark, and written big endian
+without one. Decoding fails with <tt class="docutils literal">InvalidString</tt> for bytes that aren't
+valid in the character set (an unpaired surrogate, a byte
+Windows-1252 leaves undefined, a byte above 127 in US-ASCII), and
+encoding for a character the character set can't hold. The supported
+layouts are:</p>
 <ul class="simple">
 <li>a fixed size (<tt class="docutils literal">SizeInBits/Fixed</tt>) ending at the termination
 character (<tt class="docutils literal">00</tt> by default) or at the end of the field;</li>
@@ -1837,8 +1914,12 @@ character (<tt class="docutils literal">00</tt> by default) or at the end of the
 <li>either of these within a size that another field gives
 (<tt class="docutils literal">Variable</tt> with a <tt class="docutils literal">DynamicValue</tt>).</li>
 </ul>
-<p>Sizes must be whole bytes, and size tags count bytes. When encoding,
-fixed fields are padded with the terminator and then zeros.</p>
+<p>Sizes must be whole code units, and size tags count bytes. The
+termination character may be several bytes (<tt class="docutils literal">0D0A</tt>, say), found
+only where a code unit starts; it must be a whole number of code
+units, and <tt class="docutils literal">00</tt> stands for a zero code unit, so it is <tt class="docutils literal">0000</tt> in
+UTF-16. When encoding, fixed fields are padded with the terminator and
+then zeros.</p>
 <p class="last">A string type may also have a <tt class="docutils literal">BinaryDataEncoding</tt> (fixed, or with a
 size another field gives). The field then holds the string's UTF-8
 bytes and nothing else: values must fill it exactly, as binary values
@@ -1935,10 +2016,10 @@ other than the first, arrays of arrays, <tt class="docutils literal">IndirectPar
 <tt class="docutils literal">RepeatEntry</tt> offsets that other values give, other instances than 0,
 <tt class="docutils literal">CustomAlgorithm</tt> criteria, <tt class="docutils literal">NextContainer</tt>, a container
 <tt class="docutils literal">BinaryEncoding</tt> on command containers, with a size from a
-<tt class="docutils literal">DynamicValue</tt> or with transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt>, context calibrators,
-<tt class="docutils literal">MathOperationCalibrator</tt>, BCD encodings, MIL-STD-1750A floats,
-byte orders other than big and little endian, least-significant-bit-first
-bit order, and include conditions in command containers.</dd>
+<tt class="docutils literal">DynamicValue</tt> or with transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt>,
+context calibrators, <tt class="docutils literal">MathOperationCalibrator</tt>,
+least-significant-bit-first strings and binary data, integers of more
+than 64 bits, and include conditions in command containers.</dd>
 </dl>
 </div>
 <div class="section" id="known-limitations">
@@ -2345,7 +2426,14 @@ give the same digest for the demo mission, the examples' XTCE files, the
 schema-covering samples and the documents in <tt class="docutils literal">tests/digest</tt>, which
 cover comments, CDATA, references, line ends, namespaces, unordered
 collections and documents that must be rejected; those also have known
-digests, in <tt class="docutils literal">tests/digest/expected.txt</tt>.</li>
+digests, in <tt class="docutils literal">tests/digest/expected.txt</tt>. Each also digests the sets
+of documents in <tt class="docutils literal">tests/digest/sets.txt</tt>.</li>
+<li><tt class="docutils literal">tests/float_check.sh</tt>: the Rust, C, C++ and Python runtimes decode
+and encode every float format and size, giving the results the
+formats' standards give for the conversions in
+<tt class="docutils literal">tests/float/known.txt</tt> (MIL-STD-1750A's own examples among them),
+and the same results as each other for random values from
+<tt class="docutils literal">tests/float_cases.py</tt>.</li>
 </ul>
 <p>The <tt class="docutils literal">packet_tool</tt> programs (<tt class="docutils literal">rust/examples</tt>, <tt class="docutils literal">cpp/tests</tt>, built as
 <tt class="docutils literal">cpp/build/packet_tool</tt> and <tt class="docutils literal">cpp/build/packet_tool_cxx</tt>, and

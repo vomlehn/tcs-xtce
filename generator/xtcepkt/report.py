@@ -40,6 +40,9 @@ def bits_for(lo: int, hi: int, encoding: str) -> Optional[int]:
     None if the encoding cannot hold ``lo`` (an unsigned one, below 0)."""
     if encoding == "unsigned":
         return max(hi.bit_length(), 1) if lo >= 0 else None
+    if encoding in ("BCD", "packedBCD"):  # a decimal digit in 8 or 4 bits
+        width = 8 if encoding == "BCD" else 4
+        return width * max(len(str(hi)), 1) if lo >= 0 else None
     if encoding == "twosComplement":
         n = (max(hi.bit_length() if hi >= 0 else 0,
                  (-lo - 1).bit_length() if lo < 0 else 0) + 1)
@@ -106,7 +109,7 @@ def need(vt: VType) -> tuple[Optional[int], str]:
         n = bits_for(lo, hi, e.encoding)
         if n is None or n > e.bits:
             return None, f"{why} does not fit the encoding"
-        if e.encoding != "unsigned" and lo >= 0:
+        if e.encoding not in ("unsigned", "BCD", "packedBCD") and lo >= 0:
             u = bits_for(lo, hi, "unsigned")
             if u < n:
                 n, why = u, f"{why}, as unsigned"
@@ -115,9 +118,9 @@ def need(vt: VType) -> tuple[Optional[int], str]:
                       "bytes are padded")
     else:
         return None, ""
-    if isinstance(e, IntEnc) and e.little_endian:
+    if isinstance(e, IntEnc) and isinstance(e.order, tuple):
         n = (n + 7) // 8 * 8
-        why += ", whole bytes (little-endian)"
+        why += ", whole bytes (byte order list)"
     return min(n, e.bits), why
 
 

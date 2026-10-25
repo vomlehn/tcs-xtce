@@ -3,7 +3,8 @@
      headers, container inheritance with restriction criteria, an included
      container from a nested SpaceSystem, every supported encoding, both
      calibrator kinds, commands with argument assignments, arrays, repeated
-     entries, sizes and counts given by other fields, and aggregates. -->
+     entries, sizes and counts given by other fields, aggregates, and every
+     bit and byte order, integer and float encoding and character set. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Demo">
   <TelemetryMetaData>
     <ParameterTypeSet>
@@ -453,6 +454,113 @@
           </SizeInBits>
         </BinaryDataEncoding>
       </BinaryParameterType>
+      <!-- Encodings: bit and byte orders, BCD, every float format and
+           character set. -->
+      <IntegerParameterType name="LsbLe3" signed="false">
+        <IntegerDataEncoding sizeInBits="3" bitOrder="leastSignificantBitFirst"
+          byteOrder="leastSignificantByteFirst"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="LsbLe13" signed="false">
+        <IntegerDataEncoding sizeInBits="13" bitOrder="leastSignificantBitFirst"
+          byteOrder="leastSignificantByteFirst"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="Le12" signed="true">
+        <IntegerDataEncoding sizeInBits="12" encoding="twosComplement"
+          byteOrder="leastSignificantByteFirst"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="VaxU32" signed="false">
+        <IntegerDataEncoding sizeInBits="32" byteOrder="2,3,0,1"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="PackedBcd16" signed="false">
+        <IntegerDataEncoding sizeInBits="16" encoding="packedBCD"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="Bcd16" signed="false">
+        <IntegerDataEncoding sizeInBits="16" encoding="BCD"/>
+      </IntegerParameterType>
+      <FloatParameterType name="Half">
+        <FloatDataEncoding sizeInBits="16"/>
+      </FloatParameterType>
+      <FloatParameterType name="Extended" sizeInBits="64">
+        <FloatDataEncoding sizeInBits="80"/>
+      </FloatParameterType>
+      <FloatParameterType name="Quad" sizeInBits="128">
+        <FloatDataEncoding sizeInBits="128" encoding="IEEE754"/>
+      </FloatParameterType>
+      <FloatParameterType name="Mil32">
+        <FloatDataEncoding encoding="MILSTD_1750A" sizeInBits="32"/>
+      </FloatParameterType>
+      <FloatParameterType name="Mil48" sizeInBits="64">
+        <FloatDataEncoding encoding="MILSTD_1750A" sizeInBits="48"/>
+      </FloatParameterType>
+      <!-- A VAX F_floating as it lies in memory: the halves swapped. -->
+      <FloatParameterType name="VaxF">
+        <FloatDataEncoding encoding="DEC" sizeInBits="32" byteOrder="2,3,0,1"/>
+      </FloatParameterType>
+      <FloatParameterType name="DecD" sizeInBits="64">
+        <FloatDataEncoding encoding="DEC" sizeInBits="64"/>
+      </FloatParameterType>
+      <FloatParameterType name="Ibm32">
+        <FloatDataEncoding encoding="IBM" sizeInBits="32"/>
+      </FloatParameterType>
+      <FloatParameterType name="Ibm64" sizeInBits="64">
+        <FloatDataEncoding encoding="IBM" sizeInBits="64"/>
+      </FloatParameterType>
+      <FloatParameterType name="Ibm128" sizeInBits="128">
+        <FloatDataEncoding encoding="IBM" sizeInBits="128"/>
+      </FloatParameterType>
+      <FloatParameterType name="Ti16">
+        <FloatDataEncoding encoding="TI" sizeInBits="16"/>
+      </FloatParameterType>
+      <FloatParameterType name="Ti32">
+        <FloatDataEncoding encoding="TI" sizeInBits="32"/>
+      </FloatParameterType>
+      <FloatParameterType name="Ti40" sizeInBits="64">
+        <FloatDataEncoding encoding="TI" sizeInBits="40"/>
+      </FloatParameterType>
+      <StringParameterType name="Latin1Name">
+        <StringDataEncoding encoding="ISO-8859-1">
+          <SizeInBits>
+            <Fixed><FixedValue>64</FixedValue></Fixed>
+            <TerminationChar>00</TerminationChar>
+          </SizeInBits>
+        </StringDataEncoding>
+      </StringParameterType>
+      <StringParameterType name="AnsiText">
+        <StringDataEncoding encoding="Windows-1252">
+          <Variable maxSizeInBits="64">
+            <TerminationChar>0A</TerminationChar>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+      <StringParameterType name="Utf16Text">
+        <StringDataEncoding encoding="UTF-16">
+          <Variable maxSizeInBits="136">
+            <LeadingSize sizeInBitsOfSizeTag="8"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+      <!-- The default terminator, 00, is a zero code unit of UTF-16. -->
+      <StringParameterType name="Utf16LeName">
+        <StringDataEncoding encoding="UTF-16LE">
+          <SizeInBits>
+            <Fixed><FixedValue>64</FixedValue></Fixed>
+          </SizeInBits>
+        </StringDataEncoding>
+      </StringParameterType>
+      <StringParameterType name="Utf32Text">
+        <StringDataEncoding encoding="UTF-32BE">
+          <Variable maxSizeInBits="128">
+            <TerminationChar>00000000</TerminationChar>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+      <StringParameterType name="LineText">
+        <StringDataEncoding>
+          <Variable maxSizeInBits="64">
+            <TerminationChar>0D0A</TerminationChar>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -529,6 +637,32 @@
       <Parameter name="Channel" parameterTypeRef="U4"/>
       <Parameter name="Reading" parameterTypeRef="S16"/>
       <Parameter name="Closed" parameterTypeRef="FlagType"/>
+      <Parameter name="BitA" parameterTypeRef="LsbLe3"/>
+      <Parameter name="BitB" parameterTypeRef="LsbLe13"/>
+      <Parameter name="Small" parameterTypeRef="Le12"/>
+      <Parameter name="Nibble" parameterTypeRef="U4"/>
+      <Parameter name="Vax" parameterTypeRef="VaxU32"/>
+      <Parameter name="Packed" parameterTypeRef="PackedBcd16"/>
+      <Parameter name="Digits" parameterTypeRef="Bcd16"/>
+      <Parameter name="HalfValue" parameterTypeRef="Half"/>
+      <Parameter name="ExtendedValue" parameterTypeRef="Extended"/>
+      <Parameter name="QuadValue" parameterTypeRef="Quad"/>
+      <Parameter name="Mil32Value" parameterTypeRef="Mil32"/>
+      <Parameter name="Mil48Value" parameterTypeRef="Mil48"/>
+      <Parameter name="VaxFValue" parameterTypeRef="VaxF"/>
+      <Parameter name="DecDValue" parameterTypeRef="DecD"/>
+      <Parameter name="Ibm32Value" parameterTypeRef="Ibm32"/>
+      <Parameter name="Ibm64Value" parameterTypeRef="Ibm64"/>
+      <Parameter name="Ibm128Value" parameterTypeRef="Ibm128"/>
+      <Parameter name="Ti16Value" parameterTypeRef="Ti16"/>
+      <Parameter name="Ti32Value" parameterTypeRef="Ti32"/>
+      <Parameter name="Ti40Value" parameterTypeRef="Ti40"/>
+      <Parameter name="Latin1" parameterTypeRef="Latin1Name"/>
+      <Parameter name="Ansi" parameterTypeRef="AnsiText"/>
+      <Parameter name="Wide" parameterTypeRef="Utf16Text"/>
+      <Parameter name="WideName" parameterTypeRef="Utf16LeName"/>
+      <Parameter name="Wider" parameterTypeRef="Utf32Text"/>
+      <Parameter name="Line" parameterTypeRef="LineText"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -919,6 +1053,41 @@
           <ParameterRefEntry parameterRef="FineTime"/>
         </EntryList>
       </SequenceContainer>
+      <SequenceContainer name="Encodings">
+        <EntryList>
+          <ParameterRefEntry parameterRef="BitA"/>
+          <ParameterRefEntry parameterRef="BitB"/>
+          <ParameterRefEntry parameterRef="Small"/>
+          <ParameterRefEntry parameterRef="Nibble"/>
+          <ParameterRefEntry parameterRef="Vax"/>
+          <ParameterRefEntry parameterRef="Packed"/>
+          <ParameterRefEntry parameterRef="Digits"/>
+          <ParameterRefEntry parameterRef="HalfValue"/>
+          <ParameterRefEntry parameterRef="ExtendedValue"/>
+          <ParameterRefEntry parameterRef="QuadValue"/>
+          <ParameterRefEntry parameterRef="Mil32Value"/>
+          <ParameterRefEntry parameterRef="Mil48Value"/>
+          <ParameterRefEntry parameterRef="VaxFValue"/>
+          <ParameterRefEntry parameterRef="DecDValue"/>
+          <ParameterRefEntry parameterRef="Ibm32Value"/>
+          <ParameterRefEntry parameterRef="Ibm64Value"/>
+          <ParameterRefEntry parameterRef="Ibm128Value"/>
+          <ParameterRefEntry parameterRef="Ti16Value"/>
+          <ParameterRefEntry parameterRef="Ti32Value"/>
+          <ParameterRefEntry parameterRef="Ti40Value"/>
+          <ParameterRefEntry parameterRef="Latin1"/>
+          <ParameterRefEntry parameterRef="Ansi"/>
+          <ParameterRefEntry parameterRef="Wide"/>
+          <ParameterRefEntry parameterRef="WideName"/>
+          <ParameterRefEntry parameterRef="Wider"/>
+          <ParameterRefEntry parameterRef="Line"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="380"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
     </ContainerSet>
   </TelemetryMetaData>
   <CommandMetaData>
@@ -1085,6 +1254,23 @@
       </AggregateArgumentType>
       <IntegerArgumentType name="AddressType" signed="false">
         <IntegerDataEncoding sizeInBits="32" byteOrder="leastSignificantByteFirst"/>
+      </IntegerArgumentType>
+      <FloatArgumentType name="GainArgType">
+        <FloatDataEncoding encoding="TI" sizeInBits="32"/>
+      </FloatArgumentType>
+      <StringArgumentType name="LabelArgType">
+        <StringDataEncoding encoding="UTF-16BE">
+          <Variable maxSizeInBits="72">
+            <LeadingSize sizeInBitsOfSizeTag="8"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringArgumentType>
+      <IntegerArgumentType name="CodeArgType" signed="false">
+        <IntegerDataEncoding sizeInBits="16" encoding="packedBCD"/>
+      </IntegerArgumentType>
+      <IntegerArgumentType name="FlagsArgType" signed="false">
+        <IntegerDataEncoding sizeInBits="16" bitOrder="leastSignificantBitFirst"
+          byteOrder="leastSignificantByteFirst"/>
       </IntegerArgumentType>
     </ArgumentTypeSet>
     <MetaCommandSet>
@@ -1336,6 +1522,29 @@
           <EntryList>
             <ArgumentRefEntry argumentRef="Level"/>
             <ArgumentRefEntry argumentRef="Data"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Configure">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="11"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Gain" argumentTypeRef="GainArgType"/>
+          <Argument name="Label" argumentTypeRef="LabelArgType"/>
+          <Argument name="Code" argumentTypeRef="CodeArgType"/>
+          <Argument name="Flags" argumentTypeRef="FlagsArgType"/>
+        </ArgumentList>
+        <CommandContainer name="ConfigureContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Gain"/>
+            <ArgumentRefEntry argumentRef="Label"/>
+            <ArgumentRefEntry argumentRef="Code"/>
+            <ArgumentRefEntry argumentRef="Flags"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

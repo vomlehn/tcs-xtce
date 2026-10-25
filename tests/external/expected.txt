@@ -267,8 +267,7 @@ yamcs-cfs/CFE_EVS.xml: schema invalid (facets only); loaded by the binding
     unsupported: /CFE_EVS/CFE_EVS_TlmPkt_Payload_t: base container /CFE_EVS/CFE_EVS_TlmPkt_t is not supported
   digest e8b4c653f16d5263e9a27d5e1a0bd95a
 yamcs-cfs/cfs-ccsds.xml: schema valid; loaded by the binding
-  0 packets, 1 not supported
-    unsupported: /cfs-ccsds/cfs-tlm-hdr: type /cfs-ccsds/BaseType/uint1_LE: little-endian size 1 is not whole bytes
+  1 packet, 0 not supported
   digest 16846b8720855125a6b630fb58943b66
 yamcs-cfs/auto_generated.xml: schema invalid; rejected by the binding
   digest 63a404f31532f7ba4beb0a374dd4cf6e
@@ -315,8 +314,5 @@ mission pus (9 documents): 55 packets, 33 not supported
   digest 98800cd14e818edf63bdfb4168bf7632
 mission pus-verifiers (2 documents): 9 packets, 0 not supported
   digest 6aada7e9d6a206b424f7360fa678e71e
-mission cfs-evs (2 documents): 4 packets, 3 not supported
-    unsupported: /cfs-ccsds/cfs-tlm-hdr: type /cfs-ccsds/BaseType/uint1_LE: little-endian size 1 is not whole bytes
-    unsupported: /CFE_EVS/CFE_EVS_TlmPkt_t: base container /cfs-ccsds/cfs-tlm-hdr is not supported
-    unsupported: /CFE_EVS/CFE_EVS_TlmPkt_Payload_t: base container /CFE_EVS/CFE_EVS_TlmPkt_t is not supported
+mission cfs-evs (2 documents): 7 packets, 0 not supported
   digest 41d1d27c9d7d408db62e317c0b938349

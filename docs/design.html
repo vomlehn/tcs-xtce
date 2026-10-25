@@ -382,16 +382,17 @@ ul.auto-toc {
 <li><a class="reference internal" href="#one-header-for-c-and-c" id="toc-entry-11">One header for C and C++</a></li>
 <li><a class="reference internal" href="#compiler-pipeline" id="toc-entry-12">Compiler pipeline</a></li>
 <li><a class="reference internal" href="#generated-code" id="toc-entry-13">Generated code</a></li>
-<li><a class="reference internal" href="#determinism-across-languages" id="toc-entry-14">Determinism across languages</a></li>
-<li><a class="reference internal" href="#arrays-and-sizes-from-other-fields" id="toc-entry-15">Arrays and sizes from other fields</a></li>
-<li><a class="reference internal" href="#aggregates" id="toc-entry-16">Aggregates</a></li>
-<li><a class="reference internal" href="#packet-length-fields" id="toc-entry-17">Packet length fields</a></li>
-<li><a class="reference internal" href="#runtime" id="toc-entry-18">Runtime</a></li>
+<li><a class="reference internal" href="#bit-and-byte-order" id="toc-entry-14">Bit and byte order</a></li>
+<li><a class="reference internal" href="#determinism-across-languages" id="toc-entry-15">Determinism across languages</a></li>
+<li><a class="reference internal" href="#arrays-and-sizes-from-other-fields" id="toc-entry-16">Arrays and sizes from other fields</a></li>
+<li><a class="reference internal" href="#aggregates" id="toc-entry-17">Aggregates</a></li>
+<li><a class="reference internal" href="#packet-length-fields" id="toc-entry-18">Packet length fields</a></li>
+<li><a class="reference internal" href="#runtime" id="toc-entry-19">Runtime</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#the-digest-xtce-digest" id="toc-entry-19">The digest (xtce-digest)</a></li>
-<li><a class="reference internal" href="#testing-strategy" id="toc-entry-20">Testing strategy</a></li>
-<li><a class="reference internal" href="#limitations-and-future-work" id="toc-entry-21">Limitations and future work</a></li>
+<li><a class="reference internal" href="#the-digest-xtce-digest" id="toc-entry-20">The digest (xtce-digest)</a></li>
+<li><a class="reference internal" href="#testing-strategy" id="toc-entry-21">Testing strategy</a></li>
+<li><a class="reference internal" href="#limitations-and-future-work" id="toc-entry-22">Limitations and future work</a></li>
 </ul>
 </div>
 <div class="section" id="goals">
@@ -703,8 +704,8 @@ of the encoding. A binary value with an XTCE size of -1 has a
 The compiler checks that nothing follows it in any packet, so the end
 of the packet gives its size.</p>
 <p class="last">Schema defaults are filled in here: 8-bit unsigned integers, 32-bit
-IEEE floats, <tt class="docutils literal">previousEntry</tt> locations, a <tt class="docutils literal">00</tt> terminator and
-16-bit size tags. Time types become <tt class="docutils literal">float</tt> seconds, with
+IEEE floats, <tt class="docutils literal">previousEntry</tt> locations, a <tt class="docutils literal">00</tt> terminator (a zero
+code unit in UTF-16 and UTF-32) and 16-bit size tags. Time types become <tt class="docutils literal">float</tt> seconds, with
 <tt class="docutils literal">scale</tt>/<tt class="docutils literal">offset</tt> as a linear calibrator.</p>
 </dd>
 <dt><strong>Items.</strong></dt>
@@ -778,8 +779,34 @@ Comparisons on raw values are accepted only where raw and engineering
 values are numerically equal (uncalibrated integers, enumerations and
 booleans).</p>
 </div>
+<div class="section" id="bit-and-byte-order">
+<h2><a class="toc-backref" href="#toc-entry-14">Bit and byte order</a></h2>
+<p>XTCE says only that <tt class="docutils literal">bitOrder</tt> describes &quot;the bit ordering of the
+encoded value&quot; and that a byte order list views the value's bytes as
+memory, first byte at address 0. Neither defines a field that isn't
+whole bytes, or how the two combine. tcs-xtce uses one rule for every
+integer and float encoding: take the field's bits in groups of 8 from its
+start, read each group in the bit order (the first bit most significant
+for <tt class="docutils literal">mostSignificantBitFirst</tt>, least significant otherwise, with the
+bits of each byte numbered the same way), and combine the groups in the
+byte order. The rule has three properties that make it the right one to
+pick:</p>
+<ul class="simple">
+<li>the defaults (most significant bit and byte first) give the plain
+big-endian bit string, so nothing that worked before changes;</li>
+<li>whole little-endian bytes are ordinary little-endian values, however
+the field is aligned;</li>
+<li>least significant bit and byte first together give exactly the layout
+of C bit fields on little-endian machines, which is what documents
+describing such structures (like the cFS headers in
+<tt class="docutils literal">tests/external</tt>) mean.</li>
+</ul>
+<p>The runtimes keep the existing <tt class="docutils literal">uint_order</tt> for the common cases and
+call the general <tt class="docutils literal">uint_bits</tt> only for the others, so ordinary packets
+pay nothing for it.</p>
+</div>
 <div class="section" id="determinism-across-languages">
-<h2><a class="toc-backref" href="#toc-entry-14">Determinism across languages</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-15">Determinism across languages</a></h2>
 <p>The three emitters produce the same structure. The runtimes are written
 to give bit-identical results:</p>
 <ul class="simple">
@@ -794,6 +821,21 @@ above 1 go through the C library <tt class="docutils literal">pow</tt> in all th
 evaluation order.</li>
 <li><strong>binary32</strong> conversion rounds to nearest. Overflow gives infinity in
 all three languages; Python's <tt class="docutils literal">struct</tt> would raise, so it is caught.</li>
+<li><strong>Other float formats</strong> are converted with integer arithmetic only:
+a double is split into a 53-bit significand and an exponent, rounded to
+the target format's precision half to even, and put together again;
+decoding rounds the format's significand (up to 113 bits) to a double
+the same way. Python's reference uses <tt class="docutils literal">fractions.Fraction</tt>, whose
+conversion to <tt class="docutils literal">float</tt> is correctly rounded; Rust uses <tt class="docutils literal">u128</tt>; C,
+which has no 128-bit integer in C11, keeps the top 64 bits and a sticky
+bit, which rounds identically. <tt class="docutils literal">tests/float_check.sh</tt> holds all four
+builds to the standards' examples and to each other on 60,000 random
+conversions. No library float conversion is used for these formats, so
+nothing depends on the platform's <tt class="docutils literal">long double</tt>.</li>
+<li><strong>Character sets</strong> are converted by each runtime's own code (Python's
+codecs, Rust's <tt class="docutils literal">char</tt> conversions and C's tables), with the same
+rules for invalid bytes. Windows-1252's five undefined bytes are
+errors, as in Python's <tt class="docutils literal">cp1252</tt>.</li>
 <li><strong>UTF-8</strong> is strictly validated in all three: C has its own
 validator that matches Rust and Python, rejecting overlong forms,
 surrogates and values beyond U+10FFFF.</li>
@@ -808,7 +850,7 @@ Unlisted values therefore round-trip instead of failing. Telemetry from
 newer flight software decodes even when the database is out of date.</p>
 </div>
 <div class="section" id="arrays-and-sizes-from-other-fields">
-<h2><a class="toc-backref" href="#toc-entry-15">Arrays and sizes from other fields</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-16">Arrays and sizes from other fields</a></h2>
 <p>Arrays and repeated entries share one representation: a <tt class="docutils literal">VType</tt> of
 kind <tt class="docutils literal">array</tt> whose <tt class="docutils literal">ArrayEnc</tt> holds the element type, a count and
 the gap between elements. A multi-dimensional array is flattened into
@@ -897,7 +939,7 @@ follows catches data above the field's bound.</p>
 checks that the data matches it and fails with <tt class="docutils literal">BadSize</tt> if not.</p>
 </div>
 <div class="section" id="aggregates">
-<h2><a class="toc-backref" href="#toc-entry-16">Aggregates</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-17">Aggregates</a></h2>
 <p>An aggregate is a <tt class="docutils literal">VType</tt> of kind <tt class="docutils literal">aggregate</tt> whose
 <tt class="docutils literal">AggregateEnc</tt> lists its members. Generated code reads and writes the
 members in place, recursing through member types, so aggregates nest in
@@ -933,7 +975,7 @@ layout, and <tt class="docutils literal">Pad</tt> covers the rest of a fixed-siz
 not repeated.</p>
 </div>
 <div class="section" id="packet-length-fields">
-<h2><a class="toc-backref" href="#toc-entry-17">Packet length fields</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-18">Packet length fields</a></h2>
 <p>XTCE 1.3 can say that a field's size comes from another value, but not
 that a value is the size of its packet. Its algorithms could compute
 one, but have no operand for the packet's size, and tools such as Yamcs
@@ -959,7 +1001,7 @@ known position, and nothing may depend on its value while the packet is
 being encoded.</p>
 </div>
 <div class="section" id="runtime">
-<h2><a class="toc-backref" href="#toc-entry-18">Runtime</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-19">Runtime</a></h2>
 <p><tt class="docutils literal">BitReader</tt> and <tt class="docutils literal">BitWriter</tt> handle fields of 1–64 bits, most
 significant bit first, at any bit position:</p>
 <ul class="simple">
@@ -975,7 +1017,7 @@ own. In C the writer fills a caller-owned array and fails with
 </div>
 </div>
 <div class="section" id="the-digest-xtce-digest">
-<h1><a class="toc-backref" href="#toc-entry-19">The digest (xtce-digest)</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-20">The digest (xtce-digest)</a></h1>
 <p>Packets carry no field names, tags or lengths, so two programs can read
 each other's packets only if they were built from documents that define
 the same packets. <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> gives them a way to check: an MD5
@@ -1031,7 +1073,7 @@ each file with the Python runtime. Computing a digest allocates memory,
 so it belongs at start-up, not in code that must not allocate.</p>
 </div>
 <div class="section" id="testing-strategy">
-<h1><a class="toc-backref" href="#toc-entry-20">Testing strategy</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-21">Testing strategy</a></h1>
 <dl class="docutils">
 <dt><strong>Schema coverage</strong></dt>
 <dd>21 generated sample documents cover every element slot and every
@@ -1045,6 +1087,11 @@ checked with <tt class="docutils literal">xmllint</tt>. <tt class="docutils lite
 independent bit-string packer rather than by the generated code.
 <tt class="docutils literal">vectors.expected</tt> holds their decoded text and re-encodings. Every
 language must reproduce <tt class="docutils literal">vectors.expected</tt> exactly.</dd>
+<dt><strong>Float formats</strong></dt>
+<dd><tt class="docutils literal">tests/float_check.sh</tt> decodes and encodes every float format and
+size in all four builds: the conversions in <tt class="docutils literal">tests/float/known.txt</tt>
+must give the results the formats' standards give, and random values
+must give the same results in every build.</dd>
 <dt><strong>Random packets</strong></dt>
 <dd><tt class="docutils literal">random_vectors.py</tt> produces packets with valid headers and random
 payloads. They reach every success path and every error kind. All
@@ -1108,7 +1155,7 @@ checked.</p>
 </dl>
 </div>
 <div class="section" id="limitations-and-future-work">
-<h1><a class="toc-backref" href="#toc-entry-21">Limitations and future work</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-22">Limitations and future work</a></h1>
 <ul>
 <li><p class="first"><strong>XML binding:</strong></p>
 <ul class="simple">

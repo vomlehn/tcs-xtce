@@ -1,6 +1,9 @@
 """Tests of the packet codecs generated from tests/mission/demo.xml."""
 
 import dataclasses
+import math
+import random
+import struct
 import sys
 import unittest
 from pathlib import Path
@@ -10,7 +13,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
 import demo  # noqa: E402
 from xtce import ManagedBuffer  # noqa: E402
 from xtce.packet import (  # noqa: E402
-    Codec, PacketError, enum_value, float_to_raw)
+    BitReader, BitWriter, Codec, PacketError, bcd_decode, bcd_encode,
+    decode_text, encode_text, enum_value, float_decode, float_encode,
+    float_to_raw)
 
 
 def with_length(data, length: int) -> bytes:
@@ -402,6 +407,115 @@ class PacketTests(unittest.TestCase):
         housekeeping().encode(buf)
         self.assertEqual(len(buf), demo.Housekeeping.MAX_BYTES)
         self.assertEqual(buf.capacity, 64)
+
+
+class EncodingTests(unittest.TestCase):
+    """The runtime's bit and byte orders, BCD, float formats and character
+    sets."""
+
+    SIZES = {"IEEE754": (16, 32, 64, 80, 128), "MILSTD_1750A": (32, 48),
+             "DEC": (32, 64), "IBM": (32, 64, 128), "TI": (16, 32, 40)}
+
+    def test_bit_and_byte_orders(self):
+        buf = ManagedBuffer(16)
+        w = BitWriter(buf)
+        # Least significant bit first, little endian: C bit fields.
+        w.uint_bits(3, True, "le", 0b101)
+        w.uint_bits(13, True, "le", 0x1ABC)
+        w.uint_bits(12, False, "le", 0xFFD)
+        w.uint(4, 0xA)
+        w.uint_bits(32, False, (2, 3, 0, 1), 0x0A0B0C0D)
+        self.assertEqual(buf.getvalue().hex(), "e5d5fdfa0b0a0d0c")
+        r = BitReader(buf.getvalue())
+        self.assertEqual(r.uint_bits(3, True, "le", "a"), 0b101)
+        self.assertEqual(r.uint_bits(13, True, "le", "b"), 0x1ABC)
+        self.assertEqual(r.uint_bits(12, False, "le", "c"), 0xFFD)
+        self.assertEqual(r.uint(4, "d"), 0xA)
+        self.assertEqual(r.uint_bits(32, False, (2, 3, 0, 1), "e"), 0x0A0B0C0D)
+
+    def test_bcd(self):
+        self.assertEqual(bcd_decode(0x1234, 16, True, "x"), 1234)
+        self.assertEqual(bcd_decode(0x0506, 16, False, "x"), 56)
+        self.assertEqual(bcd_encode(99, 16, False, "x"), 0x0909)
+        for raw, packed in ((0x1A, True), (0x15, False)):
+            with self.assertRaises(PacketError) as cm:
+                bcd_decode(raw, 8, packed, "x")
+            self.assertEqual(cm.exception.kind, "InvalidValue")
+        with self.assertRaises(PacketError):
+            bcd_encode(100, 16, False, "x")
+
+    def test_floats_round_trip(self):
+        # Every value a format decodes encodes back to itself.
+        rng = random.Random(3)
+        for fmt, sizes in self.SIZES.items():
+            for bits in sizes:
+                for _ in range(500):
+                    try:
+                        x = float_decode(fmt, bits, rng.getrandbits(bits), "f")
+                    except PacketError:
+                        continue
+                    if not math.isfinite(x):
+                        continue
+                    y = float_decode(fmt, bits, float_encode(fmt, bits, x, "f"),
+                                     "f")
+                    self.assertEqual(x, y, (fmt, bits))
+
+    def test_ieee_matches_struct(self):
+        rng = random.Random(4)
+        for code, bits in ((">e", 16), (">f", 32), (">d", 64)):
+            for _ in range(2000):
+                x = math.ldexp(rng.random() + 0.5, rng.randrange(-160, 140))
+                try:
+                    want = struct.pack(code, x)
+                except OverflowError:
+                    want = struct.pack(code, math.inf)
+                raw = float_encode("IEEE754", bits, x, "f")
+                self.assertEqual(raw.to_bytes(bits // 8, "big"), want, x)
+
+    def test_charsets(self):
+        for cs, s, wire in (
+                ("ISO-8859-1", "Grüße", "4772fcdf65"),
+                ("Windows-1252", "€ž", "809e"), ("UTF-16", "Aé", "004100e9"),
+                ("UTF-16LE", "😀", "3dd800de"), ("UTF-32BE", "a", "00000061"),
+                ("US-ASCII", "ok", "6f6b")):
+            self.assertEqual(encode_text(s, cs, "f").hex(), wire)
+            self.assertEqual(decode_text(bytes.fromhex(wire), cs, "f"), s)
+        # A byte order mark picks the byte order of UTF-16.
+        self.assertEqual(decode_text(bytes.fromhex("fffe4100"), "UTF-16", "f"),
+                         "A")
+        for cs, wire in (("Windows-1252", "81"), ("UTF-16BE", "d800"),
+                         ("US-ASCII", "80"), ("UTF-32BE", "00110000")):
+            with self.assertRaises(PacketError) as cm:
+                decode_text(bytes.fromhex(wire), cs, "f")
+            self.assertEqual(cm.exception.kind, "InvalidString")
+        with self.assertRaises(PacketError):
+            encode_text("€", "ISO-8859-1", "f")
+
+    def test_encodings_packet(self):
+        p = demo.Encodings(
+            sec_hdr_flag=True, seq_flags=demo.SeqFlagsType.UNSEGMENTED,
+            seq_count=1, bit_a=7, bit_b=8191, small=-2048, nibble=0, vax=1,
+            packed=9999, digits=99, half_value=65504.0, extended_value=1e300,
+            quad_value=-5e-324, mil32_value=0.5, mil48_value=-0.75,
+            vax_f_value=-2.0, dec_d_value=1e30, ibm32_value=0.1,
+            ibm64_value=-1e70, ibm128_value=1 / 3, ti16_value=-2.0,
+            ti32_value=1e-30, ti40_value=-3.5, latin1="ÿ", ansi="Œ", wide="",
+            wide_name="AB", wider="z", line="")
+        q = demo.Encodings.decode(p.to_bytes())
+        self.assertEqual(q.packed, 9999)
+        self.assertEqual(q.small, -2048)
+        self.assertEqual(q.extended_value, 1e300)
+        self.assertEqual(q.quad_value, -5e-324)
+        self.assertEqual(q.ibm128_value, 1 / 3)
+        self.assertEqual(q.ti40_value, -3.5)
+        self.assertEqual((q.latin1, q.ansi, q.wide_name), ("ÿ", "Œ", "AB"))
+        # Values too large for formats without infinity don't encode.
+        with self.assertRaises(PacketError) as cm:
+            dataclasses.replace(p, ibm32_value=1e80).to_bytes()
+        self.assertEqual(cm.exception.kind, "OutOfRange")
+        with self.assertRaises(PacketError) as cm:
+            dataclasses.replace(p, latin1="€").to_bytes()
+        self.assertEqual(cm.exception.kind, "InvalidString")
 
 
 if __name__ == "__main__":

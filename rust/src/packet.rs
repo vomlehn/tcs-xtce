@@ -54,6 +54,9 @@ pub enum PacketError {
     BadSize { field: &'static str },
     /// The packet length field `field` does not match the packet's length.
     BadLength { field: &'static str },
+    /// The bits of `field` are not a value of its encoding (a BCD digit
+    /// above 9, or a DEC reserved operand).
+    InvalidValue { field: &'static str },
 }
 
 impl PacketError {
@@ -72,6 +75,7 @@ impl PacketError {
             Self::Missing { .. } => "Missing",
             Self::BadSize { .. } => "BadSize",
             Self::BadLength { .. } => "BadLength",
+            Self::InvalidValue { .. } => "InvalidValue",
         }
     }
 }
@@ -118,6 +122,9 @@ impl fmt::Display for PacketError {
             }
             Self::BadLength { field } => {
                 write!(f, "{field} does not match the length of the packet")
+            }
+            Self::InvalidValue { field } => {
+                write!(f, "the bits of {field} are not a value of its encoding")
             }
         }
     }
@@ -303,6 +310,48 @@ impl<'a> BitReader<'a> {
     ) -> Result<u64> {
         let v = self.uint(bits, field)?;
         Ok(if le { swap_bytes(v, bits) } else { v })
+    }
+
+    /// Reads an unsigned field of `bits` (1 to 128) bits in any bit and
+    /// byte order.
+    ///
+    /// The field's bits are taken in groups of 8 (the last may be shorter).
+    /// Within a group, `lsb` false numbers the bits of each byte from the
+    /// most significant (the usual order), and the group's first bit is its
+    /// most significant; `lsb` true numbers them from the least significant,
+    /// and the group's first bit is its least significant.  `order` combines
+    /// the groups.
+    pub fn uint_bits(
+        &mut self,
+        bits: u32,
+        lsb: bool,
+        order: ByteOrder,
+        field: &'static str,
+    ) -> Result<u128> {
+        self.need(bits as usize, field)?;
+        let mut groups = [(0u8, 0u32); 16];
+        let mut q = self.pos;
+        let mut left = bits;
+        let mut k = 0;
+        while left > 0 {
+            let n = left.min(8);
+            let mut g = 0u8;
+            for i in 0..n as usize {
+                let byte = self.data[(q + i) / 8];
+                if lsb {
+                    g |= ((byte >> ((q + i) % 8)) & 1) << i;
+                } else {
+                    g = (g << 1) | ((byte >> (7 - (q + i) % 8)) & 1);
+                }
+            }
+            groups[k] = (g, n);
+            k += 1;
+            q += n as usize;
+            left -= n;
+        }
+        self.pos = q;
+        self.end = self.end.max(q);
+        Ok(combine(&groups[..k], order))
     }
 
     /// Skips `bits` bits of padding, which must be in the packet.
@@ -496,6 +545,47 @@ impl<'a> BitWriter<'a> {
         self.uint(bits, if le { swap_bytes(v, bits) } else { v });
     }
 
+    /// Writes the low `bits` bits of `v` in the bit and byte order that
+    /// [`BitReader::uint_bits`] reads.
+    pub fn uint_bits(
+        &mut self,
+        bits: u32,
+        lsb: bool,
+        order: ByteOrder,
+        v: u128,
+    ) {
+        let end = (self.pos + bits as usize).div_ceil(8);
+        if self.buf.len() < end {
+            self.buf.resize(end);
+        }
+        let mut lengths = [0u32; 16];
+        let k = bits.div_ceil(8) as usize;
+        for (i, n) in lengths.iter_mut().enumerate().take(k) {
+            *n = if (i + 1) * 8 <= bits as usize {
+                8
+            } else {
+                bits % 8
+            };
+        }
+        let data = self.buf.as_mut_bytes();
+        let mut q = self.pos;
+        for j in 0..k {
+            let (g, n) = (split(v, &lengths[..k], j, order), lengths[j]);
+            for i in 0..n as usize {
+                let bit = if lsb {
+                    (g >> i) & 1
+                } else {
+                    (g >> (n as usize - 1 - i)) & 1
+                };
+                let shift = if lsb { (q + i) % 8 } else { 7 - (q + i) % 8 };
+                let b = &mut data[(q + i) / 8];
+                *b = (*b & !(1 << shift)) | (bit << shift);
+            }
+            q += n as usize;
+        }
+        self.pos = q;
+    }
+
     /// Writes whole bytes (which need not be byte aligned).
     pub fn bytes(&mut self, data: &[u8]) {
         if data.is_empty() {
@@ -568,6 +658,57 @@ impl<'a> BitWriter<'a> {
 
 fn swap_bytes(v: u64, bits: u32) -> u64 {
     v.swap_bytes() >> (64 - bits)
+}
+
+/// How the groups of 8 bits of a field combine (see
+/// [`BitReader::uint_bits`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ByteOrder {
+    /// The first group is the most significant (big endian).
+    Big,
+    /// The first group is the least significant (little endian).
+    Little,
+    /// The significance of each (whole) byte, as an XTCE byte order list
+    /// gives it: 0 for the least significant.
+    List(&'static [u8]),
+}
+
+/// The value of groups of bits ((value, length), in stream order) combined
+/// in `order`.
+fn combine(groups: &[(u8, u32)], order: ByteOrder) -> u128 {
+    let mut v = 0u128;
+    match order {
+        ByteOrder::Big => {
+            for &(g, n) in groups {
+                v = (v << n) | g as u128;
+            }
+        }
+        ByteOrder::Little => {
+            let mut shift = 0;
+            for &(g, n) in groups {
+                v |= (g as u128) << shift;
+                shift += n;
+            }
+        }
+        ByteOrder::List(sig) => {
+            for (&(g, _), &s) in groups.iter().zip(sig) {
+                v |= (g as u128) << (8 * s as u32);
+            }
+        }
+    }
+    v
+}
+
+/// Group `j` of `v`, whose groups have `lengths` in stream order: the
+/// inverse of [`combine`].
+fn split(v: u128, lengths: &[u32], j: usize, order: ByteOrder) -> u8 {
+    let n = lengths[j];
+    let shift: u32 = match order {
+        ByteOrder::Big => lengths[j + 1..].iter().sum(),
+        ByteOrder::Little => lengths[..j].iter().sum(),
+        ByteOrder::List(sig) => 8 * sig[j] as u32,
+    };
+    ((v >> shift) & ((1u128 << n) - 1)) as u8
 }
 
 // --- integers ----------------------------------------------------------------
@@ -669,6 +810,51 @@ pub fn int_to_f64(raw: u64, bits: u32, enc: IntEncoding) -> f64 {
     }
 }
 
+/// The value of a BCD field: packed BCD has a decimal digit in every 4
+/// bits, and (unpacked) BCD one in the low 4 bits of every byte, whose high
+/// 4 bits are zero; the first digit is the most significant.  Fails with
+/// `InvalidValue` for any other bits.
+pub fn bcd_decode(
+    raw: u64,
+    bits: u32,
+    packed: bool,
+    field: &'static str,
+) -> Result<u64> {
+    let width = if packed { 4 } else { 8 };
+    let mut v = 0u64;
+    let mut shift = bits;
+    while shift >= width {
+        shift -= width;
+        let d = (raw >> shift) & mask(width);
+        if d > 9 {
+            return Err(PacketError::InvalidValue { field });
+        }
+        v = v * 10 + d;
+    }
+    Ok(v)
+}
+
+/// The BCD field holding `v`; fails with `OutOfRange` unless the field's
+/// digits hold it.
+pub fn bcd_encode(
+    v: u64,
+    bits: u32,
+    packed: bool,
+    field: &'static str,
+) -> Result<u64> {
+    let width = if packed { 4 } else { 8 };
+    let digits = bits / width;
+    if digits < 20 && v >= 10u64.pow(digits) {
+        return Err(PacketError::OutOfRange { field });
+    }
+    let (mut raw, mut v) = (0u64, v);
+    for i in 0..digits {
+        raw |= (v % 10) << (i * width);
+        v /= 10;
+    }
+    Ok(raw)
+}
+
 /// Rounds an engineering value (half away from zero) to a raw integer field.
 pub fn f64_to_int(
     x: f64,
@@ -724,6 +910,408 @@ pub fn float_to_raw(v: f64, bits: u32) -> u64 {
         (v as f32).to_bits() as u64
     } else {
         v.to_bits()
+    }
+}
+
+/// A floating-point encoding of XTCE's `FloatDataEncoding`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloatFormat {
+    /// IEEE 754 binary formats: 16, 32, 64, 80 (x87 extended) or 128 bits.
+    Ieee,
+    /// MIL-STD-1750A: 32 or 48 bits.
+    Mil1750a,
+    /// DEC (VAX): 32 bits for F_floating, 64 for D_floating.
+    Dec,
+    /// IBM hexadecimal: 32, 64 or 128 bits.
+    Ibm,
+    /// TI TMS320C3x: 16, 32 or 40 bits.
+    Ti,
+}
+
+/// `m / 2**shift` rounded to the nearest integer, ties to even; `m * 2**-shift`
+/// when `shift` is negative.
+fn round_shift(m: u128, shift: i32) -> u128 {
+    if shift <= 0 {
+        return m << (-shift) as u32;
+    }
+    if shift > 128 {
+        return 0;
+    }
+    let (q, r, half) = if shift == 128 {
+        (0, m, 1u128 << 127)
+    } else {
+        (m >> shift, m & ((1u128 << shift) - 1), 1u128 << (shift - 1))
+    };
+    q + (r > half || (r == half && q & 1 == 1)) as u128
+}
+
+/// `(-1)**neg * m * 2**e` rounded to the nearest double, ties to even;
+/// infinite when too large.
+fn to_f64(neg: bool, m: u128, e: i32) -> f64 {
+    let sign = if neg { -1.0 } else { 1.0 };
+    if m == 0 {
+        return 0.0 * sign;
+    }
+    let top = e + 127 - m.leading_zeros() as i32; // m * 2**e < 2**(top + 1)
+    if top > 1023 {
+        return f64::INFINITY * sign;
+    }
+    let mut low = top.max(-1022) - 52;
+    let mut q = round_shift(m, low - e);
+    if q >> 53 != 0 {
+        q >>= 1;
+        low += 1;
+    }
+    let bits = if q >> 52 == 0 {
+        q as u64 // subnormal
+    } else {
+        let biased = low + 52 + 1023;
+        if biased >= 2047 {
+            return f64::INFINITY * sign;
+        }
+        ((biased as u64) << 52) | (q as u64 & ((1 << 52) - 1))
+    };
+    f64::from_bits(bits) * sign
+}
+
+/// `(m, e, power)` for finite nonzero `x`: `|x| == m * 2**e` with `m` of 53
+/// bits, and whether `|x|` is a power of two.
+fn magnitude(x: f64) -> (u128, i32, bool) {
+    let b = x.to_bits();
+    let exp = ((b >> 52) & 0x7ff) as i32;
+    let frac = (b & ((1 << 52) - 1)) as u128;
+    let (mut m, mut e) = if exp == 0 {
+        (frac, -1074)
+    } else {
+        (frac | (1 << 52), exp - 1075)
+    };
+    let shift = m.leading_zeros() as i32 - 75; // to 53 bits
+    m <<= shift;
+    e -= shift;
+    (m, e, m == 1 << 52)
+}
+
+fn signed(raw: u128, bits: u32) -> i128 {
+    let shift = 128 - bits;
+    ((raw << shift) as i128) >> shift
+}
+
+fn ieee_params(bits: u32) -> (u32, u32, bool) {
+    match bits {
+        16 => (5, 10, false),
+        32 => (8, 23, false),
+        64 => (11, 52, false),
+        80 => (15, 64, true),
+        _ => (15, 112, false),
+    }
+}
+
+fn ieee_decode(raw: u128, bits: u32) -> f64 {
+    let (ebits, fbits, explicit) = ieee_params(bits);
+    let neg = (raw >> (bits - 1)) & 1 == 1;
+    let exp = ((raw >> fbits) & ((1 << ebits) - 1)) as i32;
+    let mut frac = raw & ((1u128 << fbits) - 1);
+    let bias = (1 << (ebits - 1)) - 1;
+    if exp == (1 << ebits) - 1 {
+        if explicit {
+            frac &= (1 << 63) - 1;
+        }
+        if frac != 0 {
+            return f64::NAN;
+        }
+        return if neg {
+            f64::NEG_INFINITY
+        } else {
+            f64::INFINITY
+        };
+    }
+    if explicit {
+        return to_f64(neg, frac, exp.max(1) - bias - 63);
+    }
+    if exp == 0 {
+        return to_f64(neg, frac, 1 - bias - fbits as i32);
+    }
+    to_f64(neg, frac | (1 << fbits), exp - bias - fbits as i32)
+}
+
+fn ieee_encode(x: f64, bits: u32) -> u128 {
+    let (ebits, fbits, explicit) = ieee_params(bits);
+    let sign = if x.is_sign_negative() {
+        1u128 << (bits - 1)
+    } else {
+        0
+    };
+    let top = (1u128 << ebits) - 1;
+    let integer = if explicit { 1u128 << 63 } else { 0 };
+    if x.is_nan() {
+        return sign
+            | (top << fbits)
+            | integer
+            | (1u128 << (fbits - 1 - explicit as u32));
+    }
+    if x.is_infinite() {
+        return sign | (top << fbits) | integer;
+    }
+    if x == 0.0 {
+        return sign;
+    }
+    let bias = (1i32 << (ebits - 1)) - 1;
+    let p = (fbits + !explicit as u32) as i32;
+    let (m, e, _) = magnitude(x);
+    let mut low = (e + 52).max(1 - bias) - (p - 1);
+    let mut q = round_shift(m, low - e);
+    if q >> p != 0 {
+        q >>= 1;
+        low += 1;
+    }
+    if q >> (p - 1) == 0 {
+        return sign | q;
+    }
+    let biased = (low + p - 1 + bias) as u128;
+    if biased >= top {
+        return sign | (top << fbits) | integer;
+    }
+    let f = if explicit { q } else { q - (1u128 << fbits) };
+    sign | (biased << fbits) | f
+}
+
+fn mil1750a_decode(raw: u128, bits: u32) -> f64 {
+    let (mant, exp, mbits) = if bits == 32 {
+        (raw >> 8, raw & 0xff, 24)
+    } else {
+        (((raw >> 24) << 16) | (raw & 0xffff), (raw >> 16) & 0xff, 40)
+    };
+    let mant = signed(mant, mbits);
+    let exp = signed(exp, 8) as i32;
+    to_f64(mant < 0, mant.unsigned_abs(), exp - (mbits as i32 - 1))
+}
+
+fn mil1750a_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
+    let mbits = if bits == 32 { 24 } else { 40 };
+    let f = mbits - 1;
+    if x == 0.0 {
+        return Ok(0);
+    }
+    let (m, e, power) = magnitude(x);
+    let top = e + 52;
+    let (mant, exp) = if x > 0.0 {
+        let mut exp = top + 1;
+        let mut mag = round_shift(m, exp - f - e);
+        if mag == 1 << f {
+            mag >>= 1;
+            exp += 1;
+        }
+        (mag as i128, exp)
+    } else {
+        // Negative mantissas are normalized to [-1, -1/2).
+        let mut exp = if power { top } else { top + 1 };
+        let mut mag = round_shift(m, exp - f - e);
+        if mag == 1 << (f - 1) {
+            mag = 1 << f;
+            exp -= 1;
+        }
+        (-(mag as i128), exp)
+    };
+    if exp > 127 {
+        return Err(PacketError::OutOfRange { field });
+    }
+    let (mant, exp) = if exp < -128 {
+        // Too small to normalize: unnormalized at the smallest exponent.
+        let mag = round_shift(m, -128 - f - e) as i128;
+        (if x > 0.0 { mag } else { -mag }, -128)
+    } else {
+        (mant, exp)
+    };
+    let mant = (mant as u128) & ((1 << mbits) - 1);
+    let exp = (exp as u128) & 0xff;
+    Ok(if bits == 32 {
+        (mant << 8) | exp
+    } else {
+        ((mant >> 16) << 24) | (exp << 16) | (mant & 0xffff)
+    })
+}
+
+fn dec_decode(raw: u128, bits: u32, field: &'static str) -> Result<f64> {
+    let f = if bits == 32 { 23 } else { 55 };
+    let neg = raw >> (bits - 1) == 1;
+    let exp = ((raw >> f) & 0xff) as i32;
+    if exp == 0 {
+        if neg {
+            return Err(PacketError::InvalidValue { field }); // reserved
+        }
+        return Ok(0.0);
+    }
+    let frac = (raw & ((1 << f) - 1)) | (1 << f);
+    Ok(to_f64(neg, frac, exp - 129 - f as i32))
+}
+
+fn dec_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
+    let f = if bits == 32 { 23 } else { 55 };
+    if x == 0.0 {
+        return Ok(0);
+    }
+    let (m, e, _) = magnitude(x);
+    let mut top = e + 52;
+    let mut q = round_shift(m, top - f - e);
+    if q >> (f + 1) != 0 {
+        q >>= 1;
+        top += 1;
+    }
+    let exp = top + 129;
+    if exp > 255 {
+        return Err(PacketError::OutOfRange { field });
+    }
+    if exp < 1 {
+        return Ok(0);
+    }
+    let sign = ((x < 0.0) as u128) << (bits - 1);
+    Ok(sign | ((exp as u128) << f) | (q - (1 << f)))
+}
+
+fn ibm_decode(raw: u128, bits: u32) -> f64 {
+    let neg = raw >> (bits - 1) == 1;
+    let hi = if bits == 128 { raw >> 64 } else { raw };
+    let exp = ((hi >> (bits.min(64) - 8)) & 0x7f) as i32;
+    let (frac, f) = if bits == 128 {
+        let m56 = (1u128 << 56) - 1;
+        (((hi & m56) << 56) | (raw & m56), 112)
+    } else {
+        (raw & ((1 << (bits - 8)) - 1), bits as i32 - 8)
+    };
+    to_f64(neg, frac, 4 * (exp - 64) - f)
+}
+
+fn ibm_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
+    let f = if bits == 128 { 112 } else { bits as i32 - 8 };
+    if x == 0.0 {
+        return Ok(0);
+    }
+    let (m, e, _) = magnitude(x);
+    let mut h = (e + 52).div_euclid(4) + 1;
+    let mut q = round_shift(m, 4 * h - f - e);
+    if q >> f != 0 {
+        q >>= 4;
+        h += 1;
+    }
+    let mut exp = h + 64;
+    if exp > 127 {
+        return Err(PacketError::OutOfRange { field });
+    }
+    if exp < 0 {
+        // Too small to normalize: unnormalized at the smallest exponent.
+        exp = 0;
+        q = round_shift(m, -256 - f - e);
+    }
+    let sign = (x < 0.0) as u128;
+    if bits != 128 {
+        return Ok((sign << (bits - 1)) | ((exp as u128) << f) | q);
+    }
+    // The low half has the sign, and a characteristic 14 less (modulo 128).
+    let m56 = (1u128 << 56) - 1;
+    let hi = (sign << 63) | ((exp as u128) << 56) | (q >> 56);
+    let lo = (sign << 63) | ((((exp - 14) & 0x7f) as u128) << 56) | (q & m56);
+    Ok((hi << 64) | lo)
+}
+
+fn ti_params(bits: u32) -> (u32, u32) {
+    match bits {
+        16 => (4, 11),
+        32 => (8, 23),
+        _ => (8, 31),
+    }
+}
+
+fn ti_decode(raw: u128, bits: u32) -> f64 {
+    let (ebits, f) = ti_params(bits);
+    let exp = signed(raw >> (f + 1), ebits) as i32;
+    if exp == -(1 << (ebits - 1)) {
+        return 0.0;
+    }
+    let frac = raw & ((1 << f) - 1);
+    if (raw >> f) & 1 == 1 {
+        to_f64(true, (2u128 << f) - frac, exp - f as i32)
+    } else {
+        to_f64(false, (1u128 << f) | frac, exp - f as i32)
+    }
+}
+
+fn ti_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
+    let (ebits, f) = ti_params(bits);
+    let lo = -(1i32 << (ebits - 1)); // the exponent of zero
+    let emask = (1u128 << ebits) - 1;
+    let zero = ((lo as u128) & emask) << (f + 1);
+    if x == 0.0 {
+        return Ok(zero);
+    }
+    let (m, e, power) = magnitude(x);
+    let top = e + 52;
+    let fi = f as i32;
+    let (sign, frac, exp) = if x > 0.0 {
+        let mut exp = top;
+        let mut q = round_shift(m, exp - fi - e);
+        if q >> (f + 1) != 0 {
+            q >>= 1;
+            exp += 1;
+        }
+        (0u128, q - (1 << f), exp)
+    } else {
+        // |x| / 2**exp is in (1, 2]: x == (-2 + frac) * 2**exp.
+        let mut exp = if power { top - 1 } else { top };
+        let mut q = round_shift(m, exp - fi - e);
+        if q == 1 << f {
+            exp -= 1;
+            q = 2 << f;
+        }
+        (1u128, (2u128 << f) - q, exp)
+    };
+    if exp > -lo - 1 {
+        return Err(PacketError::OutOfRange { field });
+    }
+    if exp <= lo {
+        return Ok(zero);
+    }
+    Ok((((exp as u128) & emask) << (f + 1)) | (sign << f) | frac)
+}
+
+/// The value of a float field of `bits` bits in `fmt`, rounded to the
+/// nearest double.  Fails with `InvalidValue` for a DEC reserved operand.
+pub fn float_decode(
+    fmt: FloatFormat,
+    bits: u32,
+    raw: u128,
+    field: &'static str,
+) -> Result<f64> {
+    Ok(match fmt {
+        FloatFormat::Ieee => ieee_decode(raw, bits),
+        FloatFormat::Mil1750a => mil1750a_decode(raw, bits),
+        FloatFormat::Dec => return dec_decode(raw, bits, field),
+        FloatFormat::Ibm => ibm_decode(raw, bits),
+        FloatFormat::Ti => ti_decode(raw, bits),
+    })
+}
+
+/// The float field nearest `x` (ties to even), as [`float_decode`] reads
+/// it.  IEEE formats overflow to infinity; the others, which have no
+/// infinity or NaN, fail with `OutOfRange` for values too large for them
+/// and for infinities and NaN, and encode values too small for them as
+/// zero.
+pub fn float_encode(
+    fmt: FloatFormat,
+    bits: u32,
+    x: f64,
+    field: &'static str,
+) -> Result<u128> {
+    if fmt == FloatFormat::Ieee {
+        return Ok(ieee_encode(x, bits));
+    }
+    if !x.is_finite() {
+        return Err(PacketError::OutOfRange { field });
+    }
+    match fmt {
+        FloatFormat::Mil1750a => mil1750a_encode(x, bits, field),
+        FloatFormat::Dec => dec_encode(x, bits, field),
+        FloatFormat::Ibm => ibm_encode(x, bits, field),
+        _ => ti_encode(x, bits, field),
     }
 }
 
@@ -881,6 +1469,43 @@ pub fn size_source(
 
 // --- strings -----------------------------------------------------------------
 
+/// A character set of XTCE's `StringDataEncoding`.  UTF-16 and UTF-32
+/// without a byte order are read big endian unless they start with a byte
+/// order mark, and written big endian without one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Charset {
+    Utf8,
+    Ascii,
+    Latin1,
+    Windows1252,
+    Utf16,
+    Utf16Be,
+    Utf16Le,
+    Utf32,
+    Utf32Be,
+    Utf32Le,
+}
+
+impl Charset {
+    /// The bytes in one code unit.
+    pub fn unit(self) -> usize {
+        match self {
+            Charset::Utf16 | Charset::Utf16Be | Charset::Utf16Le => 2,
+            Charset::Utf32 | Charset::Utf32Be | Charset::Utf32Le => 4,
+            _ => 1,
+        }
+    }
+}
+
+/// Unicode code points of Windows-1252 bytes 0x80 to 0x9f; 0 for the five
+/// bytes it leaves undefined.
+const WINDOWS_1252: [u16; 32] = [
+    0x20ac, 0, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030,
+    0x0160, 0x2039, 0x0152, 0, 0x017d, 0, 0, 0x2018, 0x2019, 0x201c, 0x201d,
+    0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0, 0x017e,
+    0x0178,
+];
+
 /// Layout of a string field.  Exactly one of `terminator` and `size_tag_bits`
 /// is set.
 #[derive(Debug, Clone, Copy)]
@@ -889,8 +1514,10 @@ pub struct StringSpec {
     pub fixed_bits: Option<usize>,
     /// Upper bound on the bits the field occupies.
     pub max_bits: usize,
-    pub terminator: Option<u8>,
+    /// The bytes that end the string, found only where a code unit starts.
+    pub terminator: Option<&'static [u8]>,
     pub size_tag_bits: u32,
+    pub charset: Charset,
 }
 
 impl StringSpec {
@@ -912,39 +1539,53 @@ fn fits(n: u64, tag: u32, bits: usize) -> bool {
     tag <= bits && n <= ((bits - tag) / 8) as u64
 }
 
+/// The first position of `term` in `b` that starts a code unit of `unit`
+/// bytes.
+fn find_unit(b: &[u8], term: &[u8], unit: usize) -> Option<usize> {
+    (0..=b.len().checked_sub(term.len())?)
+        .step_by(unit)
+        .find(|&i| &b[i..i + term.len()] == term)
+}
+
 pub fn read_string(
     r: &mut BitReader<'_>,
     spec: &StringSpec,
     field: &'static str,
 ) -> Result<String> {
+    let mut wire = Vec::new();
+    read_wire(r, spec, &mut wire, field)?;
     let mut b = Vec::new();
-    read_string_into(r, spec, &mut b, field)?;
+    decode_text(spec.charset, &wire, &mut b, field)?;
     String::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
 }
 
-/// [`read_string`] into a string of at most `N` bytes; fails with
-/// `TooLong` if it does not fit.
-pub fn read_fixed_string<const N: usize>(
+/// [`read_string`] into a string of at most `N` bytes, from at most `W`
+/// bytes on the wire; fails with `TooLong` if it does not fit.
+pub fn read_fixed_string<const N: usize, const W: usize>(
     r: &mut BitReader<'_>,
     spec: &StringSpec,
     field: &'static str,
 ) -> Result<FixedString<N>> {
+    let mut wire = FixedBytes::<W>::new();
+    read_wire(r, spec, &mut wire, field)?;
     let mut b = FixedBytes::new();
-    read_string_into(r, spec, &mut b, field)?;
+    decode_text(spec.charset, &wire, &mut b, field)?;
     FixedString::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
 }
 
-fn read_string_into<S: ByteSink>(
+/// Reads the bytes of a string's content, before its terminator.
+fn read_wire<S: ByteSink>(
     r: &mut BitReader<'_>,
     spec: &StringSpec,
     b: &mut S,
     field: &'static str,
 ) -> Result<()> {
     let start = r.position();
+    let unit = spec.charset.unit();
     match (spec.fixed_bits, spec.terminator) {
         (Some(bits), Some(term)) => {
             r.bytes_into(bits / 8, b, field)?;
-            if let Some(i) = b.bytes().iter().position(|&c| c == term) {
+            if let Some(i) = find_unit(b.bytes(), term, unit) {
                 b.truncate(i);
             }
         }
@@ -957,14 +1598,16 @@ fn read_string_into<S: ByteSink>(
             r.seek(start, bits as i64, field)?;
         }
         (None, Some(term)) => loop {
-            if (b.len() + 1) * 8 > spec.max_bits {
+            if (b.len() + unit) * 8 > spec.max_bits {
                 return Err(PacketError::TooLong { field });
             }
-            let c = r.uint(8, field)? as u8;
-            if c == term {
-                break;
+            r.bytes_into(unit, b, field)?;
+            if let Some(k) = b.len().checked_sub(term.len()) {
+                if k % unit == 0 && &b.bytes()[k..] == term {
+                    b.truncate(k);
+                    break;
+                }
             }
-            b.append(&[c], field)?;
         },
         (None, None) => {
             let n = r.uint(spec.size_tag_bits, field)?;
@@ -977,51 +1620,255 @@ fn read_string_into<S: ByteSink>(
     Ok(())
 }
 
+fn push_char<S: ByteSink>(
+    out: &mut S,
+    c: Option<char>,
+    field: &'static str,
+) -> Result<()> {
+    let c = c.ok_or(PacketError::InvalidString { field })?;
+    let mut buf = [0u8; 4];
+    out.append(c.encode_utf8(&mut buf).as_bytes(), field)
+}
+
+/// Appends to `out` the UTF-8 of the string whose bytes in `cs` are `b`;
+/// fails with `InvalidString` if they aren't valid.
+fn decode_text<S: ByteSink>(
+    cs: Charset,
+    b: &[u8],
+    out: &mut S,
+    field: &'static str,
+) -> Result<()> {
+    let bad = PacketError::InvalidString { field };
+    match cs {
+        Charset::Utf8 => {
+            std::str::from_utf8(b).map_err(|_| bad)?;
+            out.append(b, field)
+        }
+        Charset::Ascii => {
+            if !b.is_ascii() {
+                return Err(bad);
+            }
+            out.append(b, field)
+        }
+        Charset::Latin1 => {
+            for &c in b {
+                push_char(out, Some(c as char), field)?;
+            }
+            Ok(())
+        }
+        Charset::Windows1252 => {
+            for &c in b {
+                let u = match c {
+                    0x80..=0x9f => WINDOWS_1252[c as usize - 0x80] as u32,
+                    _ => c as u32,
+                };
+                push_char(
+                    out,
+                    if u == 0 && c != 0 {
+                        None
+                    } else {
+                        char::from_u32(u)
+                    },
+                    field,
+                )?;
+            }
+            Ok(())
+        }
+        Charset::Utf16 | Charset::Utf16Be | Charset::Utf16Le => {
+            let (mut b, mut le) = (b, cs == Charset::Utf16Le);
+            if cs == Charset::Utf16 && b.len() >= 2 {
+                if b[..2] == [0xfe, 0xff] {
+                    b = &b[2..];
+                } else if b[..2] == [0xff, 0xfe] {
+                    b = &b[2..];
+                    le = true;
+                }
+            }
+            if b.len() % 2 != 0 {
+                return Err(bad);
+            }
+            let units = b.chunks(2).map(|u| {
+                if le {
+                    u16::from_le_bytes([u[0], u[1]])
+                } else {
+                    u16::from_be_bytes([u[0], u[1]])
+                }
+            });
+            for c in char::decode_utf16(units) {
+                push_char(out, c.ok(), field)?;
+            }
+            Ok(())
+        }
+        _ => {
+            let (mut b, mut le) = (b, cs == Charset::Utf32Le);
+            if cs == Charset::Utf32 && b.len() >= 4 {
+                if b[..4] == [0, 0, 0xfe, 0xff] {
+                    b = &b[4..];
+                } else if b[..4] == [0xff, 0xfe, 0, 0] {
+                    b = &b[4..];
+                    le = true;
+                }
+            }
+            if b.len() % 4 != 0 {
+                return Err(bad);
+            }
+            for u in b.chunks(4) {
+                let u = [u[0], u[1], u[2], u[3]];
+                let v = if le {
+                    u32::from_le_bytes(u)
+                } else {
+                    u32::from_be_bytes(u)
+                };
+                push_char(out, char::from_u32(v), field)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+/// The byte of `c` in an 8-bit character set, if it has one.
+fn byte_of(cs: Charset, c: char) -> Option<u8> {
+    let u = c as u32;
+    match cs {
+        Charset::Ascii if u < 0x80 => Some(u as u8),
+        Charset::Latin1 if u < 0x100 => Some(u as u8),
+        Charset::Windows1252 if u < 0x80 || (0xa0..0x100).contains(&u) => {
+            Some(u as u8)
+        }
+        Charset::Windows1252 => WINDOWS_1252
+            .iter()
+            .position(|&w| w != 0 && w as u32 == u)
+            .map(|i| 0x80 + i as u8),
+        _ => None,
+    }
+}
+
+/// Calls `f` with each byte of `s` in `cs`, and returns how many there
+/// are; fails with `InvalidString` if `cs` can't hold a character of `s`.
+fn wire_bytes(
+    cs: Charset,
+    s: &str,
+    mut f: impl FnMut(u8),
+    field: &'static str,
+) -> Result<usize> {
+    let mut n = 0;
+    let mut put = |bytes: &[u8]| {
+        for &b in bytes {
+            f(b);
+        }
+        n += bytes.len();
+    };
+    match cs {
+        Charset::Utf8 => put(s.as_bytes()),
+        Charset::Ascii | Charset::Latin1 | Charset::Windows1252 => {
+            for c in s.chars() {
+                let b = byte_of(cs, c)
+                    .ok_or(PacketError::InvalidString { field })?;
+                put(&[b]);
+            }
+        }
+        Charset::Utf16 | Charset::Utf16Be | Charset::Utf16Le => {
+            let mut buf = [0u16; 2];
+            for c in s.chars() {
+                for &u in c.encode_utf16(&mut buf).iter() {
+                    put(&if cs == Charset::Utf16Le {
+                        u.to_le_bytes()
+                    } else {
+                        u.to_be_bytes()
+                    });
+                }
+            }
+        }
+        _ => {
+            for c in s.chars() {
+                let u = c as u32;
+                put(&if cs == Charset::Utf32Le {
+                    u.to_le_bytes()
+                } else {
+                    u.to_be_bytes()
+                });
+            }
+        }
+    }
+    Ok(n)
+}
+
+/// Whether `term` occurs in `s`'s bytes in `cs` where a code unit starts.
+fn contains_term(cs: Charset, s: &str, term: &[u8]) -> Result<bool> {
+    let (unit, t) = (cs.unit(), term.len());
+    let mut window = [0u8; 16];
+    let (mut i, mut found) = (0usize, false);
+    wire_bytes(
+        cs,
+        s,
+        |b| {
+            window.copy_within(1.., 0);
+            window[15] = b;
+            i += 1;
+            if i >= t && (i - t) % unit == 0 && &window[16 - t..] == term {
+                found = true;
+            }
+        },
+        "",
+    )?;
+    Ok(found)
+}
+
 pub fn write_string(
     w: &mut BitWriter<'_>,
     spec: &StringSpec,
     s: &str,
     field: &'static str,
 ) -> Result<()> {
-    let b = s.as_bytes();
+    let cs = spec.charset;
+    let len = wire_bytes(cs, s, |_| {}, field)?;
     let tag = spec.size_tag_bits as usize;
     match spec.terminator {
         Some(term) => {
-            if b.contains(&term) {
+            if contains_term(cs, s, term).unwrap_or(true) {
                 return Err(PacketError::InvalidString { field });
             }
             let room = spec.fixed_bits.unwrap_or(spec.max_bits) / 8;
-            let need = if spec.fixed_bits.is_some() {
-                b.len()
+            // A fixed-size string may fill its field; otherwise the
+            // terminator follows it.
+            let need = if spec.fixed_bits.is_some() && len == room {
+                room
             } else {
-                b.len() + 1
+                len + term.len()
             };
             if need > room {
                 return Err(PacketError::TooLong { field });
             }
-            w.bytes(b);
-            if b.len() < room {
-                w.uint(8, term as u64);
+            write_wire(w, cs, s);
+            if len < room {
+                w.bytes(term);
             }
-            if let Some(bits) = spec.fixed_bits {
-                w.zeros((bits / 8).saturating_sub(b.len() + 1) * 8);
+            if spec.fixed_bits.is_some() {
+                w.zeros((room - need) * 8);
             }
         }
         None => {
             let room = spec.fixed_bits.unwrap_or(spec.max_bits);
-            if b.len() * 8 + tag > room
-                || b.len() as u64 > mask(spec.size_tag_bits)
-            {
+            if len * 8 + tag > room || len as u64 > mask(spec.size_tag_bits) {
                 return Err(PacketError::TooLong { field });
             }
-            w.uint(spec.size_tag_bits, b.len() as u64);
-            w.bytes(b);
+            w.uint(spec.size_tag_bits, len as u64);
+            write_wire(w, cs, s);
             if let Some(bits) = spec.fixed_bits {
-                w.zeros(bits - tag - b.len() * 8);
+                w.zeros(bits - tag - len * 8);
             }
         }
     }
     Ok(())
+}
+
+/// Writes the bytes of `s` in `cs`, which can hold every character of it.
+fn write_wire(w: &mut BitWriter<'_>, cs: Charset, s: &str) {
+    if cs == Charset::Utf8 {
+        w.bytes(s.as_bytes());
+    } else {
+        let _ = wire_bytes(cs, s, |b| w.uint(8, b as u64), "");
+    }
 }
 
 /// The string a string field encoded as binary holds: all of its bytes,
@@ -1192,6 +2039,7 @@ mod tests {
             max_bits: 64,
             terminator: None,
             size_tag_bits: 32,
+            charset: Charset::Utf8,
         };
         assert_eq!(
             read_string(&mut BitReader::new(&data), &spec, "s"),
@@ -1208,6 +2056,76 @@ mod tests {
         assert_eq!(float_to_raw(3.402_823_567_797_336_6e38, 32), 0x7f80_0000);
         assert_eq!(float_to_raw(1e39, 32), 0x7f80_0000);
         assert_eq!(float_to_raw(-1e39, 32), 0xff80_0000);
+    }
+
+    #[test]
+    fn float_formats_match_their_standards() {
+        use FloatFormat::*;
+        let u = 2f64.powi(-23);
+        // MIL-STD-1750A's own examples.
+        for (x, raw) in [
+            ((1.0 - u) * 2f64.powi(127), 0x7fff_ff7f),
+            (0.625 * 16.0, 0x5000_0004),
+            (0.25, 0x4000_00ff),
+            (0.5 * 2f64.powi(-128), 0x4000_0080),
+            (-1.0, 0x8000_0000),
+            (-(0.5 + u) * 2f64.powi(-128), 0xbfff_ff80),
+            (-(0.75 + u) * 16.0, 0x9fff_ff04),
+        ] {
+            assert_eq!(float_encode(Mil1750a, 32, x, "f"), Ok(raw), "{x}");
+            assert_eq!(float_decode(Mil1750a, 32, raw, "f"), Ok(x));
+        }
+        assert_eq!(float_encode(Mil1750a, 48, -1.0, "f"), Ok(0x8000_0000_0000));
+        assert_eq!(float_encode(Ibm, 32, -118.625, "f"), Ok(0xc276_a000));
+        assert_eq!(float_encode(Dec, 32, 1.0, "f"), Ok(0x4080_0000));
+        assert_eq!(
+            float_decode(Dec, 32, 0x8000_0000, "f"),
+            Err(PacketError::InvalidValue { field: "f" })
+        );
+        assert_eq!(float_encode(Ti, 32, -1.0, "f"), Ok(0xff80_0000));
+        assert_eq!(float_encode(Ti, 32, 0.0, "f"), Ok(0x8000_0000));
+        assert_eq!(
+            float_encode(Ieee, 80, 1.0, "f"),
+            Ok(0x3fff_8000_0000_0000_0000)
+        );
+        assert_eq!(float_encode(Ieee, 16, 65520.0, "f"), Ok(0x7c00));
+        for x in [1.0 / 3.0, -2.5e-310, 1e300] {
+            for bits in [80, 128] {
+                let raw = float_encode(Ieee, bits, x, "f").unwrap();
+                assert_eq!(float_decode(Ieee, bits, raw, "f"), Ok(x));
+            }
+        }
+    }
+
+    #[test]
+    fn byte_and_bit_orders() {
+        let mut buf = Buffer::with_capacity(16);
+        let mut w = BitWriter::new(&mut buf);
+        // Least significant bit first, little endian: C bit fields.
+        w.uint_bits(3, true, ByteOrder::Little, 0b101);
+        w.uint_bits(13, true, ByteOrder::Little, 0x1abc);
+        w.uint_bits(32, false, ByteOrder::List(&[2, 3, 0, 1]), 0x0a0b_0c0d);
+        assert_eq!(buf.as_bytes(), &[0xe5, 0xd5, 0x0b, 0x0a, 0x0d, 0x0c]);
+        let mut r = BitReader::new(buf.as_bytes());
+        assert_eq!(r.uint_bits(3, true, ByteOrder::Little, "a"), Ok(0b101));
+        assert_eq!(r.uint_bits(13, true, ByteOrder::Little, "b"), Ok(0x1abc));
+        assert_eq!(
+            r.uint_bits(32, false, ByteOrder::List(&[2, 3, 0, 1]), "c"),
+            Ok(0x0a0b_0c0d)
+        );
+    }
+
+    #[test]
+    fn bcd() {
+        assert_eq!(bcd_decode(0x1234, 16, true, "x"), Ok(1234));
+        assert_eq!(bcd_decode(0x0102, 16, false, "x"), Ok(12));
+        assert_eq!(
+            bcd_decode(0x1a, 8, true, "x"),
+            Err(PacketError::InvalidValue { field: "x" })
+        );
+        assert_eq!(bcd_encode(1234, 16, true, "x"), Ok(0x1234));
+        assert_eq!(bcd_encode(99, 16, false, "x"), Ok(0x0909));
+        assert!(bcd_encode(100, 16, false, "x").is_err());
     }
 
     #[test]

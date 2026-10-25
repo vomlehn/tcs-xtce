@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from .common import (field_range, flt, header_lines, int_enc, invertible, le,
-                     size_args, str_cap, string_spec)
+from .common import (fast_order, field_range, flt, header_lines, int_enc,
+                     invertible, size_args, str_cap, string_spec, wire_region)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, Criterion, DynSize, Fixed,
                     FloatEnc, IntEnc, Kind, Local, Mark, Mission, Node, Pad,
@@ -92,9 +92,11 @@ def spec(vt: VType, ref, f: str) -> str:
     expression for the value that gives a dynamic size."""
     fixed, mx, term, tag = string_spec(vt)
     fixed = f"Some({fixed})" if fixed is not None else "None"
-    term = f"Some({term})" if term is not None else "None"
+    term = (f"Some(&[{', '.join(f'0x{b:02x}' for b in term)}])"
+            if term is not None else "None")
+    cs = CHARSETS[vt.enc.charset]
     s = (f"StringSpec {{ fixed_bits: {fixed}, max_bits: {mx}, terminator: "
-         f"{term}, size_tag_bits: {tag} }}")
+         f"{term}, size_tag_bits: {tag}, charset: pk::Charset::{cs} }}")
     d = vt.enc.dyn
     return f"&({s}).sized({size(d, ref(d), f)})" if d is not None else "&" + s
 
@@ -137,6 +139,41 @@ def member_sizes(e: AggregateEnc) -> set:
     return {m.vtype.dyn.member for m in e.members if m.vtype.dyn is not None}
 
 
+CHARSETS = {"UTF-8": "Utf8", "US-ASCII": "Ascii", "ISO-8859-1": "Latin1",
+            "Windows-1252": "Windows1252", "UTF-16": "Utf16",
+            "UTF-16BE": "Utf16Be", "UTF-16LE": "Utf16Le", "UTF-32": "Utf32",
+            "UTF-32BE": "Utf32Be", "UTF-32LE": "Utf32Le"}
+FLOATS = {"IEEE754": "Ieee", "MILSTD_1750A": "Mil1750a", "DEC": "Dec",
+          "IBM": "Ibm", "TI": "Ti"}
+
+
+def byte_order(e) -> str:
+    if e.order == "be":
+        return "pk::ByteOrder::Big"
+    if e.order == "le":
+        return "pk::ByteOrder::Little"
+    return f"pk::ByteOrder::List(&[{', '.join(map(str, e.order))}])"
+
+
+def raw_read(e, f: str) -> str:
+    """Expression reading the raw value of an integer or float encoding: a
+    u64, or a u128 for more than 64 bits."""
+    if fast_order(e):
+        return f"r.uint_order({e.bits}, {str(e.little_endian).lower()}, {f})?"
+    x = (f"r.uint_bits({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, {f})?")
+    return x if e.bits > 64 else f"({x} as u64)"
+
+
+def raw_write(e, raw: str) -> str:
+    """Statement writing the raw value ``raw`` (u64, or u128 for more than
+    64 bits) of an integer or float encoding."""
+    if fast_order(e):
+        return f"w.uint_order({e.bits}, {str(e.little_endian).lower()}, {raw});"
+    wide = raw if e.bits > 64 else f"{raw} as u128"
+    return (f"w.uint_bits({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, "
+            f"{wide});")
+
+
 def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
     """Expression reading one value with BitReader ``r``; ``ref`` gives the
     expression for the value that gives a size or count (a DynSize).
@@ -172,7 +209,10 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
                 f"in 0..n {{ {gap} if a.push({elem}).is_err() {{ {full} }} }} "
                 "a }")
     if isinstance(e, IntEnc):
-        raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
+        raw = raw_read(e, f)
+        if e.bcd:
+            raw = (f"pk::bcd_decode({raw}, {e.bits}, "
+                   f"{str(e.encoding == 'packedBCD').lower()}, {f})?")
         enc = f"IntEncoding::{int_enc(vt)}"
         if vt.kind == "int" and vt.calibrator is not None:
             y = calibrate(vt, f"pk::int_to_f64({raw}, {e.bits}, {enc})", f)
@@ -191,8 +231,13 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
             return f"{raw} != 0"
         return calibrate(vt, f"pk::int_to_f64({raw}, {e.bits}, {enc})", f)
     if isinstance(e, FloatEnc):
-        raw = f"r.uint_order({e.bits}, {str(le(vt)).lower()}, {f})?"
-        return calibrate(vt, f"pk::float_from_raw({raw}, {e.bits})", f)
+        raw = raw_read(e, f)
+        if e.fmt == "IEEE754" and e.bits in (32, 64):
+            return calibrate(vt, f"pk::float_from_raw({raw}, {e.bits})", f)
+        wide = raw if e.bits > 64 else f"{raw} as u128"
+        return calibrate(vt,
+                         f"pk::float_decode(pk::FloatFormat::{FLOATS[e.fmt]}, "
+                         f"{e.bits}, {wide}, {f})?", f)
     if isinstance(e, BinaryEnc):
         read = "bytes" if alloc else f"fixed_bytes::<{e.bits // 8}>"
         if e.rest:
@@ -203,7 +248,8 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
         if vt.kind != "string":
             return b
         return f"pk::{'' if alloc else 'fixed_'}string_from_bytes({b}, {f})?"
-    read = "read_string" if alloc else f"read_fixed_string::<{str_cap(vt)}>"
+    read = ("read_string" if alloc
+            else f"read_fixed_string::<{str_cap(vt)}, {wire_region(vt)}>")
     s = f"pk::{read}(&mut r, {spec(vt, ref, f)}, {f})?"
     if vt.kind == "bool":
         bad = f"return Err(PacketError::OutOfRange {{ field: {f} }})"
@@ -239,7 +285,7 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         return (f"{{ let n = {n}; if {x}.len() != n {{ {bad} }} "
                 f"w.bytes({data}); }}")
     if isinstance(e, IntEnc):
-        bits, order = e.bits, str(le(vt)).lower()
+        bits = e.bits
         enc = f"IntEncoding::{int_enc(vt)}"
         if vt.kind == "int" and vt.calibrator is not None:
             if not invertible(vt):
@@ -261,12 +307,19 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
                         "});")
             raw = (f"pk::f64_to_int({uncalibrate(vt, x, f)}, {bits}, {enc}, "
                    f"{f})?")
-        return f"w.uint_order({bits}, {order}, {raw});"
+        if e.bcd:
+            raw = (f"pk::bcd_encode({raw}, {bits}, "
+                   f"{str(e.encoding == 'packedBCD').lower()}, {f})?")
+        return raw_write(e, raw)
     if isinstance(e, FloatEnc):
         if not invertible(vt):
             return f"return Err(PacketError::NotInvertible {{ field: {f} }});"
-        return (f"w.uint_order({e.bits}, {str(le(vt)).lower()}, "
-                f"pk::float_to_raw({uncalibrate(vt, x, f)}, {e.bits}));")
+        y = uncalibrate(vt, x, f)
+        if e.fmt == "IEEE754" and e.bits in (32, 64):
+            return raw_write(e, f"pk::float_to_raw({y}, {e.bits})")
+        raw = (f"pk::float_encode(pk::FloatFormat::{FLOATS[e.fmt]}, {e.bits}, "
+               f"{y}, {f})?")
+        return raw_write(e, raw if e.bits > 64 else f"({raw} as u64)")
     if isinstance(e, BinaryEnc) and e.rest:
         return f"pk::write_rest(w, &{x}, {e.bits // 8}, {f})?;"
     if isinstance(e, BinaryEnc):
@@ -385,7 +438,7 @@ class RustEmitter:
                       "encoding and describing a")
             self.line("//! packet never allocate.")
         self.line("#![allow(dead_code, unused_imports, unused_variables, "
-                  "unreachable_code, clippy::all)]")
+                  "unreachable_code, unused_parens, clippy::all)]")
         self.line()
         self.line("use std::fmt::{self, Write as _};")
         self.line("use tcs_xtce::packet::{self as pk, BitReader, BitWriter, "

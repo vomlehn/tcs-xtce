@@ -150,12 +150,11 @@ class ErrorTests(unittest.TestCase):
                 </SequenceContainer>''' for i in range(3))
         text = mission(tm=f"""
             <ParameterTypeSet>
-              <IntegerParameterType name="U3LE" signed="false">
-                <IntegerDataEncoding sizeInBits="3"
-                  byteOrder="leastSignificantByteFirst"/>
+              <IntegerParameterType name="U65" signed="false">
+                <IntegerDataEncoding sizeInBits="65"/>
               </IntegerParameterType>
             </ParameterTypeSet>
-            <ParameterSet><Parameter name="X" parameterTypeRef="U3LE"/>
+            <ParameterSet><Parameter name="X" parameterTypeRef="U65"/>
             </ParameterSet>
             <ContainerSet>
               <SequenceContainer name="Base" abstract="true">
@@ -164,13 +163,13 @@ class ErrorTests(unittest.TestCase):
               {derived}
             </ContainerSet>""")
         msg = self.unsupported(text)
-        self.assertEqual(msg.count("not whole bytes"), 1, msg)
+        self.assertEqual(msg.count("65-bit integers"), 1, msg)
         self.assertNotIn("/Sat/D0", msg)
         self.assertIn("3 containers or meta-commands derived from them", msg)
         # Skipping still names every node left out.
         skipped = compile_xml(text, skip_unsupported=True).skipped
         self.assertEqual(len(skipped), 4, skipped)
-        self.assertIn("not whole bytes", skipped[0])
+        self.assertIn("65-bit integers", skipped[0])
 
 
     def test_negative_sizes(self):
@@ -1229,6 +1228,100 @@ class CommandContainerTests(unittest.TestCase):
         self.assertEqual(ping.max_bytes, 2)
 
 
+class EncodingRuleTests(unittest.TestCase):
+    """Bit and byte orders, BCD, float formats and character sets."""
+
+    def vtype(self, ptype: str):
+        return compile_xml(typed(ptype)).nodes[0].fields[0][1].vtype
+
+    def rejected(self, ptype: str) -> str:
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(typed(ptype))
+        return str(cm.exception)
+
+    def test_orders(self):
+        def enc(attrs: str):
+            return self.vtype('<IntegerParameterType name="T" signed="false">'
+                              f'<IntegerDataEncoding {attrs}/>'
+                              '</IntegerParameterType>').enc
+
+        e = enc('sizeInBits="32" byteOrder="2,3,0,1"')
+        self.assertEqual((e.order, e.lsb), ((2, 3, 0, 1), False))
+        # Lists that amount to big or little endian are those.
+        self.assertEqual(enc('sizeInBits="16" byteOrder="1,0"').order, "be")
+        self.assertEqual(enc('sizeInBits="16" byteOrder="0,1"').order, "le")
+        e = enc('sizeInBits="12" bitOrder="leastSignificantBitFirst" '
+                'byteOrder="leastSignificantByteFirst"')
+        self.assertEqual((e.order, e.lsb, e.bits), ("le", True, 12))
+        for attrs in ('sizeInBits="32" byteOrder="0,1,2"',
+                      'sizeInBits="16" byteOrder="0,0"',
+                      'sizeInBits="12" byteOrder="0,1"'):
+            with self.subTest(attrs=attrs):
+                self.assertIn("does not give each of the",
+                              self.rejected('<IntegerParameterType name="T">'
+                                            f'<IntegerDataEncoding {attrs}/>'
+                                            '</IntegerParameterType>'))
+
+    def test_bcd(self):
+        vt = self.vtype('<IntegerParameterType name="T" signed="false">'
+                        '<IntegerDataEncoding sizeInBits="12" '
+                        'encoding="packedBCD"/></IntegerParameterType>')
+        self.assertTrue(vt.enc.bcd)
+        self.assertFalse(vt.signed)
+        for size, kind, why in (("12", "BCD", "not whole bytes"),
+                                ("10", "packedBCD", "not whole digits")):
+            with self.subTest(kind=kind):
+                self.assertIn(why,
+                              self.rejected('<IntegerParameterType name="T">'
+                                            '<IntegerDataEncoding '
+                                            f'sizeInBits="{size}" '
+                                            f'encoding="{kind}"/>'
+                                            '</IntegerParameterType>'))
+
+    def test_float_formats(self):
+        for kind, size in (("IEEE754_1985", 16), ("IEEE754", 128),
+                           ("MILSTD_1750A", 48), ("DEC", 64), ("IBM", 128),
+                           ("TI", 40)):
+            with self.subTest(kind=kind):
+                vt = self.vtype('<FloatParameterType name="T">'
+                                f'<FloatDataEncoding encoding="{kind}" '
+                                f'sizeInBits="{size}"/></FloatParameterType>')
+                self.assertEqual(vt.enc.bits, size)
+        self.assertIn("TI has no 64-bit format",
+                      self.rejected('<FloatParameterType name="T">'
+                                    '<FloatDataEncoding encoding="TI" '
+                                    'sizeInBits="64"/></FloatParameterType>'))
+
+    def test_charsets(self):
+        def string(cs: str, size: str = "64", term: str = "") -> str:
+            term = f"<TerminationChar>{term}</TerminationChar>" if term else ""
+            return ('<StringParameterType name="T"><StringDataEncoding '
+                    f'encoding="{cs}"><SizeInBits><Fixed><FixedValue>{size}'
+                    f'</FixedValue></Fixed>{term}</SizeInBits>'
+                    '</StringDataEncoding></StringParameterType>')
+
+        # A zero terminator is a zero code unit.
+        self.assertEqual(self.vtype(string("UTF-16")).enc.terminator, bytes(2))
+        self.assertEqual(
+            self.vtype(string("UTF-8", term="0D0A")).enc.terminator, b"\r\n")
+        vt = self.vtype(
+            string("UTF-16", term="0000").replace(
+                'encoding="UTF-16"',
+                'encoding="UTF-16" byteOrder="leastSignificantByteFirst"'))
+        self.assertEqual(vt.enc.charset, "UTF-16LE")
+        self.assertIn("not whole UTF-32 code units",
+                      self.rejected(string("UTF-32", size="48")))
+        self.assertIn("is not 1 to 8 UTF-16 code units",
+                      self.rejected(string("UTF-16", term="0A")))
+
+    def test_boolean_strings_must_fit_the_charset(self):
+        text = ('<BooleanParameterType name="T" oneStringValue="€" '
+                'zeroStringValue="no"><StringDataEncoding encoding="US-ASCII">'
+                '<SizeInBits><Fixed><FixedValue>32</FixedValue></Fixed>'
+                '</SizeInBits></StringDataEncoding></BooleanParameterType>')
+        self.assertIn("'€' is not US-ASCII", self.rejected(text))
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -1313,7 +1406,7 @@ class LengthTests(unittest.TestCase):
                     + "</EntryList></SequenceContainer>")
         for kw, why in (
                 (dict(entries=LEN, len_type="S16"),
-                 "must be an uncalibrated unsigned integer"),
+                 "must be an uncalibrated unsigned binary integer"),
                 (dict(entries=LEN, tag=length_tag("one")),
                  "tcs-xtce.length 'one' is not an integer"),
                 (dict(entries=LEN,

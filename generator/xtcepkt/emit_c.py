@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .common import (field_range, flt, header_lines, int_enc, invertible, le,
-                     size_args, str_cap, string_spec)
+from .common import (fast_order, field_range, flt, header_lines, int_enc,
+                     invertible, size_args, str_cap, string_spec)
 from .compile import snake
 from .model import (term_indexes, term_locals, term_paths, walk, Index,
                     AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
@@ -27,6 +27,15 @@ ENC = {"Unsigned": "XTCE_PK_UNSIGNED",
        "TwosComplement": "XTCE_PK_TWOS_COMPLEMENT",
        "SignMagnitude": "XTCE_PK_SIGN_MAGNITUDE",
        "OnesComplement": "XTCE_PK_ONES_COMPLEMENT"}
+
+CHARSETS = {"UTF-8": "XTCE_PK_UTF8", "US-ASCII": "XTCE_PK_ASCII",
+            "ISO-8859-1": "XTCE_PK_LATIN1",
+            "Windows-1252": "XTCE_PK_WINDOWS1252", "UTF-16": "XTCE_PK_UTF16",
+            "UTF-16BE": "XTCE_PK_UTF16BE", "UTF-16LE": "XTCE_PK_UTF16LE",
+            "UTF-32": "XTCE_PK_UTF32", "UTF-32BE": "XTCE_PK_UTF32BE",
+            "UTF-32LE": "XTCE_PK_UTF32LE"}
+FLOATS = {"IEEE754": "XTCE_PK_IEEE", "MILSTD_1750A": "XTCE_PK_MIL1750A",
+          "DEC": "XTCE_PK_DEC", "IBM": "XTCE_PK_IBM", "TI": "XTCE_PK_TI"}
 
 I64_MIN, I64_MAX, U64_MAX = -(2**63), 2**63 - 1, 2**64 - 1
 
@@ -248,9 +257,12 @@ class CEmitter:
                           "*/")
             else:
                 fixed, mx, term, tag = string_spec(vt)
+                lit = (f"(const uint8_t*){cstr(term)}" if term is not None
+                       else "NULL")
                 spec = ", ".join([bool_lit(fixed is not None), str(fixed or 0),
-                                  str(mx), bool_lit(term is not None),
-                                  str(term or 0), str(tag)])
+                                  str(mx), bool_lit(term is not None), lit,
+                                  str(len(term or b"")), str(tag),
+                                  CHARSETS[vt.enc.charset]])
                 self.line(f"static const xtce_pk_string_spec {name} = "
                           f"{{{spec}}}; /* {vt.key} */")
 
@@ -381,13 +393,21 @@ class CEmitter:
         elif isinstance(e, (IntEnc, FloatEnc)):
             self.line("{", depth)
             d = depth + 1
-            self.line("uint64_t raw;", d)
-            self.line(f"XTCE_PK_TRY(xtce_pk_read_uint(r, {e.bits}, "
-                      f"{bool_lit(le(vt))}, {f}, &raw));", d)
-            if isinstance(e, FloatEnc):
+            self.read_raw(e, f, d)
+            if (isinstance(e, FloatEnc) and e.fmt == "IEEE754"
+                    and e.bits in (32, 64)):
                 self.calibrate(vt, f"xtce_pk_float_from_raw(raw, {e.bits})",
                                dst, f, d)
+            elif isinstance(e, FloatEnc):
+                self.line("double x;", d)
+                self.line(f"XTCE_PK_TRY(xtce_pk_float_decode({FLOATS[e.fmt]}, "
+                          f"{e.bits}, hi, raw, {f}, r->err, &x));", d)
+                self.calibrate(vt, "x", dst, f, d)
             else:
+                if e.bcd:
+                    self.line(f"XTCE_PK_TRY(xtce_pk_bcd_decode(raw, {e.bits}, "
+                              f"{bool_lit(e.encoding == 'packedBCD')}, {f}, "
+                              "r->err, &raw));", d)
                 enc = ENC[int_enc(vt)]
                 signed = f"xtce_pk_to_signed(raw, {e.bits}, {enc})"
                 if vt.kind == "int" and vt.calibrator is not None:
@@ -442,6 +462,48 @@ class CEmitter:
             args = f"r, {spec}, {f}, {dst}.data, {str_cap(vt)}, &{dst}.len"
             self.line(f"XTCE_PK_TRY(xtce_pk_read_string({args}));", depth + 1)
             self.line("}", depth)
+
+    def order_args(self, e, depth: int) -> str:
+        """The bit order, byte order and order list arguments of the
+        general reader and writer, declaring the list when there is one."""
+        if isinstance(e.order, tuple):
+            self.line("static const uint8_t order[] = "
+                      f"{{{', '.join(map(str, e.order))}}};", depth)
+            order, lst = "XTCE_PK_LIST", "order"
+        else:
+            order = "XTCE_PK_BIG" if e.order == "be" else "XTCE_PK_LITTLE"
+            lst = "NULL"
+        return f"{bool_lit(e.lsb)}, {order}, {lst}"
+
+    def read_raw(self, e, f: str, depth: int) -> None:
+        """Declares ``raw`` (and ``hi``, for floats) and reads the raw value
+        of an integer or float encoding into them."""
+        wide = isinstance(e, FloatEnc)
+        self.line("uint64_t raw, hi = 0;" if wide else "uint64_t raw;", depth)
+        if wide:
+            self.line("(void)hi;", depth)
+        if fast_order(e):
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_uint(r, {e.bits}, "
+                      f"{bool_lit(e.little_endian)}, {f}, &raw));", depth)
+            return
+        args = self.order_args(e, depth)
+        if wide:
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_ordered(r, {e.bits}, {args}, "
+                      f"{f}, &hi, &raw));", depth)
+        else:
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_ordered64(r, {e.bits}, "
+                      f"{args}, {f}, &raw));", depth)
+
+    def write_raw(self, e, depth: int, hi: str = "0") -> None:
+        """Writes ``raw`` (with ``hi``) as the raw value of an integer or
+        float encoding."""
+        if fast_order(e):
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_uint(w, {e.bits}, "
+                      f"{bool_lit(e.little_endian)}, raw));", depth)
+            return
+        args = self.order_args(e, depth)
+        self.line(f"XTCE_PK_TRY(xtce_pk_write_ordered(w, {e.bits}, {args}, "
+                  f"{hi}, raw));", depth)
 
     def write_value(self, vt: VType, x: str, f: str, depth: int, ref,
                     fixed=None) -> None:
@@ -506,10 +568,17 @@ class CEmitter:
             return
         if isinstance(e, FloatEnc):
             self.line("{", depth)
-            self.uncalibrate(vt, x, f, depth + 1)
-            raw = f"xtce_pk_float_to_raw(y, {e.bits})"
-            self.line(f"XTCE_PK_TRY(xtce_pk_write_uint(w, {e.bits}, "
-                      f"{bool_lit(le(vt))}, {raw}));", depth + 1)
+            d = depth + 1
+            self.uncalibrate(vt, x, f, d)
+            if e.fmt == "IEEE754" and e.bits in (32, 64):
+                self.line(f"uint64_t raw = xtce_pk_float_to_raw(y, {e.bits});",
+                          d)
+                self.write_raw(e, d)
+            else:
+                self.line("uint64_t raw, hi;", d)
+                self.line(f"XTCE_PK_TRY(xtce_pk_float_encode({FLOATS[e.fmt]}, "
+                          f"{e.bits}, y, {f}, w->err, &hi, &raw));", d)
+                self.write_raw(e, d, "hi")
             self.line("}", depth)
         elif isinstance(e, IntEnc):
             bits, enc = e.bits, ENC[int_enc(vt)]
@@ -535,8 +604,11 @@ class CEmitter:
                 self.uncalibrate(vt, x, f, d)
                 self.line(f"XTCE_PK_TRY(xtce_pk_double_to_int(y, {bits}, "
                           f"{enc}, {f}, w->err, &raw));", d)
-            self.line(f"XTCE_PK_TRY(xtce_pk_write_uint(w, {bits}, "
-                      f"{bool_lit(le(vt))}, raw));", d)
+            if e.bcd:
+                self.line(f"XTCE_PK_TRY(xtce_pk_bcd_encode(raw, {bits}, "
+                          f"{bool_lit(e.encoding == 'packedBCD')}, {f}, "
+                          "w->err, &raw));", d)
+            self.write_raw(e, d)
             self.line("}", depth)
         elif isinstance(e, BinaryEnc) and vt.kind == "string":
             # Exactly the field's bytes, like binary values.

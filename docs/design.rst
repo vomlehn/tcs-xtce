@@ -334,8 +334,8 @@ into the model in ``model.py``:
    of the packet gives its size.
 
    Schema defaults are filled in here: 8-bit unsigned integers, 32-bit
-   IEEE floats, ``previousEntry`` locations, a ``00`` terminator and
-   16-bit size tags. Time types become ``float`` seconds, with
+   IEEE floats, ``previousEntry`` locations, a ``00`` terminator (a zero
+   code unit in UTF-16 and UTF-32) and 16-bit size tags. Time types become ``float`` seconds, with
    ``scale``/``offset`` as a linear calibrator.
 
 **Items.**
@@ -410,6 +410,33 @@ Comparisons on raw values are accepted only where raw and engineering
 values are numerically equal (uncalibrated integers, enumerations and
 booleans).
 
+Bit and byte order
+------------------
+
+XTCE says only that ``bitOrder`` describes "the bit ordering of the
+encoded value" and that a byte order list views the value's bytes as
+memory, first byte at address 0. Neither defines a field that isn't
+whole bytes, or how the two combine. tcs-xtce uses one rule for every
+integer and float encoding: take the field's bits in groups of 8 from its
+start, read each group in the bit order (the first bit most significant
+for ``mostSignificantBitFirst``, least significant otherwise, with the
+bits of each byte numbered the same way), and combine the groups in the
+byte order. The rule has three properties that make it the right one to
+pick:
+
+* the defaults (most significant bit and byte first) give the plain
+  big-endian bit string, so nothing that worked before changes;
+* whole little-endian bytes are ordinary little-endian values, however
+  the field is aligned;
+* least significant bit and byte first together give exactly the layout
+  of C bit fields on little-endian machines, which is what documents
+  describing such structures (like the cFS headers in
+  ``tests/external``) mean.
+
+The runtimes keep the existing ``uint_order`` for the common cases and
+call the general ``uint_bits`` only for the others, so ordinary packets
+pay nothing for it.
+
 Determinism across languages
 ----------------------------
 
@@ -427,6 +454,21 @@ to give bit-identical results:
   evaluation order.
 * **binary32** conversion rounds to nearest. Overflow gives infinity in
   all three languages; Python's ``struct`` would raise, so it is caught.
+* **Other float formats** are converted with integer arithmetic only:
+  a double is split into a 53-bit significand and an exponent, rounded to
+  the target format's precision half to even, and put together again;
+  decoding rounds the format's significand (up to 113 bits) to a double
+  the same way. Python's reference uses ``fractions.Fraction``, whose
+  conversion to ``float`` is correctly rounded; Rust uses ``u128``; C,
+  which has no 128-bit integer in C11, keeps the top 64 bits and a sticky
+  bit, which rounds identically. ``tests/float_check.sh`` holds all four
+  builds to the standards' examples and to each other on 60,000 random
+  conversions. No library float conversion is used for these formats, so
+  nothing depends on the platform's ``long double``.
+* **Character sets** are converted by each runtime's own code (Python's
+  codecs, Rust's ``char`` conversions and C's tables), with the same
+  rules for invalid bytes. Windows-1252's five undefined bytes are
+  errors, as in Python's ``cp1252``.
 * **UTF-8** is strictly validated in all three: C has its own
   validator that matches Rust and Python, rejecting overlong forms,
   surrogates and values beyond U+10FFFF.
@@ -702,6 +744,12 @@ Testing strategy
    independent bit-string packer rather than by the generated code.
    ``vectors.expected`` holds their decoded text and re-encodings. Every
    language must reproduce ``vectors.expected`` exactly.
+
+**Float formats**
+   ``tests/float_check.sh`` decodes and encodes every float format and
+   size in all four builds: the conversions in ``tests/float/known.txt``
+   must give the results the formats' standards give, and random values
+   must give the same results in every build.
 
 **Random packets**
    ``random_vectors.py`` produces packets with valid headers and random
