@@ -570,7 +570,7 @@ fn swap_bytes(v: u64, bits: u32) -> u64 {
     v.swap_bytes() >> (64 - bits)
 }
 
-// --- integers -----------------------------------------------------------------
+// --- integers ----------------------------------------------------------------
 
 /// How a signed integer is laid out on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -709,7 +709,7 @@ pub fn round_to_int(
     }
 }
 
-// --- floats -------------------------------------------------------------------
+// --- floats ------------------------------------------------------------------
 
 pub fn float_from_raw(raw: u64, bits: u32) -> f64 {
     if bits == 32 {
@@ -727,7 +727,7 @@ pub fn float_to_raw(v: f64, bits: u32) -> u64 {
     }
 }
 
-// --- calibrators ----------------------------------------------------------------
+// --- calibrators -------------------------------------------------------------
 
 /// Evaluates a polynomial calibrator given as (coefficient, exponent) terms.
 pub fn polynomial(x: f64, terms: &[(f64, i32)]) -> f64 {
@@ -813,7 +813,7 @@ pub fn spline_inverse(
     })
 }
 
-// --- sizes from other fields -------------------------------------------------------
+// --- sizes from other fields -------------------------------------------------
 
 /// A size or count that another field gives (an XTCE `DynamicValue`):
 /// `(slope * x + intercept) / unit`, where `x` is that field's value and
@@ -869,7 +869,7 @@ pub fn size_source(
     Ok(x as i64)
 }
 
-// --- strings ----------------------------------------------------------------------
+// --- strings -----------------------------------------------------------------
 
 /// Layout of a string field.  Exactly one of `terminator` and `size_tag_bits`
 /// is set.
@@ -1061,7 +1061,7 @@ pub fn write_rest(
     Ok(())
 }
 
-// --- canonical text ---------------------------------------------------------------
+// --- canonical text ----------------------------------------------------------
 //
 // `describe` output is identical in every language so that the runtimes can be
 // compared byte for byte.

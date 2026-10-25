@@ -45,7 +45,9 @@ macro_rules! integer_value {
                 let t = s.trim();
                 let t = t.strip_prefix('+').unwrap_or(t);
                 t.parse::<$t>()
-                    .map_err(|e| format!("invalid {} {s:?}: {e}", stringify!($t)))
+                    .map_err(|e| {
+                        format!("invalid {} {s:?}: {e}", stringify!($t))
+                    })
             }
 
             fn fmt_xml(&self, out: &mut String) {

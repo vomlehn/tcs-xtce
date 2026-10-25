@@ -56,9 +56,11 @@ fn dispatches_to_derived_containers() {
     };
     let bytes = science.to_bytes().unwrap();
     let kind = CCSDSPacketKind::decode(&bytes).unwrap();
-    assert!(
-        matches!(kind, CCSDSPacketKind::ScienceHousekeeping(ref s) if s.science_count == u64::MAX)
-    );
+    assert!(matches!(
+        kind,
+        CCSDSPacketKind::ScienceHousekeeping(ref s)
+            if s.science_count == u64::MAX
+    ));
     // Its base container's entries end before the packet length does.
     assert_eq!(
         Housekeeping::decode(&bytes),

@@ -7,10 +7,10 @@
 //! array of lines, each an array of words. Before each packet the sender
 //! writes a `Length` packet, also described by `variable_array.xml`, giving
 //! its size in bytes, so the receiver knows how many bytes to read; it then
-//! writes the whole `Paragraph` in a single write. The receiver checks that every
-//! line and word arrived intact and in order, then prints each line with its
-//! words separated by spaces. The C/C++ and Python versions of this program
-//! print identical output.
+//! writes the whole `Paragraph` in a single write. The receiver checks that
+//! every line and word arrived intact and in order, then prints each line
+//! with its words separated by spaces. The C/C++ and Python versions of this
+//! program print identical output.
 
 mod variable_array;
 
@@ -26,13 +26,18 @@ use variable_array::{Length, Line, Paragraph};
 /// two.
 const PARAGRAPHS: [&[&str]; 2] = [
     &[
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut",
-        "labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco",
-        "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in",
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do \
+            eiusmod tempor incididunt ut",
+        "labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud \
+            exercitation ullamco",
+        "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure \
+            dolor in reprehenderit in",
     ],
     &[
-        "voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat",
-        "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+        "voluptate velit esse cillum dolore eu fugiat nulla pariatur. \
+            Excepteur sint occaecat",
+        "cupidatat non proident, sunt in culpa qui officia deserunt mollit \
+            anim id est laborum.",
     ],
 ];
 
