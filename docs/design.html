@@ -1018,6 +1018,12 @@ allocating. Either way the value is encoded at a byte boundary, as
 decoding reads it. Segments the entry list doesn't complete, and
 container and stream segments, are replaced by <tt class="docutils literal">Value</tt>s of raw
 fields, since the rest is in other packets.</p>
+<p><tt class="docutils literal">check_aligned</tt> walks a packet's items tracking the position modulo 8
+(unknown after a size or location that another value gives, or after a
+conditional block whose size isn't a whole number of bytes). A string or
+binary value with <tt class="docutils literal"><span class="pre">bitOrder=&quot;leastSignificantBitFirst&quot;</span></tt> must start at
+0: its bytes then read as they do in the usual order, so the emitters and
+runtimes ignore its bit order.</p>
 <p>An <tt class="docutils literal">IndirectParameterRefEntry</tt> needs no item of its own: each
 parameter its selector can name (by an enumeration label, or by an alias
 in its <tt class="docutils literal">aliasNameSpace</tt>) becomes a <tt class="docutils literal">Cond</tt> on <tt class="docutils literal">selector == name</tt>

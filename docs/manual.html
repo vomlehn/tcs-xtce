@@ -1895,8 +1895,12 @@ fields out as C bit fields do on a little-endian machine: the demo's
 word. Fields that share a byte should use the same bit order, as the
 two orders number its bits differently. String and binary encodings are
 bytes, which have no byte order: <tt class="docutils literal">leastSignificantByteFirst</tt> on a
-<tt class="docutils literal"><span class="pre">UTF-16</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32</span></tt> string makes it <tt class="docutils literal"><span class="pre">UTF-16LE</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32LE</span></tt>,
-and <tt class="docutils literal">leastSignificantBitFirst</tt> on them is not supported.</dd>
+<tt class="docutils literal"><span class="pre">UTF-16</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32</span></tt> string makes it <tt class="docutils literal"><span class="pre">UTF-16LE</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32LE</span></tt>.
+A byte that starts on a byte boundary reads the same in either bit
+order, so <tt class="docutils literal">leastSignificantBitFirst</tt> strings and binary data must
+start on one (and a string's size tag must be whole bytes). The
+generator works out where each value starts, modulo 8, and reports
+one it can't show to be aligned as not supported.</dd>
 <dt>Calibrators</dt>
 <dd><p class="first"><tt class="docutils literal">PolynomialCalibrator</tt>, <tt class="docutils literal">SplineCalibrator</tt> and
 <tt class="docutils literal">MathOperationCalibrator</tt>, as the <tt class="docutils literal">DefaultCalibrator</tt> of an integer
@@ -2239,7 +2243,8 @@ commands that include another meta-command's container,
 checksum algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which
 XTCE deprecates) and in included containers with an
 <tt class="docutils literal">IncludeCondition</tt>, calibrators inside aggregate types that use other
-values, least-significant-bit-first strings and binary data, integers
+values, least-significant-bit-first strings and binary data that may
+not start on a byte boundary, integers
 of more than 64 bits, <tt class="docutils literal">nextEntry</tt> locations, and a <tt class="docutils literal">containerEnd</tt>
 location in a container without a fixed size.</dd>
 </dl>

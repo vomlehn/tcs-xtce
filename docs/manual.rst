@@ -1450,8 +1450,12 @@ Bit and byte order
    word. Fields that share a byte should use the same bit order, as the
    two orders number its bits differently. String and binary encodings are
    bytes, which have no byte order: ``leastSignificantByteFirst`` on a
-   ``UTF-16`` or ``UTF-32`` string makes it ``UTF-16LE`` or ``UTF-32LE``,
-   and ``leastSignificantBitFirst`` on them is not supported.
+   ``UTF-16`` or ``UTF-32`` string makes it ``UTF-16LE`` or ``UTF-32LE``.
+   A byte that starts on a byte boundary reads the same in either bit
+   order, so ``leastSignificantBitFirst`` strings and binary data must
+   start on one (and a string's size tag must be whole bytes). The
+   generator works out where each value starts, modulo 8, and reports
+   one it can't show to be aligned as not supported.
 
 Calibrators
    ``PolynomialCalibrator``, ``SplineCalibrator`` and
@@ -1814,7 +1818,8 @@ Not supported
    checksum algorithms, ``ErrorDetectCorrect`` in a data encoding (which
    XTCE deprecates) and in included containers with an
    ``IncludeCondition``, calibrators inside aggregate types that use other
-   values, least-significant-bit-first strings and binary data, integers
+   values, least-significant-bit-first strings and binary data that may
+   not start on a byte boundary, integers
    of more than 64 bits, ``nextEntry`` locations, and a ``containerEnd``
    location in a container without a fixed size.
 

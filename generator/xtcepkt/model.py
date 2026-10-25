@@ -139,6 +139,7 @@ class StringEnc:
     size_tag_bits: Optional[int] = None
     dyn: Optional[DynSize] = None
     charset: str = "UTF-8"
+    lsb: bool = False  # bitOrder leastSignificantBitFirst
 
 
 @dataclass
@@ -151,6 +152,7 @@ class BinaryEnc:
     bits: int
     dyn: Optional[DynSize] = None
     rest: bool = False
+    lsb: bool = False  # bitOrder leastSignificantBitFirst
 
     @property
     def variable(self) -> bool:

@@ -871,6 +871,16 @@ class Compiler:
         return lsb, sig
 
     def encoding(self, name: str, e, path: Key, where: str):
+        enc, cal = self._encoding(name, e, path, where)
+        if (isinstance(enc, (StringEnc, BinaryEnc))
+                and getattr(e, "bit_order", None)
+                and e.bit_order.value == "leastSignificantBitFirst"):
+            # Its bytes read the same either way when they start on a byte
+            # boundary, which check_aligned makes sure of.
+            enc.lsb = True
+        return enc, cal
+
+    def _encoding(self, name: str, e, path: Key, where: str):
         if getattr(e, "error_detect_correct", None):
             # XTCE deprecates it here: it doesn't say where the value goes.
             raise Unsupported(f"{where}: ErrorDetectCorrect in a data encoding "
@@ -908,10 +918,6 @@ class Compiler:
                     self.calibrator(e, path, where))
         if name == "StringDataEncoding":
             cs = e.encoding.value if e.encoding else "UTF-8"
-            if (getattr(e, "bit_order", None)
-                    and e.bit_order.value == "leastSignificantBitFirst"):
-                raise Unsupported(f"{where}: a string with bitOrder "
-                                  "leastSignificantBitFirst")
             # A string is bytes, so byte order matters only to the code units
             # of UTF-16 and UTF-32 without a byte order of their own.
             if ((e.byte_order or "").strip() == "leastSignificantByteFirst"
@@ -952,10 +958,6 @@ class Compiler:
                               dyn=dyn, charset=cs), None)
         if name == "BinaryDataEncoding":
             # Binary data is bytes, which have no byte order.
-            if (getattr(e, "bit_order", None)
-                    and e.bit_order.value == "leastSignificantBitFirst"):
-                raise Unsupported(f"{where}: binary data with bitOrder "
-                                  "leastSignificantBitFirst")
             if (e.from_binary_transform_algorithm
                     or e.to_binary_transform_algorithm):
                 raise Unsupported(f"{where}: binary transform algorithms")
@@ -1769,6 +1771,7 @@ class Compiler:
             node.items += self.size_pad(sc, node.all_items(), 0,
                                         f"container {node.key}", scope, path)
             self.check_rest(node, f"container {node.key}")
+            check_aligned(node.all_items(), f"container {node.key}")
             self.check_length(node, f"container {node.key}")
             if not node.abstract:
                 node.checks = self.node_checks(node, f"container {node.key}")
@@ -2148,6 +2151,7 @@ class Compiler:
                 node.items += self.size_pad(cc, node.all_items(), 0, where,
                                             values, path)
             self.check_rest(node, where)
+            check_aligned(node.all_items(), where)
             self.check_length(node, where)
             if not node.abstract:
                 node.checks = self.node_checks(node, where)
@@ -2498,6 +2502,80 @@ def bounded(vt: VType, b: DynSize, rng: tuple[int, int]) -> VType:
         b.max = min(units, MAX_FIELD_BITS // 8)
         enc = dataclasses.replace(e, bits=b.max * 8, dyn=b)
     return dataclasses.replace(vt, enc=enc)
+
+
+def check_aligned(items: list[Item], where: str) -> None:
+    """Strings and binary data with bitOrder leastSignificantBitFirst must
+    start on a byte boundary, where their bytes read the same as with the
+    usual bit order."""
+    marks = {0: 0}
+
+    def walk_items(items: list, pos: Optional[int]) -> Optional[int]:
+        for it in items:
+            if isinstance(it, Cond):
+                after = walk_items(it.items, pos)
+                pos = pos if after == pos else None
+            elif isinstance(it, Mark):
+                marks[it.id] = pos
+            elif isinstance(it, Seek):
+                base = (pos if it.from_start is None
+                        else marks.get(it.from_start))
+                pos = (None if base is None or isinstance(it.offset, DynSize)
+                       else (base + it.offset) % 8)
+            elif isinstance(it, Fill):
+                base = marks.get(it.start)
+                pos = (None if base is None or isinstance(it.size, DynSize)
+                       else (base + it.size) % 8)
+            elif isinstance(it, Value):
+                if not it.assembled:
+                    pos = advance(it.local.vtype, pos, it.local.name)
+            elif isinstance(it, EndSeek):
+                pos = None
+            else:
+                pos = None if pos is None else (pos + it.bits) % 8
+        return pos
+
+    def advance(vt: VType, pos: Optional[int], name: str) -> Optional[int]:
+        """Checks ``vt`` at ``pos`` (in bits after a byte boundary, None
+        when unknown) and returns the position after it."""
+        e = vt.enc
+        if isinstance(e, (StringEnc, BinaryEnc)) and e.lsb:
+            tag = getattr(e, "size_tag_bits", None) or 0
+            if pos != 0 or tag % 8:
+                raise Unsupported(f"{where}: {name} has bitOrder "
+                                  "leastSignificantBitFirst but may not start "
+                                  "on a byte boundary")
+        if isinstance(e, AggregateEnc):
+            for m in e.members:
+                pos = None if pos is None else (pos + m.skip) % 8
+                pos = advance(m.vtype, pos, name)
+            return None if pos is None else (pos + e.pad) % 8
+        if isinstance(e, ArrayEnc):
+            gap = e.gap if isinstance(e.gap, int) else None
+            if isinstance(e.count, int) and gap is not None:
+                for _ in range(e.count):
+                    pos = advance(e.elem, pos, name)
+                    pos = None if pos is None else (pos + gap) % 8
+                return (None if pos is None or e.count == 0
+                        else (pos - gap) % 8)
+            # Elements that keep the alignment keep it however many there are.
+            first = advance(e.elem, pos, name)
+            step = (None if first is None or gap is None or pos is None
+                    else (first - pos + gap) % 8)
+            if step == 0:
+                return pos
+            for t in e.elem.tree():
+                if isinstance(t.enc, (StringEnc, BinaryEnc)) and t.enc.lsb:
+                    advance(t, None, name)
+            return None
+        bits = fixed_bits(vt)
+        if bits is None:
+            # Variable strings and binary data occupy whole bytes, after a
+            # string's size tag.
+            bits = getattr(e, "size_tag_bits", None) or 0
+        return None if pos is None else (pos + bits) % 8
+
+    walk_items(items, 0)
 
 
 SEGMENTS = ("ParameterSegmentRefEntry", "ContainerSegmentRefEntry",

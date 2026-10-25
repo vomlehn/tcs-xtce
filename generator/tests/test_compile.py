@@ -2017,3 +2017,54 @@ class IndirectTests(unittest.TestCase):
                 with self.assertRaises(Unsupported) as cm:
                     compile_xml(text)
                 self.assertIn(why, str(cm.exception))
+
+
+def lsb_mission(entries: str) -> str:
+    """Telemetry with a 4-bit N, a byte B, an lsbFirst 2-byte string S and
+    lsbFirst binary L whose size B gives, in a container with ``entries``."""
+    return mission(tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U4" signed="false">
+          <IntegerDataEncoding sizeInBits="4"/></IntegerParameterType>
+          <IntegerParameterType name="U8" signed="false">
+          <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <StringParameterType name="ST">
+          <StringDataEncoding bitOrder="leastSignificantBitFirst">
+          <SizeInBits><Fixed><FixedValue>16</FixedValue></Fixed>
+          </SizeInBits></StringDataEncoding></StringParameterType>
+          <BinaryParameterType name="LT">
+          <BinaryDataEncoding bitOrder="leastSignificantBitFirst">
+          <SizeInBits><DynamicValue><ParameterInstanceRef parameterRef="B"/>
+          </DynamicValue></SizeInBits></BinaryDataEncoding>
+          </BinaryParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="N" parameterTypeRef="U4"/>
+          <Parameter name="B" parameterTypeRef="U8"/>
+          <Parameter name="S" parameterTypeRef="ST"/>
+          <Parameter name="L" parameterTypeRef="LT"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="P"><EntryList>{entries}</EntryList>
+          </SequenceContainer>
+        </ContainerSet>""")
+
+
+def refs(*names: str) -> str:
+    return "".join(f'<ParameterRefEntry parameterRef="{n}"/>' for n in names)
+
+
+class LsbFirstTests(unittest.TestCase):
+    def test_aligned(self):
+        # Two 4-bit values realign S; variable-size L keeps whole bytes.
+        text = lsb_mission(refs("N", "N", "S", "B", "L", "S"))
+        n = compile_xml(text).nodes[0]
+        self.assertTrue(n.fields[2][1].vtype.enc.lsb)
+
+    def test_misaligned(self):
+        for entries in (refs("N", "S"), refs("B", "N", "L")):
+            with self.subTest(entries=entries):
+                with self.assertRaises(Unsupported) as cm:
+                    compile_xml(lsb_mission(entries))
+                self.assertIn("has bitOrder leastSignificantBitFirst but may "
+                              "not start on a byte boundary", str(cm.exception))

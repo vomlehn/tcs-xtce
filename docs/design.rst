@@ -664,6 +664,13 @@ decoding reads it. Segments the entry list doesn't complete, and
 container and stream segments, are replaced by ``Value``\ s of raw
 fields, since the rest is in other packets.
 
+``check_aligned`` walks a packet's items tracking the position modulo 8
+(unknown after a size or location that another value gives, or after a
+conditional block whose size isn't a whole number of bytes). A string or
+binary value with ``bitOrder="leastSignificantBitFirst"`` must start at
+0: its bytes then read as they do in the usual order, so the emitters and
+runtimes ignore its bit order.
+
 An ``IndirectParameterRefEntry`` needs no item of its own: each
 parameter its selector can name (by an enumeration label, or by an alias
 in its ``aliasNameSpace``) becomes a ``Cond`` on ``selector == name``
