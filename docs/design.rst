@@ -446,6 +446,30 @@ The runtimes keep the existing ``uint_order`` for the common cases and
 call the general ``uint_bits`` only for the others, so ordinary packets
 pay nothing for it.
 
+Containers
+----------
+
+A ``BinaryEncoding`` ``SizeInBits`` is padding when the entries' extent
+is fixed, and otherwise a ``Fill`` item: pad from where the entries end
+to the size, after checking they don't go past it, since XTCE says the
+data is "always within that maximum size". The same item serves a size
+that another value gives. A ``containerEnd`` location is resolved at
+compile time into a location from the start, which is why it needs a
+container of fixed size: with a varying size, the end would depend on the
+entries being placed.
+
+An included container with a ``BaseContainer`` is flattened, bases
+first, like a packet's inheritance chain, and its ``RestrictionCriteria``
+become a ``Require`` item checked where they stand, because an included
+container is chosen by the document, not by dispatch, so the criteria
+can only confirm it. ``NextContainer`` is a stream-level condition, so
+the compiler keeps the container out of its base's dispatch rather than
+pretend to evaluate it.
+
+A command container's ``IncludeCondition`` and ``RestrictionCriteria``
+reuse the telemetry machinery: conditional items, and criteria that fix
+the values they compare with ``==``, like argument assignments.
+
 Times
 -----
 

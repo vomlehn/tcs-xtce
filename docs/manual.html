@@ -1824,8 +1824,10 @@ the demo, <tt class="docutils literal">Tally</tt>'s <tt class="docutils literal"
 one tally fails, and one with none fails sooner.</p>
 </dd>
 <dt>Arrays</dt>
-<dd>Elements of any supported type except arrays and values whose size
-another field gives. Each dimension's <tt class="docutils literal">StartingIndex</tt> is a
+<dd>Elements of any supported type, arrays among them (an array of
+arrays is a list of lists), and values whose size another field
+gives, which every element then has; an element can't take the rest
+of the packet. Each dimension's <tt class="docutils literal">StartingIndex</tt> is a
 <tt class="docutils literal">FixedValue</tt>; its <tt class="docutils literal">EndingIndex</tt> is a <tt class="docutils literal">FixedValue</tt> or, in at most
 one dimension, a <tt class="docutils literal">DynamicValue</tt>. <tt class="docutils literal">ArrayParameterRefEntry</tt> and
 <tt class="docutils literal">ArrayArgumentRefEntry</tt> (or a plain <tt class="docutils literal">ParameterRefEntry</tt> or
@@ -1835,14 +1837,17 @@ when they are fixed.</dd>
 <dt>Repeated entries</dt>
 <dd><tt class="docutils literal">RepeatEntry</tt> on parameter and argument entries, with a <tt class="docutils literal">Count</tt>
 that is a positive <tt class="docutils literal">FixedValue</tt> or a <tt class="docutils literal">DynamicValue</tt>, and an
-optional <tt class="docutils literal">Offset</tt> that is a <tt class="docutils literal">FixedValue</tt> of zero or more bits. A
-repeated array is not supported.</dd>
+optional <tt class="docutils literal">Offset</tt> of zero or more bits, a <tt class="docutils literal">FixedValue</tt> or a
+<tt class="docutils literal">DynamicValue</tt>. A repeated array is an array of arrays, as the
+demo's <tt class="docutils literal">Nested</tt> shows; so is a repeated value whose size another
+field gives. On a command's <tt class="docutils literal">FixedValueEntry</tt> the <tt class="docutils literal">Count</tt> and
+<tt class="docutils literal">Offset</tt> must be fixed.</dd>
 <dt>Sizes and counts from other fields</dt>
 <dd><tt class="docutils literal">DynamicValue</tt> with <tt class="docutils literal">ParameterInstanceRef</tt> (instance 0) or, in
 argument types, <tt class="docutils literal">ArgumentInstanceRef</tt>, and an optional
 <tt class="docutils literal">LinearAdjustment</tt>, in array <tt class="docutils literal">EndingIndex</tt>, <tt class="docutils literal">RepeatEntry</tt>
-<tt class="docutils literal">Count</tt>, binary <tt class="docutils literal">SizeInBits</tt>, variable string sizes and
-locations. It must refer to an integer value decoded earlier in the
+<tt class="docutils literal">Count</tt> and <tt class="docutils literal">Offset</tt>, binary <tt class="docutils literal">SizeInBits</tt>, variable string sizes,
+container <tt class="docutils literal">SizeInBits</tt> and locations. It must refer to an integer value decoded earlier in the
 packet, outside any <tt class="docutils literal">IncludeCondition</tt>, or, inside an aggregate
 type, to an earlier integer member. <tt class="docutils literal">DiscreteLookupList</tt> works in
 the same places except aggregate members, with comparisons on values
@@ -2040,12 +2045,23 @@ a codec. An epoch that is none of those forms is reported. The demo's
 <tt class="docutils literal">Times</tt> packet has one time of each kind.</p>
 </dd>
 <dt>Containers</dt>
-<dd><tt class="docutils literal">SequenceContainer</tt> entry lists with <tt class="docutils literal">ParameterRefEntry</tt>,
+<dd><p class="first"><tt class="docutils literal">SequenceContainer</tt> entry lists with <tt class="docutils literal">ParameterRefEntry</tt>,
 <tt class="docutils literal">ArrayParameterRefEntry</tt> and <tt class="docutils literal">ContainerRefEntry</tt>. Included
-containers are flattened in, or with a <tt class="docutils literal">RepeatEntry</tt> become a list,
-and may not have a <tt class="docutils literal">BaseContainer</tt>. A <tt class="docutils literal">BinaryEncoding</tt> with a fixed
-<tt class="docutils literal">SizeInBits</tt> pads a telemetry container to that size. <tt class="docutils literal">BaseContainer</tt>
-inheritance uses <tt class="docutils literal">RestrictionCriteria</tt>.</dd>
+containers are flattened in, or with a <tt class="docutils literal">RepeatEntry</tt> become a list.
+An included container with a <tt class="docutils literal">BaseContainer</tt> is its bases' entries,
+then its own, and its <tt class="docutils literal">RestrictionCriteria</tt> must hold: decoding and
+encoding fail with <tt class="docutils literal">Mismatch</tt> otherwise (a repeated one can't have a
+<tt class="docutils literal">BaseContainer</tt>). <tt class="docutils literal">BaseContainer</tt> inheritance uses
+<tt class="docutils literal">RestrictionCriteria</tt>. One with a <tt class="docutils literal">NextContainer</tt> also depends on
+the container that follows it in a stream, which a packet codec can't
+see: decoding its base never picks it, so decode it directly.</p>
+<p class="last">A <tt class="docutils literal">BinaryEncoding</tt> with a <tt class="docutils literal">SizeInBits</tt> makes a telemetry container,
+whether a packet (with its base containers' entries) or an included
+one, occupy that many bits: a <tt class="docutils literal">FixedValue</tt>, or a <tt class="docutils literal">DynamicValue</tt>
+another field gives. It is padded with zeros after its entries; when
+their size varies, decoding and encoding fail with <tt class="docutils literal">BadSize</tt> if they
+go past it. The demo's <tt class="docutils literal">Framed</tt> includes containers of both kinds.</p>
+</dd>
 <dt>Error detection</dt>
 <dd><p class="first">The <tt class="docutils literal">ErrorDetectCorrect</tt> of a container's <tt class="docutils literal">BinaryEncoding</tt> (of a
 sequence container, whether a packet, a base container or an included
@@ -2117,7 +2133,11 @@ comparison with a constant fixes a field's value, so derived packets
 chosen by other criteria keep those fields, and encoding checks them.</dd>
 <dt>Locations</dt>
 <dd><tt class="docutils literal">LocationInContainerInBits</tt> relative to <tt class="docutils literal">previousEntry</tt> (the
-default) or <tt class="docutils literal">containerStart</tt>. <tt class="docutils literal">containerStart</tt> is the start of the
+default), <tt class="docutils literal">containerStart</tt> or <tt class="docutils literal">containerEnd</tt>. A <tt class="docutils literal">containerEnd</tt>
+location puts the end of the entry that many bits before the end of its
+container, which must have a fixed <tt class="docutils literal">SizeInBits</tt> (otherwise its end
+would depend on where its entries are), and the entry a fixed size.
+<tt class="docutils literal">nextEntry</tt>, which XTCE proposes to deprecate, is not supported. <tt class="docutils literal">containerStart</tt> is the start of the
 packet for inherited entries, and the inclusion point for entries of
 an included container. A <tt class="docutils literal">FixedValue</tt> offset may be negative. A
 <tt class="docutils literal">DynamicValue</tt> or <tt class="docutils literal">DiscreteLookupList</tt> offset is computed like a
@@ -2140,9 +2160,13 @@ the base meta-command's container: through a <tt class="docutils literal">BaseCo
 it, or, as Yamcs reads it, with no <tt class="docutils literal">BaseContainer</tt> at all. The container
 may hold <tt class="docutils literal">ArgumentRefEntry</tt>, <tt class="docutils literal">ArrayArgumentRefEntry</tt>,
 <tt class="docutils literal">ParameterRefEntry</tt>, <tt class="docutils literal">ArrayParameterRefEntry</tt> and
-<tt class="docutils literal">FixedValueEntry</tt> (at most 64 bits). Argument assignments act like
-<tt class="docutils literal">==</tt> restriction criteria: they fix the value when encoding and
-select the command when decoding.</dd>
+<tt class="docutils literal">FixedValueEntry</tt> (of any size), with <tt class="docutils literal">IncludeCondition</tt> as in
+telemetry. Argument assignments act like <tt class="docutils literal">==</tt> restriction criteria:
+they fix the value when encoding and select the command when decoding.
+The <tt class="docutils literal">RestrictionCriteria</tt> of a <tt class="docutils literal">CommandContainer</tt>'s
+<tt class="docutils literal">BaseContainer</tt> (which XTCE gives on parameters in the command) act
+the same way. The demo's <tt class="docutils literal">Arm</tt> has an optional argument and a
+72-bit pattern sent twice.</dd>
 <dt>Name references</dt>
 <dd>Absolute (<tt class="docutils literal">/Root/Sub/name</tt>), relative (<tt class="docutils literal">Sub/name</tt>, <tt class="docutils literal"><span class="pre">../name</span></tt>),
 and unqualified names. An unqualified name, or a relative one that
@@ -2151,16 +2175,15 @@ SpaceSystem, then from each enclosing one. References may cross
 documents (see <a class="reference internal" href="#missions-in-several-documents">Missions in several documents</a>).</dd>
 <dt>Not supported</dt>
 <dd>references to elements of arrays whose count varies in a dimension
-other than the first, arrays of arrays, <tt class="docutils literal">IndirectParameterRefEntry</tt>, stream and segment entries,
-<tt class="docutils literal">RepeatEntry</tt> offsets that other values give, other instances than 0,
-<tt class="docutils literal">CustomAlgorithm</tt> criteria, <tt class="docutils literal">NextContainer</tt>, a container
-<tt class="docutils literal">BinaryEncoding</tt> on command containers, with a size from a
-<tt class="docutils literal">DynamicValue</tt> or with transform algorithms, custom checksum
-algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
-deprecates) and in included containers with an <tt class="docutils literal">IncludeCondition</tt>,
-calibrators inside aggregate types that use other values,
-least-significant-bit-first strings and binary data, integers of more
-than 64 bits, and include conditions in command containers.</dd>
+other than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt>, stream and segment
+entries, other instances than 0, <tt class="docutils literal">CustomAlgorithm</tt> criteria, a
+<tt class="docutils literal">SizeInBits</tt> on command containers, transform algorithms, custom
+checksum algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which
+XTCE deprecates) and in included containers with an
+<tt class="docutils literal">IncludeCondition</tt>, calibrators inside aggregate types that use other
+values, least-significant-bit-first strings and binary data, integers
+of more than 64 bits, <tt class="docutils literal">nextEntry</tt> locations, and a <tt class="docutils literal">containerEnd</tt>
+location in a container without a fixed size.</dd>
 </dl>
 </div>
 <div class="section" id="known-limitations">

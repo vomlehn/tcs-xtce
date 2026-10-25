@@ -1374,8 +1374,10 @@ Array elements
    one tally fails, and one with none fails sooner.
 
 Arrays
-   Elements of any supported type except arrays and values whose size
-   another field gives. Each dimension's ``StartingIndex`` is a
+   Elements of any supported type, arrays among them (an array of
+   arrays is a list of lists), and values whose size another field
+   gives, which every element then has; an element can't take the rest
+   of the packet. Each dimension's ``StartingIndex`` is a
    ``FixedValue``; its ``EndingIndex`` is a ``FixedValue`` or, in at most
    one dimension, a ``DynamicValue``. ``ArrayParameterRefEntry`` and
    ``ArrayArgumentRefEntry`` (or a plain ``ParameterRefEntry`` or
@@ -1386,15 +1388,18 @@ Arrays
 Repeated entries
    ``RepeatEntry`` on parameter and argument entries, with a ``Count``
    that is a positive ``FixedValue`` or a ``DynamicValue``, and an
-   optional ``Offset`` that is a ``FixedValue`` of zero or more bits. A
-   repeated array is not supported.
+   optional ``Offset`` of zero or more bits, a ``FixedValue`` or a
+   ``DynamicValue``. A repeated array is an array of arrays, as the
+   demo's ``Nested`` shows; so is a repeated value whose size another
+   field gives. On a command's ``FixedValueEntry`` the ``Count`` and
+   ``Offset`` must be fixed.
 
 Sizes and counts from other fields
    ``DynamicValue`` with ``ParameterInstanceRef`` (instance 0) or, in
    argument types, ``ArgumentInstanceRef``, and an optional
    ``LinearAdjustment``, in array ``EndingIndex``, ``RepeatEntry``
-   ``Count``, binary ``SizeInBits``, variable string sizes and
-   locations. It must refer to an integer value decoded earlier in the
+   ``Count`` and ``Offset``, binary ``SizeInBits``, variable string sizes,
+   container ``SizeInBits`` and locations. It must refer to an integer value decoded earlier in the
    packet, outside any ``IncludeCondition``, or, inside an aggregate
    type, to an earlier integer member. ``DiscreteLookupList`` works in
    the same places except aggregate members, with comparisons on values
@@ -1607,10 +1612,21 @@ Times
 Containers
    ``SequenceContainer`` entry lists with ``ParameterRefEntry``,
    ``ArrayParameterRefEntry`` and ``ContainerRefEntry``. Included
-   containers are flattened in, or with a ``RepeatEntry`` become a list,
-   and may not have a ``BaseContainer``. A ``BinaryEncoding`` with a fixed
-   ``SizeInBits`` pads a telemetry container to that size. ``BaseContainer``
-   inheritance uses ``RestrictionCriteria``.
+   containers are flattened in, or with a ``RepeatEntry`` become a list.
+   An included container with a ``BaseContainer`` is its bases' entries,
+   then its own, and its ``RestrictionCriteria`` must hold: decoding and
+   encoding fail with ``Mismatch`` otherwise (a repeated one can't have a
+   ``BaseContainer``). ``BaseContainer`` inheritance uses
+   ``RestrictionCriteria``. One with a ``NextContainer`` also depends on
+   the container that follows it in a stream, which a packet codec can't
+   see: decoding its base never picks it, so decode it directly.
+
+   A ``BinaryEncoding`` with a ``SizeInBits`` makes a telemetry container,
+   whether a packet (with its base containers' entries) or an included
+   one, occupy that many bits: a ``FixedValue``, or a ``DynamicValue``
+   another field gives. It is padded with zeros after its entries; when
+   their size varies, decoding and encoding fail with ``BadSize`` if they
+   go past it. The demo's ``Framed`` includes containers of both kinds.
 
 Error detection
    The ``ErrorDetectCorrect`` of a container's ``BinaryEncoding`` (of a
@@ -1686,7 +1702,11 @@ Criteria
 
 Locations
    ``LocationInContainerInBits`` relative to ``previousEntry`` (the
-   default) or ``containerStart``. ``containerStart`` is the start of the
+   default), ``containerStart`` or ``containerEnd``. A ``containerEnd``
+   location puts the end of the entry that many bits before the end of its
+   container, which must have a fixed ``SizeInBits`` (otherwise its end
+   would depend on where its entries are), and the entry a fixed size.
+   ``nextEntry``, which XTCE proposes to deprecate, is not supported. ``containerStart`` is the start of the
    packet for inherited entries, and the inclusion point for entries of
    an included container. A ``FixedValue`` offset may be negative. A
    ``DynamicValue`` or ``DiscreteLookupList`` offset is computed like a
@@ -1711,9 +1731,13 @@ Commands
    it, or, as Yamcs reads it, with no ``BaseContainer`` at all. The container
    may hold ``ArgumentRefEntry``, ``ArrayArgumentRefEntry``,
    ``ParameterRefEntry``, ``ArrayParameterRefEntry`` and
-   ``FixedValueEntry`` (at most 64 bits). Argument assignments act like
-   ``==`` restriction criteria: they fix the value when encoding and
-   select the command when decoding.
+   ``FixedValueEntry`` (of any size), with ``IncludeCondition`` as in
+   telemetry. Argument assignments act like ``==`` restriction criteria:
+   they fix the value when encoding and select the command when decoding.
+   The ``RestrictionCriteria`` of a ``CommandContainer``'s
+   ``BaseContainer`` (which XTCE gives on parameters in the command) act
+   the same way. The demo's ``Arm`` has an optional argument and a
+   72-bit pattern sent twice.
 
 Name references
    Absolute (``/Root/Sub/name``), relative (``Sub/name``, ``../name``),
@@ -1724,16 +1748,15 @@ Name references
 
 Not supported
    references to elements of arrays whose count varies in a dimension
-   other than the first, arrays of arrays, ``IndirectParameterRefEntry``, stream and segment entries,
-   ``RepeatEntry`` offsets that other values give, other instances than 0,
-   ``CustomAlgorithm`` criteria, ``NextContainer``, a container
-   ``BinaryEncoding`` on command containers, with a size from a
-   ``DynamicValue`` or with transform algorithms, custom checksum
-   algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
-   deprecates) and in included containers with an ``IncludeCondition``,
-   calibrators inside aggregate types that use other values,
-   least-significant-bit-first strings and binary data, integers of more
-   than 64 bits, and include conditions in command containers.
+   other than the first, ``IndirectParameterRefEntry``, stream and segment
+   entries, other instances than 0, ``CustomAlgorithm`` criteria, a
+   ``SizeInBits`` on command containers, transform algorithms, custom
+   checksum algorithms, ``ErrorDetectCorrect`` in a data encoding (which
+   XTCE deprecates) and in included containers with an
+   ``IncludeCondition``, calibrators inside aggregate types that use other
+   values, least-significant-bit-first strings and binary data, integers
+   of more than 64 bits, ``nextEntry`` locations, and a ``containerEnd``
+   location in a container without a fixed size.
 
 Known limitations
 -----------------

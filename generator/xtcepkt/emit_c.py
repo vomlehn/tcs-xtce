@@ -19,7 +19,7 @@ from .model import (term_indexes, term_locals, term_paths, walk, Index,
                     AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
                     ContextCal, DynSize, Criterion, Fixed, FloatEnc, IntEnc,
                     Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
-                    Spline, StringEnc, Value, VType)
+                    Spline, StringEnc, Value, VType, Require, Fill)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -322,6 +322,7 @@ class CEmitter:
         v = f"c{depth}"
         self.line("{", depth)
         self.line(f"double {v} = {x};", depth + 1)
+        self.line(f"(void){v};", depth + 1)
         refs = [p for terms, _ in cal.cases for t in terms
                 for p in term_paths(t)]
         self.element_guards(refs, place, err, depth + 1)
@@ -451,8 +452,7 @@ class CEmitter:
             self.line(f"{dst}.len = n;", d)
             self.line(f"for (size_t {i} = 0; {i} < n; ++{i}) {{", d)
             if e.gap:
-                self.line(f"if ({i}) XTCE_PK_TRY(xtce_pk_read_skip(r, {e.gap}, "
-                          f"{f}));", d + 1)
+                self.gap(e, "read", f, ref, i, d + 1)
             self.read_value(e.elem, f"{dst}.data[{i}]", f, d + 1, ref)
             self.line("}", d)
             self.line("}", depth)
@@ -614,8 +614,7 @@ class CEmitter:
             self.line(f"if ({x}.len != n) {bad}", d)
             self.line(f"for (size_t {i} = 0; {i} < n; ++{i}) {{", d)
             if e.gap:
-                self.line(f"if ({i}) XTCE_PK_TRY(xtce_pk_write_skip(w, "
-                          f"{e.gap}, {f}));", d + 1)
+                self.gap(e, "write", f, ref, i, d + 1)
             self.write_value(e.elem, f"{x}.data[{i}]", f, d + 1, ref)
             self.line("}", d)
             self.line("}", depth)
@@ -980,6 +979,10 @@ class CEmitter:
             elif isinstance(it, Mark):
                 self.line(f"size_t m{it.id} = r->pos;", depth)
                 self.line(f"(void)m{it.id};", depth)
+            elif isinstance(it, Require):
+                self.require(it, self.read_acc, "r->err", depth)
+            elif isinstance(it, Fill):
+                self.fill(it, "r", self.read_ref, depth)
             elif isinstance(it, Pad):
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {it.bits}, "
                           f"{cstr(where)}));", depth)
@@ -987,6 +990,7 @@ class CEmitter:
                 lc = it.local
                 if lc.checksum:
                     self.line(f"size_t p{lc.id} = r->pos;", depth)
+                    self.line(f"(void)p{lc.id};", depth)
                 if not nested:
                     self.local(lc.vtype, f"v{lc.id}", depth)
                 self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth,
@@ -1038,6 +1042,11 @@ class CEmitter:
             elif isinstance(it, Fixed):
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_bits(w, {it.bits}, "
                           f"UINT64_C(0x{it.value:x})));", depth)
+            elif isinstance(it, Require):
+                self.require(it, self.write_ref(n, names).place, "w->err",
+                             depth)
+            elif isinstance(it, Fill):
+                self.fill(it, "w", self.write_ref(n, names), depth)
             elif isinstance(it, Pad):
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {it.bits}));",
                           depth)
@@ -1083,6 +1092,51 @@ class CEmitter:
             return Acc(f"d{lc.id}")
         return Acc(self.literal(lc.vtype, n.fixed[lc]))
 
+    def fill(self, it: Fill, rw: str, ref, depth: int) -> None:
+        """Pads to the end of a container with a size; fails with BadSize if
+        its entries go past it."""
+        f = cstr(it.container)
+        self.line("{", depth)
+        d = depth + 1
+        if isinstance(it.size, DynSize):
+            self.size(it.size, f"{rw}->err", f, ref, d)
+        else:
+            self.line(f"size_t n = {it.size};", d)
+        self.line(f"size_t e = (size_t){self.mark(it.start)} + n;", d)
+        self.line(f"if ({rw}->pos > e)", d)
+        self.line(f"return xtce_pk_fail({rw}->err, XTCE_PK_BAD_SIZE, {f}, "
+                  "NULL);", d + 1)
+        if rw == "r":
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, e - r->pos, {f}));", d)
+        else:
+            self.line("XTCE_PK_TRY(xtce_pk_write_zeros(w, e - w->pos));", d)
+        self.line("}", depth)
+
+    def gap(self, e: ArrayEnc, side: str, f: str, ref, i: str,
+            depth: int) -> None:
+        """Skips the bits between an array's elements, before each but the
+        first (index ``i``)."""
+        obj = "r" if side == "read" else "w"
+        if isinstance(e.gap, int):
+            self.line(f"if ({i}) XTCE_PK_TRY(xtce_pk_{side}_skip({obj}, "
+                      f"{e.gap}, {f}));", depth)
+            return
+        self.line(f"if ({i}) {{", depth)
+        self.size(e.gap, f"{obj}->err", f, ref, depth + 1)
+        self.line(f"XTCE_PK_TRY(xtce_pk_{side}_skip({obj}, (int64_t)n, {f}));",
+                  depth + 1)
+        self.line("}", depth)
+
+    def require(self, it: Require, place, err: str, depth: int) -> None:
+        """Fails with Mismatch unless an included container's criteria
+        hold."""
+        refs = [p for t in it.criteria for p in term_paths(t)]
+        self.element_guards(refs, place, err, depth)
+        cond = " && ".join(f"({self.term(t, place)})" for t in it.criteria)
+        self.line(f"if (!({cond}))", depth)
+        self.line(f"return xtce_pk_fail({err}, XTCE_PK_MISMATCH, "
+                  f"{cstr(it.container)}, {cstr(it.text)});", depth + 1)
+
     @staticmethod
     def mark(i: int) -> str:
         return "0" if i == 0 else f"m{i}"
@@ -1123,6 +1177,8 @@ class CEmitter:
                     f"{rw})")
         if c.from_end:
             end = f"({end} > {c.skip} ? {end} - {c.skip} : 0)"
+        elif start == "(size_t)0":
+            end = pos  # the field always follows the packet's start
         else:
             end = f"({pos} >= {start} ? {pos} : {end})"
         return f"({start})", end

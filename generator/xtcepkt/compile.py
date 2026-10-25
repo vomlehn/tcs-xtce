@@ -20,12 +20,13 @@ import re
 from typing import Callable, Optional
 
 from .common import (code_unit, encode_text, fast_order, find_unit, wire_cap)
-from .model import (
-    MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
-    Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index, IntEnc, Item, Kind,
-    Local, Mark, Member, Mission, Node, Pad, Polynomial, Seek, Spline,
-    StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk,
-    MATH_UNARY, Check, ContextCal, MathOp, ValueRef, needs_binding)
+from .model import (MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc,
+                    BinaryEnc, Cond, Criterion, DynSize, EnumLabel, FloatEnc,
+                    Fixed, Index, IntEnc, Item, Kind, Local, Mark, Member,
+                    Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
+                    Term, Unsupported, Value, VType, ref_text, term_locals,
+                    walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp,
+                    Require, ValueRef, needs_binding, Fill)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -683,12 +684,9 @@ class Compiler:
         """An array type: its elements in the order they are encoded, which
         for several dimensions is the order of the DimensionList."""
         ekey = self.resolve(t.array_type_ref, path, table, "array element type")
-        if table[ekey][1].startswith("Array"):
-            raise Unsupported(f"{where}: arrays of arrays")
+        # An element may itself be an array, and its size may come from
+        # another value: each packet entry binds it.
         elem = self.vtype(ekey, table)
-        if elem.dyn is not None:
-            raise Unsupported(f"{where}: elements whose size another value "
-                              "gives")
         if is_rest(elem):
             raise Unsupported(f"{where}: elements that take the rest of the "
                               "packet")
@@ -1140,7 +1138,13 @@ class Compiler:
             return [Seek(start, off)]
         if ref == "previousEntry":
             return [Seek(None, off)] if off else []
-        raise Unsupported(f"{where}: location relative to {ref}")
+        if ref == "containerEnd":
+            if not isinstance(off, int):
+                raise Unsupported(f"{where}: a location from the container's "
+                                  "end that other values give")
+            return [EndSeek(start, off)]
+        raise Unsupported(f"{where}: location relative to {ref}, which XTCE "
+                          "proposes to deprecate")
 
     def repeat(self, local: Local, e, path: Key, where: str) -> Local:
         """Turns the value of an entry with a RepeatEntry into an array."""
@@ -1151,11 +1155,6 @@ class Compiler:
             raise Unsupported(f"{where}: RepeatEntry on packet length or "
                               f"checksum field {local.name}")
         vt = local.vtype
-        if vt.kind == "array":
-            raise Unsupported(f"{where}: RepeatEntry on an array")
-        if vt.dyn is not None:
-            raise Unsupported(f"{where}: RepeatEntry on a value whose size "
-                              "another value gives")
         if is_rest(vt):
             raise Unsupported(f"{where}: RepeatEntry on a value that takes the "
                               "rest of the packet")
@@ -1163,10 +1162,7 @@ class Compiler:
         gap = 0
         if rp.offset is not None:
             gap = self.int_value(rp.offset, path, "RepeatEntry Offset", where)
-            if isinstance(gap, DynSize):
-                raise Unsupported(f"{where}: RepeatEntry Offset from "
-                                  "DynamicValue")
-            if gap < 0:
+            if not isinstance(gap, DynSize) and gap < 0:
                 raise Unsupported(f"{where}: RepeatEntry Offset {gap} is "
                                   "negative")
         if isinstance(count, int):
@@ -1186,12 +1182,27 @@ class Compiler:
              arg_key: Optional[Callable] = None) -> Local:
         """Binds the size or count of a value to what gives it, which must
         be decoded before it, and bounds it."""
-        vt = local.vtype
-        if vt.dyn is not None:
-            b, rng = self.bind_dyn(vt.dyn, scope, where, arg_key)
-            vt = bounded(vt, b, rng)
+        vt = self.bind_sizes(local.vtype, scope, where, arg_key)
         local.vtype = self.bind_calibrators(vt, scope, where, arg_key)
         return local
+
+    def bind_sizes(self, vt: VType, scope: list, where: str, arg_key) -> VType:
+        """``vt`` with its sizes, counts and gaps that other values give,
+        its array elements' too, bound to the values in ``scope``."""
+        e = vt.enc
+        if isinstance(e, ArrayEnc):
+            elem = self.bind_sizes(e.elem, scope, where, arg_key)
+            gap = e.gap
+            if isinstance(gap, DynSize) and unbound(gap):
+                gap, rng = self.bind_dyn(gap, scope, where, arg_key)
+                gap.max = min(dyn_units(gap, rng), MAX_FIELD_BITS)
+            if elem is not e.elem or gap is not e.gap:
+                vt = dataclasses.replace(
+                    vt, enc=dataclasses.replace(e, elem=elem, gap=gap))
+        if vt.dyn is not None and unbound(vt.dyn):
+            b, rng = self.bind_dyn(vt.dyn, scope, where, arg_key)
+            vt = bounded(vt, b, rng)
+        return vt
 
     def bind_calibrators(self, vt: VType, scope: list, where: str,
                          arg_key) -> VType:
@@ -1319,6 +1330,13 @@ class Compiler:
             if (ch.name not in ("ParameterRefEntry", "ContainerRefEntry",
                                 "ArrayParameterRefEntry")):
                 raise Unsupported(f"{where}: {ch.name}")
+            if (ch.name == "ContainerRefEntry"
+                    and e.location_in_container_in_bits is not None
+                    and e.location_in_container_in_bits.reference_location
+                    and e.location_in_container_in_bits.reference_location.value
+                    == "containerEnd"):
+                raise Unsupported(f"{where}: an included container located "
+                                  "from the container's end")
             cond = None
             if e.include_condition is not None:
                 cond = self.match(e.include_condition, path, scope, where)
@@ -1330,6 +1348,8 @@ class Compiler:
                                     path, where)
                 local = self.bind(self.repeat(local, e, path, where), scope,
                                   where)
+                if out and isinstance(out[-1], EndSeek):
+                    out[-1] = self.end_seek(out[-1], sc, local, where)
                 out.append(Value(local))
                 scope.append(local)
             else:
@@ -1338,8 +1358,9 @@ class Compiler:
                 if ckey in stack:
                     raise Unsupported(f"{where}: container includes itself")
                 cpath, inc = self.containers[ckey]
-                if inc.base_container is not None:
-                    raise Unsupported(f"{where}: included container "
+                if (inc.base_container is not None
+                        and e.repeat_entry is not None):
+                    raise Unsupported(f"{where}: repeated container "
                                       f"{qname(ckey)} has a BaseContainer")
                 if e.repeat_entry is not None:
                     local = self.local(inc.name, qname(ckey),
@@ -1351,8 +1372,20 @@ class Compiler:
                 else:
                     m = self._id()
                     out.append(Mark(m))
-                    inner = self.tm_items(inc, cpath, stack + [ckey], m, scope)
-                    out += inner + self.size_pad(inc, inner, m, where)
+                    inner = []
+                    # A derived container is its bases' entries, then its own.
+                    for k, (kp, kc, kkey) in enumerate(
+                            self.include_chain(ckey, stack, where)):
+                        inner += self.tm_items(kc, kp, stack + [kkey], m, scope)
+                        rc = (kc.base_container.restriction_criteria
+                              if kc.base_container is not None else None)
+                        if rc is not None:
+                            terms = self.match(rc, kp, scope, where)
+                            inner.append(Require(terms, qname(kkey),
+                                                 " and ".join(t.text
+                                                              for t in terms)))
+                    out += (inner
+                            + self.size_pad(inc, inner, m, where, scope, cpath))
                     if edc_items(inc):
                         if cond is not None:
                             raise Unsupported(f"{where}: ErrorDetectCorrect in "
@@ -1369,9 +1402,44 @@ class Compiler:
                 items.append(Cond(cond, out))
         return items
 
-    def size_pad(self, sc, items: list, start: int, where: str) -> list[Item]:
+    def include_chain(self, ckey: Key, stack: list, where: str) -> list:
+        """(path, container, key) of an included container and its bases,
+        the root first."""
+        chain = []
+        key = ckey
+        while True:
+            if key in stack or any(k == key for _, _, k in chain):
+                raise Unsupported(f"{where}: container includes itself")
+            path, c = self.containers[key]
+            chain.append((path, c, key))
+            if c.base_container is None:
+                return chain[::-1]
+            key = self.resolve(c.base_container.container_ref, path,
+                               self.containers, "container")
+
+    def end_seek(self, es: EndSeek, sc, local: Local, where: str) -> Seek:
+        """The Seek that ends ``local`` ``es.offset`` bits before the end of
+        container ``sc``, which must have a fixed size: otherwise its end
+        would depend on where its entries are."""
+        be = sc.binary_encoding
+        size = (
+            self.int_value(be.size_in_bits, (), "container SizeInBits", where)
+            if be is not None and be.size_in_bits is not None else None)
+        if not isinstance(size, int):
+            raise Unsupported(f"{where}: a location from the end of a "
+                              "container without a fixed SizeInBits")
+        vt = local.vtype
+        if vt.dyn is not None or is_rest(vt):
+            raise Unsupported(f"{where}: a location from the container's end "
+                              f"for {local.name}, whose size varies")
+        return Seek(es.start, size - es.offset - item_bits(vt))
+
+    def size_pad(self, sc, items: list, start: int, where: str,
+                 scope: Optional[list] = None, path: Key = ()) -> list[Item]:
         """The padding that makes a container with a BinaryEncoding occupy
-        its SizeInBits; ``items`` are its entries, from mark ``start``."""
+        its SizeInBits; ``items`` are its entries, from mark ``start``, and
+        ``scope`` the values decoded before its end, for a size another
+        value gives."""
         be = sc.binary_encoding
         if be is None:
             return []
@@ -1380,16 +1448,23 @@ class Compiler:
             raise Unsupported(f"{where}: container transform algorithms")
         if be.size_in_bits is None:
             return []
-        size = self.int_value(be.size_in_bits, (), "container SizeInBits",
+        size = self.int_value(be.size_in_bits, path, "container SizeInBits",
                               where)
         if isinstance(size, DynSize):
-            raise Unsupported(f"{where}: container SizeInBits from "
-                              "DynamicValue")
+            if scope is None:
+                raise Unsupported(f"{where}: a repeated container whose size "
+                                  "another value gives")
+            off, rng = self.bind_dyn(size, scope, where)
+            off.max = min(dyn_units(off, rng), MAX_FIELD_BITS)
+            return [Fill(start, off, where)]
         size = self._size(size, "container", where)
         end = static_end(items, start)
         if end is None:
-            raise Unsupported(f"{where}: a container size with entries whose "
-                              "size or position varies")
+            # Where the entries end varies: pad up to the size at run time.
+            if scope is None:
+                raise Unsupported(f"{where}: a container size with entries "
+                                  "whose size or position varies")
+            return [Fill(start, size, where)]
         pos, extent = end
         if extent > size:
             raise Unsupported(f"{where}: entries take {extent} bits, more than "
@@ -1419,6 +1494,12 @@ class Compiler:
         for it in items:
             if isinstance(it, Cond):
                 raise Unsupported(f"{what} has an IncludeCondition")
+            if isinstance(it, Require):
+                raise Unsupported(f"{what} includes a container with "
+                                  "RestrictionCriteria")
+            if isinstance(it, Fill):
+                raise Unsupported(f"{what} includes a container whose size "
+                                  "varies")
             if isinstance(it, Seek):
                 if isinstance(it.offset, DynSize):
                     raise Unsupported(f"{what} has a location that other "
@@ -1490,26 +1571,25 @@ class Compiler:
                 scope = self.scope_of(base)
                 rc = sc.base_container.restriction_criteria
                 if rc is not None:
-                    if rc.next_container is not None:
-                        raise Unsupported(f"container {node.key}: "
-                                          "NextContainer")
                     node.criteria = self.match(rc, path, scope,
                                                f"container {node.key}")
-            if (sc.binary_encoding is not None and base is not None
-                    and sc.binary_encoding.size_in_bits is not None):
-                raise Unsupported(f"container {node.key}: BinaryEncoding with "
-                                  "a size and a BaseContainer")
+                    if rc.next_container is not None:
+                        # It also depends on the container that follows it
+                        # in a stream, which a packet codec can't see:
+                        # decoding its base never picks it.
+                        node.next_container = rc.next_container.container_ref
             node._edc = (sc, path)
             self.included_checks = []
             node.items = self.tm_items(sc, path, [key], 0, scope)
             node._included = self.included_checks
-            node.items += self.size_pad(sc, node.items, 0,
-                                        f"container {node.key}")
+            # A size covers the whole packet, base containers' entries too.
+            node.items += self.size_pad(sc, node.all_items(), 0,
+                                        f"container {node.key}", scope, path)
             self.check_rest(node, f"container {node.key}")
             self.check_length(node, f"container {node.key}")
             if not node.abstract:
                 node.checks = self.node_checks(node, f"container {node.key}")
-            if base is not None:
+            if base is not None and node.next_container is None:
                 base.children.append(node)
         except Unsupported as e:
             node.error = str(e)
@@ -1840,9 +1920,16 @@ class Compiler:
                         raise Unsupported(f"{where}: CommandContainer extends "
                                           f"{qname(bc)}, which is not the "
                                           "container of its BaseMetaCommand")
-                    if cc.base_container.restriction_criteria is not None:
-                        raise Unsupported(f"{where}: RestrictionCriteria on a "
+                    rc = cc.base_container.restriction_criteria
+                    if rc is not None and rc.next_container is not None:
+                        raise Unsupported(f"{where}: NextContainer on a "
                                           "CommandContainer")
+                    if rc is not None:
+                        # Like argument assignments: what they fix, encoding
+                        # writes, and decoding picks the command by them.
+                        node.criteria += self.match(
+                            rc, path, self.scope_of(base), where,
+                            lambda name: self.arg_key_of(scope, name, where))
                 # A CommandContainer without a BaseContainer still extends
                 # the container of its BaseMetaCommand, as Yamcs reads it.
                 node.items = self.tc_items(cc, scope, path, where,
@@ -1877,11 +1964,13 @@ class Compiler:
                        "ParameterRefEntry", "ArrayParameterRefEntry")
             if ch.name not in entries + ("FixedValueEntry",):
                 raise Unsupported(f"{where}: {ch.name} in a CommandContainer")
+            cond = None
             if e.include_condition is not None:
-                raise Unsupported(f"{where}: IncludeCondition in a "
-                                  "CommandContainer")
-            items += self.location(e.location_in_container_in_bits, 0, path,
-                                   values, where, arg_key)
+                cond = self.match(e.include_condition, path, values, where,
+                                  arg_key)
+            out = items if cond is None else []
+            out += self.location(e.location_in_container_in_bits, 0, path,
+                                 values, where, arg_key)
             if ch.name in entries:
                 if "Argument" in ch.name:
                     local = self.arg_local(scope, e.argument_ref, where)
@@ -1890,20 +1979,56 @@ class Compiler:
                 local = self.subset(local, e, path, where)
                 local = self.bind(self.repeat(local, e, path, where), values,
                                   where, arg_key)
-                items.append(Value(local))
+                out.append(Value(local))
                 values.append(local)
             else:
-                if e.repeat_entry is not None:
-                    raise Unsupported(f"{where}: RepeatEntry on a "
-                                      "FixedValueEntry")
-                bits = e.size_in_bits
-                value = int.from_bytes(hex_bytes(e.binary_value.strip() or "0",
-                                                 where), "big")
-                if not 1 <= bits <= 64 or value >> bits:
-                    raise Unsupported(f"{where}: FixedValueEntry "
-                                      f"{e.binary_value} in {bits} bits")
-                items.append(Fixed(bits, value))
+                out += self.fixed_entry(e, path, where)
+            if cond is not None:
+                for it in walk(out):
+                    if isinstance(it, Value):
+                        it.local.optional = True
+                items.append(Cond(cond, out))
         return items
+
+    def arg_key_of(self, scope: dict, name: str, where: str) -> str:
+        if name not in scope:
+            raise Unsupported(f"{where}: unknown argument {name!r}")
+        return f"{qname(scope[name][0])}#{name}"
+
+    def fixed_entry(self, e, path: Key, where: str) -> list[Item]:
+        """A FixedValueEntry of any size, repeated as its RepeatEntry says:
+        Fixed items of at most 64 bits each."""
+        bits = e.size_in_bits
+        value = int.from_bytes(hex_bytes(e.binary_value.strip() or "0", where),
+                               "big")
+        if bits < 1 or value >> bits:
+            raise Unsupported(f"{where}: FixedValueEntry {e.binary_value} in "
+                              f"{bits} bits")
+        # Most significant first: a short first part, then 64 bits each.
+        one = []
+        left = bits
+        while left > 0:
+            n = left % 64 or 64
+            left -= n
+            one.append(Fixed(n, (value >> left) & ((1 << n) - 1)))
+        rp = e.repeat_entry
+        if rp is None:
+            return one
+        count = self.int_value(rp.count, path, "RepeatEntry Count", where)
+        gap = (self.int_value(rp.offset, path, "RepeatEntry Offset", where)
+               if rp.offset is not None else 0)
+        if not isinstance(count, int) or not isinstance(gap, int):
+            raise Unsupported(f"{where}: a FixedValueEntry repeated as other "
+                              "values say")
+        if count < 1 or gap < 0:
+            raise Unsupported(f"{where}: RepeatEntry Count {count} or Offset "
+                              f"{gap}")
+        out = []
+        for i in range(count):
+            if i and gap:
+                out.append(Seek(None, gap))
+            out += one
+        return out
 
     # -- whole mission --
 
@@ -1914,8 +2039,23 @@ class Compiler:
             self.tc_node(key)
         # A node whose base failed fails too.  Errors list the root causes
         # only; skipping names every node left out, root causes first.
+        # The containers others derive from.
+        self.bases = set()
+        for key, (path, sc) in self.containers.items():
+            if sc.base_container is not None:
+                try:
+                    self.bases.add(
+                        qname(self.resolve(sc.base_container.container_ref,
+                                           path, self.containers, "container")))
+                except Unsupported:
+                    pass
         roots, derived = [], []
         for n in self.order:
+            # An abstract container that nothing derives from is only ever
+            # included, where it is compiled with what surrounds it.
+            if (n.error and n.abstract and n.kind == "tm"
+                    and n.key not in self.bases):
+                continue
             if n.error:
                 (derived if n.error.startswith("base ")
                  else roots).append(f"{n.key}: {n.error}")
@@ -2027,6 +2167,11 @@ def affine(cal, a: float, b: float):
                       affine(cal.default, a, b))
 
 
+def unbound(d: DynSize) -> bool:
+    """Whether a size is still to be bound to the value that gives it."""
+    return d.local is None and d.lookup is None and d.member is None
+
+
 def int_range(e: IntEnc) -> tuple[int, int]:
     """The smallest and largest value an integer encoding holds."""
     b = e.bits
@@ -2076,8 +2221,8 @@ def bounded(vt: VType, b: DynSize, rng: tuple[int, int]) -> VType:
     units = dyn_units(b, rng)
     e = vt.enc
     if isinstance(e, ArrayEnc):
-        step = max(item_bits(e.elem) + e.gap, 1)
-        b.max = min(units, (MAX_FIELD_BITS + e.gap) // step // b.factor)
+        step = max(item_bits(e.elem) + e.max_gap, 1)
+        b.max = min(units, (MAX_FIELD_BITS + e.max_gap) // step // b.factor)
         enc = dataclasses.replace(e, count=b)
     elif isinstance(e, StringEnc):
         b.max = min(units, e.max_bits // 8, MAX_FIELD_BITS // 8)
@@ -2095,7 +2240,7 @@ def fixed_bits(vt: VType) -> Optional[int]:
         b = fixed_bits(e.elem)
         if not isinstance(e.count, int) or b is None:
             return None
-        return e.count * b + max(e.count - 1, 0) * e.gap
+        return e.count * b + max(e.count - 1, 0) * e.max_gap
     if isinstance(e, AggregateEnc):
         bs = [fixed_bits(m.vtype) for m in e.members]
         return (None if None in bs
@@ -2115,7 +2260,11 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
     for it in items:
         if isinstance(it, Cond):
             return None
-        if isinstance(it, Seek):
+        if isinstance(it, Fill):
+            if isinstance(it.size, DynSize) or it.start not in marks:
+                return None
+            pos = marks[it.start] + it.size
+        elif isinstance(it, Seek):
             if isinstance(it.offset, DynSize):
                 return None
             if it.from_start is not None and it.from_start not in marks:
@@ -2218,7 +2367,7 @@ def item_bits(vt: VType) -> int:
     e = vt.enc
     if isinstance(e, ArrayEnc):
         n = e.max_count
-        return n * item_bits(e.elem) + max(n - 1, 0) * e.gap
+        return n * item_bits(e.elem) + max(n - 1, 0) * e.max_gap
     if isinstance(e, AggregateEnc):
         return sum(m.skip + item_bits(m.vtype) for m in e.members) + e.pad
     if isinstance(e, StringEnc):
@@ -2234,6 +2383,8 @@ def max_bits(items: list[Item]) -> int:
         if isinstance(it, Seek):
             pos = ((marks[it.from_start] if it.from_start is not None else pos)
                    + it.max_offset)
+        elif isinstance(it, Fill):
+            pos = max(pos, marks[it.start] + it.max_size)
         elif isinstance(it, Mark):
             marks[it.id] = pos
         elif isinstance(it, Value):

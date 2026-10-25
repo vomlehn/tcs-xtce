@@ -257,6 +257,33 @@ def checked(rng, header: bytes):
     return bytes(data), True
 
 
+def nested(rng) -> bytes:
+    """A Nested body: rows, a row count and gap, extra rows, and words of a
+    size mostly in range."""
+    count, gap = rng.choice([0, 1, 2, 3, rng.randrange(16)]), rng.randrange(16)
+    size = rng.choice([0, 1, 2, 4, rng.randrange(8)])
+    f = [(4, rng.randrange(16)) for _ in range(6)] + [(4, count), (4, gap)]
+    for i in range(min(count, 4)):
+        if i:
+            f.append((gap, 0))
+        f += [(4, rng.randrange(16)) for _ in range(3)]
+    f.append((8, size))
+    f += [(8, rng.choice(b"ab\0")) for _ in range(3 * min(size, 4))]
+    return bits([x for x in f if x[0]])
+
+
+def framed(rng) -> bytes:
+    """A Framed body: a section mostly of kind 2, a note, a bag of a size
+    mostly at least its item's, and a tray."""
+    note = bytes(rng.choice(b"hi") for _ in range(rng.randrange(6)))
+    carton = (note + b"\0" + bytes(6))[:6]
+    bag = rng.choice([8, 16, 40, rng.randrange(64)])
+    f = ([(4, rng.choice([2, 2, rng.randrange(16)])), (4, rng.randrange(16)),
+          (8, rng.randrange(256))] + [(8, c) for c in carton])
+    f += [(8, bag), (8, rng.randrange(256)), (max(bag - 8, 0), 0)]
+    return bits([x for x in f if x[0]]) + rng.randbytes(4)
+
+
 def upload(rng) -> bytes:
     """An Upload body: word count and tag size mostly in range."""
     n = rng.choice([1, 2, 4, rng.randrange(6)])
@@ -276,8 +303,8 @@ def main() -> None:
         if rng.random() < 0.6:
             apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
-                               380, 390, 395, 395, 400, 400, 410,
-                               rng.randrange(1 << 11)])
+                               380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
+                               430, 440, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -325,6 +352,10 @@ def main() -> None:
                 data += (rng.randbytes(7) + cal.to_bytes(2, "big")
                          + rng.randbytes(8) + text.ljust(20, b"\0")
                          + rng.randbytes(6))
+            elif apid == 420 and rng.random() < 0.9:
+                data += nested(rng)
+            elif apid == 430 and rng.random() < 0.9:
+                data += framed(rng)
             elif apid == 400 and rng.random() < 0.9:
                 body, whole = checked(rng, data)
                 data = body if whole else data + body
@@ -352,7 +383,7 @@ def main() -> None:
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
             opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
-                                 12, rng.randrange(256)])
+                                 12, 13, 13, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
@@ -371,6 +402,15 @@ def main() -> None:
                 data += bytes([lo, hi]) + rng.randbytes(2 if lo < hi else 0)
             elif opcode == 11 and rng.random() < 0.9:
                 data += configure(rng)
+            elif opcode == 13 and rng.random() < 0.9:
+                # Arm: Force mostly 0 or 1, then Level when forced, then the
+                # pattern, now and then wrong (decoding doesn't check it).
+                force = rng.choice([0, 1, 1, rng.randrange(256)])
+                data += bytes([force])
+                if force == 1:
+                    data += bytes([rng.randrange(256)])
+                data += rng.choice([bytes.fromhex("a5" * 9 + "0a" + "5a" * 8
+                                                  + "50"), rng.randbytes(19)])
             elif opcode == 12 and rng.random() < 0.9:
                 # Eight digits and a Luhn check digit, mostly right.
                 digits = "".join(rng.choice("0123456789") for _ in range(8))

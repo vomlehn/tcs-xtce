@@ -7,7 +7,8 @@ from .common import (Ref, fast_order, field_range, flt, header_lines,
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
-                    Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType)
+                    Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
+                    Require, Fill)
 
 
 def pstr(s: str) -> str:
@@ -162,6 +163,12 @@ def size(d: DynSize, x: str, f: str) -> str:
     return f"{n} * {d.factor}" if d.factor != 1 else n
 
 
+def gap_expr(e: ArrayEnc, ref, f: str) -> str:
+    """The bits between an array's elements."""
+    return (str(e.gap) if isinstance(e.gap, int)
+            else size(e.gap, ref(e.gap), f))
+
+
 def count(vt: VType, ref, f: str) -> str:
     c = vt.enc.count
     return size(c, ref(c), f) if isinstance(c, DynSize) else str(c)
@@ -219,8 +226,8 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         agg = f"{vt.ident}({', '.join(parts)})"
         return f"({agg}, r.pad({e.pad}, {f}))[0]" if e.pad else agg
     if isinstance(e, ArrayEnc):
-        return (f"pk.read_list(r, {count(vt, ref, f)}, {e.gap}, {f}, lambda: "
-                f"{read_expr(e.elem, f, ref, depth + 1)})")
+        return (f"pk.read_list(r, {count(vt, ref, f)}, {gap_expr(e, ref, f)}, "
+                f"{f}, lambda: {read_expr(e.elem, f, ref, depth + 1)})")
     if isinstance(e, IntEnc):
         raw = raw_read(e, f)
         if e.bcd:
@@ -461,6 +468,10 @@ class PythonEmitter:
                 self.line(f"m{it.id} = r.pos", depth)
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
+            elif isinstance(it, Require):
+                self.require(it, lambda lc: f"v{lc.id}", depth)
+            elif isinstance(it, Fill):
+                self.fill(it, "r", self.read_ref, depth)
             elif isinstance(it, Value):
                 lc = it.local
                 if lc.checksum:
@@ -500,6 +511,10 @@ class PythonEmitter:
                 self.line(f"w.uint({it.bits}, 0x{it.value:x})", depth)
             elif isinstance(it, Pad):
                 self.line(f"w.zeros({it.bits})", depth)
+            elif isinstance(it, Require):
+                self.require(it, lambda lc: self.place(n, lc, names), depth)
+            elif isinstance(it, Fill):
+                self.fill(it, "w", self.write_ref(n, names), depth)
             elif isinstance(it, Cond):
                 cond = " and ".join(
                     f"({term(c, lambda lc: self.place(n, lc, names))})"
@@ -539,7 +554,7 @@ class PythonEmitter:
             self.line(f"for {i}, {el} in enumerate({x}):", depth)
             if e.gap:
                 self.line(f"if {i}:", depth + 1)
-                self.line(f"w.skip({e.gap}, {f})", depth + 2)
+                self.line(f"w.skip({gap_expr(e, ref, f)}, {f})", depth + 2)
             self.write_value(e.elem, el, f, ref, depth + 1)
         elif isinstance(e, BinaryEnc) and e.dyn is not None:
             data = f"{x}.encode()" if vt.kind == "string" else x
@@ -570,6 +585,27 @@ class PythonEmitter:
             return f"d{lc.id}"
         return literal(lc.vtype, n.fixed[lc])
 
+    def fill(self, it: Fill, rw: str, ref, depth: int) -> None:
+        """Pads to the end of a container with a size; raises BadSize if its
+        entries go past it."""
+        f = pstr(it.container)
+        n = (size(it.size, ref(it.size), f) if isinstance(it.size, DynSize)
+             else str(it.size))
+        self.line(f"e = {self.mark(it.start)} + {n}", depth)
+        self.line(f"if {rw}.pos > e:", depth)
+        self.line(f'raise pk.PacketError("BadSize", {f})', depth + 1)
+        if rw == "r":
+            self.line(f"r.pad(e - r.pos, {f})", depth)
+        else:
+            self.line("w.zeros(e - w.pos)", depth)
+
+    def require(self, it: Require, place, depth: int) -> None:
+        """Raises Mismatch unless an included container's criteria hold."""
+        cond = " and ".join(f"({term(t, place)})" for t in it.criteria)
+        self.line(f"if not ({cond}):", depth)
+        self.line(f'raise pk.PacketError("Mismatch", {pstr(it.container)}, '
+                  f'{pstr(it.text)})', depth + 1)
+
     @staticmethod
     def mark(i: int) -> str:
         return "0" if i == 0 else f"m{i}"
@@ -598,6 +634,8 @@ class PythonEmitter:
         end = f"m{c.end}" if c.end is not None else f"{rw}.packet_end()"
         if c.from_end:
             end = f"max({end} - {c.skip}, 0)"
+        elif start == "0":
+            end = pos  # the field always follows the packet's start
         else:
             end = f"{pos} if {pos} >= {start} else {end}"
         return f"({start})", f"({end})"

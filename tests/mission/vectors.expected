@@ -138,3 +138,14 @@ Times{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_c
 Times{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, milli_time=0.0, days=5662224000.0, months=670585230.0, cal_time=12060.0, pico=-1e-12, iso_time="", raw_time=0x000000000000} | 099ac02a002a00000000ffffff03e8bff00000000000000000000000000000000000000000000000000000000000000000
 error:Calibration | -
 error:InvalidString | -
+Nested{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, rows=[[1, 2, 3], [4, 5, 6]], row_gap=3, extra=[[7, 8, 9], [10, 11, 12]], word_size=2, words=["a", "bc", ""]} | 09a4c02a000e12345623789157804c200c4c600000
+Nested{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, rows=[[0, 0, 0], [15, 15, 15]], row_gap=0, extra=[], word_size=0, words=["", "", ""]} | 09a4c02a0004000fff0000
+Nested{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, rows=[[1, 1, 1], [2, 2, 2]], row_gap=15, extra=[[3, 3, 3], [3, 3, 3], [3, 3, 3]], word_size=4, words=["abcd", "x", "yz"]} | 09a4c02a00191112223f33300006660000ccc1185898d91e0000001e5e800000
+error:BadSize | -
+Framed{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, section_kind=2, section_value=5, section_extra=171, carton_note="hi", bag_bits=16, bag_item=17, tray_first=34, tray_last=51} | 09aec02a000e25ab68690000000010110022000033
+Framed{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, section_kind=2, section_value=0, section_extra=0, carton_note="", bag_bits=8, bag_item=255, tray_first=0, tray_last=255} | 09aec02a000d200000000000000008ff000000ff
+Framed{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, section_kind=2, section_value=15, section_extra=1, carton_note="abcd", bag_bits=40, bag_item=1, tray_first=2, tray_last=3} | 09aec02a00112f0161626364000028010000000002000003
+error:Mismatch | -
+error:BadSize | -
+Arm{seq_count=5, force=true, level=7} | 112ec00500150d0107a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50
+Arm{seq_count=5, force=false, level=none} | 112ec00500140d00a5a5a5a5a5a5a5a5a50a5a5a5a5a5a5a5a5a50

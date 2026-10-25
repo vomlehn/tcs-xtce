@@ -13,8 +13,8 @@ from xtcepkt import emit_c  # noqa: E402
 from xtcepkt.compile import (  # noqa: E402
     compile_document, compile_documents, item_bits, member_path, value_range)
 from xtcepkt.model import (  # noqa: E402
-    MAX_FIELD_BITS, AnyOf, ContextCal, Index, MathOp, Pad, Seek, Spline,
-    Unsupported)
+    MAX_FIELD_BITS, AnyOf, ContextCal, Fill, Fixed, Index, MathOp, Pad, Require,
+    Seek, Spline, Unsupported, walk)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -429,10 +429,7 @@ class ArrayTests(unittest.TestCase):
             (dim(fixed(0), dynamic("N")) * 2, COUNT_THEN_ARRAY, "U8",
              "more than one dimension from DynamicValue"),
             (dim(fixed(3), fixed(1)), COUNT_THEN_ARRAY, "U8",
-             "EndingIndex 1 is before StartingIndex 3"),
-            (dim(fixed(0), fixed(1)),
-             '<ArrayParameterRefEntry parameterRef="Nested"/>', "U8",
-             "arrays of arrays")]
+             "EndingIndex 1 is before StartingIndex 3")]
         for dims, entries, count_type, message in cases:
             with self.subTest(message):
                 self.unsupported(array_mission(dims, entries, count_type),
@@ -454,11 +451,22 @@ class ArrayTests(unittest.TestCase):
                 '</ParameterRefEntry>')
         m = compile_xml(array_mission(dim(fixed(0), fixed(0)), once))
         self.assertEqual(m.nodes[0].fields[0][1].vtype.kind, "int")
+        # A repeated array is an array of arrays.
         on_array = ('<ArrayParameterRefEntry parameterRef="Arr"><RepeatEntry>'
                     '<Count><FixedValue>2</FixedValue></Count></RepeatEntry>'
                     '</ArrayParameterRefEntry>')
-        self.unsupported(array_mission(dim(fixed(0), fixed(0)), on_array),
-                         "RepeatEntry on an array")
+        vt = compile_xml(array_mission(dim(fixed(0), fixed(0)),
+                                       on_array)).nodes[0].fields[0][1].vtype
+        self.assertEqual((vt.kind, vt.enc.count, vt.elem.kind),
+                         ("array", 2, "array"))
+
+    def test_arrays_of_arrays(self):
+        vt = compile_xml(
+            array_mission(
+                dim(fixed(0), fixed(1)),
+                '<ArrayParameterRefEntry '
+                'parameterRef="Nested"/>')).nodes[0].fields[0][1].vtype
+        self.assertEqual((vt.kind, vt.elem.kind), ("array", "array"))
 
     def test_criterion_on_array(self):
         text = array_mission(dim(fixed(0), fixed(0)),
@@ -651,11 +659,18 @@ class ContainerTests(unittest.TestCase):
         self.assertEqual(m.nodes[0].items[-1].bits, 12)
         self.assertEqual(m.nodes[0].max_bytes, 3)
 
+    def test_size_with_entries_whose_size_varies_is_filled(self):
+        m = compile_xml(container_mission(size(64) + entries(ref("Text")), ""))
+        fill = m.nodes[0].items[-1]
+        self.assertIsInstance(fill, Fill)
+        self.assertEqual(fill.size, 64)
+        self.assertEqual(m.nodes[0].max_bytes, 9)  # N, then the 64 bits
+
     def test_rejected(self):
         for record, entry, why in (
                 (size(8) + entries(ref("A"), ref("B")), "",
                  "entries take 12 bits, more than the container size 8"),
-                (size(64) + entries(ref("Text")), "",
+                (size(64) + entries(ref("Text")), REPEAT,
                  "entries whose size or position varies"),
                 (entries(ref("A"), ref("B", "previousEntry:-2")), REPEAT,
                  "has entries that overlap"),
@@ -1591,6 +1606,81 @@ class TimeTests(unittest.TestCase):
                               '</BinaryDataEncoding></Encoding>'
                               '</AbsoluteTimeParameterType>'))
         self.assertIn("with units, scale or offset", str(cm.exception))
+
+
+DEMO = (Path(__file__).resolve().parents[2] / "tests" / "mission" / "demo.xml")
+
+
+class ContainerFeatureTests(unittest.TestCase):
+    """Included derived containers, sizes that vary, locations from a
+    container's end, NextContainer, and command include conditions,
+    restriction criteria and long fixed values, as the demo uses them."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = compile_document(xtce.Document.from_file(str(DEMO)).root)
+        cls.nodes = {n.name: n for n in cls.m.nodes}
+
+    def test_included_derived_container(self):
+        items = walk(self.nodes["Framed"].items)
+        (req,) = [it for it in items if isinstance(it, Require)]
+        self.assertEqual((req.container, req.text),
+                         ("/Demo/Section", "/Demo/SectionKind == 2"))
+        names = [it.local.name for it in items if hasattr(it, "local")]
+        self.assertEqual(names[:3],
+                         ["SectionKind", "SectionValue", "SectionExtra"])
+
+    def test_sizes_and_end_locations(self):
+        items = walk(self.nodes["Framed"].items)
+        fills = [it for it in items if isinstance(it, Fill)]
+        self.assertEqual(fills[0].size, 48)  # Carton: the note varies
+        self.assertEqual(fills[1].size.local.name, "BagBits")
+        # TrayLast ends the 32-bit Tray: it starts 24 bits in.
+        seeks = [it for it in items if isinstance(it, Seek)]
+        self.assertEqual(seeks[-1].offset, 24)
+
+    def test_next_container(self):
+        follower = self.nodes["Follower"]
+        self.assertEqual(follower.next_container, "Framed")
+        self.assertNotIn(follower, follower.base.children)
+
+    def test_command_features(self):
+        arm = self.nodes["Arm"]
+        names = {lc.name: lc for _, lc in arm.fields}
+        self.assertTrue(names["Level"].optional)
+        fixed = [it for it in walk(arm.items) if isinstance(it, Fixed)]
+        # 72 bits are a byte and 64 bits, twice.
+        self.assertEqual([f.bits for f in fixed], [8, 64, 8, 64])
+
+    def test_command_restriction_criteria(self):
+        u8 = ('<IntegerArgumentType name="U8" signed="false">'
+              '<IntegerDataEncoding sizeInBits="8"/></IntegerArgumentType>')
+        text = mission(tm="""
+            <ParameterTypeSet><IntegerParameterType name="P8" signed="false">
+              <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+            </ParameterTypeSet>
+            <ParameterSet><Parameter name="Mode" parameterTypeRef="P8"/>
+            </ParameterSet>""", tc=f"""
+            <ArgumentTypeSet>{u8}</ArgumentTypeSet>
+            <MetaCommandSet>
+              <MetaCommand name="Base" abstract="true">
+                <CommandContainer name="BaseC"><EntryList>
+                  <ParameterRefEntry parameterRef="Mode"/></EntryList>
+                </CommandContainer>
+              </MetaCommand>
+              <MetaCommand name="Go">
+                <BaseMetaCommand metaCommandRef="Base"/>
+                <CommandContainer name="GoC"><EntryList/>
+                  <BaseContainer containerRef="BaseC"><RestrictionCriteria>
+                    <Comparison parameterRef="Mode" value="3"/>
+                  </RestrictionCriteria></BaseContainer>
+                </CommandContainer>
+              </MetaCommand>
+            </MetaCommandSet>""")
+        go = next(n for n in compile_xml(text).nodes if n.name == "Go")
+        (c,) = go.criteria
+        self.assertEqual((c.local.name, c.value), ("Mode", 3))
+        self.assertEqual(go.fixed, {c.local: 3})
 
 
 if __name__ == "__main__":

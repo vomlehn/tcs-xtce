@@ -11,7 +11,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
-                    Value, VType)
+                    Value, VType, Require, Fill)
 
 
 def rstr(s: str) -> str:
@@ -184,6 +184,13 @@ def size(d: DynSize, x: str, f: str) -> str:
     return f"{n} * {d.factor}" if d.factor != 1 else n
 
 
+def gap_expr(e: ArrayEnc, ref, f: str) -> str:
+    """The bits between an array's elements, as an i64 expression."""
+    if isinstance(e.gap, int):
+        return str(e.gap)
+    return f"({size(e.gap, ref(e.gap), f)}) as i64"
+
+
 def count(vt: VType, ref, f: str) -> str:
     c = vt.enc.count
     return size(c, ref(c), f) if isinstance(c, DynSize) else f"{c}usize"
@@ -270,7 +277,8 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
         agg = f"{vt.ident} {{ {', '.join(f'{i}: {x}' for i, x in reads)} }}"
         return f"{{ let a = {agg}; r.pad({e.pad}, {f})?; a }}" if e.pad else agg
     if isinstance(e, ArrayEnc):
-        gap = f"if i > 0 {{ r.skip({e.gap}, {f})?; }}" if e.gap else ""
+        gap = (f"if i > 0 {{ r.skip({gap_expr(e, ref, f)}, {f})?; }}" if e.gap
+               else "")
         elem = read_expr(e.elem, f, ref, alloc, depth + 1)
         if alloc:
             return (f"{{ let n = {count(vt, ref, f)}; let mut a = "
@@ -351,7 +359,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
             parts.append(f"w.zeros({e.pad});")
         return "{ " + " ".join(parts) + " }"
     if isinstance(e, ArrayEnc):
-        gap = f"if i > 0 {{ w.skip({e.gap}, {f})?; }}" if e.gap else ""
+        gap = (f"if i > 0 {{ w.skip({gap_expr(e, ref, f)}, {f})?; }}" if e.gap
+               else "")
         return (f"{{ let n = {count(vt, ref, f)}; if {x}.len() != n {{ {bad} "
                 f"}} for (i, {elem_pattern(e.elem)}) in {x}.iter().enumerate() "
                 f"{{ {gap} {write_stmt(e.elem, 'e', f, ref)} }} }}")
@@ -410,7 +419,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
 def elem_pattern(vt: VType) -> str:
     """Pattern binding ``e`` to an element of a slice: by value when it is
     Copy, so that ``e`` can be used like a field."""
-    return "e" if vt.kind in ("string", "binary", "aggregate") else "&e"
+    return ("e" if vt.kind in ("string", "binary", "aggregate", "array")
+            else "&e")
 
 
 def describe(vt: VType, x: str) -> str:
@@ -590,6 +600,10 @@ class RustEmitter:
                 self.line(f"let m{it.id} = r.position();", depth)
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
+            elif isinstance(it, Require):
+                self.require(it, lambda lc: f"v{lc.id}", depth)
+            elif isinstance(it, Fill):
+                self.fill(it, "r", self.read_ref, depth)
             elif isinstance(it, Value):
                 lc = it.local
                 if lc.checksum:
@@ -632,6 +646,10 @@ class RustEmitter:
                 self.line(f"w.uint({it.bits}, 0x{it.value:x});", depth)
             elif isinstance(it, Pad):
                 self.line(f"w.zeros({it.bits});", depth)
+            elif isinstance(it, Require):
+                self.require(it, lambda lc: self.place(n, lc, names), depth)
+            elif isinstance(it, Fill):
+                self.fill(it, "w", self.write_ref(n, names), depth)
             elif isinstance(it, Cond):
                 conds = [term(c, lambda lc: self.place(n, lc, names))
                          for c in it.criteria]
@@ -679,6 +697,33 @@ class RustEmitter:
         x = literal(lc.vtype, n.fixed[lc])
         return f"({x})" if lc.vtype.kind == "binary" else x
 
+    def fill(self, it: Fill, rw: str, ref, depth: int) -> None:
+        """Pads to the end of a container with a size; fails with BadSize if
+        its entries go past it."""
+        f = rstr(it.container)
+        n = (size(it.size, ref(it.size), f) if isinstance(it.size, DynSize)
+             else str(it.size))
+        self.line("{", depth)
+        d = depth + 1
+        self.line(f"let e = {self.mark(it.start)} + {n};", d)
+        self.line(f"if {rw}.position() > e {{", d)
+        self.line(f"return Err(PacketError::BadSize {{ field: {f} }});", d + 1)
+        self.line("}", d)
+        pad = "pad" if rw == "r" else "zeros"
+        tail = f", {f})?;" if rw == "r" else ");"
+        self.line(f"{rw}.{pad}(e - {rw}.position(){tail}", d)
+        self.line("}", depth)
+
+    def require(self, it: Require, place, depth: int) -> None:
+        """Fails with Mismatch unless an included container's criteria
+        hold."""
+        self.line(f"if !({conjunction([term(t, place) for t in it.criteria])}) "
+                  "{", depth)
+        self.line("return Err(PacketError::Mismatch { container: "
+                  f"{rstr(it.container)}, criterion: {rstr(it.text)} }});",
+                  depth + 1)
+        self.line("}", depth)
+
     @staticmethod
     def mark(i: int) -> str:
         return "0" if i == 0 else f"m{i}"
@@ -710,6 +755,8 @@ class RustEmitter:
         end = f"m{c.end}" if c.end is not None else f"{rw}.packet_end()"
         if c.from_end:
             end = f"{end}.saturating_sub({c.skip})"
+        elif start == "0":
+            end = pos  # the field always follows the packet's start
         else:
             end = f"if {pos} >= {start} {{ {pos} }} else {{ {end} }}"
         return f"({start})", f"({end})"

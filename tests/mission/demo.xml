@@ -769,6 +769,56 @@
         </Encoding>
         <ReferenceTime><Epoch>TAI</Epoch></ReferenceTime>
       </AbsoluteTimeParameterType>
+      <!-- Arrays of arrays, a repeated array, and elements sized by
+           another value. -->
+      <ArrayParameterType name="RowType" arrayTypeRef="U4">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex><FixedValue>0</FixedValue></StartingIndex>
+            <EndingIndex><FixedValue>2</FixedValue></EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <ArrayParameterType name="RowsType" arrayTypeRef="RowType">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex><FixedValue>0</FixedValue></StartingIndex>
+            <EndingIndex><FixedValue>1</FixedValue></EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <IntegerParameterType name="WordSizeType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="4"/>
+      </IntegerParameterType>
+      <StringParameterType name="WordType">
+        <StringDataEncoding>
+          <Variable maxSizeInBits="32">
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="WordSize"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+            <TerminationChar>00</TerminationChar>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+      <ArrayParameterType name="WordsType" arrayTypeRef="WordType">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex><FixedValue>0</FixedValue></StartingIndex>
+            <EndingIndex><FixedValue>2</FixedValue></EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
+      <!-- Containers: an included derived container, sizes that vary,
+           and a location from a container's end. -->
+      <StringParameterType name="NoteText">
+        <StringDataEncoding>
+          <Variable maxSizeInBits="40">
+            <TerminationChar>00</TerminationChar>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -899,6 +949,20 @@
       <Parameter name="Pico" parameterTypeRef="PicoType"/>
       <Parameter name="IsoTime" parameterTypeRef="IsoTimeType"/>
       <Parameter name="RawTime" parameterTypeRef="RawTimeType"/>
+      <Parameter name="Rows" parameterTypeRef="RowsType"/>
+      <Parameter name="RowCount" parameterTypeRef="U4"/>
+      <Parameter name="RowGap" parameterTypeRef="U4"/>
+      <Parameter name="Extra" parameterTypeRef="RowType"/>
+      <Parameter name="WordSize" parameterTypeRef="WordSizeType"/>
+      <Parameter name="Words" parameterTypeRef="WordsType"/>
+      <Parameter name="SectionKind" parameterTypeRef="U4"/>
+      <Parameter name="SectionValue" parameterTypeRef="U4"/>
+      <Parameter name="SectionExtra" parameterTypeRef="U8"/>
+      <Parameter name="CartonNote" parameterTypeRef="NoteText"/>
+      <Parameter name="BagBits" parameterTypeRef="U8"/>
+      <Parameter name="BagItem" parameterTypeRef="U8"/>
+      <Parameter name="TrayFirst" parameterTypeRef="U8"/>
+      <Parameter name="TrayLast" parameterTypeRef="U8"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -1415,6 +1479,115 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <SequenceContainer name="Nested">
+        <EntryList>
+          <ArrayParameterRefEntry parameterRef="Rows"/>
+          <ParameterRefEntry parameterRef="RowCount"/>
+          <ParameterRefEntry parameterRef="RowGap"/>
+          <ArrayParameterRefEntry parameterRef="Extra">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="RowCount"/>
+                </DynamicValue>
+              </Count>
+              <Offset>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="RowGap"/>
+                </DynamicValue>
+              </Offset>
+            </RepeatEntry>
+          </ArrayParameterRefEntry>
+          <ParameterRefEntry parameterRef="WordSize"/>
+          <ArrayParameterRefEntry parameterRef="Words"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="420"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="SectionBase" abstract="true">
+        <EntryList>
+          <ParameterRefEntry parameterRef="SectionKind"/>
+          <ParameterRefEntry parameterRef="SectionValue"/>
+        </EntryList>
+      </SequenceContainer>
+      <!-- Included, it is SectionBase's entries then its own, and its
+           criteria must hold. -->
+      <SequenceContainer name="Section">
+        <EntryList>
+          <ParameterRefEntry parameterRef="SectionExtra"/>
+        </EntryList>
+        <BaseContainer containerRef="SectionBase">
+          <RestrictionCriteria>
+            <Comparison parameterRef="SectionKind" value="2"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- 48 bits, whatever the note's length. -->
+      <SequenceContainer name="Carton">
+        <BinaryEncoding>
+          <SizeInBits><FixedValue>48</FixedValue></SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="CartonNote"/>
+        </EntryList>
+      </SequenceContainer>
+      <!-- As many bits as BagBits says. -->
+      <SequenceContainer name="Bag" abstract="true">
+        <BinaryEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="BagBits"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="BagItem"/>
+        </EntryList>
+      </SequenceContainer>
+      <!-- 32 bits, TrayLast in the last 8. -->
+      <SequenceContainer name="Tray">
+        <BinaryEncoding>
+          <SizeInBits><FixedValue>32</FixedValue></SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="TrayFirst"/>
+          <ParameterRefEntry parameterRef="TrayLast">
+            <LocationInContainerInBits referenceLocation="containerEnd">
+              <FixedValue>0</FixedValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="Framed">
+        <EntryList>
+          <ContainerRefEntry containerRef="Section"/>
+          <ContainerRefEntry containerRef="Carton"/>
+          <ParameterRefEntry parameterRef="BagBits"/>
+          <ContainerRefEntry containerRef="Bag"/>
+          <ContainerRefEntry containerRef="Tray"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="430"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Restricted by the container that follows it in a stream, which a
+           packet codec can't see: decoding CCSDSPacket never picks it. -->
+      <SequenceContainer name="Follower">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Counter"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="440"/>
+            <NextContainer containerRef="Framed"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
     </ContainerSet>
   </TelemetryMetaData>
   <CommandMetaData>
@@ -1601,6 +1774,9 @@
       </IntegerArgumentType>
       <IntegerArgumentType name="DigitsArgType" signed="false">
         <IntegerDataEncoding sizeInBits="32" encoding="packedBCD"/>
+      </IntegerArgumentType>
+      <IntegerArgumentType name="LevelArgType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
       </IntegerArgumentType>
     </ArgumentTypeSet>
     <MetaCommandSet>
@@ -1900,6 +2076,44 @@
           <EntryList>
             <ArgumentRefEntry argumentRef="Digits"/>
             <ParameterRefEntry parameterRef="SendCheck"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <!-- Level is sent only when Force is yes; two copies of a 72-bit
+           pattern, 4 bits apart, end it. -->
+      <MetaCommand name="Arm">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="13"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Force" argumentTypeRef="ForceType"/>
+          <Argument name="Level" argumentTypeRef="LevelArgType"/>
+        </ArgumentList>
+        <CommandContainer name="ArmContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Force"/>
+            <ArgumentRefEntry argumentRef="Level">
+              <IncludeCondition>
+                <BooleanExpression>
+                  <Condition>
+                    <ArgumentInstanceRef argumentRef="Force"/>
+                    <ComparisonOperator>==</ComparisonOperator>
+                    <Value>yes</Value>
+                  </Condition>
+                </BooleanExpression>
+              </IncludeCondition>
+            </ArgumentRefEntry>
+            <FixedValueEntry name="Pattern" binaryValue="A5A5A5A5A5A5A5A5A5"
+              sizeInBits="72">
+              <RepeatEntry>
+                <Count><FixedValue>2</FixedValue></Count>
+                <Offset><FixedValue>4</FixedValue></Offset>
+              </RepeatEntry>
+            </FixedValueEntry>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

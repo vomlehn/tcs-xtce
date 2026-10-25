@@ -161,12 +161,12 @@ class BinaryEnc:
 @dataclass
 class ArrayEnc:
     """``count`` values of type ``elem`` one after another, with ``gap`` bits
-    between them (from a RepeatEntry Offset).  ``count`` is a number, or a
-    DynSize when another value gives it."""
+    between them (from a RepeatEntry Offset).  ``count`` and ``gap`` are
+    numbers, or DynSizes when another value gives them."""
 
     elem: "VType"
     count: Union[int, DynSize]
-    gap: int = 0
+    gap: Union[int, DynSize] = 0
     dims: int = 1  # dimensions of an array type, flattened into ``count``
     # Each dimension's first index, and its size when every size is fixed
     # (empty otherwise): what element references and subsets index.
@@ -179,6 +179,10 @@ class ArrayEnc:
     def max_count(self) -> int:
         return (self.count if isinstance(self.count, int)
                 else self.count.max_total)
+
+    @property
+    def max_gap(self) -> int:
+        return self.gap if isinstance(self.gap, int) else self.gap.max_total
 
 
 @dataclass(frozen=True)
@@ -471,6 +475,17 @@ class Seek:
 
 
 @dataclass
+class EndSeek:
+    """While compiling: an entry whose end is ``offset`` bits before the end
+    of the container that starts at mark ``start`` (a containerEnd
+    location).  The compiler replaces it with a Seek once it knows the
+    container's size."""
+
+    start: int
+    offset: int
+
+
+@dataclass
 class Mark:
     """Remember the current position as the start of an included container."""
 
@@ -526,7 +541,37 @@ class Check:
     container: str
 
 
-Item = Union[Seek, Mark, Value, Fixed, Pad, Cond]
+@dataclass
+class Require:
+    """Criteria that must hold where it stands: the RestrictionCriteria of
+    an included container with a BaseContainer.  Decoding and encoding fail
+    with Mismatch, naming ``container``, when they don't."""
+
+    criteria: list["Term"]
+    container: str
+    text: str
+    bits = 0  # it occupies nothing
+
+
+@dataclass
+class Fill:
+    """Padding up to ``size`` bits after mark ``start``, where a container
+    with a size ends: a number, or a bound DynSize when another value gives
+    it.  Decoding and encoding fail with BadSize, naming ``container``, if
+    the entries already go past it."""
+
+    start: int
+    size: Union[int, "DynSize"]
+    container: str
+    bits = 0  # where it ends depends on where it starts
+
+    @property
+    def max_size(self) -> int:
+        return (self.size.max_total if isinstance(self.size, DynSize)
+                else self.size)
+
+
+Item = Union[Seek, Mark, Value, Fixed, Pad, Cond, Require, Fill]
 
 
 def walk(items: list) -> list:
@@ -637,6 +682,10 @@ class Node:
     derived: dict = field(default_factory=dict)
     # ErrorDetectCorrect checks, in the order their values are computed
     checks: list = field(default_factory=list)
+    # The container that must follow this one in a stream (its
+    # NextContainer restriction), which keeps decoding its base from
+    # picking it.
+    next_container: Optional[str] = None
     max_bytes: int = 0
     error: Optional[str] = None
 
