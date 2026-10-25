@@ -1024,8 +1024,19 @@ Testing strategy
    ``tests/mission/demo.xml`` uses every supported feature, and is
    checked with ``xmllint``. ``vectors.txt`` holds packets built by an
    independent bit-string packer rather than by the generated code.
-   ``vectors.expected`` holds their decoded text and re-encodings. Every
-   language must reproduce ``vectors.expected`` exactly.
+   ``vectors.expected`` holds their decoded text and re-encodings, and
+   for packets with alarms or algorithms, their alarm levels (from
+   ``alarms()``, and from one ``monitor()`` kept across the vectors when
+   it differs) and outputs. Every language must reproduce
+   ``vectors.expected`` exactly. The tools register the demo's custom
+   algorithms the same way in every language.
+
+**Streams**
+   ``tests/stream_check.sh`` feeds the demo's streams hand-built lines,
+   whose frames ``streams.expected`` holds, and random streams of frames
+   among noise, with bit errors, slips, inversions, stuffed bits and
+   aborts, cut at random places, on which all four builds must find the
+   same frames.
 
 **Float formats**
    ``tests/float_check.sh`` decodes and encodes every float format and

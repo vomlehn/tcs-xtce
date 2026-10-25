@@ -1347,8 +1347,18 @@ byte-identical, and to validate too.</dd>
 <dd><tt class="docutils literal">tests/mission/demo.xml</tt> uses every supported feature, and is
 checked with <tt class="docutils literal">xmllint</tt>. <tt class="docutils literal">vectors.txt</tt> holds packets built by an
 independent bit-string packer rather than by the generated code.
-<tt class="docutils literal">vectors.expected</tt> holds their decoded text and re-encodings. Every
-language must reproduce <tt class="docutils literal">vectors.expected</tt> exactly.</dd>
+<tt class="docutils literal">vectors.expected</tt> holds their decoded text and re-encodings, and
+for packets with alarms or algorithms, their alarm levels (from
+<tt class="docutils literal">alarms()</tt>, and from one <tt class="docutils literal">monitor()</tt> kept across the vectors when
+it differs) and outputs. Every language must reproduce
+<tt class="docutils literal">vectors.expected</tt> exactly. The tools register the demo's custom
+algorithms the same way in every language.</dd>
+<dt><strong>Streams</strong></dt>
+<dd><tt class="docutils literal">tests/stream_check.sh</tt> feeds the demo's streams hand-built lines,
+whose frames <tt class="docutils literal">streams.expected</tt> holds, and random streams of frames
+among noise, with bit errors, slips, inversions, stuffed bits and
+aborts, cut at random places, on which all four builds must find the
+same frames.</dd>
 <dt><strong>Float formats</strong></dt>
 <dd><tt class="docutils literal">tests/float_check.sh</tt> decodes and encodes every float format and
 size in all four builds: the conversions in <tt class="docutils literal">tests/float/known.txt</tt>

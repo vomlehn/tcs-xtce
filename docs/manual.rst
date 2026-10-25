@@ -2578,7 +2578,8 @@ Testing
   * the demo mission validates;
   * every language turns the hand-built packets in
     ``tests/mission/vectors.txt`` into exactly
-    ``tests/mission/vectors.expected``;
+    ``tests/mission/vectors.expected``: their text, re-encodings, alarm
+    levels and algorithm outputs;
   * 3000 random packets give byte-identical results in Rust (generated
     both with and without dynamic allocation), Python, and the C tool
     compiled both as C and as C++;
@@ -2587,6 +2588,10 @@ Testing
   * decoding a re-encoded packet gives the same values and the same
     bytes.
 
+* ``tests/stream_check.sh``: every language finds the frames of the
+  demo's streams in ``tests/mission/streams.txt``, exactly
+  ``tests/mission/streams.expected``, and the same frames as the others in
+  random streams with bit errors, slips, inversions and aborts.
 * ``tests/digest_check.sh``: the Rust, C, C++ and Python digest functions
   give the same digest for the demo mission, the examples' XTCE files, the
   schema-covering samples and the documents in ``tests/digest``, which

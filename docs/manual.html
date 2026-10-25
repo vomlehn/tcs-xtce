@@ -2954,7 +2954,8 @@ language, with byte-identical output that also validates.</li>
 <li>the demo mission validates;</li>
 <li>every language turns the hand-built packets in
 <tt class="docutils literal">tests/mission/vectors.txt</tt> into exactly
-<tt class="docutils literal">tests/mission/vectors.expected</tt>;</li>
+<tt class="docutils literal">tests/mission/vectors.expected</tt>: their text, re-encodings, alarm
+levels and algorithm outputs;</li>
 <li>3000 random packets give byte-identical results in Rust (generated
 both with and without dynamic allocation), Python, and the C tool
 compiled both as C and as C++;</li>
@@ -2964,6 +2965,10 @@ allocate nothing while decoding, encoding or describing a packet;</li>
 bytes.</li>
 </ul>
 </li>
+<li><tt class="docutils literal">tests/stream_check.sh</tt>: every language finds the frames of the
+demo's streams in <tt class="docutils literal">tests/mission/streams.txt</tt>, exactly
+<tt class="docutils literal">tests/mission/streams.expected</tt>, and the same frames as the others in
+random streams with bit errors, slips, inversions and aborts.</li>
 <li><tt class="docutils literal">tests/digest_check.sh</tt>: the Rust, C, C++ and Python digest functions
 give the same digest for the demo mission, the examples' XTCE files, the
 schema-covering samples and the documents in <tt class="docutils literal">tests/digest</tt>, which
