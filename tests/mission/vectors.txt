@@ -210,3 +210,7 @@ tm 0a44c02a0002001005  # scaled: otherwise it is halved
 tm 0a4ec02a00070301020304050955  # two rows: three columns; TwoRows[1][2], element 1*3+2, is 9, so TwoRowNote
 tm 0a4ec02a000603010203040508  # two rows: TwoRows[1][2] is 8
 tm 0a4ec02a00040201020304  # two rows: two columns, so no TwoRows[1][2]
+tm 0a58c02a0005121234345656  # zip: ZipA 0x1234 and ZipB 0x56, each byte doubled on the wire
+tm 0a58c02a00041234565678  # zip: five bytes, which Shrink can't halve
+tm 0a62c02a0004f0e1968777  # xor: XorBlob aabbccdd, masked on the wire
+tm 0a62c02a0002010203  # xor: three bytes, not XorBlob's four

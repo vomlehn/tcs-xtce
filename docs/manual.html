@@ -2453,6 +2453,41 @@ across packets, on a <tt class="docutils literal">OnPeriodicRateTrigger</tt>, or
 <tt class="docutils literal">CustomAlgorithm</tt> is evaluated the same way, by its hook (see
 Custom algorithms).</p>
 </dd>
+<dt>Transform algorithms</dt>
+<dd><p class="first">A <tt class="docutils literal">FromBinaryTransformAlgorithm</tt> and <tt class="docutils literal">ToBinaryTransformAlgorithm</tt>
+change bits on the wire into others, as compression or encryption
+does, by the application's functions (transform hooks, below):
+decoding gives the bytes on the wire to the first and reads what it
+makes of them, and encoding gives what it writes to the second. Both
+A document may give only one; the other way then fails with
+<tt class="docutils literal">NotInvertible</tt>, as Yamcs's PUS documents' time types, which only
+decode in telemetry and only encode in commands, do.</p>
+<p>On a binary type's <tt class="docutils literal">BinaryDataEncoding</tt>, the value is what the
+transform makes of its bytes, of any size up to the maximum field
+size; its <tt class="docutils literal">SizeInBits</tt> is its size on the wire, or <tt class="docutils literal"><span class="pre">-1</span></tt> for the
+rest of the packet. (Yamcs reads <tt class="docutils literal"><span class="pre">-1</span></tt> there as a size that the
+algorithm finds; a packet codec has no way to ask it, so such a value
+must be the packet's last.) On a container's <tt class="docutils literal">BinaryEncoding</tt>, its own
+entries (not a base container's) are read from what the transform
+makes of its bytes, and its <tt class="docutils literal">SizeInBits</tt> is their size on the wire;
+an included container needs one, while a packet's own container
+without one takes the rest of the packet. Either way the transformed
+data starts on a byte boundary, and a transform that makes more than
+fits fails with <tt class="docutils literal">TooLong</tt>, one that can't (a function giving
+nothing) with <tt class="docutils literal">InvalidValue</tt>, and one whose result isn't the size
+on the wire with <tt class="docutils literal">BadSize</tt>.</p>
+<p class="last">A Rust or C transform puts what it makes in the room it is given and
+returns its size; when that doesn't fit, it writes nothing and returns
+the size it needs, and when it can't, it returns <tt class="docutils literal">None</tt> or
+<tt class="docutils literal">XTCE_PK_NO_TRANSFORM</tt>. Encoding transforms in the output buffer,
+after what it writes, so <tt class="docutils literal">MAX_BYTES</tt> counts that room: for a
+container that takes the rest of the packet, the maximum field size,
+which <tt class="docutils literal"><span class="pre">tcs-xtce.max-field-bytes</span></tt> can lower. Transformed data can't
+have an <tt class="docutils literal">IncludeCondition</tt>, be in a repeated container, or hold a
+length field, a checksum or an entry located from the container's
+end. The demo's <tt class="docutils literal">ZipBlock</tt> doubles every byte of its entries on the
+wire, and its <tt class="docutils literal">XorBlock</tt> has a <tt class="docutils literal">XorBlob</tt> masked by XOR.</p>
+</dd>
 <dt>Custom algorithms</dt>
 <dd><p class="first">A <tt class="docutils literal">CustomAlgorithm</tt> names code that the document doesn't hold, so
 the application supplies each one as a function, a <em>hook</em>, named in
@@ -2466,7 +2501,9 @@ whether it holds for its inputs;</li>
 <li>a <tt class="docutils literal">CustomAlarm</tt>: the alarm level, 0 (normal) to 5 (severe),
 raised to at least that;</li>
 <li>a <tt class="docutils literal">Checksum</tt> named <tt class="docutils literal">custom</tt>, by its <tt class="docutils literal">InputAlgorithm</tt>: the
-value of the bits it covers.</li>
+value of the bits it covers;</li>
+<li>a <tt class="docutils literal">FromBinaryTransformAlgorithm</tt> or <tt class="docutils literal">ToBinaryTransformAlgorithm</tt>:
+the bytes it makes of the bytes given (see Transform algorithms).</li>
 </ul>
 <p>Inputs are the <tt class="docutils literal">InputSet</tt>'s values of the packet (integers, floats,
 enumerations and booleans, which must be present) and <tt class="docutils literal">Constant</tt>s,
@@ -2499,6 +2536,12 @@ in order, as doubles. The generated code has a place for each hook:</p>
 <td><tt class="docutils literal"><span class="pre">fn(&amp;[u8],</span> usize, usize) <span class="pre">-&gt;</span> u64</tt></td>
 <td><tt class="docutils literal">uint64_t f(const uint8_t*, size_t, size_t)</tt></td>
 <td><tt class="docutils literal">f(data, start, end) <span class="pre">-&gt;</span> int</tt></td>
+</tr>
+<tr><td>transform</td>
+<td><tt class="docutils literal"><span class="pre">fn(&amp;[u8],</span> &amp;mut [u8]) <span class="pre">-&gt;</span> Option&lt;usize&gt;</tt></td>
+<td><tt class="docutils literal">size_t f(const uint8_t* in, size_t n, uint8_t* out, size_t
+cap)</tt></td>
+<td><tt class="docutils literal">f(data) <span class="pre">-&gt;</span> bytes or None</tt></td>
 </tr>
 </tbody>
 </table>
@@ -2639,8 +2682,8 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 <dd><tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer or string without
 an <tt class="docutils literal">aliasNameSpace</tt>, instances of values in other packets, repeated
 segment entries with an <tt class="docutils literal">order</tt> or located from the end of their
-container, transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data
-encoding (which XTCE deprecates), least-significant-bit-first strings
+container, the transformed data listed under Transform algorithms,
+<tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE deprecates), least-significant-bit-first strings
 and binary data that may not start on a byte boundary, integers of
 more than 64 bits used other than as values (see &quot;Integer encoding&quot;),
 and a location from the end of an included container whose size

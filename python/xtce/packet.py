@@ -432,6 +432,21 @@ class BitReader:
             raise PacketError("Truncated", field)
         self.nbits = total * 8
 
+    def take(self, n, field: str) -> bytes:
+        """The next ``n`` whole bytes, the rest of the packet when None,
+        which must start on a byte boundary."""
+        if self.pos % 8:
+            raise PacketError("BadPosition", field)
+        if n is None:
+            n = (self.nbits - self.pos) // 8
+        end = self.pos + 8 * n
+        if end > self.nbits:
+            raise PacketError("Truncated", field)
+        out = bytes(self.data[self.pos // 8:end // 8])
+        self.pos = end
+        self.end = max(self.end, end)
+        return out
+
     def span_end(self, v: int, adjust: int, field: str) -> int:
         """Where the container that the length field ``field``, whose value
         ``v`` was just read, measures ends: ``v - adjust`` bytes after the
@@ -549,6 +564,24 @@ class BitWriter:
         self.pos = at
         self.uint_order(bits, le, v)
         self.pos = end
+
+    def transform(self, start: int, f, raw, cap: int, field: str) -> None:
+        """Replace the bytes written from bit ``start``, on a byte
+        boundary, with what the transform ``f`` makes of them: exactly
+        ``raw`` bytes when given, and at most ``cap``."""
+        a, b = start // 8, (self.pos + 7) // 8
+        if f is None:
+            raise PacketError("NotInvertible", field)
+        out = f(bytes(self.buf._data[a:b]))
+        if out is None:
+            raise PacketError("InvalidValue", field)
+        if len(out) > cap:
+            raise PacketError("TooLong", field)
+        if raw is not None and len(out) != raw:
+            raise PacketError("BadSize", field)
+        self.buf.resize(a)
+        self.buf.write(out)
+        self.pos = 8 * len(self.buf)
 
     def patch_span(self, at: int, bits: int, le: bool, adjust: int,
                    field: str) -> None:
@@ -2024,6 +2057,21 @@ class FlagSync:
                 self.hunting = True
                 self.frame = []
         self.run = 0
+
+
+def transform_from(f, raw: bytes, cap: int, field: str) -> bytes:
+    """What the transform ``f`` makes of ``raw``, at most ``cap`` bytes;
+    raises InvalidValue if it can't, TooLong if it gives more, and
+    NotInvertible if there is none (the document gives only the other
+    way)."""
+    if f is None:
+        raise PacketError("NotInvertible", field)
+    out = f(raw)
+    if out is None:
+        raise PacketError("InvalidValue", field)
+    if len(out) > cap:
+        raise PacketError("TooLong", field)
+    return bytes(out)
 
 
 def checked(value, ok, container: str, text: str):

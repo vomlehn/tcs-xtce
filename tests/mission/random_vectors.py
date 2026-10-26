@@ -28,6 +28,14 @@ demo.HOOKS.update(is_even=lambda v: v[0] % 2.0 == 0.0,
                   min_max=lambda v: (min(v), max(v)),
                   bands=lambda v: int(v[0] / 50.0),
                   twice=lambda d, start, end: 2 * sum(d[start // 8:end // 8]))
+# The demo's transforms: Expand doubles every byte, Shrink takes every
+# other one (and gives nothing when a pair differs); Mask and Unmask are XOR
+# 0x5A.
+demo.HOOKS.update(expand=lambda b: bytes(x for x in b for _ in range(2)),
+                  shrink=lambda b: (bytes(b[::2]) if len(b) % 2 == 0
+                                    and b[::2] == b[1::2] else None),
+                  mask=lambda b: bytes(x ^ 0x5A for x in b),
+                  unmask=lambda b: bytes(x ^ 0x5A for x in b))
 
 
 def header(rng, packet_type, apid):
@@ -390,8 +398,8 @@ def main() -> None:
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
                                430, 440, 450, 460, 470, 480, 490, 500, 510, 520,
-                               530, 550, 550, 560, 560, 570, 570, 580, 590,
-                               rng.randrange(1 << 11)])
+                               530, 550, 550, 560, 560, 570, 570, 580, 590, 600,
+                               600, 610, 610, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -464,6 +472,16 @@ def main() -> None:
                     + [(8, rng.randrange(256)) for _ in range(2)])
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
+            elif apid == 600 and rng.random() < 0.9:
+                # ZipBlock: its bytes doubled on the wire, mostly.
+                body = rng.randbytes(3)
+                data += (bytes(x for x in body for _ in range(2))
+                         if rng.random() < 0.8 else rng.randbytes(6))
+                keep = rng.random() < 0.5
+                if keep:
+                    data = with_length(data, len(data))
+            elif apid == 610 and rng.random() < 0.9:
+                data += rng.randbytes(5)
             elif apid == 590 and rng.random() < 0.9:
                 # Two rows of a count mostly in range, TwoRows[1][2] often 9.
                 n = rng.choice([0, 2, 3, 3, 5, rng.randrange(8)])

@@ -16,7 +16,11 @@
 
 /* Buffers for the largest packet and description, allocated once. */
 static uint8_t input[4096];
-static uint8_t output[4096];
+/* Room for any packet, a transformed one's work space included. */
+static uint8_t output[demo_CCSDSPacketKind_MAX_BYTES >
+                                      demo_CCSDSCommandKind_MAX_BYTES
+                              ? demo_CCSDSPacketKind_MAX_BYTES
+                              : demo_CCSDSCommandKind_MAX_BYTES];
 static char text[8192];
 
 /* The demo mission's custom algorithms, the same in every version of this
@@ -45,6 +49,33 @@ static uint64_t twice(const uint8_t* data, size_t start, size_t end) {
         size_t i;
         for (i = start / 8; i < end / 8; ++i) sum += data[i];
         return 2 * sum;
+}
+
+/* The demo's transforms: Expand doubles every byte, Shrink takes every
+ * other one (and gives nothing when a pair differs); Mask and Unmask are XOR
+ * 0x5A. */
+static size_t expand(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
+        size_t i;
+        if (2 * n > cap) return 2 * n; /* the room it needs */
+        for (i = 0; i < n; ++i) out[2 * i] = out[2 * i + 1] = in[i];
+        return 2 * n;
+}
+
+static size_t shrink(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
+        size_t i;
+        if (n % 2) return XTCE_PK_NO_TRANSFORM;
+        for (i = 0; i < n / 2; ++i)
+                if (in[2 * i] != in[2 * i + 1]) return XTCE_PK_NO_TRANSFORM;
+        if (n / 2 > cap) return n / 2; /* the room it needs */
+        for (i = 0; i < n / 2; ++i) out[i] = in[2 * i];
+        return n / 2;
+}
+
+static size_t xor_5a(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
+        size_t i;
+        if (n > cap) return n;
+        for (i = 0; i < n; ++i) out[i] = (uint8_t)(in[i] ^ 0x5A);
+        return n;
 }
 
 static xtce_pk_alarm alarms[64];
@@ -127,6 +158,10 @@ int main(int argc, char** argv) {
         demo_hook_min_max = min_max;
         demo_hook_bands = bands;
         demo_hook_twice = twice;
+        demo_hook_expand = expand;
+        demo_hook_shrink = shrink;
+        demo_hook_mask = xor_5a;
+        demo_hook_unmask = xor_5a;
         while (fgets(line, sizeof line, in)) {
                 char kind[16], hex[sizeof line];
                 size_t n = 0, i;

@@ -24,7 +24,7 @@ from .model import (
     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, DynSize, Criterion, Fixed,
     FloatEnc, IntEnc, Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
     Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify, Custom,
-    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd)
+    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -105,7 +105,8 @@ def ulit(v: int) -> str:
 # The C type of each kind of hook.
 HOOK_TYPES = {"criterion": "xtce_pk_criterion_fn",
               "algorithm": "xtce_pk_algorithm_fn", "alarm": "xtce_pk_alarm_fn",
-              "checksum": "xtce_pk_checksum_fn"}
+              "checksum": "xtce_pk_checksum_fn",
+              "transform": "xtce_pk_transform_fn"}
 
 
 def cflt(x: float) -> str:
@@ -1172,6 +1173,24 @@ class CEmitter:
             elif isinstance(it, LengthEnd):
                 self.line("XTCE_PK_TRY(xtce_pk_read_check_span(r, "
                           f"e{it.local.id}, {cstr(it.local.name)}));", depth)
+            elif isinstance(it, Transform):
+                # Read its items from what the transform makes of its bytes.
+                t, f = it.start, cstr(it.name)
+                self.line(f"const uint8_t* raw{t};", depth)
+                self.line(f"size_t rn{t}, k{t};", depth)
+                self.line(f"uint8_t t{t}[{it.cap}];", depth)
+                self.line("XTCE_PK_TRY(xtce_pk_read_take(r, "
+                          f"{bool_lit(it.raw is not None)}, {it.raw or 0}, "
+                          f"{f}, &raw{t}, &rn{t}));", depth)
+                self.line("XTCE_PK_TRY(xtce_pk_transform_from("
+                          f"{self.transform_hook(it.decode)}, raw{t}, rn{t}, t"
+                          f"{t}, {it.cap}, {f}, r->err, &k{t}));", depth)
+                self.line(f"xtce_pk_reader s{t} = xtce_pk_reader_init(t{t}, "
+                          f"k{t}, r->err);", depth)
+                self.line(f"xtce_pk_reader* rr{t} = r;", depth)
+                self.line(f"r = &s{t};", depth)
+                self.read_items(it.items, depth, where, nested)
+                self.line(f"r = rr{t};", depth)
             elif isinstance(it, TailPad):
                 # The packet's last bits, which encoding fills with zeros.
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_skip(r, {it.bits}, "
@@ -1283,6 +1302,15 @@ class CEmitter:
                 self.line(f"XTCE_PK_TRY(xtce_pk_patch_span(w, l{lc.id}, "
                           f"{enc.bits}, {bool_lit(enc.little_endian)}, "
                           f"INT64_C({lc.length}), {cstr(lc.name)}));", depth)
+            elif isinstance(it, Transform):
+                # Write its items, then what the transform makes of them.
+                t = it.start
+                self.line(f"size_t t{t} = w->pos;", depth)
+                self.write_items(n, it.items, depth, where, names)
+                self.line(f"XTCE_PK_TRY(xtce_pk_write_transform(w, t{t}, "
+                          f"{self.transform_hook(it.encode)}, "
+                          f"{bool_lit(it.raw is not None)}, {it.raw or 0}, "
+                          f"{it.out_cap}, {cstr(it.name)}));", depth)
             elif isinstance(it, Cond):
                 self.element_guards(
                     [p for c in it.criteria for p in term_paths(c)],
@@ -1938,6 +1966,10 @@ class CEmitter:
                        + math_value(x[3], access(place(x[1]).expr, x[2]), "c")
                        for x in inputs)
         return f"xtce_pk_inputs_of({len(inputs)}{args})"
+
+    def transform_hook(self, h) -> str:
+        """A transform hook, or NULL for a way the document doesn't give."""
+        return f"{self.p}hook_{h.ident}" if h else "NULL"
 
     def need_hooks(self, hooks: list, err: str, depth: int) -> None:
         for h in hooks:

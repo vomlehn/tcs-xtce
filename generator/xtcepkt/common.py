@@ -11,7 +11,8 @@ from xtcegen import CRATE, REPOSITORY
 
 from .model import (BinaryEnc, Cond, ContextCal, Criterion, DynSize, Fill,
                     FloatEnc, IntEnc, MathOp, Node, Polynomial, Require, Seek,
-                    Spline, StringEnc, Value, Verify, VType, term_hooks, walk)
+                    Spline, StringEnc, Value, Verify, VType, term_hooks, walk,
+                    Transform)
 
 # The runtimes' integer encodings.  BCD values are decoded to unsigned ones.
 ENCODINGS = {"unsigned": "Unsigned", "twosComplement": "TwosComplement",
@@ -237,7 +238,9 @@ HOOK_DOCS = {
     "criterion": "a criterion: whether it holds for the inputs.",
     "algorithm": "an algorithm: its outputs from the inputs.",
     "alarm": "an alarm: the level for the inputs, 0 (normal) to 5 (severe).",
-    "checksum": "a checksum: the value of a range of the packet's bits."}
+    "checksum": "a checksum: the value of a range of the packet's bits.",
+    "transform": "a transform: the bytes it makes of the bytes given, or "
+                 "nothing if it can't."}
 
 
 def terms_hooks(terms: list) -> list:
@@ -267,7 +270,10 @@ def items_hooks(items: list) -> list:
 
     terms: list = [c for it in items for c in conds(it)]
     checks: list = []
+    transforms: list = []
     for it in walk(items):
+        if isinstance(it, Transform):
+            transforms += [h for h in (it.decode, it.encode) if h]
         if isinstance(it, Require):
             terms += it.criteria
         if isinstance(it, Verify):
@@ -282,7 +288,8 @@ def items_hooks(items: list) -> list:
         for d in dyns:
             terms += [c for crit, _ in d.lookup or [] for c in crit]
     out = terms_hooks(terms)
-    return out + [h for h in checks_hooks(checks) if h not in out]
+    out += [h for h in checks_hooks(checks) if h not in out]
+    return out + [h for h in dict.fromkeys(transforms) if h not in out]
 
 
 def written(n: Node, lc) -> VType:

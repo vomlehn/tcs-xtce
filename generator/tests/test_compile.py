@@ -14,7 +14,8 @@ from xtcepkt.compile import (  # noqa: E402
     compile_document, compile_documents, item_bits, member_path, value_range)
 from xtcepkt.model import (  # noqa: E402
     MAX_FIELD_BITS, AnyOf, Cond, ContextCal, Fill, Fixed, Index, MathOp, Pad,
-    Require, Seek, Segment, Spline, Unsupported, Value, walk, LengthEnd)
+    Require, Seek, Segment, Spline, Unsupported, Value, walk, LengthEnd,
+    Transform)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -909,6 +910,76 @@ class AggregateCalibratorTests(unittest.TestCase):
         self.assertIs(p.origin, q.origin)
         self.assertEqual([vt.ident for vt in m.aggregates], [p.ident])
         self.assertEqual(q.ident, p.ident)
+
+
+def transform_mission(encoding: str = "", entries: str = "",
+                      bits: int = 32) -> str:
+    """Telemetry with a binary B (``bits`` on the wire, transformed by F
+    and T) and a container P of ``entries`` with BinaryEncoding
+    ``encoding``."""
+    return mission(tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+          <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <BinaryParameterType name="Blob"><BinaryDataEncoding>
+            <SizeInBits><FixedValue>{bits}</FixedValue></SizeInBits>
+            <FromBinaryTransformAlgorithm name="F"/>
+            <ToBinaryTransformAlgorithm name="T"/>
+          </BinaryDataEncoding></BinaryParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="A" parameterTypeRef="U8"/>
+          <Parameter name="B" parameterTypeRef="Blob"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="P">{encoding}<EntryList>{entries}
+          </EntryList></SequenceContainer>
+        </ContainerSet>""")
+
+
+TRANSFORMS = ("<FromBinaryTransformAlgorithm name='Unzip'/>"
+              "<ToBinaryTransformAlgorithm name='Zip'/>")
+
+
+class TransformTests(unittest.TestCase):
+    def test_binary_value(self):
+        n = compile_xml(
+            transform_mission(entries='<ParameterRefEntry parameterRef="B"/>'
+                                      '<ParameterRefEntry '
+                                      'parameterRef="A"/>')).nodes[0]
+        t = n.items[0]
+        self.assertIsInstance(t, Transform)
+        self.assertEqual((t.raw, t.decode.name, t.encode.name), (4, "F", "T"))
+        self.assertTrue(t.items[-1].local.vtype.enc.rest)
+        self.assertEqual([lc.name for _, lc in n.fields], ["B", "A"])
+
+    def test_container(self):
+        n = compile_xml(
+            transform_mission(f"<BinaryEncoding>{TRANSFORMS}</BinaryEncoding>",
+                              '<ParameterRefEntry parameterRef="A"/>')).nodes[0]
+        (t,) = n.items
+        self.assertEqual((t.raw, t.cap, t.decode.name), (None, 1, "Unzip"))
+        self.assertEqual([lc.name for _, lc in n.fields], ["A"])
+
+    def test_one_way(self):
+        # Decoding works, and encoding fails with NotInvertible.
+        one_way = TRANSFORMS.split("<To")[0]
+        n = compile_xml(
+            transform_mission(f"<BinaryEncoding>{one_way}</BinaryEncoding>",
+                              '<ParameterRefEntry parameterRef="A"/>')).nodes[0]
+        self.assertEqual((n.items[0].decode.name, n.items[0].encode),
+                         ("Unzip", None))
+
+    def test_rejected(self):
+        text = transform_mission(
+            entries='<ParameterRefEntry parameterRef="A"/><ParameterRefEntry '
+                    'parameterRef="B"><IncludeCondition><Comparison '
+                    'parameterRef="A" value="1"/></IncludeCondition>'
+                    '</ParameterRefEntry>')
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("transformed data with an IncludeCondition",
+                      str(cm.exception))
 
 
 class LocationTests(unittest.TestCase):

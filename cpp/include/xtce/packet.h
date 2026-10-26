@@ -388,6 +388,50 @@ static inline int xtce_pk_read_pad(xtce_pk_reader* r, size_t bits,
 /* Ends the packet where the packet length field `f`, whose value `v` was
  * just read, says: `v - adjust` bytes after the field.  Fails with
  * XTCE_PK_TRUNCATED if the data is shorter. */
+/* A FromBinaryTransformAlgorithm or ToBinaryTransformAlgorithm: puts what
+ * it makes of the `n` bytes at `in` into the `cap` bytes at `out`, and
+ * returns how many bytes that is (more than `cap` when it doesn't fit,
+ * having written nothing), or XTCE_PK_NO_TRANSFORM if it can't. */
+typedef size_t (*xtce_pk_transform_fn)(const uint8_t* in, size_t n,
+                                       uint8_t* out, size_t cap);
+#define XTCE_PK_NO_TRANSFORM ((size_t)-1)
+
+/* The next `n` whole bytes (the rest of the packet unless `has_n`), which
+ * must start on a byte boundary, into *out and *len without copying. */
+static inline int xtce_pk_read_take(xtce_pk_reader* r, bool has_n, size_t n,
+                                    const char* f, const uint8_t** out,
+                                    size_t* len) {
+        size_t start = r->pos / 8;
+        if (r->pos % 8)
+                return xtce_pk_fail(r->err, XTCE_PK_BAD_POSITION, f, NULL);
+        if (!has_n) n = r->len > start ? r->len - start : 0;
+        if (n > r->len - start)
+                return xtce_pk_fail(r->err, XTCE_PK_TRUNCATED, f, NULL);
+        *out = r->data + start;
+        *len = n;
+        r->pos += 8 * n;
+        xtce_pk_read_moved(r);
+        return 0;
+}
+
+/* What the transform `fn` makes of the `n` bytes at `raw`, into the `cap`
+ * bytes at `out`, its size into *k. */
+static inline int xtce_pk_transform_from(xtce_pk_transform_fn fn,
+                                         const uint8_t* raw, size_t n,
+                                         uint8_t* out, size_t cap,
+                                         const char* f, xtce_pk_error* err,
+                                         size_t* k) {
+        size_t m;
+        /* NULL when the document gives only the other way. */
+        if (!fn) return xtce_pk_fail(err, XTCE_PK_NOT_INVERTIBLE, f, NULL);
+        m = fn(raw, n, out, cap);
+        if (m == XTCE_PK_NO_TRANSFORM)
+                return xtce_pk_fail(err, XTCE_PK_INVALID_VALUE, f, NULL);
+        if (m > cap) return xtce_pk_fail(err, XTCE_PK_TOO_LONG, f, NULL);
+        *k = m;
+        return 0;
+}
+
 /* Where the container that the length field `f`, whose value `v` was just
  * read, measures ends: `v - adjust` bytes after the field, in bytes from
  * the packet's start, into *end. */
@@ -644,6 +688,34 @@ static inline int xtce_pk_write_bytes(xtce_pk_writer* w, const uint8_t* data,
 /* Fills in the packet length field `f` of `bits` bits at bit `at`, once the
  * whole packet is written: the number of bytes after the field plus
  * `adjust`. */
+/* Replaces the bytes written from bit `start`, on a byte boundary, with
+ * what the transform `fn` makes of them: exactly `raw` bytes when
+ * `has_raw`, and at most `cap`.  It works in the buffer, past what is
+ * written, so the buffer needs `cap` bytes more. */
+static inline int xtce_pk_write_transform(xtce_pk_writer* w, size_t start,
+                                          xtce_pk_transform_fn fn,
+                                          bool has_raw, size_t raw,
+                                          size_t cap, const char* f) {
+        size_t a = start / 8, b = (w->pos + 7) / 8, n;
+        if (!fn) return xtce_pk_fail(w->err, XTCE_PK_NOT_INVERTIBLE, f, NULL);
+        if (b > w->cap || cap > w->cap - b)
+                return xtce_pk_fail(w->err, XTCE_PK_NO_SPACE, "packet", NULL);
+        if (w->len < b) {
+                memset(w->buf + w->len, 0, b - w->len);
+                w->len = b;
+        }
+        n = fn(w->buf + a, b - a, w->buf + b, cap);
+        if (n == XTCE_PK_NO_TRANSFORM)
+                return xtce_pk_fail(w->err, XTCE_PK_INVALID_VALUE, f, NULL);
+        if (n > cap) return xtce_pk_fail(w->err, XTCE_PK_TOO_LONG, f, NULL);
+        if (has_raw && n != raw)
+                return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, f, NULL);
+        memmove(w->buf + a, w->buf + b, n);
+        w->len = a + n;
+        w->pos = 8 * (a + n);
+        return 0;
+}
+
 /* Fills in the length field `f` of `bits` bits at bit `at`, which measures
  * an included container that ends here: the bytes after the field plus
  * `adjust`. */

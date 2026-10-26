@@ -122,6 +122,43 @@ fn set_hooks() {
                 .sum::<u64>()
         })
         .ok();
+    // The demo's transforms: Expand doubles every byte, Shrink takes every
+    // other one (and gives nothing when a pair differs); Xor and Unxor are
+    // XOR 0x5A.
+    demo::hooks::EXPAND
+        .set(|b, out| {
+            if 2 * b.len() > out.len() {
+                return Some(2 * b.len()); // the room it needs
+            }
+            for (i, &x) in b.iter().enumerate() {
+                out[2 * i] = x;
+                out[2 * i + 1] = x;
+            }
+            Some(2 * b.len())
+        })
+        .ok();
+    demo::hooks::SHRINK
+        .set(|b, out| {
+            if b.len() % 2 != 0 || b.chunks(2).any(|p| p[0] != p[1]) {
+                return None;
+            }
+            if b.len() / 2 > out.len() {
+                return Some(b.len() / 2); // the room it needs
+            }
+            for (o, p) in out.iter_mut().zip(b.chunks(2)) {
+                *o = p[0];
+            }
+            Some(b.len() / 2)
+        })
+        .ok();
+    let xor: fn(&[u8], &mut [u8]) -> Option<usize> = |b, out| {
+        for (o, &x) in out.iter_mut().zip(b) {
+            *o = x ^ 0x5A;
+        }
+        Some(b.len())
+    };
+    demo::hooks::MASK.set(xor).ok();
+    demo::hooks::UNMASK.set(xor).ok();
 }
 
 fn main() {

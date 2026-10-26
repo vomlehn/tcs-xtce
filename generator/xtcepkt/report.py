@@ -149,7 +149,7 @@ def gap_bits(n: Node) -> int:
     """Bits inside the packet that no entry covers (left by location offsets
     and container padding)."""
     pos, marks, spans = 0, {0: 0}, []
-    for it in walk(n.all_items()):
+    for it in walk(n.all_items(), inner=False):
         if isinstance(it, Seek):
             pos = ((marks[it.from_start] if it.from_start is not None else pos)
                    + it.max_offset)

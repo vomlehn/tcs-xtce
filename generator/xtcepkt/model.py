@@ -154,6 +154,9 @@ class BinaryEnc:
     dyn: Optional[DynSize] = None
     rest: bool = False
     lsb: bool = False  # bitOrder leastSignificantBitFirst
+    # The names of its FromBinaryTransformAlgorithm and
+    # ToBinaryTransformAlgorithm, which make it a Transform's value.
+    transform: Optional[tuple] = None
 
     @property
     def variable(self) -> bool:
@@ -745,6 +748,35 @@ class TailPad:
 
 
 @dataclass
+class Transform:
+    """Items whose bits are transformed on the wire (a container's
+    FromBinaryTransformAlgorithm and ToBinaryTransformAlgorithm, or a
+    binary value's, whose Value takes the rest of what they give).
+    Decoding gives ``raw`` bytes (the rest of the packet when None) to the
+    application's ``decode`` hook and reads ``items`` from what it gives,
+    at most ``cap`` bytes, from mark ``start``; encoding writes ``items``,
+    then gives their bytes to ``encode``, which gives at most ``out_cap``
+    bytes in their place, exactly ``raw`` when it is given.  It starts on
+    a byte boundary."""
+
+    items: list
+    # None for a direction the document doesn't give, which fails with
+    # NotInvertible.
+    decode: Optional["Hook"]
+    encode: Optional["Hook"]
+    raw: Optional[int]
+    cap: int
+    out_cap: int
+    name: str
+    start: int
+
+    @property
+    def bits(self) -> int:
+        """The most bits it takes on the wire."""
+        return 8 * (self.raw if self.raw is not None else self.out_cap)
+
+
+@dataclass
 class LengthEnd:
     """Where the included container that length field ``local`` measures
     ends: decoding checks that the field said so, and encoding fills it
@@ -888,14 +920,19 @@ Item = Union[Seek, Mark, Value, Segment, Fixed, Pad, Cond, Require, Fill,
              Verify]
 
 
-def walk(items: list) -> list:
-    """The items, with the contents of conditional blocks spliced in."""
+def walk(items: list, inner: bool = True) -> list:
+    """The items, with the contents of conditional blocks spliced in, and
+    of transformed containers after them unless ``inner`` is false (for
+    finding where items are on the wire, where a Transform stands for
+    its contents)."""
     out = []
     for it in items:
         if isinstance(it, Cond):
-            out.extend(walk(it.items))
+            out.extend(walk(it.items, inner))
         else:
             out.append(it)
+            if inner and isinstance(it, Transform):
+                out.extend(walk(it.items, inner))
     return out
 
 
@@ -945,7 +982,8 @@ class Hook:
     named ``name`` (the algorithm's qualified name) and ``ident`` in the
     generated code.  ``kind`` says what it computes from its inputs:
     ``criterion`` (whether it holds), ``algorithm`` (``outputs`` values),
-    ``alarm`` (a level) or ``checksum`` (from the packet's bits)."""
+    ``alarm`` (a level), ``checksum`` (from the packet's bits) or
+    ``transform`` (bytes from bytes)."""
 
     kind: str
     name: str

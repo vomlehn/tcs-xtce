@@ -32,6 +32,14 @@ demo.HOOKS.update(is_even=lambda v: v[0] % 2.0 == 0.0,
                   min_max=lambda v: (min(v), max(v)),
                   bands=lambda v: int(v[0] / 50.0),
                   twice=lambda d, start, end: 2 * sum(d[start // 8:end // 8]))
+# The demo's transforms: Expand doubles every byte, Shrink takes every
+# other one (and gives nothing when a pair differs); Mask and Unmask are XOR
+# 0x5A.
+demo.HOOKS.update(expand=lambda b: bytes(x for x in b for _ in range(2)),
+                  shrink=lambda b: (bytes(b[::2]) if len(b) % 2 == 0
+                                    and b[::2] == b[1::2] else None),
+                  mask=lambda b: bytes(x ^ 0x5A for x in b),
+                  unmask=lambda b: bytes(x ^ 0x5A for x in b))
 
 
 def run(kind: str, data: bytes, t: float) -> str:

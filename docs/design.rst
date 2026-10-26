@@ -501,6 +501,16 @@ command's own assignments they don't select the command when decoding:
 the document chose the included container, so the assignments can only
 confirm it.
 
+Transformed data is a ``Transform`` item holding the items whose bits it
+transforms; a binary value's is a ``Transform`` holding the value, which
+then takes the rest of what the transform gives. Decoding reads its bytes
+and swaps in a reader over what the transform makes of them, so its
+items are read with the same code as any others; encoding writes them in
+place, then replaces their bytes with the transform's, working in the
+output buffer after them, which ``max_bits`` counts. ``walk`` splices a
+Transform's items in for everything that looks at values, and keeps it
+whole (``inner=False``) for everything that places bits on the wire.
+
 A length field inside an included container can't mean the packet's
 length, so ``measure`` makes it measure the container: it marks the
 field and puts a ``LengthEnd`` where the container ends, where decoding

@@ -28,9 +28,9 @@ from .model import (
     IntEnc, Item, Kind, Local, Mark, Member, Mission, Node, Pad, Polynomial,
     Seek, Spline, StringEnc, Term, Unsupported, Value, VType, ref_text,
     term_locals, walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp, NextSeek,
-    Require, TailPad, TailSeek, LengthEnd, ValueRef, needs_binding, Fill,
-    Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change, Algorithm, Stream,
-    Hook, Custom, term_hooks, input_locals)
+    Require, TailPad, TailSeek, LengthEnd, Transform, ValueRef, needs_binding,
+    Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change, Algorithm,
+    Stream, Hook, Custom, term_hooks, input_locals)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -1157,26 +1157,109 @@ class Compiler:
                               dyn=dyn, charset=cs), None)
         if name == "BinaryDataEncoding":
             # Binary data is bytes, which have no byte order.
-            if (e.from_binary_transform_algorithm
-                    or e.to_binary_transform_algorithm):
-                raise Unsupported(f"{where}: binary transform algorithms")
-            c = e.size_in_bits.choice
-            if c.name in ("DynamicValue", "DiscreteLookupList"):
-                dyn = self.int_value(e.size_in_bits, path, "binary size", where)
-                dyn.unit = 8
-                return BinaryEnc(self.max_field_bits, dyn), None
-            if c.name != "FixedValue":
-                raise Unsupported(f"{where}: binary size from {c.name}")
-            if c.value == -1:
-                # A Yamcs convention: the size of the value given.  Only the
-                # end of the packet can bound it when decoding.
-                return BinaryEnc(self.max_field_bits, rest=True), None
-            bits = self._size(c.value, "binary", where)
-            if bits % 8:
-                raise Unsupported(f"{where}: binary size {bits} is not whole "
-                                  "bytes")
-            return BinaryEnc(bits), None
+            enc = self.binary_encoding(e, path, where)
+            enc.transform = self.transform_names(e, where)
+            return enc, None
         raise Unsupported(f"{where}: {name}")
+
+    def transformed(self, local: Local, where: str) -> list[Item]:
+        """The items for value ``local``: a Value, or for binary data with
+        transform algorithms, a Transform whose Value takes the rest of
+        the bytes they give."""
+        e = local.vtype.enc
+        names = getattr(e, "transform", None)
+        if names is None:
+            return [Value(local)]
+        if local.vtype.kind != "binary":
+            raise Unsupported(f"{where}: a {local.vtype.kind} value with "
+                              "transform algorithms")
+        if e.dyn is not None:
+            raise Unsupported(f"{where}: transformed binary data whose size "
+                              "another value gives")
+        raw = None if e.rest else e.bits // 8
+        local.vtype = dataclasses.replace(
+            local.vtype, enc=BinaryEnc(self.max_field_bits, rest=True))
+        m = self._id()
+        cap = self.max_field_bits // 8
+        return [Transform([Mark(m), Value(local)],
+                          self.transform_hook(names[0]),
+                          self.transform_hook(names[1]), raw, cap,
+                          raw if raw is not None else cap, local.name, m)]
+
+    def wrap_transform(self, sc, items: list, start: int, where: str, path: Key,
+                       name: str, packet: bool) -> list[Item]:
+        """A container's items (from mark ``start``, which must be first)
+        in a Transform, if its BinaryEncoding has transform algorithms;
+        its SizeInBits is then its size on the wire, which only the packet
+        itself may leave out, to take the rest of it."""
+        be = sc.binary_encoding
+        names = self.transform_names(be, where) if be is not None else None
+        if names is None:
+            return items
+        if edc_items(sc):
+            raise Unsupported(f"{where}: ErrorDetectCorrect in a container "
+                              "with transform algorithms")
+        for it in walk(items):
+            if isinstance(it, Value) and it.local.computed:
+                raise Unsupported(f"{where}: packet length or checksum field "
+                                  f"{it.local.name} in a container with "
+                                  "transform algorithms")
+            if isinstance(it, TailSeek):
+                raise Unsupported(f"{where}: a transformed container with an "
+                                  "entry located from its end")
+        raw = None
+        if be.size_in_bits is not None:
+            size = self.int_value(be.size_in_bits, path, "container SizeInBits",
+                                  where)
+            if not isinstance(size, int) or size % 8:
+                raise Unsupported(f"{where}: a transformed container whose "
+                                  "size isn't a number of whole bytes")
+            raw = size // 8
+        elif not packet:
+            raise Unsupported(f"{where}: an included container with transform "
+                              "algorithms and no fixed SizeInBits")
+        cap = (max_bits(items) + 7) // 8
+        out_cap = raw if raw is not None else self.max_field_bits // 8
+        return [Transform(items, self.transform_hook(names[0]),
+                          self.transform_hook(names[1]), raw, cap, out_cap,
+                          name, start)]
+
+    def transform_hook(self, name: Optional[str]) -> Optional[Hook]:
+        return self.hook("transform", name) if name is not None else None
+
+    def has_transform(self, sc, where: str) -> bool:
+        be = sc.binary_encoding
+        return be is not None and self.transform_names(be, where) is not None
+
+    @staticmethod
+    def transform_names(e, where: str) -> Optional[tuple]:
+        """The names of the algorithms that transform the bits of ``e``, a
+        BinaryDataEncoding or a container's BinaryEncoding, or None."""
+        fa = e.from_binary_transform_algorithm
+        ta = e.to_binary_transform_algorithm
+        if fa is None and ta is None:
+            return None
+        # One may be missing: that way fails with NotInvertible.
+        return (fa.name if fa is not None else None,
+                ta.name if ta is not None else None)
+
+    def binary_encoding(self, e, path: Key, where: str) -> BinaryEnc:
+        """A BinaryDataEncoding's BinaryEnc."""
+        c = e.size_in_bits.choice
+        if c.name in ("DynamicValue", "DiscreteLookupList"):
+            dyn = self.int_value(e.size_in_bits, path, "binary size", where)
+            dyn.unit = 8
+            return BinaryEnc(self.max_field_bits, dyn)
+        if c.name != "FixedValue":
+            raise Unsupported(f"{where}: binary size from {c.name}")
+        if c.value == -1:
+            # A Yamcs convention: the size of the value given.  Only the end
+            # of the packet can bound it when decoding.
+            return BinaryEnc(self.max_field_bits, rest=True)
+        bits = self._size(c.value, "binary", where)
+        if bits % 8:
+            raise Unsupported(f"{where}: binary size {bits} is not whole bytes")
+        return BinaryEnc(bits)
 
     @staticmethod
     def _size(bits: int, what: str, where: str) -> int:
@@ -1642,7 +1725,7 @@ class Compiler:
                 after = []
                 if out and isinstance(out[-1], EndSeek):
                     out[-1], after = self.end_seek(out[-1], sc, local, where)
-                out.append(Value(local))
+                out += self.transformed(local, where)
                 out += after
                 scope.append(local)
             else:
@@ -1664,8 +1747,7 @@ class Compiler:
                     scope.append(local)
                 else:
                     m = self._id()
-                    out.append(Mark(m))
-                    inner = []
+                    inner = [Mark(m)]
                     # A derived container is its bases' entries, then its own.
                     for k, (kp, kc, kkey) in enumerate(
                             self.include_chain(ckey, stack, where)):
@@ -1678,9 +1760,10 @@ class Compiler:
                             inner.append(Require(terms, qname(kkey),
                                                  " and ".join(t.text
                                                               for t in terms)))
-                    out += self.measure(inner
-                                        + self.size_pad(inc, inner, m, where,
-                                                        scope, cpath), where)
+                    inner += self.size_pad(inc, inner, m, where, scope, cpath)
+                    out += self.measure(
+                        self.wrap_transform(inc, inner, m, where, cpath,
+                                            qname(ckey), False), where)
                     if edc_items(inc):
                         end = self._id()
                         out.append(Mark(end))
@@ -1695,6 +1778,9 @@ class Compiler:
                             self.included_checks.append(
                                 (inc, cpath, m, end, list(scope), qname(ckey)))
             if cond is not None:
+                if any(isinstance(it, Transform) for it in walk(out)):
+                    raise Unsupported(f"{where}: transformed data with an "
+                                      "IncludeCondition")
                 for it in walk(out):
                     if isinstance(it, Value):
                         it.local.optional = True
@@ -1962,7 +2048,8 @@ class Compiler:
             return []
         if (be.from_binary_transform_algorithm
                 or be.to_binary_transform_algorithm):
-            raise Unsupported(f"{where}: container transform algorithms")
+            # Its SizeInBits is its transformed size: see wrap_transform.
+            return []
         if be.size_in_bits is None:
             return []
         size = self.int_value(be.size_in_bits, path, "container SizeInBits",
@@ -2056,6 +2143,8 @@ class Compiler:
             if isinstance(it, Fill):
                 raise Unsupported(f"{what} includes a container whose size "
                                   "varies")
+            if isinstance(it, Transform):
+                raise Unsupported(f"{what} has transformed data")
             if isinstance(it, Seek):
                 if isinstance(it.offset, DynSize):
                     raise Unsupported(f"{what} has a location that other "
@@ -2139,11 +2228,21 @@ class Compiler:
                         node.next_container = rc.next_container.container_ref
             node._edc = (sc, path)
             self.included_checks = []
-            node.items = self.tm_items(sc, path, [key], 0, scope)
+            where = f"container {node.key}"
+            if self.has_transform(sc, where):
+                # Its own entries are transformed: they start at the start
+                # of what the transform gives.
+                m = self._id()
+                node.items = self.wrap_transform(
+                    sc, [Mark(m)] + self.tm_items(sc, path, [key], m, scope), m,
+                    where, path, node.key, True)
+            else:
+                node.items = self.tm_items(sc, path, [key], 0, scope)
+                # A size covers the whole packet, base containers' entries
+                # too.
+                node.items += self.size_pad(sc, node.all_items(), 0, where,
+                                            scope, path)
             node._included = self.included_checks
-            # A size covers the whole packet, base containers' entries too.
-            node.items += self.size_pad(sc, node.all_items(), 0,
-                                        f"container {node.key}", scope, path)
             self.check_rest(node, f"container {node.key}")
             self.check_tail(node, f"container {node.key}")
             check_aligned(node.all_items(), f"container {node.key}")
@@ -2251,12 +2350,17 @@ class Compiler:
 
     @staticmethod
     def check_rest(node: Node, where: str) -> None:
-        """A value that takes the rest of the packet must come last."""
-        items = walk(node.all_items())
+        """A value that takes the rest of the packet must come last, as
+        must a transformed one that does."""
+        items = walk(node.all_items(), inner=False)
         for i, it in enumerate(items[:-1]):
-            if isinstance(it, Value) and is_rest(it.local.vtype):
-                raise Unsupported(f"{where}: {it.local.name} takes the rest of "
-                                  "the packet but is not last")
+            if ((isinstance(it, Value) and is_rest(it.local.vtype))
+                    or (isinstance(it, Transform) and it.raw is None)):
+                if all(isinstance(x, (Require, Mark)) for x in items[i + 1:]):
+                    continue
+                what = (it.name if isinstance(it, Transform) else it.local.name)
+                raise Unsupported(f"{where}: {what} takes the rest of the "
+                                  "packet but is not last")
 
     @staticmethod
     def check_length(node: Node, where: str) -> None:
@@ -2503,11 +2607,6 @@ class Compiler:
                                                    f"{asg.argument_value}"))
             cc = mc.command_container
             if cc is not None:
-                be = cc.binary_encoding
-                if be is not None and (be.from_binary_transform_algorithm
-                                       or be.to_binary_transform_algorithm):
-                    raise Unsupported(f"{where}: container transform "
-                                      "algorithms")
                 node._edc = (cc, path)
                 values = self.scope_of(base) if base else []
                 prefix: list[Item] = []
@@ -2555,12 +2654,20 @@ class Compiler:
                             lambda name: self.arg_key_of(scope, name, where))
                 # A CommandContainer without a BaseContainer still extends
                 # the container of its BaseMetaCommand, as Yamcs reads it.
-                node.items = (prefix
-                              + self.tc_items(cc, scope, path, where, values))
-                # A size covers the whole command, base containers' entries
-                # too.
-                node.items += self.size_pad(cc, node.all_items(), 0, where,
-                                            values, path)
+                if self.has_transform(cc, where):
+                    m = self._id()
+                    node.items = prefix + self.wrap_transform(
+                        cc,
+                        [Mark(m)]
+                        + self.tc_items(cc, scope, path, where, values, m), m,
+                        where, path, node.key, True)
+                else:
+                    node.items = (
+                        prefix + self.tc_items(cc, scope, path, where, values))
+                    # A size covers the whole command, base containers'
+                    # entries too.
+                    node.items += self.size_pad(cc, node.all_items(), 0, where,
+                                                values, path)
             self.check_rest(node, where)
             self.check_tail(node, where)
             check_aligned(node.all_items(), where)
@@ -2666,12 +2773,15 @@ class Compiler:
                 after = []
                 if out and isinstance(out[-1], EndSeek):
                     out[-1], after = self.end_seek(out[-1], cc, local, where)
-                out.append(Value(local))
+                out += self.transformed(local, where)
                 out += after
                 values.append(local)
             else:
                 out += self.fixed_entry(e, path, where)
             if cond is not None:
+                if any(isinstance(it, Transform) for it in walk(out)):
+                    raise Unsupported(f"{where}: transformed data with an "
+                                      "IncludeCondition")
                 for it in walk(out):
                     if isinstance(it, Value):
                         it.local.optional = True
@@ -2713,8 +2823,14 @@ class Compiler:
                 inner.append(Require(terms, qname(key),
                                      " and ".join(t.text for t in terms)))
         cpath, inc = self.tc_containers[ckey]
-        return (items + inner
-                + self.size_pad(inc, inner, m, where, values, cpath))
+        for _, c, key in chain[1:]:
+            if self.has_transform(c, where):
+                raise Unsupported(f"{where}: transform algorithms in base "
+                                  f"container {qname(key)}")
+        return self.wrap_transform(
+            inc,
+            items + inner + self.size_pad(inc, inner, m, where, values, cpath),
+            m, where, cpath, qname(ckey), False)
 
     @staticmethod
     def measure(items: list, where: str) -> list[Item]:
@@ -2830,8 +2946,11 @@ class Compiler:
             inner.append(Require(terms, qname(key),
                                  " and ".join(t.text for t in terms)))
         inner += self.tc_items(cc, scope, path, where, values, m, stack)
-        return ([Mark(m)] + inner
-                + self.size_pad(cc, inner, m, where, values, path))
+        return self.wrap_transform(cc,
+                                   [Mark(m)] + inner
+                                   + self.size_pad(cc, inner, m, where, values,
+                                                   path), m, where, path,
+                                   qname(key), False)
 
     def arg_key_of(self, scope: dict, name: str, where: str) -> str:
         if name not in scope:
@@ -3566,6 +3685,12 @@ def check_aligned(items: list[Item], where: str) -> None:
                     pos = advance(it.local.vtype, pos, it.local.name)
             elif isinstance(it, (EndSeek, TailSeek)):
                 pos = None
+            elif isinstance(it, Transform):
+                if pos != 0:
+                    raise Unsupported(f"{where}: transformed data {it.name} "
+                                      "may not start on a byte boundary")
+                walk_items(it.items, 0)
+                pos = 0 if it.raw is not None else None
             else:
                 pos = None if pos is None else (pos + it.bits) % 8
         return pos
@@ -3647,6 +3772,8 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
     marks = {start: 0}
     for it in items:
         if isinstance(it, (Cond, TailSeek)):
+            return None
+        if isinstance(it, Transform) and it.raw is None:
             return None
         if isinstance(it, Fill):
             if isinstance(it.size, DynSize) or it.start not in marks:
@@ -3767,7 +3894,10 @@ def max_bits(items: list[Item]) -> int:
     """Upper bound on the bits a packet with these items occupies."""
     pos = extent = 0
     marks = {0: 0}
-    for it in walk(items):
+    for it in walk(items, inner=False):
+        if isinstance(it, Transform):
+            # Encoding writes its items, then what it gives after them.
+            extent = max(extent, pos + 8 * (it.cap + it.out_cap))
         if isinstance(it, Seek):
             pos = ((marks[it.from_start] if it.from_start is not None else pos)
                    + it.max_offset)

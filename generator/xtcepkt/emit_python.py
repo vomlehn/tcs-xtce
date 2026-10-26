@@ -13,7 +13,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
                     Require, Fill, Segment, Verify, Custom, TailPad, TailSeek,
-                    LengthEnd)
+                    LengthEnd, Transform)
 
 
 def pstr(s: str) -> str:
@@ -381,6 +381,11 @@ def pspec(spec: tuple) -> str:
     return repr(spec)
 
 
+def transform_hook(h) -> str:
+    """A transform hook, or None for a way the document doesn't give."""
+    return f"HOOKS[{pstr(h.ident)}]" if h else "None"
+
+
 def hook_args(inputs: list, place) -> str:
     """A tuple's items: a custom algorithm's inputs, as floats."""
     out = [flt(x[1]) if x[0] == "const"
@@ -660,6 +665,16 @@ class PythonEmitter:
             elif isinstance(it, LengthEnd):
                 self.line(f"r.check_span(e{it.local.id}, "
                           f"{pstr(it.local.name)})", depth)
+            elif isinstance(it, Transform):
+                # Read its items from what the transform makes of its bytes.
+                f = pstr(it.name)
+                self.line(f"_t{it.start} = "
+                          f"pk.transform_from({transform_hook(it.decode)}, "
+                          f"r.take({it.raw}, {f}), {it.cap}, {f})", depth)
+                self.line(f"r, _r{it.start} = pk.BitReader(_t{it.start}), r",
+                          depth)
+                self.read_items(it.items, depth, where, nested)
+                self.line(f"r = _r{it.start}", depth)
             elif isinstance(it, TailPad):
                 # The packet's last bits, which encoding fills with zeros.
                 self.line(f"r.skip({it.bits}, {pstr(where)})", depth)
@@ -730,6 +745,13 @@ class PythonEmitter:
                 self.line(f"w.patch_span(l{lc.id}, {enc.bits}, "
                           f"{enc.little_endian}, {lc.length}, {pstr(lc.name)})",
                           depth)
+            elif isinstance(it, Transform):
+                # Write its items, then what the transform makes of them.
+                self.line(f"_t{it.start} = w.pos", depth)
+                self.write_items(n, it.items, depth, where, names)
+                self.line(f"w.transform(_t{it.start}, "
+                          f"{transform_hook(it.encode)}, {it.raw}, "
+                          f"{it.out_cap}, {pstr(it.name)})", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: self.place(n, lc, names), depth)
             elif isinstance(it, Verify):

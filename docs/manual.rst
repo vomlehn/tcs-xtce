@@ -2033,6 +2033,43 @@ Algorithms
    ``CustomAlgorithm`` is evaluated the same way, by its hook (see
    Custom algorithms).
 
+Transform algorithms
+   A ``FromBinaryTransformAlgorithm`` and ``ToBinaryTransformAlgorithm``
+   change bits on the wire into others, as compression or encryption
+   does, by the application's functions (transform hooks, below):
+   decoding gives the bytes on the wire to the first and reads what it
+   makes of them, and encoding gives what it writes to the second. Both
+   A document may give only one; the other way then fails with
+   ``NotInvertible``, as Yamcs's PUS documents' time types, which only
+   decode in telemetry and only encode in commands, do.
+
+   On a binary type's ``BinaryDataEncoding``, the value is what the
+   transform makes of its bytes, of any size up to the maximum field
+   size; its ``SizeInBits`` is its size on the wire, or ``-1`` for the
+   rest of the packet. (Yamcs reads ``-1`` there as a size that the
+   algorithm finds; a packet codec has no way to ask it, so such a value
+   must be the packet's last.) On a container's ``BinaryEncoding``, its own
+   entries (not a base container's) are read from what the transform
+   makes of its bytes, and its ``SizeInBits`` is their size on the wire;
+   an included container needs one, while a packet's own container
+   without one takes the rest of the packet. Either way the transformed
+   data starts on a byte boundary, and a transform that makes more than
+   fits fails with ``TooLong``, one that can't (a function giving
+   nothing) with ``InvalidValue``, and one whose result isn't the size
+   on the wire with ``BadSize``.
+
+   A Rust or C transform puts what it makes in the room it is given and
+   returns its size; when that doesn't fit, it writes nothing and returns
+   the size it needs, and when it can't, it returns ``None`` or
+   ``XTCE_PK_NO_TRANSFORM``. Encoding transforms in the output buffer,
+   after what it writes, so ``MAX_BYTES`` counts that room: for a
+   container that takes the rest of the packet, the maximum field size,
+   which ``tcs-xtce.max-field-bytes`` can lower. Transformed data can't
+   have an ``IncludeCondition``, be in a repeated container, or hold a
+   length field, a checksum or an entry located from the container's
+   end. The demo's ``ZipBlock`` doubles every byte of its entries on the
+   wire, and its ``XorBlock`` has a ``XorBlob`` masked by XOR.
+
 Custom algorithms
    A ``CustomAlgorithm`` names code that the document doesn't hold, so
    the application supplies each one as a function, a *hook*, named in
@@ -2046,7 +2083,9 @@ Custom algorithms
    * a ``CustomAlarm``: the alarm level, 0 (normal) to 5 (severe),
      raised to at least that;
    * a ``Checksum`` named ``custom``, by its ``InputAlgorithm``: the
-     value of the bits it covers.
+     value of the bits it covers;
+   * a ``FromBinaryTransformAlgorithm`` or ``ToBinaryTransformAlgorithm``:
+     the bytes it makes of the bytes given (see Transform algorithms).
 
    Inputs are the ``InputSet``'s values of the packet (integers, floats,
    enumerations and booleans, which must be present) and ``Constant``\ s,
@@ -2076,6 +2115,11 @@ Custom algorithms
         - ``fn(&[u8], usize, usize) -> u64``
         - ``uint64_t f(const uint8_t*, size_t, size_t)``
         - ``f(data, start, end) -> int``
+      * - transform
+        - ``fn(&[u8], &mut [u8]) -> Option<usize>``
+        - ``size_t f(const uint8_t* in, size_t n, uint8_t* out, size_t
+          cap)``
+        - ``f(data) -> bytes or None``
 
    A checksum hook gets the packet's bytes and the range of bits, from
    ``start`` to ``end``; an algorithm hook returns false (or None) when it
@@ -2220,8 +2264,8 @@ Not supported
    ``IndirectParameterRefEntry`` chosen by an integer or string without
    an ``aliasNameSpace``, instances of values in other packets, repeated
    segment entries with an ``order`` or located from the end of their
-   container, transform algorithms, ``ErrorDetectCorrect`` in a data
-   encoding (which XTCE deprecates), least-significant-bit-first strings
+   container, the transformed data listed under Transform algorithms,
+   ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates), least-significant-bit-first strings
    and binary data that may not start on a byte boundary, integers of
    more than 64 bits used other than as values (see "Integer encoding"),
    and a location from the end of an included container whose size

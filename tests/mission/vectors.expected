@@ -210,3 +210,7 @@ ScaledBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented,
 TwoRowBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, two_rows=[1, 2, 3, 4, 5, 9], two_row_note=85} | 0a4ec02a00070301020304050955
 TwoRowBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, two_rows=[1, 2, 3, 4, 5, 8], two_row_note=none} | 0a4ec02a000603010203040508
 error:BadSize | -
+ZipBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, zip_a=4660, zip_b=86} | 0a58c02a0005121234345656
+error:InvalidValue | -
+XorBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, xor_blob=0xaabbccdd, xor_tail=119} | 0a62c02a0004f0e1968777
+error:Truncated | -

@@ -16,7 +16,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
                     Value, VType, Require, Fill, Segment, Verify, Custom,
-                    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd)
+                    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform)
 
 
 def rstr(s: str) -> str:
@@ -71,7 +71,8 @@ def rflt(x: float) -> str:
 HOOK_TYPES = {"criterion": "fn(&[f64]) -> bool",
               "algorithm": "fn(&[f64], &mut [f64]) -> bool",
               "alarm": "fn(&[f64]) -> u8",
-              "checksum": "fn(&[u8], usize, usize) -> u64"}
+              "checksum": "fn(&[u8], usize, usize) -> u64",
+              "transform": "fn(&[u8], &mut [u8]) -> Option<usize>"}
 
 
 def wide_type(vt: VType) -> str:
@@ -626,6 +627,11 @@ def term(t, place) -> str:
                      place(t.other) if t.other is not None else None)
 
 
+def transform_hook(h) -> str:
+    """A transform hook, or None for a way the document doesn't give."""
+    return f"hooks::{h.ident.upper()}.get().copied()" if h else "None"
+
+
 def hook_args(inputs: list, place) -> str:
     """A slice's items: a custom algorithm's inputs, as f64s."""
     return ", ".join(rflt(x[1]) if x[0] == "const"
@@ -827,6 +833,14 @@ class RustEmitter:
         self.line("}", 1)
         self.line("}")
 
+    def transform_buffers(self, nodes: list, depth: int) -> None:
+        """The buffers of the transformed data that decoding ``nodes``
+        reads, declared before the reader so that it can read them."""
+        for node in nodes:
+            for it in walk(node.items):
+                if isinstance(it, Transform):
+                    self.line(f"let mut t{it.start} = [0u8; {it.cap}];", depth)
+
     def need_hooks(self, hooks: list, depth: int) -> None:
         for h in hooks:
             self.line(f"if hooks::{h.ident.upper()}.get().is_none() {{", depth)
@@ -931,6 +945,19 @@ class RustEmitter:
             elif isinstance(it, LengthEnd):
                 self.line(f"r.check_span(e{it.local.id}, "
                           f"{rstr(it.local.name)})?;", depth)
+            elif isinstance(it, Transform):
+                # Read its items from what the transform makes of its bytes,
+                # into the buffer the decoding function begins with.
+                t, f = it.start, rstr(it.name)
+                raw = "None" if it.raw is None else f"Some({it.raw})"
+                self.line(f"let raw{t} = r.take({raw}, {f})?;", depth)
+                self.line(f"let n{t} = "
+                          f"pk::transform_from({transform_hook(it.decode)}, "
+                          f"raw{t}, &mut t{t}, {f})?;", depth)
+                self.line(f"let r{t} = std::mem::replace(&mut r, "
+                          f"BitReader::new(&t{t}[..n{t}]));", depth)
+                self.read_items(it.items, depth, where, assign)
+                self.line(f"r = r{t};", depth)
             elif isinstance(it, TailPad):
                 # The packet's last bits, which encoding fills with zeros.
                 self.line(f"r.skip({it.bits}, {rstr(where)})?;", depth)
@@ -1010,6 +1037,14 @@ class RustEmitter:
                 self.line(f"w.patch_span(l{lc.id}, {enc.bits}, "
                           f"{str(enc.little_endian).lower()}, {lc.length}, "
                           f"{rstr(lc.name)})?;", depth)
+            elif isinstance(it, Transform):
+                # Write its items, then what the transform makes of them.
+                t = it.start
+                self.line(f"let t{t} = w.position();", depth)
+                self.write_items(n, it.items, depth, where, names)
+                raw = "None" if it.raw is None else f"Some({it.raw})"
+                self.line(f"w.transform(t{t}, {transform_hook(it.encode)}, "
+                          f"{raw}, {it.out_cap}, {rstr(it.name)})?;", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: self.place(n, lc, names), depth)
             elif isinstance(it, Verify):
@@ -1204,6 +1239,7 @@ class RustEmitter:
         if empty:
             self.line("let _ = data;", 2)
         else:
+            self.transform_buffers(n.chain(), 2)
             self.line("let mut r = BitReader::new(data);", 2)
         for i, node in enumerate(n.chain()):
             for c in node.criteria:
@@ -1518,6 +1554,7 @@ class RustEmitter:
         self.line("/// document order) whose criteria match, recursively.", 1)
         self.line("fn decode_prefix(data: &[u8]) -> Result<(Self, usize)> {", 1)
         self.need_hooks(items_hooks(k.root.items), 2)
+        self.transform_buffers([k.root] + k.root.descendants(), 2)
         self.line("let mut r = BitReader::new(data);", 2)
         self.read_items(k.root.items, 2, k.root.key)
         self.dispatch(k, k.root, 2)

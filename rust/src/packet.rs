@@ -636,6 +636,27 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
+    /// The next `n` whole bytes, the rest of the packet when None, which
+    /// must start on a byte boundary.
+    pub fn take(
+        &mut self,
+        n: Option<usize>,
+        field: &'static str,
+    ) -> Result<&'a [u8]> {
+        if self.pos % 8 != 0 {
+            return Err(PacketError::BadPosition { field });
+        }
+        let start = self.pos / 8;
+        let n = n.unwrap_or(self.data.len().saturating_sub(start));
+        if start + n > self.data.len() {
+            return Err(PacketError::Truncated { field });
+        }
+        self.pos += 8 * n;
+        self.end = self.end.max(self.pos);
+        let data: &'a [u8] = self.data;
+        Ok(&data[start..start + n])
+    }
+
     /// Where the container that the length field `field`, whose value `v`
     /// was just read, measures ends: `v - adjust` bytes after the field, in
     /// bytes from the packet's start.
@@ -956,6 +977,36 @@ impl<'a> BitWriter<'a> {
         self.pos = at;
         self.uint_order(bits, le, v as u64);
         self.pos = end;
+        Ok(())
+    }
+
+    /// Replaces the bytes written from bit `start`, on a byte boundary, with
+    /// what the transform `f` makes of them: exactly `raw` bytes when given,
+    /// and at most `cap`.  It works in the buffer, past what is written.
+    pub fn transform(
+        &mut self,
+        start: usize,
+        f: Option<TransformFn>,
+        raw: Option<usize>,
+        cap: usize,
+        field: &'static str,
+    ) -> Result<()> {
+        // None when the document gives only the other way.
+        let f = f.ok_or(PacketError::NotInvertible { field })?;
+        let (a, b) = (start / 8, self.pos.div_ceil(8));
+        self.buf.resize(b + cap);
+        let (head, tail) = self.buf.as_mut_bytes().split_at_mut(b);
+        let n =
+            f(&head[a..b], tail).ok_or(PacketError::InvalidValue { field })?;
+        if n > cap {
+            return Err(PacketError::TooLong { field });
+        }
+        if raw.is_some_and(|r| r != n) {
+            return Err(PacketError::BadSize { field });
+        }
+        self.buf.as_mut_bytes().copy_within(b..b + n, a);
+        self.buf.resize(a + n);
+        self.pos = 8 * (a + n);
         Ok(())
     }
 
@@ -3373,6 +3424,29 @@ pub struct FrameSync<const BITS: usize, const BYTES: usize> {
     flip: u8,
     invert: Option<BitInvert>,
     frame: [u8; BYTES],
+}
+
+/// A FromBinaryTransformAlgorithm or ToBinaryTransformAlgorithm: puts what
+/// it makes of the bytes given into the second argument, and gives how
+/// many bytes that is (more than the second argument holds when it doesn't
+/// fit, having written nothing), or None if it can't.
+pub type TransformFn = fn(&[u8], &mut [u8]) -> Option<usize>;
+
+/// What the transform `f` makes of `raw`, in `out`; fails with InvalidValue
+/// if it can't.
+pub fn transform_from(
+    f: Option<TransformFn>,
+    raw: &[u8],
+    out: &mut [u8],
+    field: &'static str,
+) -> Result<usize> {
+    // None when the document gives only the other way.
+    let f = f.ok_or(PacketError::NotInvertible { field })?;
+    match f(raw, out) {
+        Some(n) if n <= out.len() => Ok(n),
+        Some(_) => Err(PacketError::TooLong { field }),
+        None => Err(PacketError::InvalidValue { field }),
+    }
 }
 
 /// An InvertAlgorithm: what a bit is once AutoInvert has inverted the

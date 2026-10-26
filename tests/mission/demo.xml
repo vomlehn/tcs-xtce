@@ -1054,6 +1054,17 @@
           </Dimension>
         </DimensionList>
       </ArrayParameterType>
+      <!-- Four bytes on the wire, XOR 0x5A, which the application's Unmask
+           and Mask transform. -->
+      <BinaryParameterType name="XorBlobType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <FixedValue>32</FixedValue>
+          </SizeInBits>
+          <FromBinaryTransformAlgorithm name="Unmask"/>
+          <ToBinaryTransformAlgorithm name="Mask"/>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
       <IntegerParameterType name="RepCountType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
         <ValidRange minInclusive="0" maxInclusive="5"/>
@@ -1308,6 +1319,10 @@
       <Parameter name="HkSum" parameterTypeRef="U8"/>
       <Parameter name="HkMin" parameterTypeRef="DrDoubleType"/>
       <Parameter name="HkMax" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="XorBlob" parameterTypeRef="XorBlobType"/>
+      <Parameter name="XorTail" parameterTypeRef="U8"/>
+      <Parameter name="ZipA" parameterTypeRef="U16"/>
+      <Parameter name="ZipB" parameterTypeRef="U8"/>
       <Parameter name="TwoRowCols" parameterTypeRef="RepCountType"/>
       <Parameter name="TwoRows" parameterTypeRef="TwoRowType"/>
       <Parameter name="TwoRowNote" parameterTypeRef="U8"/>
@@ -2253,6 +2268,35 @@
       </SequenceContainer>
       <!-- TailFlag ends 4 bits before TailData starts, and TailSum ends a
            byte before the end of the packet, whose size varies. -->
+      <!-- Its own entries are transformed: every byte is doubled on the
+           wire, which the application's Shrink undoes when decoding and
+           its Expand does when encoding. -->
+      <SequenceContainer name="ZipBlock">
+        <BinaryEncoding>
+          <FromBinaryTransformAlgorithm name="Shrink"/>
+          <ToBinaryTransformAlgorithm name="Expand"/>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipA"/>
+          <ParameterRefEntry parameterRef="ZipB"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="600"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="XorBlock">
+        <EntryList>
+          <ParameterRefEntry parameterRef="XorBlob"/>
+          <ParameterRefEntry parameterRef="XorTail"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="610"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="TwoRowBlock">
         <EntryList>
           <ParameterRefEntry parameterRef="TwoRowCols"/>

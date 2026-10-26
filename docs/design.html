@@ -870,6 +870,15 @@ of an optional field would have nowhere to be absent. Unlike a
 command's own assignments they don't select the command when decoding:
 the document chose the included container, so the assignments can only
 confirm it.</p>
+<p>Transformed data is a <tt class="docutils literal">Transform</tt> item holding the items whose bits it
+transforms; a binary value's is a <tt class="docutils literal">Transform</tt> holding the value, which
+then takes the rest of what the transform gives. Decoding reads its bytes
+and swaps in a reader over what the transform makes of them, so its
+items are read with the same code as any others; encoding writes them in
+place, then replaces their bytes with the transform's, working in the
+output buffer after them, which <tt class="docutils literal">max_bits</tt> counts. <tt class="docutils literal">walk</tt> splices a
+Transform's items in for everything that looks at values, and keeps it
+whole (<tt class="docutils literal">inner=False</tt>) for everything that places bits on the wire.</p>
 <p>A length field inside an included container can't mean the packet's
 length, so <tt class="docutils literal">measure</tt> makes it measure the container: it marks the
 field and puts a <tt class="docutils literal">LengthEnd</tt> where the container ends, where decoding
