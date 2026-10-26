@@ -348,6 +348,15 @@ class BitReader:
     def skip(self, offset: int, field: str) -> None:
         self.seek(self.pos, offset, field)
 
+    def seek_end(self, back: int, field: str) -> None:
+        """Move to ``back`` bits before the end of the packet, which must
+        not be before the current position."""
+        p = self.nbits - back
+        if p < self.pos:
+            raise PacketError("BadPosition", field)
+        self.pos = p
+        self.end = max(self.end, p)
+
     def uint(self, bits: int, field: str) -> int:
         end = self.pos + bits
         if end > self.nbits:
@@ -471,6 +480,12 @@ class BitWriter:
 
     def skip(self, offset: int, field: str) -> None:
         self.pos = _position(self.pos, offset, field)
+
+    def seek_tail(self, back: int) -> None:
+        """Move forward the fewest bits (zeros) that put the end of the
+        packet, ``back`` bits on, on a byte boundary: where decoding finds
+        an entry located from the packet's end."""
+        self.pos += -(self.pos + back) % 8
 
     def uint(self, bits: int, v: int) -> None:
         end = self.pos + bits

@@ -863,6 +863,57 @@ class ContainerTests(unittest.TestCase):
 
 
 
+def packet_mission(*refs: str, record: str = "") -> str:
+    """container_mission, with Status's own entries ``refs`` after N, and
+    Record included first when ``record`` gives its contents."""
+    inc = '<ContainerRefEntry containerRef="Record"/>' if record else ""
+    return container_mission(record or entries(),
+                             "").replace(
+        '<ContainerRefEntry containerRef="Record"></ContainerRefEntry>',
+        inc + "".join(refs))
+
+
+class LocationTests(unittest.TestCase):
+    def items(self, *refs: str, record: str = "") -> list:
+        return compile_xml(packet_mission(*refs, record=record)).nodes[0].items
+
+    def test_next_entry_follows(self):
+        # A ends 4 bits before B starts.
+        items = self.items(ref("A", "nextEntry:4"), ref("B"))
+        self.assertEqual([type(it).__name__ for it in items],
+                         ["Value", "Value", "Seek", "Value"])
+        self.assertEqual((items[2].from_start, items[2].offset), (None, 4))
+
+    def test_next_entry_backward(self):
+        # B is 32 bits from the start, so A (4 bits) ends 2 bits before.
+        items = self.items(ref("A", "nextEntry:2"),
+                           ref("B", "containerStart:32"))
+        self.assertEqual((items[1].from_start, items[1].offset), (0, 26))
+
+    def test_container_end_in_a_packet_of_varying_size(self):
+        items = self.items(ref("Text"), ref("B", "containerEnd:8"))
+        kinds = [type(it).__name__ for it in items]
+        self.assertEqual(kinds[-3:], ["TailSeek", "Value", "TailPad"])
+        self.assertEqual((items[-3].back, items[-1].bits), (16, 8))
+
+    def test_rejected(self):
+        for refs, record, why in (
+                ((ref("A", "nextEntry:4"), ref("B", "previousEntry:3")), "",
+                 "an entry located 4 bits before the next one, which says "
+                 "otherwise"),
+                ((ref("A"), ref("B", "nextEntry:4")), "",
+                 "an entry located from the next entry, without one after"),
+                ((ref("Text", "nextEntry:0"), ref("B", "containerStart:80")),
+                 "", "an entry located from the next entry whose size varies"),
+                ((ref("B", "containerEnd:0"), ref("A")), "", "is not its last"),
+                ((), entries(ref("Text"), ref("A", "containerEnd:0")),
+                 "a location from the end of an included container")):
+            with self.subTest(why=why):
+                with self.assertRaises(Unsupported) as cm:
+                    self.items(*refs, record=record)
+                self.assertIn(why, str(cm.exception))
+
+
 def bool_string(attrs: str, bits: int = 32) -> str:
     """Telemetry with a boolean X encoded as a fixed, terminated string."""
     return mission(tm=f"""

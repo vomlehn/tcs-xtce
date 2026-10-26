@@ -461,6 +461,19 @@ impl<'a> BitReader<'a> {
     }
 
     /// Moves `offset` bits from the current position.
+    /// Moves to `back` bits before the end of the packet, which must not be
+    /// before the current position.
+    pub fn seek_end(&mut self, back: usize, field: &'static str) -> Result<()> {
+        match (self.data.len() * 8).checked_sub(back) {
+            Some(p) if p >= self.pos => {
+                self.pos = p;
+                self.end = self.end.max(p);
+                Ok(())
+            }
+            _ => Err(PacketError::BadPosition { field }),
+        }
+    }
+
     pub fn skip(&mut self, offset: i64, field: &'static str) -> Result<()> {
         self.seek(self.pos, offset, field)
     }
@@ -776,6 +789,13 @@ impl<'a> BitWriter<'a> {
     ) -> Result<()> {
         self.pos = position(start, offset, field)?;
         Ok(())
+    }
+
+    /// Moves forward the fewest bits (zeros) that put the end of the
+    /// packet, `back` bits on, on a byte boundary: where decoding finds an
+    /// entry located from the packet's end.
+    pub fn seek_tail(&mut self, back: usize) {
+        self.pos += (8 - (self.pos + back) % 8) % 8;
     }
 
     pub fn skip(&mut self, offset: i64, field: &'static str) -> Result<()> {

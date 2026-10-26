@@ -237,6 +237,18 @@ static inline int xtce_pk_read_skip(xtce_pk_reader* r, int64_t offset,
         return xtce_pk_read_seek(r, r->pos, offset, f);
 }
 
+/* Moves to `back` bits before the end of the packet, which must not be
+ * before the current position. */
+static inline int xtce_pk_read_seek_end(xtce_pk_reader* r, size_t back,
+                                        const char* f) {
+        size_t bits = r->len * 8;
+        if (back > bits || bits - back < r->pos)
+                return xtce_pk_fail(r->err, XTCE_PK_BAD_POSITION, f, NULL);
+        r->pos = bits - back;
+        xtce_pk_read_moved(r);
+        return 0;
+}
+
 static inline int xtce_pk_read_need(const xtce_pk_reader* r, size_t bits,
                                     const char* f) {
         if (r->pos + bits > r->len * 8)
@@ -492,6 +504,14 @@ static inline int xtce_pk_write_seek(xtce_pk_writer* w, size_t start,
 static inline int xtce_pk_write_skip(xtce_pk_writer* w, int64_t offset,
                                      const char* f) {
         return xtce_pk_position(w->pos, offset, f, w->err, &w->pos);
+}
+
+/* Moves forward the fewest bits (zeros) that put the end of the packet,
+ * `back` bits on, on a byte boundary: where decoding finds an entry located
+ * from the packet's end. */
+static inline int xtce_pk_write_seek_tail(xtce_pk_writer* w, size_t back) {
+        w->pos += (8 - (w->pos + back) % 8) % 8;
+        return 0;
 }
 
 static inline int xtce_pk_write_bits(xtce_pk_writer* w, unsigned bits,

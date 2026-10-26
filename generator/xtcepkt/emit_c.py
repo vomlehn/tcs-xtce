@@ -24,7 +24,7 @@ from .model import (term_indexes, term_locals, term_paths, walk, Index,
                     ContextCal, DynSize, Criterion, Fixed, FloatEnc, IntEnc,
                     Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
                     Spline, StringEnc, Value, VType, Require, Fill, Segment,
-                    Verify, Custom, NARROW_MAX_BYTES)
+                    Verify, Custom, NARROW_MAX_BYTES, TailPad, TailSeek)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -1152,6 +1152,13 @@ class CEmitter:
             elif isinstance(it, Pad):
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {it.bits}, "
                           f"{cstr(where)}));", depth)
+            elif isinstance(it, TailSeek):
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_seek_end(r, {it.back}, "
+                          f"{cstr(where)}));", depth)
+            elif isinstance(it, TailPad):
+                # The packet's last bits, which encoding fills with zeros.
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_skip(r, {it.bits}, "
+                          f"{cstr(where)}));", depth)
             elif isinstance(it, Segment):
                 lc = it.local
                 if it.first:
@@ -1242,9 +1249,12 @@ class CEmitter:
                 self.patch(it.check, depth)
             elif isinstance(it, Fill):
                 self.fill(it, "w", self.write_ref(n, names), depth)
-            elif isinstance(it, Pad):
+            elif isinstance(it, (Pad, TailPad)):
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {it.bits}));",
                           depth)
+            elif isinstance(it, TailSeek):
+                self.line("XTCE_PK_TRY(xtce_pk_write_seek_tail(w, "
+                          f"{it.back}));", depth)
             elif isinstance(it, Cond):
                 self.element_guards(
                     [p for c in it.criteria for p in term_paths(c)],

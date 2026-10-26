@@ -2227,13 +2227,32 @@ comparison with a constant fixes a field's value, so derived packets
 chosen by other criteria keep those fields, and encoding checks them.</p>
 </dd>
 <dt>Locations</dt>
-<dd><tt class="docutils literal">LocationInContainerInBits</tt> relative to <tt class="docutils literal">previousEntry</tt> (the
-default), <tt class="docutils literal">containerStart</tt> or <tt class="docutils literal">containerEnd</tt>. A <tt class="docutils literal">containerEnd</tt>
-location puts the end of the entry that many bits before the end of its
-container, which must have a fixed <tt class="docutils literal">SizeInBits</tt> (otherwise its end
-would depend on where its entries are), and the entry a fixed size.
-<tt class="docutils literal">nextEntry</tt>, which XTCE proposes to deprecate, is not supported.
-<tt class="docutils literal">containerStart</tt> is the start of the
+<dd><p class="first"><tt class="docutils literal">LocationInContainerInBits</tt> relative to <tt class="docutils literal">previousEntry</tt> (the
+default), <tt class="docutils literal">containerStart</tt>, <tt class="docutils literal">containerEnd</tt> or <tt class="docutils literal">nextEntry</tt>. As
+XTCE says, the first two place the start of the entry and the last two
+its end, so an entry located from either end has a fixed size.</p>
+<p>A <tt class="docutils literal">containerEnd</tt> location puts the end of the entry that many bits
+before the end of its container. In a container with a fixed
+<tt class="docutils literal">SizeInBits</tt> that is a place from its start. In a packet whose size
+varies, it is the packet's end, which decoding knows (the end of the
+data, or where its length field says); there it must be the packet's
+last entry, always present. Decoding moves there (failing with
+<tt class="docutils literal">BadPosition</tt> if that is before the previous entry's end) and treats
+the bits after it as the packet's; encoding writes it after the
+previous entry, moved on by the fewest zero bits that end the packet
+on a byte boundary, then the offset's bits as zeros. Bits that the
+decoded packet had before it are left out, as gaps are. The end of an
+included container whose size varies would depend on where its entries
+are, so an entry there can't be located from it.</p>
+<p>A <tt class="docutils literal">nextEntry</tt> location puts the end of the entry that many bits
+before the start of the entry after it in the same entry list. When
+that entry is located from its container's start, this one goes back
+from there; otherwise the offset is the gap between them, and the next
+entry's own <tt class="docutils literal">previousEntry</tt> offset, if it gives one, must be the
+same. The demo's <tt class="docutils literal">Tail</tt> packet has <tt class="docutils literal">TailFlag</tt> 4 bits before
+<tt class="docutils literal">TailData</tt>, and <tt class="docutils literal">TailSum</tt> a byte before the end of a packet whose
+size varies.</p>
+<p class="last"><tt class="docutils literal">containerStart</tt> is the start of the
 packet for inherited entries, and the inclusion point for entries of
 an included container. A <tt class="docutils literal">FixedValue</tt> offset may be negative. A
 <tt class="docutils literal">DynamicValue</tt> or <tt class="docutils literal">DiscreteLookupList</tt> offset is computed like a
@@ -2241,7 +2260,8 @@ size, in bits, so it must be a whole number from 0 up to its bound
 (at most the maximum field size), or decoding and encoding fail with
 <tt class="docutils literal">BadSize</tt>; in
 the demo, <tt class="docutils literal">Frame</tt>'s <tt class="docutils literal">FrameEnd</tt> comes <tt class="docutils literal">FrameGap</tt> bits after the
-body. Repeated and fixed-size containers need fixed offsets.</dd>
+body. Repeated and fixed-size containers need fixed offsets.</p>
+</dd>
 <dt>Include conditions</dt>
 <dd><tt class="docutils literal">IncludeCondition</tt> (see Criteria) on
 <tt class="docutils literal">ParameterRefEntry</tt> and <tt class="docutils literal">ContainerRefEntry</tt>, on values decoded
@@ -2566,8 +2586,8 @@ length field in a command with one of its own, transform algorithms, <tt class="
 deprecates), calibrators inside aggregate types that use other values,
 least-significant-bit-first strings and binary data that may not start on
 a byte boundary, integers of more than 64 bits used other than as
-values (see &quot;Integer encoding&quot;), <tt class="docutils literal">nextEntry</tt> locations,
-and a <tt class="docutils literal">containerEnd</tt> location in a container without a fixed size.</dd>
+values (see &quot;Integer encoding&quot;), and a location from the end of an
+included container whose size varies.</dd>
 </dl>
 </div>
 <div class="section" id="known-limitations">

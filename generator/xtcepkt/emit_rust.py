@@ -16,7 +16,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
                     Value, VType, Require, Fill, Segment, Verify, Custom,
-                    NARROW_MAX_BYTES)
+                    NARROW_MAX_BYTES, TailPad, TailSeek)
 
 
 def rstr(s: str) -> str:
@@ -863,6 +863,11 @@ class RustEmitter:
                 self.line(f"let m{it.id} = r.position();", depth)
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
+            elif isinstance(it, TailSeek):
+                self.line(f"r.seek_end({it.back}, {rstr(where)})?;", depth)
+            elif isinstance(it, TailPad):
+                # The packet's last bits, which encoding fills with zeros.
+                self.line(f"r.skip({it.bits}, {rstr(where)})?;", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: f"v{lc.id}", depth)
             elif isinstance(it, Verify):
@@ -926,8 +931,10 @@ class RustEmitter:
                 self.line(f"let m{it.id} = w.position();", depth)
             elif isinstance(it, Fixed):
                 self.line(f"w.uint({it.bits}, 0x{it.value:x});", depth)
-            elif isinstance(it, Pad):
+            elif isinstance(it, (Pad, TailPad)):
                 self.line(f"w.zeros({it.bits});", depth)
+            elif isinstance(it, TailSeek):
+                self.line(f"w.seek_tail({it.back});", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: self.place(n, lc, names), depth)
             elif isinstance(it, Verify):

@@ -27,9 +27,10 @@ from .model import (
     BinaryEnc, Cond, Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index,
     IntEnc, Item, Kind, Local, Mark, Member, Mission, Node, Pad, Polynomial,
     Seek, Spline, StringEnc, Term, Unsupported, Value, VType, ref_text,
-    term_locals, walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp, Require,
-    ValueRef, needs_binding, Fill, Segment, Verify, Alarm, AlarmDef, Band,
-    LEVELS, Change, Algorithm, Stream, Hook, Custom, term_hooks, input_locals)
+    term_locals, walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp, NextSeek,
+    Require, TailPad, TailSeek, ValueRef, needs_binding, Fill, Segment, Verify,
+    Alarm, AlarmDef, Band, LEVELS, Change, Algorithm, Stream, Hook, Custom,
+    term_hooks, input_locals)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -1346,8 +1347,57 @@ class Compiler:
                 raise Unsupported(f"{where}: a location from the container's "
                                   "end that other values give")
             return [EndSeek(start, off)]
-        raise Unsupported(f"{where}: location relative to {ref}, which XTCE "
-                          "proposes to deprecate")
+        if not isinstance(off, int):
+            raise Unsupported(f"{where}: a location from the next entry that "
+                              "other values give")
+        return [NextSeek(off)]
+
+    @staticmethod
+    def no_next(items: list, where: str) -> None:
+        """Rejects a nextEntry location with no entry after it in its entry
+        list, or inside an IncludeCondition."""
+        if any(isinstance(it, NextSeek) for it in walk(items)):
+            raise Unsupported(f"{where}: an entry located from the next entry, "
+                              "without one after it in its entry list and "
+                              "condition")
+
+    @staticmethod
+    def next_seek(items: list, loc: list, where: str) -> list:
+        """Places an entry with a nextEntry location, which is in ``items``
+        (its NextSeek, then its Value), now that the entry after it has the
+        location items ``loc``: the earlier entry ends where the later one
+        starts, less the offset.  Returns ``loc``, adjusted."""
+        at = next((i for i in range(len(items) - 1, -1, -1)
+                   if isinstance(items[i], NextSeek)), None)
+        if at is None:
+            return loc
+        k = items[at].offset
+        if (len(loc) == 1 and isinstance(loc[0], Seek)
+                and loc[0].from_start is not None
+                and isinstance(loc[0].offset, int)):
+            # The next entry is placed from its container's start, so this
+            # one goes back from there.
+            body = [it for it in items[at + 1:]]
+            bits = sum(item_bits(it.local.vtype) for it in body
+                       if isinstance(it, Value)
+                       and fixed_bits(it.local.vtype) is not None)
+            if (any(isinstance(it, Value) and fixed_bits(it.local.vtype) is None
+                    for it in body)):
+                raise Unsupported(f"{where}: an entry located from the next "
+                                  "entry whose size varies")
+            items[at] = Seek(loc[0].from_start, loc[0].offset - k - bits)
+            return loc
+        if any(isinstance(it, (EndSeek, NextSeek)) for it in loc):
+            raise Unsupported(f"{where}: an entry located from the next entry, "
+                              "which is located from another")
+        # The next entry follows this one, k bits after its end.
+        given = sum(it.offset for it in loc if isinstance(it, Seek)
+                    and isinstance(it.offset, int))
+        if loc and (given != k or len(loc) > 1):
+            raise Unsupported(f"{where}: an entry located {k} bits before the "
+                              "next one, which says otherwise")
+        del items[at]
+        return [Seek(None, k)] if k else []
 
     def repeat(self, local: Local, e, path: Key, where: str) -> Local:
         """Turns the value of an entry with a RepeatEntry into an array."""
@@ -1539,9 +1589,9 @@ class Compiler:
         IncludeCondition."""
         items: list[Item] = []
         segs: dict = {}
+        where = f"container {qname(stack[-1])}"
         for ch in sc.entry_list.items:
             e = ch.value
-            where = f"container {qname(stack[-1])}"
             if (ch.name not in ("ParameterRefEntry", "ContainerRefEntry",
                                 "ArrayParameterRefEntry",
                                 "IndirectParameterRefEntry") + SEGMENTS):
@@ -1557,17 +1607,21 @@ class Compiler:
             if e.include_condition is not None:
                 cond = self.match(e.include_condition, path, scope, where)
             out = items if cond is None else []
-            out += self.location(e.location_in_container_in_bits, start, path,
-                                 scope, where)
+            out += self.next_seek(items,
+                                  self.location(e.location_in_container_in_bits,
+                                                start, path, scope, where),
+                                  where)
             if ch.name in SEGMENTS:
+                after = []
                 if out and isinstance(out[-1], EndSeek):
                     if e.repeat_entry is not None:
                         raise Unsupported(f"{where}: a repeated {ch.name} "
                                           "located from the container's end")
-                    out[-1] = self.end_seek(out[-1], sc, None, where,
-                                            e.size_in_bits)
+                    out[-1], after = self.end_seek(out[-1], sc, None, where,
+                                                   e.size_in_bits)
                 out += self.segment(ch.name, e, path, where, segs,
                                     cond is not None, scope)
+                out += after
             elif ch.name == "IndirectParameterRefEntry":
                 out += self.indirect(e, path, scope, where)
             elif ch.name != "ContainerRefEntry":
@@ -1575,9 +1629,11 @@ class Compiler:
                                     path, where)
                 local = self.bind(self.repeat(local, e, path, where), scope,
                                   where)
+                after = []
                 if out and isinstance(out[-1], EndSeek):
-                    out[-1] = self.end_seek(out[-1], sc, local, where)
+                    out[-1], after = self.end_seek(out[-1], sc, local, where)
                 out.append(Value(local))
+                out += after
                 scope.append(local)
             else:
                 ckey = self.resolve(e.container_ref, path, self.containers,
@@ -1632,6 +1688,7 @@ class Compiler:
                     if isinstance(it, Value):
                         it.local.optional = True
                 items.append(Cond(cond, out))
+        self.no_next(items, where)
         self.raw_segments(items, segs, scope)
         return items
 
@@ -1839,25 +1896,49 @@ class Compiler:
                                self.containers, "container")
 
     def end_seek(self, es: EndSeek, sc, local: Optional[Local], where: str,
-                 bits: int = 0) -> Seek:
+                 bits: int = 0) -> tuple:
         """The Seek that ends ``local`` (or a segment of ``bits``)
-        ``es.offset`` bits before the end of container ``sc``, which must
-        have a fixed size: otherwise its end would depend on where its
-        entries are."""
+        ``es.offset`` bits before the end of container ``sc``, and the items
+        to follow it.  In a container with a fixed size, that is a place
+        from its start.  Otherwise the container must be the packet itself,
+        whose end decoding knows (a TailSeek, and a TailPad after): an
+        included container's end would depend on where its entries are."""
+        if local is not None:
+            vt = local.vtype
+            if vt.dyn is not None or is_rest(vt) or fixed_bits(vt) is None:
+                raise Unsupported(f"{where}: a location from the container's "
+                                  f"end for {local.name}, whose size varies")
+            bits = item_bits(vt)
         be = sc.binary_encoding
         size = (
             self.int_value(be.size_in_bits, (), "container SizeInBits", where)
             if be is not None and be.size_in_bits is not None else None)
-        if not isinstance(size, int):
-            raise Unsupported(f"{where}: a location from the end of a "
-                              "container without a fixed SizeInBits")
-        if local is None:
-            return Seek(es.start, size - es.offset - bits)
-        vt = local.vtype
-        if vt.dyn is not None or is_rest(vt):
-            raise Unsupported(f"{where}: a location from the container's end "
-                              f"for {local.name}, whose size varies")
-        return Seek(es.start, size - es.offset - item_bits(vt))
+        if isinstance(size, int):
+            return Seek(es.start, size - es.offset - bits), []
+        if es.start != 0 or size is not None:
+            raise Unsupported(f"{where}: a location from the end of an "
+                              "included container, or one whose size another "
+                              "value gives")
+        return TailSeek(es.offset + bits), [TailPad(es.offset)]
+
+    @staticmethod
+    def check_tail(node: Node, where: str) -> None:
+        """An entry located from the end of a packet whose size varies is
+        its last, and is always there."""
+        items = node.all_items()
+        for it in items:
+            if (isinstance(it, Cond)
+                    and any(isinstance(x, TailSeek) for x in walk(it.items))):
+                raise Unsupported(f"{where}: an entry located from the "
+                                  "packet's end has an IncludeCondition")
+        at = [i for i, it in enumerate(items) if isinstance(it, TailSeek)]
+        if not at:
+            return
+        rest = items[at[0] + 3:]
+        if (len(at) > 1
+                or any(not isinstance(it, (Require, Mark)) for it in rest)):
+            raise Unsupported(f"{where}: an entry located from the end of a "
+                              "packet whose size varies is not its last")
 
     def size_pad(self, sc, items: list, start: int, where: str,
                  scope: Optional[list] = None, path: Key = ()) -> list[Item]:
@@ -2015,6 +2096,7 @@ class Compiler:
             node.items += self.size_pad(sc, node.all_items(), 0,
                                         f"container {node.key}", scope, path)
             self.check_rest(node, f"container {node.key}")
+            self.check_tail(node, f"container {node.key}")
             check_aligned(node.all_items(), f"container {node.key}")
             self.check_length(node, f"container {node.key}")
             if not node.abstract:
@@ -2431,6 +2513,7 @@ class Compiler:
                 node.items += self.size_pad(cc, node.all_items(), 0, where,
                                             values, path)
             self.check_rest(node, where)
+            self.check_tail(node, where)
             check_aligned(node.all_items(), where)
             self.check_length(node, where)
             if not node.abstract:
@@ -2471,11 +2554,25 @@ class Compiler:
                 cond = self.match(e.include_condition, path, values, where,
                                   arg_key)
             out = items if cond is None else []
-            out += self.location(e.location_in_container_in_bits, start, path,
-                                 values, where, arg_key)
+            out += self.next_seek(items,
+                                  self.location(e.location_in_container_in_bits,
+                                                start, path, values, where,
+                                                arg_key), where)
+            if (out and isinstance(out[-1], EndSeek)
+                    and ch.name not in entries + SEGMENTS):
+                raise Unsupported(f"{where}: a {ch.name} located from the "
+                                  "container's end")
             if ch.name in SEGMENTS:
+                after = []
+                if out and isinstance(out[-1], EndSeek):
+                    if e.repeat_entry is not None:
+                        raise Unsupported(f"{where}: a repeated {ch.name} "
+                                          "located from the container's end")
+                    out[-1], after = self.end_seek(out[-1], cc, None, where,
+                                                   e.size_in_bits)
                 out += self.segment(ch.name, e, path, where, segs,
                                     cond is not None, values, arg_key)
+                out += after
             elif ch.name == "IndirectParameterRefEntry":
                 out += self.indirect(e, path, values, where, arg_key)
             elif (ch.name == "ContainerRefEntry"
@@ -2509,7 +2606,11 @@ class Compiler:
                 local = self.subset(local, e, path, where)
                 local = self.bind(self.repeat(local, e, path, where), values,
                                   where, arg_key)
+                after = []
+                if out and isinstance(out[-1], EndSeek):
+                    out[-1], after = self.end_seek(out[-1], cc, local, where)
                 out.append(Value(local))
+                out += after
                 values.append(local)
             else:
                 out += self.fixed_entry(e, path, where)
@@ -2518,6 +2619,7 @@ class Compiler:
                     if isinstance(it, Value):
                         it.local.optional = True
                 items.append(Cond(cond, out))
+        self.no_next(items, where)
         self.raw_segments(items, segs, values)
         return items
 
@@ -3321,7 +3423,7 @@ def check_aligned(items: list[Item], where: str) -> None:
             elif isinstance(it, Value):
                 if not it.assembled:
                     pos = advance(it.local.vtype, pos, it.local.name)
-            elif isinstance(it, EndSeek):
+            elif isinstance(it, (EndSeek, TailSeek)):
                 pos = None
             else:
                 pos = None if pos is None else (pos + it.bits) % 8
@@ -3403,7 +3505,7 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
     pos = extent = 0
     marks = {start: 0}
     for it in items:
-        if isinstance(it, Cond):
+        if isinstance(it, (Cond, TailSeek)):
             return None
         if isinstance(it, Fill):
             if isinstance(it.size, DynSize) or it.start not in marks:

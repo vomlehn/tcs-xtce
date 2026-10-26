@@ -198,3 +198,6 @@ tm 0a30c02a000a0600000000000000000000  # repeated: a tail segment count beyond i
 tc 112ec0010006120007fffb012c  # set limits: Limits' container, its LimitKind fixed at 7
 tc 112ec002000b120107ffff000107fffe0002  # set limits: both copies of Limits' container
 tc 112ec002000b120107ffff000108fffe0002  # set limits: the second copy's LimitKind isn't 7
+tm 0a3ac02a000902ab0111122220beef00  # tail: TailFlag 4 bits before TailData; TailSum a byte before the end
+tm 0a3ac02a0009010103333fffffcafe55  # tail: bytes before TailSum, which re-encoding leaves out
+tm 0a3ac02a0008030000001000200030  # tail: no room for TailSum after TailData

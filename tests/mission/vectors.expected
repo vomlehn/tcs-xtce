@@ -198,3 +198,6 @@ error:BadSize | -
 SetLimits{seq_count=1, both=false, lo=-5, hi=300, limit_kind=none, lo2=none, hi2=none} | 112ec0010006120007fffb012c
 SetLimits{seq_count=2, both=true, lo=-1, hi=1, limit_kind=7, lo2=-2, hi2=2} | 112ec002000b120107ffff000107fffe0002
 error:Mismatch | -
+Tail{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tail_flag=171, tail_data=[4369, 8738], tail_sum=48879} | 0a3ac02a000902ab0111122220beef00
+Tail{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tail_flag=1, tail_data=[13107], tail_sum=51966} | 0a3ac02a00070101033330cafe00
+error:BadPosition | -

@@ -1795,11 +1795,33 @@ Criteria
 
 Locations
    ``LocationInContainerInBits`` relative to ``previousEntry`` (the
-   default), ``containerStart`` or ``containerEnd``. A ``containerEnd``
-   location puts the end of the entry that many bits before the end of its
-   container, which must have a fixed ``SizeInBits`` (otherwise its end
-   would depend on where its entries are), and the entry a fixed size.
-   ``nextEntry``, which XTCE proposes to deprecate, is not supported.
+   default), ``containerStart``, ``containerEnd`` or ``nextEntry``. As
+   XTCE says, the first two place the start of the entry and the last two
+   its end, so an entry located from either end has a fixed size.
+
+   A ``containerEnd`` location puts the end of the entry that many bits
+   before the end of its container. In a container with a fixed
+   ``SizeInBits`` that is a place from its start. In a packet whose size
+   varies, it is the packet's end, which decoding knows (the end of the
+   data, or where its length field says); there it must be the packet's
+   last entry, always present. Decoding moves there (failing with
+   ``BadPosition`` if that is before the previous entry's end) and treats
+   the bits after it as the packet's; encoding writes it after the
+   previous entry, moved on by the fewest zero bits that end the packet
+   on a byte boundary, then the offset's bits as zeros. Bits that the
+   decoded packet had before it are left out, as gaps are. The end of an
+   included container whose size varies would depend on where its entries
+   are, so an entry there can't be located from it.
+
+   A ``nextEntry`` location puts the end of the entry that many bits
+   before the start of the entry after it in the same entry list. When
+   that entry is located from its container's start, this one goes back
+   from there; otherwise the offset is the gap between them, and the next
+   entry's own ``previousEntry`` offset, if it gives one, must be the
+   same. The demo's ``Tail`` packet has ``TailFlag`` 4 bits before
+   ``TailData``, and ``TailSum`` a byte before the end of a packet whose
+   size varies.
+
    ``containerStart`` is the start of the
    packet for inherited entries, and the inclusion point for entries of
    an included container. A ``FixedValue`` offset may be negative. A
@@ -2145,8 +2167,8 @@ Not supported
    deprecates), calibrators inside aggregate types that use other values,
    least-significant-bit-first strings and binary data that may not start on
    a byte boundary, integers of more than 64 bits used other than as
-   values (see "Integer encoding"), ``nextEntry`` locations,
-   and a ``containerEnd`` location in a container without a fixed size.
+   values (see "Integer encoding"), and a location from the end of an
+   included container whose size varies.
 
 Known limitations
 -----------------

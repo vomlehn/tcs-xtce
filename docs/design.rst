@@ -457,7 +457,16 @@ data is "always within that maximum size". The same item serves a size
 that another value gives. A ``containerEnd`` location is resolved at
 compile time into a location from the start, which is why it needs a
 container of fixed size: with a varying size, the end would depend on the
-entries being placed.
+entries being placed. The exception is the packet itself, whose end
+decoding knows before it reads anything; a ``TailSeek`` moves there, and
+encoding, which makes the end, places the entry so that the packet ends
+on a byte boundary the offset after it, as decoding will find it. That
+only works for the packet's last entry, so ``check_tail`` insists on it.
+
+A ``nextEntry`` location is an ``EndSeek`` in the other direction: the
+compiler holds a ``NextSeek`` until the next entry's location is known,
+then makes it a place back from that entry's container-start location, or
+the gap before an entry that follows on.
 
 An included container with a ``BaseContainer`` is flattened, bases
 first, like a packet's inheritance chain, and its ``RestrictionCriteria``

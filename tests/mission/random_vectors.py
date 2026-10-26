@@ -361,6 +361,16 @@ def repeated(rng) -> bytes:
     return bits(f + [(8, rng.randrange(256))])
 
 
+def tail(rng) -> bytes:
+    """A Tail body: a count mostly in range, TailFlag 4 bits before the
+    data, then often some bytes before TailSum and the last byte."""
+    n = rng.choice([0, 1, 3, 5, rng.randrange(8)])
+    f = [(8, n), (8, rng.randrange(256)), (4, rng.randrange(16))]
+    f += [(16, rng.randrange(1 << 16)) for _ in range(min(n, 5))]
+    return (bits(f) + rng.randbytes(rng.choice([0, 0, 1, 3]))
+            + rng.randbytes(3))
+
+
 def set_limits(rng) -> bytes:
     """A SetLimits body: Both mostly 0 or 1, LimitKind mostly 7."""
     both = rng.choice([0, 1, 1, rng.randrange(256)])
@@ -380,7 +390,8 @@ def main() -> None:
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
                                430, 440, 450, 460, 470, 480, 490, 500, 510, 520,
-                               530, 550, 550, 560, 560, rng.randrange(1 << 11)])
+                               530, 550, 550, 560, 560, 570, 570,
+                               rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -453,6 +464,8 @@ def main() -> None:
                     + [(8, rng.randrange(256)) for _ in range(2)])
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
+            elif apid == 570 and rng.random() < 0.9:
+                data += tail(rng)
             elif apid == 560 and rng.random() < 0.9:
                 data += repeated(rng)
             elif apid == 550 and rng.random() < 0.9:

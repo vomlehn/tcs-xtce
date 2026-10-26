@@ -12,7 +12,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
-                    Require, Fill, Segment, Verify, Custom)
+                    Require, Fill, Segment, Verify, Custom, TailPad, TailSeek)
 
 
 def pstr(s: str) -> str:
@@ -610,6 +610,11 @@ class PythonEmitter:
                 self.line(f"m{it.id} = r.pos", depth)
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
+            elif isinstance(it, TailSeek):
+                self.line(f"r.seek_end({it.back}, {pstr(where)})", depth)
+            elif isinstance(it, TailPad):
+                # The packet's last bits, which encoding fills with zeros.
+                self.line(f"r.skip({it.bits}, {pstr(where)})", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: f"v{lc.id}", depth)
             elif isinstance(it, Verify):
@@ -664,8 +669,10 @@ class PythonEmitter:
                 self.line(f"m{it.id} = w.pos", depth)
             elif isinstance(it, Fixed):
                 self.line(f"w.uint({it.bits}, 0x{it.value:x})", depth)
-            elif isinstance(it, Pad):
+            elif isinstance(it, (Pad, TailPad)):
                 self.line(f"w.zeros({it.bits})", depth)
+            elif isinstance(it, TailSeek):
+                self.line(f"w.seek_tail({it.back})", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: self.place(n, lc, names), depth)
             elif isinstance(it, Verify):

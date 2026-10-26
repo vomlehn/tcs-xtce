@@ -679,6 +679,35 @@ class EndSeek:
 
 
 @dataclass
+class TailSeek:
+    """Where the last entry of a packet whose size varies goes, when it is
+    located from the packet's end: decoding moves to ``back`` bits before
+    the end of the packet (the end of the data, or where its length field
+    says), which must not be before the previous entry's end; encoding
+    writes it after the previous entry, then a TailPad."""
+
+    back: int
+    bits = 7  # at most: the zeros encoding puts before the entry
+
+
+@dataclass
+class TailPad:
+    """The ``bits`` zero bits that encoding writes after an entry placed by
+    a TailSeek; decoding ignores them."""
+
+    bits: int
+
+
+@dataclass
+class NextSeek:
+    """While compiling: an entry whose end is ``offset`` bits before the
+    start of the entry after it (a nextEntry location).  The compiler
+    replaces it with a Seek once it knows where that entry goes."""
+
+    offset: int
+
+
+@dataclass
 class Mark:
     """Remember the current position as the start of an included container."""
 

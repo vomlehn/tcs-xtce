@@ -1254,6 +1254,10 @@
       <Parameter name="HkSum" parameterTypeRef="U8"/>
       <Parameter name="HkMin" parameterTypeRef="DrDoubleType"/>
       <Parameter name="HkMax" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="TailCount" parameterTypeRef="RepCountType"/>
+      <Parameter name="TailFlag" parameterTypeRef="U8"/>
+      <Parameter name="TailData" parameterTypeRef="U16"/>
+      <Parameter name="TailSum" parameterTypeRef="U16"/>
       <Parameter name="RepCount" parameterTypeRef="RepCountType"/>
       <Parameter name="RepWord" parameterTypeRef="U32"/>
       <Parameter name="RepTail" parameterTypeRef="U16"/>
@@ -2185,6 +2189,37 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="560"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- TailFlag ends 4 bits before TailData starts, and TailSum ends a
+           byte before the end of the packet, whose size varies. -->
+      <SequenceContainer name="Tail">
+        <EntryList>
+          <ParameterRefEntry parameterRef="TailCount"/>
+          <ParameterRefEntry parameterRef="TailFlag">
+            <LocationInContainerInBits referenceLocation="nextEntry">
+              <FixedValue>4</FixedValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="TailData">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="TailCount"/>
+                </DynamicValue>
+              </Count>
+            </RepeatEntry>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="TailSum">
+            <LocationInContainerInBits referenceLocation="containerEnd">
+              <FixedValue>8</FixedValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="570"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
