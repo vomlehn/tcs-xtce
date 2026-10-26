@@ -17,14 +17,14 @@ from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
                      notes, stream_capacity, stream_doc, Ref, c_op, fast_order,
                      field_range, flt, header_lines, inputs, int_enc, stream_fn,
                      invertible, leaf_calibrators, math_value, size_args,
-                     str_cap, string_spec)
+                     str_cap, string_spec, binary_cap)
 from .compile import snake
 from .model import (
     term_indexes, term_locals, term_paths, walk, Index, AggregateEnc, AllOf,
     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, DynSize, Criterion, Fixed,
     FloatEnc, IntEnc, Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
     Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify, Custom,
-    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform)
+    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform, XformEnc)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -103,10 +103,12 @@ def ulit(v: int) -> str:
 
 
 # The C type of each kind of hook.
-HOOK_TYPES = {"criterion": "xtce_pk_criterion_fn",
-              "algorithm": "xtce_pk_algorithm_fn", "alarm": "xtce_pk_alarm_fn",
-              "checksum": "xtce_pk_checksum_fn",
-              "transform": "xtce_pk_transform_fn"}
+HOOK_TYPES = {
+    "criterion": "xtce_pk_criterion_fn", "algorithm": "xtce_pk_algorithm_fn",
+    "alarm": "xtce_pk_alarm_fn", "checksum": "xtce_pk_checksum_fn",
+    "binary_from": "xtce_pk_binary_from_fn",
+    "binary_to": "xtce_pk_binary_to_fn", "time_from": "xtce_pk_time_from_fn",
+    "time_to": "xtce_pk_time_to_fn"}
 
 
 def cflt(x: float) -> str:
@@ -166,7 +168,7 @@ class CEmitter:
         if k == "aggregate":
             return self.p + vt.ident
         if k == "binary" and vt.enc.variable:
-            return f"{self.p}varbytes{vt.enc.bits // 8}"
+            return f"{self.p}varbytes{binary_cap(vt)}"
         if k == "int" and vt.wide:
             return f"{self.p}{'' if vt.signed else 'u'}int{vt.width}"
         if k == "int":
@@ -223,7 +225,7 @@ class CEmitter:
                        if vt.kind == "string"})
         bins = sorted({vt.enc.bits // 8 for vt in self.vtypes()
                        if vt.kind == "binary" and not vt.enc.variable})
-        vbins = sorted({vt.enc.bits // 8 for vt in self.vtypes()
+        vbins = sorted({binary_cap(vt) for vt in self.vtypes()
                         if vt.kind == "binary" and vt.enc.variable})
         wides = sorted({(vt.width, vt.signed) for vt in self.vtypes()
                         if vt.wide})
@@ -512,6 +514,16 @@ class CEmitter:
             self.read_value(e.elem, f"{dst}.data[{i}]", f, d + 1, ref)
             self.line("}", d)
             self.line("}", depth)
+        elif isinstance(e, XformEnc):
+            h = self.transform_hook(e.decode)
+            has, raw = bool_lit(e.raw is not None), e.raw or 0
+            if e.time:
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_time_from(r, {h}, {has}, "
+                          f"{raw}, {f}, &{dst}));", depth)
+            else:
+                self.line(f"XTCE_PK_TRY(xtce_pk_read_binary_from(r, {h}, "
+                          f"{has}, {raw}, {dst}.data, {e.cap}, {f}, "
+                          f"&{dst}.len));", depth)
         elif isinstance(e, BinaryEnc) and e.variable:
             self.line("{", depth)
             if e.rest:
@@ -728,6 +740,20 @@ class CEmitter:
             self.write_value(e.elem, f"{x}.data[{i}]", f, d + 1, ref)
             self.line("}", d)
             self.line("}", depth)
+            return
+        if isinstance(e, XformEnc):
+            h = self.transform_hook(e.encode)
+            has, raw = bool_lit(e.raw is not None), e.raw or 0
+            if e.time:
+                self.line(f"XTCE_PK_TRY(xtce_pk_write_time_to(w, {h}, {x}, "
+                          f"{has}, {raw}, {e.bits // 8}, {f}));", depth)
+                return
+            data, n = ((f"(const uint8_t*){x}", str(len(fixed))) if is_lit
+                       else (f"{x}.data", f"{x}.len"))
+            self.line(f"if ({n} > {e.cap}) return xtce_pk_fail(w->err, "
+                      f"XTCE_PK_TOO_LONG, {f}, NULL);", depth)
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_binary_to(w, {h}, {data}, "
+                      f"{n}, {has}, {raw}, {e.bits // 8}, {f}));", depth)
             return
         if isinstance(e, BinaryEnc) and e.rest:
             data, n = ((f"(const uint8_t*){x}", str(len(fixed))) if is_lit
@@ -1176,15 +1202,12 @@ class CEmitter:
             elif isinstance(it, Transform):
                 # Read its items from what the transform makes of its bytes.
                 t, f = it.start, cstr(it.name)
-                self.line(f"const uint8_t* raw{t};", depth)
-                self.line(f"size_t rn{t}, k{t};", depth)
+                self.line(f"size_t k{t};", depth)
                 self.line(f"uint8_t t{t}[{it.cap}];", depth)
-                self.line("XTCE_PK_TRY(xtce_pk_read_take(r, "
+                self.line("XTCE_PK_TRY(xtce_pk_read_binary_from(r, "
+                          f"{self.transform_hook(it.decode)}, "
                           f"{bool_lit(it.raw is not None)}, {it.raw or 0}, "
-                          f"{f}, &raw{t}, &rn{t}));", depth)
-                self.line("XTCE_PK_TRY(xtce_pk_transform_from("
-                          f"{self.transform_hook(it.decode)}, raw{t}, rn{t}, t"
-                          f"{t}, {it.cap}, {f}, r->err, &k{t}));", depth)
+                          f"t{t}, {it.cap}, {f}, &k{t}));", depth)
                 self.line(f"xtce_pk_reader s{t} = xtce_pk_reader_init(t{t}, "
                           f"k{t}, r->err);", depth)
                 self.line(f"xtce_pk_reader* rr{t} = r;", depth)

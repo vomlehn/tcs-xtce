@@ -637,12 +637,8 @@ impl<'a> BitReader<'a> {
     }
 
     /// The next `n` whole bytes, the rest of the packet when None, which
-    /// must start on a byte boundary.
-    pub fn take(
-        &mut self,
-        n: Option<usize>,
-        field: &'static str,
-    ) -> Result<&'a [u8]> {
+    /// must start on a byte boundary, without reading them.
+    fn offer(&self, n: Option<usize>, field: &'static str) -> Result<&'a [u8]> {
         if self.pos % 8 != 0 {
             return Err(PacketError::BadPosition { field });
         }
@@ -651,10 +647,62 @@ impl<'a> BitReader<'a> {
         if start + n > self.data.len() {
             return Err(PacketError::Truncated { field });
         }
-        self.pos += 8 * n;
-        self.end = self.end.max(self.pos);
         let data: &'a [u8] = self.data;
         Ok(&data[start..start + n])
+    }
+
+    /// Moves past the `k` bytes a transform took of those `offer` gave,
+    /// which must be all `raw` of them when given.
+    fn took(
+        &mut self,
+        k: usize,
+        offered: usize,
+        raw: Option<usize>,
+        field: &'static str,
+    ) -> Result<()> {
+        if k > offered || raw.is_some_and(|r| r != k) {
+            return Err(PacketError::BadSize { field });
+        }
+        self.pos += 8 * k;
+        self.end = self.end.max(self.pos);
+        Ok(())
+    }
+
+    /// Reads data that the transform `f` decodes: offers it the next `raw`
+    /// bytes, or the rest of the packet when None, and moves past those it
+    /// says it takes, which must be all `raw` of them.  Gives how many
+    /// bytes it makes, in `out`.
+    pub fn binary_from(
+        &mut self,
+        f: Option<BinaryFromFn>,
+        raw: Option<usize>,
+        out: &mut [u8],
+        field: &'static str,
+    ) -> Result<usize> {
+        // None when the document gives only the other way.
+        let f = f.ok_or(PacketError::NotInvertible { field })?;
+        let data = self.offer(raw, field)?;
+        let (k, n) = f(data, out).ok_or(PacketError::InvalidValue { field })?;
+        if n > out.len() {
+            return Err(PacketError::TooLong { field });
+        }
+        self.took(k, data.len(), raw, field)?;
+        Ok(n)
+    }
+
+    /// Reads a time that the transform `f` decodes, in seconds, as
+    /// `binary_from` reads bytes.
+    pub fn time_from(
+        &mut self,
+        f: Option<TimeFromFn>,
+        raw: Option<usize>,
+        field: &'static str,
+    ) -> Result<f64> {
+        let f = f.ok_or(PacketError::NotInvertible { field })?;
+        let data = self.offer(raw, field)?;
+        let (k, s) = f(data).ok_or(PacketError::InvalidValue { field })?;
+        self.took(k, data.len(), raw, field)?;
+        Ok(s)
     }
 
     /// Where the container that the length field `field`, whose value `v`
@@ -986,7 +1034,7 @@ impl<'a> BitWriter<'a> {
     pub fn transform(
         &mut self,
         start: usize,
-        f: Option<TransformFn>,
+        f: Option<BinaryToFn>,
         raw: Option<usize>,
         cap: usize,
         field: &'static str,
@@ -1005,6 +1053,53 @@ impl<'a> BitWriter<'a> {
             return Err(PacketError::BadSize { field });
         }
         self.buf.as_mut_bytes().copy_within(b..b + n, a);
+        self.buf.resize(a + n);
+        self.pos = 8 * (a + n);
+        Ok(())
+    }
+
+    /// Writes what the transform `f` makes of `data`, as `transform` does,
+    /// on a byte boundary.
+    pub fn binary_to(
+        &mut self,
+        f: Option<BinaryToFn>,
+        data: &[u8],
+        raw: Option<usize>,
+        cap: usize,
+        field: &'static str,
+    ) -> Result<()> {
+        if self.pos % 8 != 0 {
+            return Err(PacketError::BadPosition { field });
+        }
+        let start = self.pos;
+        self.bytes(data);
+        self.transform(start, f, raw, cap, field)
+    }
+
+    /// Writes what the transform `f` makes of the time `s`, in seconds, on
+    /// a byte boundary: exactly `raw` bytes when given, and at most `cap`.
+    pub fn time_to(
+        &mut self,
+        f: Option<TimeToFn>,
+        s: f64,
+        raw: Option<usize>,
+        cap: usize,
+        field: &'static str,
+    ) -> Result<()> {
+        let f = f.ok_or(PacketError::NotInvertible { field })?;
+        if self.pos % 8 != 0 {
+            return Err(PacketError::BadPosition { field });
+        }
+        let a = self.pos / 8;
+        self.buf.resize(a + cap);
+        let n = f(s, &mut self.buf.as_mut_bytes()[a..])
+            .ok_or(PacketError::InvalidValue { field })?;
+        if n > cap {
+            return Err(PacketError::TooLong { field });
+        }
+        if raw.is_some_and(|r| r != n) {
+            return Err(PacketError::BadSize { field });
+        }
         self.buf.resize(a + n);
         self.pos = 8 * (a + n);
         Ok(())
@@ -3426,27 +3521,55 @@ pub struct FrameSync<const BITS: usize, const BYTES: usize> {
     frame: [u8; BYTES],
 }
 
-/// A FromBinaryTransformAlgorithm or ToBinaryTransformAlgorithm: puts what
-/// it makes of the bytes given into the second argument, and gives how
-/// many bytes that is (more than the second argument holds when it doesn't
-/// fit, having written nothing), or None if it can't.
-pub type TransformFn = fn(&[u8], &mut [u8]) -> Option<usize>;
+/// A FromBinaryTransformAlgorithm that makes bytes: given the bytes on
+/// the wire, puts what it makes of the first of them into the second
+/// argument and gives how many it took and how many it made (more than the
+/// second argument holds when they don't fit, having written nothing), or
+/// None if it can't.
+pub type BinaryFromFn = fn(&[u8], &mut [u8]) -> Option<(usize, usize)>;
 
-/// What the transform `f` makes of `raw`, in `out`; fails with InvalidValue
-/// if it can't.
-pub fn transform_from(
-    f: Option<TransformFn>,
-    raw: &[u8],
-    out: &mut [u8],
+/// A ToBinaryTransformAlgorithm that makes bytes of bytes: puts what it
+/// makes of the bytes given into the second argument, and gives how many
+/// bytes that is (more than the second argument holds when it doesn't fit,
+/// having written nothing), or None if it can't.
+pub type BinaryToFn = fn(&[u8], &mut [u8]) -> Option<usize>;
+
+/// A FromBinaryTransformAlgorithm that makes a time: given the bytes on
+/// the wire, gives how many of them it took and the time they hold, in
+/// seconds, or None if it can't.
+pub type TimeFromFn = fn(&[u8]) -> Option<(usize, f64)>;
+
+/// A ToBinaryTransformAlgorithm that encodes a time, in seconds: puts its
+/// bytes into the second argument and gives how many it wrote (more than
+/// it holds when they don't fit, having written nothing), or None if it
+/// can't.
+pub type TimeToFn = fn(f64, &mut [u8]) -> Option<usize>;
+
+/// Reads binary data that the transform `f` decodes, at most `cap` bytes.
+pub fn read_binary_from(
+    r: &mut BitReader<'_>,
+    f: Option<BinaryFromFn>,
+    raw: Option<usize>,
+    cap: usize,
     field: &'static str,
-) -> Result<usize> {
-    // None when the document gives only the other way.
-    let f = f.ok_or(PacketError::NotInvertible { field })?;
-    match f(raw, out) {
-        Some(n) if n <= out.len() => Ok(n),
-        Some(_) => Err(PacketError::TooLong { field }),
-        None => Err(PacketError::InvalidValue { field }),
-    }
+) -> Result<Vec<u8>> {
+    let mut out = vec![0u8; cap];
+    let n = r.binary_from(f, raw, &mut out, field)?;
+    out.truncate(n);
+    Ok(out)
+}
+
+/// Reads binary data that the transform `f` decodes into a fixed-capacity
+/// vector.
+pub fn read_fixed_binary_from<const N: usize>(
+    r: &mut BitReader<'_>,
+    f: Option<BinaryFromFn>,
+    raw: Option<usize>,
+    field: &'static str,
+) -> Result<FixedBytes<N>> {
+    let mut out = FixedBytes::<N>::new();
+    out.fill(|b| r.binary_from(f, raw, b, field))?;
+    Ok(out)
 }
 
 /// An InvertAlgorithm: what a bit is once AutoInvert has inverted the

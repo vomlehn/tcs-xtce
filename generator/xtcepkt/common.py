@@ -12,7 +12,7 @@ from xtcegen import CRATE, REPOSITORY
 from .model import (BinaryEnc, Cond, ContextCal, Criterion, DynSize, Fill,
                     FloatEnc, IntEnc, MathOp, Node, Polynomial, Require, Seek,
                     Spline, StringEnc, Value, Verify, VType, term_hooks, walk,
-                    Transform)
+                    Transform, XformEnc)
 
 # The runtimes' integer encodings.  BCD values are decoded to unsigned ones.
 ENCODINGS = {"unsigned": "Unsigned", "twosComplement": "TwosComplement",
@@ -147,6 +147,12 @@ def wire_region(vt: VType) -> int:
     return (fixed if fixed is not None and vt.enc.dyn is None else mx) // 8
 
 
+def binary_cap(vt: VType) -> int:
+    """The most bytes a binary value holds."""
+    e = vt.enc
+    return e.cap if isinstance(e, XformEnc) else e.bits // 8
+
+
 def wire_cap(vt: VType) -> int:
     """The most bytes of content a string field (or a boolean encoded as a
     string) can hold on the wire, in its charset."""
@@ -239,8 +245,14 @@ HOOK_DOCS = {
     "algorithm": "an algorithm: its outputs from the inputs.",
     "alarm": "an alarm: the level for the inputs, 0 (normal) to 5 (severe).",
     "checksum": "a checksum: the value of a range of the packet's bits.",
-    "transform": "a transform: the bytes it makes of the bytes given, or "
-                 "nothing if it can't."}
+    "binary_from": "a transform: how many of the bytes given it takes and the "
+                   "bytes it makes of them, or nothing if it can't.",
+    "binary_to": "a transform: the bytes it makes of the bytes given, or "
+                 "nothing if it can't.",
+    "time_from": "a time decoder: how many of the bytes given it takes and the "
+                 "time they hold, in seconds, or nothing if it can't.",
+    "time_to": "a time encoder: the bytes of the time given, in seconds, or "
+               "nothing if it can't."}
 
 
 def terms_hooks(terms: list) -> list:
@@ -285,6 +297,9 @@ def items_hooks(items: list) -> list:
             dyns.append(it.size)
         if isinstance(it, Value):
             dyns += [t.dyn for t in it.local.vtype.tree() if t.dyn]
+            for t in it.local.vtype.tree():
+                if isinstance(t.enc, XformEnc):
+                    transforms += [h for h in (t.enc.decode, t.enc.encode) if h]
         for d in dyns:
             terms += [c for crit, _ in d.lookup or [] for c in crit]
     out = terms_hooks(terms)

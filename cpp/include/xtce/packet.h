@@ -388,48 +388,97 @@ static inline int xtce_pk_read_pad(xtce_pk_reader* r, size_t bits,
 /* Ends the packet where the packet length field `f`, whose value `v` was
  * just read, says: `v - adjust` bytes after the field.  Fails with
  * XTCE_PK_TRUNCATED if the data is shorter. */
-/* A FromBinaryTransformAlgorithm or ToBinaryTransformAlgorithm: puts what
- * it makes of the `n` bytes at `in` into the `cap` bytes at `out`, and
+/* A FromBinaryTransformAlgorithm that makes bytes: puts what it makes of
+ * the first of the `n` bytes at `in` into the `cap` bytes at `out`, sets
+ * *consumed to how many it took, and returns how many bytes it made (more
+ * than `cap` when they don't fit, having written nothing), or
+ * XTCE_PK_NO_TRANSFORM if it can't. */
+typedef size_t (*xtce_pk_binary_from_fn)(const uint8_t* in, size_t n,
+                                         size_t* consumed, uint8_t* out,
+                                         size_t cap);
+/* A ToBinaryTransformAlgorithm that makes bytes of bytes: puts what it
+ * makes of the `n` bytes at `in` into the `cap` bytes at `out`, and
  * returns how many bytes that is (more than `cap` when it doesn't fit,
  * having written nothing), or XTCE_PK_NO_TRANSFORM if it can't. */
-typedef size_t (*xtce_pk_transform_fn)(const uint8_t* in, size_t n,
+typedef size_t (*xtce_pk_binary_to_fn)(const uint8_t* in, size_t n,
                                        uint8_t* out, size_t cap);
+/* A FromBinaryTransformAlgorithm that makes a time: sets *consumed to how
+ * many of the `n` bytes at `in` it took and *s to the time they hold, in
+ * seconds, and returns true, or false if it can't. */
+typedef bool (*xtce_pk_time_from_fn)(const uint8_t* in, size_t n,
+                                     size_t* consumed, double* s);
+/* A ToBinaryTransformAlgorithm that encodes the time `s`, in seconds:
+ * puts its bytes into the `cap` bytes at `out` and returns how many it
+ * wrote (more than `cap` when they don't fit, having written nothing), or
+ * XTCE_PK_NO_TRANSFORM if it can't. */
+typedef size_t (*xtce_pk_time_to_fn)(double s, uint8_t* out, size_t cap);
 #define XTCE_PK_NO_TRANSFORM ((size_t)-1)
 
-/* The next `n` whole bytes (the rest of the packet unless `has_n`), which
- * must start on a byte boundary, into *out and *len without copying. */
-static inline int xtce_pk_read_take(xtce_pk_reader* r, bool has_n, size_t n,
-                                    const char* f, const uint8_t** out,
-                                    size_t* len) {
+/* The next `raw` whole bytes (the rest of the packet unless `has_raw`),
+ * which must start on a byte boundary, into *out and *n without reading
+ * them. */
+static inline int xtce_pk_read_offer(const xtce_pk_reader* r, bool has_raw,
+                                     size_t raw, const char* f,
+                                     const uint8_t** out, size_t* n) {
         size_t start = r->pos / 8;
         if (r->pos % 8)
                 return xtce_pk_fail(r->err, XTCE_PK_BAD_POSITION, f, NULL);
-        if (!has_n) n = r->len > start ? r->len - start : 0;
-        if (n > r->len - start)
+        if (!has_raw) raw = r->len > start ? r->len - start : 0;
+        if (start > r->len || raw > r->len - start)
                 return xtce_pk_fail(r->err, XTCE_PK_TRUNCATED, f, NULL);
         *out = r->data + start;
-        *len = n;
-        r->pos += 8 * n;
+        *n = raw;
+        return 0;
+}
+
+/* Moves past the `k` bytes a transform took of the `n` that
+ * xtce_pk_read_offer gave, which must be all `raw` of them when
+ * `has_raw`. */
+static inline int xtce_pk_read_took(xtce_pk_reader* r, size_t k, size_t n,
+                                    bool has_raw, size_t raw, const char* f) {
+        if (k > n || (has_raw && k != raw))
+                return xtce_pk_fail(r->err, XTCE_PK_BAD_SIZE, f, NULL);
+        r->pos += 8 * k;
         xtce_pk_read_moved(r);
         return 0;
 }
 
-/* What the transform `fn` makes of the `n` bytes at `raw`, into the `cap`
- * bytes at `out`, its size into *k. */
-static inline int xtce_pk_transform_from(xtce_pk_transform_fn fn,
-                                         const uint8_t* raw, size_t n,
-                                         uint8_t* out, size_t cap,
-                                         const char* f, xtce_pk_error* err,
-                                         size_t* k) {
-        size_t m;
+/* Reads data that the transform `fn` decodes: offers it the next `raw`
+ * bytes (the rest of the packet unless `has_raw`) and moves past those it
+ * says it takes, which must be all `raw` of them.  The bytes it makes go
+ * into the `cap` bytes at `out`, and how many into *len. */
+static inline int xtce_pk_read_binary_from(xtce_pk_reader* r,
+                                           xtce_pk_binary_from_fn fn,
+                                           bool has_raw, size_t raw,
+                                           uint8_t* out, size_t cap,
+                                           const char* f, size_t* len) {
+        const uint8_t* data;
+        size_t n, k = 0, m;
         /* NULL when the document gives only the other way. */
-        if (!fn) return xtce_pk_fail(err, XTCE_PK_NOT_INVERTIBLE, f, NULL);
-        m = fn(raw, n, out, cap);
+        if (!fn) return xtce_pk_fail(r->err, XTCE_PK_NOT_INVERTIBLE, f, NULL);
+        XTCE_PK_TRY(xtce_pk_read_offer(r, has_raw, raw, f, &data, &n));
+        m = fn(data, n, &k, out, cap);
         if (m == XTCE_PK_NO_TRANSFORM)
-                return xtce_pk_fail(err, XTCE_PK_INVALID_VALUE, f, NULL);
-        if (m > cap) return xtce_pk_fail(err, XTCE_PK_TOO_LONG, f, NULL);
-        *k = m;
+                return xtce_pk_fail(r->err, XTCE_PK_INVALID_VALUE, f, NULL);
+        if (m > cap) return xtce_pk_fail(r->err, XTCE_PK_TOO_LONG, f, NULL);
+        XTCE_PK_TRY(xtce_pk_read_took(r, k, n, has_raw, raw, f));
+        *len = m;
         return 0;
+}
+
+/* Reads a time that the transform `fn` decodes, in seconds, into *s, as
+ * xtce_pk_read_binary_from reads bytes. */
+static inline int xtce_pk_read_time_from(xtce_pk_reader* r,
+                                         xtce_pk_time_from_fn fn,
+                                         bool has_raw, size_t raw,
+                                         const char* f, double* s) {
+        const uint8_t* data;
+        size_t n, k = 0;
+        if (!fn) return xtce_pk_fail(r->err, XTCE_PK_NOT_INVERTIBLE, f, NULL);
+        XTCE_PK_TRY(xtce_pk_read_offer(r, has_raw, raw, f, &data, &n));
+        if (!fn(data, n, &k, s))
+                return xtce_pk_fail(r->err, XTCE_PK_INVALID_VALUE, f, NULL);
+        return xtce_pk_read_took(r, k, n, has_raw, raw, f);
 }
 
 /* Where the container that the length field `f`, whose value `v` was just
@@ -693,7 +742,7 @@ static inline int xtce_pk_write_bytes(xtce_pk_writer* w, const uint8_t* data,
  * `has_raw`, and at most `cap`.  It works in the buffer, past what is
  * written, so the buffer needs `cap` bytes more. */
 static inline int xtce_pk_write_transform(xtce_pk_writer* w, size_t start,
-                                          xtce_pk_transform_fn fn,
+                                          xtce_pk_binary_to_fn fn,
                                           bool has_raw, size_t raw,
                                           size_t cap, const char* f) {
         size_t a = start / 8, b = (w->pos + 7) / 8, n;
@@ -711,6 +760,47 @@ static inline int xtce_pk_write_transform(xtce_pk_writer* w, size_t start,
         if (has_raw && n != raw)
                 return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, f, NULL);
         memmove(w->buf + a, w->buf + b, n);
+        w->len = a + n;
+        w->pos = 8 * (a + n);
+        return 0;
+}
+
+/* Writes what the transform `fn` makes of the `n` bytes at `data`, as
+ * xtce_pk_write_transform does, on a byte boundary. */
+static inline int xtce_pk_write_binary_to(xtce_pk_writer* w,
+                                          xtce_pk_binary_to_fn fn,
+                                          const uint8_t* data, size_t n,
+                                          bool has_raw, size_t raw,
+                                          size_t cap, const char* f) {
+        size_t start = w->pos;
+        if (w->pos % 8)
+                return xtce_pk_fail(w->err, XTCE_PK_BAD_POSITION, f, NULL);
+        XTCE_PK_TRY(xtce_pk_write_bytes(w, data, n));
+        return xtce_pk_write_transform(w, start, fn, has_raw, raw, cap, f);
+}
+
+/* Writes what the transform `fn` makes of the time `s`, in seconds, on a
+ * byte boundary: exactly `raw` bytes when `has_raw`, and at most `cap`. */
+static inline int xtce_pk_write_time_to(xtce_pk_writer* w,
+                                        xtce_pk_time_to_fn fn, double s,
+                                        bool has_raw, size_t raw, size_t cap,
+                                        const char* f) {
+        size_t a = w->pos / 8, n;
+        if (!fn) return xtce_pk_fail(w->err, XTCE_PK_NOT_INVERTIBLE, f, NULL);
+        if (w->pos % 8)
+                return xtce_pk_fail(w->err, XTCE_PK_BAD_POSITION, f, NULL);
+        if (a > w->cap || cap > w->cap - a)
+                return xtce_pk_fail(w->err, XTCE_PK_NO_SPACE, "packet", NULL);
+        if (w->len < a) {
+                memset(w->buf + w->len, 0, a - w->len);
+                w->len = a;
+        }
+        n = fn(s, w->buf + a, cap);
+        if (n == XTCE_PK_NO_TRANSFORM)
+                return xtce_pk_fail(w->err, XTCE_PK_INVALID_VALUE, f, NULL);
+        if (n > cap) return xtce_pk_fail(w->err, XTCE_PK_TOO_LONG, f, NULL);
+        if (has_raw && n != raw)
+                return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, f, NULL);
         w->len = a + n;
         w->pos = 8 * (a + n);
         return 0;

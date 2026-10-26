@@ -61,20 +61,109 @@ static size_t expand(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
         return 2 * n;
 }
 
-static size_t shrink(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
+static size_t shrink(const uint8_t* in, size_t n, size_t* consumed,
+                     uint8_t* out, size_t cap) {
         size_t i;
         if (n % 2) return XTCE_PK_NO_TRANSFORM;
         for (i = 0; i < n / 2; ++i)
                 if (in[2 * i] != in[2 * i + 1]) return XTCE_PK_NO_TRANSFORM;
+        *consumed = n;
         if (n / 2 > cap) return n / 2; /* the room it needs */
         for (i = 0; i < n / 2; ++i) out[i] = in[2 * i];
         return n / 2;
 }
 
-static size_t xor_5a(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
+static size_t mask(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
         size_t i;
         if (n > cap) return n;
         for (i = 0; i < n; ++i) out[i] = (uint8_t)(in[i] ^ 0x5A);
+        return n;
+}
+
+static size_t unmask(const uint8_t* in, size_t n, size_t* consumed,
+                     uint8_t* out, size_t cap) {
+        *consumed = n;
+        return mask(in, n, out, cap);
+}
+
+/* Stuff and Unstuff frame bytes with their length; MsFrom and MsTo are
+ * milliseconds in four bytes, VarFrom and VarTo milliseconds in a
+ * varint. */
+static size_t stuff(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
+        if (n > 255) return XTCE_PK_NO_TRANSFORM;
+        if (n + 1 > cap) return n + 1; /* the room it needs */
+        out[0] = (uint8_t)n;
+        memcpy(out + 1, in, n);
+        return n + 1;
+}
+
+static size_t unstuff(const uint8_t* in, size_t n, size_t* consumed,
+                      uint8_t* out, size_t cap) {
+        size_t k;
+        if (!n || n <= in[0]) return XTCE_PK_NO_TRANSFORM;
+        k = in[0];
+        *consumed = k + 1;
+        if (k > cap) return k; /* the room it needs */
+        memcpy(out, in + 1, k);
+        return k;
+}
+
+/* Seconds as whole milliseconds into *v, or false outside 0 to
+ * 2^32 - 1. */
+static bool ms(double s, uint32_t* v) {
+        double x = floor(s * 1000.0 + 0.5);
+        if (!(x >= 0.0 && x < 4294967296.0)) return false;
+        *v = (uint32_t)x;
+        return true;
+}
+
+static bool ms_from(const uint8_t* in, size_t n, size_t* consumed,
+                    double* s) {
+        if (n < 4) return false;
+        *consumed = 4;
+        *s = (double)((uint32_t)in[0] << 24 | (uint32_t)in[1] << 16
+                      | (uint32_t)in[2] << 8 | in[3]) / 1000.0;
+        return true;
+}
+
+static size_t ms_to(double s, uint8_t* out, size_t cap) {
+        uint32_t v;
+        if (!ms(s, &v)) return XTCE_PK_NO_TRANSFORM;
+        if (cap < 4) return 4; /* the room it needs */
+        out[0] = (uint8_t)(v >> 24);
+        out[1] = (uint8_t)(v >> 16);
+        out[2] = (uint8_t)(v >> 8);
+        out[3] = (uint8_t)v;
+        return 4;
+}
+
+static bool var_from(const uint8_t* in, size_t n, size_t* consumed,
+                     double* s) {
+        uint64_t v = 0;
+        size_t i;
+        for (i = 0; i < n && i < 5; ++i) {
+                v |= (uint64_t)(in[i] & 0x7F) << (7 * i);
+                if (!(in[i] & 0x80)) {
+                        *consumed = i + 1;
+                        *s = (double)v / 1000.0;
+                        return true;
+                }
+        }
+        return false;
+}
+
+static size_t var_to(double s, uint8_t* out, size_t cap) {
+        uint8_t buf[5];
+        uint32_t v;
+        size_t n = 0;
+        if (!ms(s, &v)) return XTCE_PK_NO_TRANSFORM;
+        while (v >= 0x80) {
+                buf[n++] = (uint8_t)((v & 0x7F) | 0x80);
+                v >>= 7;
+        }
+        buf[n++] = (uint8_t)v;
+        if (n > cap) return n; /* the room it needs */
+        memcpy(out, buf, n);
         return n;
 }
 
@@ -160,8 +249,14 @@ int main(int argc, char** argv) {
         demo_hook_twice = twice;
         demo_hook_expand = expand;
         demo_hook_shrink = shrink;
-        demo_hook_mask = xor_5a;
-        demo_hook_unmask = xor_5a;
+        demo_hook_mask = mask;
+        demo_hook_unmask = unmask;
+        demo_hook_stuff = stuff;
+        demo_hook_unstuff = unstuff;
+        demo_hook_ms_from = ms_from;
+        demo_hook_ms_to = ms_to;
+        demo_hook_var_from = var_from;
+        demo_hook_var_to = var_to;
         while (fgets(line, sizeof line, in)) {
                 char kind[16], hex[sizeof line];
                 size_t n = 0, i;

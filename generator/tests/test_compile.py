@@ -15,7 +15,7 @@ from xtcepkt.compile import (  # noqa: E402
 from xtcepkt.model import (  # noqa: E402
     MAX_FIELD_BITS, AnyOf, Cond, ContextCal, Fill, Fixed, Index, MathOp, Pad,
     Require, Seek, Segment, Spline, Unsupported, Value, walk, LengthEnd,
-    Transform)
+    Transform, XformEnc)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -941,17 +941,88 @@ TRANSFORMS = ("<FromBinaryTransformAlgorithm name='Unzip'/>"
               "<ToBinaryTransformAlgorithm name='Zip'/>")
 
 
+def dialect(text: str, value: str) -> str:
+    """``text`` with tcs-xtce.dialect ``value`` on its first SpaceSystem."""
+    at = text.index(">") + 1
+    return (text[:at]
+            + '<AncillaryDataSet><AncillaryData '
+              f'name="tcs-xtce.dialect">{value}</AncillaryData>'
+              '</AncillaryDataSet>' + text[at:])
+
+
 class TransformTests(unittest.TestCase):
+    B_A = '<ParameterRefEntry parameterRef="B"/><ParameterRefEntry ' \
+          'parameterRef="A"/>'
+
     def test_binary_value(self):
-        n = compile_xml(
-            transform_mission(entries='<ParameterRefEntry parameterRef="B"/>'
-                                      '<ParameterRefEntry '
-                                      'parameterRef="A"/>')).nodes[0]
-        t = n.items[0]
-        self.assertIsInstance(t, Transform)
-        self.assertEqual((t.raw, t.decode.name, t.encode.name), (4, "F", "T"))
-        self.assertTrue(t.items[-1].local.vtype.enc.rest)
+        n = compile_xml(transform_mission(entries=self.B_A)).nodes[0]
+        e = n.items[0].local.vtype.enc
+        self.assertIsInstance(e, XformEnc)
+        self.assertEqual((e.raw, e.decode.name, e.encode.name, e.time),
+                         (4, "F", "T", False))
+        self.assertEqual((e.decode.kind, e.encode.kind),
+                         ("binary_from", "binary_to"))
         self.assertEqual([lc.name for _, lc in n.fields], ["B", "A"])
+
+    def test_rest_of_packet(self):
+        # A size of -1 offers the decoding transform the rest of the
+        # packet: in the standard reading, nothing may follow.
+        text = transform_mission(entries=self.B_A, bits=-1)
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("B takes the rest of the packet but is not last",
+                      str(cm.exception))
+        n = compile_xml(
+            transform_mission(entries='<ParameterRefEntry parameterRef="B"/>',
+                              bits=-1)).nodes[0]
+        e = n.items[0].local.vtype.enc
+        self.assertEqual((e.raw, e.sized), (None, False))
+
+    def test_yamcs_sized(self):
+        # In the Yamcs dialect the decoding transform says how much of the
+        # rest it takes, so entries may follow.
+        n = compile_xml(dialect(transform_mission(entries=self.B_A, bits=-1),
+                                "yamcs")).nodes[0]
+        e = n.items[0].local.vtype.enc
+        self.assertEqual((e.raw, e.sized), (None, True))
+        self.assertEqual([lc.name for _, lc in n.fields], ["B", "A"])
+
+    def test_dialects(self):
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(dialect(transform_mission(entries=self.B_A), "xtce"))
+        self.assertIn("tcs-xtce.dialect 'xtce' is not one of yamcs",
+                      str(cm.exception))
+        sub = dialect('<SpaceSystem name="Sub"></SpaceSystem>', "yamcs")
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(mission().replace("</SpaceSystem>",
+                                          sub + "</SpaceSystem>"))
+        self.assertIn("is only read on a document's root SpaceSystem",
+                      str(cm.exception))
+
+    def test_time(self):
+        text = mission(tm="""
+            <ParameterTypeSet>
+              <AbsoluteTimeParameterType name="Stamp"><Encoding>
+                <BinaryDataEncoding>
+                  <SizeInBits><FixedValue>32</FixedValue></SizeInBits>
+                  <FromBinaryTransformAlgorithm name="MsFrom"/>
+                  <ToBinaryTransformAlgorithm name="MsTo"/>
+                </BinaryDataEncoding></Encoding>
+                <ReferenceTime><Epoch>TAI</Epoch></ReferenceTime>
+              </AbsoluteTimeParameterType>
+            </ParameterTypeSet>
+            <ParameterSet>
+              <Parameter name="T" parameterTypeRef="Stamp"/>
+            </ParameterSet>
+            <ContainerSet>
+              <SequenceContainer name="P"><EntryList>
+                <ParameterRefEntry parameterRef="T"/>
+              </EntryList></SequenceContainer>
+            </ContainerSet>""")
+        vt = compile_xml(text).nodes[0].items[0].local.vtype
+        self.assertEqual((vt.kind, vt.enc.raw, vt.enc.time), ("float", 4, True))
+        self.assertEqual((vt.enc.decode.kind, vt.enc.encode.kind),
+                         ("time_from", "time_to"))
 
     def test_container(self):
         n = compile_xml(
@@ -970,16 +1041,16 @@ class TransformTests(unittest.TestCase):
         self.assertEqual((n.items[0].decode.name, n.items[0].encode),
                          ("Unzip", None))
 
-    def test_rejected(self):
-        text = transform_mission(
-            entries='<ParameterRefEntry parameterRef="A"/><ParameterRefEntry '
-                    'parameterRef="B"><IncludeCondition><Comparison '
-                    'parameterRef="A" value="1"/></IncludeCondition>'
-                    '</ParameterRefEntry>')
-        with self.assertRaises(Unsupported) as cm:
-            compile_xml(text)
-        self.assertIn("transformed data with an IncludeCondition",
-                      str(cm.exception))
+    def test_conditional(self):
+        # A transformed value may be optional; a transformed container may
+        # not.
+        n = compile_xml(
+            transform_mission(
+                entries='<ParameterRefEntry parameterRef="A"/>'
+                        '<ParameterRefEntry parameterRef="B"><IncludeCondition>'
+                        '<Comparison parameterRef="A" value="1"/>'
+                        '</IncludeCondition></ParameterRefEntry>')).nodes[0]
+        self.assertTrue(n.fields[1][1].optional)
 
 
 class LocationTests(unittest.TestCase):

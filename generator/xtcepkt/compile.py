@@ -30,7 +30,7 @@ from .model import (
     term_locals, walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp, NextSeek,
     Require, TailPad, TailSeek, LengthEnd, Transform, ValueRef, needs_binding,
     Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change, Algorithm,
-    Stream, Hook, Custom, term_hooks, input_locals)
+    Stream, Hook, Custom, term_hooks, input_locals, XformEnc)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -406,22 +406,34 @@ LENGTH_TAG = "tcs-xtce.length"
 # The AncillaryData of a root SpaceSystem that gives the most bytes a field
 # whose size or count another value gives may take on the wire.
 MAX_FIELD_TAG = "tcs-xtce.max-field-bytes"
+# The AncillaryData of a root SpaceSystem that names the dialect of XTCE the
+# documents follow where the standard leaves something open.
+DIALECT_TAG = "tcs-xtce.dialect"
+DIALECTS = ("yamcs",)
 
 
-def ancillary_int(item, tag: str, where: str) -> Optional[int]:
-    """The integer value of ``item``'s AncillaryData ``tag``, or None if it
-    has none."""
+def ancillary_str(item, tag: str, where: str) -> Optional[str]:
+    """The value of ``item``'s AncillaryData ``tag``, without surrounding
+    space, or None if it has none."""
     ads = item.ancillary_data_set
     tags = [a for a in (ads.ancillary_data if ads else []) if a.name == tag]
     if not tags:
         return None
     if len(tags) > 1:
         raise Unsupported(f"{where}: more than one {tag}")
+    return (tags[0].value or "").strip()
+
+
+def ancillary_int(item, tag: str, where: str) -> Optional[int]:
+    """The integer value of ``item``'s AncillaryData ``tag``, or None if it
+    has none."""
+    v = ancillary_str(item, tag, where)
+    if v is None:
+        return None
     try:
-        return int(tags[0].value.strip())
+        return int(v)
     except ValueError:
-        raise Unsupported(f"{where}: {tag} {tags[0].value!r} is not an "
-                          "integer") from None
+        raise Unsupported(f"{where}: {tag} {v!r} is not an integer") from None
 
 
 def length_adjust(item, vt: VType, where: str) -> Optional[int]:
@@ -448,11 +460,17 @@ def length_adjust(item, vt: VType, where: str) -> Optional[int]:
 
 
 class Compiler:
-    def __init__(self, roots: list, skip_unsupported: bool = False):
+    def __init__(self, roots: list, skip_unsupported: bool = False,
+                 dialect: Optional[str] = None):
         """``roots`` is the root SpaceSystem of each of the mission's
-        documents."""
+        documents; ``dialect`` is the one they follow when they don't say
+        (see DIALECT_TAG)."""
         self.roots = list(roots)
         self.skip_unsupported = skip_unsupported
+        if dialect is not None and dialect not in DIALECTS:
+            raise Unsupported(f"dialect {dialect!r} is not one of "
+                              f"{', '.join(DIALECTS)}")
+        self.dialect = dialect
         self.ptypes: dict[Key, tuple] = {}
         self.params: dict[Key, tuple] = {}
         self.atypes: dict[Key, tuple] = {}
@@ -490,6 +508,7 @@ class Compiler:
             seen.add(root.name)
             self._index(root, ())
         self.max_field_bits = 8 * self.max_field_bytes()
+        self.dialect = self.root_dialect(self.dialect)
         for k, v in self.containers.items():
             self.tc_containers.setdefault(k, v)
 
@@ -511,12 +530,32 @@ class Compiler:
             raise Unsupported(f"the documents' {MAX_FIELD_TAG} differ: {names}")
         return next(iter(given.values()), MAX_FIELD_BITS // 8)
 
+    def root_dialect(self, default: Optional[str]) -> Optional[str]:
+        """The roots' tcs-xtce.dialect, which all that give one must agree
+        on, and ``default``, if given, too; or ``default``."""
+        given = {} if default is None else {"(the dialect given)": default}
+        for root in self.roots:
+            d = ancillary_str(root, DIALECT_TAG, f"SpaceSystem {root.name}")
+            if d is None:
+                continue
+            if d not in DIALECTS:
+                raise Unsupported(f"SpaceSystem {root.name}: {DIALECT_TAG} "
+                                  f"{d!r} is not one of {', '.join(DIALECTS)}")
+            given[root.name] = d
+        if len(set(given.values())) > 1:
+            names = ", ".join(f"{k} ({v})" for k, v in given.items())
+            raise Unsupported(f"the documents' {DIALECT_TAG} differ: {names}")
+        return next(iter(given.values()), None)
+
     # -- indexing and name resolution --
 
     def _index(self, ss, parent: Key) -> None:
         path = parent + (ss.name,)
         if parent and ancillary_int(ss, MAX_FIELD_TAG, qname(path)) is not None:
             raise Unsupported(f"SpaceSystem {qname(path)}: {MAX_FIELD_TAG} is "
+                              "only read on a document's root SpaceSystem")
+        if parent and ancillary_str(ss, DIALECT_TAG, qname(path)) is not None:
+            raise Unsupported(f"SpaceSystem {qname(path)}: {DIALECT_TAG} is "
                               "only read on a document's root SpaceSystem")
         if ss.service_set:
             for sv in ss.service_set.service:
@@ -741,6 +780,11 @@ class Compiler:
             what = ("calibrated integer" if base == "Integer" else base.lower())
             raise Unsupported(f"{where}: {what} in a {enc.bits}-bit integer "
                               "encoding")
+        if isinstance(enc, BinaryEnc) and enc.transform is not None:
+            if base != "Binary":
+                raise Unsupported(f"{where}: {base.lower()} with transform "
+                                  "algorithms")
+            enc = self.xform(enc, False, where)
         vt = VType(key=qname(key), name=t.name, kind="", enc=enc,
                    calibrator=cal)
         if base == "Float":
@@ -777,7 +821,7 @@ class Compiler:
                 raise Unsupported(f"{where}: string with binary size -1")
             vt.kind = "string"
         else:
-            if not isinstance(enc, BinaryEnc):
+            if not isinstance(enc, (BinaryEnc, XformEnc)):
                 raise Unsupported(f"{where}: binary with {enc_name}")
             vt.kind = "binary"
         if vt.kind == "enum":
@@ -862,6 +906,11 @@ class Compiler:
                 raise Unsupported(f"{where}: a time encoded as "
                                   f"{enc.choice.name} with units, scale or "
                                   "offset")
+            if isinstance(e, BinaryEnc) and e.transform is not None:
+                # The transform algorithms give the time in seconds.
+                return VType(key=qname(key), name=t.name, kind="float",
+                             enc=self.xform(e, True, where),
+                             doc=f"{what} time, seconds {ref}")
             kind = "string" if isinstance(e, StringEnc) else "binary"
             return VType(key=qname(key), name=t.name, kind=kind, enc=e,
                          doc=f"{what} time as encoded, {ref}")
@@ -1162,29 +1211,24 @@ class Compiler:
             return enc, None
         raise Unsupported(f"{where}: {name}")
 
-    def transformed(self, local: Local, where: str) -> list[Item]:
-        """The items for value ``local``: a Value, or for binary data with
-        transform algorithms, a Transform whose Value takes the rest of
-        the bytes they give."""
-        e = local.vtype.enc
-        names = getattr(e, "transform", None)
-        if names is None:
-            return [Value(local)]
-        if local.vtype.kind != "binary":
-            raise Unsupported(f"{where}: a {local.vtype.kind} value with "
-                              "transform algorithms")
+    def xform(self, e: BinaryEnc, time: bool, where: str) -> XformEnc:
+        """The encoding of binary data with transform algorithms, which
+        make bytes of it, or with ``time``, a time in seconds.  A size of
+        -1 offers the decoding algorithm the rest of the packet; in the
+        Yamcs dialect it says how much it takes, and entries may follow."""
         if e.dyn is not None:
             raise Unsupported(f"{where}: transformed binary data whose size "
                               "another value gives")
-        raw = None if e.rest else e.bits // 8
-        local.vtype = dataclasses.replace(
-            local.vtype, enc=BinaryEnc(self.max_field_bits, rest=True))
-        m = self._id()
-        cap = self.max_field_bits // 8
-        return [Transform([Mark(m), Value(local)],
-                          self.transform_hook(names[0]),
-                          self.transform_hook(names[1]), raw, cap,
-                          raw if raw is not None else cap, local.name, m)]
+        if e.lsb:
+            raise Unsupported(f"{where}: transformed binary data with bitOrder "
+                              "leastSignificantBitFirst")
+        fa, ta = e.transform
+        k = "time" if time else "binary"
+        return XformEnc(None if e.rest else e.bits // 8,
+                        self.hook(f"{k}_from", fa) if fa else None,
+                        self.hook(f"{k}_to", ta) if ta else None,
+                        self.max_field_bits // 8, time,
+                        e.rest and self.dialect == "yamcs")
 
     def wrap_transform(self, sc, items: list, start: int, where: str, path: Key,
                        name: str, packet: bool) -> list[Item]:
@@ -1220,12 +1264,10 @@ class Compiler:
                               "algorithms and no fixed SizeInBits")
         cap = (max_bits(items) + 7) // 8
         out_cap = raw if raw is not None else self.max_field_bits // 8
-        return [Transform(items, self.transform_hook(names[0]),
-                          self.transform_hook(names[1]), raw, cap, out_cap,
-                          name, start)]
-
-    def transform_hook(self, name: Optional[str]) -> Optional[Hook]:
-        return self.hook("transform", name) if name is not None else None
+        fa, ta = names
+        return [Transform(items, self.hook("binary_from", fa) if fa else None,
+                          self.hook("binary_to", ta) if ta else None, raw, cap,
+                          out_cap, name, start)]
 
     def has_transform(self, sc, where: str) -> bool:
         be = sc.binary_encoding
@@ -1725,7 +1767,7 @@ class Compiler:
                 after = []
                 if out and isinstance(out[-1], EndSeek):
                     out[-1], after = self.end_seek(out[-1], sc, local, where)
-                out += self.transformed(local, where)
+                out.append(Value(local))
                 out += after
                 scope.append(local)
             else:
@@ -2773,7 +2815,7 @@ class Compiler:
                 after = []
                 if out and isinstance(out[-1], EndSeek):
                     out[-1], after = self.end_seek(out[-1], cc, local, where)
-                out += self.transformed(local, where)
+                out.append(Value(local))
                 out += after
                 values.append(local)
             else:
@@ -3728,6 +3770,11 @@ def check_aligned(items: list[Item], where: str) -> None:
                 if isinstance(t.enc, (StringEnc, BinaryEnc)) and t.enc.lsb:
                     advance(t, None, name)
             return None
+        if isinstance(e, XformEnc):
+            if pos != 0:
+                raise Unsupported(f"{where}: transformed data {name} may not "
+                                  "start on a byte boundary")
+            return 0
         bits = fixed_bits(vt)
         if bits is None:
             # Variable strings and binary data occupy whole bytes, after a
@@ -3762,6 +3809,8 @@ def fixed_bits(vt: VType) -> Optional[int]:
         return e.fixed_bits if e.dyn is None else None
     if isinstance(e, BinaryEnc):
         return None if e.variable else e.bits
+    if isinstance(e, XformEnc):
+        return e.bits if e.raw is not None else None
     return e.bits
 
 
@@ -3874,7 +3923,9 @@ def conds(it: Item) -> list[Term]:
 
 def is_rest(vt: VType) -> bool:
     """Whether the value takes the rest of the packet."""
-    return isinstance(vt.enc, BinaryEnc) and vt.enc.rest
+    e = vt.enc
+    return ((isinstance(e, BinaryEnc) and e.rest)
+            or (isinstance(e, XformEnc) and e.raw is None and not e.sized))
 
 
 def item_bits(vt: VType) -> int:
@@ -3906,19 +3957,29 @@ def max_bits(items: list[Item]) -> int:
         elif isinstance(it, Mark):
             marks[it.id] = pos
         elif isinstance(it, Value):
-            pos += 0 if it.assembled else item_bits(it.local.vtype)
+            vt = it.local.vtype
+            pos += 0 if it.assembled else item_bits(vt)
+            # Encoding transformed bytes writes them, then what the
+            # transform gives after them.
+            work = [t.enc.cap for t in vt.tree() if isinstance(t.enc, XformEnc)
+                    and not t.enc.time]
+            if work:
+                extent = max(extent, pos + 8 * max(work))
         else:
             pos += it.bits
         extent = max(extent, pos)
     return extent
 
 
-def compile_document(root, skip_unsupported: bool = False) -> Mission:
+def compile_document(root, skip_unsupported: bool = False,
+                     dialect: Optional[str] = None) -> Mission:
     """Compile the mission whose definitions are all in one document."""
-    return Compiler([root], skip_unsupported).compile()
+    return Compiler([root], skip_unsupported, dialect).compile()
 
 
-def compile_documents(roots: list, skip_unsupported: bool = False) -> Mission:
+def compile_documents(roots: list, skip_unsupported: bool = False,
+                      dialect: Optional[str] = None) -> Mission:
     """Compile the mission whose definitions are in several documents:
-    ``roots`` is the root SpaceSystem of each, in the order given."""
-    return Compiler(roots, skip_unsupported).compile()
+    ``roots`` is the root SpaceSystem of each, in the order given;
+    ``dialect`` is the dialect of XTCE they follow when they don't say."""
+    return Compiler(roots, skip_unsupported, dialect).compile()

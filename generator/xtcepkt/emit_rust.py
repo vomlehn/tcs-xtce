@@ -10,13 +10,13 @@ from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
                      notes, stream_capacity, stream_doc, MATH_OPS, Ref,
                      fast_order, field_range, flt, header_lines, inputs,
                      int_enc, invertible, math_value, size_args, str_cap,
-                     stream_fn, string_spec, wire_region)
-from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
-                    AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
-                    DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
-                    Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
-                    Value, VType, Require, Fill, Segment, Verify, Custom,
-                    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform)
+                     binary_cap, stream_fn, string_spec, wire_region)
+from .model import (
+    term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf,
+    ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion, DynSize, Fixed, FloatEnc,
+    IntEnc, Kind, Local, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
+    Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify, Custom,
+    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform, XformEnc)
 
 
 def rstr(s: str) -> str:
@@ -50,7 +50,7 @@ def field_type(vt: VType, alloc: bool, optional: bool = False) -> str:
     if k == "string":
         return "String" if alloc else f"pk::FixedString<{str_cap(vt)}>"
     if k == "binary":
-        return "Vec<u8>" if alloc else f"pk::FixedBytes<{vt.enc.bits // 8}>"
+        return "Vec<u8>" if alloc else f"pk::FixedBytes<{binary_cap(vt)}>"
     return {"float": "f64", "bool": "bool"}.get(k) or vt.ident
 
 
@@ -72,7 +72,10 @@ HOOK_TYPES = {"criterion": "fn(&[f64]) -> bool",
               "algorithm": "fn(&[f64], &mut [f64]) -> bool",
               "alarm": "fn(&[f64]) -> u8",
               "checksum": "fn(&[u8], usize, usize) -> u64",
-              "transform": "fn(&[u8], &mut [u8]) -> Option<usize>"}
+              "binary_from": "fn(&[u8], &mut [u8]) -> Option<(usize, usize)>",
+              "binary_to": "fn(&[u8], &mut [u8]) -> Option<usize>",
+              "time_from": "fn(&[u8]) -> Option<(usize, f64)>",
+              "time_to": "fn(f64, &mut [u8]) -> Option<usize>"}
 
 
 def wide_type(vt: VType) -> str:
@@ -346,6 +349,14 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
                 f"<{field_type(e.elem, alloc)}, {e.max_count}>::new(); for i "
                 f"in 0..n {{ {gap} if a.push({elem}).is_err() {{ {full} }} }} "
                 "a }")
+    if isinstance(e, XformEnc):
+        h, raw = transform_hook(e.decode), opt_size(e.raw)
+        if e.time:
+            return f"r.time_from({h}, {raw}, {f})?"
+        if alloc:
+            return (f"pk::read_binary_from(&mut r, {h}, {raw}, {e.cap}, {f})?")
+        return (f"pk::read_fixed_binary_from::<{e.cap}>(&mut r, {h}, {raw}, "
+                f"{f})?")
     if isinstance(e, IntEnc) and vt.wide:
         return read_wide(vt, f)
     if isinstance(e, IntEnc):
@@ -497,6 +508,12 @@ def write_value_stmt(vt: VType, x: str, f: str, ref) -> str:
         return (f"{{ let n = {count(vt, ref, f)}; if {x}.len() != n {{ {bad} "
                 f"}} for (i, {elem_pattern(e.elem)}) in {x}.iter().enumerate() "
                 f"{{ {gap} {write_stmt(e.elem, 'e', f, ref)} }} }}")
+    if isinstance(e, XformEnc):
+        h, raw = transform_hook(e.encode), opt_size(e.raw)
+        cap = e.bits // 8
+        if e.time:
+            return f"w.time_to({h}, {x}, {raw}, {cap}, {f})?;"
+        return f"w.binary_to({h}, &{x}, {raw}, {cap}, {f})?;"
     data = f"{x}.as_bytes()" if vt.kind == "string" else f"&{x}"
     if isinstance(e, BinaryEnc) and e.dyn is not None:
         n = size(e.dyn, ref(e.dyn), f)
@@ -630,6 +647,10 @@ def term(t, place) -> str:
 def transform_hook(h) -> str:
     """A transform hook, or None for a way the document doesn't give."""
     return f"hooks::{h.ident.upper()}.get().copied()" if h else "None"
+
+
+def opt_size(n) -> str:
+    return "None" if n is None else f"Some({n})"
 
 
 def hook_args(inputs: list, place) -> str:
@@ -949,11 +970,9 @@ class RustEmitter:
                 # Read its items from what the transform makes of its bytes,
                 # into the buffer the decoding function begins with.
                 t, f = it.start, rstr(it.name)
-                raw = "None" if it.raw is None else f"Some({it.raw})"
-                self.line(f"let raw{t} = r.take({raw}, {f})?;", depth)
                 self.line(f"let n{t} = "
-                          f"pk::transform_from({transform_hook(it.decode)}, "
-                          f"raw{t}, &mut t{t}, {f})?;", depth)
+                          f"r.binary_from({transform_hook(it.decode)}, "
+                          f"{opt_size(it.raw)}, &mut t{t}, {f})?;", depth)
                 self.line(f"let r{t} = std::mem::replace(&mut r, "
                           f"BitReader::new(&t{t}[..n{t}]));", depth)
                 self.read_items(it.items, depth, where, assign)
@@ -1042,9 +1061,9 @@ class RustEmitter:
                 t = it.start
                 self.line(f"let t{t} = w.position();", depth)
                 self.write_items(n, it.items, depth, where, names)
-                raw = "None" if it.raw is None else f"Some({it.raw})"
                 self.line(f"w.transform(t{t}, {transform_hook(it.encode)}, "
-                          f"{raw}, {it.out_cap}, {rstr(it.name)})?;", depth)
+                          f"{opt_size(it.raw)}, {it.out_cap}, "
+                          f"{rstr(it.name)})?;", depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: self.place(n, lc, names), depth)
             elif isinstance(it, Verify):

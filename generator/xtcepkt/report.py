@@ -29,7 +29,7 @@ from typing import Optional
 from .compile import item_bits, max_bits
 from .model import (AggregateEnc, ArrayEnc, BinaryEnc, Fixed, IntEnc, Mark,
                     Mission, Node, Pad, Seek, StringEnc, Value, VType, walk,
-                    Fill)
+                    Fill, XformEnc)
 
 
 def nbytes(n: int) -> str:
@@ -89,6 +89,8 @@ def need(vt: VType) -> tuple[Optional[int], str]:
         return None, f"size from {vt.dyn.source}, at most {nbytes(vt.dyn.max)}"
     if isinstance(e, BinaryEnc) and e.rest:
         return None, f"rest of the packet, at most {nbytes(e.bits // 8)}"
+    if isinstance(e, XformEnc):
+        return None, "made by transform algorithms"
     if vt.kind == "int" and vt.calibrator is not None:
         return None, "calibrated, so its range does not bound the encoding"
     if vt.kind == "bool" and isinstance(e, StringEnc):

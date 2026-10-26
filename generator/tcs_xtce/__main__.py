@@ -37,7 +37,7 @@ import xtce  # noqa: E402
 from xtcegen.__main__ import rustfmt  # noqa: E402
 from xtcegen.wrap import wrap  # noqa: E402
 from xtcepkt import emit_c, emit_python, emit_rust, report  # noqa: E402
-from xtcepkt.compile import compile_documents  # noqa: E402
+from xtcepkt.compile import DIALECTS, compile_documents  # noqa: E402
 from xtcepkt.model import Unsupported  # noqa: E402
 
 LANGS = ("c", "c++", "rust", "python")
@@ -73,6 +73,10 @@ def main(argv=None) -> int:
     ap.add_argument("--skip-unsupported", action="store_true",
                     help="leave out containers and meta-commands that use "
                          "unsupported XTCE features instead of failing")
+    ap.add_argument("--dialect", choices=DIALECTS,
+                    help="the dialect of XTCE the documents follow where the "
+                         "standard leaves something open, unless their "
+                         "tcs-xtce.dialect AncillaryData says")
     ap.add_argument("--size-report", action="store_true",
                     help="instead of code, report the bits each packet field "
                          "uses and the bits the document says it needs")
@@ -119,8 +123,8 @@ def main(argv=None) -> int:
             print(f"tcs-xtce: {name}: {e}", file=sys.stderr)
             return 1
     try:
-        mission = compile_documents(roots,
-                                    args.skip_unsupported or args.size_report)
+        mission = compile_documents(
+            roots, args.skip_unsupported or args.size_report, args.dialect)
     except Unsupported as e:
         where = f"{inputs[0]}: " if len(inputs) == 1 else ""
         print(f"tcs-xtce: {where}{e}", file=sys.stderr)

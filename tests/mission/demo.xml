@@ -8,6 +8,12 @@
      calibrators, math operations and splines of any order, every kind of
      error detection, and times in every unit and encoding. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Demo">
+  <!-- A binary size of -1 with transform algorithms is Yamcs's: the
+       decoding algorithm says how much of the rest of the packet it takes,
+       and entries may follow. -->
+  <AncillaryDataSet>
+    <AncillaryData name="tcs-xtce.dialect">yamcs</AncillaryData>
+  </AncillaryDataSet>
   <TelemetryMetaData>
     <ParameterTypeSet>
       <IntegerParameterType name="U3" signed="false">
@@ -1065,6 +1071,46 @@
           <ToBinaryTransformAlgorithm name="Mask"/>
         </BinaryDataEncoding>
       </BinaryParameterType>
+      <!-- A length byte, then that many bytes, which the application's
+           Unstuff gives and its Stuff makes. -->
+      <BinaryParameterType name="StuffedType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <FixedValue>-1</FixedValue>
+          </SizeInBits>
+          <FromBinaryTransformAlgorithm name="Unstuff"/>
+          <ToBinaryTransformAlgorithm name="Stuff"/>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
+      <!-- Milliseconds, as four bytes, most significant first, that the
+           application's MsFrom and MsTo turn into seconds and back. -->
+      <AbsoluteTimeParameterType name="MsStampType">
+        <Encoding>
+          <BinaryDataEncoding>
+            <SizeInBits>
+              <FixedValue>32</FixedValue>
+            </SizeInBits>
+            <FromBinaryTransformAlgorithm name="MsFrom"/>
+            <ToBinaryTransformAlgorithm name="MsTo"/>
+          </BinaryDataEncoding>
+        </Encoding>
+        <ReferenceTime>
+          <Epoch>TAI</Epoch>
+        </ReferenceTime>
+      </AbsoluteTimeParameterType>
+      <!-- Milliseconds as a LEB128 varint of one to five bytes, which the
+           application's VarFrom and VarTo turn into seconds and back. -->
+      <RelativeTimeParameterType name="VarDelayType">
+        <Encoding>
+          <BinaryDataEncoding>
+            <SizeInBits>
+              <FixedValue>-1</FixedValue>
+            </SizeInBits>
+            <FromBinaryTransformAlgorithm name="VarFrom"/>
+            <ToBinaryTransformAlgorithm name="VarTo"/>
+          </BinaryDataEncoding>
+        </Encoding>
+      </RelativeTimeParameterType>
       <IntegerParameterType name="RepCountType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
         <ValidRange minInclusive="0" maxInclusive="5"/>
@@ -1321,6 +1367,11 @@
       <Parameter name="HkMax" parameterTypeRef="DrDoubleType"/>
       <Parameter name="XorBlob" parameterTypeRef="XorBlobType"/>
       <Parameter name="XorTail" parameterTypeRef="U8"/>
+      <Parameter name="Stuffed" parameterTypeRef="StuffedType"/>
+      <Parameter name="StuffTail" parameterTypeRef="U8"/>
+      <Parameter name="MsStamp" parameterTypeRef="MsStampType"/>
+      <Parameter name="VarDelay" parameterTypeRef="VarDelayType"/>
+      <Parameter name="StuffEnd" parameterTypeRef="U8"/>
       <Parameter name="ZipA" parameterTypeRef="U16"/>
       <Parameter name="ZipB" parameterTypeRef="U8"/>
       <Parameter name="TwoRowCols" parameterTypeRef="RepCountType"/>
@@ -2294,6 +2345,22 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="610"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Values the application's transforms make, whose size on the
+           wire they say, with entries after them. -->
+      <SequenceContainer name="StuffBlock">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Stuffed"/>
+          <ParameterRefEntry parameterRef="StuffTail"/>
+          <ParameterRefEntry parameterRef="MsStamp"/>
+          <ParameterRefEntry parameterRef="VarDelay"/>
+          <ParameterRefEntry parameterRef="StuffEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="620"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

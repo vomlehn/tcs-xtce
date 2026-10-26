@@ -13,6 +13,7 @@ Usage: python3 random_vectors.py SEED COUNT
 It needs the generated Python codec, which ``make packets`` writes.
 """
 
+import math
 import random
 import sys
 from pathlib import Path
@@ -30,12 +31,53 @@ demo.HOOKS.update(is_even=lambda v: v[0] % 2.0 == 0.0,
                   twice=lambda d, start, end: 2 * sum(d[start // 8:end // 8]))
 # The demo's transforms: Expand doubles every byte, Shrink takes every
 # other one (and gives nothing when a pair differs); Mask and Unmask are XOR
-# 0x5A.
+# 0x5A.  The decoding ones say how many bytes they take: all of them.
 demo.HOOKS.update(expand=lambda b: bytes(x for x in b for _ in range(2)),
-                  shrink=lambda b: (bytes(b[::2]) if len(b) % 2 == 0
+                  shrink=lambda b: ((len(b), bytes(b[::2])) if len(b) % 2 == 0
                                     and b[::2] == b[1::2] else None),
                   mask=lambda b: bytes(x ^ 0x5A for x in b),
-                  unmask=lambda b: bytes(x ^ 0x5A for x in b))
+                  unmask=lambda b: (len(b), bytes(x ^ 0x5A for x in b)))
+
+
+def unstuff(b):
+    """A length byte and that many bytes: those bytes."""
+    return (1 + b[0], bytes(b[1:1 + b[0]])) if b and len(b) > b[0] else None
+
+
+def ms(s):
+    """Seconds as whole milliseconds, or None outside 0 to 2**32 - 1."""
+    v = math.floor(s * 1000.0 + 0.5) if math.isfinite(s) else -1
+    return v if 0 <= v < 1 << 32 else None
+
+
+def var_from(b):
+    """A LEB128 varint of one to five bytes, in milliseconds."""
+    v = 0
+    for i, x in enumerate(b[:5]):
+        v |= (x & 0x7F) << 7 * i
+        if not x & 0x80:
+            return i + 1, v / 1000.0
+    return None
+
+
+def var_to(s):
+    v, out = ms(s), bytearray()
+    if v is None:
+        return None
+    while v >= 0x80:
+        out.append(v & 0x7F | 0x80)
+        v >>= 7
+    return bytes(out + bytes([v]))
+
+
+# Stuff and Unstuff frame bytes with their length; MsFrom and MsTo are
+# milliseconds in four bytes, VarFrom and VarTo milliseconds in a varint.
+demo.HOOKS.update(stuff=lambda b: bytes([len(b)]) + bytes(b) if len(b) < 256
+                  else None, unstuff=unstuff,
+                  ms_from=lambda b: (4, int.from_bytes(b[:4], "big") / 1000.0),
+                  ms_to=lambda s: None if ms(s) is None
+                  else ms(s).to_bytes(4, "big"), var_from=var_from,
+                  var_to=var_to)
 
 
 def header(rng, packet_type, apid):
@@ -209,6 +251,25 @@ def tally(rng) -> bytes:
     if n >= 3:
         body += rng.randbytes(1)
     return body
+
+
+def stuffed(rng) -> bytes:
+    """A StuffBlock body: a length byte and that many bytes, a byte, four
+    bytes of milliseconds, a varint of milliseconds and a byte; now and
+    then a length or varint that runs past the packet."""
+    n = rng.randrange(6)
+    out = bytes([n if rng.random() < 0.9 else rng.randrange(256)])
+    out += rng.randbytes(n) + rng.randbytes(5)
+    v = rng.choice([0, rng.randrange(1 << 7), rng.randrange(1 << 14),
+                    rng.randrange(1 << 32)])
+    var = bytearray()
+    while v >= 0x80:
+        var.append(v & 0x7F | 0x80)
+        v >>= 7
+    var.append(v)
+    if rng.random() < 0.1:
+        var = bytearray(x | 0x80 for x in rng.randbytes(rng.randrange(1, 7)))
+    return out + bytes(var) + rng.randbytes(1)
 
 
 def bcd(rng, digits: int, packed: bool) -> bytes:
@@ -399,7 +460,7 @@ def main() -> None:
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
                                430, 440, 450, 460, 470, 480, 490, 500, 510, 520,
                                530, 550, 550, 560, 560, 570, 570, 580, 590, 600,
-                               600, 610, 610, rng.randrange(1 << 11)])
+                               600, 610, 610, 620, 620, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -477,6 +538,11 @@ def main() -> None:
                 body = rng.randbytes(3)
                 data += (bytes(x for x in body for _ in range(2))
                          if rng.random() < 0.8 else rng.randbytes(6))
+                keep = rng.random() < 0.5
+                if keep:
+                    data = with_length(data, len(data))
+            elif apid == 620 and rng.random() < 0.9:
+                data += stuffed(rng)
                 keep = rng.random() < 0.5
                 if keep:
                     data = with_length(data, len(data))

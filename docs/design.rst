@@ -501,15 +501,26 @@ command's own assignments they don't select the command when decoding:
 the document chose the included container, so the assignments can only
 confirm it.
 
-Transformed data is a ``Transform`` item holding the items whose bits it
-transforms; a binary value's is a ``Transform`` holding the value, which
-then takes the rest of what the transform gives. Decoding reads its bytes
-and swaps in a reader over what the transform makes of them, so its
-items are read with the same code as any others; encoding writes them in
-place, then replaces their bytes with the transform's, working in the
-output buffer after them, which ``max_bits`` counts. ``walk`` splices a
-Transform's items in for everything that looks at values, and keeps it
-whole (``inner=False``) for everything that places bits on the wire.
+A transformed container is a ``Transform`` item holding the items whose
+bits it transforms. Decoding reads its bytes and swaps in a reader over
+what the transform makes of them, so its items are read with the same
+code as any others; encoding writes them in place, then replaces their
+bytes with the transform's, working in the output buffer after them,
+which ``max_bits`` counts. ``walk`` splices a Transform's items in for
+everything that looks at values, and keeps it whole (``inner=False``)
+for everything that places bits on the wire.
+
+A transformed binary or time value is instead an ordinary ``Value``
+whose encoding is an ``XformEnc``, so it can be optional, repeated or
+inside an array or aggregate like any value. The runtimes' readers
+*offer* the transform the bytes on the wire (a fixed number, or the
+rest of the packet) without reading them, and then move past as many as
+it says it took. That one step serves both readings of a size of -1:
+the standard one, where the value is last and takes what is left, and
+Yamcs's, selected by the ``tcs-xtce.dialect`` AncillaryData or
+``--dialect``, where the algorithm finds its own size and later entries
+follow it. ``XformEnc.sized`` records the choice only so that
+``check_rest`` knows whether entries may follow.
 
 A length field inside an included container can't mean the packet's
 length, so ``measure`` makes it measure the container: it marks the
@@ -670,7 +681,8 @@ any calibrator, and nothing in the emitters or runtimes knows about time.
 Seconds keep one meaning across a mission whatever units its documents
 use; the cost is the precision of a double, which a 64-bit nanosecond
 counter exceeds. Text and binary times are kept as they are, because
-XTCE only describes their meaning through transform algorithms.
+XTCE only describes their meaning through transform algorithms; with
+those, the application's transforms give the seconds.
 
 Error detection
 ---------------

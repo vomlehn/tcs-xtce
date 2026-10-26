@@ -16,6 +16,7 @@ which for each document checks that
    module against the tcs-xtce crate, and the Python module;
 5. the Rust, C, C++ and Python runtimes give it the same XTCE digest;
 
+Documents from Yamcs projects are compiled in the Yamcs dialect.
 It also compiles the missions in tests/external/missions.txt, each split
 across several of the documents, together as one, and checks 3 to 5 for
 each (5 for the set's one digest).
@@ -187,11 +188,22 @@ def set_digest(paths: list[Path]) -> str:
                  f"{' '.join(sorted(others))}")
 
 
-def compiled(roots: list, stem: str, out: Path) -> list[str]:
+def dialect(paths: list[Path]) -> str | None:
+    """The dialect of XTCE the documents follow: Yamcs's, for those from
+    Yamcs projects."""
+    files = EXTERNAL / "files"
+    yamcs = {p.relative_to(files).parts[0].startswith("yamcs") for p in paths}
+    return "yamcs" if yamcs == {True} else None
+
+
+def compiled(roots: list, stem: str, out: Path,
+             dialect: str | None) -> list[str]:
     """The summary lines of compiling the documents with root SpaceSystems
-    ``roots`` together, and building the code generated from them."""
+    ``roots`` together, in ``dialect``, and building the code generated
+    from them."""
     try:
-        mission = compile_documents(roots, skip_unsupported=True)
+        mission = compile_documents(roots, skip_unsupported=True,
+                                    dialect=dialect)
         report.report(mission)
     except Unsupported as e:
         return [f"not compiled: {e}"]
@@ -212,7 +224,7 @@ def check_mission(paths: list[Path], stem: str, out: Path) -> list[str]:
             roots.append(xtce.Document.from_file(str(p)).root)
         except xtce.XtceError:
             return [f"not compiled: the binding rejects {p.name}"]
-    return compiled(roots, stem, out)
+    return compiled(roots, stem, out, dialect(paths))
 
 
 def check(path: Path, out: Path) -> list[str]:
@@ -232,7 +244,7 @@ def check(path: Path, out: Path) -> list[str]:
     if xtce.Document.from_bytes(doc.to_bytes()).root != doc.root:
         lines.append("ROUND TRIP DIFFERS")
     stem = re.sub(r"\W", "_", path.stem).lower()
-    return lines + compiled([doc.root], stem, out)
+    return lines + compiled([doc.root], stem, out, dialect([path]))
 
 
 def main() -> int:

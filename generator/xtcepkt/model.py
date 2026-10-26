@@ -155,7 +155,7 @@ class BinaryEnc:
     rest: bool = False
     lsb: bool = False  # bitOrder leastSignificantBitFirst
     # The names of its FromBinaryTransformAlgorithm and
-    # ToBinaryTransformAlgorithm, which make it a Transform's value.
+    # ToBinaryTransformAlgorithm, which make it an XformEnc.
     transform: Optional[tuple] = None
 
     @property
@@ -251,7 +251,37 @@ class AggregateEnc:
     this: Optional["Local"] = None
 
 
-Encoding = Union[IntEnc, FloatEnc, StringEnc, BinaryEnc, ArrayEnc, AggregateEnc]
+@dataclass
+class XformEnc:
+    """A value that algorithms the application supplies make from its bits
+    on the wire and back (a binary encoding's FromBinaryTransformAlgorithm
+    and ToBinaryTransformAlgorithm): bytes of at most ``cap``, or with
+    ``time``, a time in seconds.  The wire holds ``raw`` bytes, or with
+    None, decoding offers the decoding algorithm the rest of the packet
+    and it says how many it takes; encoding writes at most ``bits`` bits.
+    ``sized`` (the Yamcs reading of a size of -1) lets entries follow such
+    a value; otherwise it must be the packet's last.  A missing algorithm
+    fails with NotInvertible.  It starts on a byte boundary."""
+
+    raw: Optional[int]
+    decode: Optional["Hook"]
+    encode: Optional["Hook"]
+    cap: int
+    time: bool = False
+    sized: bool = False
+
+    @property
+    def bits(self) -> int:
+        """The most bits it takes on the wire."""
+        return 8 * (self.raw if self.raw is not None else self.cap)
+
+    @property
+    def variable(self) -> bool:
+        return True
+
+
+Encoding = Union[IntEnc, FloatEnc, StringEnc, BinaryEnc, ArrayEnc, AggregateEnc,
+                 XformEnc]
 
 # The most bits a field whose size or count another value gives may take on
 # the wire, unless the range of that value bounds it more tightly.  It keeps
@@ -750,8 +780,7 @@ class TailPad:
 @dataclass
 class Transform:
     """Items whose bits are transformed on the wire (a container's
-    FromBinaryTransformAlgorithm and ToBinaryTransformAlgorithm, or a
-    binary value's, whose Value takes the rest of what they give).
+    FromBinaryTransformAlgorithm and ToBinaryTransformAlgorithm).
     Decoding gives ``raw`` bytes (the rest of the packet when None) to the
     application's ``decode`` hook and reads ``items`` from what it gives,
     at most ``cap`` bytes, from mark ``start``; encoding writes ``items``,
@@ -982,8 +1011,9 @@ class Hook:
     named ``name`` (the algorithm's qualified name) and ``ident`` in the
     generated code.  ``kind`` says what it computes from its inputs:
     ``criterion`` (whether it holds), ``algorithm`` (``outputs`` values),
-    ``alarm`` (a level), ``checksum`` (from the packet's bits) or
-    ``transform`` (bytes from bytes)."""
+    ``alarm`` (a level), ``checksum`` (from the packet's bits),
+    ``binary_from`` and ``binary_to`` (bytes from bytes), or ``time_from``
+    (seconds from bytes) and ``time_to`` (bytes from seconds)."""
 
     kind: str
     name: str

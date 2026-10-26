@@ -57,6 +57,12 @@ fn run<P: Packet + Display>(
     format!("{packet} | {again}{}", alarms(&packet))
 }
 
+/// Seconds as whole milliseconds, or None outside 0 to 2^32 - 1.
+fn ms(s: f64) -> Option<u32> {
+    let v = (s * 1000.0 + 0.5).floor();
+    (v >= 0.0 && v < 4294967296.0).then_some(v as u32)
+}
+
 /// The demo mission's custom algorithms, the same in every version of this
 /// tool.
 fn set_hooks() {
@@ -78,8 +84,8 @@ fn set_hooks() {
         })
         .ok();
     // The demo's transforms: Expand doubles every byte, Shrink takes every
-    // other one (and gives nothing when a pair differs); Xor and Unxor are
-    // XOR 0x5A.
+    // other one (and gives nothing when a pair differs); Mask and Unmask
+    // are XOR 0x5A.
     demo::hooks::EXPAND
         .set(|b, out| {
             if 2 * b.len() > out.len() {
@@ -98,22 +104,106 @@ fn set_hooks() {
                 return None;
             }
             if b.len() / 2 > out.len() {
-                return Some(b.len() / 2); // the room it needs
+                return Some((b.len(), b.len() / 2)); // the room it needs
             }
             for (o, p) in out.iter_mut().zip(b.chunks(2)) {
                 *o = p[0];
             }
-            Some(b.len() / 2)
+            Some((b.len(), b.len() / 2))
         })
         .ok();
-    let xor: fn(&[u8], &mut [u8]) -> Option<usize> = |b, out| {
-        for (o, &x) in out.iter_mut().zip(b) {
-            *o = x ^ 0x5A;
-        }
-        Some(b.len())
-    };
-    demo::hooks::MASK.set(xor).ok();
-    demo::hooks::UNMASK.set(xor).ok();
+    demo::hooks::MASK
+        .set(|b, out| {
+            for (o, &x) in out.iter_mut().zip(b) {
+                *o = x ^ 0x5A;
+            }
+            Some(b.len())
+        })
+        .ok();
+    demo::hooks::UNMASK
+        .set(|b, out| {
+            for (o, &x) in out.iter_mut().zip(b) {
+                *o = x ^ 0x5A;
+            }
+            Some((b.len(), b.len()))
+        })
+        .ok();
+    // Stuff and Unstuff frame bytes with their length; MsFrom and MsTo are
+    // milliseconds in four bytes, VarFrom and VarTo milliseconds in a
+    // varint.
+    demo::hooks::STUFF
+        .set(|b, out| {
+            if b.len() > 255 {
+                return None;
+            }
+            if b.len() + 1 > out.len() {
+                return Some(b.len() + 1); // the room it needs
+            }
+            out[0] = b.len() as u8;
+            out[1..=b.len()].copy_from_slice(b);
+            Some(b.len() + 1)
+        })
+        .ok();
+    demo::hooks::UNSTUFF
+        .set(|b, out| {
+            let n = usize::from(*b.first()?);
+            if b.len() <= n {
+                return None;
+            }
+            if n > out.len() {
+                return Some((n + 1, n)); // the room it needs
+            }
+            out[..n].copy_from_slice(&b[1..=n]);
+            Some((n + 1, n))
+        })
+        .ok();
+    demo::hooks::MS_FROM
+        .set(|b| {
+            let v = u32::from_be_bytes(b.get(..4)?.try_into().ok()?);
+            Some((4, f64::from(v) / 1000.0))
+        })
+        .ok();
+    demo::hooks::MS_TO
+        .set(|s, out| {
+            let v = ms(s)?;
+            if out.len() < 4 {
+                return Some(4); // the room it needs
+            }
+            out[..4].copy_from_slice(&v.to_be_bytes());
+            Some(4)
+        })
+        .ok();
+    demo::hooks::VAR_FROM
+        .set(|b| {
+            let mut v = 0u64;
+            for (i, &x) in b.iter().take(5).enumerate() {
+                v |= u64::from(x & 0x7F) << (7 * i);
+                if x & 0x80 == 0 {
+                    return Some((i + 1, v as f64 / 1000.0));
+                }
+            }
+            None
+        })
+        .ok();
+    demo::hooks::VAR_TO
+        .set(|s, out| {
+            let mut v = ms(s)?;
+            let mut n = 0;
+            let mut buf = [0u8; 5];
+            while v >= 0x80 {
+                buf[n] = (v & 0x7F) as u8 | 0x80;
+                v >>= 7;
+                n += 1;
+            }
+            buf[n] = v as u8;
+            n += 1;
+            if n > out.len() {
+                return Some(n); // the room it needs
+            }
+            out[..n].copy_from_slice(&buf[..n]);
+            Some(n)
+        })
+        .ok();
 }
 
 fn main() {

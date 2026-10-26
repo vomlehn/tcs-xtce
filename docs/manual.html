@@ -1024,6 +1024,10 @@ in snake_case followed by <tt class="docutils literal">_</tt>, such as <tt class
 <tr><td><tt class="docutils literal"><span class="pre">--skip-unsupported</span></tt></td>
 <td>Leave out containers and meta-commands that use unsupported XTCE features, with a warning, instead of failing</td>
 </tr>
+<tr><td><tt class="docutils literal"><span class="pre">--dialect</span> yamcs</tt></td>
+<td>Read the documents as the ground system named does where XTCE
+leaves a meaning open, unless they say otherwise (see Dialects)</td>
+</tr>
 <tr><td><tt class="docutils literal"><span class="pre">--size-report</span></tt></td>
 <td>Write a size report instead of code (see <a class="reference internal" href="#size-report">Size report</a>), to
 <tt class="docutils literal">OUTPUT</tt> or standard output</td>
@@ -2125,9 +2129,10 @@ invertible calibrator, as for other values. A time's value is a double,
 so an integer encoding of more than 53 bits, such as a 64-bit count of
 nanoseconds, loses its low bits.</p>
 <p>A time with a <tt class="docutils literal">StringDataEncoding</tt> holds its text, and one with a
-<tt class="docutils literal">BinaryDataEncoding</tt> its bytes, unconverted: XTCE expects such times
-to be described with transform algorithms. Neither may have <tt class="docutils literal">units</tt>,
-<tt class="docutils literal">scale</tt> or <tt class="docutils literal">offset</tt>.</p>
+<tt class="docutils literal">BinaryDataEncoding</tt> its bytes, unconverted, unless that encoding
+has transform algorithms, which give the time in seconds (see
+Transform algorithms). Neither may have <tt class="docutils literal">units</tt>, <tt class="docutils literal">scale</tt> or
+<tt class="docutils literal">offset</tt>.</p>
 <p class="last">The <tt class="docutils literal">ReferenceTime</tt> (an <tt class="docutils literal">Epoch</tt>: <tt class="docutils literal">TAI</tt>, <tt class="docutils literal">J2000</tt>, <tt class="docutils literal">UNIX</tt>,
 <tt class="docutils literal">GPS</tt>, a date or a date and time; or an <tt class="docutils literal">OffsetFrom</tt> another
 parameter) is recorded in the generated documentation and not applied:
@@ -2459,35 +2464,64 @@ Custom algorithms).</p>
 change bits on the wire into others, as compression or encryption
 does, by the application's functions (transform hooks, below):
 decoding gives the bytes on the wire to the first and reads what it
-makes of them, and encoding gives what it writes to the second. Both
-A document may give only one; the other way then fails with
+makes of them, and encoding gives what it writes to the second. A
+document may give only one; the other way then fails with
 <tt class="docutils literal">NotInvertible</tt>, as Yamcs's PUS documents' time types, which only
 decode in telemetry and only encode in commands, do.</p>
 <p>On a binary type's <tt class="docutils literal">BinaryDataEncoding</tt>, the value is what the
 transform makes of its bytes, of any size up to the maximum field
-size; its <tt class="docutils literal">SizeInBits</tt> is its size on the wire, or <tt class="docutils literal"><span class="pre">-1</span></tt> for the
-rest of the packet. (Yamcs reads <tt class="docutils literal"><span class="pre">-1</span></tt> there as a size that the
-algorithm finds; a packet codec has no way to ask it, so such a value
-must be the packet's last.) On a container's <tt class="docutils literal">BinaryEncoding</tt>, its own
-entries (not a base container's) are read from what the transform
-makes of its bytes, and its <tt class="docutils literal">SizeInBits</tt> is their size on the wire;
-an included container needs one, while a packet's own container
-without one takes the rest of the packet. Either way the transformed
-data starts on a byte boundary, and a transform that makes more than
-fits fails with <tt class="docutils literal">TooLong</tt>, one that can't (a function giving
-nothing) with <tt class="docutils literal">InvalidValue</tt>, and one whose result isn't the size
-on the wire with <tt class="docutils literal">BadSize</tt>.</p>
+size. On an absolute or relative time type's, it is the time the
+transform makes of them, in seconds, as a double like any other
+time. Its <tt class="docutils literal">SizeInBits</tt> is its size on the wire, or <tt class="docutils literal"><span class="pre">-1</span></tt>, which
+offers the decoding transform the rest of the packet; the transform
+says how many of those bytes it takes, and a fixed size must be all
+of them. In standard XTCE <tt class="docutils literal"><span class="pre">-1</span></tt> leaves nothing for later entries,
+so such a value must be the packet's last. Yamcs reads <tt class="docutils literal"><span class="pre">-1</span></tt> as a
+size that the algorithm finds, so entries may follow it; documents
+written for Yamcs say so with the <tt class="docutils literal">yamcs</tt> dialect (see Dialects,
+below). Transformed values may be optional, repeated, array elements
+or aggregate members.</p>
+<p>On a container's <tt class="docutils literal">BinaryEncoding</tt>, its own entries (not a base
+container's) are read from what the transform makes of its bytes,
+and its <tt class="docutils literal">SizeInBits</tt> is their size on the wire; an included
+container needs one, while a packet's own container without one
+takes the rest of the packet. A transformed container can't have an
+<tt class="docutils literal">IncludeCondition</tt>, be repeated, or hold a length field, a
+checksum or an entry located from the container's end.</p>
+<p>Either way the transformed data starts on a byte boundary, and a
+transform that makes more than fits fails with <tt class="docutils literal">TooLong</tt>, one that
+can't (a function giving nothing) with <tt class="docutils literal">InvalidValue</tt>, and one that
+takes or makes other than the size on the wire with <tt class="docutils literal">BadSize</tt>.</p>
 <p class="last">A Rust or C transform puts what it makes in the room it is given and
 returns its size; when that doesn't fit, it writes nothing and returns
 the size it needs, and when it can't, it returns <tt class="docutils literal">None</tt> or
-<tt class="docutils literal">XTCE_PK_NO_TRANSFORM</tt>. Encoding transforms in the output buffer,
-after what it writes, so <tt class="docutils literal">MAX_BYTES</tt> counts that room: for a
-container that takes the rest of the packet, the maximum field size,
-which <tt class="docutils literal"><span class="pre">tcs-xtce.max-field-bytes</span></tt> can lower. Transformed data can't
-have an <tt class="docutils literal">IncludeCondition</tt>, be in a repeated container, or hold a
-length field, a checksum or an entry located from the container's
-end. The demo's <tt class="docutils literal">ZipBlock</tt> doubles every byte of its entries on the
-wire, and its <tt class="docutils literal">XorBlock</tt> has a <tt class="docutils literal">XorBlob</tt> masked by XOR.</p>
+<tt class="docutils literal">XTCE_PK_NO_TRANSFORM</tt>. A decoding transform also says how many of
+the bytes it was given it took. Encoding transforms in the output
+buffer, after what it writes, so <tt class="docutils literal">MAX_BYTES</tt> counts that room: for
+data that takes the rest of the packet or whose size the transform
+finds, the maximum field size, which <tt class="docutils literal"><span class="pre">tcs-xtce.max-field-bytes</span></tt> can
+lower. The demo's <tt class="docutils literal">ZipBlock</tt> doubles every byte of its entries on
+the wire, its <tt class="docutils literal">XorBlock</tt> has a <tt class="docutils literal">XorBlob</tt> masked by XOR, and its
+<tt class="docutils literal">StuffBlock</tt> has bytes framed by their length, a time in
+milliseconds and a delay in a varint, with entries after each.</p>
+</dd>
+<dt>Dialects</dt>
+<dd><p class="first">Where XTCE leaves a meaning open and a ground system settles it, an
+<tt class="docutils literal">AncillaryData</tt> named <tt class="docutils literal"><span class="pre">tcs-xtce.dialect</span></tt> on a document's root
+<tt class="docutils literal">SpaceSystem</tt> says whose reading to follow. The one dialect is
+<tt class="docutils literal">yamcs</tt>, which reads a transformed value's <tt class="docutils literal">SizeInBits</tt> of <tt class="docutils literal"><span class="pre">-1</span></tt>
+as Yamcs does (see Transform algorithms):</p>
+<pre class="code xml literal-block">
+<span class="name tag">&lt;SpaceSystem</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;Rover&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;AncillaryDataSet&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;AncillaryData</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;tcs-xtce.dialect&quot;</span><span class="name tag">&gt;</span>yamcs<span class="name tag">&lt;/AncillaryData&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/AncillaryDataSet&gt;</span><span class="whitespace">
+  </span>...
+</pre>
+<p class="last">As with <tt class="docutils literal"><span class="pre">tcs-xtce.max-field-bytes</span></tt>, every root of a mission that
+gives it must agree, and on any other <tt class="docutils literal">SpaceSystem</tt> it is an error.
+<tt class="docutils literal"><span class="pre">--dialect</span></tt> gives it for documents that can't be changed; a document
+that gives one must agree with it.</p>
 </dd>
 <dt>Custom algorithms</dt>
 <dd><p class="first">A <tt class="docutils literal">CustomAlgorithm</tt> names code that the document doesn't hold, so
@@ -2503,8 +2537,10 @@ whether it holds for its inputs;</li>
 raised to at least that;</li>
 <li>a <tt class="docutils literal">Checksum</tt> named <tt class="docutils literal">custom</tt>, by its <tt class="docutils literal">InputAlgorithm</tt>: the
 value of the bits it covers;</li>
-<li>a <tt class="docutils literal">FromBinaryTransformAlgorithm</tt> or <tt class="docutils literal">ToBinaryTransformAlgorithm</tt>:
-the bytes it makes of the bytes given (see Transform algorithms).</li>
+<li>a <tt class="docutils literal">FromBinaryTransformAlgorithm</tt>: how many of the bytes given it
+takes and the bytes, or for a time type the seconds, it makes of
+them; a <tt class="docutils literal">ToBinaryTransformAlgorithm</tt>: the bytes it makes of the
+bytes, or the seconds, given (see Transform algorithms).</li>
 </ul>
 <p>Inputs are the <tt class="docutils literal">InputSet</tt>'s values of the packet (integers, floats,
 enumerations and booleans, which must be present) and <tt class="docutils literal">Constant</tt>s,
@@ -2538,11 +2574,30 @@ in order, as doubles. The generated code has a place for each hook:</p>
 <td><tt class="docutils literal">uint64_t f(const uint8_t*, size_t, size_t)</tt></td>
 <td><tt class="docutils literal">f(data, start, end) <span class="pre">-&gt;</span> int</tt></td>
 </tr>
-<tr><td>transform</td>
+<tr><td>from binary</td>
+<td><tt class="docutils literal"><span class="pre">fn(&amp;[u8],</span> &amp;mut [u8]) <span class="pre">-&gt;</span> <span class="pre">Option&lt;(usize,</span> usize)&gt;</tt>, how many
+it took and made</td>
+<td><tt class="docutils literal">size_t f(const uint8_t* in, size_t n, size_t* consumed,
+uint8_t* out, size_t cap)</tt></td>
+<td><tt class="docutils literal">f(data) <span class="pre">-&gt;</span> (taken, bytes) or None</tt></td>
+</tr>
+<tr><td>to binary</td>
 <td><tt class="docutils literal"><span class="pre">fn(&amp;[u8],</span> &amp;mut [u8]) <span class="pre">-&gt;</span> Option&lt;usize&gt;</tt></td>
 <td><tt class="docutils literal">size_t f(const uint8_t* in, size_t n, uint8_t* out, size_t
 cap)</tt></td>
 <td><tt class="docutils literal">f(data) <span class="pre">-&gt;</span> bytes or None</tt></td>
+</tr>
+<tr><td>time from binary</td>
+<td><tt class="docutils literal"><span class="pre">fn(&amp;[u8])</span> <span class="pre">-&gt;</span> <span class="pre">Option&lt;(usize,</span> f64)&gt;</tt>, how many it took and
+the seconds</td>
+<td><tt class="docutils literal">bool f(const uint8_t* in, size_t n, size_t* consumed,
+double* s)</tt></td>
+<td><tt class="docutils literal">f(data) <span class="pre">-&gt;</span> (taken, seconds) or None</tt></td>
+</tr>
+<tr><td>time to binary</td>
+<td><tt class="docutils literal">fn(f64, &amp;mut [u8]) <span class="pre">-&gt;</span> Option&lt;usize&gt;</tt></td>
+<td><tt class="docutils literal">size_t f(double s, uint8_t* out, size_t cap)</tt></td>
+<td><tt class="docutils literal">f(seconds) <span class="pre">-&gt;</span> bytes or None</tt></td>
 </tr>
 </tbody>
 </table>
@@ -2683,7 +2738,9 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 <dd><tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer or string without
 an <tt class="docutils literal">aliasNameSpace</tt>, instances of values in other packets, repeated
 segment entries with an <tt class="docutils literal">order</tt> or located from the end of their
-container, the transformed data listed under Transform algorithms,
+container, transformed containers with an <tt class="docutils literal">IncludeCondition</tt>, in a
+repeated container, or holding a length field, a checksum or an entry
+located from the end,
 <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE deprecates), least-significant-bit-first strings
 and binary data that may not start on a byte boundary, integers of
 more than 64 bits used other than as values (see &quot;Integer encoding&quot;),

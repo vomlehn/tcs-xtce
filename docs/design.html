@@ -871,15 +871,25 @@ of an optional field would have nowhere to be absent. Unlike a
 command's own assignments they don't select the command when decoding:
 the document chose the included container, so the assignments can only
 confirm it.</p>
-<p>Transformed data is a <tt class="docutils literal">Transform</tt> item holding the items whose bits it
-transforms; a binary value's is a <tt class="docutils literal">Transform</tt> holding the value, which
-then takes the rest of what the transform gives. Decoding reads its bytes
-and swaps in a reader over what the transform makes of them, so its
-items are read with the same code as any others; encoding writes them in
-place, then replaces their bytes with the transform's, working in the
-output buffer after them, which <tt class="docutils literal">max_bits</tt> counts. <tt class="docutils literal">walk</tt> splices a
-Transform's items in for everything that looks at values, and keeps it
-whole (<tt class="docutils literal">inner=False</tt>) for everything that places bits on the wire.</p>
+<p>A transformed container is a <tt class="docutils literal">Transform</tt> item holding the items whose
+bits it transforms. Decoding reads its bytes and swaps in a reader over
+what the transform makes of them, so its items are read with the same
+code as any others; encoding writes them in place, then replaces their
+bytes with the transform's, working in the output buffer after them,
+which <tt class="docutils literal">max_bits</tt> counts. <tt class="docutils literal">walk</tt> splices a Transform's items in for
+everything that looks at values, and keeps it whole (<tt class="docutils literal">inner=False</tt>)
+for everything that places bits on the wire.</p>
+<p>A transformed binary or time value is instead an ordinary <tt class="docutils literal">Value</tt>
+whose encoding is an <tt class="docutils literal">XformEnc</tt>, so it can be optional, repeated or
+inside an array or aggregate like any value. The runtimes' readers
+<em>offer</em> the transform the bytes on the wire (a fixed number, or the
+rest of the packet) without reading them, and then move past as many as
+it says it took. That one step serves both readings of a size of -1:
+the standard one, where the value is last and takes what is left, and
+Yamcs's, selected by the <tt class="docutils literal"><span class="pre">tcs-xtce.dialect</span></tt> AncillaryData or
+<tt class="docutils literal"><span class="pre">--dialect</span></tt>, where the algorithm finds its own size and later entries
+follow it. <tt class="docutils literal">XformEnc.sized</tt> records the choice only so that
+<tt class="docutils literal">check_rest</tt> knows whether entries may follow.</p>
 <p>A length field inside an included container can't mean the packet's
 length, so <tt class="docutils literal">measure</tt> makes it measure the container: it marks the
 field and puts a <tt class="docutils literal">LengthEnd</tt> where the container ends, where decoding
@@ -1023,7 +1033,8 @@ any calibrator, and nothing in the emitters or runtimes knows about time.
 Seconds keep one meaning across a mission whatever units its documents
 use; the cost is the precision of a double, which a 64-bit nanosecond
 counter exceeds. Text and binary times are kept as they are, because
-XTCE only describes their meaning through transform algorithms.</p>
+XTCE only describes their meaning through transform algorithms; with
+those, the application's transforms give the seconds.</p>
 </div>
 <div class="section" id="error-detection">
 <h2><a class="toc-backref" href="#toc-entry-21">Error detection</a></h2>

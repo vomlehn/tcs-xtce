@@ -13,7 +13,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
                     Require, Fill, Segment, Verify, Custom, TailPad, TailSeek,
-                    LengthEnd, Transform)
+                    LengthEnd, Transform, XformEnc)
 
 
 def pstr(s: str) -> str:
@@ -268,6 +268,11 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         return calibrate(vt,
                          f"pk.float_decode({e.fmt!r}, {e.bits}, "
                          f"{raw_read(e, f)}, {f})", f, ref.place)
+    if isinstance(e, XformEnc):
+        h = transform_hook(e.decode)
+        if e.time:
+            return f"r.time_from({h}, {e.raw}, {f})"
+        return f"r.binary_from({h}, {e.raw}, {e.cap}, {f})"
     if isinstance(e, BinaryEnc):
         if e.rest:
             return f"r.bytes(r.rest_bytes({e.bits // 8}, {f}), {f})"
@@ -314,6 +319,10 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         if e.fmt == "IEEE754" and e.bits in (32, 64):
             return raw_write(e, f"pk.float_to_raw({y}, {e.bits})")
         return raw_write(e, f"pk.float_encode({e.fmt!r}, {e.bits}, {y}, {f})")
+    if isinstance(e, XformEnc):
+        h = transform_hook(e.encode)
+        way = "time_to" if e.time else "binary_to"
+        return f"w.{way}({h}, {x}, {e.raw}, {e.bits // 8}, {f})"
     if isinstance(e, BinaryEnc) and e.rest:
         return f"pk.write_rest(w, {x}, {e.bits // 8}, {f})"
     if isinstance(e, BinaryEnc):
@@ -669,8 +678,8 @@ class PythonEmitter:
                 # Read its items from what the transform makes of its bytes.
                 f = pstr(it.name)
                 self.line(f"_t{it.start} = "
-                          f"pk.transform_from({transform_hook(it.decode)}, "
-                          f"r.take({it.raw}, {f}), {it.cap}, {f})", depth)
+                          f"r.binary_from({transform_hook(it.decode)}, "
+                          f"{it.raw}, {it.cap}, {f})", depth)
                 self.line(f"r, _r{it.start} = pk.BitReader(_t{it.start}), r",
                           depth)
                 self.read_items(it.items, depth, where, nested)

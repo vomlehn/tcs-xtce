@@ -275,33 +275,13 @@ yamcs-cfs/tutorial.xml: schema invalid; rejected by the binding
   digest 51d78ba9ef5ab2f366459606f42a5ff5
 yamcs-cfs/ocpoc.xml: schema invalid; rejected by the binding
   digest 2c8841271cb1758d2684ad621de8c618
-mission pus (9 documents): 62 packets, 26 not supported
-    unsupported: /PUS/pus-tc-ack: container /PUS/pus-tc-ack: pus-time takes the rest of the packet but is not last
-    unsupported: /PUS/hk25: container /PUS/hk25: pus-time takes the rest of the packet but is not last
-    unsupported: /PUS5/pus5-tm: container /PUS5/pus5-tm: pus-time takes the rest of the packet but is not last
-    unsupported: /PUS11/SUBSCHEDULE_STATUS_REPORT: container /PUS11/SUBSCHEDULE_STATUS_REPORT: pus-time takes the rest of the packet but is not last
-    unsupported: /PUS11/GROUP_STATUS_REPORT: container /PUS11/GROUP_STATUS_REPORT: pus-time takes the rest of the packet but is not last
-    unsupported: /PUS11/DETAIL_REPORT/DETAIL_REPORT_ELEMENT: container /PUS11/DETAIL_REPORT/DETAIL_REPORT_ELEMENT: release_time takes the rest of the packet but is not last
-    unsupported: /PUS11/DETAIL_REPORT/DETAIL_REPORT: container /PUS11/DETAIL_REPORT/DETAIL_REPORT: repeated container /PUS11/DETAIL_REPORT/DETAIL_REPORT_ELEMENT has transformed data
-    unsupported: /PUS11/SUMMARY_REPORT/SUMMARY_REPORT_ELEMENT: container /PUS11/SUMMARY_REPORT/SUMMARY_REPORT_ELEMENT: release_time takes the rest of the packet but is not last
-    unsupported: /PUS11/SUMMARY_REPORT/SUMMARY_REPORT: container /PUS11/SUMMARY_REPORT/SUMMARY_REPORT: repeated container /PUS11/SUMMARY_REPORT/SUMMARY_REPORT_ELEMENT has transformed data
-    unsupported: /PUS19/EVENT_ACTION_STATUS_REPORT: container /PUS19/EVENT_ACTION_STATUS_REPORT: pus-time takes the rest of the packet but is not last
+mission pus (9 documents): 82 packets, 6 not supported
+    unsupported: /PUS5/event2: container /PUS5/event2: unresolved parameter reference '_yamcs_ignore'
+    unsupported: /PUS11/DETAIL_REPORT/DETAIL_REPORT: container /PUS11/DETAIL_REPORT/DETAIL_REPORT: repeated container /PUS11/DETAIL_REPORT/DETAIL_REPORT_ELEMENT: tc_data has a size that another value gives
     unsupported: /PUS20/TM(20,2)_parameter_value_report: unresolved parameter reference 'number_of_parameters' in /PUS20
-    unsupported: /PUS22/SUBSCHEDULE_STATUS_REPORT: container /PUS22/SUBSCHEDULE_STATUS_REPORT: pus-time takes the rest of the packet but is not last
-    unsupported: /PUS22/GROUP_STATUS_REPORT: container /PUS22/GROUP_STATUS_REPORT: pus-time takes the rest of the packet but is not last
     unsupported: /PUS22/DETAIL_REPORT/DETAIL_REPORT: container /PUS22/DETAIL_REPORT/DETAIL_REPORT: repeated container /PUS22/DETAIL_REPORT/DETAIL_REPORT_ELEMENT: tc_data has a size that another value gives
-    unsupported: /PUS22/SUMMARY_REPORT/SUMMARY_REPORT: container /PUS22/SUMMARY_REPORT/SUMMARY_REPORT: pus-time takes the rest of the packet but is not last
-    unsupported: /PUS11/INSERT_ACTIVITIES: type /PUS11/ActivityType: member release_time takes the rest of the packet
-    unsupported: /PUS11/DELETE_ACTIVITIES_BY_FILTER: meta-command /PUS11/DELETE_ACTIVITIES_BY_FILTER: start_time takes the rest of the packet but is not last
-    unsupported: /PUS11/TIME_SHIFT_ACTIVITIES_BY_FILTER: meta-command /PUS11/TIME_SHIFT_ACTIVITIES_BY_FILTER: start_time takes the rest of the packet but is not last
-    unsupported: /PUS11/GET_DETAIL_REPORT_BY_FILTER: meta-command /PUS11/GET_DETAIL_REPORT_BY_FILTER: start_time takes the rest of the packet but is not last
-    unsupported: /PUS11/GET_SUMMARY_REPORT_BY_FILTER: meta-command /PUS11/GET_SUMMARY_REPORT_BY_FILTER: start_time takes the rest of the packet but is not last
+    unsupported: /PUS11/INSERT_ACTIVITIES: type /PUS11/ActivityType: member tc takes the rest of the packet
     unsupported: /PUS19/ADD_EVENT_ACTIONS: type /PUS19/EventActionType: member tc takes the rest of the packet
-    unsupported: /PUS/pus-tc-ack-acceptance-failure: base container /PUS/pus-tc-ack is not supported
-    unsupported: /PUS/pus-tc-ack-start-failure: base container /PUS/pus-tc-ack is not supported
-    unsupported: /PUS/pus-tc-ack-completion-failure: base container /PUS/pus-tc-ack is not supported
-    unsupported: /PUS5/event1: base container /PUS5/pus5-tm is not supported
-    unsupported: /PUS5/event2: base container /PUS5/pus5-tm is not supported
   digest 98800cd14e818edf63bdfb4168bf7632
 mission pus-verifiers (2 documents): 9 packets, 0 not supported
   digest 6aada7e9d6a206b424f7360fa678e71e

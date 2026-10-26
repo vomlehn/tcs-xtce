@@ -214,3 +214,8 @@ tm 0a58c02a0005121234345656  # zip: ZipA 0x1234 and ZipB 0x56, each byte doubled
 tm 0a58c02a00041234565678  # zip: five bytes, which Shrink can't halve
 tm 0a62c02a0004f0e1968777  # xor: XorBlob aabbccdd, masked on the wire
 tm 0a62c02a0002010203  # xor: three bytes, not XorBlob's four
+tm 0a6cc02a000b03aabbcc11000004d2ac0222  # stuffed: aabbcc framed by its length, then 1.234 s and a 300 ms varint
+tm 0a6cc02a00070011000000000022  # stuffed: nothing framed, times of zero
+tm 0a6cc02a000209aabb  # stuffed: a length past the packet, which Unstuff can't take
+tm 0a6cc02a0008001100000001800022  # stuffed: a varint of two bytes for zero, re-encoded in one
+tm 0a6cc02a000a001100000000ffffffffff  # stuffed: a varint that never ends

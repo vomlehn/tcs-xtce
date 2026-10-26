@@ -69,6 +69,17 @@ impl<T, const N: usize> FixedVec<T, N> {
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         &mut self.data[..self.len]
     }
+
+    /// Lets `f` fill the whole storage, then holds the values it says it
+    /// gave.
+    pub(crate) fn fill<E>(
+        &mut self,
+        f: impl FnOnce(&mut [T]) -> Result<usize, E>,
+    ) -> Result<(), E> {
+        let n = f(&mut self.data)?;
+        self.len = n.min(N);
+        Ok(())
+    }
 }
 
 impl<T: Clone, const N: usize> FixedVec<T, N> {

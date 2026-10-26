@@ -558,6 +558,9 @@ Each run writes one language. Run it once per language you need.
        in snake_case followed by ``_``, such as ``demo_``)
    * - ``--skip-unsupported``
      - Leave out containers and meta-commands that use unsupported XTCE features, with a warning, instead of failing
+   * - ``--dialect yamcs``
+     - Read the documents as the ground system named does where XTCE
+       leaves a meaning open, unless they say otherwise (see Dialects)
    * - ``--size-report``
      - Write a size report instead of code (see `Size report`_), to
        ``OUTPUT`` or standard output
@@ -1686,9 +1689,10 @@ Times
    nanoseconds, loses its low bits.
 
    A time with a ``StringDataEncoding`` holds its text, and one with a
-   ``BinaryDataEncoding`` its bytes, unconverted: XTCE expects such times
-   to be described with transform algorithms. Neither may have ``units``,
-   ``scale`` or ``offset``.
+   ``BinaryDataEncoding`` its bytes, unconverted, unless that encoding
+   has transform algorithms, which give the time in seconds (see
+   Transform algorithms). Neither may have ``units``, ``scale`` or
+   ``offset``.
 
    The ``ReferenceTime`` (an ``Epoch``: ``TAI``, ``J2000``, ``UNIX``,
    ``GPS``, a date or a date and time; or an ``OffsetFrom`` another
@@ -2038,37 +2042,70 @@ Transform algorithms
    change bits on the wire into others, as compression or encryption
    does, by the application's functions (transform hooks, below):
    decoding gives the bytes on the wire to the first and reads what it
-   makes of them, and encoding gives what it writes to the second. Both
-   A document may give only one; the other way then fails with
+   makes of them, and encoding gives what it writes to the second. A
+   document may give only one; the other way then fails with
    ``NotInvertible``, as Yamcs's PUS documents' time types, which only
    decode in telemetry and only encode in commands, do.
 
    On a binary type's ``BinaryDataEncoding``, the value is what the
    transform makes of its bytes, of any size up to the maximum field
-   size; its ``SizeInBits`` is its size on the wire, or ``-1`` for the
-   rest of the packet. (Yamcs reads ``-1`` there as a size that the
-   algorithm finds; a packet codec has no way to ask it, so such a value
-   must be the packet's last.) On a container's ``BinaryEncoding``, its own
-   entries (not a base container's) are read from what the transform
-   makes of its bytes, and its ``SizeInBits`` is their size on the wire;
-   an included container needs one, while a packet's own container
-   without one takes the rest of the packet. Either way the transformed
-   data starts on a byte boundary, and a transform that makes more than
-   fits fails with ``TooLong``, one that can't (a function giving
-   nothing) with ``InvalidValue``, and one whose result isn't the size
-   on the wire with ``BadSize``.
+   size. On an absolute or relative time type's, it is the time the
+   transform makes of them, in seconds, as a double like any other
+   time. Its ``SizeInBits`` is its size on the wire, or ``-1``, which
+   offers the decoding transform the rest of the packet; the transform
+   says how many of those bytes it takes, and a fixed size must be all
+   of them. In standard XTCE ``-1`` leaves nothing for later entries,
+   so such a value must be the packet's last. Yamcs reads ``-1`` as a
+   size that the algorithm finds, so entries may follow it; documents
+   written for Yamcs say so with the ``yamcs`` dialect (see Dialects,
+   below). Transformed values may be optional, repeated, array elements
+   or aggregate members.
+
+   On a container's ``BinaryEncoding``, its own entries (not a base
+   container's) are read from what the transform makes of its bytes,
+   and its ``SizeInBits`` is their size on the wire; an included
+   container needs one, while a packet's own container without one
+   takes the rest of the packet. A transformed container can't have an
+   ``IncludeCondition``, be repeated, or hold a length field, a
+   checksum or an entry located from the container's end.
+
+   Either way the transformed data starts on a byte boundary, and a
+   transform that makes more than fits fails with ``TooLong``, one that
+   can't (a function giving nothing) with ``InvalidValue``, and one that
+   takes or makes other than the size on the wire with ``BadSize``.
 
    A Rust or C transform puts what it makes in the room it is given and
    returns its size; when that doesn't fit, it writes nothing and returns
    the size it needs, and when it can't, it returns ``None`` or
-   ``XTCE_PK_NO_TRANSFORM``. Encoding transforms in the output buffer,
-   after what it writes, so ``MAX_BYTES`` counts that room: for a
-   container that takes the rest of the packet, the maximum field size,
-   which ``tcs-xtce.max-field-bytes`` can lower. Transformed data can't
-   have an ``IncludeCondition``, be in a repeated container, or hold a
-   length field, a checksum or an entry located from the container's
-   end. The demo's ``ZipBlock`` doubles every byte of its entries on the
-   wire, and its ``XorBlock`` has a ``XorBlob`` masked by XOR.
+   ``XTCE_PK_NO_TRANSFORM``. A decoding transform also says how many of
+   the bytes it was given it took. Encoding transforms in the output
+   buffer, after what it writes, so ``MAX_BYTES`` counts that room: for
+   data that takes the rest of the packet or whose size the transform
+   finds, the maximum field size, which ``tcs-xtce.max-field-bytes`` can
+   lower. The demo's ``ZipBlock`` doubles every byte of its entries on
+   the wire, its ``XorBlock`` has a ``XorBlob`` masked by XOR, and its
+   ``StuffBlock`` has bytes framed by their length, a time in
+   milliseconds and a delay in a varint, with entries after each.
+
+Dialects
+   Where XTCE leaves a meaning open and a ground system settles it, an
+   ``AncillaryData`` named ``tcs-xtce.dialect`` on a document's root
+   ``SpaceSystem`` says whose reading to follow. The one dialect is
+   ``yamcs``, which reads a transformed value's ``SizeInBits`` of ``-1``
+   as Yamcs does (see Transform algorithms):
+
+   .. code-block:: xml
+
+      <SpaceSystem name="Rover">
+        <AncillaryDataSet>
+          <AncillaryData name="tcs-xtce.dialect">yamcs</AncillaryData>
+        </AncillaryDataSet>
+        ...
+
+   As with ``tcs-xtce.max-field-bytes``, every root of a mission that
+   gives it must agree, and on any other ``SpaceSystem`` it is an error.
+   ``--dialect`` gives it for documents that can't be changed; a document
+   that gives one must agree with it.
 
 Custom algorithms
    A ``CustomAlgorithm`` names code that the document doesn't hold, so
@@ -2084,8 +2121,10 @@ Custom algorithms
      raised to at least that;
    * a ``Checksum`` named ``custom``, by its ``InputAlgorithm``: the
      value of the bits it covers;
-   * a ``FromBinaryTransformAlgorithm`` or ``ToBinaryTransformAlgorithm``:
-     the bytes it makes of the bytes given (see Transform algorithms).
+   * a ``FromBinaryTransformAlgorithm``: how many of the bytes given it
+     takes and the bytes, or for a time type the seconds, it makes of
+     them; a ``ToBinaryTransformAlgorithm``: the bytes it makes of the
+     bytes, or the seconds, given (see Transform algorithms).
 
    Inputs are the ``InputSet``'s values of the packet (integers, floats,
    enumerations and booleans, which must be present) and ``Constant``\ s,
@@ -2115,11 +2154,27 @@ Custom algorithms
         - ``fn(&[u8], usize, usize) -> u64``
         - ``uint64_t f(const uint8_t*, size_t, size_t)``
         - ``f(data, start, end) -> int``
-      * - transform
+      * - from binary
+        - ``fn(&[u8], &mut [u8]) -> Option<(usize, usize)>``, how many
+          it took and made
+        - ``size_t f(const uint8_t* in, size_t n, size_t* consumed,
+          uint8_t* out, size_t cap)``
+        - ``f(data) -> (taken, bytes) or None``
+      * - to binary
         - ``fn(&[u8], &mut [u8]) -> Option<usize>``
         - ``size_t f(const uint8_t* in, size_t n, uint8_t* out, size_t
           cap)``
         - ``f(data) -> bytes or None``
+      * - time from binary
+        - ``fn(&[u8]) -> Option<(usize, f64)>``, how many it took and
+          the seconds
+        - ``bool f(const uint8_t* in, size_t n, size_t* consumed,
+          double* s)``
+        - ``f(data) -> (taken, seconds) or None``
+      * - time to binary
+        - ``fn(f64, &mut [u8]) -> Option<usize>``
+        - ``size_t f(double s, uint8_t* out, size_t cap)``
+        - ``f(seconds) -> bytes or None``
 
    A checksum hook gets the packet's bytes and the range of bits, from
    ``start`` to ``end``; an algorithm hook returns false (or None) when it
@@ -2264,7 +2319,9 @@ Not supported
    ``IndirectParameterRefEntry`` chosen by an integer or string without
    an ``aliasNameSpace``, instances of values in other packets, repeated
    segment entries with an ``order`` or located from the end of their
-   container, the transformed data listed under Transform algorithms,
+   container, transformed containers with an ``IncludeCondition``, in a
+   repeated container, or holding a length field, a checksum or an entry
+   located from the end,
    ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates), least-significant-bit-first strings
    and binary data that may not start on a byte boundary, integers of
    more than 64 bits used other than as values (see "Integer encoding"),
