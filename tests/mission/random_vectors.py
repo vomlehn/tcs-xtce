@@ -478,7 +478,7 @@ def main() -> None:
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
             opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
-                                 12, 13, 13, 14, 15, 16, 17, 17, 18, 18,
+                                 12, 13, 13, 14, 15, 16, 17, 17, 18, 18, 19, 19,
                                  rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
@@ -515,6 +515,13 @@ def main() -> None:
                 if rng.random() < 0.3:
                     body = body[:4] + bytes([rng.randrange(256)])
                 data += body
+            elif opcode == 19 and rng.random() < 0.9:
+                # SetManyLimits: a count mostly 1 to 4, LimitKinds mostly 7.
+                n = rng.choice([1, 2, 4, rng.randrange(6)])
+                data += bytes([n])
+                for _ in range(min(n, 4)):
+                    data += bytes([rng.choice([7] * 9 + [rng.randrange(256)])])
+                    data += rng.randbytes(4)
             elif opcode == 18 and rng.random() < 0.9:
                 data += set_limits(rng)
             elif opcode == 17 and rng.random() < 0.9:

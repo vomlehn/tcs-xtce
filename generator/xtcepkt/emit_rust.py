@@ -321,9 +321,17 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
             lets = " ".join(f"let {a}{i} = {x};" for i, x in reads)
             pad = f" r.pad({e.pad}, {f})?;" if e.pad else ""
             fields = ", ".join(f"{i}: {a}{i}" for i, _ in reads)
-            return f"{{ {lets}{pad} {vt.ident} {{ {fields} }} }}"
-        agg = f"{vt.ident} {{ {', '.join(f'{i}: {x}' for i, x in reads)} }}"
-        return f"{{ let a = {agg}; r.pad({e.pad}, {f})?; a }}" if e.pad else agg
+            agg = f"{{ {lets}{pad} {vt.ident} {{ {fields} }} }}"
+        else:
+            agg = (f"{vt.ident} {{ {', '.join(f'{i}: {x}' for i, x in reads)} "
+                   "}")
+            if e.pad:
+                agg = f"{{ let a = {agg}; r.pad({e.pad}, {f})?; a }}"
+        if not e.checks:
+            return agg
+        # A repeated container's own criteria, on each copy.
+        c = f"c{depth}"
+        return f"{{ let {c} = {agg}; {checks(e, c)} {c} }}"
     if isinstance(e, ArrayEnc):
         gap = (f"if i > 0 {{ r.skip({gap_expr(e, ref, f)}, {f})?; }}" if e.gap
                else "")
@@ -425,6 +433,18 @@ def write_wide(vt: VType, x: str, f: str) -> str:
             f"&{raw}.to_le_bytes());")
 
 
+def checks(e: AggregateEnc, x: str) -> str:
+    """Statements failing with Mismatch unless aggregate ``x`` meets the
+    criteria of the repeated container it is a copy of."""
+    out = []
+    for r in e.checks:
+        cond = conjunction([term(t, lambda lc: x) for t in r.criteria])
+        out.append(f"if !({cond}) {{ return Err(PacketError::Mismatch {{ "
+                   f"container: {rstr(r.container)}, criterion: {rstr(r.text)} "
+                   "}); }")
+    return " ".join(out)
+
+
 def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     """Statement writing value ``x`` (a place or literal) with BitWriter ``w``;
     ``ref`` gives the expression for a value that gives a size or count.  A
@@ -462,7 +482,7 @@ def write_value_stmt(vt: VType, x: str, f: str, ref) -> str:
     if isinstance(e, AggregateEnc):
         inner = Ref(lambda d: f"{x}.{d.member}" if d.member else ref(d),
                     ref.place)
-        parts = []
+        parts = [checks(e, x)] if e.checks else []
         for m in e.members:
             if m.skip:
                 parts.append(f"w.zeros({m.skip});")

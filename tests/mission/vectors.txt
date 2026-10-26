@@ -201,3 +201,5 @@ tc 112ec002000b120107ffff000108fffe0002  # set limits: the second copy's LimitKi
 tm 0a3ac02a000902ab0111122220beef00  # tail: TailFlag 4 bits before TailData; TailSum a byte before the end
 tm 0a3ac02a0009010103333fffffcafe55  # tail: bytes before TailSum, which re-encoding leaves out
 tm 0a3ac02a0008030000001000200030  # tail: no room for TailSum after TailData
+tc 112ec003000b130207ffff000107006400c8  # set many limits: two copies of Limits' container
+tc 112ec003000b130207ffff000108006400c8  # set many limits: the second copy's LimitKind isn't 7

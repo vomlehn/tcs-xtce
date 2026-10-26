@@ -232,6 +232,13 @@ class AggregateEnc:
 
     members: list[Member]
     pad: int = 0
+    # Requires on the aggregate's own members (the argument assignments
+    # of a repeated meta-command container, the RestrictionCriteria of a
+    # container it includes): their Criteria are on ``this`` with the
+    # member's name first in their paths.  Decoding and encoding fail
+    # with Mismatch when one doesn't hold.
+    checks: list = field(default_factory=list)
+    this: Optional["Local"] = None
 
 
 Encoding = Union[IntEnc, FloatEnc, StringEnc, BinaryEnc, ArrayEnc, AggregateEnc]

@@ -485,6 +485,9 @@ class CEmitter:
             if e.pad:
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {e.pad}, {f}));",
                           depth)
+            for c in e.checks:
+                # A repeated container's own criteria, on each copy.
+                self.require(c, lambda lc: Acc(dst), "r->err", depth)
         elif isinstance(e, ArrayEnc):
             # Indexes are numbered by depth: an aggregate element may hold
             # another array.
@@ -692,6 +695,8 @@ class CEmitter:
         if isinstance(e, AggregateEnc):
             inner = Ref(lambda d: f"{x}.{d.member}" if d.member else ref(d),
                         ref.place)
+            for c in e.checks:
+                self.require(c, lambda lc: Acc(x), "w->err", depth)
             for m in e.members:
                 if m.skip:
                     self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {m.skip}));",

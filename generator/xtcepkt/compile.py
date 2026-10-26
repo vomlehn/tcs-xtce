@@ -1994,6 +1994,33 @@ class Compiler:
         # values outside it; ones from values inside are rejected below.
         items = self.tm_items(inc, cpath, stack + [ckey], m, [])
         items += self.size_pad(inc, items, m, where)
+        vt = self.aggregate_of(items, m, what, qname(ckey), inc.name)
+        self.ctypes[ckey] = vt
+        return vt
+
+    def mc_container_type(self, key: Key, where: str, stack: tuple) -> VType:
+        """container_type for the CommandContainer of meta-command ``key``,
+        with its arguments as members."""
+        ckey = ("meta-command",) + key
+        if ckey in self.ctypes:
+            return self.ctypes[ckey]
+        cc = self.mcs[key][1].command_container
+        what = f"{where}: repeated CommandContainer of {qname(key)}"
+        items = self.mc_include(key, where, [], stack)
+        m = items[0].id  # mc_include starts with its Mark
+        vt = self.aggregate_of(items, m, what, qname(key),
+                               cc.name if cc is not None else key[-1])
+        self.ctypes[ckey] = vt
+        return vt
+
+    @staticmethod
+    def aggregate_of(items: list, m: int, what: str, key: str,
+                     name: str) -> VType:
+        """The aggregate of a repeated container's items, which start at
+        mark ``m``."""
+        this = Local(0, name, key, None)
+        idents: dict = {}  # id(Local) -> member
+        checks: list = []
         members: list[Member] = []
         names = Namer()
         pos: Optional[int] = 0  # None once a value of varying size is passed
@@ -2003,8 +2030,18 @@ class Compiler:
             if isinstance(it, Cond):
                 raise Unsupported(f"{what} has an IncludeCondition")
             if isinstance(it, Require):
-                raise Unsupported(f"{what} includes a container with "
-                                  "RestrictionCriteria")
+                crit = []
+                for c in it.criteria:
+                    if (not isinstance(c, Criterion) or c.other is not None
+                            or id(c.local) not in idents):
+                        raise Unsupported(f"{what} has criteria on values "
+                                          "outside it")
+                    mem = idents[id(c.local)]
+                    crit.append(Criterion(this, c.op, c.value, c.text,
+                                          (mem.ident,) + tuple(c.path),
+                                          c.target or mem.vtype))
+                checks.append(Require(crit, it.container, it.text))
+                continue
             if isinstance(it, Fill):
                 raise Unsupported(f"{what} includes a container whose size "
                                   "varies")
@@ -2044,16 +2081,17 @@ class Compiler:
                 members.append(Member(it.local.name,
                                       names.take(snake(it.local.name)), vt,
                                       skip))
+                idents[id(it.local)] = members[-1]
                 skip = 0
                 bits = fixed_bits(vt)
                 pos = (pos + bits if pos is not None and bits is not None
                        else None)
         if not members:
             raise Unsupported(f"{what} has no entries")
-        vt = VType(key=qname(ckey), name=inc.name, kind="aggregate",
-                   enc=AggregateEnc(members, skip))
+        vt = VType(key=key, name=name, kind="aggregate",
+                   enc=AggregateEnc(members, skip, checks, this))
+        this.vtype = vt
         vt.doc = "one copy of a repeated container"
-        self.ctypes[ckey] = vt
         return vt
 
     def tm_node(self, key: Key) -> Node:
@@ -2577,10 +2615,16 @@ class Compiler:
                 out += self.indirect(e, path, values, where, arg_key)
             elif (ch.name == "ContainerRefEntry"
                   and (owner := self.mc_owner(e.container_ref, path))):
-                if e.repeat_entry is not None:
-                    raise Unsupported(f"{where}: a repeated CommandContainer "
-                                      f"of meta-command {qname(owner)}")
-                out += self.mc_include(owner, where, values, stack)
+                if e.repeat_entry is None:
+                    out += self.mc_include(owner, where, values, stack)
+                else:
+                    local = self.local(
+                        self.mcs[owner][1].command_container.name, qname(owner),
+                        self.mc_container_type(owner, where, stack))
+                    local = self.bind(self.repeat(local, e, path, where),
+                                      values, where, arg_key)
+                    out.append(Value(local))
+                    values.append(local)
             elif ch.name == "ContainerRefEntry":
                 ckey = self.resolve(e.container_ref, path, self.tc_containers,
                                     "container")

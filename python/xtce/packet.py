@@ -1982,6 +1982,14 @@ class FlagSync:
         self.run = 0
 
 
+def checked(value, ok, container: str, text: str):
+    """``value``, a copy of a repeated container, if ``ok(value)``; raises
+    Mismatch naming ``container`` and the criterion ``text`` otherwise."""
+    if not ok(value):
+        raise PacketError("Mismatch", container, text)
+    return value
+
+
 def need_hooks(hooks: dict, names: tuple) -> None:
     """Raises NoAlgorithm unless ``hooks`` has a function for each of
     ``names``."""

@@ -228,7 +228,14 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
                 x = f"(r.pad({m.skip}, {f}), {x})[1]"
             parts.append(f"{m.ident}={x}")
         agg = f"{vt.ident}({', '.join(parts)})"
-        return f"({agg}, r.pad({e.pad}, {f}))[0]" if e.pad else agg
+        agg = f"({agg}, r.pad({e.pad}, {f}))[0]" if e.pad else agg
+        for c in e.checks:
+            # A repeated container's own criteria, on each copy.
+            cond = " and ".join(f"({term(t, lambda lc: '_c')})"
+                                for t in c.criteria)
+            agg = (f"pk.checked({agg}, lambda _c: {cond}, {pstr(c.container)}, "
+                   f"{pstr(c.text)})")
+        return agg
     if isinstance(e, ArrayEnc):
         return (f"pk.read_list(r, {count(vt, ref, f)}, {gap_expr(e, ref, f)}, "
                 f"{f}, lambda: {read_expr(e.elem, f, ref, depth + 1)})")
@@ -718,6 +725,8 @@ class PythonEmitter:
         if isinstance(e, AggregateEnc):
             inner = Ref(lambda d: f"{x}.{d.member}" if d.member else ref(d),
                         ref.place)
+            for c in e.checks:
+                self.require(c, lambda lc: x, depth)
             for m in e.members:
                 if m.skip:
                     self.line(f"w.zeros({m.skip})", depth)

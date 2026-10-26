@@ -1881,8 +1881,11 @@ Commands
    ``Limits``' container, which extends ``LimitsBase``'s and assigns
    ``LimitKind`` 7, and a second copy when ``Both`` is true. A command
    still has at most one packet length field, so it can't include a whole
-   command with one of its own when it has one too, and such a container
-   can't be repeated.
+   command with one of its own when it has one too. Repeated, such a
+   container is an array of aggregates of its arguments, as a repeated
+   container is in telemetry, and its assignments are checked on each
+   copy: the demo's ``SetManyLimits`` sends ``LimitsCount`` copies of
+   ``Limits``' container, each with a ``LimitKind`` of 7.
 
 Segments
    ``ParameterSegmentRefEntry``, ``ContainerSegmentRefEntry`` and
@@ -2162,8 +2165,8 @@ Not supported
    than the first, ``IndirectParameterRefEntry`` chosen by an integer or
    string without an ``aliasNameSpace``, the stream constructs listed under
    Streams, instances of values in other packets, repeated segment entries
-   with an ``order`` or located from the end of their container, a
-   repeated container of a meta-command, an included command's packet
+   with an ``order`` or located from the end of their container, an
+   included command's packet
    length field in a command with one of its own, transform algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
    deprecates), calibrators inside aggregate types that use other values,
    least-significant-bit-first strings and binary data that may not start on

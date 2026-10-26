@@ -2308,8 +2308,11 @@ they are checked instead: decoding and encoding fail with
 <tt class="docutils literal">Limits</tt>' container, which extends <tt class="docutils literal">LimitsBase</tt>'s and assigns
 <tt class="docutils literal">LimitKind</tt> 7, and a second copy when <tt class="docutils literal">Both</tt> is true. A command
 still has at most one packet length field, so it can't include a whole
-command with one of its own when it has one too, and such a container
-can't be repeated.</p>
+command with one of its own when it has one too. Repeated, such a
+container is an array of aggregates of its arguments, as a repeated
+container is in telemetry, and its assignments are checked on each
+copy: the demo's <tt class="docutils literal">SetManyLimits</tt> sends <tt class="docutils literal">LimitsCount</tt> copies of
+<tt class="docutils literal">Limits</tt>' container, each with a <tt class="docutils literal">LimitKind</tt> of 7.</p>
 </dd>
 <dt>Segments</dt>
 <dd><p class="first"><tt class="docutils literal">ParameterSegmentRefEntry</tt>, <tt class="docutils literal">ContainerSegmentRefEntry</tt> and
@@ -2581,8 +2584,8 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer or
 string without an <tt class="docutils literal">aliasNameSpace</tt>, the stream constructs listed under
 Streams, instances of values in other packets, repeated segment entries
-with an <tt class="docutils literal">order</tt> or located from the end of their container, a
-repeated container of a meta-command, an included command's packet
+with an <tt class="docutils literal">order</tt> or located from the end of their container, an
+included command's packet
 length field in a command with one of its own, transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
 deprecates), calibrators inside aggregate types that use other values,
 least-significant-bit-first strings and binary data that may not start on

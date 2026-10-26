@@ -201,3 +201,5 @@ error:Mismatch | -
 Tail{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tail_flag=171, tail_data=[4369, 8738], tail_sum=48879} | 0a3ac02a000902ab0111122220beef00
 Tail{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, tail_flag=1, tail_data=[13107], tail_sum=51966} | 0a3ac02a00070101033330cafe00
 error:BadPosition | -
+SetManyLimits{seq_count=3, limits_container=[{limit_kind=7, lo=-1, hi=1}, {limit_kind=7, lo=100, hi=200}]} | 112ec003000b130207ffff000107006400c8
+error:Mismatch | -

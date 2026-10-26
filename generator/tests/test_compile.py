@@ -2203,7 +2203,11 @@ class CommandContainerSetTests(unittest.TestCase):
             shared_mission("", '<ContainerRefEntry containerRef="Body"/>'))
         self.assertEqual([lc.name for _, lc in n.fields], ["X", "K", "T"])
 
-    def test_includes_meta_command(self):
+    @staticmethod
+    def fragment_mission(entries: str) -> str:
+        """shared_mission with abstract meta-commands Base (argument Kind)
+        and Frag (extending it, assigning Kind 7, with argument Y), and C's
+        ``entries``."""
         frag = ('<MetaCommand name="Base" abstract="true"><ArgumentList>'
                 '<Argument name="Kind" argumentTypeRef="U8A"/></ArgumentList>'
                 '<CommandContainer name="BaseC"><EntryList><ArgumentRefEntry '
@@ -2217,17 +2221,34 @@ class CommandContainerSetTests(unittest.TestCase):
                 '<CommandContainer name="FragC"><EntryList><ArgumentRefEntry '
                 'argumentRef="Y"/></EntryList><BaseContainer '
                 'containerRef="BaseC"/></CommandContainer></MetaCommand>')
-        text = shared_mission("", '<ContainerRefEntry containerRef="FragC"/>')
+        text = shared_mission("", entries)
         text = text.replace("<MetaCommandSet>", "<MetaCommandSet>" + frag)
-        text = text.replace("</ArgumentTypeSet>",
+        return text.replace("</ArgumentTypeSet>",
                             '<IntegerArgumentType name="U8A" signed="false">'
                             '<IntegerDataEncoding sizeInBits="8"/>'
                             '</IntegerArgumentType></ArgumentTypeSet>')
-        n = self.node(text)
+
+    def test_includes_meta_command(self):
+        n = self.node(self.fragment_mission('<ContainerRefEntry '
+                                            'containerRef="FragC"/>'))
         # Kind is fixed by Frag's assignment; Y is a field.
         self.assertEqual([lc.name for _, lc in n.fields], ["X", "Y"])
         self.assertEqual([v for lc, v in n.fixed.items() if lc.name == "Kind"],
                          [7])
+
+    def test_repeats_meta_command(self):
+        text = self.fragment_mission('<ContainerRefEntry containerRef="FragC">'
+                                     '<RepeatEntry><Count><FixedValue>2'
+                                     '</FixedValue></Count></RepeatEntry>'
+                                     '</ContainerRefEntry>')
+        vt = self.node(text).fields[-1][1].vtype
+        agg = vt.elem.enc
+        self.assertEqual((vt.kind, [m.ident for m in agg.members]),
+                         ("array", ["kind", "y"]))
+        # Frag's assignment is checked on each copy.
+        (check,) = agg.checks
+        self.assertEqual(check.criteria[0].path, ("kind",))
+        self.assertEqual(check.criteria[0].value, 7)
 
     def test_rejected(self):
         meta = '<BaseMetaCommand metaCommandRef="B"/>'

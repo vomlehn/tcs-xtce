@@ -3089,6 +3089,34 @@
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>
       </MetaCommand>
+      <!-- LimitsCount copies of Limits' container; each LimitKind must be
+           7. -->
+      <MetaCommand name="SetManyLimits">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="19"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="LimitsCount" argumentTypeRef="WordCountType"/>
+        </ArgumentList>
+        <CommandContainer name="SetManyLimitsContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="LimitsCount"/>
+            <ContainerRefEntry containerRef="LimitsContainer">
+              <RepeatEntry>
+                <Count>
+                  <DynamicValue>
+                    <ArgumentInstanceRef argumentRef="LimitsCount"/>
+                  </DynamicValue>
+                </Count>
+              </RepeatEntry>
+            </ContainerRefEntry>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
     </MetaCommandSet>
     <CommandContainerSet>
       <CommandContainer name="Pair">
