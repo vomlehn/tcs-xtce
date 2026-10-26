@@ -16,6 +16,9 @@
 
 static demo_DownlinkStream downlink;
 static demo_UplinkStream uplink;
+static demo_DeepStream deep;
+static demo_BeaconStream beacon;
+static demo_RelayStream relay;
 static uint8_t input[65536];
 static int frames;
 
@@ -41,6 +44,9 @@ int main(int argc, char** argv) {
         }
         demo_DownlinkStream_init(&downlink);
         demo_UplinkStream_init(&uplink);
+        demo_DeepStream_init(&deep);
+        demo_BeaconStream_init(&beacon);
+        demo_RelayStream_init(&relay);
         while (fgets(line, sizeof line, in)) {
                 static char name[16], hex[sizeof line];
                 size_t n = 0, i;
@@ -58,6 +64,12 @@ int main(int argc, char** argv) {
                                                  NULL);
                 } else if (strcmp(name, "uplink") == 0) {
                         demo_UplinkStream_push(&uplink, input, n, take, NULL);
+                } else if (strcmp(name, "deep") == 0) {
+                        demo_DeepStream_push(&deep, input, n, take, NULL);
+                } else if (strcmp(name, "beacon") == 0) {
+                        demo_BeaconStream_push(&beacon, input, n, take, NULL);
+                } else if (strcmp(name, "relay") == 0) {
+                        demo_RelayStream_push(&relay, input, n, take, NULL);
                 } else {
                         fprintf(stderr, "unknown stream %s\n", name);
                         return 1;

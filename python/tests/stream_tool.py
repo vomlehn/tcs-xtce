@@ -17,7 +17,9 @@ import demo  # noqa: E402
 
 
 def main() -> None:
-    streams = {"downlink": demo.DownlinkStream(), "uplink": demo.UplinkStream()}
+    streams = {"downlink": demo.DownlinkStream(), "uplink": demo.UplinkStream(),
+               "deep": demo.DeepStream(), "beacon": demo.BeaconStream(),
+               "relay": demo.RelayStream()}
     for line in Path(sys.argv[1]).read_text().splitlines():
         line = line.split("#")[0].split()
         if line:

@@ -19,6 +19,9 @@ fn main() {
     let text = std::fs::read_to_string(path).expect("cannot read streams");
     let mut downlink = demo::DownlinkStream::new();
     let mut uplink = demo::UplinkStream::new();
+    let mut deep = demo::DeepStream::new();
+    let mut beacon = demo::BeaconStream::new();
+    let mut relay = demo::RelayStream::new();
     for line in text.lines() {
         let line = line.split('#').next().unwrap_or("");
         let mut words = line.split_whitespace();
@@ -34,6 +37,9 @@ fn main() {
         match name {
             "downlink" => downlink.push(&data, &mut take),
             "uplink" => uplink.push(&data, &mut take),
+            "deep" => deep.push(&data, &mut take),
+            "beacon" => beacon.push(&data, &mut take),
+            "relay" => relay.push(&data, &mut take),
             _ => panic!("unknown stream {name}"),
         }
         if frames.is_empty() {

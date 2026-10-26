@@ -2491,14 +2491,19 @@ then <tt class="docutils literal"><span class="pre">P_DownlinkStream_push(&amp;s
 <tt class="docutils literal">s.push(data)</tt> returns the frames. Neither allocates.</p>
 <p>Both read the bits most significant first, invert them when
 <tt class="docutils literal">inverted</tt> says to, and decode the <tt class="docutils literal">pcmType</tt>: <tt class="docutils literal">NRZL</tt> (the
-level is the bit), <tt class="docutils literal">NRZM</tt> (a one is a change of level) or <tt class="docutils literal">NRZS</tt>
-(a zero is).</p>
+level is the bit), <tt class="docutils literal">NRZM</tt> (a one is a change of level), <tt class="docutils literal">NRZS</tt>
+(a zero is), or a bi-phase code, in which each bit is two half bits:
+<tt class="docutils literal">BiPhaseL</tt> (Manchester: a one is high then low, a zero low then
+high), <tt class="docutils literal">BiPhaseM</tt> (every bit starts with a change of level, and a
+one has another in mid bit) or <tt class="docutils literal">BiPhaseS</tt> (a zero has). A bi-phase
+stream must start on the first half of a bit.</p>
 <p>A fixed stream finds its frames by the <tt class="docutils literal">SyncPattern</tt>
 (<tt class="docutils literal">patternLengthInBits</tt> of <tt class="docutils literal">pattern</tt>, and of <tt class="docutils literal">mask</tt> when given,
 both truncated from the left; bits of the pattern that a shorter mask
 doesn't reach are compared), at <tt class="docutils literal">bitLocationFromStartOfContainer</tt>
 in each <tt class="docutils literal">frameLengthInBits</tt> frame, with up to
-<tt class="docutils literal">maxBitErrorsInSyncPattern</tt> bits wrong. It works as the schema
+<tt class="docutils literal">maxBitErrorsInSyncPattern</tt> bits wrong. The pattern may have any
+length. It works as the schema
 says: in Search it looks for the pattern at every bit; in Verify it
 needs <tt class="docutils literal">verifyToLockGoodFrames</tt> frames in a row whose patterns are
 one frame apart, give or take <tt class="docutils literal">syncApertureInBits</tt>, and then locks;
@@ -2508,7 +2513,9 @@ patterns in a row lock it again (the missed frame isn't given) and a
 missed one sends it back to Search. With <tt class="docutils literal">AutoInvert</tt>, searching
 <tt class="docutils literal">badFramesToAutoInvert</tt> frames' worth of bits in vain inverts the
 bits. The demo's <tt class="docutils literal">Downlink</tt> has 128-bit frames led by the CCSDS
-sync marker.</p>
+sync marker; <tt class="docutils literal">Deep</tt> has Bi-phase-L frames led by an 80-bit pattern
+with a byte masked out, and <tt class="docutils literal">Beacon</tt> inverted Bi-phase-S frames led
+by a 72-bit one.</p>
 <p>A variable stream's frames lie between flags of <tt class="docutils literal">flagSizeInBits</tt>
 ones (or zeros), with a bit of the other kind on either side, as
 HDLC's are with six ones: the bit of the other kind stuffed after
@@ -2517,13 +2524,13 @@ row abort the frame, as does a frame larger than the container's
 largest packet; frames are found again from the next flag. A
 variable stream has no sync states, so its <tt class="docutils literal">SyncStrategy</tt>'s other
 settings don't apply. The demo's <tt class="docutils literal">Uplink</tt> carries CCSDS packets
-between flags, NRZ-M coded.</p>
+between flags, NRZ-M coded, and <tt class="docutils literal">Relay</tt> Bi-phase-M coded.</p>
 <p class="last"><tt class="docutils literal">tests/stream_check.sh</tt> checks that every runtime finds the same
 frames, in <tt class="docutils literal">tests/mission/streams.txt</tt> and in random streams with
 slips, bit errors, inversions and aborts. Not supported: a
-<tt class="docutils literal">StreamRef</tt> from a stream it connects to, a <tt class="docutils literal">CustomStream</tt>, an <tt class="docutils literal">InvertAlgorithm</tt>, the biphase <tt class="docutils literal">pcmType</tt>s,
-sync patterns longer than 64 bits, and a <tt class="docutils literal">syncApertureInBits</tt> of
-half a frame or more.</p>
+<tt class="docutils literal">StreamRef</tt> from a stream it connects to, a <tt class="docutils literal">CustomStream</tt>, an
+<tt class="docutils literal">InvertAlgorithm</tt>, and a <tt class="docutils literal">syncApertureInBits</tt> of half a frame or
+more.</p>
 </dd>
 <dt>Messages</dt>
 <dd>A <tt class="docutils literal">MessageSet</tt>'s <tt class="docutils literal">Message</tt> picks out its container by its

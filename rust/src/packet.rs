@@ -3166,6 +3166,13 @@ pub enum Pcm {
     Nrzm,
     /// A zero is a change of level.
     Nrzs,
+    /// Bi-phase-L (Manchester): each bit is two half bits, a one high then
+    /// low and a zero low then high; the first half is the bit.
+    BiphaseL,
+    /// Bi-phase-M: a one has a change of level in mid bit.
+    BiphaseM,
+    /// Bi-phase-S: a zero has a change of level in mid bit.
+    BiphaseS,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -3173,6 +3180,8 @@ struct LineDecoder {
     pcm: Pcm,
     inverted: bool,
     prev: u8,
+    // The first half of a bi-phase bit, once read.
+    half: Option<u8>,
 }
 
 impl LineDecoder {
@@ -3181,18 +3190,32 @@ impl LineDecoder {
             pcm,
             inverted,
             prev: 0,
+            half: None,
         }
     }
 
-    fn decode(&mut self, raw: u8) -> u8 {
+    /// The data bit that the level `raw` completes, if any: a bi-phase
+    /// bit takes two levels, the stream starting on a bit's first half.
+    fn decode(&mut self, raw: u8) -> Option<u8> {
         let level = raw ^ u8::from(self.inverted);
         let bit = match self.pcm {
             Pcm::Nrzl => level,
             Pcm::Nrzm => level ^ self.prev,
             Pcm::Nrzs => 1 ^ level ^ self.prev,
+            _ => {
+                let Some(first) = self.half.take() else {
+                    self.half = Some(level);
+                    return None;
+                };
+                match self.pcm {
+                    Pcm::BiphaseL => first,
+                    Pcm::BiphaseM => first ^ level,
+                    _ => 1 ^ first ^ level,
+                }
+            }
         };
         self.prev = level;
-        bit
+        Some(bit)
     }
 }
 
@@ -3214,8 +3237,10 @@ fn pack_bits(bits: impl Iterator<Item = u8>, out: &mut [u8]) -> usize {
 #[derive(Debug, Clone, Copy)]
 pub struct FrameSpec {
     pub frame_bits: usize,
-    pub pattern: u64,
-    pub mask: u64,
+    /// The sync pattern's `pattern_bits` bits, right-aligned in bytes, most
+    /// significant first; and the mask of the bits compared.
+    pub pattern: &'static [u8],
+    pub mask: &'static [u8],
     pub pattern_bits: u32,
     pub location: usize,
     pub max_errors: u32,
@@ -3287,7 +3312,9 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
     pub fn push(&mut self, data: &[u8], mut f: impl FnMut(&[u8])) {
         for &byte in data {
             for k in (0..8).rev() {
-                let b = self.line.decode((byte >> k) & 1);
+                let Some(b) = self.line.decode((byte >> k) & 1) else {
+                    continue;
+                };
                 if self.len == BITS {
                     // Never, with the capacity the generator gives; start
                     // again rather than overrun.
@@ -3311,11 +3338,13 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
         let n = self.spec.pattern_bits;
         let at = s + self.spec.location;
         let mut errors = 0;
+        // Bit k (0 the least significant) of right-aligned bytes.
+        let get =
+            |b: &[u8], k: u32| (b[b.len() - 1 - k as usize / 8] >> (k % 8)) & 1;
         for j in 0..n {
             let shift = n - 1 - j;
-            if (self.spec.mask >> shift) & 1 == 1
-                && u64::from(self.bit(at + j as usize))
-                    != (self.spec.pattern >> shift) & 1
+            if get(self.spec.mask, shift) == 1
+                && self.bit(at + j as usize) != get(self.spec.pattern, shift)
             {
                 errors += 1;
                 if errors > self.spec.max_errors {
@@ -3476,8 +3505,9 @@ impl<const BITS: usize, const BYTES: usize> FlagSync<BITS, BYTES> {
     pub fn push(&mut self, data: &[u8], mut f: impl FnMut(&[u8])) {
         for &byte in data {
             for k in (0..8).rev() {
-                let b = self.line.decode((byte >> k) & 1);
-                self.bit(b, &mut f);
+                if let Some(b) = self.line.decode((byte >> k) & 1) {
+                    self.bit(b, &mut f);
+                }
             }
         }
     }

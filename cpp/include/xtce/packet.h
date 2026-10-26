@@ -3035,23 +3035,55 @@ static inline void xtce_pk_text_bytes(xtce_pk_text* t, const uint8_t* b,
  */
 
 /* How a PCM stream's levels become data bits: the level is the bit
- * (NRZL), a one is a change of level (NRZM), or a zero is (NRZS). */
-enum { XTCE_PK_NRZL, XTCE_PK_NRZM, XTCE_PK_NRZS };
+ * (NRZL), a one is a change of level (NRZM), or a zero is (NRZS).  In the
+ * bi-phase codes each bit is two half bits: in BIPHASE_L (Manchester) a
+ * one is high then low and a zero low then high, so the first half is the
+ * bit; in BIPHASE_M a one has a change of level in mid bit, and in
+ * BIPHASE_S a zero does. */
+enum {
+        XTCE_PK_NRZL,
+        XTCE_PK_NRZM,
+        XTCE_PK_NRZS,
+        XTCE_PK_BIPHASE_L,
+        XTCE_PK_BIPHASE_M,
+        XTCE_PK_BIPHASE_S
+};
+
+/* What xtce_pk_line_decode gives for the first half of a bi-phase bit. */
+#define XTCE_PK_NO_BIT 2
 
 typedef struct xtce_pk_line {
         int pcm;
         bool inverted;
         uint8_t prev;
+        uint8_t half; /* a bi-phase bit's first half, or XTCE_PK_NO_BIT */
 } xtce_pk_line;
 
+/* The data bit that the level `raw` completes, or XTCE_PK_NO_BIT: a
+ * bi-phase bit takes two levels, the stream starting on a bit's first
+ * half. */
 static inline uint8_t xtce_pk_line_decode(xtce_pk_line* l, uint8_t raw) {
         uint8_t level = (uint8_t)(raw ^ (l->inverted ? 1 : 0)), bit;
-        if (l->pcm == XTCE_PK_NRZM)
+        if (l->pcm >= XTCE_PK_BIPHASE_L) {
+                uint8_t first = l->half;
+                if (first == XTCE_PK_NO_BIT) {
+                        l->half = level;
+                        return XTCE_PK_NO_BIT;
+                }
+                l->half = XTCE_PK_NO_BIT;
+                if (l->pcm == XTCE_PK_BIPHASE_L)
+                        bit = first;
+                else if (l->pcm == XTCE_PK_BIPHASE_M)
+                        bit = (uint8_t)(first ^ level);
+                else
+                        bit = (uint8_t)(1 ^ first ^ level);
+        } else if (l->pcm == XTCE_PK_NRZM) {
                 bit = (uint8_t)(level ^ l->prev);
-        else if (l->pcm == XTCE_PK_NRZS)
+        } else if (l->pcm == XTCE_PK_NRZS) {
                 bit = (uint8_t)(1 ^ level ^ l->prev);
-        else
+        } else {
                 bit = level;
+        }
         l->prev = level;
         return bit;
 }
@@ -3063,8 +3095,10 @@ typedef void (*xtce_pk_frame_fn)(void* ctx, const uint8_t* frame, size_t len);
 /* The parameters of a FixedFrameStream; see xtce_pk_frame_sync. */
 typedef struct xtce_pk_frame_spec {
         size_t frame_bits;
-        uint64_t pattern;
-        uint64_t mask;
+        /* The sync pattern's `pattern_bits` bits, right-aligned in bytes,
+         * most significant first; and the mask of the bits compared. */
+        const uint8_t* pattern;
+        const uint8_t* mask;
         unsigned pattern_bits;
         size_t location;
         unsigned max_errors;
@@ -3115,6 +3149,7 @@ static inline void xtce_pk_frame_sync_init(xtce_pk_frame_sync* s,
         s->spec = spec;
         s->line.pcm = spec->pcm;
         s->line.inverted = spec->inverted;
+        s->line.half = XTCE_PK_NO_BIT;
         s->bits = bits;
         s->cap = cap;
         s->frame = frame;
@@ -3129,13 +3164,14 @@ static inline uint8_t xtce_pk_frame_bit(const xtce_pk_frame_sync* s,
 static inline bool xtce_pk_frame_matches(const xtce_pk_frame_sync* s,
                                          size_t at) {
         const xtce_pk_frame_spec* sp = s->spec;
-        unsigned n = sp->pattern_bits, j, errors = 0;
+        unsigned n = sp->pattern_bits, last = (n + 7) / 8 - 1, j, errors = 0;
         at += sp->location;
         for (j = 0; j < n; ++j) {
                 unsigned shift = n - 1 - j;
-                uint64_t want = (sp->pattern >> shift) & 1;
-                if (((sp->mask >> shift) & 1) &&
-                    xtce_pk_frame_bit(s, at + j) != want)
+                unsigned byte = last - shift / 8, bit = shift % 8;
+                unsigned want = (sp->pattern[byte] >> bit) & 1;
+                if (((sp->mask[byte] >> bit) & 1) &&
+                    (unsigned)xtce_pk_frame_bit(s, at + j) != want)
                         if (++errors > sp->max_errors) return false;
         }
         return true;
@@ -3232,6 +3268,7 @@ static inline void xtce_pk_frame_sync_push(xtce_pk_frame_sync* s,
                 for (k = 7; k >= 0; --k) {
                         uint8_t b = xtce_pk_line_decode(
                                 &s->line, (uint8_t)((data[i] >> k) & 1));
+                        if (b == XTCE_PK_NO_BIT) continue;
                         if (s->len == s->cap) {
                                 /* Never, with the capacity the generator
                                  * gives; start again rather than overrun. */
@@ -3282,6 +3319,7 @@ static inline void xtce_pk_flag_sync_init(xtce_pk_flag_sync* s,
         s->spec = spec;
         s->line.pcm = spec->pcm;
         s->line.inverted = spec->inverted;
+        s->line.half = XTCE_PK_NO_BIT;
         s->bits = bits;
         s->cap = cap;
         s->frame = frame;
@@ -3338,13 +3376,13 @@ static inline void xtce_pk_flag_sync_push(xtce_pk_flag_sync* s,
                                           xtce_pk_frame_fn f, void* ctx) {
         size_t i;
         int k;
-        for (i = 0; i < len; ++i)
-                for (k = 7; k >= 0; --k)
-                        xtce_pk_flag_bit(s,
-                                         xtce_pk_line_decode(
-                                                 &s->line,
-                                                 (uint8_t)((data[i] >> k) & 1)),
-                                         f, ctx);
+        for (i = 0; i < len; ++i) {
+                for (k = 7; k >= 0; --k) {
+                        uint8_t b = xtce_pk_line_decode(
+                                &s->line, (uint8_t)((data[i] >> k) & 1));
+                        if (b != XTCE_PK_NO_BIT) xtce_pk_flag_bit(s, b, f, ctx);
+                }
+        }
 }
 
 /* --- batches -----------------------------------------------------------------

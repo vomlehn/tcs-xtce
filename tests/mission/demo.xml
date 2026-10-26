@@ -2275,6 +2275,33 @@
           <Flag flagSizeInBits="6" flagBitType="ones"/>
         </SyncStrategy>
       </VariableFrameStream>
+      <!-- 160-bit frames, Bi-phase-L (Manchester) coded, found by an 80-bit
+           pattern whose ninth byte isn't compared, with two bits wrong
+           allowed and two bits of slip. -->
+      <FixedFrameStream name="Deep" frameLengthInBits="160"
+        syncApertureInBits="2" pcmType="BiPhaseL">
+        <ContainerRef containerRef="DlFrame"/>
+        <SyncStrategy verifyToLockGoodFrames="2" maxBitErrorsInSyncPattern="2">
+          <SyncPattern pattern="FAF320034ACFFC1D5A5A"
+            mask="FFFFFFFFFFFFFFFF00FF" patternLengthInBits="80"/>
+        </SyncStrategy>
+      </FixedFrameStream>
+      <!-- 128-bit frames, Bi-phase-S coded and inverted, found by a 72-bit
+           pattern. -->
+      <FixedFrameStream name="Beacon" frameLengthInBits="128"
+        pcmType="BiPhaseS" inverted="true">
+        <ContainerRef containerRef="DlFrame"/>
+        <SyncStrategy verifyToLockGoodFrames="1">
+          <SyncPattern pattern="C3A55A3CF00FF0E1D2" patternLengthInBits="72"/>
+        </SyncStrategy>
+      </FixedFrameStream>
+      <!-- CCSDS packets between HDLC flags, Bi-phase-M coded. -->
+      <VariableFrameStream name="Relay" pcmType="BiPhaseM">
+        <ContainerRef containerRef="CCSDSPacket"/>
+        <SyncStrategy>
+          <Flag flagSizeInBits="6" flagBitType="ones"/>
+        </SyncStrategy>
+      </VariableFrameStream>
     </StreamSet>
     <AlgorithmSet>
       <MathAlgorithm name="SpeedToKph">

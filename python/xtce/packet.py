@@ -1736,13 +1736,28 @@ class AlarmState:
 
 
 def _line_decoder(pcm: str, inverted: bool):
-    """A function turning the bits of a PCM stream (``pcm`` NRZL, NRZM or
-    NRZS, inverted when ``inverted``) into data bits."""
+    """A function turning the levels of a PCM stream (``pcm`` NRZL, NRZM,
+    NRZS, BiPhaseL, BiPhaseM or BiPhaseS, inverted when ``inverted``) into
+    data bits: the bit each level completes, or None for the first half of
+    a bi-phase bit, the stream starting on one."""
     prev = [0]
+    half = [None]
 
-    def decode(raw: int) -> int:
+    def decode(raw: int):
         level = raw ^ inverted
-        if pcm == "NRZM":  # a one is a change of level
+        if pcm.startswith("BiPhase"):
+            first = half[0]
+            if first is None:
+                half[0] = level
+                return None
+            half[0] = None
+            if pcm == "BiPhaseL":  # high then low is a one
+                bit = first
+            elif pcm == "BiPhaseM":  # a one changes level in mid bit
+                bit = first ^ level
+            else:  # a zero does
+                bit = 1 ^ first ^ level
+        elif pcm == "NRZM":  # a one is a change of level
             bit = level ^ prev[0]
         elif pcm == "NRZS":  # a zero is a change of level
             bit = 1 ^ level ^ prev[0]
@@ -1808,7 +1823,9 @@ class FrameSync:
         frames: list = []
         for byte in data:
             for k in range(7, -1, -1):
-                self.bits.append(self.decode((byte >> k) & 1))
+                b = self.decode((byte >> k) & 1)
+                if b is not None:
+                    self.bits.append(b)
             self._run(frames)
         return frames
 
@@ -1910,7 +1927,9 @@ class FlagSync:
         frames: list = []
         for byte in data:
             for k in range(7, -1, -1):
-                self._bit(self.decode((byte >> k) & 1), frames)
+                b = self.decode((byte >> k) & 1)
+                if b is not None:
+                    self._bit(b, frames)
         return frames
 
     def _bit(self, b: int, frames: list) -> None:

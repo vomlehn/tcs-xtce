@@ -2064,15 +2064,20 @@ Streams
 
    Both read the bits most significant first, invert them when
    ``inverted`` says to, and decode the ``pcmType``: ``NRZL`` (the
-   level is the bit), ``NRZM`` (a one is a change of level) or ``NRZS``
-   (a zero is).
+   level is the bit), ``NRZM`` (a one is a change of level), ``NRZS``
+   (a zero is), or a bi-phase code, in which each bit is two half bits:
+   ``BiPhaseL`` (Manchester: a one is high then low, a zero low then
+   high), ``BiPhaseM`` (every bit starts with a change of level, and a
+   one has another in mid bit) or ``BiPhaseS`` (a zero has). A bi-phase
+   stream must start on the first half of a bit.
 
    A fixed stream finds its frames by the ``SyncPattern``
    (``patternLengthInBits`` of ``pattern``, and of ``mask`` when given,
    both truncated from the left; bits of the pattern that a shorter mask
    doesn't reach are compared), at ``bitLocationFromStartOfContainer``
    in each ``frameLengthInBits`` frame, with up to
-   ``maxBitErrorsInSyncPattern`` bits wrong. It works as the schema
+   ``maxBitErrorsInSyncPattern`` bits wrong. The pattern may have any
+   length. It works as the schema
    says: in Search it looks for the pattern at every bit; in Verify it
    needs ``verifyToLockGoodFrames`` frames in a row whose patterns are
    one frame apart, give or take ``syncApertureInBits``, and then locks;
@@ -2082,7 +2087,9 @@ Streams
    missed one sends it back to Search. With ``AutoInvert``, searching
    ``badFramesToAutoInvert`` frames' worth of bits in vain inverts the
    bits. The demo's ``Downlink`` has 128-bit frames led by the CCSDS
-   sync marker.
+   sync marker; ``Deep`` has Bi-phase-L frames led by an 80-bit pattern
+   with a byte masked out, and ``Beacon`` inverted Bi-phase-S frames led
+   by a 72-bit one.
 
    A variable stream's frames lie between flags of ``flagSizeInBits``
    ones (or zeros), with a bit of the other kind on either side, as
@@ -2092,14 +2099,14 @@ Streams
    largest packet; frames are found again from the next flag. A
    variable stream has no sync states, so its ``SyncStrategy``'s other
    settings don't apply. The demo's ``Uplink`` carries CCSDS packets
-   between flags, NRZ-M coded.
+   between flags, NRZ-M coded, and ``Relay`` Bi-phase-M coded.
 
    ``tests/stream_check.sh`` checks that every runtime finds the same
    frames, in ``tests/mission/streams.txt`` and in random streams with
    slips, bit errors, inversions and aborts. Not supported: a
-   ``StreamRef`` from a stream it connects to, a ``CustomStream``, an ``InvertAlgorithm``, the biphase ``pcmType``\ s,
-   sync patterns longer than 64 bits, and a ``syncApertureInBits`` of
-   half a frame or more.
+   ``StreamRef`` from a stream it connects to, a ``CustomStream``, an
+   ``InvertAlgorithm``, and a ``syncApertureInBits`` of half a frame or
+   more.
 
 Messages
    A ``MessageSet``'s ``Message`` picks out its container by its

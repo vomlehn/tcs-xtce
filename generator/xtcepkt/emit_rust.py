@@ -54,6 +54,12 @@ def field_type(vt: VType, alloc: bool, optional: bool = False) -> str:
     return {"float": "f64", "bool": "bool"}.get(k) or vt.ident
 
 
+def byte_slice(v: int, bits: int) -> str:
+    """The bytes of ``v``, of ``bits`` bits, most significant first."""
+    b = v.to_bytes((bits + 7) // 8, "big")
+    return "&[" + ", ".join(f"0x{x:02x}" for x in b) + "]"
+
+
 def rflt(x: float) -> str:
     """An f64 literal, infinities included."""
     if math.isinf(x):
@@ -702,7 +708,9 @@ class RustEmitter:
     def stream(self, st) -> None:
         bits, size = stream_capacity(st)
         sync = "FrameSync" if st.fixed else "FlagSync"
-        pcm = {"NRZL": "Nrzl", "NRZM": "Nrzm", "NRZS": "Nrzs"}[st.pcm]
+        pcm = {"NRZL": "Nrzl", "NRZM": "Nrzm", "NRZS": "Nrzs",
+               "BiPhaseL": "BiphaseL", "BiPhaseM": "BiphaseM",
+               "BiPhaseS": "BiphaseS"}[st.pcm]
         self.line()
         doc = stream_doc(st).replace(st.key,
                                      f"`{st.key}`").replace(st.container,
@@ -724,14 +732,15 @@ class RustEmitter:
                   1)
         if st.fixed:
             self.line("pub const SPEC: pk::FrameSpec = pk::FrameSpec {", 1)
-            fields = (
-                ("frame_bits", st.frame_bits), ("pattern", f"0x{st.pattern:x}"),
-                ("mask", f"0x{st.mask:x}"), ("pattern_bits", st.pattern_bits),
-                ("location", st.location), ("max_errors", st.max_errors),
-                ("aperture", st.aperture), ("verify", st.verify),
-                ("check", st.check), ("invert_after", st.invert_after),
-                ("pcm", f"pk::Pcm::{pcm}"),
-                ("inverted", str(st.inverted).lower()))
+            fields = (("frame_bits", st.frame_bits),
+                      ("pattern", byte_slice(st.pattern, st.pattern_bits)),
+                      ("mask", byte_slice(st.mask, st.pattern_bits)),
+                      ("pattern_bits", st.pattern_bits),
+                      ("location", st.location), ("max_errors", st.max_errors),
+                      ("aperture", st.aperture), ("verify", st.verify),
+                      ("check", st.check), ("invert_after", st.invert_after),
+                      ("pcm", f"pk::Pcm::{pcm}"),
+                      ("inverted", str(st.inverted).lower()))
         else:
             self.line("pub const SPEC: pk::FlagSpec = pk::FlagSpec {", 1)
             fields = (("flag_bits", st.flag_bits),

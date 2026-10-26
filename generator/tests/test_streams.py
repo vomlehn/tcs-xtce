@@ -20,8 +20,10 @@ def stream_mission(stream: str) -> str:
         <StreamSet>{stream}</StreamSet>""")
 
 
-def fixed(pattern: str, extra: str = "", attrs: str = "") -> str:
-    return f"""<FixedFrameStream name="S" frameLengthInBits="64" {attrs}>
+def fixed(pattern: str, extra: str = "", attrs: str = "",
+          frame_bits: int = 64) -> str:
+    return f"""<FixedFrameStream name="S" frameLengthInBits="{frame_bits}"
+        {attrs}>
         <ContainerRef containerRef="F"/>
         <SyncStrategy>{extra}<SyncPattern {pattern}/></SyncStrategy>
         </FixedFrameStream>"""
@@ -68,16 +70,24 @@ class StreamTests(unittest.TestCase):
         self.assertEqual((st.container, st.service, st.max_bits),
                          ("/Sat/Svc", ["/Sat/F"], 8))
 
+    def test_biphase_and_long_patterns(self):
+        for pcm in ("BiPhaseL", "BiPhaseM", "BiPhaseS"):
+            with self.subTest(pcm=pcm):
+                m = compile_xml(
+                    stream_mission(fixed('pattern="FAF320034ACFFC1D5A5A" '
+                                         'patternLengthInBits="80"', "",
+                                         f'pcmType="{pcm}"', 160)))
+                st = m.streams[0]
+                self.assertEqual((st.pcm, st.pattern_bits), (pcm, 80))
+                self.assertEqual(st.pattern, 0xFAF320034ACFFC1D5A5A)
+
     def test_unsupported(self):
-        for stream, why in (
-                (fixed('pattern="1ACF" patternLengthInBits="16"', "",
-                       'pcmType="BiPhaseL"'), "pcmType BiPhaseL"),
-                (fixed('pattern="1ACF" patternLengthInBits="16" '
-                       'bitLocationFromStartOfContainer="50"'),
-                 "a sync pattern outside the frame"),
-                (fixed('pattern="1ACF" patternLengthInBits="16"', "",
-                       'syncApertureInBits="32"'),
-                 "a sync aperture of half a frame or more")):
+        for stream, why in ((fixed('pattern="1ACF" patternLengthInBits="16" '
+                                   'bitLocationFromStartOfContainer="50"'),
+                             "a sync pattern outside the frame"),
+                            (fixed('pattern="1ACF" patternLengthInBits="16"',
+                                   "", 'syncApertureInBits="32"'),
+                             "a sync aperture of half a frame or more")):
             with self.subTest(why=why):
                 m = compile_xml(stream_mission(stream), skip_unsupported=True)
                 self.assertEqual(m.streams, [])

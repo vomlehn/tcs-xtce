@@ -10,6 +10,8 @@ import random
 import sys
 
 ASM = [int(b) for b in f"{0x1ACFFC1D:032b}"]
+DEEP = [int(b) for b in f"{0xFAF320034ACFFC1D5A5A:080b}"]
+BEACON = [int(b) for b in f"{0xC3A55A3CF00FF0E1D2:072b}"]
 
 
 def bits_of(data: bytes) -> list:
@@ -45,6 +47,47 @@ def downlink(rng) -> list:
     return out
 
 
+def fixed_frames(rng, sync: list, frame_bits: int, unmasked=()) -> list:
+    """Bits of frames led by ``sync``, whose bits at ``unmasked`` aren't
+    compared, with bit errors, slips and noise."""
+    out = [rng.randrange(2) for _ in range(rng.randrange(200))]
+    for count in range(rng.randrange(1, 20)):
+        frame = (sync
+                 + bits_of(bytes([count & 255])
+                           + rng.randbytes((frame_bits - len(sync)) // 8 - 1)))
+        for i in unmasked:
+            frame[i] = rng.randrange(2)
+        r = rng.random()
+        if r < 0.1:
+            for _ in range(rng.choice([1, 2, 3])):
+                frame[rng.randrange(len(sync))] ^= 1
+        elif r < 0.15:
+            for _ in range(rng.choice([1, 2, 3])):
+                if rng.random() < 0.5:
+                    out.append(rng.randrange(2))
+                elif out:
+                    out.pop()
+        elif r < 0.18:
+            frame = [rng.randrange(2) for _ in frame]
+        out += frame
+    return out
+
+
+def biphase(bits: list, code: str) -> list:
+    """Bi-phase-L, -M or -S levels for ``bits``, two a bit."""
+    out, level = [], 0
+    for b in bits:
+        if code == "L":
+            out += [b, 1 - b]
+            continue
+        level ^= 1  # every bit starts with a change of level
+        first = level
+        if b == (code == "M"):
+            level ^= 1  # and a one (M) or zero (S) changes in mid bit
+        out += [first, level]
+    return out
+
+
 def stuff(bits: list) -> list:
     out, run = [], 0
     for b in bits:
@@ -64,7 +107,8 @@ def nrzm(bits: list, level: int = 0) -> list:
     return out
 
 
-def uplink(rng) -> list:
+def hdlc(rng) -> list:
+    """Bits of HDLC frames among noise, with aborts."""
     flag = [0, 1, 1, 1, 1, 1, 1, 0]
     out = [rng.randrange(2) for _ in range(rng.randrange(40))]
     for _ in range(rng.randrange(1, 8)):
@@ -74,14 +118,31 @@ def uplink(rng) -> list:
             body[rng.randrange(len(body)):] = [1] * 7
         out += body
     out += flag
-    return nrzm(out)
+    return out
+
+
+def uplink(rng) -> list:
+    return nrzm(hdlc(rng))
+
+
+def deep(rng) -> list:
+    return biphase(fixed_frames(rng, DEEP, 160, range(64, 72)), "L")
+
+
+def beacon(rng) -> list:
+    return [1 - b for b in biphase(fixed_frames(rng, BEACON, 128), "S")]
+
+
+def relay(rng) -> list:
+    return biphase(hdlc(rng), "M")
 
 
 def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
-        name = rng.choice(["downlink", "uplink"])
-        bits = downlink(rng) if name == "downlink" else uplink(rng)
+        name = rng.choice(["downlink", "uplink", "deep", "beacon", "relay"])
+        bits = {"downlink": downlink, "uplink": uplink, "deep": deep,
+                "beacon": beacon, "relay": relay}[name](rng)
         hexes = to_hex(bits)
         at = 0
         while at < len(hexes):

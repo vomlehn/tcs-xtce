@@ -617,6 +617,12 @@ zeros: a flag is the run of flag bits ended by a bit of the other kind,
 the frame is what came before it less the flag's leading bit, and a bit
 of the other kind after one fewer than a flag's run is a stuffed bit.
 
+Both take bits from a line decoder, which turns levels into data bits
+before anything else sees them; a bi-phase decoder gives a bit for every
+second level, pairing them from the start of the stream, since nothing
+in XTCE says where a bit's halves begin. Sync patterns are bytes, so they
+can be any length; the matcher already compared them a bit at a time.
+
 Times
 -----
 

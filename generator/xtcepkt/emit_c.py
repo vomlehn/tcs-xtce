@@ -1754,7 +1754,7 @@ class CEmitter:
         t = self.p + st.ident
         bits, size = stream_capacity(st)
         sync = "frame" if st.fixed else "flag"
-        pcm = f"XTCE_PK_{st.pcm}"
+        pcm = "XTCE_PK_" + st.pcm.upper().replace("BIPHASE", "BIPHASE_")
         self.line()
         for k, text in enumerate(textwrap.wrap(stream_doc(st)
                                                + " Initialize it with "
@@ -1770,12 +1770,16 @@ class CEmitter:
         self.line(f"}} {t};")
         self.line()
         if st.fixed:
+            n = (st.pattern_bits + 7) // 8
+            for name, v in (("pattern", st.pattern), ("mask", st.mask)):
+                b = ", ".join(f"0x{x:02x}" for x in v.to_bytes(n, "big"))
+                self.line(f"static const uint8_t {t}_{name}[{n}] = {{{b}}};")
             self.line(f"static const xtce_pk_frame_spec {t}_spec = "
-                      f"{{{st.frame_bits}, UINT64_C(0x{st.pattern:x}), "
-                      f"UINT64_C(0x{st.mask:x}), {st.pattern_bits}, "
-                      f"{st.location}, {st.max_errors}, {st.aperture}, "
-                      f"{st.verify}, {st.check}, UINT64_C({st.invert_after}), "
-                      f"{pcm}, {bool_lit(st.inverted)}}};")
+                      f"{{{st.frame_bits}, {t}_pattern, {t}_mask, "
+                      f"{st.pattern_bits}, {st.location}, {st.max_errors}, "
+                      f"{st.aperture}, {st.verify}, {st.check}, "
+                      f"UINT64_C({st.invert_after}), {pcm}, "
+                      f"{bool_lit(st.inverted)}}};")
         else:
             self.line(f"static const xtce_pk_flag_spec {t}_spec = "
                       f"{{{st.flag_bits}, {bool_lit(st.flag_ones)}, "

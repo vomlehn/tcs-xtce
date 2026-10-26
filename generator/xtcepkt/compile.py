@@ -2816,7 +2816,8 @@ class Compiler:
         if st.stream_ref is not None:
             raise Unsupported(f"{where}: a StreamRef")
         pcm = st.pcm_type.value if st.pcm_type else "NRZL"
-        if pcm not in ("NRZL", "NRZM", "NRZS"):
+        if (pcm not in ("NRZL", "NRZM", "NRZS", "BiPhaseL", "BiPhaseM",
+                        "BiPhaseS")):
             raise Unsupported(f"{where}: pcmType {pcm}")
         service = []
         if st.choice.name == "ServiceRef":
@@ -2855,7 +2856,7 @@ class Compiler:
         out.frame_bits = st.frame_length_in_bits
         sp = ss.sync_pattern
         n = sp.pattern_length_in_bits
-        if not 1 <= n <= 64:
+        if n < 1:
             raise Unsupported(f"{where}: a {n}-bit sync pattern")
         # The pattern and mask are truncated from the left.
         out.pattern = int(sp.pattern.strip() or "0", 16) & ((1 << n) - 1)
