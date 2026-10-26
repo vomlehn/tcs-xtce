@@ -949,7 +949,8 @@ Runtime
 -------
 
 ``BitReader`` and ``BitWriter`` handle fields of 1–64 bits, most
-significant bit first, at any bit position:
+significant bit first, at any bit position (wider integers are read and
+written a bit at a time; see `Integers of any size`_):
 
 * Little-endian fields are read big-endian and then byte-swapped, so
   they must be a whole number of bytes.
@@ -991,6 +992,17 @@ variable-length arrays, so the header uses none.
 ``tests/bnum_check.sh`` holds the claim to account: the Rust tool runs
 the cases on bnum itself, and every C and C++ result must match it
 exactly.
+
+Packets use these integers only as values: they are read and written a
+bit at a time into bytes (``BitReader::wide``, ``xtce_pk_read_wide``),
+in the same bit and byte orders as narrower ones, converted between raw
+fields and values with bnum's operations, compared and described. The
+compiler rejects every use that would compute with one, so sizes,
+offsets, calibrators and algorithms stay in 64-bit integers and doubles.
+Fields of 65 to 128 bits are ``u128`` and ``i128`` in Rust, which hold
+them natively, and 16-byte integers in C; comparisons between integers of
+different sizes widen both to one more byte than the larger, so that
+either sign fits.
 
 
 The digest (xtce-digest)

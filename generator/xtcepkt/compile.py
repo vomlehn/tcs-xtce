@@ -428,6 +428,8 @@ def length_adjust(item, vt: VType, where: str) -> Optional[int]:
             or vt.enc.bcd or vt.calibrator is not None):
         raise Unsupported(f"{where}: a packet length field must be an "
                           "uncalibrated unsigned binary integer")
+    if vt.wide:
+        raise Unsupported(f"{where}: a {vt.enc.bits}-bit packet length field")
     if not fast_order(vt.enc):
         raise Unsupported(f"{where}: a packet length field must be big or "
                           "little endian in whole bytes, most significant bit "
@@ -636,6 +638,9 @@ class Compiler:
                      min_conformance=a.min_conformance or 1)
         if a.disabled:
             return d
+        if vt.wide:
+            raise Unsupported(f"{where}: an alarm on a {vt.enc.bits}-bit "
+                              "integer")
         if a.choice is not None and a.choice.name == "CustomAlarm":
             alg = a.choice.value.input_algorithm
             d.custom = (self.hook("alarm", qname(path + (alg.name,))), alg)
@@ -724,6 +729,12 @@ class Compiler:
             raise Unsupported(f"{where}: no data encoding")
         enc_name, e = t.choice.name, t.choice.value
         enc, cal = self.encoding(enc_name, e, path, where)
+        if (isinstance(enc, IntEnc) and enc.bits > 64
+                and (base != "Integer" or cal is not None)):
+            # Only its integer value is kept; nothing computes with it.
+            what = ("calibrated integer" if base == "Integer" else base.lower())
+            raise Unsupported(f"{where}: {what} in a {enc.bits}-bit integer "
+                              "encoding")
         vt = VType(key=qname(key), name=t.name, kind="", enc=enc,
                    calibrator=cal)
         if base == "Float":
@@ -837,6 +848,9 @@ class Compiler:
         what = "absolute" if base == "AbsoluteTime" else "relative"
         ref = self.reference_time(t.reference_time, where)
         e, cal = self.encoding(enc.choice.name, enc.choice.value, path, where)
+        if isinstance(e, IntEnc) and e.bits > 64:
+            raise Unsupported(f"{where}: time in a {e.bits}-bit integer "
+                              "encoding")
         if isinstance(e, (StringEnc, BinaryEnc)):
             if (units, scale, offset) != ("seconds", 1.0, 0.0):
                 raise Unsupported(f"{where}: a time encoded as "
@@ -1068,7 +1082,7 @@ class Compiler:
         if name == "IntegerDataEncoding":
             bits = e.size_in_bits if e.size_in_bits is not None else 8
             kind = e.encoding.value if e.encoding else "unsigned"
-            if not 1 <= bits <= 64:
+            if bits < 1:
                 raise Unsupported(f"{where}: {bits}-bit integers")
             if kind == "BCD" and bits % 8:
                 raise Unsupported(f"{where}: BCD in {bits} bits, not whole "
@@ -1450,6 +1464,9 @@ class Compiler:
         if vt.kind not in ("int", "float", "enum", "bool"):
             raise Unsupported(f"{where}: MathOperationCalibrator uses "
                               f"{vt.kind} value {name}")
+        if vt.wide:
+            raise Unsupported(f"{where}: MathOperationCalibrator uses "
+                              f"{vt.enc.bits}-bit integer {name}")
         if local.computed:
             raise Unsupported(f"{where}: MathOperationCalibrator uses packet "
                               f"length or checksum field {name}")
@@ -1500,6 +1517,9 @@ class Compiler:
         if vt.kind != "int":
             raise Unsupported(f"{where}: size or count from {vt.kind} value "
                               f"{d.name or name}")
+        if vt.wide:
+            raise Unsupported(f"{where}: size or count from {vt.enc.bits}-bit "
+                              f"integer {d.name or name}")
         return dataclasses.replace(d, local=ref, path=member), int_bounds(vt)
 
     def param_local(self, ref: str, path: Key) -> Local:
@@ -2017,7 +2037,7 @@ class Compiler:
                               f"container {container}")
         vt = local.vtype
         if (vt.kind != "int" or not isinstance(vt.enc, IntEnc) or vt.enc.signed
-                or vt.enc.bcd or vt.calibrator is not None
+                or vt.enc.bcd or vt.calibrator is not None or vt.wide
                 or not fast_order(vt.enc)):
             raise Unsupported(f"{where}: checksum field {local.name} must be "
                               "an uncalibrated unsigned binary integer, big "
@@ -2754,6 +2774,9 @@ class Compiler:
             if vt.kind not in ("int", "float", "enum", "bool"):
                 raise Unsupported(f"{where}: custom algorithm input {name} is "
                                   f"a {vt.kind} value")
+            if vt.wide:
+                raise Unsupported(f"{where}: custom algorithm input {name} is "
+                                  f"a {vt.enc.bits}-bit integer")
             if v.use_calibrated_value is False and vt.calibrator is not None:
                 raise Unsupported(f"{where}: the raw value of calibrated "
                                   f"{name}")
@@ -2854,6 +2877,9 @@ class Compiler:
                               "packet")
         if vt.kind not in ("int", "float", "enum", "bool"):
             raise Unsupported(f"{where}: input {name} is a {vt.kind} value")
+        if vt.wide:
+            raise Unsupported(f"{where}: input {name} is a {vt.enc.bits}-bit "
+                              "integer")
         if r.ref.use_calibrated_value is False and vt.calibrator is not None:
             raise Unsupported(f"{where}: the raw value of calibrated {name}")
         return ("value", ValueRef(r.ref, r.path, local, member, vt))

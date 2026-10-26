@@ -7,10 +7,10 @@
  * and calibration helpers they call.  It mirrors xtce::packet in Rust and
  * xtce.packet in Python.
  *
- * The header is self-contained, needs only the C standard library (link with
- * -lm) and compiles both as C11 and as C++.  Nothing is allocated: callers
- * preallocate buffers, typically of the generated *_MAX_BYTES size, and reuse
- * them for every packet.
+ * The header needs only xtce/bnum.h, beside it, and the C standard library
+ * (link with -lm), and compiles both as C11 and as C++.  Nothing is
+ * allocated: callers preallocate buffers, typically of the generated
+ * *_MAX_BYTES size, and reuse them for every packet.
  *
  * Every fallible function returns 0 (XTCE_PK_OK) on success or an error code,
  * and fills in the xtce_pk_error it was given (which may be NULL).
@@ -27,6 +27,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "bnum.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -1031,6 +1033,218 @@ static inline int xtce_pk_cmp_iu(int64_t a, uint64_t b) {
 }
 static inline int xtce_pk_cmp_ui(uint64_t a, int64_t b) {
         return -xtce_pk_cmp_iu(b, a);
+}
+
+/* --- integers of more than 64 bits -------------------------------------------
+ *
+ * They are xtce/bnum.h integers: generated structs of `bytes`, least
+ * significant first and two's complement when signed, of 16 bytes up to
+ * 128 bits and of whole bytes beyond.  A raw field of `bits` bits is held
+ * the same way, unsigned. */
+
+/* The bytes of a 64-bit integer, to compare it with a wider one. */
+typedef struct xtce_pk_le64 {
+        uint8_t bytes[8];
+} xtce_pk_le64;
+
+static inline xtce_pk_le64 xtce_pk_le64_u(uint64_t v) {
+        xtce_pk_le64 r;
+        xtce_bn_from_u64(r.bytes, 8, v);
+        return r;
+}
+
+static inline xtce_pk_le64 xtce_pk_le64_i(int64_t v) {
+        xtce_pk_le64 r;
+        xtce_bn_from_i64(r.bytes, 8, v);
+        return r;
+}
+
+/* The significance of the lowest bit of group `j`, of `len` bits, of a
+ * field of `bits` bits, the groups before which have `done` bits. */
+static inline unsigned xtce_pk_group_shift(unsigned bits, unsigned done,
+                                           unsigned len, unsigned j,
+                                           int order, const uint8_t* list) {
+        if (order == XTCE_PK_BIG) return bits - done - len;
+        if (order == XTCE_PK_LITTLE) return done;
+        return 8u * list[j];
+}
+
+/* Reads an unsigned field of `bits` bits, in the bit and byte order that
+ * xtce_pk_read_ordered reads, into the `n` bytes at `out`. */
+static inline int xtce_pk_read_wide(xtce_pk_reader* r, unsigned bits,
+                                    bool lsb, int order, const uint8_t* list,
+                                    const char* f, uint8_t* out, size_t n) {
+        unsigned done = 0, j = 0;
+        size_t q;
+        XTCE_PK_TRY(xtce_pk_read_need(r, bits, f));
+        memset(out, 0, n);
+        q = r->pos;
+        while (done < bits) {
+                unsigned len = bits - done < 8 ? bits - done : 8, i;
+                unsigned at = xtce_pk_group_shift(bits, done, len, j, order,
+                                                  list);
+                for (i = 0; i < len; ++i) {
+                        size_t p = q + i;
+                        unsigned bit = lsb ? (r->data[p / 8] >> (p % 8)) & 1
+                                           : (r->data[p / 8] >> (7 - p % 8)) &
+                                                     1;
+                        /* The group's first bit is its least significant
+                         * when lsb. */
+                        unsigned k = at + (lsb ? i : len - 1 - i);
+                        out[k / 8] = (uint8_t)(out[k / 8] | bit << (k % 8));
+                }
+                q += len;
+                done += len;
+                ++j;
+        }
+        r->pos = q;
+        xtce_pk_read_moved(r);
+        return 0;
+}
+
+/* Writes the low `bits` bits of the `n`-byte integer at `v` in the order
+ * xtce_pk_read_wide reads. */
+static inline int xtce_pk_write_wide(xtce_pk_writer* w, unsigned bits,
+                                     bool lsb, int order, const uint8_t* list,
+                                     const uint8_t* v) {
+        size_t end = (w->pos + bits + 7) / 8, q = w->pos;
+        unsigned done = 0, j = 0;
+        if (end > w->cap)
+                return xtce_pk_fail(w->err, XTCE_PK_NO_SPACE, "packet", NULL);
+        if (w->len < end) {
+                memset(w->buf + w->len, 0, end - w->len);
+                w->len = end;
+        }
+        while (done < bits) {
+                unsigned len = bits - done < 8 ? bits - done : 8, i;
+                unsigned at = xtce_pk_group_shift(bits, done, len, j, order,
+                                                  list);
+                for (i = 0; i < len; ++i) {
+                        unsigned k = at + (lsb ? i : len - 1 - i);
+                        unsigned bit = (v[k / 8] >> (k % 8)) & 1;
+                        unsigned sh = lsb ? (unsigned)((q + i) % 8)
+                                          : 7 - (unsigned)((q + i) % 8);
+                        uint8_t* b = &w->buf[(q + i) / 8];
+                        *b = (uint8_t)((*b & ~(1u << sh)) | (bit << sh));
+                }
+                q += len;
+                done += len;
+                ++j;
+        }
+        w->pos = q;
+        return 0;
+}
+
+/* Clears the bits of the `n`-byte integer at `v` from bit `k` up. */
+static inline void xtce_pk_wide_keep(uint8_t* v, size_t n, unsigned k) {
+        unsigned drop = (unsigned)(8 * n) - k;
+        xtce_bn_unbounded_shl(v, v, n, drop);
+        xtce_bn_unbounded_shr(v, v, n, false, drop);
+}
+
+/* Converts the raw field of `bits` bits in the `n` bytes at `v` to its value
+ * in place, as xtce_pk_to_signed does. */
+static inline void xtce_pk_wide_to_signed(uint8_t* v, size_t n, unsigned bits,
+                                          int enc) {
+        unsigned k = (unsigned)(8 * n) - bits;
+        if (enc == XTCE_PK_UNSIGNED || !xtce_bn_bit(v, n, bits - 1)) return;
+        if (enc == XTCE_PK_TWOS_COMPLEMENT) {
+                xtce_bn_wrapping_shl(v, v, n, k);
+                xtce_bn_wrapping_shr(v, v, n, true, k);
+                return;
+        }
+        if (enc == XTCE_PK_ONES_COMPLEMENT) xtce_bn_not(v, v, n);
+        xtce_pk_wide_keep(v, n, bits - 1);
+        xtce_bn_wrapping_neg(v, v, n);
+}
+
+/* Checks that the unsigned integer in the `n` bytes at `v` fits in `bits`
+ * bits. */
+static inline int xtce_pk_wide_from_unsigned(const uint8_t* v, size_t n,
+                                             unsigned bits, const char* f,
+                                             xtce_pk_error* err) {
+        if (xtce_bn_bit_width(v, n) > bits)
+                return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+        return 0;
+}
+
+/* Converts the signed value in the `n` bytes at `v` to its raw field of
+ * `bits` bits in place, as xtce_pk_from_signed does. */
+static inline int xtce_pk_wide_from_signed(uint8_t* v, size_t n,
+                                           unsigned bits, int enc,
+                                           const char* f, xtce_pk_error* err) {
+        bool neg = xtce_bn_is_negative(v, n, true);
+        unsigned top = (unsigned)(8 * n) - bits + 1;
+        if (enc == XTCE_PK_UNSIGNED) {
+                if (neg)
+                        return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f,
+                                            NULL);
+                return xtce_pk_wide_from_unsigned(v, n, bits, f, err);
+        }
+        if (enc == XTCE_PK_TWOS_COMPLEMENT) {
+                /* It fits if the bits from its sign bit up are all the
+                 * same. */
+                if ((neg ? xtce_bn_leading_ones(v, n)
+                         : xtce_bn_leading_zeros(v, n)) < top)
+                        return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f,
+                                            NULL);
+                xtce_pk_wide_keep(v, n, bits);
+                return 0;
+        }
+        xtce_bn_unsigned_abs(v, v, n, true);
+        if (xtce_bn_leading_zeros(v, n) < top)
+                return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+        if (!neg) return 0;
+        if (enc == XTCE_PK_SIGN_MAGNITUDE) {
+                xtce_bn_set_bit(v, n, bits - 1, true);
+        } else {
+                xtce_bn_not(v, v, n);
+                xtce_pk_wide_keep(v, n, bits);
+        }
+        return 0;
+}
+
+/* xtce_pk_bcd_decode for the raw field of `bits` bits in the `n` bytes at
+ * `v`, in place; `scratch` is `n` bytes. */
+static inline int xtce_pk_wide_bcd_decode(uint8_t* v, size_t n,
+                                          unsigned bits, bool packed,
+                                          const char* f, xtce_pk_error* err,
+                                          uint8_t* scratch) {
+        unsigned width = packed ? 4 : 8, shift = bits;
+        memcpy(scratch, v, n);
+        memset(v, 0, n);
+        while (shift >= width) {
+                unsigned d = 0, i;
+                shift -= width;
+                for (i = 0; i < width; ++i)
+                        d |= (unsigned)xtce_bn_bit(scratch, n, shift + i) << i;
+                if (d > 9)
+                        return xtce_pk_fail(err, XTCE_PK_INVALID_VALUE, f,
+                                            NULL);
+                (void)xtce_bn_mul_small(v, v, n, 10, d);
+        }
+        return 0;
+}
+
+/* xtce_pk_bcd_encode for the `n`-byte unsigned value at `v`, in place;
+ * `scratch` is `n` bytes. */
+static inline int xtce_pk_wide_bcd_encode(uint8_t* v, size_t n,
+                                          unsigned bits, bool packed,
+                                          const char* f, xtce_pk_error* err,
+                                          uint8_t* scratch) {
+        unsigned width = packed ? 4 : 8, i, k;
+        memcpy(scratch, v, n);
+        memset(v, 0, n);
+        for (i = 0; i < bits / width; ++i) {
+                uint32_t d = xtce_bn_div_small(scratch, scratch, n, 10);
+                for (k = 0; k < 4; ++k)
+                        if ((d >> k) & 1)
+                                xtce_bn_set_bit(v, n, i * width + k, true);
+        }
+        /* Whatever is left is more than the digits hold. */
+        if (!xtce_bn_is_zero(scratch, n))
+                return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+        return 0;
 }
 
 /* --- floats

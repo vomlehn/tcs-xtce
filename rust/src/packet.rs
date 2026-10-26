@@ -544,6 +544,40 @@ impl<'a> BitReader<'a> {
         Ok(combine(&groups[..k], order))
     }
 
+    /// Reads an unsigned field of `bits` bits, as many as `N` bytes hold,
+    /// in the bit and byte order that [`BitReader::uint_bits`] reads.
+    pub fn wide<const N: usize>(
+        &mut self,
+        bits: u32,
+        lsb: bool,
+        order: ByteOrder,
+        field: &'static str,
+    ) -> Result<Uint<N>> {
+        self.need(bits as usize, field)?;
+        let mut out = [0u8; N];
+        let (mut q, mut done, mut j) = (self.pos, 0, 0);
+        while done < bits {
+            let n = (bits - done).min(8);
+            let at = group_shift(bits, done, n, j, order);
+            for i in 0..n as usize {
+                let bit = if lsb {
+                    (self.data[(q + i) / 8] >> ((q + i) % 8)) & 1
+                } else {
+                    (self.data[(q + i) / 8] >> (7 - (q + i) % 8)) & 1
+                };
+                // The group's first bit is its least significant when lsb.
+                let k = at + if lsb { i as u32 } else { n - 1 - i as u32 };
+                out[k as usize / 8] |= bit << (k % 8);
+            }
+            q += n as usize;
+            done += n;
+            j += 1;
+        }
+        self.pos = q;
+        self.end = self.end.max(q);
+        Ok(Uint::<N>::from_le_bytes(out))
+    }
+
     /// The end of the packet in bits: the end of the last byte read.
     pub fn packet_end(&self) -> usize {
         self.end.div_ceil(8) * 8
@@ -814,6 +848,32 @@ impl<'a> BitWriter<'a> {
         self.pos = q;
     }
 
+    /// Writes the low `bits` bits of the integer whose bytes, least
+    /// significant first, are `v`, in the order [`BitReader::wide`] reads.
+    pub fn wide(&mut self, bits: u32, lsb: bool, order: ByteOrder, v: &[u8]) {
+        let end = (self.pos + bits as usize).div_ceil(8);
+        if self.buf.len() < end {
+            self.buf.resize(end);
+        }
+        let data = self.buf.as_mut_bytes();
+        let (mut q, mut done, mut j) = (self.pos, 0, 0);
+        while done < bits {
+            let n = (bits - done).min(8);
+            let at = group_shift(bits, done, n, j, order);
+            for i in 0..n as usize {
+                let k = at + if lsb { i as u32 } else { n - 1 - i as u32 };
+                let bit = (v[k as usize / 8] >> (k % 8)) & 1;
+                let shift = if lsb { (q + i) % 8 } else { 7 - (q + i) % 8 };
+                let b = &mut data[(q + i) / 8];
+                *b = (*b & !(1 << shift)) | (bit << shift);
+            }
+            q += n as usize;
+            done += n;
+            j += 1;
+        }
+        self.pos = q;
+    }
+
     /// Writes whole bytes (which need not be byte aligned).
     pub fn bytes(&mut self, data: &[u8]) {
         if data.is_empty() {
@@ -991,6 +1051,22 @@ fn combine(groups: &[(u8, u32)], order: ByteOrder) -> u128 {
         }
     }
     v
+}
+
+/// The significance of the lowest bit of group `j`, of `n` bits, of a
+/// field of `bits` bits, the groups before which have `done` bits.
+fn group_shift(
+    bits: u32,
+    done: u32,
+    n: u32,
+    j: usize,
+    order: ByteOrder,
+) -> u32 {
+    match order {
+        ByteOrder::Big => bits - done - n,
+        ByteOrder::Little => done,
+        ByteOrder::List(sig) => 8 * sig[j] as u32,
+    }
 }
 
 /// Group `j` of `v`, whose groups have `lengths` in stream order: the
@@ -1399,6 +1475,188 @@ pub fn bcd_encode(
         v /= 10;
     }
     Ok(raw)
+}
+
+// --- integers of more than 64 bits -------------------------------------------
+
+/// The bnum crate, whose integers hold values of more than 128 bits.
+pub use bnum;
+/// An unsigned integer of `N` bytes, least significant first.
+pub type Uint<const N: usize> = bnum::Uint<N>;
+/// A signed integer of `N` bytes, two's complement.
+pub type Int<const N: usize> = bnum::Int<N>;
+
+/// A small number as an unsigned integer of `N` bytes (bnum's From is
+/// only for sizes it knows can hold the number).
+fn small<const N: usize>(x: u64) -> Uint<N> {
+    bnum::cast::CastFrom::cast_from(x)
+}
+
+/// The low `k` bits set.
+fn wide_mask<const N: usize>(k: u32) -> Uint<N> {
+    Uint::<N>::MAX.unbounded_shr(8 * N as u32 - k)
+}
+
+/// Converts a raw field of `bits` bits to its value, as [`to_signed`]
+/// does.
+pub fn wide_to_signed<const N: usize>(
+    raw: Uint<N>,
+    bits: u32,
+    enc: IntEncoding,
+) -> Int<N> {
+    if enc == IntEncoding::Unsigned || !raw.bit(bits - 1) {
+        return raw.cast_signed();
+    }
+    let low = match enc {
+        IntEncoding::TwosComplement => {
+            let k = 8 * N as u32 - bits;
+            return raw.cast_signed().wrapping_shl(k).wrapping_shr(k);
+        }
+        IntEncoding::SignMagnitude => raw,
+        _ => !raw,
+    };
+    (low & wide_mask(bits - 1)).cast_signed().wrapping_neg()
+}
+
+/// Converts a value to its raw field of `bits` bits, checking that it
+/// fits, as [`from_signed`] does.
+pub fn wide_from_signed<const N: usize>(
+    v: Int<N>,
+    bits: u32,
+    enc: IntEncoding,
+    field: &'static str,
+) -> Result<Uint<N>> {
+    let out = Err(PacketError::OutOfRange { field });
+    let limit = wide_mask::<N>(bits - 1);
+    match enc {
+        IntEncoding::Unsigned => {
+            if v.is_negative() {
+                out
+            } else {
+                wide_from_unsigned(v.cast_unsigned(), bits, field)
+            }
+        }
+        IntEncoding::TwosComplement => {
+            let hi = limit.cast_signed();
+            if v > hi
+                || v < hi
+                    .wrapping_neg()
+                    .wrapping_sub(small::<N>(1).cast_signed())
+            {
+                out
+            } else {
+                Ok(v.cast_unsigned() & wide_mask(bits))
+            }
+        }
+        _ => {
+            let m = v.unsigned_abs();
+            if m > limit {
+                out
+            } else if !v.is_negative() {
+                Ok(m)
+            } else if enc == IntEncoding::SignMagnitude {
+                Ok(m | small::<N>(1).wrapping_shl(bits - 1))
+            } else {
+                Ok(!m & wide_mask(bits))
+            }
+        }
+    }
+}
+
+/// Checks that an unsigned value fits in `bits` bits.
+pub fn wide_from_unsigned<const N: usize>(
+    v: Uint<N>,
+    bits: u32,
+    field: &'static str,
+) -> Result<Uint<N>> {
+    if v > wide_mask(bits) {
+        Err(PacketError::OutOfRange { field })
+    } else {
+        Ok(v)
+    }
+}
+
+/// [`bcd_decode`] for fields of more than 64 bits.
+pub fn wide_bcd_decode<const N: usize>(
+    raw: Uint<N>,
+    bits: u32,
+    packed: bool,
+    field: &'static str,
+) -> Result<Uint<N>> {
+    let width = if packed { 4 } else { 8 };
+    let (ten, digit) = (small::<N>(10), wide_mask::<N>(width));
+    let mut v = small::<N>(0);
+    let mut shift = bits;
+    while shift >= width {
+        shift -= width;
+        let d = raw.unbounded_shr(shift) & digit;
+        if d > small(9) {
+            return Err(PacketError::InvalidValue { field });
+        }
+        v = v.wrapping_mul(ten).wrapping_add(d);
+    }
+    Ok(v)
+}
+
+/// [`bcd_encode`] for fields of more than 64 bits.
+pub fn wide_bcd_encode<const N: usize>(
+    v: Uint<N>,
+    bits: u32,
+    packed: bool,
+    field: &'static str,
+) -> Result<Uint<N>> {
+    let width = if packed { 4 } else { 8 };
+    let ten = small::<N>(10);
+    let (mut raw, mut v) = (small::<N>(0), v);
+    for i in 0..bits / width {
+        raw = raw | (v % ten).unbounded_shl(i * width);
+        v = v / ten;
+    }
+    // Whatever is left is more than the digits hold.
+    if v.is_zero() {
+        Ok(raw)
+    } else {
+        Err(PacketError::OutOfRange { field })
+    }
+}
+
+/// An integer as one of `M` bytes, so that integers of different types
+/// compare.
+pub fn widen<const M: usize, T>(x: T) -> Int<M>
+where
+    Int<M>: bnum::cast::CastFrom<T>,
+{
+    <Int<M> as bnum::cast::CastFrom<T>>::cast_from(x)
+}
+
+/// Writes an unsigned integer of more than 128 bits (so `N` is at least 8)
+/// in decimal, without allocating, as bnum formats only with its `alloc`
+/// feature.
+pub fn write_uint<W: fmt::Write + ?Sized, const N: usize>(
+    v: Uint<N>,
+    f: &mut W,
+) -> fmt::Result {
+    // 19 digits at a time, the most significant first.
+    let chunk = small::<N>(10_000_000_000_000_000_000);
+    let low = |x: Uint<N>| {
+        u64::from_le_bytes(x.to_le_bytes()[..8].try_into().unwrap())
+    };
+    if v < chunk {
+        return write!(f, "{}", low(v));
+    }
+    write_uint(v / chunk, f)?;
+    write!(f, "{:019}", low(v % chunk))
+}
+
+/// Writes a signed integer of more than 128 bits in decimal.
+pub fn write_int<W: fmt::Write + ?Sized, const N: usize>(
+    v: Int<N>,
+    f: &mut W,
+) -> fmt::Result {
+    if v.is_negative() {
+        f.write_char('-')?;
+    }
+    write_uint(v.unsigned_abs(), f)
 }
 
 /// Rounds an engineering value (half away from zero) to a raw integer field.

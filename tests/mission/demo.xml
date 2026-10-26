@@ -1000,6 +1000,57 @@
           </CustomAlarm>
         </DefaultAlarm>
       </IntegerParameterType>
+      <!-- Integers of more than 64 bits, in every encoding and order. -->
+      <IntegerParameterType name="WideU72" signed="false">
+        <IntegerDataEncoding sizeInBits="72"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WideLe80">
+        <IntegerDataEncoding sizeInBits="80" encoding="twosComplement"
+          byteOrder="leastSignificantByteFirst"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WideSm100">
+        <IntegerDataEncoding sizeInBits="100" encoding="signMagnitude"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WideOnes65">
+        <IntegerDataEncoding sizeInBits="65" encoding="onesComplement"
+          bitOrder="leastSignificantBitFirst"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WideSpareType" signed="false">
+        <IntegerDataEncoding sizeInBits="7"
+          bitOrder="leastSignificantBitFirst"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WideU128" signed="false">
+        <IntegerDataEncoding sizeInBits="128"/>
+        <ValidRange minInclusive="0" maxInclusive="1000000000000000000"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WidePacked96" signed="false">
+        <IntegerDataEncoding sizeInBits="96" encoding="packedBCD"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WideBcd136" signed="false">
+        <IntegerDataEncoding sizeInBits="136" encoding="BCD"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WideList128" signed="false">
+        <IntegerDataEncoding sizeInBits="128"
+          byteOrder="1,0,3,2,5,4,7,6,9,8,11,10,13,12,15,14"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WideI200">
+        <IntegerDataEncoding sizeInBits="200" encoding="twosComplement"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="WideI72">
+        <IntegerDataEncoding sizeInBits="72" encoding="twosComplement"/>
+      </IntegerParameterType>
+      <ArrayParameterType name="WidePairType" arrayTypeRef="WideI72">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>1</FixedValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
     </ParameterTypeSet>
     <ParameterSet>
       <Parameter name="Version" parameterTypeRef="U3"/>
@@ -1199,6 +1250,21 @@
       <Parameter name="HkSum" parameterTypeRef="U8"/>
       <Parameter name="HkMin" parameterTypeRef="DrDoubleType"/>
       <Parameter name="HkMax" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="WideTiny" parameterTypeRef="S16"/>
+      <Parameter name="WideA" parameterTypeRef="WideU72"/>
+      <Parameter name="WideB" parameterTypeRef="WideLe80"/>
+      <Parameter name="WideC" parameterTypeRef="WideSm100"/>
+      <Parameter name="WideD" parameterTypeRef="WideOnes65"/>
+      <Parameter name="WideSpare" parameterTypeRef="WideSpareType"/>
+      <Parameter name="WideE" parameterTypeRef="WideU128"/>
+      <Parameter name="WideF" parameterTypeRef="WidePacked96"/>
+      <Parameter name="WideG" parameterTypeRef="WideBcd136"/>
+      <Parameter name="WideH" parameterTypeRef="WideList128"/>
+      <Parameter name="WideI" parameterTypeRef="WideI200"/>
+      <Parameter name="WidePair" parameterTypeRef="WidePairType"/>
+      <Parameter name="WideBig" parameterTypeRef="U8"/>
+      <Parameter name="WideLess" parameterTypeRef="U8"/>
+      <Parameter name="WideAbove" parameterTypeRef="U8"/>
     </ParameterSet>
     <ContainerSet>
       <SequenceContainer name="CCSDSPacket" abstract="true">
@@ -2070,6 +2136,59 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <SequenceContainer name="Wide">
+        <EntryList>
+          <ParameterRefEntry parameterRef="WideTiny"/>
+          <ParameterRefEntry parameterRef="WideA"/>
+          <ParameterRefEntry parameterRef="WideB"/>
+          <!-- Least significant bit first, so that it shares no byte with a
+               field numbering bits the other way. -->
+          <ParameterRefEntry parameterRef="WideD"/>
+          <ParameterRefEntry parameterRef="WideSpare"/>
+          <ParameterRefEntry parameterRef="WideC"/>
+          <ParameterRefEntry parameterRef="WideE"/>
+          <ParameterRefEntry parameterRef="WideF"/>
+          <ParameterRefEntry parameterRef="WideG"/>
+          <ParameterRefEntry parameterRef="WideH"/>
+          <ParameterRefEntry parameterRef="WideI"/>
+          <ParameterRefEntry parameterRef="WidePair"/>
+          <!-- A value above 2^64, an integer of another size and sign,
+               and a 16-bit one. -->
+          <ParameterRefEntry parameterRef="WideBig">
+            <IncludeCondition>
+              <Comparison parameterRef="WideA" comparisonOperator="&gt;"
+                value="1000000000000000000000"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="WideLess">
+            <IncludeCondition>
+              <BooleanExpression>
+                <Condition>
+                  <ParameterInstanceRef parameterRef="WideB"/>
+                  <ComparisonOperator>&lt;</ComparisonOperator>
+                  <ParameterInstanceRef parameterRef="WideE"/>
+                </Condition>
+              </BooleanExpression>
+            </IncludeCondition>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="WideAbove">
+            <IncludeCondition>
+              <BooleanExpression>
+                <Condition>
+                  <ParameterInstanceRef parameterRef="WideC"/>
+                  <ComparisonOperator>&gt;=</ComparisonOperator>
+                  <ParameterInstanceRef parameterRef="WideTiny"/>
+                </Condition>
+              </BooleanExpression>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="550"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
     </ContainerSet>
     <MessageSet>
       <Message name="PulseStart">
@@ -2347,6 +2466,17 @@
       </IntegerArgumentType>
       <IntegerArgumentType name="LevelArgType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
+      </IntegerArgumentType>
+      <IntegerArgumentType name="WideArgType">
+        <IntegerDataEncoding sizeInBits="96" encoding="twosComplement"/>
+        <ValidRangeSet>
+          <ValidRange minInclusive="-1000000000000000000"
+            maxInclusive="1000000000000000000"/>
+        </ValidRangeSet>
+      </IntegerArgumentType>
+      <IntegerArgumentType name="WideKeyType" signed="false">
+        <IntegerDataEncoding sizeInBits="136"
+          byteOrder="leastSignificantByteFirst"/>
       </IntegerArgumentType>
     </ArgumentTypeSet>
     <MetaCommandSet>
@@ -2756,6 +2886,25 @@
                 </Count>
               </RepeatEntry>
             </ContainerRefEntry>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="SetWide">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="17"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Offset" argumentTypeRef="WideArgType"/>
+          <Argument name="Key" argumentTypeRef="WideKeyType"/>
+        </ArgumentList>
+        <CommandContainer name="SetWideContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Offset"/>
+            <ArgumentRefEntry argumentRef="Key"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

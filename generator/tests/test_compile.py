@@ -151,11 +151,13 @@ class ErrorTests(unittest.TestCase):
                 </SequenceContainer>''' for i in range(3))
         text = mission(tm=f"""
             <ParameterTypeSet>
-              <IntegerParameterType name="U65" signed="false">
+              <EnumeratedParameterType name="E65">
                 <IntegerDataEncoding sizeInBits="65"/>
-              </IntegerParameterType>
+                <EnumerationList><Enumeration value="0" label="A"/>
+                </EnumerationList>
+              </EnumeratedParameterType>
             </ParameterTypeSet>
-            <ParameterSet><Parameter name="X" parameterTypeRef="U65"/>
+            <ParameterSet><Parameter name="X" parameterTypeRef="E65"/>
             </ParameterSet>
             <ContainerSet>
               <SequenceContainer name="Base" abstract="true">
@@ -164,13 +166,14 @@ class ErrorTests(unittest.TestCase):
               {derived}
             </ContainerSet>""")
         msg = self.unsupported(text)
-        self.assertEqual(msg.count("65-bit integers"), 1, msg)
+        why = "enumerated in a 65-bit integer encoding"
+        self.assertEqual(msg.count(why), 1, msg)
         self.assertNotIn("/Sat/D0", msg)
         self.assertIn("3 containers or meta-commands derived from them", msg)
         # Skipping still names every node left out.
         skipped = compile_xml(text, skip_unsupported=True).skipped
         self.assertEqual(len(skipped), 4, skipped)
-        self.assertIn("65-bit integers", skipped[0])
+        self.assertIn(why, skipped[0])
 
 
     def test_negative_sizes(self):
@@ -200,6 +203,120 @@ class ErrorTests(unittest.TestCase):
                   </SequenceContainer>
                 </ContainerSet>""")
             self.assertIn(why, self.unsupported(text))
+
+
+def wide_mission(types: str, entries: str, params: str = "") -> str:
+    """A container of integers W (72 bits, unsigned), S (130 bits, signed)
+    and N (16 bits) and ``params``, then ``entries``."""
+    return mission(tm=f"""
+        <ParameterTypeSet>
+          <IntegerParameterType name="W72" signed="false">
+            <IntegerDataEncoding sizeInBits="72"/>
+          </IntegerParameterType>
+          <IntegerParameterType name="S130">
+            <IntegerDataEncoding sizeInBits="130"
+              encoding="twosComplement"/>
+          </IntegerParameterType>
+          <IntegerParameterType name="U16" signed="false">
+            <IntegerDataEncoding sizeInBits="16"/>
+          </IntegerParameterType>
+          {types}
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="W" parameterTypeRef="W72"/>
+          <Parameter name="S" parameterTypeRef="S130"/>
+          <Parameter name="N" parameterTypeRef="U16"/>
+          {params}
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="Status">
+            <EntryList>
+              <ParameterRefEntry parameterRef="W"/>
+              <ParameterRefEntry parameterRef="S"/>
+              <ParameterRefEntry parameterRef="N"/>
+              {entries}
+            </EntryList>
+          </SequenceContainer>
+        </ContainerSet>""")
+
+
+class WideIntegerTests(unittest.TestCase):
+    """Integers of more than 64 bits are decoded, encoded and compared, but
+    nothing computes with them."""
+
+    def test_fields(self):
+        m = compile_xml(wide_mission("", ""))
+        vts = {lc.name: lc.vtype for _, lc in m.nodes[0].fields}
+        self.assertEqual((vts["W"].width, vts["W"].signed, vts["W"].wide),
+                         (128, False, True))
+        self.assertEqual((vts["S"].width, vts["S"].signed), (136, True))
+        self.assertFalse(vts["N"].wide)
+        self.assertEqual(item_bits(vts["S"]), 130)
+
+    def test_compared(self):
+        cond = ('<ParameterRefEntry parameterRef="Opt"><IncludeCondition>'
+                '<Comparison parameterRef="W" comparisonOperator="&gt;" '
+                'value="1000000000000000000000"/></IncludeCondition>'
+                '</ParameterRefEntry>')
+        m = compile_xml(wide_mission("", cond,
+                                     '<Parameter name="Opt" '
+                                     'parameterTypeRef="U16"/>'))
+        opt = next(lc for _, lc in m.nodes[0].fields if lc.name == "Opt")
+        self.assertTrue(opt.optional)
+
+    def test_rejected(self):
+        e65 = ('<IntegerDataEncoding sizeInBits="65"/>')
+        for why, types, entries, params in (
+                ("enumerated in a 65-bit integer encoding",
+                 f'<EnumeratedParameterType name="T">{e65}<EnumerationList>'
+                 '<Enumeration value="0" label="A"/></EnumerationList>'
+                 '</EnumeratedParameterType>', "", ""),
+                ("boolean in a 65-bit integer encoding",
+                 f'<BooleanParameterType name="T">{e65}</BooleanParameterType>',
+                 "", ""),
+                ("float in a 65-bit integer encoding",
+                 f'<FloatParameterType name="T">{e65}</FloatParameterType>', "",
+                 ""),
+                ("calibrated integer in a 65-bit integer encoding",
+                 '<IntegerParameterType name="T"><IntegerDataEncoding '
+                 'sizeInBits="65"><DefaultCalibrator><PolynomialCalibrator>'
+                 '<Term coefficient="2" exponent="1"/></PolynomialCalibrator>'
+                 '</DefaultCalibrator></IntegerDataEncoding>'
+                 '</IntegerParameterType>', "", ""),
+                ("time in a 65-bit integer encoding",
+                 f'<AbsoluteTimeParameterType name="T"><Encoding>{e65}'
+                 '</Encoding><ReferenceTime><Epoch>TAI</Epoch></ReferenceTime>'
+                 '</AbsoluteTimeParameterType>', "", ""),
+                ("size or count from 72-bit integer W",
+                 '<BinaryParameterType name="T"><BinaryDataEncoding>'
+                 '<SizeInBits><DynamicValue><ParameterInstanceRef '
+                 'parameterRef="W"/></DynamicValue></SizeInBits>'
+                 '</BinaryDataEncoding></BinaryParameterType>', "", ""),
+                ("a 72-bit packet length field", "", "",
+                 '<Parameter name="L" parameterTypeRef="W72"><AncillaryDataSet>'
+                 '<AncillaryData name="tcs-xtce.length">0</AncillaryData>'
+                 '</AncillaryDataSet></Parameter>')):
+            with self.subTest(why):
+                if types:
+                    params = ((params or "")
+                              + ('<Parameter name="X" parameterTypeRef="T"/>'))
+                    entries = '<ParameterRefEntry parameterRef="X"/>'
+                if "length" in why:
+                    entries = '<ParameterRefEntry parameterRef="L"/>'
+                with self.assertRaises(Unsupported) as cm:
+                    compile_xml(wide_mission(types, entries, params))
+                self.assertIn(why, str(cm.exception))
+
+    def test_alarm_left_out(self):
+        alarm = ('<IntegerParameterType name="A" signed="false">'
+                 '<IntegerDataEncoding sizeInBits="72"/><DefaultAlarm>'
+                 '<StaticAlarmRanges><WarningRange maxInclusive="10"/>'
+                 '</StaticAlarmRanges></DefaultAlarm></IntegerParameterType>')
+        m = compile_xml(
+            wide_mission(alarm, '<ParameterRefEntry parameterRef="X"/>',
+                         '<Parameter name="X" parameterTypeRef="A"/>'))
+        self.assertIn("an alarm on a 72-bit integer",
+                      " ".join(m.nodes[0].alarm_notes))
 
 
 def calibrated_mission(itype: str,

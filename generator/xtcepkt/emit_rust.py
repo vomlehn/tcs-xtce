@@ -43,6 +43,8 @@ def field_type(vt: VType, alloc: bool, optional: bool = False) -> str:
                 else f"pk::FixedVec<{elem}, {vt.enc.max_count}>")
     if k == "aggregate":
         return vt.ident
+    if k == "int" and vt.width > 128:
+        return wide_type(vt)
     if k == "int":
         return f"{'i' if vt.signed else 'u'}{vt.width}"
     if k == "string":
@@ -66,8 +68,24 @@ HOOK_TYPES = {"criterion": "fn(&[f64]) -> bool",
               "checksum": "fn(&[u8], usize, usize) -> u64"}
 
 
+def wide_type(vt: VType) -> str:
+    """The bnum type an integer of more than 64 bits is computed in: its
+    own type, for more than 128 bits."""
+    return f"pk::{'Int' if vt.signed else 'Uint'}<{vt.width // 8}>"
+
+
+def wide_literal(vt: VType, v: int) -> str:
+    if vt.width == 128:
+        return f"{v}{'i' if vt.signed else 'u'}128"
+    b = v.to_bytes(vt.width // 8, "little", signed=vt.signed)
+    return (f"{wide_type(vt).replace('<', '::<')}::from_le_bytes(["
+            + ", ".join(f"0x{x:02x}" for x in b) + "])")
+
+
 def literal(vt: VType, v) -> str:
     k = vt.kind
+    if k == "int" and vt.wide:
+        return wide_literal(vt, v)
     if k == "int":
         return str(v)
     if k == "float":
@@ -313,6 +331,8 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
                 f"<{field_type(e.elem, alloc)}, {e.max_count}>::new(); for i "
                 f"in 0..n {{ {gap} if a.push({elem}).is_err() {{ {full} }} }} "
                 "a }")
+    if isinstance(e, IntEnc) and vt.wide:
+        return read_wide(vt, f)
     if isinstance(e, IntEnc):
         raw = raw_read(e, f)
         if e.bcd:
@@ -366,6 +386,39 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
     return s
 
 
+def read_wide(vt: VType, f: str) -> str:
+    """Expression reading an integer of more than 64 bits."""
+    e = vt.enc
+    n = vt.width // 8
+    x = (f"r.wide::<{n}>({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, "
+         f"{f})?")
+    if e.bcd:
+        x = (f"pk::wide_bcd_decode({x}, {e.bits}, "
+             f"{str(e.encoding == 'packedBCD').lower()}, {f})?")
+    if vt.signed:
+        x = f"pk::wide_to_signed({x}, {e.bits}, IntEncoding::{int_enc(vt)})"
+    if n == 16:
+        x = f"{'i' if vt.signed else 'u'}128::from_le_bytes({x}.to_le_bytes())"
+    return x
+
+
+def write_wide(vt: VType, x: str, f: str) -> str:
+    """Statement writing ``x``, an integer of more than 64 bits."""
+    e = vt.enc
+    t = wide_type(vt).replace("<", "::<")
+    v = f"{t}::from_le_bytes(({x}).to_le_bytes())"
+    if e.bcd:
+        raw = (f"pk::wide_bcd_encode({v}, {e.bits}, "
+               f"{str(e.encoding == 'packedBCD').lower()}, {f})?")
+    elif vt.signed:
+        raw = (f"pk::wide_from_signed({v}, {e.bits}, "
+               f"IntEncoding::{int_enc(vt)}, {f})?")
+    else:
+        raw = f"pk::wide_from_unsigned({v}, {e.bits}, {f})?"
+    return (f"w.wide({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, "
+            f"&{raw}.to_le_bytes());")
+
+
 def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     """Statement writing value ``x`` (a place or literal) with BitWriter ``w``;
     ``ref`` gives the expression for a value that gives a size or count.  A
@@ -375,7 +428,12 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         return stmt
     tests = []
     for b in vt.valid:
-        if vt.kind == "int":
+        if vt.wide:
+            parts = ([f"{x} >= {literal(vt, b.lo)}"] if b.lo is not None
+                     else []) + ([f"{x} <= {literal(vt, b.hi)}"]
+                                 if b.hi is not None else [])
+            tests.append(" && ".join(parts) or "true")
+        elif vt.kind == "int":
             parts = ([f"{b.lo}i128 <= {x} as i128"] if b.lo is not None
                      else []) + ([f"{x} as i128 <= {b.hi}i128"]
                                  if b.hi is not None else [])
@@ -417,6 +475,8 @@ def write_value_stmt(vt: VType, x: str, f: str, ref) -> str:
         n = size(e.dyn, ref(e.dyn), f)
         return (f"{{ let n = {n}; if {x}.len() != n {{ {bad} }} "
                 f"w.bytes({data}); }}")
+    if isinstance(e, IntEnc) and vt.wide:
+        return write_wide(vt, x, f)
     if isinstance(e, IntEnc):
         bits = e.bits
         enc = f"IntEncoding::{int_enc(vt)}"
@@ -495,6 +555,8 @@ def describe(vt: VType, x: str) -> str:
         return f"pk::describe_str(&{x}, f)?"
     if k == "binary":
         return f"pk::describe_bytes(&{x}, f)?"
+    if k == "int" and vt.width > 128:
+        return f"pk::write_{'int' if vt.signed else 'uint'}({x}, f)?"
     return f"write!(f, \"{{}}\", {x})?"
 
 
@@ -555,11 +617,24 @@ def condition(c: Criterion, x: str, y=None) -> str:
     x = reach(x, c.path, rstr(c.local.name))
     if y is not None:
         y = reach(y, c.other_path, rstr(c.other.name))
+        ovt = c.other_target or c.other.vtype
+        if vt.kind == "int" and (vt.wide or ovt.wide):
+            # In a type that holds both, signed or not.
+            m = max(vt.width, ovt.width) // 8 + 1
+            return (f"pk::widen::<{m}, _>({x}) {c.op} pk::widen::<{m}, _>({y})")
         if vt.kind == "int":
             return f"({x} as i128) {c.op} ({y} as i128)"
         if vt.kind == "enum":
             return f"{x}.0 {c.op} {y}.0"
         return f"{x} {c.op} {y}"
+    if vt.kind == "int" and vt.wide:
+        lo, hi = field_range(vt)
+        if not lo <= c.value <= hi:
+            # Every value of the field compares the same way.
+            below = c.value < lo
+            return str({"==": False, "!=": True, "<": not below,
+                        "<=": not below, ">": below, ">=": below}[c.op]).lower()
+        return f"{x} {c.op} {literal(vt, c.value)}"
     if vt.kind == "int":
         return f"({x} as i128) {c.op} {c.value}"
     if vt.kind == "enum":

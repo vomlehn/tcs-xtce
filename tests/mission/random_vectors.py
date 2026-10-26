@@ -318,6 +318,38 @@ def upload(rng) -> bytes:
     return bits(f)
 
 
+def wide_value(rng, n: int) -> int:
+    """A raw field of ``n`` bits: zero, all ones, its sign bit alone (-0 or
+    the most negative value), small, or random."""
+    return rng.choice([0, (1 << n) - 1, 1 << (n - 1), (1 << (n - 1)) - 1,
+                       rng.randrange(1000), rng.getrandbits(n),
+                       rng.getrandbits(n)])
+
+
+def bcd_digits(rng, digits: int, width: int) -> int:
+    """BCD digits in ``width`` bits each; now and then one isn't."""
+    bad = rng.randrange(digits) if rng.random() < 0.1 else -1
+    v = 0
+    for i in range(digits):
+        v = (v << width) | (rng.randrange(10) if i != bad
+                            else rng.randrange(10, 1 << min(width, 4)))
+    return v
+
+
+def wide(rng) -> bytes:
+    """A Wide body: integers of 65 to 200 bits."""
+    f = [(16, rng.randrange(1 << 16))]
+    f += [(72, rng.choice([wide_value(rng, 72), 10**21, 10**21 + 1]))]
+    f += [(n, wide_value(rng, n)) for n in (80, 65, 7, 100)]
+    # Mostly within its ValidRange, which encoding checks.
+    f += [(128,
+           rng.choice([wide_value(rng, 128), 10**18, 10**18 + 1, 0]
+                      + [rng.randrange(10**18)] * 4))]
+    f += [(96, bcd_digits(rng, 24, 4)), (136, bcd_digits(rng, 17, 8))]
+    f += [(n, wide_value(rng, n)) for n in (128, 200, 72, 72)]
+    return bits(f)
+
+
 def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
@@ -327,7 +359,7 @@ def main() -> None:
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
                                430, 440, 450, 460, 470, 480, 490, 500, 510, 520,
-                               530, rng.randrange(1 << 11)])
+                               530, 550, 550, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -400,6 +432,8 @@ def main() -> None:
                     + [(8, rng.randrange(256)) for _ in range(2)])
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
+            elif apid == 550 and rng.random() < 0.9:
+                data += wide(rng)
             elif apid == 340 and rng.random() < 0.8:
                 fixed = [bytes([1, 2]), bytes([0, 0]), bytes([2, 1])]
                 data += rng.choice(fixed + [rng.randbytes(2)])
@@ -408,7 +442,8 @@ def main() -> None:
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
             opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
-                                 12, 13, 13, 14, 15, 16, rng.randrange(256)])
+                                 12, 13, 13, 14, 15, 16, 17, 17,
+                                 rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
@@ -444,6 +479,12 @@ def main() -> None:
                 if rng.random() < 0.3:
                     body = body[:4] + bytes([rng.randrange(256)])
                 data += body
+            elif opcode == 17 and rng.random() < 0.9:
+                # SetWide: a 96-bit offset, mostly in its valid range when
+                # re-encoded, and a 136-bit key.
+                offset = rng.choice([wide_value(rng, 96), 10**18,
+                                     (1 << 96) - 10**18, rng.randrange(100)])
+                data += bits([(96, offset), (136, wide_value(rng, 136))])
             elif opcode == 8 and rng.random() < 0.8:
                 n = rng.choice([1, 2, 4, rng.randrange(6)])
                 data += (bytes([rng.randrange(3), n])

@@ -1213,8 +1213,11 @@ written automatically and ignored when decoding.</p>
 <tbody valign="top">
 <tr><td>integer (by encoded size and sign; with a calibrator, by the
 type's <tt class="docutils literal">sizeInBits</tt> and <tt class="docutils literal">signed</tt>)</td>
-<td><tt class="docutils literal">u8</tt> … <tt class="docutils literal">u64</tt>, <tt class="docutils literal">i8</tt> … <tt class="docutils literal">i64</tt></td>
-<td><tt class="docutils literal">uint8_t</tt> … <tt class="docutils literal">int64_t</tt></td>
+<td><tt class="docutils literal">u8</tt> … <tt class="docutils literal">u128</tt>, <tt class="docutils literal">i8</tt> … <tt class="docutils literal">i128</tt>; over 128 bits
+<tt class="docutils literal"><span class="pre">pk::Uint&lt;N&gt;</span></tt> or <tt class="docutils literal"><span class="pre">pk::Int&lt;N&gt;</span></tt> (bnum's, of <tt class="docutils literal">N</tt> bytes)</td>
+<td><tt class="docutils literal">uint8_t</tt> … <tt class="docutils literal">int64_t</tt>; over 64 bits <tt class="docutils literal">demo_uintB</tt> or
+<tt class="docutils literal">demo_intB</tt>, <tt class="docutils literal">B</tt> bits in <tt class="docutils literal">uint8_t bytes[B / 8]</tt> (see <a class="reference internal" href="#integers-of-any-size">Integers
+of any size</a>)</td>
 <td><tt class="docutils literal">int</tt></td>
 </tr>
 <tr><td>float (with any encoding), time</td>
@@ -1735,7 +1738,12 @@ bit and byte order (see &quot;Bit and byte order&quot; under <a class="reference
 order list (Rust <tt class="docutils literal"><span class="pre">ByteOrder::Big</span></tt>, <tt class="docutils literal">Little</tt> or <tt class="docutils literal"><span class="pre">List(&amp;[...])</span></tt>;
 C <tt class="docutils literal">XTCE_PK_BIG</tt>, <tt class="docutils literal">XTCE_PK_LITTLE</tt> or <tt class="docutils literal">XTCE_PK_LIST</tt> with the list;
 Python <tt class="docutils literal">&quot;be&quot;</tt>, <tt class="docutils literal">&quot;le&quot;</tt> or a tuple). Values of more than 64 bits are
-a <tt class="docutils literal">u128</tt> in Rust and a (<tt class="docutils literal">hi</tt>, <tt class="docutils literal">lo</tt>) pair in C.
+a <tt class="docutils literal">u128</tt> in Rust and a (<tt class="docutils literal">hi</tt>, <tt class="docutils literal">lo</tt>) pair in C. Integers of more
+than 64 bits are read with <tt class="docutils literal"><span class="pre">wide::&lt;N&gt;(bits,</span> lsb, order, field)</tt>
+(<tt class="docutils literal">xtce_pk_read_wide</tt>) into <tt class="docutils literal">N</tt> bytes, least significant first,
+and <tt class="docutils literal">wide_to_signed</tt>, <tt class="docutils literal">wide_from_signed</tt>, <tt class="docutils literal">wide_from_unsigned</tt>,
+<tt class="docutils literal">wide_bcd_decode</tt> and <tt class="docutils literal">wide_bcd_encode</tt> convert them as their
+64-bit counterparts do. Python's <tt class="docutils literal">uint_bits</tt> reads any size.
 <tt class="docutils literal">limit(value, adjust, field)</tt> (<tt class="docutils literal">xtce_pk_read_limit</tt>) ends the packet
 where a packet length field that was just read says, and
 <tt class="docutils literal">finish(field)</tt> (<tt class="docutils literal">xtce_pk_read_finish</tt>) checks that decoding
@@ -1899,12 +1907,26 @@ the same places except aggregate members, with comparisons on values
 decoded earlier. See <a class="reference internal" href="#generated-packet-types">Generated packet types</a> for the checks and
 bounds.</dd>
 <dt>Integer encoding</dt>
-<dd>1–64 bits; <tt class="docutils literal">unsigned</tt>, <tt class="docutils literal">twosComplement</tt>, <tt class="docutils literal">signMagnitude</tt>,
-<tt class="docutils literal">onesComplement</tt>, <tt class="docutils literal">BCD</tt> and <tt class="docutils literal">packedBCD</tt>, in any bit and byte
-order (see &quot;Bit and byte order&quot; below). Packed BCD has a decimal digit
-in every 4 bits; BCD has one in the low 4 bits of every byte, whose high 4
-bits are zero. Both are unsigned, their size must be whole digits, and
-decoding fails with <tt class="docutils literal">InvalidValue</tt> for any other bits.</dd>
+<dd><p class="first">Any number of bits; <tt class="docutils literal">unsigned</tt>, <tt class="docutils literal">twosComplement</tt>,
+<tt class="docutils literal">signMagnitude</tt>, <tt class="docutils literal">onesComplement</tt>, <tt class="docutils literal">BCD</tt> and <tt class="docutils literal">packedBCD</tt>, in any
+bit and byte order (see &quot;Bit and byte order&quot; below). Packed BCD has a
+decimal digit in every 4 bits; BCD has one in the low 4 bits of every
+byte, whose high 4 bits are zero. Both are unsigned, their size must be
+whole digits, and decoding fails with <tt class="docutils literal">InvalidValue</tt> for any other
+bits.</p>
+<p class="last">An integer of more than 64 bits is a field of the type the field types
+table gives: a <tt class="docutils literal">u128</tt> or <tt class="docutils literal">i128</tt> in Rust up to 128 bits, and past
+that integers of <a class="reference internal" href="#integers-of-any-size">Integers of any size</a>, whose methods compute with
+it. It is decoded, encoded (checking its <tt class="docutils literal">ValidRange</tt>), described and
+compared, with a value or with another integer of any size, in every
+criterion. Nothing computes with it, so it can't be an enumeration, a
+boolean, a float, a time or a calibrated integer, give a size, count or
+location, be used by a calibrator or an algorithm, have an alarm (the
+alarm is left out, with a note), or be a packet length or checksum
+field. The demo's <tt class="docutils literal">Wide</tt> packet has integers of 65 to 200 bits in
+every encoding and order, and <tt class="docutils literal">SetWide</tt> command arguments of 96 and
+136 bits.</p>
+</dd>
 <dt>Float encoding</dt>
 <dd><tt class="docutils literal">IEEE754_1985</tt> and <tt class="docutils literal">IEEE754</tt> (16, 32, 64, 80 or 128 bits: binary16,
 binary32, binary64, the x87 80-bit extended format and binary128),
@@ -2512,7 +2534,8 @@ commands that include another meta-command's container, transform
 algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
 deprecates), calibrators inside aggregate types that use other values,
 least-significant-bit-first strings and binary data that may not start on
-a byte boundary, integers of more than 64 bits, <tt class="docutils literal">nextEntry</tt> locations,
+a byte boundary, integers of more than 64 bits used other than as
+values (see &quot;Integer encoding&quot;), <tt class="docutils literal">nextEntry</tt> locations,
 and a <tt class="docutils literal">containerEnd</tt> location in a container without a fixed size.</dd>
 </dl>
 </div>
@@ -2589,6 +2612,10 @@ otherwise before the header is included.</p>
 </pre>
 </dd>
 </dl>
+<p>Generated packets hold integers of more than 64 bits in these types (see
+&quot;Integer encoding&quot; under <a class="reference internal" href="#supported-xtce">Supported XTCE</a>): bnum's, past 128 bits, in
+Rust, and in C structs declared with <tt class="docutils literal">XTCE_BN_TYPEDEF</tt>, <tt class="docutils literal">demo_uint200</tt>
+for a 200-bit unsigned integer, whose <tt class="docutils literal">bytes</tt> the functions take.</p>
 <p>Sizes are whole bytes; bnum's third parameter, a width in bits that
 isn't, has no counterpart. <tt class="docutils literal">make <span class="pre">bnum-check</span></tt> checks the library
 against bnum (see <a class="reference internal" href="#testing">Testing</a>). It also found one difference, kept

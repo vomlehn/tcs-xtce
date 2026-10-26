@@ -754,8 +754,11 @@ Field types:
      - Python
    * - integer (by encoded size and sign; with a calibrator, by the
        type's ``sizeInBits`` and ``signed``)
-     - ``u8`` … ``u64``, ``i8`` … ``i64``
-     - ``uint8_t`` … ``int64_t``
+     - ``u8`` … ``u128``, ``i8`` … ``i128``; over 128 bits
+       ``pk::Uint<N>`` or ``pk::Int<N>`` (bnum's, of ``N`` bytes)
+     - ``uint8_t`` … ``int64_t``; over 64 bits ``demo_uintB`` or
+       ``demo_intB``, ``B`` bits in ``uint8_t bytes[B / 8]`` (see `Integers
+       of any size`_)
      - ``int``
    * - float (with any encoding), time
      - ``f64``
@@ -1270,7 +1273,12 @@ return an error code and their result through a pointer. Examples:
    order list (Rust ``ByteOrder::Big``, ``Little`` or ``List(&[...])``;
    C ``XTCE_PK_BIG``, ``XTCE_PK_LITTLE`` or ``XTCE_PK_LIST`` with the list;
    Python ``"be"``, ``"le"`` or a tuple). Values of more than 64 bits are
-   a ``u128`` in Rust and a (``hi``, ``lo``) pair in C.
+   a ``u128`` in Rust and a (``hi``, ``lo``) pair in C. Integers of more
+   than 64 bits are read with ``wide::<N>(bits, lsb, order, field)``
+   (``xtce_pk_read_wide``) into ``N`` bytes, least significant first,
+   and ``wide_to_signed``, ``wide_from_signed``, ``wide_from_unsigned``,
+   ``wide_bcd_decode`` and ``wide_bcd_encode`` convert them as their
+   64-bit counterparts do. Python's ``uint_bits`` reads any size.
    ``limit(value, adjust, field)`` (``xtce_pk_read_limit``) ends the packet
    where a packet length field that was just read says, and
    ``finish(field)`` (``xtce_pk_read_finish``) checks that decoding
@@ -1448,12 +1456,26 @@ Sizes and counts from other fields
    bounds.
 
 Integer encoding
-   1–64 bits; ``unsigned``, ``twosComplement``, ``signMagnitude``,
-   ``onesComplement``, ``BCD`` and ``packedBCD``, in any bit and byte
-   order (see "Bit and byte order" below). Packed BCD has a decimal digit
-   in every 4 bits; BCD has one in the low 4 bits of every byte, whose high 4
-   bits are zero. Both are unsigned, their size must be whole digits, and
-   decoding fails with ``InvalidValue`` for any other bits.
+   Any number of bits; ``unsigned``, ``twosComplement``,
+   ``signMagnitude``, ``onesComplement``, ``BCD`` and ``packedBCD``, in any
+   bit and byte order (see "Bit and byte order" below). Packed BCD has a
+   decimal digit in every 4 bits; BCD has one in the low 4 bits of every
+   byte, whose high 4 bits are zero. Both are unsigned, their size must be
+   whole digits, and decoding fails with ``InvalidValue`` for any other
+   bits.
+
+   An integer of more than 64 bits is a field of the type the field types
+   table gives: a ``u128`` or ``i128`` in Rust up to 128 bits, and past
+   that integers of `Integers of any size`_, whose methods compute with
+   it. It is decoded, encoded (checking its ``ValidRange``), described and
+   compared, with a value or with another integer of any size, in every
+   criterion. Nothing computes with it, so it can't be an enumeration, a
+   boolean, a float, a time or a calibrated integer, give a size, count or
+   location, be used by a calibrator or an algorithm, have an alarm (the
+   alarm is left out, with a note), or be a packet length or checksum
+   field. The demo's ``Wide`` packet has integers of 65 to 200 bits in
+   every encoding and order, and ``SetWide`` command arguments of 96 and
+   136 bits.
 
 Float encoding
    ``IEEE754_1985`` and ``IEEE754`` (16, 32, 64, 80 or 128 bits: binary16,
@@ -2089,7 +2111,8 @@ Not supported
    algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
    deprecates), calibrators inside aggregate types that use other values,
    least-significant-bit-first strings and binary data that may not start on
-   a byte boundary, integers of more than 64 bits, ``nextEntry`` locations,
+   a byte boundary, integers of more than 64 bits used other than as
+   values (see "Integer encoding"), ``nextEntry`` locations,
    and a ``containerEnd`` location in a container without a fixed size.
 
 Known limitations
@@ -2167,6 +2190,11 @@ standard library and allocate nothing:
       U256 x = U256::one() << 160;
       std::optional<U256> y = x.checked_mul(x);  // none: 2^320 overflows
       std::cout << x.pow(3) << "\n";               // 0: it wraps
+
+Generated packets hold integers of more than 64 bits in these types (see
+"Integer encoding" under `Supported XTCE`_): bnum's, past 128 bits, in
+Rust, and in C structs declared with ``XTCE_BN_TYPEDEF``, ``demo_uint200``
+for a 200-bit unsigned integer, whose ``bytes`` the functions take.
 
 Sizes are whole bytes; bnum's third parameter, a width in bits that
 isn't, has no counterpart. ``make bnum-check`` checks the library

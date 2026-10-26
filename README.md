@@ -211,8 +211,9 @@ let wire = codec.encode(&demo::SetMode { mode: demo::ModeArgType::SCIENCE, ..Def
 
 Supported features:
 
-* every XTCE data type: integers (any size up to 64 bits, every signed
-  encoding and BCD), floats (IEEE 754 16 to 128 bits, MIL-STD-1750A, DEC,
+* every XTCE data type: integers (any size, every signed encoding and
+  BCD; past 64 bits they are held with the bnum crate in Rust and with
+  `xtce/bnum.h`, a C and C++ library that mirrors it), floats (IEEE 754 16 to 128 bits, MIL-STD-1750A, DEC,
   IBM, TI), strings in every character set, binary, enumerations,
   booleans, times, arrays and aggregates, in any bit and byte order, with
   valid ranges checked when encoding;

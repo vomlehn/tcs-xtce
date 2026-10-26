@@ -144,7 +144,8 @@ def main() -> None:
                     out.append(f"{op} {t} {base} {rng.randint(0, 2 * bits)}")
                 elif op == "isqrt":
                     # bnum panics on a negative value.
-                    out.append(f"{op} {t} {min(abs(pick()), limits(signed, n)[1])}")
+                    v = min(abs(pick()), limits(signed, n)[1])
+                    out.append(f"{op} {t} {v}")
                 elif op == "to_str_radix":
                     out.append(f"{op} {t} {pick()} {rng.randint(2, 36)}")
                 elif op == "from_str_radix":

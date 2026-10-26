@@ -1278,7 +1278,8 @@ being encoded.</p>
 <div class="section" id="runtime">
 <h2><a class="toc-backref" href="#toc-entry-26">Runtime</a></h2>
 <p><tt class="docutils literal">BitReader</tt> and <tt class="docutils literal">BitWriter</tt> handle fields of 1–64 bits, most
-significant bit first, at any bit position:</p>
+significant bit first, at any bit position (wider integers are read and
+written a bit at a time; see <a class="reference internal" href="#integers-of-any-size">Integers of any size</a>):</p>
 <ul class="simple">
 <li>Little-endian fields are read big-endian and then byte-swapped, so
 they must be a whole number of bytes.</li>
@@ -1318,6 +1319,16 @@ variable-length arrays, so the header uses none.</p>
 <p><tt class="docutils literal">tests/bnum_check.sh</tt> holds the claim to account: the Rust tool runs
 the cases on bnum itself, and every C and C++ result must match it
 exactly.</p>
+<p>Packets use these integers only as values: they are read and written a
+bit at a time into bytes (<tt class="docutils literal"><span class="pre">BitReader::wide</span></tt>, <tt class="docutils literal">xtce_pk_read_wide</tt>),
+in the same bit and byte orders as narrower ones, converted between raw
+fields and values with bnum's operations, compared and described. The
+compiler rejects every use that would compute with one, so sizes,
+offsets, calibrators and algorithms stay in 64-bit integers and doubles.
+Fields of 65 to 128 bits are <tt class="docutils literal">u128</tt> and <tt class="docutils literal">i128</tt> in Rust, which hold
+them natively, and 16-byte integers in C; comparisons between integers of
+different sizes widen both to one more byte than the larger, so that
+either sign fits.</p>
 </div>
 <div class="section" id="the-digest-xtce-digest">
 <h1><a class="toc-backref" href="#toc-entry-28">The digest (xtce-digest)</a></h1>

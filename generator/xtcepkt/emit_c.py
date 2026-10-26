@@ -160,6 +160,8 @@ class CEmitter:
             return self.p + vt.ident
         if k == "binary" and vt.enc.variable:
             return f"{self.p}varbytes{vt.enc.bits // 8}"
+        if k == "int" and vt.wide:
+            return f"{self.p}{'' if vt.signed else 'u'}int{vt.width}"
         if k == "int":
             return f"{'' if vt.signed else 'u'}int{vt.width}_t"
         if k == "float":
@@ -181,10 +183,14 @@ class CEmitter:
     def zero(self, vt: VType) -> str:
         return ("XTCE_PK_ZERO"
                 if vt.kind in ("string", "binary", "array", "aggregate")
-                else "0")
+                or vt.wide else "0")
 
     def literal(self, vt: VType, v) -> str:
         k = vt.kind
+        if k == "int" and vt.wide:
+            b = v.to_bytes(vt.width // 8, "little", signed=vt.signed)
+            return (f"XTCE_BN_LIT({self.ctype(vt)}, {{{{"
+                    + ", ".join(f"0x{x:02x}" for x in b) + "}})")
         if k == "int":
             return slit(v) if vt.signed else ulit(v)
         if k == "float":
@@ -212,6 +218,15 @@ class CEmitter:
                        if vt.kind == "binary" and not vt.enc.variable})
         vbins = sorted({vt.enc.bits // 8 for vt in self.vtypes()
                         if vt.kind == "binary" and vt.enc.variable})
+        wides = sorted({(vt.width, vt.signed) for vt in self.vtypes()
+                        if vt.wide})
+        if wides:
+            self.line()
+            self.line("/* Integers of N bits, xtce/bnum.h's: whole bytes, "
+                      "least significant first. */")
+            for bits, signed in wides:
+                self.line(f"XTCE_BN_TYPEDEF({self.p}{'' if signed else 'u'}int"
+                          f"{bits}, {bits // 8});")
         if strs:
             self.line()
             self.line("/* Strings of at most N bytes of UTF-8; `data` is "
@@ -500,6 +515,8 @@ class CEmitter:
                           f"{dst}.data));", depth + 1)
                 self.line(f"{dst}.len = n;", depth + 1)
             self.line("}", depth)
+        elif isinstance(e, IntEnc) and vt.wide:
+            self.read_wide(vt, dst, f, depth)
         elif isinstance(e, (IntEnc, FloatEnc)):
             self.line("{", depth)
             d = depth + 1
@@ -572,6 +589,56 @@ class CEmitter:
             args = f"r, {spec}, {f}, {dst}.data, {str_cap(vt)}, &{dst}.len"
             self.line(f"XTCE_PK_TRY(xtce_pk_read_string({args}));", depth + 1)
             self.line("}", depth)
+
+    def read_wide(self, vt: VType, dst: str, f: str, depth: int) -> None:
+        """Reads an integer of more than 64 bits into ``dst``."""
+        e, n, d = vt.enc, vt.width // 8, depth + 1
+        self.line("{", depth)
+        self.line(f"uint8_t raw[{n}];", d)
+        args = self.order_args(e, d)
+        self.line(f"XTCE_PK_TRY(xtce_pk_read_wide(r, {e.bits}, {args}, {f}, "
+                  f"raw, {n}));", d)
+        if e.bcd:
+            self.line(f"uint8_t s[{n}];", d)
+            self.line(f"XTCE_PK_TRY(xtce_pk_wide_bcd_decode(raw, {n}, "
+                      f"{e.bits}, {bool_lit(e.encoding == 'packedBCD')}, {f}, "
+                      "r->err, s));", d)
+        if vt.signed:
+            self.line(f"xtce_pk_wide_to_signed(raw, {n}, {e.bits}, "
+                      f"{ENC[int_enc(vt)]});", d)
+        self.line(f"memcpy({dst}.bytes, raw, {n});", d)
+        self.line("}", depth)
+
+    def write_wide(self, vt: VType, x: str, f: str, depth: int) -> None:
+        """Writes ``x``, an integer of more than 64 bits."""
+        e, n, d = vt.enc, vt.width // 8, depth + 1
+        self.line("{", depth)
+        self.line(f"uint8_t raw[{n}];", d)
+        self.line(f"memcpy(raw, ({x}).bytes, {n});", d)
+        if e.bcd:
+            self.line(f"uint8_t s[{n}];", d)
+            self.line(f"XTCE_PK_TRY(xtce_pk_wide_bcd_encode(raw, {n}, "
+                      f"{e.bits}, {bool_lit(e.encoding == 'packedBCD')}, {f}, "
+                      "w->err, s));", d)
+        elif vt.signed:
+            self.line(f"XTCE_PK_TRY(xtce_pk_wide_from_signed(raw, {n}, "
+                      f"{e.bits}, {ENC[int_enc(vt)]}, {f}, w->err));", d)
+        else:
+            self.line(f"XTCE_PK_TRY(xtce_pk_wide_from_unsigned(raw, {n}, "
+                      f"{e.bits}, {f}, w->err));", d)
+        args = self.order_args(e, d)
+        self.line(f"XTCE_PK_TRY(xtce_pk_write_wide(w, {e.bits}, {args}, raw));",
+                  d)
+        self.line("}", depth)
+
+    def int_bytes(self, vt: VType, x: str) -> str:
+        """The bytes of integer ``x``, least significant first, and how
+        many, to compare it with xtce/bnum.h."""
+        if vt.wide:
+            return f"({x}).bytes, {vt.width // 8}"
+        if vt.kind == "enum" or vt.signed:
+            return f"xtce_pk_le64_i((int64_t)({x})).bytes, 8"
+        return f"xtce_pk_le64_u((uint64_t)({x})).bytes, 8"
 
     def order_args(self, e, depth: int) -> str:
         """The bit order, byte order and order list arguments of the
@@ -679,7 +746,9 @@ class CEmitter:
             self.line("return xtce_pk_fail(w->err, XTCE_PK_NOT_INVERTIBLE, "
                       f"{f}, NULL);", depth)
             return
-        if isinstance(e, FloatEnc):
+        if isinstance(e, IntEnc) and vt.wide:
+            self.write_wide(vt, x, f, depth)
+        elif isinstance(e, FloatEnc):
             self.line("{", depth)
             d = depth + 1
             self.uncalibrate(vt, x, f, d, ref)
@@ -776,8 +845,12 @@ class CEmitter:
         if other is not None:
             # Both values are present: the compiler rejects optional ones.
             y = other.expr + access(c.other_path)
+            ovt = c.other_target or c.other.vtype
+            if k == "int" and (vt.wide or ovt.wide):
+                return (f"xtce_bn_cmp_mixed({self.int_bytes(vt, x)}, "
+                        f"{bool_lit(vt.signed)}, {self.int_bytes(ovt, y)}, "
+                        f"{bool_lit(ovt.signed)}) {op} 0")
             if k in ("int", "enum"):
-                ovt = c.other_target or c.other.vtype
                 a = "i" if k == "enum" or vt.signed else "u"
                 b = "i" if k == "enum" or ovt.signed else "u"
                 return (f"xtce_pk_cmp_{a if a == b else a + b}({x}, {y}) {op} "
@@ -788,13 +861,18 @@ class CEmitter:
             return f"{x} {op} {y}"
         if k in ("int", "enum"):
             signed = k == "enum" or vt.signed
-            lo, hi = (I64_MIN, I64_MAX) if signed else (0, U64_MAX)
+            lo, hi = (field_range(vt) if vt.wide else (I64_MIN, I64_MAX)
+                      if signed else (0, U64_MAX))
             if v < lo or v > hi:
                 # Every value of the field compares the same way.
                 below = v < lo
                 holds = {"==": False, "!=": True, "<": not below,
                          "<=": not below, ">": below, ">=": below}[op]
                 cond = f"((void)({x}), {int(holds)})"
+            elif vt.wide:
+                cond = (f"xtce_bn_cmp(({x}).bytes, "
+                        f"({self.literal(vt, v)}).bytes, {vt.width // 8}, "
+                        f"{bool_lit(signed)}) {op} 0")
             elif signed:
                 cond = f"xtce_pk_cmp_i({x}, {slit(v)}) {op} 0"
             else:
@@ -1716,12 +1794,19 @@ class CEmitter:
         self.line(f"xtce_pk_{sync}_sync_push(&s->sync, data, len, f, ctx);", 1)
         self.line("}")
 
-    @staticmethod
-    def valid_test(vt: VType, x: str) -> str:
+    def valid_test(self, vt: VType, x: str) -> str:
         """Whether value ``x`` lies in one of its type's valid ranges."""
         tests = []
         for b in vt.valid:
-            if vt.kind == "int":
+            if vt.wide:
+                def cmp(v):
+                    return (f"xtce_bn_cmp(({x}).bytes, "
+                            f"({self.literal(vt, v)}).bytes, {vt.width // 8}, "
+                            f"{bool_lit(vt.signed)})")
+                parts = (([f"{cmp(b.lo)} >= 0"] if b.lo is not None else [])
+                         + ([f"{cmp(b.hi)} <= 0"] if b.hi is not None else []))
+                tests.append(" && ".join(parts) or "true")
+            elif vt.kind == "int":
                 lit = slit if vt.signed else ulit
                 parts = (([f"{x} >= {lit(b.lo)}"] if b.lo is not None else [])
                          + ([f"{x} <= {lit(b.hi)}"] if b.hi is not None
@@ -1900,6 +1985,16 @@ class CEmitter:
             self.line(f"{self.p}{vt.ident}_describe(t, {x});", depth)
         elif k == "bool":
             self.line(f'xtce_pk_text_puts(t, {x} ? "true" : "false");', depth)
+        elif vt.wide:
+            n = vt.width // 8
+            # A sign, and fewer than 2.41 digits a byte.
+            self.line("{", depth)
+            self.line(f"uint8_t s[{n}];", depth + 1)
+            self.line(f"char d[{3 * n + 2}];", depth + 1)
+            self.line(f"xtce_bn_to_str_radix(({x}).bytes, {n}, "
+                      f"{bool_lit(vt.signed)}, 10, s, d, sizeof d);", depth + 1)
+            self.line("xtce_pk_text_puts(t, d);", depth + 1)
+            self.line("}", depth)
         elif vt.signed:
             self.line(f"xtce_pk_text_int(t, {x});", depth)
         else:

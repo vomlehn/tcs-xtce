@@ -410,8 +410,18 @@ class VType:
 
     @property
     def width(self) -> int:
+        """The bits of the generated field: 8, 16, 32, 64 or 128, or the
+        whole bytes of a wider value."""
         bits = self.eng[0] if self.eng else self.enc.bits
-        return next(w for w in (8, 16, 32, 64) if bits <= w)
+        return next((w for w in (8, 16, 32, 64, 128) if bits <= w),
+                    -(-bits // 8) * 8)
+
+    @property
+    def wide(self) -> bool:
+        """An integer of more than 64 bits.  It is decoded, encoded and
+        compared, but not used in arithmetic: sizes, calibrators,
+        algorithms and alarms."""
+        return self.kind == "int" and self.width > 64
 
     @property
     def signed(self) -> bool:
