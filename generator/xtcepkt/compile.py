@@ -251,13 +251,6 @@ def walk_members(vt: VType, members: tuple, what: str) -> tuple[tuple, VType]:
             if vt.kind != "array":
                 raise Unsupported(f"{what}: {vt.kind} type {vt.key} is not an "
                                   "array")
-            # The count can vary in the first dimension only: elements are
-            # flattened with the last dimension fastest, so a varying later
-            # dimension would move every element after the first row.
-            varies = isinstance(e.count, DynSize)
-            if varies and None in e.sizes[1:]:
-                raise Unsupported(f"{what}: element of an array whose count "
-                                  "varies in a dimension other than the first")
             # One index per dimension, flattened with the last fastest.
             index = [step]
             while len(index) < e.dims and steps and isinstance(steps[0], int):
@@ -265,20 +258,32 @@ def walk_members(vt: VType, members: tuple, what: str) -> tuple[tuple, VType]:
             if len(index) < e.dims:
                 raise Unsupported(f"{what}: {len(index)} indexes for a "
                                   f"{e.dims}-dimensional array")
-            flat = 0
+            varies = isinstance(e.count, DynSize)
+            # flat + stride * d, d the size of the dimension that varies
+            # (if any), whose index must be below d.
+            flat = stride = need = 0
+            per = 1
             for i, start, size in zip(index, e.starts, e.sizes):
                 if size is None:
-                    # Whether the element is there is known only when the
-                    # packet is decoded or encoded.  This is the first
-                    # dimension, so flat starts as i - start.
                     if i < start:
                         raise Unsupported(f"{what}: index {i} is before "
                                           f"{start}")
-                    size = 1
-                elif not start <= i < start + size:
+                    # Whether the element is there is known only when the
+                    # packet is decoded or encoded.
+                    need = i - start + 1
+                    stride = flat
+                    flat = i - start
+                    continue
+                if not start <= i < start + size:
                     raise Unsupported(f"{what}: index {i} is outside "
                                       f"{start}..{start + size - 1}")
                 flat = flat * size + i - start
+                stride *= size
+                per *= size
+            if varies and stride:
+                path.append(Index(flat, None, stride, per, need))
+                vt = e.elem
+                continue
             path.append(Index(flat, None if varies else e.count))
             vt = e.elem
             continue

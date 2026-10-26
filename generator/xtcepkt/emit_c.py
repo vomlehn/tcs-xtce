@@ -119,10 +119,16 @@ def bool_lit(b: bool) -> str:
     return "true" if b else "false"
 
 
-def access(path) -> str:
-    """The expression suffix for a member and element path."""
-    return "".join(f".data[{p.i}]" if isinstance(p, Index) else "." + p
-                   for p in path)
+def access(x: str, path) -> str:
+    """The expression for the member or element ``path`` of ``x``."""
+    for p in path:
+        if not isinstance(p, Index):
+            x += "." + p
+        elif p.stride:
+            x += f".data[{p.i} + {p.stride} * ({x}.len / {p.per})]"
+        else:
+            x += f".data[{p.i}]"
+    return x
 
 
 class Acc:
@@ -347,10 +353,8 @@ class CEmitter:
             return x
         if e[0] == "value":
             r = e[1]
-            v = place(r.local).expr
-            for p in r.member:
-                v += f".data[{p.i}]" if isinstance(p, Index) else "." + p
-            return math_value(r.vtype, v, "c")
+            return math_value(r.vtype, access(place(r.local).expr, r.member),
+                              "c")
         args = [self.math_expr(a, x, place) for a in e[1:]]
         if e[0] in ("+", "-", "*"):
             return f"({args[0]} {e[0]} {args[1]})"
@@ -453,11 +457,16 @@ class CEmitter:
                 if not isinstance(p, Index):
                     x += "." + p
                     continue
-                if p.count is None and (x, p.i) not in done:
+                if p.stride and (x, p) not in done:
+                    done.add((x, p))
+                    self.line(f"XTCE_PK_TRY(xtce_pk_element_at({x}.len, "
+                              f"{p.per}, {p.need}, {cstr(lc.name)}, {err}));",
+                              depth)
+                elif p.count is None and (x, p.i) not in done:
                     done.add((x, p.i))
                     self.line(f"XTCE_PK_TRY(xtce_pk_element({x}.len, {p.i}, "
                               f"{cstr(lc.name)}, {err}));", depth)
-                x += f".data[{p.i}]"
+                x = access(x, [p])
 
     def string_spec(self, vt: VType, err: str, f: str, ref, depth: int) -> str:
         """The address of the spec of a string type, declaring a sized copy
@@ -845,11 +854,11 @@ class CEmitter:
 
     def condition(self, c: Criterion, acc: Acc,
                   other: Optional[Acc] = None) -> str:
-        vt, x, op, v = c.vtype, acc.expr + access(c.path), c.op, c.value
+        vt, x, op, v = c.vtype, access(acc.expr, c.path), c.op, c.value
         k = vt.kind
         if other is not None:
             # Both values are present: the compiler rejects optional ones.
-            y = other.expr + access(c.other_path)
+            y = access(other.expr, c.other_path)
             ovt = c.other_target or c.other.vtype
             if k == "int" and (vt.wide or ovt.wide):
                 return (f"xtce_bn_cmp_mixed({self.int_bytes(vt, x)}, "
@@ -1103,7 +1112,7 @@ class CEmitter:
         first matching value of a DiscreteLookupList.  ``place`` gives the
         Acc of a Local."""
         if d.lookup is None:
-            return place(d.local).expr + access(d.path)
+            return access(place(d.local).expr, d.path)
         x = slit(d.default)
         for criteria, v in reversed(d.lookup):
             cond = " && ".join(f"({self.term(c, place)})" for c in criteria)
@@ -1517,7 +1526,7 @@ class CEmitter:
             for c in node.criteria:
                 for lc, prefix, count in term_indexes(c):
                     if lc in names:
-                        guards[(names[lc].expr + access(prefix),
+                        guards[(access(names[lc].expr, prefix),
                                 count)] = (lc.name)
         for (x, count), name in guards.items():
             # Criteria are checked before the arrays they index are written.
@@ -1857,7 +1866,7 @@ class CEmitter:
         """An xtce_pk_inputs of a custom algorithm's inputs."""
         args = "".join(f", {flt(x[1])}" if x[0] == "const"
                        else ", (double)"
-                       + math_value(x[3], place(x[1]).expr + access(x[2]), "c")
+                       + math_value(x[3], access(place(x[1]).expr, x[2]), "c")
                        for x in inputs)
         return f"xtce_pk_inputs_of({len(inputs)}{args})"
 

@@ -1263,6 +1263,11 @@ class ElementTests(unittest.TestCase):
                               + dim(fixed(0), fixed(2)), "Arr[2][1]")
         crit = compile_xml(text).nodes[0].items[2].criteria[0]
         self.assertEqual(crit.path, (Index(4, None),))
+        # Two rows of N: Arr[1][2] is element 2 + N, there when N >= 3.
+        text = self.condition(dim(fixed(0), fixed(1))
+                              + dim(fixed(0), dynamic("N")), "Arr[1][2]")
+        crit = compile_xml(text).nodes[0].items[2].criteria[0]
+        self.assertEqual(crit.path, (Index(2, None, 1, 2, 3),))
 
     def test_subset(self):
         # Elements 1..3 of 0..4 in the entry, then 2 of them in another.
@@ -1297,10 +1302,6 @@ class ElementTests(unittest.TestCase):
     def test_rejected(self):
         for dims, ref, why in (
                 (dim(fixed(0), fixed(2)), "Arr[3]", "index 3 is outside 0..2"),
-                (dim(fixed(0), fixed(1)) + dim(fixed(0), dynamic("N")),
-                 "Arr[0][0]",
-                 "element of an array whose count varies in a dimension other "
-                 "than the first"),
                 (dim(fixed(1), dynamic("N")), "Arr[0]", "index 0 is before 1"),
                 (dim(fixed(0), fixed(1)) + dim(fixed(0), fixed(1)), "Arr[0]",
                  "1 indexes for a 2-dimensional array"),

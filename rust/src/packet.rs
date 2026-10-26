@@ -2529,6 +2529,25 @@ pub fn element<'a, T>(
     v.get(i).ok_or(PacketError::BadSize { field })
 }
 
+/// Element `i + stride * d` of `v`, a multi-dimensional array whose count
+/// varies in a dimension after the first, which has `d = v.len() / per`
+/// elements; fails with `BadSize`, naming `field`, unless d is at least
+/// `need`.
+pub fn element_at<'a, T>(
+    v: &'a [T],
+    i: usize,
+    stride: usize,
+    per: usize,
+    need: usize,
+    field: &'static str,
+) -> Result<&'a T> {
+    let d = v.len() / per;
+    if d < need {
+        return Err(PacketError::BadSize { field });
+    }
+    v.get(i + stride * d).ok_or(PacketError::BadSize { field })
+}
+
 /// The value of the field that gives a size or count of `n` (the inverse of
 /// [`dynamic_size`] followed by multiplying by `factor`), for encoding a
 /// field computed from the length of the value it sizes.  Fails with

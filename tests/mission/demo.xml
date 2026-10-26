@@ -1029,6 +1029,31 @@
           <Member name="Tag" typeRef="U8"/>
         </MemberList>
       </AggregateParameterType>
+      <!-- Two rows of TwoRowCols bytes: a count that varies in the second
+           dimension. -->
+      <ArrayParameterType name="TwoRowType" arrayTypeRef="U8">
+        <DimensionList>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <FixedValue>1</FixedValue>
+            </EndingIndex>
+          </Dimension>
+          <Dimension>
+            <StartingIndex>
+              <FixedValue>0</FixedValue>
+            </StartingIndex>
+            <EndingIndex>
+              <DynamicValue>
+                <ParameterInstanceRef parameterRef="TwoRowCols"/>
+                <LinearAdjustment intercept="-1"/>
+              </DynamicValue>
+            </EndingIndex>
+          </Dimension>
+        </DimensionList>
+      </ArrayParameterType>
       <IntegerParameterType name="RepCountType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
         <ValidRange minInclusive="0" maxInclusive="5"/>
@@ -1283,6 +1308,9 @@
       <Parameter name="HkSum" parameterTypeRef="U8"/>
       <Parameter name="HkMin" parameterTypeRef="DrDoubleType"/>
       <Parameter name="HkMax" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="TwoRowCols" parameterTypeRef="RepCountType"/>
+      <Parameter name="TwoRows" parameterTypeRef="TwoRowType"/>
+      <Parameter name="TwoRowNote" parameterTypeRef="U8"/>
       <Parameter name="ScaleMode" parameterTypeRef="U8"/>
       <Parameter name="ScaledPair" parameterTypeRef="ScaledPairType"/>
       <Parameter name="TailCount" parameterTypeRef="RepCountType"/>
@@ -2225,6 +2253,22 @@
       </SequenceContainer>
       <!-- TailFlag ends 4 bits before TailData starts, and TailSum ends a
            byte before the end of the packet, whose size varies. -->
+      <SequenceContainer name="TwoRowBlock">
+        <EntryList>
+          <ParameterRefEntry parameterRef="TwoRowCols"/>
+          <ParameterRefEntry parameterRef="TwoRows"/>
+          <ParameterRefEntry parameterRef="TwoRowNote">
+            <IncludeCondition>
+              <Comparison parameterRef="TwoRows[1][2]" value="9"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="590"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="ScaledBlock">
         <EntryList>
           <ParameterRefEntry parameterRef="ScaleMode"/>

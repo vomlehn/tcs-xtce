@@ -2170,6 +2170,15 @@ static inline int xtce_pk_element(size_t len, size_t i, const char* f,
         return i < len ? 0 : xtce_pk_fail(err, XTCE_PK_BAD_SIZE, f, NULL);
 }
 
+/* Checks that a multi-dimensional array of `len` elements, whose count
+ * varies in a dimension after the first, has at least `need` in that
+ * dimension, of `len / per`. */
+static inline int xtce_pk_element_at(size_t len, size_t per, size_t need,
+                                     const char* f, xtce_pk_error* err) {
+        return len / per >= need ? 0
+                                 : xtce_pk_fail(err, XTCE_PK_BAD_SIZE, f, NULL);
+}
+
 /* A size or count that another field gives (an XTCE DynamicValue):
  * (slope * x + intercept) / unit, where x is that field's value and unit is 8
  * for a size in bits used in whole bytes.  Fails with XTCE_PK_BAD_SIZE unless

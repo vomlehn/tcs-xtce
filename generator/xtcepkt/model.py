@@ -193,10 +193,17 @@ class Index:
     """A step into element ``i`` of a one-dimensional array of ``count``
     elements, in a reference such as ``P[2]``.  ``count`` is None when
     another value gives it: the element may then be missing, which reading
-    it reports."""
+    it reports.  A ``stride`` puts it further on by a multiple of a
+    dimension's size that only the data gives."""
 
     i: int
     count: Optional[int]
+    # For an array whose count varies in a dimension after the first, the
+    # element is at i + stride * d, where d = len / per is that dimension's
+    # size, and it is there when d >= need.
+    stride: int = 0
+    per: int = 1
+    need: int = 0
 
 
 def ref_text(name: str, steps) -> str:

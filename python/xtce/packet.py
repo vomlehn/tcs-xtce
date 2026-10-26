@@ -1457,6 +1457,17 @@ def element(v, i: int, field: str):
     return v[i]
 
 
+def element_at(v, i: int, stride: int, per: int, need: int, field: str):
+    """Element ``i + stride * d`` of ``v``, a multi-dimensional array whose
+    count varies in a dimension after the first, which has ``d = len(v) /
+    per`` elements; raises ``BadSize``, naming ``field``, unless d is at
+    least ``need``."""
+    d = len(v) // per
+    if d < need:
+        raise PacketError("BadSize", field)
+    return v[i + stride * d]
+
+
 def check_size(v, n: int, field: str) -> None:
     """Raises ``BadSize`` unless ``v`` has ``n`` elements or bytes."""
     if len(v) != n:

@@ -599,6 +599,9 @@ def reach(x: str, path, f: str) -> str:
     for p in path:
         if not isinstance(p, Index):
             x += "." + p
+        elif p.stride:
+            x = (f"(*pk::element_at(&{x}, {p.i}, {p.stride}, {p.per}, "
+                 f"{p.need}, {f})?)")
         elif p.count is None:
             x = f"(*pk::element(&{x}, {p.i}, {f})?)"
         else:

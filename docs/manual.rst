@@ -1424,15 +1424,17 @@ Array elements
    the demo, ``ProbeOne`` and ``ProbeOther`` are chosen by
    ``Probes[0].Id``, and ``ProbeData`` is sized by ``Probes[1].Gains[0]``.
 
-   The array's count may come from another value in its first dimension
-   (the only one, for a one-dimensional array), but not in a later one,
-   which would move every element after the first row. Whether the
-   element is there is then known only from the packet: decoding and
+   The array's count may come from another value in any one dimension.
+   In a later one it moves every element after the first row, so where
+   the element is, as well as whether it is there, is known only from the
+   packet. Either way decoding and
    encoding fail with ``BadSize``, naming the array, when it isn't, at
    the point where the criterion or size that reads it is evaluated. In
    the demo, ``Tally``'s ``TallyData`` is sized by ``Tallies[0]`` and its
    ``TallyExtra`` is included when ``Tallies[1]`` is 7, so a ``Tally`` with
-   one tally fails, and one with none fails sooner.
+   one tally fails, and one with none fails sooner; ``TwoRowBlock`` has
+   two rows of ``TwoRowCols`` bytes, and ``TwoRowNote`` is included when
+   ``TwoRows[1][2]`` is 9.
 
 Arrays
    Elements of any supported type, arrays among them (an array of
@@ -2173,8 +2175,7 @@ Name references
    documents (see `Missions in several documents`_).
 
 Not supported
-   references to elements of arrays whose count varies in a dimension other
-   than the first, ``IndirectParameterRefEntry`` chosen by an integer or
+   ``IndirectParameterRefEntry`` chosen by an integer or
    string without an ``aliasNameSpace``, the stream constructs listed under
    Streams, instances of values in other packets, repeated segment entries
    with an ``order`` or located from the end of their container,
