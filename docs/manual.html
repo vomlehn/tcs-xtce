@@ -1368,12 +1368,31 @@ strings and binary), or above the field's bound fails with
 <tt class="docutils literal">BadSize</tt>.</p>
 <p>The bound is the largest value the referenced field's <tt class="docutils literal">ValidRange</tt>
 allows, or, without one, its encoding, or the largest of a
-<tt class="docutils literal">DiscreteLookupList</tt>'s values. It is limited to what fits in
-64 KiB on the wire, which keeps C structs bounded. In C this bound is
+<tt class="docutils literal">DiscreteLookupList</tt>'s values. It is limited to what fits in the
+mission's maximum field size on the wire, 64 KiB unless the document
+says otherwise, which keeps C structs bounded. In C this bound is
 <tt class="docutils literal">N</tt> in the field's type, so give count fields a <tt class="docutils literal">ValidRange</tt>: the
 demo's <tt class="docutils literal">SampleCount</tt> (<tt class="docutils literal"><span class="pre">0..6</span></tt>) makes <tt class="docutils literal">Readings</tt> a
 <tt class="docutils literal">demo_int16_list6</tt>, where an 8-bit count without a range would allow
 255 elements, and a 32-bit one 32768 of them.</p>
+<p><strong>The maximum field size.</strong> An <tt class="docutils literal">AncillaryData</tt> named
+<tt class="docutils literal"><span class="pre">tcs-xtce.max-field-bytes</span></tt> on a document's root <tt class="docutils literal">SpaceSystem</tt> sets
+it, in bytes, from 1 to 4294967295 (a 32-bit size):</p>
+<pre class="code xml literal-block">
+<span class="name tag">&lt;SpaceSystem</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;Rover&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;AncillaryDataSet&gt;</span><span class="whitespace">
+    </span><span class="name tag">&lt;AncillaryData</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;tcs-xtce.max-field-bytes&quot;</span><span class="name tag">&gt;</span>1048576<span class="name tag">&lt;/AncillaryData&gt;</span><span class="whitespace">
+  </span><span class="name tag">&lt;/AncillaryDataSet&gt;</span><span class="whitespace">
+  </span>...
+</pre>
+<p>The setting is in the document, so a sender and a receiver that check
+the document's digest also agree on it. When a mission is split over
+several documents, every root that gives it must give the same value;
+on any other <tt class="docutils literal">SpaceSystem</tt> it is an error. It bounds every value
+whose size, count or location another value gives, and values that
+take the rest of the packet. A packet too large to count its bits in a
+32-bit <tt class="docutils literal">size_t</tt> (over 512 MiB) still builds on 64-bit targets, but
+its generated C and Rust refuse to compile on 32-bit ones.</p>
 <p><strong>Packet length fields.</strong> XTCE has no way to say that a field holds the
 length of its packet, so tcs-xtce reads it from an <tt class="docutils literal">AncillaryData</tt>
 named <tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> on the parameter or argument. Its value is an
@@ -1818,8 +1837,9 @@ type, which must be the same kind of type, possibly in another document;
 those it gives replace the base's, whole.</dd>
 <dt>Ancillary data</dt>
 <dd><tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> on a parameter or argument marks a packet length
-field, described under the generated packet types. Other ancillary
-data is ignored.</dd>
+field, and <tt class="docutils literal"><span class="pre">tcs-xtce.max-field-bytes</span></tt> on a root <tt class="docutils literal">SpaceSystem</tt> sets
+the maximum field size, both described under the generated packet
+types. Other ancillary data is ignored.</dd>
 <dt>Aggregates</dt>
 <dd>Members of any supported type except the aggregate itself, values
 that take the rest of the packet, and values whose size another value
@@ -2047,11 +2067,12 @@ must differ and fit the encoding. In the demo, <tt class="docutils literal">Repl
 <dd><p class="first">A fixed size in whole bytes, or a size another field gives. Values
 must have exactly that length.</p>
 <p class="last">A <tt class="docutils literal">SizeInBits</tt> of <tt class="docutils literal"><span class="pre">-1</span></tt> (a Yamcs convention for &quot;the size of the
-value given&quot;) takes the rest of the packet, up to 64 KiB. It must be
+value given&quot;) takes the rest of the packet, up to the maximum field
+size (64 KiB by default). It must be
 the last entry of every packet that contains it, and can't be an array
 element, an aggregate member or repeated. Decoding fails with
 <tt class="docutils literal">BadSize</tt> unless what is left is whole bytes, and encoding fails
-with <tt class="docutils literal">TooLong</tt> above 64 KiB. Yamcs also allows such values before
+with <tt class="docutils literal">TooLong</tt> above that size. Yamcs also allows such values before
 other entries, where only the sender knows their size; those packets
 are not supported.</p>
 </dd>
@@ -2194,7 +2215,8 @@ packet for inherited entries, and the inclusion point for entries of
 an included container. A <tt class="docutils literal">FixedValue</tt> offset may be negative. A
 <tt class="docutils literal">DynamicValue</tt> or <tt class="docutils literal">DiscreteLookupList</tt> offset is computed like a
 size, in bits, so it must be a whole number from 0 up to its bound
-(at most 64 KiB), or decoding and encoding fail with <tt class="docutils literal">BadSize</tt>; in
+(at most the maximum field size), or decoding and encoding fail with
+<tt class="docutils literal">BadSize</tt>; in
 the demo, <tt class="docutils literal">Frame</tt>'s <tt class="docutils literal">FrameEnd</tt> comes <tt class="docutils literal">FrameGap</tt> bits after the
 body. Repeated and fixed-size containers need fixed offsets.</dd>
 <dt>Include conditions</dt>

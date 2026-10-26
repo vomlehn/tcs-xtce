@@ -238,8 +238,15 @@ Encoding = Union[IntEnc, FloatEnc, StringEnc, BinaryEnc, ArrayEnc, AggregateEnc]
 
 # The most bits a field whose size or count another value gives may take on
 # the wire, unless the range of that value bounds it more tightly.  It keeps
-# the storage of C structs bounded.
+# the storage of C structs bounded.  This is the default; a mission sets its
+# own with the tcs-xtce.max-field-bytes AncillaryData.
 MAX_FIELD_BITS = 65536 * 8
+# The largest tcs-xtce.max-field-bytes: a size in bytes is a 32-bit integer.
+MAX_FIELD_BYTES_LIMIT = (1 << 32) - 1
+# The most bytes a packet can take and still count its bits in a 32-bit
+# size_t or usize.  The generated C and Rust refuse to build on such
+# targets for larger packets.
+NARROW_MAX_BYTES = ((1 << 32) - 1) // 8
 
 
 # --- calibrators -------------------------------------------------------------

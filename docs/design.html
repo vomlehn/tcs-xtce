@@ -707,7 +707,8 @@ drops its base's header, isn't useful.</p>
 <p>A calibrated integer keeps the <tt class="docutils literal">int</tt> kind; <tt class="docutils literal">eng</tt> holds the type's
 <tt class="docutils literal">sizeInBits</tt> and <tt class="docutils literal">signed</tt>, which size the generated field instead
 of the encoding. A binary value with an XTCE size of -1 has a
-<tt class="docutils literal">BinaryEnc</tt> with <tt class="docutils literal">rest</tt> set and a bound of <tt class="docutils literal">MAX_FIELD_BITS</tt>.
+<tt class="docutils literal">BinaryEnc</tt> with <tt class="docutils literal">rest</tt> set and a bound of the mission's
+<tt class="docutils literal">max_field_bits</tt>.
 The compiler checks that nothing follows it in any packet, so the end
 of the packet gives its size.</p>
 <p class="last">Schema defaults are filled in here: 8-bit unsigned integers, 32-bit
@@ -1079,8 +1080,19 @@ earlier in the packet, and given a bound:</p>
 <ul class="simple">
 <li>from the referenced value's <tt class="docutils literal">ValidRange</tt>, or its encoding (through
 its calibrator, for a calibrated integer);</li>
-<li>capped at <tt class="docutils literal">MAX_FIELD_BITS</tt> (64 KiB on the wire).</li>
+<li>capped at the compiler's <tt class="docutils literal">max_field_bits</tt>.</li>
 </ul>
+<p><tt class="docutils literal">max_field_bits</tt> comes from the <tt class="docutils literal"><span class="pre">tcs-xtce.max-field-bytes</span></tt>
+<tt class="docutils literal">AncillaryData</tt> of the documents' root <tt class="docutils literal">SpaceSystem</tt>s, or is
+<tt class="docutils literal">MAX_FIELD_BITS</tt> (64 KiB) without one. It is one value for the whole
+mission, read before anything is compiled, because a type's bound is
+cached with the type and a type can be used from any document; that is
+why roots must agree and other <tt class="docutils literal">SpaceSystem</tt>s may not give one. A
+size in bytes is limited to 32 bits. The runtimes count positions in
+bits in a <tt class="docutils literal">size_t</tt> or <tt class="docutils literal">usize</tt>, so for a packet whose <tt class="docutils literal">MAX_BYTES</tt>
+is over <tt class="docutils literal">NARROW_MAX_BYTES</tt> (512 MiB) the C emitter adds a
+<tt class="docutils literal">SIZE_MAX</tt> check with <tt class="docutils literal">#error</tt>, and the Rust emitter a <tt class="docutils literal">const</tt>
+assertion, so a 32-bit build fails instead of overflowing.</p>
 <p>The bound becomes <tt class="docutils literal">N</tt> in the C storage types and in <tt class="docutils literal">MAX_BYTES</tt>.
 That is how C keeps fixed-size structs and no allocation while counts
 vary.</p>

@@ -286,6 +286,64 @@ class CalibratedIntegerTests(unittest.TestCase):
         self.assertIn("raw comparison on int parameter", str(cm.exception))
 
 
+def max_field(text: str, value: str) -> str:
+    """``text`` with tcs-xtce.max-field-bytes ``value`` on its first
+    SpaceSystem."""
+    at = text.index(">") + 1
+    return (text[:at]
+            + '<AncillaryDataSet><AncillaryData '
+              f'name="tcs-xtce.max-field-bytes">{value}</AncillaryData>'
+              '</AncillaryDataSet>' + text[at:])
+
+
+class MaxFieldBytesTests(unittest.TestCase):
+    def array(self, m):
+        return next(lc for _, lc in m.nodes[0].fields if lc.name == "Arr").vtype
+
+    def unsupported(self, message: str, *texts: str) -> None:
+        with self.assertRaises(Unsupported) as cm:
+            compile_xmls(*texts)
+        self.assertIn(message, str(cm.exception))
+
+    def test_caps_a_count_without_range(self):
+        text = array_mission(dim(fixed(0), dynamic("N")), COUNT_THEN_ARRAY,
+                             "U32")
+        vt = self.array(compile_xml(max_field(text, "1024")))
+        self.assertEqual(vt.enc.max_count, 512)
+        self.assertEqual(item_bits(vt), 1024 * 8)
+
+    def test_caps_the_rest_of_the_packet(self):
+        text = calibrated_mission(calibrated(),
+                                  '<ParameterRefEntry parameterRef="Rest"/>')
+        m = compile_xml(max_field(text, " 4294967295 "))
+        self.assertEqual(m.nodes[0].fields[0][1].vtype.enc.bits, 4294967295 * 8)
+
+    def test_documents_that_agree(self):
+        m = compile_xmls(max_field(TYPES, "100"), HEADER, max_field(APP, "100"))
+        self.assertTrue(m.nodes)
+
+    def test_rejected(self):
+        nested = mission().replace("</SpaceSystem>",
+                                   max_field('<SpaceSystem name="Sub">', "100")
+                                   + "</SpaceSystem>" + "</SpaceSystem>")
+        for message, texts in (
+                ("max-field-bytes 0 is not from 1 to 4294967295",
+                 [max_field(mission(), "0")]),
+                ("max-field-bytes 4294967296 is not from 1",
+                 [max_field(mission(), "4294967296")]),
+                ("max-field-bytes '1K' is not an integer",
+                 [max_field(mission(), "1K")]),
+                ("more than one tcs-xtce.max-field-bytes",
+                 [max_field(mission(),
+                            '1</AncillaryData><AncillaryData '
+                            'name="tcs-xtce.max-field-bytes">2')]),
+                ("max-field-bytes differ: dt (100), app (200)",
+                 [max_field(TYPES, "100"), HEADER, max_field(APP, "200")]),
+                ("only read on a document's root SpaceSystem", [nested])):
+            with self.subTest(message):
+                self.unsupported(message, *texts)
+
+
 class RestTests(unittest.TestCase):
     def test_last_value_takes_the_rest(self):
         m = compile_xml(calibrated_mission(calibrated(),

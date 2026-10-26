@@ -8,7 +8,8 @@
 //!
 //! A [`Codec`] owns one input and one output buffer, preallocated for the
 //! largest packet it will see and reused for every packet until the codec is
-//! dropped.
+//! dropped.  A [`Batch`] carries several packets in one buffer, after their
+//! length, so a receiver gets them all in two reads.
 //!
 //! Code generated with `--dynamic-allocations false` uses the
 //! fixed-capacity types of [`crate::fixed`] for arrays, strings and binary
@@ -20,7 +21,7 @@ use crate::buffer::Buffer;
 pub use crate::fixed::{CapacityError, FixedBytes, FixedString, FixedVec};
 use crate::value::write_double;
 use std::fmt;
-use std::io::Read;
+use std::io::{self, Read, Write};
 
 /// Why a packet could not be decoded or encoded.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,7 +161,13 @@ pub trait Packet: Sized {
 
     /// Decodes a packet that starts at the first byte of `data`.  Bytes after
     /// the packet are ignored.
-    fn decode(data: &[u8]) -> Result<Self>;
+    fn decode(data: &[u8]) -> Result<Self> {
+        Self::decode_prefix(data).map(|(p, _)| p)
+    }
+
+    /// Decodes a packet that starts at the first byte of `data`, and the
+    /// number of bytes it takes.
+    fn decode_prefix(data: &[u8]) -> Result<(Self, usize)>;
 
     /// Writes the packet with `w`.
     fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()>;
@@ -235,6 +242,167 @@ impl Codec {
     }
 }
 
+/// The bytes of the length that starts a [`Batch`].
+pub const BATCH_LENGTH_BYTES: usize = 4;
+
+/// Several packets in one buffer: the number of bytes that follow, as a
+/// 32-bit big-endian integer, then the packets one after another.
+///
+/// The length is always sent, so a receiver reads it and then the rest of
+/// the batch: two reads however many packets there are and however their
+/// sizes vary.  The packets carry no tags, so the receiver decodes them in
+/// the order the sender added them, with [`Batch::next`].  A packet with a
+/// value that takes the rest of the packet, and no packet length field,
+/// takes the rest of the batch, so it must come last.
+///
+/// The capacity bounds the bytes after the length on both sides: adding a
+/// packet that would pass it fails with `TooLong`, and receiving a longer
+/// batch fails with `InvalidData`, before the batch is read.
+#[derive(Debug, Clone)]
+pub struct Batch {
+    buf: Buffer,
+    scratch: Buffer,
+    capacity: usize,
+    pos: usize, // the next packet to decode, in bytes from the start
+}
+
+impl Batch {
+    /// Creates an empty batch that holds up to `capacity` bytes of packets
+    /// (at most `u32::MAX`), preallocated.
+    pub fn with_capacity(capacity: usize) -> Self {
+        let capacity = capacity.min(u32::MAX as usize);
+        let mut b = Self {
+            buf: Buffer::with_capacity(BATCH_LENGTH_BYTES + capacity),
+            scratch: Buffer::new(),
+            capacity,
+            pos: BATCH_LENGTH_BYTES,
+        };
+        b.clear();
+        b
+    }
+
+    /// Removes every packet, keeping the allocation.
+    pub fn clear(&mut self) {
+        self.buf.load(&[0; BATCH_LENGTH_BYTES]);
+        self.pos = BATCH_LENGTH_BYTES;
+    }
+
+    /// The most bytes of packets the batch holds.
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Encodes `packet` after the packets already in the batch.  Fails with
+    /// `TooLong` if the batch would pass its capacity, leaving it as it
+    /// was.
+    pub fn push<P: Packet>(&mut self, packet: &P) -> Result<()> {
+        packet.encode(&mut self.scratch)?;
+        let len = self.len() + self.scratch.len();
+        if len > self.capacity {
+            return Err(PacketError::TooLong { field: P::NAME });
+        }
+        self.buf.extend_from_slice(self.scratch.as_bytes());
+        self.buf.as_mut_bytes()[..BATCH_LENGTH_BYTES]
+            .copy_from_slice(&(len as u32).to_be_bytes());
+        Ok(())
+    }
+
+    /// The number of bytes of packets, after the length.
+    pub fn len(&self) -> usize {
+        self.buf.len() - BATCH_LENGTH_BYTES
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The whole batch, length first, as it is sent.
+    pub fn as_bytes(&self) -> &[u8] {
+        self.buf.as_bytes()
+    }
+
+    /// The packets, after the length.
+    pub fn packets(&self) -> &[u8] {
+        &self.buf.as_bytes()[BATCH_LENGTH_BYTES..]
+    }
+
+    /// Sends the batch with one write.
+    pub fn write_to<W: Write>(&self, mut writer: W) -> io::Result<()> {
+        writer.write_all(self.as_bytes())
+    }
+
+    /// Replaces the batch with one read from `reader`: its length, then
+    /// that many bytes.  Fails with `InvalidData` if the length is above
+    /// the capacity, and `UnexpectedEof` if the batch ends early.
+    pub fn read_from<R: Read>(&mut self, mut reader: R) -> io::Result<()> {
+        let mut head = [0; BATCH_LENGTH_BYTES];
+        reader.read_exact(&mut head)?;
+        let len = self.check_length(head)?;
+        self.buf.load(&head);
+        self.buf.resize(BATCH_LENGTH_BYTES + len);
+        self.pos = BATCH_LENGTH_BYTES;
+        let r = reader
+            .read_exact(&mut self.buf.as_mut_bytes()[BATCH_LENGTH_BYTES..]);
+        if r.is_err() {
+            self.clear();
+        }
+        r
+    }
+
+    /// Replaces the batch with `bytes`, a whole batch received at once (a
+    /// datagram, say).  Fails with `InvalidData` unless its length is the
+    /// number of bytes after it, and at most the capacity.
+    pub fn load(&mut self, bytes: &[u8]) -> io::Result<()> {
+        let Some(head) = bytes.first_chunk::<BATCH_LENGTH_BYTES>() else {
+            return Err(invalid_batch("a batch is shorter than its length"));
+        };
+        if self.check_length(*head)? != bytes.len() - BATCH_LENGTH_BYTES {
+            return Err(invalid_batch(
+                "a batch's length does not match its size",
+            ));
+        }
+        self.buf.load(bytes);
+        self.pos = BATCH_LENGTH_BYTES;
+        Ok(())
+    }
+
+    fn check_length(
+        &self,
+        head: [u8; BATCH_LENGTH_BYTES],
+    ) -> io::Result<usize> {
+        let len = u32::from_be_bytes(head) as usize;
+        if len > self.capacity {
+            return Err(invalid_batch("a batch is longer than its capacity"));
+        }
+        Ok(len)
+    }
+
+    /// Decodes the next packet, which must be a `P`.
+    pub fn next<P: Packet>(&mut self) -> Result<P> {
+        let (p, used) = P::decode_prefix(&self.buf.as_bytes()[self.pos..])?;
+        self.pos += used;
+        Ok(p)
+    }
+
+    /// The bytes of packets not yet decoded.
+    pub fn remaining(&self) -> usize {
+        self.buf.len() - self.pos
+    }
+
+    /// Checks that every packet has been decoded: fails with `BadLength`
+    /// if bytes are left over.
+    pub fn finish(&self) -> Result<()> {
+        if self.remaining() != 0 {
+            return Err(PacketError::BadLength { field: "batch" });
+        }
+        Ok(())
+    }
+}
+
+fn invalid_batch(why: &'static str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, why)
+}
+
 fn mask(bits: u32) -> u64 {
     if bits >= 64 {
         u64::MAX
@@ -272,6 +440,11 @@ impl<'a> BitReader<'a> {
     /// Current position in bits from the start of the packet.
     pub fn position(&self) -> usize {
         self.pos
+    }
+
+    /// The bytes of the packet read so far, up to the furthest bit read.
+    pub fn used(&self) -> usize {
+        self.end.div_ceil(8)
     }
 
     /// Moves to `offset` bits from `start`.  Bits skipped over count as

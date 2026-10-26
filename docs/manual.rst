@@ -911,12 +911,34 @@ strings and binary), or above the field's bound fails with
 
 The bound is the largest value the referenced field's ``ValidRange``
 allows, or, without one, its encoding, or the largest of a
-``DiscreteLookupList``'s values. It is limited to what fits in
-64 KiB on the wire, which keeps C structs bounded. In C this bound is
+``DiscreteLookupList``'s values. It is limited to what fits in the
+mission's maximum field size on the wire, 64 KiB unless the document
+says otherwise, which keeps C structs bounded. In C this bound is
 ``N`` in the field's type, so give count fields a ``ValidRange``: the
 demo's ``SampleCount`` (``0..6``) makes ``Readings`` a
 ``demo_int16_list6``, where an 8-bit count without a range would allow
 255 elements, and a 32-bit one 32768 of them.
+
+**The maximum field size.** An ``AncillaryData`` named
+``tcs-xtce.max-field-bytes`` on a document's root ``SpaceSystem`` sets
+it, in bytes, from 1 to 4294967295 (a 32-bit size):
+
+.. code-block:: xml
+
+   <SpaceSystem name="Rover">
+     <AncillaryDataSet>
+       <AncillaryData name="tcs-xtce.max-field-bytes">1048576</AncillaryData>
+     </AncillaryDataSet>
+     ...
+
+The setting is in the document, so a sender and a receiver that check
+the document's digest also agree on it. When a mission is split over
+several documents, every root that gives it must give the same value;
+on any other ``SpaceSystem`` it is an error. It bounds every value
+whose size, count or location another value gives, and values that
+take the rest of the packet. A packet too large to count its bits in a
+32-bit ``size_t`` (over 512 MiB) still builds on 64-bit targets, but
+its generated C and Rust refuse to compile on 32-bit ones.
 
 **Packet length fields.** XTCE has no way to say that a field holds the
 length of its packet, so tcs-xtce reads it from an ``AncillaryData``
@@ -1359,8 +1381,9 @@ Parameter and argument types
 
 Ancillary data
    ``tcs-xtce.length`` on a parameter or argument marks a packet length
-   field, described under the generated packet types. Other ancillary
-   data is ignored.
+   field, and ``tcs-xtce.max-field-bytes`` on a root ``SpaceSystem`` sets
+   the maximum field size, both described under the generated packet
+   types. Other ancillary data is ignored.
 
 Aggregates
    Members of any supported type except the aggregate itself, values
@@ -1605,11 +1628,12 @@ Binary
    must have exactly that length.
 
    A ``SizeInBits`` of ``-1`` (a Yamcs convention for "the size of the
-   value given") takes the rest of the packet, up to 64 KiB. It must be
+   value given") takes the rest of the packet, up to the maximum field
+   size (64 KiB by default). It must be
    the last entry of every packet that contains it, and can't be an array
    element, an aggregate member or repeated. Decoding fails with
    ``BadSize`` unless what is left is whole bytes, and encoding fails
-   with ``TooLong`` above 64 KiB. Yamcs also allows such values before
+   with ``TooLong`` above that size. Yamcs also allows such values before
    other entries, where only the sender knows their size; those packets
    are not supported.
 
@@ -1759,7 +1783,8 @@ Locations
    an included container. A ``FixedValue`` offset may be negative. A
    ``DynamicValue`` or ``DiscreteLookupList`` offset is computed like a
    size, in bits, so it must be a whole number from 0 up to its bound
-   (at most 64 KiB), or decoding and encoding fail with ``BadSize``; in
+   (at most the maximum field size), or decoding and encoding fail with
+   ``BadSize``; in
    the demo, ``Frame``'s ``FrameEnd`` comes ``FrameGap`` bits after the
    body. Repeated and fixed-size containers need fixed offsets.
 

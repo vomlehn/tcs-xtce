@@ -19,11 +19,12 @@ from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
                      invertible, leaf_calibrators, math_value, size_args,
                      str_cap, string_spec)
 from .compile import snake
-from .model import (
-    term_indexes, term_locals, term_paths, walk, Index, AggregateEnc, AllOf,
-    AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, DynSize, Criterion, Fixed,
-    FloatEnc, IntEnc, Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
-    Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify, Custom)
+from .model import (term_indexes, term_locals, term_paths, walk, Index,
+                    AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
+                    ContextCal, DynSize, Criterion, Fixed, FloatEnc, IntEnc,
+                    Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
+                    Spline, StringEnc, Value, VType, Require, Fill, Segment,
+                    Verify, Custom, NARROW_MAX_BYTES)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -913,7 +914,7 @@ class CEmitter:
                 self.line(f" * {text.replace('*/', '* /')}")
         self.line(" */")
         self.line(f"#define {t}_NAME {cstr(n.key)}")
-        self.line(f"#define {t}_MAX_BYTES {n.max_bytes}")
+        self.max_bytes(t, n.key, n.max_bytes)
         self.line(f"typedef struct {t} {{")
         for name, lc in n.fields:
             doc = f"; {lc.vtype.doc}" if lc.vtype.doc else ""
@@ -945,6 +946,11 @@ class CEmitter:
         self.line(" */")
         self.line(f"static inline int {t}_decode({t}* out, const uint8_t* "
                   "data, size_t len, xtce_pk_error* err);")
+        self.line("/* Like _decode, and stores the number of bytes the packet "
+                  "takes in `*used`. */")
+        self.line(f"static inline int {t}_decode_prefix({t}* out, const "
+                  "uint8_t* data, size_t len, size_t* used, xtce_pk_error* "
+                  "err);")
         self.line(f"static inline int {t}_encode_into(const {t}* p, "
                   "xtce_pk_writer* w);")
         self.line("/* Encodes into the `cap` bytes at `buf` and stores the "
@@ -975,12 +981,21 @@ class CEmitter:
         self.line(f"static inline size_t {t}_algorithms(const {t}* p, "
                   "xtce_pk_output* out);")
 
+    def max_bytes(self, t: str, key: str, n: int) -> None:
+        """Define ``t``'s MAX_BYTES, refusing to build where its size in
+        bits doesn't fit in a size_t."""
+        self.line(f"#define {t}_MAX_BYTES {n}")
+        if n > NARROW_MAX_BYTES:
+            self.line(f"#if SIZE_MAX / 8 < {t}_MAX_BYTES")
+            self.line(f"#error {cstr(key + ' is too large for this size_t')}")
+            self.line("#endif")
+
     def declare_kind(self, k: Kind) -> None:
         t = self.p + k.ident
         self.line()
         self.line(f"/* Every concrete packet derived from {k.root.key}. */")
         self.line(f"#define {t}_NAME {cstr(k.root.key)}")
-        self.line(f"#define {t}_MAX_BYTES {k.max_bytes}")
+        self.max_bytes(t, k.root.key, k.max_bytes)
         self.line(f"typedef enum {t}_tag {{")
         for mem in k.members:
             self.line(f"{t}_{mem.ident}_tag,", 1)
@@ -1339,9 +1354,11 @@ class CEmitter:
 
     def define(self, n: Node) -> None:
         t = self.p + n.ident
+        self.decode(t)
         self.line()
-        self.line(f"static inline int {t}_decode({t}* out, const uint8_t* "
-                  "data, size_t len, xtce_pk_error* err) {")
+        self.line(f"static inline int {t}_decode_prefix({t}* out, const "
+                  "uint8_t* data, size_t len, size_t* used, xtce_pk_error* "
+                  "err) {")
         self.reader()
         self.need_hooks(n.hooks, "err", 1)
         self.line("(void)out;", 1)
@@ -1355,6 +1372,7 @@ class CEmitter:
             self.read_items(node.items, 1, node.key)
         self.finish(n, 1)
         self.construct(n, "out", 1)
+        self.line("*used = xtce_pk_read_used(r);", 1)
         self.line("return 0;", 1)
         self.line("}")
         self.line()
@@ -1420,6 +1438,7 @@ class CEmitter:
         self.line("return 0;", 1)
         self.line("}")
         self.encode(t)
+        self.batch(t)
         self.line()
         self.line(f"static inline size_t {t}_describe(const {t}* p, char* buf, "
                   "size_t cap) {")
@@ -1805,6 +1824,37 @@ class CEmitter:
                                   f"{{{name}_starts, {name}_trans, "
                                   f"{name}_accept}};")
 
+    def decode(self, t: str) -> None:
+        self.line()
+        self.line(f"static inline int {t}_decode({t}* out, const uint8_t* "
+                  "data, size_t len, xtce_pk_error* err) {")
+        self.line("size_t used;", 1)
+        self.line(f"return {t}_decode_prefix(out, data, len, &used, err);", 1)
+        self.line("}")
+
+    def batch(self, t: str) -> None:
+        self.line()
+        self.line("/* Encodes `p` after the packets already in batch `b`. */")
+        self.line(f"static inline int {t}_batch_add(const {t}* p, "
+                  "xtce_pk_batch* b, xtce_pk_error* err) {")
+        self.line("size_t n;", 1)
+        self.line(f"XTCE_PK_TRY({t}_encode(p, xtce_pk_batch_tail(b), "
+                  "xtce_pk_batch_room(b), &n, err));", 1)
+        self.line("xtce_pk_batch_added(b, n);", 1)
+        self.line("return 0;", 1)
+        self.line("}")
+        self.line()
+        self.line("/* Decodes the next packet of batch `b`, which must be one "
+                  "of these. */")
+        self.line(f"static inline int {t}_batch_next({t}* out, xtce_pk_batch* "
+                  "b, xtce_pk_error* err) {")
+        self.line("size_t used;", 1)
+        self.line(f"XTCE_PK_TRY({t}_decode_prefix(out, b->buf + b->pos, "
+                  "xtce_pk_batch_remaining(b), &used, err));", 1)
+        self.line("b->pos += used;", 1)
+        self.line("return 0;", 1)
+        self.line("}")
+
     def encode(self, t: str) -> None:
         self.line()
         self.line(f"static inline int {t}_encode(const {t}* p, uint8_t* buf, "
@@ -1857,9 +1907,11 @@ class CEmitter:
 
     def define_kind(self, k: Kind) -> None:
         t = self.p + k.ident
+        self.decode(t)
         self.line()
-        self.line(f"static inline int {t}_decode({t}* out, const uint8_t* "
-                  "data, size_t len, xtce_pk_error* err) {")
+        self.line(f"static inline int {t}_decode_prefix({t}* out, const "
+                  "uint8_t* data, size_t len, size_t* used, xtce_pk_error* "
+                  "err) {")
         self.reader()
         self.need_hooks(items_hooks(k.root.items), "err", 1)
         self.read_items(k.root.items, 1, k.root.key)
@@ -1879,6 +1931,7 @@ class CEmitter:
                   "NULL);", 1)
         self.line("}")
         self.encode(t)
+        self.batch(t)
         self.line()
         self.line(f"static inline size_t {t}_describe(const {t}* p, char* buf, "
                   "size_t cap) {")
@@ -1960,6 +2013,7 @@ class CEmitter:
             self.line("(void)o;", depth + 1)
             self.construct(n, "o", depth + 1)
             self.line("}", depth)
+            self.line("*used = xtce_pk_read_used(r);", depth)
             self.line("return 0;", depth)
 
 

@@ -15,7 +15,8 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, StringEnc,
-                    Value, VType, Require, Fill, Segment, Verify, Custom)
+                    Value, VType, Require, Fill, Segment, Verify, Custom,
+                    NARROW_MAX_BYTES)
 
 
 def rstr(s: str) -> str:
@@ -1024,11 +1025,12 @@ class RustEmitter:
         self.line()
         self.alarms(n)
         self.line()
+        self.size_check(n.key, n.max_bytes)
         self.line(f"impl Packet for {n.ident} {{")
         self.line(f"const NAME: &'static str = {rstr(n.key)};", 1)
         self.line(f"const MAX_BYTES: usize = {n.max_bytes};", 1)
         self.line()
-        self.line("fn decode(data: &[u8]) -> Result<Self> {", 1)
+        self.line("fn decode_prefix(data: &[u8]) -> Result<(Self, usize)> {", 1)
         self.need_hooks(n.hooks, 2)
         # A packet without entries, such as a meta-command without a command
         # container, reads and writes nothing.
@@ -1046,7 +1048,8 @@ class RustEmitter:
                 self.line("}", 2)
             self.read_items(node.items, 2, node.key)
         self.finish(n, 2)
-        self.line(f"Ok({self.construct(n)})", 2)
+        used = "0" if empty else "r.used()"
+        self.line(f"Ok(({self.construct(n)}, {used}))", 2)
         self.line("}", 1)
         self.line()
         self.line("fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()> "
@@ -1322,6 +1325,14 @@ class RustEmitter:
         self.dfas.append((name, dfa))
         return name
 
+    def size_check(self, key: str, n: int) -> None:
+        """Refuse to build where a packet of ``n`` bytes doesn't count its
+        bits in a usize."""
+        if n > NARROW_MAX_BYTES:
+            self.line(f"const _: () = assert!({n}u64 <= usize::MAX as u64 / 8, "
+                      f"{rstr(key + ' is too large for this usize')});")
+            self.line()
+
     def kind(self, k: Kind) -> None:
         self.line()
         self.line(f"/// Every concrete packet derived from `{k.root.key}`.")
@@ -1331,6 +1342,7 @@ class RustEmitter:
             self.line(f"{m.ident}({m.ident}),", 1)
         self.line("}")
         self.line()
+        self.size_check(k.root.key, k.max_bytes)
         self.line(f"impl Packet for {k.ident} {{")
         self.line(f"const NAME: &'static str = {rstr(k.root.key)};", 1)
         self.line(f"const MAX_BYTES: usize = {k.max_bytes};", 1)
@@ -1338,7 +1350,7 @@ class RustEmitter:
         self.line("/// Decodes the root's entries, then picks the first child "
                   "(in", 1)
         self.line("/// document order) whose criteria match, recursively.", 1)
-        self.line("fn decode(data: &[u8]) -> Result<Self> {", 1)
+        self.line("fn decode_prefix(data: &[u8]) -> Result<(Self, usize)> {", 1)
         self.need_hooks(items_hooks(k.root.items), 2)
         self.line("let mut r = BitReader::new(data);", 2)
         self.read_items(k.root.items, 2, k.root.key)
@@ -1446,8 +1458,8 @@ class RustEmitter:
         else:
             self.need_hooks(checks_hooks(n.checks), depth)
             self.finish(n, depth)
-            self.line(f"return Ok(Self::{n.ident}({self.construct(n)}));",
-                      depth)
+            self.line(f"return Ok((Self::{n.ident}({self.construct(n)}), "
+                      "r.used()));", depth)
 
 
 def emit(mission: Mission, source: str, alloc: bool = True) -> str:

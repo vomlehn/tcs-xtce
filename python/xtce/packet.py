@@ -8,7 +8,9 @@ those and the integer, float, string and calibration helpers they call.  It
 mirrors ``tcs_xtce::packet`` in Rust and ``xtce/packet.h`` in C and C++.
 
 A :class:`Codec` owns one input and one output buffer, preallocated for the
-largest packet it will see and reused until the codec is discarded.
+largest packet it will see and reused until the codec is discarded.  A
+:class:`Batch` carries several packets in one buffer, after their length, so
+a receiver gets them all in two reads.
 """
 
 from __future__ import annotations
@@ -22,8 +24,8 @@ from typing import Optional
 from ._buffer import ManagedBuffer
 from ._xml import f_double
 
-__all__ = ["BitReader", "BitWriter", "Codec", "Packet", "PacketError",
-           "PacketKind"]
+__all__ = ["BATCH_LENGTH_BYTES", "Batch", "BitReader", "BitWriter", "Codec",
+           "Packet", "PacketError", "PacketKind"]
 
 
 class PacketError(ValueError):
@@ -68,7 +70,17 @@ class Packet:
     NAME = ""
     MAX_BYTES = 0
 
-    # Generated packet classes override this.
+    @classmethod
+    def decode(cls, data):
+        """Decode a packet that starts at the first byte of ``data``.  Bytes
+        after the packet are ignored."""
+        return cls.decode_prefix(data)[0]
+
+    # Generated packet classes override these.
+    @classmethod
+    def decode_prefix(cls, data) -> tuple:  # pragma: no cover
+        raise NotImplementedError
+
     def encode_into(self, w: "BitWriter") -> None:  # pragma: no cover
         raise NotImplementedError
 
@@ -91,6 +103,12 @@ class PacketKind:
     NAME = ""
     MAX_BYTES = 0
     MEMBERS: tuple = ()
+
+    @classmethod
+    def decode(cls, data):
+        """Decode a packet that starts at the first byte of ``data`` as the
+        member whose criteria match."""
+        return cls.decode_prefix(data)[0]
 
 
 class Codec:
@@ -148,6 +166,153 @@ class Codec:
         return self._output.capacity
 
 
+# The bytes of the length that starts a Batch.
+BATCH_LENGTH_BYTES = 4
+
+
+class Batch:
+    """Several packets in one buffer: the number of bytes that follow, as a
+    32-bit big-endian integer, then the packets one after another.
+
+    The length is always sent, so a receiver reads it and then the rest of
+    the batch: two reads however many packets there are and however their
+    sizes vary.  The packets carry no tags, so the receiver decodes them in
+    the order the sender added them, with :meth:`next`.  A packet with a
+    value that takes the rest of the packet, and no packet length field,
+    takes the rest of the batch, so it must come last.
+
+    The capacity bounds the bytes after the length on both sides: adding a
+    packet that would pass it raises ``TooLong``, and receiving a longer
+    batch raises ``BadLength`` before the batch is read.
+    """
+
+    __slots__ = ("_buf", "_scratch", "_capacity", "_pos")
+
+    def __init__(self, capacity: int = 64 * 1024) -> None:
+        """An empty batch that holds up to ``capacity`` bytes of packets (at
+        most 2**32 - 1), preallocated."""
+        self._capacity = min(capacity, 0xFFFFFFFF)
+        self._buf = ManagedBuffer(BATCH_LENGTH_BYTES + self._capacity)
+        self._scratch = ManagedBuffer()
+        self.clear()
+
+    def clear(self) -> None:
+        """Remove every packet, keeping the allocation."""
+        self._buf.load(bytes(BATCH_LENGTH_BYTES))
+        self._pos = BATCH_LENGTH_BYTES
+
+    @property
+    def capacity(self) -> int:
+        """The most bytes of packets the batch holds."""
+        return self._capacity
+
+    def push(self, packet) -> None:
+        """Encode ``packet`` after the packets already in the batch.  Raises
+        ``TooLong`` if the batch would pass its capacity, leaving it as it
+        was."""
+        packet.encode(self._scratch)
+        n = len(self) + len(self._scratch)
+        if n > self._capacity:
+            raise PacketError("TooLong", packet.NAME)
+        with self._scratch.view() as v:
+            self._buf.write(v)
+        with self._buf.view() as v:
+            v[:BATCH_LENGTH_BYTES] = n.to_bytes(BATCH_LENGTH_BYTES, "big")
+
+    def __len__(self) -> int:
+        """The number of bytes of packets, after the length."""
+        return len(self._buf) - BATCH_LENGTH_BYTES
+
+    def view(self) -> memoryview:
+        """The whole batch, length first, as it is sent; release the view
+        before changing the batch."""
+        return self._buf.view()
+
+    def getvalue(self) -> bytes:
+        """A copy of the whole batch, length first."""
+        return self._buf.getvalue()
+
+    def write_to(self, stream) -> None:
+        """Send the batch with one write."""
+        with self._buf.view() as v:
+            stream.write(v)
+
+    def read_from(self, stream) -> None:
+        """Replace the batch with one read from a binary stream: its
+        length, then that many bytes.  Raises ``BadLength`` if the length
+        is above the capacity, and ``EOFError`` if the batch ends early."""
+        head = _read_exact(stream, BATCH_LENGTH_BYTES)
+        n = self._check_length(head)
+        try:
+            self._buf.load(head)
+            self._buf.resize(BATCH_LENGTH_BYTES + n)
+            with self._buf.view() as v:
+                _read_into(stream, v[BATCH_LENGTH_BYTES:])
+        except BaseException:
+            self.clear()
+            raise
+        self._pos = BATCH_LENGTH_BYTES
+
+    def load(self, data) -> None:
+        """Replace the batch with ``data``, a whole batch received at once
+        (a datagram, say).  Raises ``BadLength`` unless its length is the
+        number of bytes after it, and at most the capacity."""
+        if len(data) < BATCH_LENGTH_BYTES:
+            raise PacketError("BadLength", "batch")
+        n = self._check_length(bytes(data[:BATCH_LENGTH_BYTES]))
+        if n != len(data) - BATCH_LENGTH_BYTES:
+            raise PacketError("BadLength", "batch")
+        self._buf.load(data)
+        self._pos = BATCH_LENGTH_BYTES
+
+    def _check_length(self, head: bytes) -> int:
+        n = int.from_bytes(head, "big")
+        if n > self._capacity:
+            raise PacketError("BadLength", "batch")
+        return n
+
+    def next(self, packet_class):
+        """Decode the next packet, which must be a ``packet_class`` (a
+        packet or kind)."""
+        with self._buf.view() as v:
+            p, used = packet_class.decode_prefix(v[self._pos:])
+        self._pos += used
+        return p
+
+    @property
+    def remaining(self) -> int:
+        """The bytes of packets not yet decoded."""
+        return len(self._buf) - self._pos
+
+    def finish(self) -> None:
+        """Check that every packet has been decoded: raises ``BadLength`` if
+        bytes are left over."""
+        if self.remaining:
+            raise PacketError("BadLength", "batch")
+
+
+def _read_exact(stream, n: int) -> bytes:
+    out = bytearray(n)
+    with memoryview(out) as v:
+        _read_into(stream, v)
+    return bytes(out)
+
+
+def _read_into(stream, view: memoryview) -> None:
+    """Fill ``view`` from ``stream``, raising EOFError if it ends first."""
+    got = 0
+    while got < len(view):
+        if hasattr(stream, "readinto"):
+            n = stream.readinto(view[got:])
+        else:
+            block = stream.read(len(view) - got)
+            n = len(block)
+            view[got:got + n] = block
+        if not n:
+            raise EOFError("a batch ends early")
+        got += n
+
+
 def _position(base: int, offset: int, field: str) -> int:
     p = base + offset
     if p < 0:
@@ -168,6 +333,11 @@ class BitReader:
 
     def position(self) -> int:
         return self.pos
+
+    def used(self) -> int:
+        """The bytes of the packet read so far, up to the furthest bit
+        read."""
+        return (self.end + 7) // 8
 
     def seek(self, start: int, offset: int, field: str) -> None:
         """Move to ``offset`` bits from ``start``.  Bits skipped over count

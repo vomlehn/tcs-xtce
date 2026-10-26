@@ -23,13 +23,13 @@ from .common import (checks_hooks, code_unit, encode_text, fast_order,
                      find_unit, items_hooks, terms_hooks, wire_cap)
 from .regex import compile_pattern
 from .model import (
-    MAX_FIELD_BITS, AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
-    Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index, IntEnc, Item, Kind,
-    Local, Mark, Member, Mission, Node, Pad, Polynomial, Seek, Spline,
-    StringEnc, Term, Unsupported, Value, VType, ref_text, term_locals, walk,
-    MATH_UNARY, Check, ContextCal, EndSeek, MathOp, Require, ValueRef,
-    needs_binding, Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change,
-    Algorithm, Stream, Hook, Custom, term_hooks, input_locals)
+    MAX_FIELD_BITS, MAX_FIELD_BYTES_LIMIT, AggregateEnc, AllOf, AnyOf, ArrayEnc,
+    BinaryEnc, Cond, Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index,
+    IntEnc, Item, Kind, Local, Mark, Member, Mission, Node, Pad, Polynomial,
+    Seek, Spline, StringEnc, Term, Unsupported, Value, VType, ref_text,
+    term_locals, walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp, Require,
+    ValueRef, needs_binding, Fill, Segment, Verify, Alarm, AlarmDef, Band,
+    LEVELS, Change, Algorithm, Stream, Hook, Custom, term_hooks, input_locals)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -187,6 +187,7 @@ RESERVED = set(keyword.kwlist) | {
     "dataclasses",
     # generated members
     "decode",
+    "decode_prefix",
     "encode",
     "encode_into",
     "describe",
@@ -396,23 +397,33 @@ RUNTIME_NAMES = {"Packet", "PacketError", "Codec", "BitReader", "BitWriter",
 # The AncillaryData that marks a parameter or argument as a packet length
 # field; its value is the number to add to the bytes after the field.
 LENGTH_TAG = "tcs-xtce.length"
+# The AncillaryData of a root SpaceSystem that gives the most bytes a field
+# whose size or count another value gives may take on the wire.
+MAX_FIELD_TAG = "tcs-xtce.max-field-bytes"
+
+
+def ancillary_int(item, tag: str, where: str) -> Optional[int]:
+    """The integer value of ``item``'s AncillaryData ``tag``, or None if it
+    has none."""
+    ads = item.ancillary_data_set
+    tags = [a for a in (ads.ancillary_data if ads else []) if a.name == tag]
+    if not tags:
+        return None
+    if len(tags) > 1:
+        raise Unsupported(f"{where}: more than one {tag}")
+    try:
+        return int(tags[0].value.strip())
+    except ValueError:
+        raise Unsupported(f"{where}: {tag} {tags[0].value!r} is not an "
+                          "integer") from None
 
 
 def length_adjust(item, vt: VType, where: str) -> Optional[int]:
     """The adjustment of a packet length field, or None if ``item`` (a
     Parameter or Argument) isn't one."""
-    ads = item.ancillary_data_set
-    tags = [a for a in (ads.ancillary_data if ads else [])
-            if a.name == LENGTH_TAG]
-    if not tags:
+    adjust = ancillary_int(item, LENGTH_TAG, where)
+    if adjust is None:
         return None
-    if len(tags) > 1:
-        raise Unsupported(f"{where}: more than one {LENGTH_TAG}")
-    try:
-        adjust = int(tags[0].value.strip())
-    except ValueError:
-        raise Unsupported(f"{where}: {LENGTH_TAG} {tags[0].value!r} is not an "
-                          "integer") from None
     if (vt.kind != "int" or not isinstance(vt.enc, IntEnc) or vt.enc.signed
             or vt.enc.bcd or vt.calibrator is not None):
         raise Unsupported(f"{where}: a packet length field must be an "
@@ -470,13 +481,35 @@ class Compiler:
                                   f"{root.name!r}")
             seen.add(root.name)
             self._index(root, ())
+        self.max_field_bits = 8 * self.max_field_bytes()
         for k, v in self.containers.items():
             self.tc_containers.setdefault(k, v)
+
+    def max_field_bytes(self) -> int:
+        """The roots' tcs-xtce.max-field-bytes, which all that give one must
+        agree on, or the default."""
+        given = {}
+        for root in self.roots:
+            n = ancillary_int(root, MAX_FIELD_TAG, f"SpaceSystem {root.name}")
+            if n is None:
+                continue
+            if not 1 <= n <= MAX_FIELD_BYTES_LIMIT:
+                raise Unsupported(f"SpaceSystem {root.name}: {MAX_FIELD_TAG} "
+                                  f"{n} is not from 1 to "
+                                  f"{MAX_FIELD_BYTES_LIMIT}")
+            given[root.name] = n
+        if len(set(given.values())) > 1:
+            names = ", ".join(f"{k} ({v})" for k, v in given.items())
+            raise Unsupported(f"the documents' {MAX_FIELD_TAG} differ: {names}")
+        return next(iter(given.values()), MAX_FIELD_BITS // 8)
 
     # -- indexing and name resolution --
 
     def _index(self, ss, parent: Key) -> None:
         path = parent + (ss.name,)
+        if parent and ancillary_int(ss, MAX_FIELD_TAG, qname(path)) is not None:
+            raise Unsupported(f"SpaceSystem {qname(path)}: {MAX_FIELD_TAG} is "
+                              "only read on a document's root SpaceSystem")
         if ss.service_set:
             for sv in ss.service_set.service:
                 self.services[path + (sv.name,)] = (path, sv)
@@ -941,7 +974,7 @@ class Compiler:
                         raise Unsupported(f"{where}: size or count from "
                                           f"{sib.vtype.kind} member {sib.name}")
                     mt = bounded(mt, dataclasses.replace(d, member=sib.ident),
-                                 int_bounds(sib.vtype))
+                                 int_bounds(sib.vtype), self.max_field_bits)
                 if is_rest(mt):
                     raise Unsupported(f"{where}: member {m.name} takes the "
                                       "rest of the packet")
@@ -1111,13 +1144,13 @@ class Compiler:
             if c.name in ("DynamicValue", "DiscreteLookupList"):
                 dyn = self.int_value(e.size_in_bits, path, "binary size", where)
                 dyn.unit = 8
-                return BinaryEnc(MAX_FIELD_BITS, dyn), None
+                return BinaryEnc(self.max_field_bits, dyn), None
             if c.name != "FixedValue":
                 raise Unsupported(f"{where}: binary size from {c.name}")
             if c.value == -1:
                 # A Yamcs convention: the size of the value given.  Only the
                 # end of the packet can bound it when decoding.
-                return BinaryEnc(MAX_FIELD_BITS, rest=True), None
+                return BinaryEnc(self.max_field_bits, rest=True), None
             bits = self._size(c.value, "binary", where)
             if bits % 8:
                 raise Unsupported(f"{where}: binary size {bits} is not whole "
@@ -1289,7 +1322,7 @@ class Compiler:
             else:
                 raise Unsupported(f"{where}: location from {c.name}")
             off, rng = self.bind_dyn(d, scope, where, arg_key)
-            off.max = min(dyn_units(off, rng), MAX_FIELD_BITS)
+            off.max = dyn_units(off, rng, self.max_field_bits)
         if ref == "containerStart":
             return [Seek(start, off)]
         if ref == "previousEntry":
@@ -1351,13 +1384,13 @@ class Compiler:
             gap = e.gap
             if isinstance(gap, DynSize) and unbound(gap):
                 gap, rng = self.bind_dyn(gap, scope, where, arg_key)
-                gap.max = min(dyn_units(gap, rng), MAX_FIELD_BITS)
+                gap.max = dyn_units(gap, rng, self.max_field_bits)
             if elem is not e.elem or gap is not e.gap:
                 vt = dataclasses.replace(
                     vt, enc=dataclasses.replace(e, elem=elem, gap=gap))
         if vt.dyn is not None and unbound(vt.dyn):
             b, rng = self.bind_dyn(vt.dyn, scope, where, arg_key)
-            vt = bounded(vt, b, rng)
+            vt = bounded(vt, b, rng, self.max_field_bits)
         return vt
 
     def bind_calibrators(self, vt: VType, scope: list, where: str,
@@ -1713,7 +1746,7 @@ class Compiler:
         if bits <= 64:
             vt = VType(key=f"{ref} segment", name=f"segment of {ref}",
                        kind="int", enc=IntEnc(bits))
-        elif bits % 8 == 0 and bits <= MAX_FIELD_BITS:
+        elif bits % 8 == 0 and bits <= self.max_field_bits:
             vt = VType(key=f"{ref} segment", name=f"segment of {ref}",
                        kind="binary", enc=BinaryEnc(bits))
         else:
@@ -1791,7 +1824,7 @@ class Compiler:
                 raise Unsupported(f"{where}: a repeated container whose size "
                                   "another value gives")
             off, rng = self.bind_dyn(size, scope, where)
-            off.max = min(dyn_units(off, rng), MAX_FIELD_BITS)
+            off.max = dyn_units(off, rng, self.max_field_bits)
             return [Fill(start, off, where)]
         size = self._size(size, "container", where)
         end = static_end(items, start)
@@ -2595,7 +2628,7 @@ class Compiler:
             keys = st.service or [st.container]
             sizes = ([k.max_bytes for k in kinds if k.root.key in keys]
                      + [n.max_bytes for n in concrete if n.key in keys])
-            st.max_bits = 8 * max(sizes, default=MAX_FIELD_BITS // 8)
+            st.max_bits = 8 * max(sizes, default=self.max_field_bits // 8)
         mnames = Namer()
         hnames = Namer()
         for h in self.hooks.values():
@@ -2994,28 +3027,30 @@ def int_bounds(vt: VType) -> tuple[int, int]:
     return vt.valid_range or value_range(vt)
 
 
-def dyn_units(b: DynSize, rng: tuple[int, int]) -> int:
-    """The largest ``(slope * x + intercept) / unit`` for x in ``rng``."""
+def dyn_units(b: DynSize, rng: tuple[int, int], cap: int) -> int:
+    """The largest ``(slope * x + intercept) / unit`` for x in ``rng``, at
+    most ``cap``."""
     lo, hi = rng
     top = max(b.slope * lo, b.slope * hi) + b.intercept
-    return (max(math.floor(top), 0) // b.unit if math.isfinite(top)
-            else MAX_FIELD_BITS)
+    return (min(max(math.floor(top), 0) // b.unit, cap) if math.isfinite(top)
+            else cap)
 
 
-def bounded(vt: VType, b: DynSize, rng: tuple[int, int]) -> VType:
+def bounded(vt: VType, b: DynSize, rng: tuple[int, int], cap: int) -> VType:
     """A copy of ``vt`` whose size or count is the bound ``b``, with
-    ``b.max`` set from the range ``rng`` of the value it adjusts."""
-    units = dyn_units(b, rng)
+    ``b.max`` set from the range ``rng`` of the value it adjusts and the
+    most bits, ``cap``, the field may take."""
+    units = dyn_units(b, rng, cap)
     e = vt.enc
     if isinstance(e, ArrayEnc):
         step = max(item_bits(e.elem) + e.max_gap, 1)
-        b.max = min(units, (MAX_FIELD_BITS + e.max_gap) // step // b.factor)
+        b.max = min(units, (cap + e.max_gap) // step // b.factor)
         enc = dataclasses.replace(e, count=b)
     elif isinstance(e, StringEnc):
-        b.max = min(units, e.max_bits // 8, MAX_FIELD_BITS // 8)
+        b.max = min(units, e.max_bits // 8, cap // 8)
         enc = dataclasses.replace(e, max_bits=b.max * 8, dyn=b)
     else:
-        b.max = min(units, MAX_FIELD_BITS // 8)
+        b.max = min(units, cap // 8)
         enc = dataclasses.replace(e, bits=b.max * 8, dyn=b)
     return dataclasses.replace(vt, enc=enc)
 

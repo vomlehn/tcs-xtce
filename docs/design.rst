@@ -329,7 +329,8 @@ into the model in ``model.py``:
    A calibrated integer keeps the ``int`` kind; ``eng`` holds the type's
    ``sizeInBits`` and ``signed``, which size the generated field instead
    of the encoding. A binary value with an XTCE size of -1 has a
-   ``BinaryEnc`` with ``rest`` set and a bound of ``MAX_FIELD_BITS``.
+   ``BinaryEnc`` with ``rest`` set and a bound of the mission's
+   ``max_field_bits``.
    The compiler checks that nothing follows it in any packet, so the end
    of the packet gives its size.
 
@@ -728,7 +729,19 @@ earlier in the packet, and given a bound:
 
 * from the referenced value's ``ValidRange``, or its encoding (through
   its calibrator, for a calibrated integer);
-* capped at ``MAX_FIELD_BITS`` (64 KiB on the wire).
+* capped at the compiler's ``max_field_bits``.
+
+``max_field_bits`` comes from the ``tcs-xtce.max-field-bytes``
+``AncillaryData`` of the documents' root ``SpaceSystem``\ s, or is
+``MAX_FIELD_BITS`` (64 KiB) without one. It is one value for the whole
+mission, read before anything is compiled, because a type's bound is
+cached with the type and a type can be used from any document; that is
+why roots must agree and other ``SpaceSystem``\ s may not give one. A
+size in bytes is limited to 32 bits. The runtimes count positions in
+bits in a ``size_t`` or ``usize``, so for a packet whose ``MAX_BYTES``
+is over ``NARROW_MAX_BYTES`` (512 MiB) the C emitter adds a
+``SIZE_MAX`` check with ``#error``, and the Rust emitter a ``const``
+assertion, so a 32-bit build fails instead of overflowing.
 
 The bound becomes ``N`` in the C storage types and in ``MAX_BYTES``.
 That is how C keeps fixed-size structs and no allocation while counts

@@ -395,6 +395,11 @@ static inline int xtce_pk_read_limit(xtce_pk_reader* r, uint64_t v,
         return 0;
 }
 
+/* The bytes of the packet read so far, up to the furthest bit read. */
+static inline size_t xtce_pk_read_used(const xtce_pk_reader* r) {
+        return (r->end + 7) / 8;
+}
+
 /* Checks that the packet's entries reach the end that the packet length
  * field `f` gave. */
 static inline int xtce_pk_read_finish(const xtce_pk_reader* r, const char* f) {
@@ -3126,6 +3131,152 @@ static inline void xtce_pk_flag_sync_push(xtce_pk_flag_sync* s,
                                                  &s->line,
                                                  (uint8_t)((data[i] >> k) & 1)),
                                          f, ctx);
+}
+
+/* --- batches -----------------------------------------------------------------
+ */
+
+/* The bytes of the length that starts a batch. */
+#define XTCE_PK_BATCH_LENGTH_BYTES 4
+
+/* Several packets in the `cap` bytes at `buf`: the number of bytes that
+ * follow, as a 32-bit big-endian integer, then the packets one after
+ * another.  `len` is the size of the whole batch, length included, and
+ * `pos` is where the next packet to decode starts.
+ *
+ * The length is always sent, so a receiver reads it and then the rest of
+ * the batch: two reads however many packets there are and however their
+ * sizes vary.  The packets carry no tags, so the receiver decodes them in
+ * the order the sender added them, with each packet's _batch_next.  A
+ * packet with a value that takes the rest of the packet, and no packet
+ * length field, takes the rest of the batch, so it must come last.
+ *
+ * Each packet's _batch_add encodes it at the end of a batch, failing with
+ * XTCE_PK_NO_SPACE if it doesn't fit, which leaves the batch as it was. */
+typedef struct xtce_pk_batch {
+        uint8_t* buf;
+        size_t cap;
+        size_t len;
+        size_t pos;
+} xtce_pk_batch;
+
+/* Removes every packet. */
+static inline void xtce_pk_batch_clear(xtce_pk_batch* b) {
+        memset(b->buf, 0, XTCE_PK_BATCH_LENGTH_BYTES);
+        b->len = XTCE_PK_BATCH_LENGTH_BYTES;
+        b->pos = XTCE_PK_BATCH_LENGTH_BYTES;
+}
+
+/* Makes an empty batch in the `cap` bytes at `buf`, which must hold at
+ * least the length. */
+static inline void xtce_pk_batch_init(xtce_pk_batch* b, uint8_t* buf,
+                                      size_t cap) {
+        b->buf = buf;
+        b->cap = cap;
+        xtce_pk_batch_clear(b);
+}
+
+/* Where the next packet goes, and the bytes there are for it: never more
+ * than the length can count. */
+static inline uint8_t* xtce_pk_batch_tail(const xtce_pk_batch* b) {
+        return b->buf + b->len;
+}
+
+static inline size_t xtce_pk_batch_room(const xtce_pk_batch* b) {
+        size_t room = b->cap - b->len;
+        uint64_t most = UINT64_C(0xFFFFFFFF) -
+                        (uint64_t)(b->len - XTCE_PK_BATCH_LENGTH_BYTES);
+        return (uint64_t)room < most ? room : (size_t)most;
+}
+
+/* Adds the packet of `n` bytes just encoded at xtce_pk_batch_tail. */
+static inline void xtce_pk_batch_added(xtce_pk_batch* b, size_t n) {
+        uint32_t total;
+        int i;
+        b->len += n;
+        total = (uint32_t)(b->len - XTCE_PK_BATCH_LENGTH_BYTES);
+        for (i = XTCE_PK_BATCH_LENGTH_BYTES - 1; i >= 0; --i) {
+                b->buf[i] = (uint8_t)total;
+                total >>= 8;
+        }
+}
+
+/* The bytes of packets not yet decoded. */
+static inline size_t xtce_pk_batch_remaining(const xtce_pk_batch* b) {
+        return b->len - b->pos;
+}
+
+/* Checks the length at the start of the buffer, giving the number of
+ * bytes after it in `*n`: fails with XTCE_PK_BAD_LENGTH if they don't fit
+ * in the buffer. */
+static inline int xtce_pk_batch_length(const xtce_pk_batch* b, size_t* n,
+                                       xtce_pk_error* err) {
+        uint32_t v = 0;
+        int i;
+        for (i = 0; i < XTCE_PK_BATCH_LENGTH_BYTES; ++i)
+                v = (v << 8) | b->buf[i];
+        if (v > b->cap - XTCE_PK_BATCH_LENGTH_BYTES)
+                return xtce_pk_fail(err, XTCE_PK_BAD_LENGTH, "batch", NULL);
+        *n = v;
+        return 0;
+}
+
+/* Reads exactly `n` bytes into `buf`, returning 0, or nonzero if it can't;
+ * `ctx` is whatever the caller gave. */
+typedef int (*xtce_pk_read_fn)(void* ctx, uint8_t* buf, size_t n);
+
+/* Replaces the batch with two calls of `fn`: one for its length, one for
+ * that many bytes.  Fails with XTCE_PK_BAD_LENGTH, before the second call,
+ * if the length is more than the buffer holds, and with
+ * XTCE_PK_TRUNCATED if `fn` fails; either way the batch is left empty. */
+static inline int xtce_pk_batch_read(xtce_pk_batch* b, xtce_pk_read_fn fn,
+                                     void* ctx, xtce_pk_error* err) {
+        size_t n;
+        int rc;
+        xtce_pk_batch_clear(b);
+        if (fn(ctx, b->buf, XTCE_PK_BATCH_LENGTH_BYTES) != 0) {
+                xtce_pk_batch_clear(b);
+                return xtce_pk_fail(err, XTCE_PK_TRUNCATED, "batch", NULL);
+        }
+        rc = xtce_pk_batch_length(b, &n, err);
+        if (rc == 0 && fn(ctx, b->buf + XTCE_PK_BATCH_LENGTH_BYTES, n) != 0)
+                rc = xtce_pk_fail(err, XTCE_PK_TRUNCATED, "batch", NULL);
+        if (rc != 0) {
+                xtce_pk_batch_clear(b);
+                return rc;
+        }
+        b->len = XTCE_PK_BATCH_LENGTH_BYTES + n;
+        return 0;
+}
+
+/* Takes the `n` bytes the caller put at the start of the buffer as a whole
+ * batch received at once (a datagram, say).  Fails with
+ * XTCE_PK_BAD_LENGTH, leaving the batch empty, unless its length is the
+ * number of bytes after it. */
+static inline int xtce_pk_batch_received(xtce_pk_batch* b, size_t n,
+                                         xtce_pk_error* err) {
+        size_t after;
+        int rc = n < XTCE_PK_BATCH_LENGTH_BYTES || n > b->cap
+                         ? xtce_pk_fail(err, XTCE_PK_BAD_LENGTH, "batch", NULL)
+                         : xtce_pk_batch_length(b, &after, err);
+        if (rc == 0 && after != n - XTCE_PK_BATCH_LENGTH_BYTES)
+                rc = xtce_pk_fail(err, XTCE_PK_BAD_LENGTH, "batch", NULL);
+        if (rc != 0) {
+                xtce_pk_batch_clear(b);
+                return rc;
+        }
+        b->len = n;
+        b->pos = XTCE_PK_BATCH_LENGTH_BYTES;
+        return 0;
+}
+
+/* Checks that every packet has been decoded: fails with
+ * XTCE_PK_BAD_LENGTH if bytes are left over. */
+static inline int xtce_pk_batch_finish(const xtce_pk_batch* b,
+                                       xtce_pk_error* err) {
+        if (xtce_pk_batch_remaining(b) != 0)
+                return xtce_pk_fail(err, XTCE_PK_BAD_LENGTH, "batch", NULL);
+        return 0;
 }
 
 #ifdef __cplusplus

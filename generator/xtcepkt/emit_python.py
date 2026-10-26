@@ -874,9 +874,10 @@ class PythonEmitter:
             self.line(f'"""``{lc.key}`` ({lc.vtype.key}{doc}{cond})"""', 1)
         self.line()
         self.line("@classmethod", 1)
-        self.line(f"def decode(cls, data) -> {n.ident}:", 1)
+        self.line(f"def decode_prefix(cls, data) -> tuple[{n.ident}, int]:", 1)
         self.line('"""Decode a packet that starts at the first byte of '
-                  '``data``."""', 2)
+                  '``data``; return', 2)
+        self.line('it and the number of bytes it takes."""', 2)
         self.need_hooks(n.hooks, 2)
         self.line("r = pk.BitReader(data)", 2)
         for node in n.chain():
@@ -886,7 +887,7 @@ class PythonEmitter:
                           f'{pstr(c.text)})', 3)
             self.read_items(node.items, 2, node.key)
         self.finish(n, 2)
-        self.line(f"return {self.construct(n)}", 2)
+        self.line(f"return {self.construct(n)}, r.used()", 2)
         self.line()
         self.line("def encode_into(self, w: pk.BitWriter) -> None:", 1)
         body = len(self.out)
@@ -1130,10 +1131,13 @@ class PythonEmitter:
         self.line(f"MEMBERS: ClassVar[tuple] = ({members},)", 1)
         self.line()
         self.line("@staticmethod", 1)
-        self.line(f"def decode(data) -> Union[{members}]:", 1)
+        self.line(f"def decode_prefix(data) -> tuple[Union[{members}], int]:",
+                  1)
         self.line('"""Decode the root\'s entries, then pick the first child '
                   '(in', 2)
-        self.line('document order) whose criteria match, recursively."""', 2)
+        self.line("document order) whose criteria match, recursively; return "
+                  "it and", 2)
+        self.line('the number of bytes it takes."""', 2)
         self.need_hooks(items_hooks(k.root.items), 2)
         self.line("r = pk.BitReader(data)", 2)
         self.read_items(k.root.items, 2, k.root.key)
@@ -1155,7 +1159,7 @@ class PythonEmitter:
         else:
             self.need_hooks(checks_hooks(n.checks), depth)
             self.finish(n, depth)
-            self.line(f"return {self.construct(n)}", depth)
+            self.line(f"return {self.construct(n)}, r.used()", depth)
 
 
 def emit(mission: Mission, source: str) -> str:
