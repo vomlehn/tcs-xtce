@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "bnum"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1b08cb4ecbb540b940016b0a0f35b7e48ab0cc372ab88150c351de4cc469959"
+
+[[package]]
 name = "housekeeping"
 version = "0.1.0"
 dependencies = [
@@ -12,3 +18,6 @@ dependencies = [
 [[package]]
 name = "tcs-xtce"
 version = "0.2.0"
+dependencies = [
+ "bnum",
+]

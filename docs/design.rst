@@ -960,6 +960,39 @@ significant bit first, at any bit position:
   own. In C the writer fills a caller-owned array and fails with
   ``NoSpace`` rather than grow it.
 
+Integers of any size
+====================
+
+XTCE gives an integer any number of bits. Python's ``int`` holds them,
+and Rust's ``u128`` and ``i128`` up to 128 bits; past that, Rust uses the
+bnum crate, the established crate for fixed-size integers of any width,
+signed and unsigned. Its default ``alloc`` feature is off for the
+library, which promises codecs that allocate nothing, and bnum's
+formatting needs it, so the runtime formats bnum integers itself, with
+bnum's division.
+
+C and C++ have no such library that fits: GMP and mini-gmp allocate, and
+the runtime is a header with no library to link. ``xtce/bnum.h`` is one,
+mirroring bnum so that the languages agree by construction: the same
+bytes (least significant first, two's complement), the same operation
+names, and the same results, including bnum's choices where Rust leaves
+room, such as which parse error wins. ``xtce/bnum.hpp`` wraps it in a
+class template like bnum's ``Integer``.
+
+The C functions work on byte pointers with a size and a signedness, so
+one function serves every width without macros or generated code; that
+costs nothing that matters for the widths XTCE uses. Signed
+multiplication and division read the magnitudes of their operands a byte
+at a time without storing them (the bytes of ``-a`` are 0 below its
+lowest non-zero byte, its negation there, and its complement above), so
+they need no temporary of a size known only at run time; C++ has no
+variable-length arrays, so the header uses none.
+
+``tests/bnum_check.sh`` holds the claim to account: the Rust tool runs
+the cases on bnum itself, and every C and C++ result must match it
+exactly.
+
+
 The digest (xtce-digest)
 ========================
 

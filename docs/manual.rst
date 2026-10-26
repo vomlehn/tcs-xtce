@@ -2108,6 +2108,75 @@ Known limitations
 * Enumerated values must fit in a signed 64-bit integer.
 
 
+Integers of any size
+====================
+
+Rust has integers of up to 128 bits, and C and C++ of up to 64. For
+wider ones, the Rust runtime uses the `bnum <https://docs.rs/bnum>`_
+crate, and the C and C++ runtime its own header-only library that
+mirrors bnum, so that all of them hold and compute such integers alike.
+Python's ``int`` has no size limit.
+
+The library is two headers in ``cpp/include/xtce``, which need only the
+standard library and allocate nothing:
+
+``xtce/bnum.h``
+   C11 functions, which also compile as C++, on integers of ``n`` bytes
+   held least significant first, two's complement when signed. Each is
+   named after the bnum method it mirrors (``xtce_bn_wrapping_add`` is
+   bnum's ``wrapping_add``) and takes its integers as byte pointers with
+   their size and signedness:
+
+   .. code-block:: c
+
+      #include <xtce/bnum.h>
+
+      XTCE_BN_TYPEDEF(u256, 32);  /* typedef struct { uint8_t bytes[32]; } */
+
+      u256 a, b, sum;
+      xtce_bn_from_str_radix(a.bytes, 32, false, "1e40", 4, 16);
+      xtce_bn_from_u64(b.bytes, 32, 1);
+      if (xtce_bn_overflowing_add(sum.bytes, a.bytes, b.bytes, 32, false))
+              /* it overflowed */;
+
+   They cover construction, casts between sizes, byte order, comparison,
+   bit operations, shifts and rotations, counting bits, and addition,
+   subtraction, multiplication, division (truncating and Euclidean),
+   remainders, negation and absolute values, each in bnum's wrapping,
+   overflowing, checked and saturating forms, and parsing and formatting
+   in any radix from 2 to 36. ``overflowing_`` functions return whether
+   the result overflowed, and ``checked_`` ones whether it succeeded.
+   Functions that need room to work take a ``scratch`` buffer of ``n``
+   bytes; the header says which may not be given the same integer twice.
+
+``xtce/bnum.hpp``
+   For C++20, ``xtce::bnum::Integer<S, N>``, like bnum's
+   ``Integer<S, N>``: an integer of ``N`` bytes, signed if ``S``, with
+   ``Uint<N>`` and ``Int<N>`` for short. It has bnum's methods under the
+   same names, ``pow``, ``isqrt`` and the logarithms among them, and its
+   operators wrap on overflow, as bnum's do in its ``Wrap`` overflow
+   mode. Where bnum panics (dividing by zero, or a ``strict_`` method
+   overflowing) it calls ``XTCE_BNUM_PANIC``, which aborts unless defined
+   otherwise before the header is included.
+
+   .. code-block:: cpp
+
+      #include <xtce/bnum.hpp>
+
+      using U256 = xtce::bnum::Uint<32>;
+      U256 x = U256::one() << 160;
+      std::optional<U256> y = x.checked_mul(x);  // none: 2^320 overflows
+      std::cout << x.pow(3) << "\n";               // 0: it wraps
+
+Sizes are whole bytes; bnum's third parameter, a width in bits that
+isn't, has no counterpart. ``make bnum-check`` checks the library
+against bnum (see `Testing`_). It also found one difference, kept
+deliberately: bnum 0.14's ``from_le_slice`` and ``from_be_slice`` give a
+signed integer the truncated bytes of a longer negative slice whose
+value doesn't fit (``I8::from_le_slice(&[0x05, 0xff])`` is ``Some(5)``,
+though the bytes are -251), where the library gives none.
+
+
 xtce-digest
 ===========
 
@@ -2630,6 +2699,11 @@ Testing
   ``tests/float/known.txt`` (MIL-STD-1750A's own examples among them),
   and the same results as each other for random values from
   ``tests/float_cases.py``.
+* ``tests/bnum_check.sh``: the C functions of ``xtce/bnum.h`` (built as
+  C and as C++) and the C++ class of ``xtce/bnum.hpp`` give the same
+  results as the bnum crate for random cases from
+  ``tests/bnum_cases.py``: every operation they have, on signed and
+  unsigned integers of 1 to 32 bytes, with each type's edge values.
 
 The ``packet_tool`` programs (``rust/examples``, ``cpp/tests``, built as
 ``cpp/build/packet_tool`` and ``cpp/build/packet_tool_cxx``, and

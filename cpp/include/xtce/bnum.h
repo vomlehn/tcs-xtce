@@ -1,0 +1,998 @@
+/* Fixed-width integers of any number of bytes, for C11 and C++.
+ *
+ * This mirrors the Rust crate bnum (https://docs.rs/bnum), which the Rust
+ * runtime uses for integers of more than 128 bits, so that C, C++ and Rust
+ * hold and compute them alike.  An integer is N bytes, least significant
+ * first, and two's complement when it is signed; xtce/bnum.hpp wraps these
+ * functions in a C++ class template, xtce::bnum::Integer<S, N>, like bnum's
+ * Integer<S, N>.
+ *
+ * Every function takes its integers as byte pointers, their size `n` in bytes
+ * (at least 1) and whether they are signed `s`, and is named after the bnum
+ * method it mirrors: xtce_bn_wrapping_add is bnum's wrapping_add.  The
+ * overflowing_ functions return whether the operation overflowed, and the
+ * checked_ ones whether it succeeded, leaving `out` unspecified when not.
+ * The result `out` may be one of the operands, except where a function says
+ * otherwise.  Shift amounts and radixes are unsigned ints, as in bnum.
+ *
+ * Nothing is allocated; where a function needs room to work it takes a
+ * `scratch` buffer of `n` bytes.  The header needs only the C standard
+ * library.
+ */
+#ifndef XTCE_BNUM_H
+#define XTCE_BNUM_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Declares `name`, an integer of `n` bytes: a struct, so that it can be
+ * assigned and returned, holding them in `bytes`. */
+#define XTCE_BN_TYPEDEF(name, n)    \
+        typedef struct name {       \
+                uint8_t bytes[n];   \
+        } name
+
+/* An expression of struct type `T` from a brace-enclosed initializer, in C
+ * (a compound literal) and in C++. */
+#ifdef __cplusplus
+#define XTCE_BN_LIT(T, ...) (T __VA_ARGS__)
+#else
+#define XTCE_BN_LIT(T, ...) ((T)__VA_ARGS__)
+#endif
+
+/* Why xtce_bn_from_str_radix failed, as Rust's IntErrorKind gives it. */
+enum {
+        XTCE_BN_OK = 0,
+        XTCE_BN_EMPTY,
+        XTCE_BN_INVALID_DIGIT,
+        XTCE_BN_POS_OVERFLOW,
+        XTCE_BN_NEG_OVERFLOW,
+};
+
+/* --- bits and constants -------------------------------------------------- */
+
+static inline bool xtce_bn_is_negative(const uint8_t* a, size_t n, bool s) {
+        return s && (a[n - 1] & 0x80) != 0;
+}
+
+static inline bool xtce_bn_is_zero(const uint8_t* a, size_t n) {
+        size_t i;
+        for (i = 0; i < n; ++i)
+                if (a[i]) return false;
+        return true;
+}
+
+static inline bool xtce_bn_is_one(const uint8_t* a, size_t n) {
+        size_t i;
+        for (i = 1; i < n; ++i)
+                if (a[i]) return false;
+        return a[0] == 1;
+}
+
+static inline bool xtce_bn_is_positive(const uint8_t* a, size_t n, bool s) {
+        return !xtce_bn_is_negative(a, n, s) && !xtce_bn_is_zero(a, n);
+}
+
+/* -1, 0 or 1. */
+static inline int xtce_bn_signum(const uint8_t* a, size_t n, bool s) {
+        return xtce_bn_is_negative(a, n, s) ? -1 : !xtce_bn_is_zero(a, n);
+}
+
+/* Bit `k` (0 is the least significant). */
+static inline bool xtce_bn_bit(const uint8_t* a, size_t n, unsigned k) {
+        return k / 8 < n && ((a[k / 8] >> (k % 8)) & 1) != 0;
+}
+
+static inline void xtce_bn_set_bit(uint8_t* a, size_t n, unsigned k,
+                                   bool value) {
+        uint8_t m = (uint8_t)(1u << (k % 8));
+        if (k / 8 >= n) return;
+        a[k / 8] = value ? (uint8_t)(a[k / 8] | m) : (uint8_t)(a[k / 8] & ~m);
+}
+
+static inline void xtce_bn_zero(uint8_t* out, size_t n) {
+        memset(out, 0, n);
+}
+
+static inline void xtce_bn_one(uint8_t* out, size_t n) {
+        memset(out, 0, n);
+        out[0] = 1;
+}
+
+/* MIN and MAX. */
+static inline void xtce_bn_min(uint8_t* out, size_t n, bool s) {
+        memset(out, 0, n);
+        if (s) out[n - 1] = 0x80;
+}
+
+static inline void xtce_bn_max(uint8_t* out, size_t n, bool s) {
+        memset(out, 0xff, n);
+        if (s) out[n - 1] = 0x7f;
+}
+
+/* --- conversions --------------------------------------------------------- */
+
+/* `a`, of `na` bytes and signedness `sa`, as an integer of `n` bytes, as
+ * Rust's `as` converts: truncated, or extended with its sign if `sa`. */
+static inline void xtce_bn_cast(uint8_t* out, size_t n, const uint8_t* a,
+                                size_t na, bool sa) {
+        uint8_t fill = xtce_bn_is_negative(a, na, sa) ? 0xff : 0;
+        if (out != a) memmove(out, a, na < n ? na : n);
+        if (n > na) memset(out + na, fill, n - na);
+}
+
+/* Whether `a` (of `na` bytes, signed if `sa`) has the same value as an
+ * integer of `n` bytes, signed if `s`: whether xtce_bn_cast keeps it. */
+static inline bool xtce_bn_fits(const uint8_t* a, size_t na, bool sa,
+                                size_t n, bool s) {
+        bool neg = xtce_bn_is_negative(a, na, sa);
+        uint8_t fill = neg ? 0xff : 0;
+        size_t i;
+        if (neg && !s) return false;
+        for (i = n; i < na; ++i)
+                if (a[i] != fill) return false;
+        if (n > na || !s) return true;
+        /* The top bit kept must be the sign. */
+        return ((a[n - 1] & 0x80) != 0) == neg;
+}
+
+static inline void xtce_bn_from_u64(uint8_t* out, size_t n, uint64_t v) {
+        size_t i;
+        for (i = 0; i < n; ++i, v >>= 8) out[i] = (uint8_t)(i < 8 ? v : 0);
+}
+
+static inline void xtce_bn_from_i64(uint8_t* out, size_t n, int64_t v) {
+        xtce_bn_from_u64(out, n, (uint64_t)v);
+        if (v < 0 && n > 8) memset(out + 8, 0xff, n - 8);
+}
+
+/* Whether `a` fits a uint64_t, and if so its value in *out. */
+static inline bool xtce_bn_to_u64(const uint8_t* a, size_t n, bool s,
+                                  uint64_t* out) {
+        uint64_t v = 0;
+        size_t i;
+        if (!xtce_bn_fits(a, n, s, 8, false)) return false;
+        for (i = n < 8 ? n : 8; i-- > 0;) v = (v << 8) | a[i];
+        *out = v;
+        return true;
+}
+
+static inline bool xtce_bn_to_i64(const uint8_t* a, size_t n, bool s,
+                                  int64_t* out) {
+        uint8_t b[8];
+        uint64_t u = 0;
+        size_t i;
+        if (!xtce_bn_fits(a, n, s, 8, true)) return false;
+        xtce_bn_cast(b, 8, a, n, s);
+        for (i = 8; i-- > 0;) u = (u << 8) | b[i];
+        /* Not a cast: converting an out of range value to int64_t is
+         * implementation-defined in C. */
+        *out = (b[7] & 0x80) ? -(int64_t)(~u) - 1 : (int64_t)u;
+        return true;
+}
+
+/* `len` bytes at `src`, least (le) or most (be) significant first, as an
+ * integer of `n` bytes: false if it doesn't fit.  A signed integer takes
+ * the slice's top bit as its sign, as bnum does. */
+static inline bool xtce_bn_from_le_slice(uint8_t* out, size_t n, bool s,
+                                         const uint8_t* src, size_t len) {
+        size_t i;
+        if (!len) {
+                memset(out, 0, n);
+                return true;
+        }
+        if (!xtce_bn_fits(src, len, s, n, s)) return false;
+        for (i = 0; i < n; ++i)
+                out[i] = i < len ? src[i]
+                                 : (xtce_bn_is_negative(src, len, s) ? 0xff
+                                                                     : 0);
+        return true;
+}
+
+/* The bytes of `a` the other way round: little to big endian, or back. */
+static inline void xtce_bn_swap_bytes(uint8_t* out, const uint8_t* a,
+                                      size_t n) {
+        size_t i;
+        for (i = 0; i < n / 2; ++i) {
+                uint8_t t = a[i];
+                out[i] = a[n - 1 - i];
+                out[n - 1 - i] = t;
+        }
+        if (n % 2) out[n / 2] = a[n / 2];
+}
+
+static inline bool xtce_bn_from_be_slice(uint8_t* out, size_t n, bool s,
+                                         const uint8_t* src, size_t len) {
+        size_t i;
+        uint8_t fill;
+        if (!len) {
+                memset(out, 0, n);
+                return true;
+        }
+        fill = (s && (src[0] & 0x80)) ? 0xff : 0;
+        if (len > n) {
+                for (i = 0; i < len - n; ++i)
+                        if (src[i] != fill) return false;
+                src += len - n;
+                len = n;
+                if (s && ((src[0] & 0x80) ? 0xff : 0) != fill) return false;
+        }
+        for (i = 0; i < n; ++i) out[i] = i < len ? src[len - 1 - i] : fill;
+        return true;
+}
+
+/* The bytes of `a` most significant first. */
+static inline void xtce_bn_to_be_bytes(uint8_t* out, const uint8_t* a,
+                                       size_t n) {
+        xtce_bn_swap_bytes(out, a, n);
+}
+
+/* `a` with its bits in the reverse order. */
+static inline void xtce_bn_reverse_bits(uint8_t* out, const uint8_t* a,
+                                        size_t n) {
+        size_t i;
+        xtce_bn_swap_bytes(out, a, n);
+        for (i = 0; i < n; ++i) {
+                uint8_t b = out[i], r = 0;
+                int k;
+                for (k = 0; k < 8; ++k) r = (uint8_t)(r | ((b >> k) & 1)
+                                                               << (7 - k));
+                out[i] = r;
+        }
+}
+
+/* --- comparison ---------------------------------------------------------- */
+
+/* -1, 0 or 1 as `a` is less than, equal to or greater than `b`. */
+static inline int xtce_bn_cmp(const uint8_t* a, const uint8_t* b, size_t n,
+                              bool s) {
+        bool an = xtce_bn_is_negative(a, n, s);
+        size_t i = n;
+        if (an != xtce_bn_is_negative(b, n, s)) return an ? -1 : 1;
+        while (i-- > 0)
+                if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
+        return 0;
+}
+
+/* xtce_bn_cmp for integers of any sizes and signedness, as their values
+ * compare.  (Rust compares them after casting both to one type.) */
+static inline int xtce_bn_cmp_mixed(const uint8_t* a, size_t na, bool sa,
+                                    const uint8_t* b, size_t nb, bool sb) {
+        bool an = xtce_bn_is_negative(a, na, sa);
+        bool bn = xtce_bn_is_negative(b, nb, sb);
+        size_t i = na > nb ? na : nb;
+        if (an != bn) return an ? -1 : 1;
+        while (i-- > 0) {
+                unsigned x = i < na ? a[i] : (an ? 0xffu : 0u);
+                unsigned y = i < nb ? b[i] : (bn ? 0xffu : 0u);
+                if (x != y) return x < y ? -1 : 1;
+        }
+        return 0;
+}
+
+static inline void xtce_bn_min_of(uint8_t* out, const uint8_t* a,
+                                  const uint8_t* b, size_t n, bool s) {
+        memmove(out, xtce_bn_cmp(a, b, n, s) <= 0 ? a : b, n);
+}
+
+static inline void xtce_bn_max_of(uint8_t* out, const uint8_t* a,
+                                  const uint8_t* b, size_t n, bool s) {
+        memmove(out, xtce_bn_cmp(a, b, n, s) >= 0 ? a : b, n);
+}
+
+/* --- bitwise operations -------------------------------------------------- */
+
+static inline void xtce_bn_not(uint8_t* out, const uint8_t* a, size_t n) {
+        size_t i;
+        for (i = 0; i < n; ++i) out[i] = (uint8_t)~a[i];
+}
+
+static inline void xtce_bn_bitand(uint8_t* out, const uint8_t* a,
+                                  const uint8_t* b, size_t n) {
+        size_t i;
+        for (i = 0; i < n; ++i) out[i] = a[i] & b[i];
+}
+
+static inline void xtce_bn_bitor(uint8_t* out, const uint8_t* a,
+                                 const uint8_t* b, size_t n) {
+        size_t i;
+        for (i = 0; i < n; ++i) out[i] = a[i] | b[i];
+}
+
+static inline void xtce_bn_bitxor(uint8_t* out, const uint8_t* a,
+                                  const uint8_t* b, size_t n) {
+        size_t i;
+        for (i = 0; i < n; ++i) out[i] = a[i] ^ b[i];
+}
+
+static inline unsigned xtce_bn_count_ones(const uint8_t* a, size_t n) {
+        unsigned c = 0;
+        size_t i;
+        for (i = 0; i < n; ++i) {
+                uint8_t b = a[i];
+                for (; b; b &= (uint8_t)(b - 1)) ++c;
+        }
+        return c;
+}
+
+static inline unsigned xtce_bn_count_zeros(const uint8_t* a, size_t n) {
+        return (unsigned)(8 * n) - xtce_bn_count_ones(a, n);
+}
+
+/* The number of leading (most significant) bits equal to `one`. */
+static inline unsigned xtce_bn_leading_(const uint8_t* a, size_t n,
+                                        bool one) {
+        unsigned c = 0;
+        size_t i = n;
+        while (i-- > 0) {
+                uint8_t b = one ? (uint8_t)~a[i] : a[i];
+                if (b) {
+                        while (!(b & 0x80)) {
+                                ++c;
+                                b = (uint8_t)(b << 1);
+                        }
+                        return c;
+                }
+                c += 8;
+        }
+        return c;
+}
+
+static inline unsigned xtce_bn_trailing_(const uint8_t* a, size_t n,
+                                         bool one) {
+        unsigned c = 0;
+        size_t i;
+        for (i = 0; i < n; ++i) {
+                uint8_t b = one ? (uint8_t)~a[i] : a[i];
+                if (b) {
+                        while (!(b & 1)) {
+                                ++c;
+                                b >>= 1;
+                        }
+                        return c;
+                }
+                c += 8;
+        }
+        return c;
+}
+
+static inline unsigned xtce_bn_leading_zeros(const uint8_t* a, size_t n) {
+        return xtce_bn_leading_(a, n, false);
+}
+
+static inline unsigned xtce_bn_leading_ones(const uint8_t* a, size_t n) {
+        return xtce_bn_leading_(a, n, true);
+}
+
+static inline unsigned xtce_bn_trailing_zeros(const uint8_t* a, size_t n) {
+        return xtce_bn_trailing_(a, n, false);
+}
+
+static inline unsigned xtce_bn_trailing_ones(const uint8_t* a, size_t n) {
+        return xtce_bn_trailing_(a, n, true);
+}
+
+/* The bits needed to hold `a` as unsigned: the bits less its leading
+ * zeros. */
+static inline unsigned xtce_bn_bit_width(const uint8_t* a, size_t n) {
+        return (unsigned)(8 * n) - xtce_bn_leading_zeros(a, n);
+}
+
+static inline bool xtce_bn_is_power_of_two(const uint8_t* a, size_t n) {
+        return xtce_bn_count_ones(a, n) == 1;
+}
+
+/* --- shifts and rotations ------------------------------------------------ */
+
+/* `a` shifted left by `k` bits (any number), zeros coming in. */
+static inline void xtce_bn_shl_bits_(uint8_t* out, const uint8_t* a,
+                                     size_t n, size_t k) {
+        size_t q = k / 8, i = n;
+        unsigned r = (unsigned)(k % 8);
+        /* From the top down, each byte reads only those below it. */
+        while (i-- > 0) {
+                unsigned hi = i >= q ? a[i - q] : 0;
+                unsigned lo = i >= q + 1 ? a[i - q - 1] : 0;
+                out[i] = (uint8_t)((hi << r) | (r ? lo >> (8 - r) : 0));
+        }
+}
+
+/* `a` shifted right by `k` bits, copies of `fill` (0 or 0xff) coming in. */
+static inline void xtce_bn_shr_bits_(uint8_t* out, const uint8_t* a,
+                                     size_t n, size_t k, uint8_t fill) {
+        size_t q = k / 8, i;
+        unsigned r = (unsigned)(k % 8);
+        /* From the bottom up, each byte reads only those above it. */
+        for (i = 0; i < n; ++i) {
+                unsigned lo = i + q < n ? a[i + q] : fill;
+                unsigned hi = i + q + 1 < n ? a[i + q + 1] : fill;
+                out[i] = (uint8_t)((lo >> r) | (r ? hi << (8 - r) : 0));
+        }
+}
+
+/* bnum's overflowing_shl: the shift is taken modulo the number of bits,
+ * and it overflowed if it was that many or more. */
+static inline bool xtce_bn_overflowing_shl(uint8_t* out, const uint8_t* a,
+                                           size_t n, unsigned k) {
+        xtce_bn_shl_bits_(out, a, n, k % (8 * n));
+        return k >= 8 * n;
+}
+
+/* A signed integer shifts in copies of its sign. */
+static inline bool xtce_bn_overflowing_shr(uint8_t* out, const uint8_t* a,
+                                           size_t n, bool s, unsigned k) {
+        uint8_t fill = xtce_bn_is_negative(a, n, s) ? 0xff : 0;
+        xtce_bn_shr_bits_(out, a, n, k % (8 * n), fill);
+        return k >= 8 * n;
+}
+
+static inline void xtce_bn_wrapping_shl(uint8_t* out, const uint8_t* a,
+                                        size_t n, unsigned k) {
+        (void)xtce_bn_overflowing_shl(out, a, n, k);
+}
+
+static inline void xtce_bn_wrapping_shr(uint8_t* out, const uint8_t* a,
+                                        size_t n, bool s, unsigned k) {
+        (void)xtce_bn_overflowing_shr(out, a, n, s, k);
+}
+
+static inline bool xtce_bn_checked_shl(uint8_t* out, const uint8_t* a,
+                                       size_t n, unsigned k) {
+        return !xtce_bn_overflowing_shl(out, a, n, k);
+}
+
+static inline bool xtce_bn_checked_shr(uint8_t* out, const uint8_t* a,
+                                       size_t n, bool s, unsigned k) {
+        return !xtce_bn_overflowing_shr(out, a, n, s, k);
+}
+
+/* Shifts of any size: every bit shifted out, for that many or more. */
+static inline void xtce_bn_unbounded_shl(uint8_t* out, const uint8_t* a,
+                                         size_t n, unsigned k) {
+        xtce_bn_shl_bits_(out, a, n, k < 8 * n ? k : 8 * n);
+}
+
+static inline void xtce_bn_unbounded_shr(uint8_t* out, const uint8_t* a,
+                                         size_t n, bool s, unsigned k) {
+        uint8_t fill = xtce_bn_is_negative(a, n, s) ? 0xff : 0;
+        xtce_bn_shr_bits_(out, a, n, k < 8 * n ? k : 8 * n, fill);
+}
+
+/* Rotations; `out` must not be `a`. */
+static inline void xtce_bn_rotate_left(uint8_t* out, const uint8_t* a,
+                                       size_t n, unsigned k) {
+        size_t bits = 8 * n, i;
+        k %= (unsigned)bits;
+        for (i = 0; i < bits; ++i)
+                xtce_bn_set_bit(out, n, (unsigned)((i + k) % bits),
+                                xtce_bn_bit(a, n, (unsigned)i));
+}
+
+static inline void xtce_bn_rotate_right(uint8_t* out, const uint8_t* a,
+                                        size_t n, unsigned k) {
+        xtce_bn_rotate_left(out, a, n,
+                            (unsigned)(8 * n - k % (8 * n)) %
+                                    (unsigned)(8 * n));
+}
+
+/* --- addition and subtraction -------------------------------------------- */
+
+/* `a + b + carry` as unsigned; the carry out. */
+static inline unsigned xtce_bn_add_(uint8_t* out, const uint8_t* a,
+                                    const uint8_t* b, size_t n,
+                                    unsigned carry) {
+        size_t i;
+        for (i = 0; i < n; ++i) {
+                unsigned x = (unsigned)a[i] + b[i] + carry;
+                out[i] = (uint8_t)x;
+                carry = x >> 8;
+        }
+        return carry;
+}
+
+/* `a - b` as unsigned; the borrow out. */
+static inline unsigned xtce_bn_sub_(uint8_t* out, const uint8_t* a,
+                                    const uint8_t* b, size_t n) {
+        unsigned borrow = 0;
+        size_t i;
+        for (i = 0; i < n; ++i) {
+                unsigned x = (unsigned)a[i] - b[i] - borrow;
+                out[i] = (uint8_t)x;
+                borrow = (x >> 8) & 1;
+        }
+        return borrow;
+}
+
+static inline bool xtce_bn_overflowing_add(uint8_t* out, const uint8_t* a,
+                                           const uint8_t* b, size_t n,
+                                           bool s) {
+        bool an = xtce_bn_is_negative(a, n, s);
+        bool bn = xtce_bn_is_negative(b, n, s);
+        unsigned carry = xtce_bn_add_(out, a, b, n, 0);
+        if (!s) return carry != 0;
+        return an == bn && xtce_bn_is_negative(out, n, s) != an;
+}
+
+static inline bool xtce_bn_overflowing_sub(uint8_t* out, const uint8_t* a,
+                                           const uint8_t* b, size_t n,
+                                           bool s) {
+        bool an = xtce_bn_is_negative(a, n, s);
+        bool bn = xtce_bn_is_negative(b, n, s);
+        unsigned borrow = xtce_bn_sub_(out, a, b, n);
+        if (!s) return borrow != 0;
+        return an != bn && xtce_bn_is_negative(out, n, s) != an;
+}
+
+/* -a; for an unsigned integer it overflows unless `a` is zero. */
+static inline bool xtce_bn_overflowing_neg(uint8_t* out, const uint8_t* a,
+                                           size_t n, bool s) {
+        unsigned carry = 1;
+        bool zero = xtce_bn_is_zero(a, n), an = xtce_bn_is_negative(a, n, s);
+        size_t i;
+        for (i = 0; i < n; ++i) {
+                unsigned x = (unsigned)(uint8_t)~a[i] + carry;
+                out[i] = (uint8_t)x;
+                carry = x >> 8;
+        }
+        if (!s) return !zero;
+        /* Only MIN is its own negation, apart from zero. */
+        return an && xtce_bn_is_negative(out, n, s);
+}
+
+static inline bool xtce_bn_overflowing_abs(uint8_t* out, const uint8_t* a,
+                                           size_t n, bool s) {
+        if (!xtce_bn_is_negative(a, n, s)) {
+                memmove(out, a, n);
+                return false;
+        }
+        return xtce_bn_overflowing_neg(out, a, n, s);
+}
+
+/* |a| as unsigned, which always fits. */
+static inline void xtce_bn_unsigned_abs(uint8_t* out, const uint8_t* a,
+                                        size_t n, bool s) {
+        (void)xtce_bn_overflowing_abs(out, a, n, s);
+}
+
+/* |a - b| as unsigned; `out` must not be `a` or `b`. */
+static inline void xtce_bn_abs_diff(uint8_t* out, const uint8_t* a,
+                                    const uint8_t* b, size_t n, bool s) {
+        if (xtce_bn_cmp(a, b, n, s) >= 0)
+                (void)xtce_bn_sub_(out, a, b, n);
+        else
+                (void)xtce_bn_sub_(out, b, a, n);
+}
+
+/* --- multiplication and division ----------------------------------------- */
+
+/* The magnitude of an integer, read a byte at a time without storing it:
+ * the bytes of -a are 0 below its lowest non-zero byte z, -a[z] at z, and
+ * ~a[k] above. */
+typedef struct xtce_bn_mag_ {
+        const uint8_t* p;
+        size_t z;
+        bool neg;
+} xtce_bn_mag_;
+
+static inline xtce_bn_mag_ xtce_bn_mag_of_(const uint8_t* a, size_t n,
+                                           bool s) {
+        xtce_bn_mag_ m;
+        m.p = a;
+        m.neg = xtce_bn_is_negative(a, n, s);
+        for (m.z = 0; m.z < n && !a[m.z]; ++m.z) {
+        }
+        return m;
+}
+
+static inline unsigned xtce_bn_mag_byte_(const xtce_bn_mag_* m, size_t k) {
+        if (!m->neg) return m->p[k];
+        if (k < m->z) return 0;
+        if (k == m->z) return (uint8_t)(0u - m->p[k]);
+        return (uint8_t)~m->p[k];
+}
+
+/* Whether `a` is a negative integer's magnitude that fits: at most MAX, or
+ * 2^(8n-1) (MIN's) if `neg`. */
+static inline bool xtce_bn_mag_fits_(const uint8_t* a, size_t n, bool neg) {
+        size_t i;
+        if (!(a[n - 1] & 0x80)) return true;
+        if (!neg || a[n - 1] != 0x80) return false;
+        for (i = 0; i + 1 < n; ++i)
+                if (a[i]) return false;
+        return true;
+}
+
+/* In place: `a` negated, ignoring overflow. */
+static inline void xtce_bn_negate_(uint8_t* a, size_t n) {
+        (void)xtce_bn_overflowing_neg(a, a, n, false);
+}
+
+/* `a * b`; `out` must not be `a` or `b`. */
+static inline bool xtce_bn_overflowing_mul(uint8_t* out, const uint8_t* a,
+                                           const uint8_t* b, size_t n,
+                                           bool s) {
+        xtce_bn_mag_ ma = xtce_bn_mag_of_(a, n, s);
+        xtce_bn_mag_ mb = xtce_bn_mag_of_(b, n, s);
+        bool neg = ma.neg != mb.neg, high;
+        uint64_t acc = 0;
+        size_t i, j, k;
+        /* The low n bytes of the product of the magnitudes, a column at a
+         * time. */
+        for (k = 0; k < n; ++k) {
+                for (i = 0; i <= k; ++i)
+                        acc += (uint64_t)xtce_bn_mag_byte_(&ma, i) *
+                               xtce_bn_mag_byte_(&mb, k - i);
+                out[k] = (uint8_t)acc;
+                acc >>= 8;
+        }
+        /* The bytes above are non-zero if a carry or a term reaches them. */
+        high = acc != 0;
+        for (i = 1; i < n && !high; ++i) {
+                if (!xtce_bn_mag_byte_(&ma, i)) continue;
+                for (j = n - i; j < n && !high; ++j)
+                        high = xtce_bn_mag_byte_(&mb, j) != 0;
+        }
+        if (s) high = high || !xtce_bn_mag_fits_(out, n, neg);
+        if (neg) xtce_bn_negate_(out, n);
+        return high;
+}
+
+/* `q = a / b` and `r = a % b`, rounding toward zero as Rust does, so that
+ * `r` has the sign of `a`.  False, leaving both unspecified, if `b` is zero.
+ * MIN / -1 overflows to MIN, with a remainder of 0; *overflow (if not NULL)
+ * says whether it did.  `q` may be `a`; otherwise none of them may be the
+ * same.  The division functions below take `scratch` for the result they
+ * don't return, and their `out` must not be `b`. */
+static inline bool xtce_bn_div_rem_(uint8_t* q, uint8_t* r, const uint8_t* a,
+                                    const uint8_t* b, size_t n, bool s,
+                                    bool* overflow) {
+        xtce_bn_mag_ ma = xtce_bn_mag_of_(a, n, s);
+        xtce_bn_mag_ mb = xtce_bn_mag_of_(b, n, s);
+        size_t bits = 8 * n, i, k;
+        if (overflow) *overflow = false;
+        if (mb.z == n) return false;
+        /* The dividend's magnitude in `q`: byte k reads only a[k] (and the
+         * already read a[z]), so `q` may be `a`. */
+        for (k = 0; k < n; ++k) q[k] = (uint8_t)xtce_bn_mag_byte_(&ma, k);
+        memset(r, 0, n);
+        /* Restoring division: shift (r, q) left a bit at a time, and take the
+         * divisor's magnitude from r when r holds it. */
+        for (i = 0; i < bits; ++i) {
+                unsigned top = r[n - 1] >> 7, in = q[n - 1] >> 7;
+                bool ge = top != 0;
+                xtce_bn_shl_bits_(r, r, n, 1);
+                r[0] = (uint8_t)(r[0] | in);
+                xtce_bn_shl_bits_(q, q, n, 1);
+                for (k = n; !ge && k-- > 0;) {
+                        unsigned d = xtce_bn_mag_byte_(&mb, k);
+                        if (r[k] != d) {
+                                ge = r[k] > d;
+                                break;
+                        }
+                        if (k == 0) ge = true;
+                }
+                if (ge) {
+                        unsigned borrow = 0;
+                        for (k = 0; k < n; ++k) {
+                                unsigned x = (unsigned)r[k] -
+                                             xtce_bn_mag_byte_(&mb, k) -
+                                             borrow;
+                                r[k] = (uint8_t)x;
+                                borrow = (x >> 8) & 1;
+                        }
+                        q[0] |= 1;
+                }
+        }
+        if (ma.neg != mb.neg) xtce_bn_negate_(q, n);
+        if (ma.neg) xtce_bn_negate_(r, n);
+        if (s && overflow) {
+                /* Only MIN / -1 has a quotient that doesn't fit. */
+                *overflow = ma.neg == mb.neg && xtce_bn_is_negative(q, n, s);
+        }
+        return true;
+}
+
+static inline bool xtce_bn_checked_div(uint8_t* out, const uint8_t* a,
+                                       const uint8_t* b, size_t n, bool s,
+                                       uint8_t* scratch) {
+        bool overflow;
+        return xtce_bn_div_rem_(out, scratch, a, b, n, s, &overflow) &&
+               !overflow;
+}
+
+static inline bool xtce_bn_checked_rem(uint8_t* out, const uint8_t* a,
+                                       const uint8_t* b, size_t n, bool s,
+                                       uint8_t* scratch) {
+        bool overflow;
+        memmove(scratch, a, n);
+        return xtce_bn_div_rem_(scratch, out, scratch, b, n, s, &overflow) &&
+               !overflow;
+}
+
+/* bnum's overflowing_div and overflowing_rem: false (in *ok) if `b` is zero,
+ * where bnum panics. */
+static inline bool xtce_bn_overflowing_div(uint8_t* out, const uint8_t* a,
+                                           const uint8_t* b, size_t n,
+                                           bool s, uint8_t* scratch,
+                                           bool* ok) {
+        bool overflow = false;
+        *ok = xtce_bn_div_rem_(out, scratch, a, b, n, s, &overflow);
+        return overflow;
+}
+
+static inline bool xtce_bn_overflowing_rem(uint8_t* out, const uint8_t* a,
+                                           const uint8_t* b, size_t n,
+                                           bool s, uint8_t* scratch,
+                                           bool* ok) {
+        bool overflow = false;
+        memmove(scratch, a, n);
+        *ok = xtce_bn_div_rem_(scratch, out, scratch, b, n, s, &overflow);
+        return overflow;
+}
+
+/* Euclidean division: the remainder is never negative, and
+ * a = b * q + r. */
+static inline bool xtce_bn_div_rem_euclid_(uint8_t* q, uint8_t* r,
+                                           const uint8_t* a,
+                                           const uint8_t* b, size_t n,
+                                           bool s, bool* overflow) {
+        bool bn = xtce_bn_is_negative(b, n, s);
+        if (!xtce_bn_div_rem_(q, r, a, b, n, s, overflow)) return false;
+        if (xtce_bn_is_negative(r, n, s)) {
+                /* r + |b|, and the quotient one further from zero. */
+                if (bn)
+                        (void)xtce_bn_sub_(r, r, b, n);
+                else
+                        (void)xtce_bn_add_(r, r, b, n, 0);
+                if (bn) {
+                        size_t i;
+                        unsigned carry = 1;
+                        for (i = 0; i < n && carry; ++i) {
+                                unsigned x = (unsigned)q[i] + carry;
+                                q[i] = (uint8_t)x;
+                                carry = x >> 8;
+                        }
+                } else {
+                        size_t i;
+                        unsigned borrow = 1;
+                        for (i = 0; i < n && borrow; ++i) {
+                                unsigned x = (unsigned)q[i] - borrow;
+                                q[i] = (uint8_t)x;
+                                borrow = (x >> 8) & 1;
+                        }
+                }
+        }
+        return true;
+}
+
+static inline bool xtce_bn_checked_div_euclid(uint8_t* out, const uint8_t* a,
+                                              const uint8_t* b, size_t n,
+                                              bool s, uint8_t* scratch) {
+        bool overflow;
+        return xtce_bn_div_rem_euclid_(out, scratch, a, b, n, s,
+                                       &overflow) &&
+               !overflow;
+}
+
+static inline bool xtce_bn_checked_rem_euclid(uint8_t* out, const uint8_t* a,
+                                              const uint8_t* b, size_t n,
+                                              bool s, uint8_t* scratch) {
+        bool overflow;
+        memmove(scratch, a, n);
+        return xtce_bn_div_rem_euclid_(scratch, out, scratch, b, n, s,
+                                       &overflow) &&
+               !overflow;
+}
+
+/* --- wrapping, checked and saturating forms ------------------------------ */
+
+static inline void xtce_bn_wrapping_add(uint8_t* out, const uint8_t* a,
+                                        const uint8_t* b, size_t n) {
+        (void)xtce_bn_add_(out, a, b, n, 0);
+}
+
+static inline void xtce_bn_wrapping_sub(uint8_t* out, const uint8_t* a,
+                                        const uint8_t* b, size_t n) {
+        (void)xtce_bn_sub_(out, a, b, n);
+}
+
+static inline void xtce_bn_wrapping_mul(uint8_t* out, const uint8_t* a,
+                                        const uint8_t* b, size_t n, bool s) {
+        (void)xtce_bn_overflowing_mul(out, a, b, n, s);
+}
+
+static inline void xtce_bn_wrapping_neg(uint8_t* out, const uint8_t* a,
+                                        size_t n) {
+        (void)xtce_bn_overflowing_neg(out, a, n, false);
+}
+
+static inline void xtce_bn_wrapping_abs(uint8_t* out, const uint8_t* a,
+                                        size_t n, bool s) {
+        (void)xtce_bn_overflowing_abs(out, a, n, s);
+}
+
+static inline bool xtce_bn_checked_add(uint8_t* out, const uint8_t* a,
+                                       const uint8_t* b, size_t n, bool s) {
+        return !xtce_bn_overflowing_add(out, a, b, n, s);
+}
+
+static inline bool xtce_bn_checked_sub(uint8_t* out, const uint8_t* a,
+                                       const uint8_t* b, size_t n, bool s) {
+        return !xtce_bn_overflowing_sub(out, a, b, n, s);
+}
+
+static inline bool xtce_bn_checked_mul(uint8_t* out, const uint8_t* a,
+                                       const uint8_t* b, size_t n, bool s) {
+        return !xtce_bn_overflowing_mul(out, a, b, n, s);
+}
+
+static inline bool xtce_bn_checked_neg(uint8_t* out, const uint8_t* a,
+                                       size_t n, bool s) {
+        return !xtce_bn_overflowing_neg(out, a, n, s);
+}
+
+static inline bool xtce_bn_checked_abs(uint8_t* out, const uint8_t* a,
+                                       size_t n, bool s) {
+        return !xtce_bn_overflowing_abs(out, a, n, s);
+}
+
+/* MAX, or MIN if the exact result is negative. */
+static inline void xtce_bn_saturate_(uint8_t* out, size_t n, bool s,
+                                     bool negative) {
+        if (negative)
+                xtce_bn_min(out, n, s);
+        else
+                xtce_bn_max(out, n, s);
+}
+
+static inline void xtce_bn_saturating_add(uint8_t* out, const uint8_t* a,
+                                          const uint8_t* b, size_t n,
+                                          bool s) {
+        bool an = xtce_bn_is_negative(a, n, s);
+        if (xtce_bn_overflowing_add(out, a, b, n, s))
+                xtce_bn_saturate_(out, n, s, an);
+}
+
+static inline void xtce_bn_saturating_sub(uint8_t* out, const uint8_t* a,
+                                          const uint8_t* b, size_t n,
+                                          bool s) {
+        bool an = xtce_bn_is_negative(a, n, s);
+        if (xtce_bn_overflowing_sub(out, a, b, n, s))
+                xtce_bn_saturate_(out, n, s, !s || an);
+}
+
+/* `out` must not be `a` or `b`. */
+static inline void xtce_bn_saturating_mul(uint8_t* out, const uint8_t* a,
+                                          const uint8_t* b, size_t n,
+                                          bool s) {
+        bool neg = xtce_bn_is_negative(a, n, s) !=
+                   xtce_bn_is_negative(b, n, s);
+        if (xtce_bn_overflowing_mul(out, a, b, n, s))
+                xtce_bn_saturate_(out, n, s, neg);
+}
+
+static inline void xtce_bn_saturating_neg(uint8_t* out, const uint8_t* a,
+                                          size_t n, bool s) {
+        bool an = xtce_bn_is_negative(a, n, s);
+        if (xtce_bn_overflowing_neg(out, a, n, s))
+                xtce_bn_saturate_(out, n, s, !an);
+}
+
+static inline void xtce_bn_saturating_abs(uint8_t* out, const uint8_t* a,
+                                          size_t n, bool s) {
+        if (xtce_bn_overflowing_abs(out, a, n, s))
+                xtce_bn_max(out, n, s);
+}
+
+/* --- small operands ------------------------------------------------------ */
+
+/* out = a * m + add, for m and add below 2^24; the carry out.  As with the
+ * other operations, `out` may be `a`. */
+static inline uint32_t xtce_bn_mul_small(uint8_t* out, const uint8_t* a,
+                                         size_t n, uint32_t m, uint32_t add) {
+        uint64_t c = add;
+        size_t i;
+        for (i = 0; i < n; ++i) {
+                c += (uint64_t)a[i] * m;
+                out[i] = (uint8_t)c;
+                c >>= 8;
+        }
+        return (uint32_t)c;
+}
+
+/* out = a / d as unsigned, for d from 1 to 2^24; the remainder. */
+static inline uint32_t xtce_bn_div_small(uint8_t* out, const uint8_t* a,
+                                         size_t n, uint32_t d) {
+        uint64_t r = 0;
+        size_t i = n;
+        while (i-- > 0) {
+                r = (r << 8) | a[i];
+                out[i] = (uint8_t)(r / d);
+                r %= d;
+        }
+        return (uint32_t)r;
+}
+
+/* --- text ---------------------------------------------------------------- */
+
+/* Writes `a` in `radix` (2 to 36), with lowercase digits after a '-' if
+ * negative, as bnum's to_str_radix does, into `buf` of `cap` chars,
+ * NUL-terminated.  Returns its length without the NUL; if that is `cap` or
+ * more, `buf` was too small and holds only part of it.  `scratch` is `n`
+ * bytes, and `a` is left alone. */
+static inline size_t xtce_bn_to_str_radix(const uint8_t* a, size_t n, bool s,
+                                          unsigned radix, uint8_t* scratch,
+                                          char* buf, size_t cap) {
+        static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+        bool neg = xtce_bn_is_negative(a, n, s);
+        size_t len = 0, i;
+        xtce_bn_unsigned_abs(scratch, a, n, s);
+        /* The digits least significant first, then turned round. */
+        do {
+                uint32_t d = xtce_bn_div_small(scratch, scratch, n, radix);
+                if (len < cap) buf[len] = digits[d];
+                ++len;
+        } while (!xtce_bn_is_zero(scratch, n));
+        if (neg) {
+                if (len < cap) buf[len] = '-';
+                ++len;
+        }
+        if (len < cap) {
+                for (i = 0; i < len / 2; ++i) {
+                        char t = buf[i];
+                        buf[i] = buf[len - 1 - i];
+                        buf[len - 1 - i] = t;
+                }
+                buf[len] = '\0';
+        } else if (cap) {
+                buf[cap - 1] = '\0';
+        }
+        return len;
+}
+
+/* Parses `len` chars at `str`: an optional '+' (or, if signed, '-'), then
+ * digits in `radix` (2 to 36) of either case, as bnum's from_str_radix does.
+ * Returns XTCE_BN_OK, or why it failed. */
+static inline int xtce_bn_from_str_radix(uint8_t* out, size_t n, bool s,
+                                         const char* str, size_t len,
+                                         unsigned radix) {
+        bool neg = false;
+        size_t i = 0;
+        if (len && (str[0] == '+' || (str[0] == '-' && s))) {
+                neg = str[0] == '-';
+                i = 1;
+        }
+        if (i == len) return len ? XTCE_BN_INVALID_DIGIT : XTCE_BN_EMPTY;
+        memset(out, 0, n);
+        for (; i < len; ++i) {
+                char c = str[i];
+                unsigned d = c >= '0' && c <= '9'   ? (unsigned)(c - '0')
+                             : c >= 'a' && c <= 'z' ? (unsigned)(c - 'a') + 10
+                             : c >= 'A' && c <= 'Z' ? (unsigned)(c - 'A') + 10
+                                                    : 36;
+                if (d >= radix) return XTCE_BN_INVALID_DIGIT;
+                /* `out` holds the magnitude, as unsigned.  As in bnum,
+                 * overflowing that stops at once, before any invalid digit
+                 * after it, but the range of a signed integer is checked
+                 * only once every digit is. */
+                if (xtce_bn_mul_small(out, out, n, radix, d))
+                        return neg ? XTCE_BN_NEG_OVERFLOW
+                                   : XTCE_BN_POS_OVERFLOW;
+        }
+        if (s && !xtce_bn_mag_fits_(out, n, neg))
+                return neg ? XTCE_BN_NEG_OVERFLOW : XTCE_BN_POS_OVERFLOW;
+        if (neg) xtce_bn_negate_(out, n);
+        return XTCE_BN_OK;
+}
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* XTCE_BNUM_H */

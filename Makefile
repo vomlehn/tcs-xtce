@@ -9,6 +9,7 @@
 #   make test            run every language's tests, the cross-language
 #                        checks (packets and digests) and the line-width
 #                        check
+#   make bnum-check      check xtce/bnum.h and bnum.hpp against the bnum crate
 #   make line-width      check that no line of code is wider than 80 columns
 #   make samples-check   check tcs-xtce against public XTCE documents
 #                        (downloads them)
@@ -116,7 +117,7 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
 .PHONY: test
 test: test-generator test-rust test-cpp test-python cross-check packet-check \
-      stream-check digest-check float-check examples line-width
+      stream-check digest-check float-check bnum-check examples line-width
 
 # Every line of code, hand-written or generated, fits in 80 columns.  It comes
 # last in `test` so that the code the examples generate exists by then.
@@ -164,6 +165,12 @@ digest-check: rust cpp
 float-check: rust cpp
 	sh tests/float_check.sh rust/target/release/examples/float_tool \
 		cpp/build/float_tool cpp/build/float_tool_cxx
+
+.PHONY: bnum-check
+bnum-check: rust cpp
+	sh tests/bnum_check.sh rust/target/release/examples/bnum_tool \
+		cpp/build/bnum_tool cpp/build/bnum_tool_cxx \
+		cpp/build/bnum_tool_hpp
 
 # Public XTCE documents, pinned to commits in tests/external/sources.txt and
 # downloaded on demand; not part of `make test`, which needs no network.

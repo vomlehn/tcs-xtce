@@ -19,7 +19,8 @@ HEADERS  := $(wildcard include/xtce/*.hpp include/xtce/*.h)
 .PHONY: all
 all: lib $(BUILD)/xtce_roundtrip $(BUILD)/packet_tool $(BUILD)/packet_tool_cxx \
      $(BUILD)/digest_tool $(BUILD)/digest_tool_cxx $(BUILD)/float_tool \
-     $(BUILD)/float_tool_cxx $(BUILD)/stream_tool $(BUILD)/stream_tool_cxx
+     $(BUILD)/float_tool_cxx $(BUILD)/stream_tool $(BUILD)/stream_tool_cxx \
+     $(BUILD)/bnum_tool $(BUILD)/bnum_tool_cxx $(BUILD)/bnum_tool_hpp
 
 .PHONY: lib
 lib: $(BUILD)/libxtce.a $(BUILD)/libxtce.so
@@ -77,6 +78,17 @@ $(BUILD)/float_tool: tests/float_tool.c include/xtce/packet.h | $(BUILD)
 
 $(BUILD)/float_tool_cxx: tests/float_tool.c include/xtce/packet.h | $(BUILD)
 	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -x c++ $< -o $@
+
+# Integers of any size: xtce/bnum.h built both ways, and xtce/bnum.hpp.
+$(BUILD)/bnum_tool: tests/bnum_tool.c include/xtce/bnum.h | $(BUILD)
+	$(CC) -std=c11 $(CFLAGS) $(WARN) -Iinclude $< -o $@
+
+$(BUILD)/bnum_tool_cxx: tests/bnum_tool.c include/xtce/bnum.h | $(BUILD)
+	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -x c++ $< -o $@
+
+$(BUILD)/bnum_tool_hpp: tests/bnum_tool.cpp include/xtce/bnum.h \
+    include/xtce/bnum.hpp | $(BUILD)
+	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude $< -o $@
 
 # The C test is compiled as C and linked with the C++ runtime.
 $(BUILD)/c_api_test: tests/c_api_test.c $(BUILD)/libxtce.a

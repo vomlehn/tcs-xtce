@@ -29,6 +29,15 @@ include = [
 ]
 
 [dependencies]
+# Integers of more than 128 bits.  Without its alloc feature it allocates
+# nothing, which the packet codecs promise; its formatting needs alloc, so
+# xtce::packet formats them itself.
+bnum = { version = "0.14", default-features = false }
+
+[dev-dependencies]
+# The examples that check xtce/bnum.h against bnum print with bnum's own
+# formatting.
+bnum = { version = "0.14", features = ["alloc"] }
 
 [lib]
 path = "src/lib.rs"

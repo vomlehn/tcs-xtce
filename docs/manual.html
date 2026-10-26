@@ -401,18 +401,19 @@ ul.auto-toc {
 <li><a class="reference internal" href="#known-limitations" id="toc-entry-26">Known limitations</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#xtce-digest" id="toc-entry-27">xtce-digest</a></li>
-<li><a class="reference internal" href="#examples" id="toc-entry-28">Examples</a><ul>
-<li><a class="reference internal" href="#housekeeping" id="toc-entry-29"><tt class="docutils literal">housekeeping</tt></a></li>
-<li><a class="reference internal" href="#simple-string" id="toc-entry-30"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
-<li><a class="reference internal" href="#to-from" id="toc-entry-31"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></li>
-<li><a class="reference internal" href="#variable-array" id="toc-entry-32"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></li>
-<li><a class="reference internal" href="#enum-labels" id="toc-entry-33"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></li>
-<li><a class="reference internal" href="#split-mission" id="toc-entry-34"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></li>
+<li><a class="reference internal" href="#integers-of-any-size" id="toc-entry-27">Integers of any size</a></li>
+<li><a class="reference internal" href="#xtce-digest" id="toc-entry-28">xtce-digest</a></li>
+<li><a class="reference internal" href="#examples" id="toc-entry-29">Examples</a><ul>
+<li><a class="reference internal" href="#housekeeping" id="toc-entry-30"><tt class="docutils literal">housekeeping</tt></a></li>
+<li><a class="reference internal" href="#simple-string" id="toc-entry-31"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
+<li><a class="reference internal" href="#to-from" id="toc-entry-32"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></li>
+<li><a class="reference internal" href="#variable-array" id="toc-entry-33"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></li>
+<li><a class="reference internal" href="#enum-labels" id="toc-entry-34"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></li>
+<li><a class="reference internal" href="#split-mission" id="toc-entry-35"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing" id="toc-entry-35">Testing</a></li>
-<li><a class="reference internal" href="#license" id="toc-entry-36">License</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-36">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-37">License</a></li>
 </ul>
 </div>
 <div class="section" id="summary">
@@ -2532,8 +2533,72 @@ field and the data to agree.</li>
 </ul>
 </div>
 </div>
+<div class="section" id="integers-of-any-size">
+<h1><a class="toc-backref" href="#toc-entry-27">Integers of any size</a></h1>
+<p>Rust has integers of up to 128 bits, and C and C++ of up to 64. For
+wider ones, the Rust runtime uses the <a class="reference external" href="https://docs.rs/bnum">bnum</a>
+crate, and the C and C++ runtime its own header-only library that
+mirrors bnum, so that all of them hold and compute such integers alike.
+Python's <tt class="docutils literal">int</tt> has no size limit.</p>
+<p>The library is two headers in <tt class="docutils literal">cpp/include/xtce</tt>, which need only the
+standard library and allocate nothing:</p>
+<dl class="docutils">
+<dt><tt class="docutils literal">xtce/bnum.h</tt></dt>
+<dd><p class="first">C11 functions, which also compile as C++, on integers of <tt class="docutils literal">n</tt> bytes
+held least significant first, two's complement when signed. Each is
+named after the bnum method it mirrors (<tt class="docutils literal">xtce_bn_wrapping_add</tt> is
+bnum's <tt class="docutils literal">wrapping_add</tt>) and takes its integers as byte pointers with
+their size and signedness:</p>
+<pre class="code c literal-block">
+<span class="comment preproc">#include</span><span class="whitespace"> </span><span class="comment preprocfile">&lt;xtce/bnum.h&gt;</span><span class="comment preproc">
+</span><span class="whitespace">
+</span><span class="name">XTCE_BN_TYPEDEF</span><span class="punctuation">(</span><span class="name">u256</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">32</span><span class="punctuation">);</span><span class="whitespace">  </span><span class="comment multiline">/* typedef struct { uint8_t bytes[32]; } */</span><span class="whitespace">
+
+</span><span class="name">u256</span><span class="whitespace"> </span><span class="name">a</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">b</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">sum</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="name">xtce_bn_from_str_radix</span><span class="punctuation">(</span><span class="name">a</span><span class="punctuation">.</span><span class="name">bytes</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">32</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name builtin">false</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal string">&quot;1e40&quot;</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">4</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">16</span><span class="punctuation">);</span><span class="whitespace">
+</span><span class="name">xtce_bn_from_u64</span><span class="punctuation">(</span><span class="name">b</span><span class="punctuation">.</span><span class="name">bytes</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">32</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">1</span><span class="punctuation">);</span><span class="whitespace">
+</span><span class="keyword">if</span><span class="whitespace"> </span><span class="punctuation">(</span><span class="name">xtce_bn_overflowing_add</span><span class="punctuation">(</span><span class="name">sum</span><span class="punctuation">.</span><span class="name">bytes</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">a</span><span class="punctuation">.</span><span class="name">bytes</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">b</span><span class="punctuation">.</span><span class="name">bytes</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">32</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name builtin">false</span><span class="punctuation">))</span><span class="whitespace">
+        </span><span class="comment multiline">/* it overflowed */</span><span class="punctuation">;</span>
+</pre>
+<p class="last">They cover construction, casts between sizes, byte order, comparison,
+bit operations, shifts and rotations, counting bits, and addition,
+subtraction, multiplication, division (truncating and Euclidean),
+remainders, negation and absolute values, each in bnum's wrapping,
+overflowing, checked and saturating forms, and parsing and formatting
+in any radix from 2 to 36. <tt class="docutils literal">overflowing_</tt> functions return whether
+the result overflowed, and <tt class="docutils literal">checked_</tt> ones whether it succeeded.
+Functions that need room to work take a <tt class="docutils literal">scratch</tt> buffer of <tt class="docutils literal">n</tt>
+bytes; the header says which may not be given the same integer twice.</p>
+</dd>
+<dt><tt class="docutils literal">xtce/bnum.hpp</tt></dt>
+<dd><p class="first">For C++20, <tt class="docutils literal"><span class="pre">xtce::bnum::Integer&lt;S,</span> N&gt;</tt>, like bnum's
+<tt class="docutils literal">Integer&lt;S, N&gt;</tt>: an integer of <tt class="docutils literal">N</tt> bytes, signed if <tt class="docutils literal">S</tt>, with
+<tt class="docutils literal">Uint&lt;N&gt;</tt> and <tt class="docutils literal">Int&lt;N&gt;</tt> for short. It has bnum's methods under the
+same names, <tt class="docutils literal">pow</tt>, <tt class="docutils literal">isqrt</tt> and the logarithms among them, and its
+operators wrap on overflow, as bnum's do in its <tt class="docutils literal">Wrap</tt> overflow
+mode. Where bnum panics (dividing by zero, or a <tt class="docutils literal">strict_</tt> method
+overflowing) it calls <tt class="docutils literal">XTCE_BNUM_PANIC</tt>, which aborts unless defined
+otherwise before the header is included.</p>
+<pre class="code cpp last literal-block">
+<span class="comment preproc">#include</span><span class="whitespace"> </span><span class="comment preprocfile">&lt;xtce/bnum.hpp&gt;</span><span class="comment preproc">
+</span><span class="whitespace">
+</span><span class="keyword">using</span><span class="whitespace"> </span><span class="name">U256</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">xtce</span><span class="operator">::</span><span class="name">bnum</span><span class="operator">::</span><span class="name">Uint</span><span class="operator">&lt;</span><span class="literal number integer">32</span><span class="operator">&gt;</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="name">U256</span><span class="whitespace"> </span><span class="name">x</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">U256</span><span class="operator">::</span><span class="name">one</span><span class="punctuation">()</span><span class="whitespace"> </span><span class="operator">&lt;&lt;</span><span class="whitespace"> </span><span class="literal number integer">160</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="name">std</span><span class="operator">::</span><span class="name">optional</span><span class="operator">&lt;</span><span class="name">U256</span><span class="operator">&gt;</span><span class="whitespace"> </span><span class="name">y</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">x</span><span class="punctuation">.</span><span class="name">checked_mul</span><span class="punctuation">(</span><span class="name">x</span><span class="punctuation">);</span><span class="whitespace">  </span><span class="comment single">// none: 2^320 overflows
+</span><span class="name">std</span><span class="operator">::</span><span class="name">cout</span><span class="whitespace"> </span><span class="operator">&lt;&lt;</span><span class="whitespace"> </span><span class="name">x</span><span class="punctuation">.</span><span class="name">pow</span><span class="punctuation">(</span><span class="literal number integer">3</span><span class="punctuation">)</span><span class="whitespace"> </span><span class="operator">&lt;&lt;</span><span class="whitespace"> </span><span class="literal string">&quot;</span><span class="literal string escape">\n</span><span class="literal string">&quot;</span><span class="punctuation">;</span><span class="whitespace">               </span><span class="comment single">// 0: it wraps</span>
+</pre>
+</dd>
+</dl>
+<p>Sizes are whole bytes; bnum's third parameter, a width in bits that
+isn't, has no counterpart. <tt class="docutils literal">make <span class="pre">bnum-check</span></tt> checks the library
+against bnum (see <a class="reference internal" href="#testing">Testing</a>). It also found one difference, kept
+deliberately: bnum 0.14's <tt class="docutils literal">from_le_slice</tt> and <tt class="docutils literal">from_be_slice</tt> give a
+signed integer the truncated bytes of a longer negative slice whose
+value doesn't fit (<tt class="docutils literal"><span class="pre">I8::from_le_slice(&amp;[0x05,</span> 0xff])</tt> is <tt class="docutils literal">Some(5)</tt>,
+though the bytes are -251), where the library gives none.</p>
+</div>
 <div class="section" id="xtce-digest">
-<h1><a class="toc-backref" href="#toc-entry-27">xtce-digest</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-28">xtce-digest</a></h1>
 <p><tt class="docutils literal"><span class="pre">xtce-digest</span></tt> prints an MD5 digest of what each XTCE document given to
 it means, so that a change to a mission database that would change the
 generated data structures and methods can be noticed, and an edit that
@@ -2660,7 +2725,7 @@ tcs-xtce ignores them. An attribute given its default value explicitly
 also changes the digest, though the meaning is the same.</p>
 </div>
 <div class="section" id="examples">
-<h1><a class="toc-backref" href="#toc-entry-28">Examples</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-29">Examples</a></h1>
 <p><tt class="docutils literal">examples/</tt> holds self-contained examples. Every example supports all
 four languages <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> generates: C, C++, Rust and Python 3, one for
 each <tt class="docutils literal"><span class="pre">--lang</span></tt> value. <tt class="docutils literal">make examples</tt> fails if an example is missing
@@ -2711,7 +2776,7 @@ thread to another, each after its length.</li>
 </ul>
 <p>Each is summarized below; its README has the details.</p>
 <div class="section" id="housekeeping">
-<h2><a class="toc-backref" href="#toc-entry-29"><tt class="docutils literal">housekeeping</tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-30"><tt class="docutils literal">housekeeping</tt></a></h2>
 <p><tt class="docutils literal">examples/housekeeping/housekeeping.xml</tt> describes a container,
 <tt class="docutils literal">Status</tt>:</p>
 <pre class="literal-block">
@@ -2748,7 +2813,7 @@ encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=n
 more.</p>
 </div>
 <div class="section" id="simple-string">
-<h2><a class="toc-backref" href="#toc-entry-30"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-31"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xml</span></tt> describes a container,
 <tt class="docutils literal">SimpleString</tt>, holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string
 that always occupies 64 bits and ends at a NUL byte, so it holds up to
@@ -2790,7 +2855,7 @@ buffers reused without reallocation: true
 for more.</p>
 </div>
 <div class="section" id="to-from">
-<h2><a class="toc-backref" href="#toc-entry-31"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-32"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/to-from/to_from.xml</span></tt> describes a container, <tt class="docutils literal">Word</tt>,
 holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string of varying length
 with a 32-bit size tag before it. The tag and the string together occupy
@@ -2830,7 +2895,7 @@ same bytes, and runs all 16 pairs of reader and writer.</p>
 <p>See the <a class="reference external" href="../examples/to-from/README.html">to-from README</a> for more.</p>
 </div>
 <div class="section" id="variable-array">
-<h2><a class="toc-backref" href="#toc-entry-32"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-33"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/variable-array/variable_array.xml</span></tt> describes a container,
 <tt class="docutils literal">Paragraph</tt>, holding a two-dimensional array whose dimensions both vary:
 an array of lines, each an array of words. A count before each array gives
@@ -2894,7 +2959,7 @@ cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est la
 for more.</p>
 </div>
 <div class="section" id="enum-labels">
-<h2><a class="toc-backref" href="#toc-entry-33"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-34"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/enum-labels/modes.xml</span></tt> describes a probe's <tt class="docutils literal">Status</tt>, whose
 <tt class="docutils literal">Mode</tt> is an enumeration (<tt class="docutils literal">SAFE</tt>, <tt class="docutils literal">IDLE</tt>, <tt class="docutils literal">SCIENCE</tt>,
 <tt class="docutils literal">DOWNLINK</tt>, and <tt class="docutils literal">TEST</tt> for the values 16 to 31). Everything that
@@ -2928,7 +2993,7 @@ decode 2850 -&gt; Status{mode=40, battery=80, target=none, station=none} | alarm
 more.</p>
 </div>
 <div class="section" id="split-mission">
-<h2><a class="toc-backref" href="#toc-entry-34"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-35"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/split-mission</span></tt> describes a rover's PUS telemetry in three
 documents, as Yamcs's PUS example lays them out: <tt class="docutils literal">dt.xml</tt> holds data
 types, <tt class="docutils literal">pus.xml</tt> the CCSDS primary header and PUS telemetry secondary
@@ -2959,7 +3024,7 @@ for more.</p>
 </div>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-35">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-36">Testing</a></h1>
 <p><tt class="docutils literal">make test</tt> runs:</p>
 <ul class="simple">
 <li>the unit tests of every language (<tt class="docutils literal">cargo test</tt>, <tt class="docutils literal">cpp/tests</tt>,
@@ -3004,6 +3069,11 @@ formats' standards give for the conversions in
 <tt class="docutils literal">tests/float/known.txt</tt> (MIL-STD-1750A's own examples among them),
 and the same results as each other for random values from
 <tt class="docutils literal">tests/float_cases.py</tt>.</li>
+<li><tt class="docutils literal">tests/bnum_check.sh</tt>: the C functions of <tt class="docutils literal">xtce/bnum.h</tt> (built as
+C and as C++) and the C++ class of <tt class="docutils literal">xtce/bnum.hpp</tt> give the same
+results as the bnum crate for random cases from
+<tt class="docutils literal">tests/bnum_cases.py</tt>: every operation they have, on signed and
+unsigned integers of 1 to 32 bytes, with each type's edge values.</li>
 </ul>
 <p>The <tt class="docutils literal">packet_tool</tt> programs (<tt class="docutils literal">rust/examples</tt>, <tt class="docutils literal">cpp/tests</tt>, built as
 <tt class="docutils literal">cpp/build/packet_tool</tt> and <tt class="docutils literal">cpp/build/packet_tool_cxx</tt>, and
@@ -3049,7 +3119,7 @@ tests/samples_check.py <span class="pre">--update</span></tt> rewrites <tt class
 diff.</p>
 </div>
 <div class="section" id="license">
-<h1><a class="toc-backref" href="#toc-entry-36">License</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-37">License</a></h1>
 <p>tcs-xtce -- the generator, the Rust crate, the C/C++ library and the Python
 package -- is licensed under either of the Apache License, Version 2.0
 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT
