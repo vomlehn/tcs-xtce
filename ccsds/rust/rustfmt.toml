@@ -1,0 +1,2 @@
+# The examples' Rust crates use the project's line width, like rust/.
+max_width = 80

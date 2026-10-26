@@ -10,6 +10,7 @@
 #                        checks (packets and digests) and the line-width
 #                        check
 #   make bnum-check      check xtce/bnum.h and bnum.hpp against the bnum crate
+#   make ccsds-check     check tcs-ccsds's time codes in every language
 #   make line-width      check that no line of code is wider than 80 columns
 #   make samples-check   check tcs-xtce against public XTCE documents
 #                        (downloads them)
@@ -117,7 +118,8 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
 .PHONY: test
 test: test-generator test-rust test-cpp test-python cross-check packet-check \
-      stream-check digest-check float-check bnum-check examples line-width
+      stream-check digest-check float-check bnum-check ccsds-check examples \
+      line-width
 
 # Every line of code, hand-written or generated, fits in 80 columns.  It comes
 # last in `test` so that the code the examples generate exists by then.
@@ -217,9 +219,21 @@ PY_FILES = $$(git -C .. ls-files '*.py' | sed 's|^|../|') \
 
 # The examples' Rust code includes their generated codecs, so generate them
 # first.
+# tcs-ccsds: the CCSDS time codes, in Rust, C, C++ and Python.
+.PHONY: ccsds
+ccsds:
+	$(MAKE) -C ccsds
+
+.PHONY: ccsds-check
+ccsds-check: ccsds
+	$(MAKE) -C ccsds test
+	sh tests/ccsds_check.sh ccsds/rust/target/release/examples/time_tool \
+		ccsds/build/time_tool ccsds/build/time_tool_cxx
+
 .PHONY: fmt
 fmt:
 	cd rust && $(CARGO) fmt
+	cd ccsds/rust && $(CARGO) fmt
 	for d in $(EXAMPLES); do \
 	    $(MAKE) -C $$d generate && \
 	        (cd $$d/rust && $(CARGO) fmt) || exit 1; \
@@ -229,6 +243,7 @@ fmt:
 .PHONY: fmt-check
 fmt-check:
 	cd rust && $(CARGO) fmt --check
+	cd ccsds/rust && $(CARGO) fmt --check
 	for d in $(EXAMPLES); do \
 	    $(MAKE) -C $$d generate && \
 	        (cd $$d/rust && $(CARGO) fmt --check) || exit 1; \
@@ -247,6 +262,7 @@ html:
 clean:
 	cd rust && $(CARGO) clean
 	$(MAKE) -C cpp clean
+	$(MAKE) -C ccsds clean
 	for d in $(EXAMPLES); do $(MAKE) -C $$d clean; done
 	$(MAKE) -C references clean
 	find python generator -name __pycache__ -type d -prune -exec rm -rf {} +

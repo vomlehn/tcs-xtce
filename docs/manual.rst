@@ -2361,6 +2361,62 @@ value doesn't fit (``I8::from_le_slice(&[0x05, 0xff])`` is ``Some(5)``,
 though the bytes are -251), where the library gives none.
 
 
+CCSDS time codes (tcs-ccsds)
+============================
+
+tcs-ccsds is a second library, in ``ccsds/``, for CCSDS standards that XTCE
+knows nothing about. It doesn't depend on tcs-xtce: it is plain functions
+over bytes, which a packet codec can use as hooks, or any program can use
+by itself. It has the binary time codes of CCSDS 301.0-B-4, *Time Code
+Formats*:
+
+CUC (CCSDS Unsegmented time Code)
+   1 to 7 coarse octets of whole seconds, then 0 to 10 fine octets of
+   binary fractions of a second.
+
+CDS (CCSDS Day Segmented time code)
+   Days in 16 or 24 bits, milliseconds of the day in 32, and optionally
+   microseconds (16 bits) or picoseconds (32) of the millisecond.
+
+A time is seconds since the code's epoch, as a double: the CCSDS epoch
+(1958-01-01, TAI) or the agency's (the mission's), as the code's P-field,
+its preamble, says. A layout gives its P-field and decodes and encodes
+its T-field; decoding a time that starts with its P-field reads the layout
+from it. Decoding gives the octets read and the seconds; encoding gives
+the octets, rounding to the layout's unit, halves up, and gives nothing
+for a negative time or one the layout can't hold. A CDS time's
+milliseconds may reach a leap second's.
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Language
+     - Library
+     - Decode a time with its P-field
+   * - Rust
+     - crate ``tcs-ccsds``, ``tcs_ccsds::time``
+     - ``decode_cuc(&data) -> Option<(usize, f64)>``
+   * - C/C++
+     - ``ccsds/include/ccsds/time.h``, ``ccsds_`` names
+     - ``bool ccsds_decode_cuc(data, n, &k, &s)``
+   * - Python
+     - package ``tcs_ccsds``, ``tcs_ccsds.time``
+     - ``decode_cuc(data) -> (k, s) or None``
+
+The layouts are ``Cuc`` and ``Cds`` (``ccsds_cuc`` and ``ccsds_cds``),
+with ``pfield``, ``from_pfield``, ``decode_t``, ``encode_t`` and
+``encode``. In Rust and C, encoding into too small an output writes
+nothing and gives the octets it needs, more than the room given.
+
+``make ccsds-check`` runs ``tests/ccsds_check.sh``: Rust, C, C++ and
+Python decode and encode the cases of ``tests/ccsds/known.txt``, worked
+out by hand from the formats (extended P-fields, a leap second, rounding
+that carries, times a layout can't hold), and must give their results;
+on random cases from ``tests/ccsds_cases.py`` they must agree with each
+other.
+
+
 xtce-digest
 ===========
 
@@ -2883,6 +2939,9 @@ Testing
   ``tests/float/known.txt`` (MIL-STD-1750A's own examples among them),
   and the same results as each other for random values from
   ``tests/float_cases.py``.
+* ``tests/ccsds_check.sh``: tcs-ccsds's time codes give the known results
+  and the same results in Rust, C, C++ and Python (see `CCSDS time codes
+  (tcs-ccsds)`_).
 * ``tests/bnum_check.sh``: the C functions of ``xtce/bnum.h`` (built as
   C and as C++) and the C++ class of ``xtce/bnum.hpp`` give the same
   results as the bnum crate for random cases from

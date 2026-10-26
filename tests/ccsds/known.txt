@@ -1,0 +1,34 @@
+# Each case: a time tool's input | the output it must give.
+# Decoding: P-field 0x1e is CUC, CCSDS epoch, 4 coarse and 2 fine octets
+cuc_decode 1e000000018000 | 7 3ff8000000000000
+# P-field 0x2e: the agency's epoch; 1000 and a half seconds
+cuc_decode 2e000003e88000 | 7 408f440000000000
+# Extended P-field 9f 48: 4+2 coarse and 3+2 fine octets; 1 + 2^-40
+cuc_decode 9f480000000000010000000001 | 13 3ff0000000001000
+# A time code ID of 7 is not CUC
+cuc_decode 7e000000018000 | none
+# CDS P-field 0x40: CCSDS epoch, 16-bit days, no sub-ms; day 2 and the
+# 86400th second of it, a leap second
+cds_decode 40000205265c00 | 7 410fa40000000000
+# 0x41: microseconds; day 2, 3004 ms and 5 us
+cds_decode 41000200000bbc0005 | 9 410518180833c600
+# A sub-millisecond code of 3 is reserved
+cds_decode 43000000000000 | none
+# Encoding: 1.999 s in 1+1 octets rounds 0.999*256 up to a carry
+cuc_encode 1 1 0 3ffffbe76c8b4396 0 8 | 0200
+# 255.999 s carries past what 1 coarse octet holds
+cuc_encode 1 1 0 406ffff7ced91687 0 8 | none
+# 2^32 s needs a fifth coarse octet
+cuc_encode 4 0 0 41f0000000000000 0 8 | none
+# Negative times have no code
+cuc_encode 4 0 0 bff0000000000000 0 8 | none
+# With its P-field; too little room says how much it needs
+cuc_encode 4 2 1 408f440000000000 1 32 | 2e000003e88000
+cuc_encode 4 2 1 408f440000000000 1 3 | needs 7
+cuc_encode 6 5 0 0000000000000000 1 32 | 9f480000000000000000000000
+# CDS: day 2, 3.004005 s, to the nearest microsecond
+cds_encode 0 1 0 410518180833c600 1 32 | 41000200000bbc0005
+# 0.9999996 s rounds to a whole second (1000 ms, 0 us)
+cds_encode 0 1 0 3fefffff29406b2a 0 32 | 0000000003e80000
+# The last millisecond of day 65535 rounds into day 65536: too late
+cds_encode 0 0 0 41f517ffffffff97 0 32 | none

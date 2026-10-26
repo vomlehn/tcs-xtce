@@ -237,6 +237,10 @@ Supported features:
   PCM code including bi-phase, and custom streams that chain into them;
 * custom algorithms, which the application supplies as functions.
 
+tcs-ccsds, in `ccsds/`, is a separate library of CCSDS standards that XTCE
+doesn't define, in the same four languages: so far the CUC and CDS time
+codes.
+
 See the manual for the exact list. `tests/packet_check.sh` checks that
 Rust, C, C++ and Python produce identical results on hand-built and
 random packets.

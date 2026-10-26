@@ -402,18 +402,19 @@ ul.auto-toc {
 </ul>
 </li>
 <li><a class="reference internal" href="#integers-of-any-size" id="toc-entry-27">Integers of any size</a></li>
-<li><a class="reference internal" href="#xtce-digest" id="toc-entry-28">xtce-digest</a></li>
-<li><a class="reference internal" href="#examples" id="toc-entry-29">Examples</a><ul>
-<li><a class="reference internal" href="#housekeeping" id="toc-entry-30"><tt class="docutils literal">housekeeping</tt></a></li>
-<li><a class="reference internal" href="#simple-string" id="toc-entry-31"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
-<li><a class="reference internal" href="#to-from" id="toc-entry-32"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></li>
-<li><a class="reference internal" href="#variable-array" id="toc-entry-33"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></li>
-<li><a class="reference internal" href="#enum-labels" id="toc-entry-34"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></li>
-<li><a class="reference internal" href="#split-mission" id="toc-entry-35"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></li>
+<li><a class="reference internal" href="#ccsds-time-codes-tcs-ccsds" id="toc-entry-28">CCSDS time codes (tcs-ccsds)</a></li>
+<li><a class="reference internal" href="#xtce-digest" id="toc-entry-29">xtce-digest</a></li>
+<li><a class="reference internal" href="#examples" id="toc-entry-30">Examples</a><ul>
+<li><a class="reference internal" href="#housekeeping" id="toc-entry-31"><tt class="docutils literal">housekeeping</tt></a></li>
+<li><a class="reference internal" href="#simple-string" id="toc-entry-32"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
+<li><a class="reference internal" href="#to-from" id="toc-entry-33"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></li>
+<li><a class="reference internal" href="#variable-array" id="toc-entry-34"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></li>
+<li><a class="reference internal" href="#enum-labels" id="toc-entry-35"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></li>
+<li><a class="reference internal" href="#split-mission" id="toc-entry-36"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing" id="toc-entry-36">Testing</a></li>
-<li><a class="reference internal" href="#license" id="toc-entry-37">License</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-37">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-38">License</a></li>
 </ul>
 </div>
 <div class="section" id="summary">
@@ -2775,8 +2776,64 @@ signed integer the truncated bytes of a longer negative slice whose
 value doesn't fit (<tt class="docutils literal"><span class="pre">I8::from_le_slice(&amp;[0x05,</span> 0xff])</tt> is <tt class="docutils literal">Some(5)</tt>,
 though the bytes are -251), where the library gives none.</p>
 </div>
+<div class="section" id="ccsds-time-codes-tcs-ccsds">
+<h1><a class="toc-backref" href="#toc-entry-28">CCSDS time codes (tcs-ccsds)</a></h1>
+<p>tcs-ccsds is a second library, in <tt class="docutils literal">ccsds/</tt>, for CCSDS standards that XTCE
+knows nothing about. It doesn't depend on tcs-xtce: it is plain functions
+over bytes, which a packet codec can use as hooks, or any program can use
+by itself. It has the binary time codes of CCSDS 301.0-B-4, <em>Time Code
+Formats</em>:</p>
+<dl class="docutils">
+<dt>CUC (CCSDS Unsegmented time Code)</dt>
+<dd>1 to 7 coarse octets of whole seconds, then 0 to 10 fine octets of
+binary fractions of a second.</dd>
+<dt>CDS (CCSDS Day Segmented time code)</dt>
+<dd>Days in 16 or 24 bits, milliseconds of the day in 32, and optionally
+microseconds (16 bits) or picoseconds (32) of the millisecond.</dd>
+</dl>
+<p>A time is seconds since the code's epoch, as a double: the CCSDS epoch
+(1958-01-01, TAI) or the agency's (the mission's), as the code's P-field,
+its preamble, says. A layout gives its P-field and decodes and encodes
+its T-field; decoding a time that starts with its P-field reads the layout
+from it. Decoding gives the octets read and the seconds; encoding gives
+the octets, rounding to the layout's unit, halves up, and gives nothing
+for a negative time or one the layout can't hold. A CDS time's
+milliseconds may reach a leap second's.</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Language</th>
+<th class="head">Library</th>
+<th class="head">Decode a time with its P-field</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Rust</td>
+<td>crate <tt class="docutils literal"><span class="pre">tcs-ccsds</span></tt>, <tt class="docutils literal"><span class="pre">tcs_ccsds::time</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">decode_cuc(&amp;data)</span> <span class="pre">-&gt;</span> <span class="pre">Option&lt;(usize,</span> f64)&gt;</tt></td>
+</tr>
+<tr><td>C/C++</td>
+<td><tt class="docutils literal">ccsds/include/ccsds/time.h</tt>, <tt class="docutils literal">ccsds_</tt> names</td>
+<td><tt class="docutils literal">bool ccsds_decode_cuc(data, n, &amp;k, &amp;s)</tt></td>
+</tr>
+<tr><td>Python</td>
+<td>package <tt class="docutils literal">tcs_ccsds</tt>, <tt class="docutils literal">tcs_ccsds.time</tt></td>
+<td><tt class="docutils literal">decode_cuc(data) <span class="pre">-&gt;</span> (k, s) or None</tt></td>
+</tr>
+</tbody>
+</table>
+<p>The layouts are <tt class="docutils literal">Cuc</tt> and <tt class="docutils literal">Cds</tt> (<tt class="docutils literal">ccsds_cuc</tt> and <tt class="docutils literal">ccsds_cds</tt>),
+with <tt class="docutils literal">pfield</tt>, <tt class="docutils literal">from_pfield</tt>, <tt class="docutils literal">decode_t</tt>, <tt class="docutils literal">encode_t</tt> and
+<tt class="docutils literal">encode</tt>. In Rust and C, encoding into too small an output writes
+nothing and gives the octets it needs, more than the room given.</p>
+<p><tt class="docutils literal">make <span class="pre">ccsds-check</span></tt> runs <tt class="docutils literal">tests/ccsds_check.sh</tt>: Rust, C, C++ and
+Python decode and encode the cases of <tt class="docutils literal">tests/ccsds/known.txt</tt>, worked
+out by hand from the formats (extended P-fields, a leap second, rounding
+that carries, times a layout can't hold), and must give their results;
+on random cases from <tt class="docutils literal">tests/ccsds_cases.py</tt> they must agree with each
+other.</p>
+</div>
 <div class="section" id="xtce-digest">
-<h1><a class="toc-backref" href="#toc-entry-28">xtce-digest</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-29">xtce-digest</a></h1>
 <p><tt class="docutils literal"><span class="pre">xtce-digest</span></tt> prints an MD5 digest of what each XTCE document given to
 it means, so that a change to a mission database that would change the
 generated data structures and methods can be noticed, and an edit that
@@ -2903,7 +2960,7 @@ tcs-xtce ignores them. An attribute given its default value explicitly
 also changes the digest, though the meaning is the same.</p>
 </div>
 <div class="section" id="examples">
-<h1><a class="toc-backref" href="#toc-entry-29">Examples</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-30">Examples</a></h1>
 <p><tt class="docutils literal">examples/</tt> holds self-contained examples. Every example supports all
 four languages <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> generates: C, C++, Rust and Python 3, one for
 each <tt class="docutils literal"><span class="pre">--lang</span></tt> value. <tt class="docutils literal">make examples</tt> fails if an example is missing
@@ -2954,7 +3011,7 @@ thread to another, each after its length.</li>
 </ul>
 <p>Each is summarized below; its README has the details.</p>
 <div class="section" id="housekeeping">
-<h2><a class="toc-backref" href="#toc-entry-30"><tt class="docutils literal">housekeeping</tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-31"><tt class="docutils literal">housekeeping</tt></a></h2>
 <p><tt class="docutils literal">examples/housekeeping/housekeeping.xml</tt> describes a container,
 <tt class="docutils literal">Status</tt>:</p>
 <pre class="literal-block">
@@ -2991,7 +3048,7 @@ encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=n
 more.</p>
 </div>
 <div class="section" id="simple-string">
-<h2><a class="toc-backref" href="#toc-entry-31"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-32"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xml</span></tt> describes a container,
 <tt class="docutils literal">SimpleString</tt>, holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string
 that always occupies 64 bits and ends at a NUL byte, so it holds up to
@@ -3033,7 +3090,7 @@ buffers reused without reallocation: true
 for more.</p>
 </div>
 <div class="section" id="to-from">
-<h2><a class="toc-backref" href="#toc-entry-32"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-33"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/to-from/to_from.xml</span></tt> describes a container, <tt class="docutils literal">Word</tt>,
 holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string of varying length
 with a 32-bit size tag before it. The tag and the string together occupy
@@ -3073,7 +3130,7 @@ same bytes, and runs all 16 pairs of reader and writer.</p>
 <p>See the <a class="reference external" href="../examples/to-from/README.html">to-from README</a> for more.</p>
 </div>
 <div class="section" id="variable-array">
-<h2><a class="toc-backref" href="#toc-entry-33"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-34"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/variable-array/variable_array.xml</span></tt> describes a container,
 <tt class="docutils literal">Paragraph</tt>, holding a two-dimensional array whose dimensions both vary:
 an array of lines, each an array of words. A count before each array gives
@@ -3137,7 +3194,7 @@ cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est la
 for more.</p>
 </div>
 <div class="section" id="enum-labels">
-<h2><a class="toc-backref" href="#toc-entry-34"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-35"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/enum-labels/modes.xml</span></tt> describes a probe's <tt class="docutils literal">Status</tt>, whose
 <tt class="docutils literal">Mode</tt> is an enumeration (<tt class="docutils literal">SAFE</tt>, <tt class="docutils literal">IDLE</tt>, <tt class="docutils literal">SCIENCE</tt>,
 <tt class="docutils literal">DOWNLINK</tt>, and <tt class="docutils literal">TEST</tt> for the values 16 to 31). Everything that
@@ -3171,7 +3228,7 @@ decode 2850 -&gt; Status{mode=40, battery=80, target=none, station=none} | alarm
 more.</p>
 </div>
 <div class="section" id="split-mission">
-<h2><a class="toc-backref" href="#toc-entry-35"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-36"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/split-mission</span></tt> describes a rover's PUS telemetry in three
 documents, as Yamcs's PUS example lays them out: <tt class="docutils literal">dt.xml</tt> holds data
 types, <tt class="docutils literal">pus.xml</tt> the CCSDS primary header and PUS telemetry secondary
@@ -3202,7 +3259,7 @@ for more.</p>
 </div>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-36">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-37">Testing</a></h1>
 <p><tt class="docutils literal">make test</tt> runs:</p>
 <ul class="simple">
 <li>the unit tests of every language (<tt class="docutils literal">cargo test</tt>, <tt class="docutils literal">cpp/tests</tt>,
@@ -3247,6 +3304,9 @@ formats' standards give for the conversions in
 <tt class="docutils literal">tests/float/known.txt</tt> (MIL-STD-1750A's own examples among them),
 and the same results as each other for random values from
 <tt class="docutils literal">tests/float_cases.py</tt>.</li>
+<li><tt class="docutils literal">tests/ccsds_check.sh</tt>: tcs-ccsds's time codes give the known results
+and the same results in Rust, C, C++ and Python (see <a class="reference internal" href="#ccsds-time-codes-tcs-ccsds">CCSDS time codes
+(tcs-ccsds)</a>).</li>
 <li><tt class="docutils literal">tests/bnum_check.sh</tt>: the C functions of <tt class="docutils literal">xtce/bnum.h</tt> (built as
 C and as C++) and the C++ class of <tt class="docutils literal">xtce/bnum.hpp</tt> give the same
 results as the bnum crate for random cases from
@@ -3297,7 +3357,7 @@ tests/samples_check.py <span class="pre">--update</span></tt> rewrites <tt class
 diff.</p>
 </div>
 <div class="section" id="license">
-<h1><a class="toc-backref" href="#toc-entry-37">License</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-38">License</a></h1>
 <p>tcs-xtce -- the generator, the Rust crate, the C/C++ library and the Python
 package -- is licensed under either of the Apache License, Version 2.0
 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT

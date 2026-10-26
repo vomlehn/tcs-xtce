@@ -1,0 +1,18 @@
+[package]
+name = "tcs-ccsds"
+version = "0.1.0"
+edition = "2021"
+description = """\
+    Flight software: CCSDS standards, such as the CCSDS time codes, without \
+    allocation; part of tcs-xtce, with matching C, C++ and Python libraries\
+"""
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vomlehn/tcs-xtce"
+keywords = ["ccsds", "cuc", "cds", "spacecraft", "telemetry"]
+categories = ["aerospace::space-protocols", "encoding", "no-std"]
+include = ["src/**/*.rs", "LICENSE-APACHE", "LICENSE-MIT"]
+
+[dependencies]
+
+[lib]
+path = "src/lib.rs"

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tcs-ccsds"
+version = "0.1.0"
+description = """\
+    Flight software: CCSDS standards, such as the CCSDS time codes; part of \
+    tcs-xtce, with matching Rust, C and C++ libraries\
+"""
+requires-python = ">=3.10"
+license = { text = "MIT OR Apache-2.0" }
+
+[tool.setuptools]
+packages = ["tcs_ccsds"]

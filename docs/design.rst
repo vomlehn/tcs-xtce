@@ -1072,6 +1072,27 @@ different sizes widen both to one more byte than the larger, so that
 either sign fits.
 
 
+CCSDS standards (tcs-ccsds)
+===========================
+
+Knowledge of CCSDS standards, such as what a CUC P-field means, is kept out
+of tcs-xtce: XTCE doesn't define it, and a document reaches it only through
+algorithms the application supplies. tcs-ccsds holds it, as functions over
+bytes shaped like tcs-xtce's hooks but depending on nothing, so an
+application wires one into the other and anyone can use either alone. It
+lives in this repository, released separately, for the shared tooling and
+cross-language checks.
+
+The time codes compute with IEEE doubles in the same order in every
+language, truncating with casts rather than calling ``floor`` (which
+``core`` lacks), so the three implementations give the same bits. Encoding
+rounds to the layout's unit, halves up, because truncation turns a time
+like 3.004005 s, which no double holds exactly, into 4 microseconds. Fine
+CUC octets beyond what a double holds are exact, so only up to six are
+rounded. CCS and the ASCII codes are left out for now: they are usually
+UTC, and turning them into seconds needs a table of leap seconds.
+
+
 The digest (xtce-digest)
 ========================
 
