@@ -14,7 +14,7 @@ from xtcepkt.compile import (  # noqa: E402
     compile_document, compile_documents, item_bits, member_path, value_range)
 from xtcepkt.model import (  # noqa: E402
     MAX_FIELD_BITS, AnyOf, Cond, ContextCal, Fill, Fixed, Index, MathOp, Pad,
-    Require, Seek, Segment, Spline, Unsupported, Value, walk)
+    Require, Seek, Segment, Spline, Unsupported, Value, walk, LengthEnd)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -2249,6 +2249,24 @@ class CommandContainerSetTests(unittest.TestCase):
         (check,) = agg.checks
         self.assertEqual(check.criteria[0].path, ("kind",))
         self.assertEqual(check.criteria[0].value, 7)
+
+    def test_included_length_field(self):
+        # Frag's Kind measures the container it is in.
+        text = self.fragment_mission(
+            '<ContainerRefEntry containerRef="FragC"/>').replace(
+            '<Argument name="Kind" argumentTypeRef="U8A"/>',
+            '<Argument name="Kind" argumentTypeRef="U8A"><AncillaryDataSet>'
+            '<AncillaryData name="tcs-xtce.length">0</AncillaryData>'
+            '</AncillaryDataSet></Argument>').replace(
+            '<ArgumentAssignmentList><ArgumentAssignment argumentName="Kind" '
+            'argumentValue="7"/></ArgumentAssignmentList>', "")
+        n = self.node(text)
+        kind = next(it.local for it in walk(n.items) if isinstance(it, Value)
+                    and it.local.name == "Kind")
+        self.assertTrue(kind.measures)
+        self.assertIsNone(n.length_field())
+        self.assertTrue(any(isinstance(it, LengthEnd) and it.local is kind
+                            for it in n.items))
 
     def test_rejected(self):
         meta = '<BaseMetaCommand metaCommandRef="B"/>'

@@ -479,7 +479,7 @@ def main() -> None:
             data = header(rng, 1, rng.choice([300, 301, 302]))
             opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
                                  12, 13, 13, 14, 15, 16, 17, 17, 18, 18, 19, 19,
-                                 rng.randrange(256)])
+                                 20, 20, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
@@ -515,6 +515,11 @@ def main() -> None:
                 if rng.random() < 0.3:
                     body = body[:4] + bytes([rng.randrange(256)])
                 data += body
+            elif opcode == 20 and rng.random() < 0.9:
+                # Forward: a SetMode command, its length mostly right.
+                data += (bytes.fromhex("112cc000")
+                         + bytes([0, rng.choice([1, 1, 1, rng.randrange(4)]), 1,
+                                  rng.randrange(3)]))
             elif opcode == 19 and rng.random() < 0.9:
                 # SetManyLimits: a count mostly 1 to 4, LimitKinds mostly 7.
                 n = rng.choice([1, 2, 4, rng.randrange(6)])

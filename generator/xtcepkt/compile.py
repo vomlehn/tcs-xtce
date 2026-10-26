@@ -28,9 +28,9 @@ from .model import (
     IntEnc, Item, Kind, Local, Mark, Member, Mission, Node, Pad, Polynomial,
     Seek, Spline, StringEnc, Term, Unsupported, Value, VType, ref_text,
     term_locals, walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp, NextSeek,
-    Require, TailPad, TailSeek, ValueRef, needs_binding, Fill, Segment, Verify,
-    Alarm, AlarmDef, Band, LEVELS, Change, Algorithm, Stream, Hook, Custom,
-    term_hooks, input_locals)
+    Require, TailPad, TailSeek, LengthEnd, ValueRef, needs_binding, Fill,
+    Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change, Algorithm, Stream,
+    Hook, Custom, term_hooks, input_locals)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -1668,8 +1668,9 @@ class Compiler:
                             inner.append(Require(terms, qname(kkey),
                                                  " and ".join(t.text
                                                               for t in terms)))
-                    out += (inner
-                            + self.size_pad(inc, inner, m, where, scope, cpath))
+                    out += self.measure(inner
+                                        + self.size_pad(inc, inner, m, where,
+                                                        scope, cpath), where)
                     if edc_items(inc):
                         end = self._id()
                         out.append(Mark(end))
@@ -2253,7 +2254,7 @@ class Compiler:
         and which nothing compares or takes a size from."""
         items = node.all_items()
         lengths = [it.local for it in walk(items) if isinstance(it, Value)
-                   and it.local.length is not None]
+                   and it.local.length is not None and not it.local.measures]
         if len(lengths) > 1:
             raise Unsupported(f"{where}: more than one packet length field")
         if not lengths:
@@ -2616,7 +2617,8 @@ class Compiler:
             elif (ch.name == "ContainerRefEntry"
                   and (owner := self.mc_owner(e.container_ref, path))):
                 if e.repeat_entry is None:
-                    out += self.mc_include(owner, where, values, stack)
+                    out += self.measure(self.mc_include(owner, where, values,
+                                                        stack), where)
                 else:
                     local = self.local(
                         self.mcs[owner][1].command_container.name, qname(owner),
@@ -2629,7 +2631,8 @@ class Compiler:
                 ckey = self.resolve(e.container_ref, path, self.tc_containers,
                                     "container")
                 if e.repeat_entry is None:
-                    out += self.tc_include(ckey, scope, where, values, stack)
+                    out += self.measure(self.tc_include(ckey, scope, where,
+                                                        values, stack), where)
                 else:
                     inc = self.tc_containers[ckey][1]
                     if inc.base_container is not None:
@@ -2702,6 +2705,23 @@ class Compiler:
         cpath, inc = self.tc_containers[ckey]
         return (items + inner
                 + self.size_pad(inc, inner, m, where, values, cpath))
+
+    @staticmethod
+    def measure(items: list, where: str) -> list[Item]:
+        """An included container's items, its length fields (those not
+        already measuring a container inside it) made to measure it, with
+        a LengthEnd for each where it ends."""
+        ends = []
+        for it in walk(items):
+            if (isinstance(it, Value) and it.local.length is not None
+                    and not it.local.measures):
+                if it.local.optional:
+                    raise Unsupported(f"{where}: length field {it.local.name} "
+                                      "of an included container has an "
+                                      "IncludeCondition")
+                it.local.measures = True
+                ends.append(LengthEnd(it.local))
+        return items + ends
 
     def mc_owner(self, ref: str, path: Key) -> Optional[Key]:
         """The meta-command whose CommandContainer ``ref`` names, if it

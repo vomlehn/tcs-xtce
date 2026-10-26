@@ -432,6 +432,20 @@ class BitReader:
             raise PacketError("Truncated", field)
         self.nbits = total * 8
 
+    def span_end(self, v: int, adjust: int, field: str) -> int:
+        """Where the container that the length field ``field``, whose value
+        ``v`` was just read, measures ends: ``v - adjust`` bytes after the
+        field, in bytes from the packet's start."""
+        if v - adjust < 0:
+            raise PacketError("BadLength", field)
+        return (self.pos + 7) // 8 + v - adjust
+
+    def check_span(self, end: int, field: str) -> None:
+        """Raises BadLength unless the container that ``field`` measures
+        ends at byte ``end``, here."""
+        if (self.pos + 7) // 8 != end:
+            raise PacketError("BadLength", field)
+
     def finish(self, field: str) -> None:
         """Check that the packet's entries reach the end that the packet
         length field ``field`` gave."""
@@ -529,6 +543,19 @@ class BitWriter:
         ``at``, once the whole packet is written: the number of bytes after
         the field plus ``adjust``."""
         v = len(self.buf) - (at + bits + 7) // 8 + adjust
+        if not 0 <= v < 1 << bits:
+            raise PacketError("OutOfRange", field)
+        end = self.pos
+        self.pos = at
+        self.uint_order(bits, le, v)
+        self.pos = end
+
+    def patch_span(self, at: int, bits: int, le: bool, adjust: int,
+                   field: str) -> None:
+        """Fill in the length field ``field`` of ``bits`` bits at bit ``at``,
+        which measures an included container that ends here: the bytes
+        after the field plus ``adjust``."""
+        v = (self.pos + 7) // 8 - (at + bits + 7) // 8 + adjust
         if not 0 <= v < 1 << bits:
             raise PacketError("OutOfRange", field)
         end = self.pos

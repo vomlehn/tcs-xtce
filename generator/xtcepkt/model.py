@@ -649,6 +649,9 @@ class Local:
     # A packet length field: the generated code computes it, as the number
     # of bytes after it plus ``length``, and checks it when decoding.
     length: Optional[int] = None
+    # A length field of an included container: it measures that
+    # container, which ends at its LengthEnd, rather than the packet.
+    measures: bool = False
     # A field that holds a checksum (an ErrorDetectCorrect value): the
     # generated code computes it, and checks it when decoding.
     checksum: bool = False
@@ -703,6 +706,16 @@ class TailPad:
     a TailSeek; decoding ignores them."""
 
     bits: int
+
+
+@dataclass
+class LengthEnd:
+    """Where the included container that length field ``local`` measures
+    ends: decoding checks that the field said so, and encoding fills it
+    in."""
+
+    local: "Local"
+    bits = 0  # it occupies nothing
 
 
 @dataclass
@@ -1028,9 +1041,9 @@ class Node:
 
     def length_field(self) -> Optional[Local]:
         """The packet length field, if the packet has one."""
-        return next(
-            (it.local for it in walk(self.all_items()) if isinstance(it, Value)
-             and it.local.length is not None), None)
+        return next((it.local for it in walk(self.all_items())
+                     if isinstance(it, Value) and it.local.length is not None
+                     and not it.local.measures), None)
 
     def descendants(self) -> list["Node"]:
         out = []

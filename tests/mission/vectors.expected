@@ -203,3 +203,5 @@ Tail{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_co
 error:BadPosition | -
 SetManyLimits{seq_count=3, limits_container=[{limit_kind=7, lo=-1, hi=1}, {limit_kind=7, lo=100, hi=200}]} | 112ec003000b130207ffff000107006400c8
 error:Mismatch | -
+Forward{seq_count=5, seq_count2=9, mode=Science} | 112ec005000814112cc00900010102
+error:BadLength | -

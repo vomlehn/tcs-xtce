@@ -19,12 +19,12 @@ from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
                      invertible, leaf_calibrators, math_value, size_args,
                      str_cap, string_spec)
 from .compile import snake
-from .model import (term_indexes, term_locals, term_paths, walk, Index,
-                    AggregateEnc, AllOf, AnyOf, ArrayEnc, BinaryEnc, Cond,
-                    ContextCal, DynSize, Criterion, Fixed, FloatEnc, IntEnc,
-                    Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
-                    Spline, StringEnc, Value, VType, Require, Fill, Segment,
-                    Verify, Custom, NARROW_MAX_BYTES, TailPad, TailSeek)
+from .model import (
+    term_indexes, term_locals, term_paths, walk, Index, AggregateEnc, AllOf,
+    AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, DynSize, Criterion, Fixed,
+    FloatEnc, IntEnc, Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
+    Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify, Custom,
+    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -1160,6 +1160,9 @@ class CEmitter:
             elif isinstance(it, TailSeek):
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_seek_end(r, {it.back}, "
                           f"{cstr(where)}));", depth)
+            elif isinstance(it, LengthEnd):
+                self.line("XTCE_PK_TRY(xtce_pk_read_check_span(r, "
+                          f"e{it.local.id}, {cstr(it.local.name)}));", depth)
             elif isinstance(it, TailPad):
                 # The packet's last bits, which encoding fills with zeros.
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_skip(r, {it.bits}, "
@@ -1199,7 +1202,12 @@ class CEmitter:
                     continue
                 self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth,
                                 self.read_ref)
-                if lc.length is not None:
+                if lc.length is not None and lc.measures:
+                    self.line(f"int64_t e{lc.id};", depth)
+                    self.line(f"XTCE_PK_TRY(xtce_pk_read_span_end(r, v{lc.id}, "
+                              f"INT64_C({lc.length}), {cstr(lc.name)}, "
+                              f"&e{lc.id}));", depth)
+                elif lc.length is not None:
                     self.line(f"XTCE_PK_TRY(xtce_pk_read_limit(r, v{lc.id}, "
                               f"INT64_C({lc.length}), {cstr(lc.name)}));",
                               depth)
@@ -1260,6 +1268,12 @@ class CEmitter:
             elif isinstance(it, TailSeek):
                 self.line("XTCE_PK_TRY(xtce_pk_write_seek_tail(w, "
                           f"{it.back}));", depth)
+            elif isinstance(it, LengthEnd):
+                lc = it.local
+                enc = lc.vtype.enc
+                self.line(f"XTCE_PK_TRY(xtce_pk_patch_span(w, l{lc.id}, "
+                          f"{enc.bits}, {bool_lit(enc.little_endian)}, "
+                          f"INT64_C({lc.length}), {cstr(lc.name)}));", depth)
             elif isinstance(it, Cond):
                 self.element_guards(
                     [p for c in it.criteria for p in term_paths(c)],

@@ -1429,6 +1429,14 @@ calibrator, and at most one per packet. It can't have an
 <tt class="docutils literal">IncludeCondition</tt> or <tt class="docutils literal">RepeatEntry</tt>, be compared by a criterion or
 set by an argument assignment, give a size or count, or be inside a
 repeated container.</p>
+<p>A length field inside an included container (a <tt class="docutils literal">ContainerRefEntry</tt>'s,
+in telemetry or a command) measures that container instead: the bytes
+after it to the container's end, plus its value. Encoding fills it in
+where the container ends, and decoding fails with <tt class="docutils literal">BadLength</tt> there if
+the container doesn't end where the field says. So a command can carry
+a whole other command, header and all: the demo's <tt class="docutils literal">Forward</tt> includes
+<tt class="docutils literal">SetModeContainer</tt>, whose own <tt class="docutils literal">PacketLength</tt> counts only the
+<tt class="docutils literal">SetMode</tt> command.</p>
 <p>Integer field widths come from the <em>encoding</em>: an 11-bit unsigned field
 is a <tt class="docutils literal">u16</tt>, and a 12-bit sign-magnitude field is an <tt class="docutils literal">i16</tt>. Floats
 are always 64-bit in memory. 32-bit encodings round when written.
@@ -2306,9 +2314,9 @@ except in an included container with an <tt class="docutils literal">IncludeCond
 they are checked instead: decoding and encoding fail with
 <tt class="docutils literal">Mismatch</tt> when they don't hold. The demo's <tt class="docutils literal">SetLimits</tt> includes
 <tt class="docutils literal">Limits</tt>' container, which extends <tt class="docutils literal">LimitsBase</tt>'s and assigns
-<tt class="docutils literal">LimitKind</tt> 7, and a second copy when <tt class="docutils literal">Both</tt> is true. A command
-still has at most one packet length field, so it can't include a whole
-command with one of its own when it has one too. Repeated, such a
+<tt class="docutils literal">LimitKind</tt> 7, and a second copy when <tt class="docutils literal">Both</tt> is true. A length
+field in the included container measures that container (see the
+generated packet types). Repeated, such a
 container is an array of aggregates of its arguments, as a repeated
 container is in telemetry, and its assignments are checked on each
 copy: the demo's <tt class="docutils literal">SetManyLimits</tt> sends <tt class="docutils literal">LimitsCount</tt> copies of
@@ -2584,9 +2592,8 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer or
 string without an <tt class="docutils literal">aliasNameSpace</tt>, the stream constructs listed under
 Streams, instances of values in other packets, repeated segment entries
-with an <tt class="docutils literal">order</tt> or located from the end of their container, an
-included command's packet
-length field in a command with one of its own, transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
+with an <tt class="docutils literal">order</tt> or located from the end of their container,
+transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
 deprecates), calibrators inside aggregate types that use other values,
 least-significant-bit-first strings and binary data that may not start on
 a byte boundary, integers of more than 64 bits used other than as

@@ -203,3 +203,5 @@ tm 0a3ac02a0009010103333fffffcafe55  # tail: bytes before TailSum, which re-enco
 tm 0a3ac02a0008030000001000200030  # tail: no room for TailSum after TailData
 tc 112ec003000b130207ffff000107006400c8  # set many limits: two copies of Limits' container
 tc 112ec003000b130207ffff000108006400c8  # set many limits: the second copy's LimitKind isn't 7
+tc 112ec005000814112cc00900010102  # forward: a whole SetMode command, its length its own
+tc 112ec005000814112cc00900020102  # forward: the SetMode command's length one too many

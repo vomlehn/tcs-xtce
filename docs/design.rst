@@ -501,6 +501,13 @@ command's own assignments they don't select the command when decoding:
 the document chose the included container, so the assignments can only
 confirm it.
 
+A length field inside an included container can't mean the packet's
+length, so ``measure`` makes it measure the container: it marks the
+field and puts a ``LengthEnd`` where the container ends, where decoding
+checks the field and encoding patches it, as the packet's own length
+field is patched at the packet's end. Innermost includes are measured
+first, so each field measures the container nearest it.
+
 Segments are kept in step with their parameter by counting them per
 entry list. A ``RepeatEntry`` with a fixed count and no ``Offset`` is
 expanded into that many segments, which can still assemble the value;

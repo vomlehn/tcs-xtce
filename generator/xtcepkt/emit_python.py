@@ -12,7 +12,8 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
-                    Require, Fill, Segment, Verify, Custom, TailPad, TailSeek)
+                    Require, Fill, Segment, Verify, Custom, TailPad, TailSeek,
+                    LengthEnd)
 
 
 def pstr(s: str) -> str:
@@ -619,6 +620,9 @@ class PythonEmitter:
                 self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
             elif isinstance(it, TailSeek):
                 self.line(f"r.seek_end({it.back}, {pstr(where)})", depth)
+            elif isinstance(it, LengthEnd):
+                self.line(f"r.check_span(e{it.local.id}, "
+                          f"{pstr(it.local.name)})", depth)
             elif isinstance(it, TailPad):
                 # The packet's last bits, which encoding fills with zeros.
                 self.line(f"r.skip({it.bits}, {pstr(where)})", depth)
@@ -645,7 +649,10 @@ class PythonEmitter:
                     f"v{lc.id} = "
                     f"{read_expr(lc.vtype, pstr(lc.name), self.read_ref)}",
                     depth)
-                if lc.length is not None:
+                if lc.length is not None and lc.measures:
+                    self.line(f"e{lc.id} = r.span_end(v{lc.id}, {lc.length}, "
+                              f"{pstr(lc.name)})", depth)
+                elif lc.length is not None:
                     self.line(f"r.limit(v{lc.id}, {lc.length}, "
                               f"{pstr(lc.name)})", depth)
                 if it.assembled:
@@ -680,6 +687,12 @@ class PythonEmitter:
                 self.line(f"w.zeros({it.bits})", depth)
             elif isinstance(it, TailSeek):
                 self.line(f"w.seek_tail({it.back})", depth)
+            elif isinstance(it, LengthEnd):
+                lc = it.local
+                enc = lc.vtype.enc
+                self.line(f"w.patch_span(l{lc.id}, {enc.bits}, "
+                          f"{enc.little_endian}, {lc.length}, {pstr(lc.name)})",
+                          depth)
             elif isinstance(it, Require):
                 self.require(it, lambda lc: self.place(n, lc, names), depth)
             elif isinstance(it, Verify):

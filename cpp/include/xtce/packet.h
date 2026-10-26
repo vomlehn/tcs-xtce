@@ -388,6 +388,28 @@ static inline int xtce_pk_read_pad(xtce_pk_reader* r, size_t bits,
 /* Ends the packet where the packet length field `f`, whose value `v` was
  * just read, says: `v - adjust` bytes after the field.  Fails with
  * XTCE_PK_TRUNCATED if the data is shorter. */
+/* Where the container that the length field `f`, whose value `v` was just
+ * read, measures ends: `v - adjust` bytes after the field, in bytes from
+ * the packet's start, into *end. */
+static inline int xtce_pk_read_span_end(const xtce_pk_reader* r, uint64_t v,
+                                        int64_t adjust, const char* f,
+                                        int64_t* end) {
+        if (v > (uint64_t)INT64_MAX / 2 ||
+            (int64_t)v - adjust < 0)
+                return xtce_pk_fail(r->err, XTCE_PK_BAD_LENGTH, f, NULL);
+        *end = (int64_t)((r->pos + 7) / 8) + (int64_t)v - adjust;
+        return 0;
+}
+
+/* Fails with BAD_LENGTH unless the container that `f` measures ends at byte
+ * `end`, here. */
+static inline int xtce_pk_read_check_span(const xtce_pk_reader* r,
+                                          int64_t end, const char* f) {
+        if ((int64_t)((r->pos + 7) / 8) != end)
+                return xtce_pk_fail(r->err, XTCE_PK_BAD_LENGTH, f, NULL);
+        return 0;
+}
+
 static inline int xtce_pk_read_limit(xtce_pk_reader* r, uint64_t v,
                                      int64_t adjust, const char* f) {
         size_t start = (r->pos + 7) / 8;
@@ -622,6 +644,23 @@ static inline int xtce_pk_write_bytes(xtce_pk_writer* w, const uint8_t* data,
 /* Fills in the packet length field `f` of `bits` bits at bit `at`, once the
  * whole packet is written: the number of bytes after the field plus
  * `adjust`. */
+/* Fills in the length field `f` of `bits` bits at bit `at`, which measures
+ * an included container that ends here: the bytes after the field plus
+ * `adjust`. */
+static inline int xtce_pk_patch_span(xtce_pk_writer* w, size_t at,
+                                     unsigned bits, bool le, int64_t adjust,
+                                     const char* f) {
+        int64_t v = (int64_t)((w->pos + 7) / 8) -
+                    (int64_t)((at + bits + 7) / 8) + adjust;
+        size_t end = w->pos;
+        if (v < 0 || (uint64_t)v > xtce_pk_mask(bits))
+                return xtce_pk_fail(w->err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+        w->pos = at;
+        XTCE_PK_TRY(xtce_pk_write_uint(w, bits, le, (uint64_t)v));
+        w->pos = end;
+        return 0;
+}
+
 static inline int xtce_pk_patch_length(xtce_pk_writer* w, size_t at,
                                        unsigned bits, bool le, int64_t adjust,
                                        const char* f) {

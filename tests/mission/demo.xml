@@ -3117,6 +3117,22 @@
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>
       </MetaCommand>
+      <!-- A whole SetMode command, with its own CCSDS header and packet
+           length, which measures it alone. -->
+      <MetaCommand name="Forward">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="20"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <CommandContainer name="ForwardContainer">
+          <EntryList>
+            <ContainerRefEntry containerRef="SetModeContainer"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
     </MetaCommandSet>
     <CommandContainerSet>
       <CommandContainer name="Pair">

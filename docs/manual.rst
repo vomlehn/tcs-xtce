@@ -978,6 +978,15 @@ calibrator, and at most one per packet. It can't have an
 set by an argument assignment, give a size or count, or be inside a
 repeated container.
 
+A length field inside an included container (a ``ContainerRefEntry``'s,
+in telemetry or a command) measures that container instead: the bytes
+after it to the container's end, plus its value. Encoding fills it in
+where the container ends, and decoding fails with ``BadLength`` there if
+the container doesn't end where the field says. So a command can carry
+a whole other command, header and all: the demo's ``Forward`` includes
+``SetModeContainer``, whose own ``PacketLength`` counts only the
+``SetMode`` command.
+
 Integer field widths come from the *encoding*: an 11-bit unsigned field
 is a ``u16``, and a 12-bit sign-magnitude field is an ``i16``. Floats
 are always 64-bit in memory. 32-bit encodings round when written.
@@ -1879,9 +1888,9 @@ Commands
    they are checked instead: decoding and encoding fail with
    ``Mismatch`` when they don't hold. The demo's ``SetLimits`` includes
    ``Limits``' container, which extends ``LimitsBase``'s and assigns
-   ``LimitKind`` 7, and a second copy when ``Both`` is true. A command
-   still has at most one packet length field, so it can't include a whole
-   command with one of its own when it has one too. Repeated, such a
+   ``LimitKind`` 7, and a second copy when ``Both`` is true. A length
+   field in the included container measures that container (see the
+   generated packet types). Repeated, such a
    container is an array of aggregates of its arguments, as a repeated
    container is in telemetry, and its assignments are checked on each
    copy: the demo's ``SetManyLimits`` sends ``LimitsCount`` copies of
@@ -2165,9 +2174,8 @@ Not supported
    than the first, ``IndirectParameterRefEntry`` chosen by an integer or
    string without an ``aliasNameSpace``, the stream constructs listed under
    Streams, instances of values in other packets, repeated segment entries
-   with an ``order`` or located from the end of their container, an
-   included command's packet
-   length field in a command with one of its own, transform algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
+   with an ``order`` or located from the end of their container,
+   transform algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
    deprecates), calibrators inside aggregate types that use other values,
    least-significant-bit-first strings and binary data that may not start on
    a byte boundary, integers of more than 64 bits used other than as

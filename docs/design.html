@@ -870,6 +870,12 @@ of an optional field would have nowhere to be absent. Unlike a
 command's own assignments they don't select the command when decoding:
 the document chose the included container, so the assignments can only
 confirm it.</p>
+<p>A length field inside an included container can't mean the packet's
+length, so <tt class="docutils literal">measure</tt> makes it measure the container: it marks the
+field and puts a <tt class="docutils literal">LengthEnd</tt> where the container ends, where decoding
+checks the field and encoding patches it, as the packet's own length
+field is patched at the packet's end. Innermost includes are measured
+first, so each field measures the container nearest it.</p>
 <p>Segments are kept in step with their parameter by counting them per
 entry list. A <tt class="docutils literal">RepeatEntry</tt> with a fixed count and no <tt class="docutils literal">Offset</tt> is
 expanded into that many segments, which can still assemble the value;

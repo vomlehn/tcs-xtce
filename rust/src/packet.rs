@@ -636,6 +636,31 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
+    /// Where the container that the length field `field`, whose value `v`
+    /// was just read, measures ends: `v - adjust` bytes after the field, in
+    /// bytes from the packet's start.
+    pub fn span_end(
+        &self,
+        v: u64,
+        adjust: i64,
+        field: &'static str,
+    ) -> Result<i128> {
+        let after = v as i128 - adjust as i128;
+        if after < 0 {
+            return Err(PacketError::BadLength { field });
+        }
+        Ok(self.pos.div_ceil(8) as i128 + after)
+    }
+
+    /// Fails with BadLength unless the container that `field` measures ends
+    /// at byte `end`, here.
+    pub fn check_span(&self, end: i128, field: &'static str) -> Result<()> {
+        if self.pos.div_ceil(8) as i128 != end {
+            return Err(PacketError::BadLength { field });
+        }
+        Ok(())
+    }
+
     /// Checks that the packet's entries reach the end that the packet
     /// length field `field` gave.
     pub fn finish(&self, field: &'static str) -> Result<()> {
@@ -922,6 +947,30 @@ impl<'a> BitWriter<'a> {
         field: &'static str,
     ) -> Result<()> {
         let v = self.buf.len() as i128
+            - (at + bits as usize).div_ceil(8) as i128
+            + adjust as i128;
+        if v < 0 || v > mask(bits) as i128 {
+            return Err(PacketError::OutOfRange { field });
+        }
+        let end = self.pos;
+        self.pos = at;
+        self.uint_order(bits, le, v as u64);
+        self.pos = end;
+        Ok(())
+    }
+
+    /// Fills in the length field `field` of `bits` bits at bit `at`, which
+    /// measures an included container that ends here: the bytes after the
+    /// field plus `adjust`.
+    pub fn patch_span(
+        &mut self,
+        at: usize,
+        bits: u32,
+        le: bool,
+        adjust: i64,
+        field: &'static str,
+    ) -> Result<()> {
+        let v = self.pos.div_ceil(8) as i128
             - (at + bits as usize).div_ceil(8) as i128
             + adjust as i128;
         if v < 0 || v > mask(bits) as i128 {
