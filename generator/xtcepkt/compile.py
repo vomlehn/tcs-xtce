@@ -1469,12 +1469,17 @@ class Compiler:
             return dataclasses.replace(vt,
                                        enc=dataclasses.replace(e, elem=elem))
         if isinstance(e, AggregateEnc):
-            for t in vt.tree():
-                if needs_binding(t.calibrator):
-                    raise Unsupported(f"{where}: a calibrator in aggregate "
-                                      f"{vt.key} uses other values of the "
-                                      "packet")
-            return vt
+            # The same type, with its members' calibrators bound here.
+            members = [
+                dataclasses.replace(m,
+                                    vtype=self.bind_calibrators(m.vtype, scope,
+                                                                where, arg_key))
+                for m in e.members]
+            if all(a.vtype is b.vtype for a, b in zip(members, e.members)):
+                return vt
+            return dataclasses.replace(
+                vt, enc=dataclasses.replace(e, members=members),
+                origin=vt.origin or vt)
         if not needs_binding(vt.calibrator):
             return vt
         return dataclasses.replace(
@@ -2928,7 +2933,7 @@ class Compiler:
                     Kind(names.take(camel(r.name) + "Kind",
                                     camel(r.key) + "Kind"), r, members, 0))
         concrete = [n for n in ok if not n.abstract]
-        used, aggregates = {}, {}
+        used, aggregates, copies = {}, {}, []
         monitored: dict = {}
         for n in concrete:
             self._finish(n)
@@ -2942,6 +2947,9 @@ class Compiler:
                     for vt in it.local.vtype.tree():
                         if vt.kind == "enum":
                             used[id(vt)] = vt
+                        elif vt.kind == "aggregate" and vt.origin:
+                            copies.append(vt)
+                            aggregates[id(vt.origin)] = vt.origin
                         elif vt.kind == "aggregate":
                             aggregates[id(vt)] = vt
         for vt in used.values():
@@ -2950,6 +2958,8 @@ class Compiler:
             # A repeated container is often a packet too.
             vt.ident = names.take(camel(vt.name), camel(vt.name) + "Item",
                                   camel(vt.key))
+        for vt in copies:
+            vt.ident = vt.origin.ident
         for k in kinds:
             k.max_bytes = max(m.max_bytes for m in k.members)
         for st in streams:

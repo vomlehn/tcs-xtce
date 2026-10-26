@@ -1408,7 +1408,10 @@ Aggregates
    gives, unless that value is an earlier member of the same aggregate.
    Criteria, lookups and sizes can refer to a member with XTCE's dot
    syntax (``parameterRef="RouteHdr.Count"``, also nested, as in
-   ``P.a.b``, and in ``argumentRef``), but not to a whole aggregate.
+   ``P.a.b``, and in ``argumentRef``), but not to a whole aggregate. A
+   member's calibrator may use other values of the packet decoded before
+   the aggregate: the demo's ``ScaledPair`` has a ``Value`` that
+   ``ScaleMode`` chooses the calibrator of.
 
 Array elements
    Criteria, lookups and sizes can refer to an element with XTCE's
@@ -2176,7 +2179,7 @@ Not supported
    Streams, instances of values in other packets, repeated segment entries
    with an ``order`` or located from the end of their container,
    transform algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
-   deprecates), calibrators inside aggregate types that use other values,
+   deprecates),
    least-significant-bit-first strings and binary data that may not start on
    a byte boundary, integers of more than 64 bits used other than as
    values (see "Integer encoding"), and a location from the end of an

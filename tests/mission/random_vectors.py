@@ -390,7 +390,7 @@ def main() -> None:
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
                                430, 440, 450, 460, 470, 480, 490, 500, 510, 520,
-                               530, 550, 550, 560, 560, 570, 570,
+                               530, 550, 550, 560, 560, 570, 570, 580,
                                rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
@@ -464,6 +464,9 @@ def main() -> None:
                     + [(8, rng.randrange(256)) for _ in range(2)])
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
+            elif apid == 580 and rng.random() < 0.9:
+                data += bytes([rng.choice([0, 1, 1, rng.randrange(256)])])
+                data += rng.randbytes(2)
             elif apid == 570 and rng.random() < 0.9:
                 data += tail(rng)
             elif apid == 560 and rng.random() < 0.9:

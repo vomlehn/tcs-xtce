@@ -1267,6 +1267,11 @@ reference, as written, is the name of an earlier member binds to that
 member, even if a parameter or argument has the same name. Any other
 reference from inside an aggregate is still unsupported, since one type
 can be used in packets where the referenced value is not decoded first.</p>
+<p>A member's calibrator that uses other values is bound per packet, as a
+parameter's is, so a packet that uses the aggregate gets a copy of its
+type with the members' calibrators bound to its own values. The copy
+keeps the original in <tt class="docutils literal">origin</tt>; only originals are declared, and copies
+take their names, so every packet shares one struct.</p>
 <p>The bound <tt class="docutils literal">DynSize</tt> has <tt class="docutils literal">member</tt> (the member's field name) rather
 than <tt class="docutils literal">local</tt>. The emitters pass the whole <tt class="docutils literal">DynSize</tt> to the callback
 that gives a size's value, and an aggregate wraps that callback, mapping

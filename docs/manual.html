@@ -1863,7 +1863,10 @@ that take the rest of the packet, and values whose size another value
 gives, unless that value is an earlier member of the same aggregate.
 Criteria, lookups and sizes can refer to a member with XTCE's dot
 syntax (<tt class="docutils literal"><span class="pre">parameterRef=&quot;RouteHdr.Count&quot;</span></tt>, also nested, as in
-<tt class="docutils literal">P.a.b</tt>, and in <tt class="docutils literal">argumentRef</tt>), but not to a whole aggregate.</dd>
+<tt class="docutils literal">P.a.b</tt>, and in <tt class="docutils literal">argumentRef</tt>), but not to a whole aggregate. A
+member's calibrator may use other values of the packet decoded before
+the aggregate: the demo's <tt class="docutils literal">ScaledPair</tt> has a <tt class="docutils literal">Value</tt> that
+<tt class="docutils literal">ScaleMode</tt> chooses the calibrator of.</dd>
 <dt>Array elements</dt>
 <dd><p class="first">Criteria, lookups and sizes can refer to an element with XTCE's
 bracket syntax, mixed with members (<tt class="docutils literal"><span class="pre">Probes[1].Gains[0]</span></tt>), with
@@ -2594,7 +2597,7 @@ string without an <tt class="docutils literal">aliasNameSpace</tt>, the stream c
 Streams, instances of values in other packets, repeated segment entries
 with an <tt class="docutils literal">order</tt> or located from the end of their container,
 transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
-deprecates), calibrators inside aggregate types that use other values,
+deprecates),
 least-significant-bit-first strings and binary data that may not start on
 a byte boundary, integers of more than 64 bits used other than as
 values (see &quot;Integer encoding&quot;), and a location from the end of an

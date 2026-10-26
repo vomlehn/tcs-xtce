@@ -205,3 +205,5 @@ SetManyLimits{seq_count=3, limits_container=[{limit_kind=7, lo=-1, hi=1}, {limit
 error:Mismatch | -
 Forward{seq_count=5, seq_count2=9, mode=Science} | 112ec005000814112cc00900010102
 error:BadLength | -
+ScaledBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, scale_mode=1, scaled_pair={value_=32.0, tag=5}} | 0a44c02a0002011005
+ScaledBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, scale_mode=0, scaled_pair={value_=8.0, tag=5}} | 0a44c02a0002001005

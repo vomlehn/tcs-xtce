@@ -1000,6 +1000,35 @@
           </CustomAlarm>
         </DefaultAlarm>
       </IntegerParameterType>
+      <!-- An aggregate whose member's calibrator depends on a value
+           outside it. -->
+      <FloatParameterType name="ContextScaledType">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="0.5" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+          <ContextCalibratorList>
+            <ContextCalibrator>
+              <ContextMatch>
+                <Comparison parameterRef="ScaleMode" value="1"/>
+              </ContextMatch>
+              <Calibrator>
+                <PolynomialCalibrator>
+                  <Term coefficient="2" exponent="1"/>
+                </PolynomialCalibrator>
+              </Calibrator>
+            </ContextCalibrator>
+          </ContextCalibratorList>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <AggregateParameterType name="ScaledPairType">
+        <MemberList>
+          <Member name="Value" typeRef="ContextScaledType"/>
+          <Member name="Tag" typeRef="U8"/>
+        </MemberList>
+      </AggregateParameterType>
       <IntegerParameterType name="RepCountType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
         <ValidRange minInclusive="0" maxInclusive="5"/>
@@ -1254,6 +1283,8 @@
       <Parameter name="HkSum" parameterTypeRef="U8"/>
       <Parameter name="HkMin" parameterTypeRef="DrDoubleType"/>
       <Parameter name="HkMax" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="ScaleMode" parameterTypeRef="U8"/>
+      <Parameter name="ScaledPair" parameterTypeRef="ScaledPairType"/>
       <Parameter name="TailCount" parameterTypeRef="RepCountType"/>
       <Parameter name="TailFlag" parameterTypeRef="U8"/>
       <Parameter name="TailData" parameterTypeRef="U16"/>
@@ -2194,6 +2225,17 @@
       </SequenceContainer>
       <!-- TailFlag ends 4 bits before TailData starts, and TailSum ends a
            byte before the end of the packet, whose size varies. -->
+      <SequenceContainer name="ScaledBlock">
+        <EntryList>
+          <ParameterRefEntry parameterRef="ScaleMode"/>
+          <ParameterRefEntry parameterRef="ScaledPair"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="580"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="Tail">
         <EntryList>
           <ParameterRefEntry parameterRef="TailCount"/>

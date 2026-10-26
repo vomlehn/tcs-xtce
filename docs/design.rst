@@ -938,6 +938,12 @@ member, even if a parameter or argument has the same name. Any other
 reference from inside an aggregate is still unsupported, since one type
 can be used in packets where the referenced value is not decoded first.
 
+A member's calibrator that uses other values is bound per packet, as a
+parameter's is, so a packet that uses the aggregate gets a copy of its
+type with the members' calibrators bound to its own values. The copy
+keeps the original in ``origin``; only originals are declared, and copies
+take their names, so every packet shares one struct.
+
 The bound ``DynSize`` has ``member`` (the member's field name) rather
 than ``local``. The emitters pass the whole ``DynSize`` to the callback
 that gives a size's value, and an aggregate wraps that callback, mapping

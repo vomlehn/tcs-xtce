@@ -205,3 +205,5 @@ tc 112ec003000b130207ffff000107006400c8  # set many limits: two copies of Limits
 tc 112ec003000b130207ffff000108006400c8  # set many limits: the second copy's LimitKind isn't 7
 tc 112ec005000814112cc00900010102  # forward: a whole SetMode command, its length its own
 tc 112ec005000814112cc00900020102  # forward: the SetMode command's length one too many
+tm 0a44c02a0002011005  # scaled: mode 1 doubles the value
+tm 0a44c02a0002001005  # scaled: otherwise it is halved

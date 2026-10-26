@@ -873,6 +873,44 @@ def packet_mission(*refs: str, record: str = "") -> str:
         inc + "".join(refs))
 
 
+class AggregateCalibratorTests(unittest.TestCase):
+    def test_member_calibrator_uses_an_earlier_value(self):
+        text = mission(tm="""
+            <ParameterTypeSet>
+              <IntegerParameterType name="U8" signed="false">
+              <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+              <FloatParameterType name="F"><IntegerDataEncoding sizeInBits="8">
+                <ContextCalibratorList><ContextCalibrator><ContextMatch>
+                <Comparison parameterRef="M" value="1"/></ContextMatch>
+                <Calibrator><PolynomialCalibrator>
+                <Term coefficient="2" exponent="1"/></PolynomialCalibrator>
+                </Calibrator></ContextCalibrator></ContextCalibratorList>
+              </IntegerDataEncoding></FloatParameterType>
+              <AggregateParameterType name="A"><MemberList>
+                <Member name="V" typeRef="F"/></MemberList>
+              </AggregateParameterType>
+            </ParameterTypeSet>
+            <ParameterSet>
+              <Parameter name="M" parameterTypeRef="U8"/>
+              <Parameter name="P" parameterTypeRef="A"/>
+              <Parameter name="Q" parameterTypeRef="A"/>
+            </ParameterSet>
+            <ContainerSet>
+              <SequenceContainer name="S"><EntryList>
+                <ParameterRefEntry parameterRef="M"/>
+                <ParameterRefEntry parameterRef="P"/>
+                <ParameterRefEntry parameterRef="Q"/>
+              </EntryList></SequenceContainer>
+            </ContainerSet>""")
+        m = compile_xml(text)
+        p, q = (lc.vtype for _, lc in m.nodes[0].fields[1:])
+        # Each use is bound to the packet's M; both are the one type A.
+        self.assertTrue(p.enc.members[0].vtype.calibrator.bound)
+        self.assertIs(p.origin, q.origin)
+        self.assertEqual([vt.ident for vt in m.aggregates], [p.ident])
+        self.assertEqual(q.ident, p.ident)
+
+
 class LocationTests(unittest.TestCase):
     def items(self, *refs: str, record: str = "") -> list:
         return compile_xml(packet_mission(*refs, record=record)).nodes[0].items
@@ -1682,7 +1720,7 @@ class CalibratorTests(unittest.TestCase):
                                                + '<SplinePoint raw="1" '
                                                  'calibrated="5"/>'))))
 
-    def test_bound_calibrators_in_aggregates_rejected(self):
+    def test_bound_calibrators_in_aggregates(self):
         text = mission(tm="""
             <ParameterTypeSet>
               <IntegerParameterType name="U8" signed="false">
@@ -1700,7 +1738,10 @@ class CalibratorTests(unittest.TestCase):
               <ParameterRefEntry parameterRef="A"/>
               <ParameterRefEntry parameterRef="X"/></EntryList>
             </SequenceContainer></ContainerSet>""")
-        self.assertIn("uses other values of the packet", self.rejected(text))
+        x = compile_xml(text).nodes[0].fields[1][1].vtype
+        cal = x.enc.members[0].vtype.calibrator
+        self.assertIsInstance(cal, MathOp)
+        self.assertEqual(cal.expr[2][1].local.name, "A")
 
 
 def checked_mission(edc: str, entries: str = "", ctype: str = "U8") -> str:

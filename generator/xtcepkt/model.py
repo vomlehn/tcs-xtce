@@ -414,6 +414,9 @@ class VType:
     # ValidRangeSet), as Bands inside which the value must lie when it is
     # encoded; integer ones whole and inclusive (see compile.int_band).
     valid: list = field(default_factory=list)
+    # A copy of an aggregate type whose members' calibrators are bound to
+    # one packet's values: the type it copies, which names it.
+    origin: Optional["VType"] = None
 
     @property
     def width(self) -> int:
