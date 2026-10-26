@@ -2423,6 +2423,33 @@
           <Flag flagSizeInBits="6" flagBitType="ones"/>
         </SyncStrategy>
       </VariableFrameStream>
+      <!-- Bytes scrambled by XOR with 0x55: the application's Descramble
+           decodes them into the Clear stream. -->
+      <CustomStream name="Scrambled" encodedStreamRef="Scrambled"
+        decodedStreamRef="Clear">
+        <EncodingAlgorithm name="Scramble"/>
+        <DecodingAlgorithm name="Descramble"/>
+      </CustomStream>
+      <!-- 64-bit frames led by C3A5965A (which has no run of ones that
+           Nested could take for a flag), inverted by the application's
+           Invert when the pattern isn't found. -->
+      <FixedFrameStream name="Clear" frameLengthInBits="64">
+        <ContainerRef containerRef="DlFrame"/>
+        <SyncStrategy verifyToLockGoodFrames="1">
+          <AutoInvert badFramesToAutoInvert="2">
+            <InvertAlgorithm name="Invert"/>
+          </AutoInvert>
+          <SyncPattern pattern="C3A5965A" patternLengthInBits="32"/>
+        </SyncStrategy>
+      </FixedFrameStream>
+      <!-- HDLC frames carried in Clear's frames. -->
+      <VariableFrameStream name="Nested">
+        <ContainerRef containerRef="CCSDSPacket"/>
+        <StreamRef streamRef="Clear"/>
+        <SyncStrategy>
+          <Flag flagSizeInBits="6" flagBitType="ones"/>
+        </SyncStrategy>
+      </VariableFrameStream>
     </StreamSet>
     <AlgorithmSet>
       <MathAlgorithm name="SpeedToKph">

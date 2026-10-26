@@ -642,6 +642,32 @@ class Stream:
     # A frame that is any of a Service's containers: ``container`` names the
     # service, and these are its containers' qualified names.
     service: list = field(default_factory=list)
+    # A CustomStream: it gives the bytes that the application's
+    # DecodingAlgorithm (``decoder``) decodes from its input, not frames.
+    custom: bool = False
+    decoder: str = ""
+    # The stream whose output is this one's input (from a StreamRef, or a
+    # CustomStream's decodedStreamRef or encodedStreamRef); None for one
+    # whose input is the raw stream.
+    feeder: Optional["Stream"] = None
+    # An InvertAlgorithm's name: once AutoInvert inverts the bits, the
+    # application's function gives each one.
+    inverter: str = ""
+
+    def chain(self) -> list["Stream"]:
+        """This stream, then the streams that feed it, to the raw one."""
+        out, st = [], self
+        while st is not None and st not in out:  # a cycle is an error
+            out.append(st)
+            st = st.feeder
+        return out
+
+    def functions(self) -> list[tuple[str, "Stream"]]:
+        """The functions the application gives this stream's type, through
+        its chain: ("decode", a CustomStream) and ("invert", a stream with
+        an InvertAlgorithm)."""
+        return ([("decode", s) for s in self.chain() if s.custom]
+                + [("invert", s) for s in self.chain() if s.inverter])
 
 
 # --- containers --------------------------------------------------------------

@@ -210,8 +210,19 @@ def stream_capacity(st) -> tuple[int, int]:
     return st.max_bits + st.flag_bits + 2, (st.max_bits + 8) // 8
 
 
+def stream_fn(kind: str, st) -> str:
+    """The name of the parameter that gives a stream's type the
+    application's ``kind`` function (decode or invert) for stream ``st``."""
+    from .compile import snake  # compile imports this module
+    return f"{snake(st.key.rsplit('/', 1)[-1])}_{kind}"
+
+
 def stream_doc(st) -> str:
     """What a stream type's documentation says it is."""
+    if st.custom:
+        return (f"Custom stream {st.key}: gives the bytes that the "
+                f"application's DecodingAlgorithm {st.decoder} decodes from "
+                "its input.")
     what = "Fixed" if st.fixed else "Variable"
     if st.service:
         return (f"{what} frame stream {st.key}: finds its frames, each a "
@@ -323,7 +334,7 @@ def header_lines(mission, source: str) -> list:
 
 __all__ = ["Criterion", "FloatEnc", "IntEnc", "Polynomial", "Spline",
            "StringEnc", "criteria_by_node", "field_range", "size_args",
-           "header_lines", "flt", "int_enc", "invertible", "le", "raw_is_int",
-           "str_cap", "string_spec", "values", "wire_cap", "wire_region",
-           "code_unit", "encode_text", "find_unit", "fast_order", "Ref",
-           "MATH_OPS", "c_op", "leaf_calibrators", "math_value"]
+           "stream_fn", "header_lines", "flt", "int_enc", "invertible", "le",
+           "raw_is_int", "str_cap", "string_spec", "values", "wire_cap",
+           "wire_region", "code_unit", "encode_text", "find_unit", "fast_order",
+           "Ref", "MATH_OPS", "c_op", "leaf_calibrators", "math_value"]

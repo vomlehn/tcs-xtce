@@ -15,7 +15,7 @@ from typing import Optional
 
 from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
                      notes, stream_capacity, stream_doc, Ref, c_op, fast_order,
-                     field_range, flt, header_lines, inputs, int_enc,
+                     field_range, flt, header_lines, inputs, int_enc, stream_fn,
                      invertible, leaf_calibrators, math_value, size_args,
                      str_cap, string_spec)
 from .compile import snake
@@ -1790,24 +1790,44 @@ class CEmitter:
 
     def stream(self, st) -> None:
         t = self.p + st.ident
-        bits, size = stream_capacity(st)
-        sync = "frame" if st.fixed else "flag"
-        pcm = "XTCE_PK_" + st.pcm.upper().replace("BIPHASE", "BIPHASE_")
+        fns = [(k, stream_fn(k, x)) for k, x in st.functions()]
+        params = "".join(f", xtce_pk_stream_decode_fn {n}, void* "
+                         f"{n[:-len('decode')]}ctx" if k == "decode"
+                         else f", uint8_t (*{n})(uint8_t bit)" for k, n in fns)
         self.line()
-        for k, text in enumerate(textwrap.wrap(stream_doc(st)
-                                               + " Initialize it with "
-                                                 f"{t}_init, and don't copy it "
-                                                 "after.", 72)):
+        doc = stream_doc(st)
+        if st.feeder is not None:
+            doc += (f" Its input is what stream {st.feeder.key} gives, from "
+                    "the bytes pushed.")
+        if fns:
+            doc += (" The application gives it its functions: "
+                    + ", ".join(n for _, n in fns)
+                    + " (a decoding function with the context it is called "
+                      "with).")
+        doc += f" Initialize it with {t}_init, and don't copy it after."
+        for k, text in enumerate(textwrap.wrap(doc, 72)):
             self.line(("/* " if k == 0 else " * ") + text)
         self.line(" */")
-        self.line(f"#define {t}_CONTAINER {cstr(st.container)}")
+        if not st.custom:
+            self.line(f"#define {t}_CONTAINER {cstr(st.container)}")
         self.line(f"typedef struct {t} {{")
-        self.line(f"xtce_pk_{sync}_sync sync;", 1)
-        self.line(f"uint8_t bits[{bits}];", 1)
-        self.line(f"uint8_t frame[{size}];", 1)
+        if st.custom:
+            self.line("xtce_pk_stream_decode_fn decode;", 1)
+            self.line("void* ctx;", 1)
+        else:
+            bits, size = stream_capacity(st)
+            sync = "frame" if st.fixed else "flag"
+            self.line(f"xtce_pk_{sync}_sync sync;", 1)
+            self.line(f"uint8_t bits[{bits}];", 1)
+            self.line(f"uint8_t frame[{size}];", 1)
+        if st.feeder is not None:
+            self.line(f"{self.p}{st.feeder.ident} feeder;", 1)
         self.line(f"}} {t};")
         self.line()
-        if st.fixed:
+        pcm = "XTCE_PK_" + st.pcm.upper().replace("BIPHASE", "BIPHASE_")
+        if st.custom:
+            pass
+        elif st.fixed:
             n = (st.pattern_bits + 7) // 8
             for name, v in (("pattern", st.pattern), ("mask", st.mask)):
                 b = ", ".join(f"0x{x:02x}" for x in v.to_bytes(n, "big"))
@@ -1818,22 +1838,71 @@ class CEmitter:
                       f"{st.aperture}, {st.verify}, {st.check}, "
                       f"UINT64_C({st.invert_after}), {pcm}, "
                       f"{bool_lit(st.inverted)}}};")
+            self.line()
         else:
             self.line(f"static const xtce_pk_flag_spec {t}_spec = "
                       f"{{{st.flag_bits}, {bool_lit(st.flag_ones)}, "
                       f"{st.max_bits}, {pcm}, {bool_lit(st.inverted)}}};")
-        self.line()
-        self.line(f"static inline void {t}_init({t}* s) {{")
-        self.line(f"xtce_pk_{sync}_sync_init(&s->sync, &{t}_spec, s->bits, "
-                  f"{bits}, s->frame);", 1)
+            self.line()
+        self.line(f"static inline void {t}_init({t}* s{params}) {{")
+        if st.custom:
+            n = stream_fn("decode", st)
+            self.line(f"s->decode = {n};", 1)
+            self.line(f"s->ctx = {n[:-len('decode')]}ctx;", 1)
+        else:
+            bits, _ = stream_capacity(st)
+            sync = "frame" if st.fixed else "flag"
+            self.line(f"xtce_pk_{sync}_sync_init(&s->sync, &{t}_spec, s->bits, "
+                      f"{bits}, s->frame);", 1)
+            if st.inverter:
+                self.line(f"s->sync.invert = {stream_fn('invert', st)};", 1)
+        if st.feeder is not None:
+            args = "".join(f", {n}, {n[:-len('decode')]}ctx" if k == "decode"
+                           else f", {n}"
+                           for k, n in ((k, stream_fn(k, x))
+                                        for k, x in st.feeder.functions()))
+            self.line(f"{self.p}{st.feeder.ident}_init(&s->feeder{args});", 1)
         self.line("}")
+        if st.feeder is not None:
+            # What the feeder gives goes on to this stream.
+            self.line()
+            self.line(f"typedef struct {t}_link_ {{")
+            self.line(f"{t}* s;", 1)
+            self.line("xtce_pk_frame_fn f;", 1)
+            self.line("void* ctx;", 1)
+            self.line(f"}} {t}_link_;")
+            self.line()
+            self.line(f"static inline void {t}_feed_(void* c, const uint8_t* "
+                      "data, size_t len) {")
+            self.line(f"{t}_link_* k = ({t}_link_*)c;", 1)
+            if st.custom:
+                self.line("k->s->decode(k->s->ctx, data, len, k->f, k->ctx);",
+                          1)
+            else:
+                sync = "frame" if st.fixed else "flag"
+                self.line(f"xtce_pk_{sync}_sync_push(&k->s->sync, data, len, "
+                          "k->f, k->ctx);", 1)
+            self.line("}")
         self.line()
+        what = ("the bytes it decodes" if st.custom
+                else "each frame they complete")
         self.line("/* Takes the next `len` bytes of the stream, and gives `f` "
-                  "each frame they")
-        self.line(" * complete. */")
+                  f"{what}. */")
         self.line(f"static inline void {t}_push({t}* s, const uint8_t* data, "
                   "size_t len, xtce_pk_frame_fn f, void* ctx) {")
-        self.line(f"xtce_pk_{sync}_sync_push(&s->sync, data, len, f, ctx);", 1)
+        if st.feeder is not None:
+            self.line(f"{t}_link_ k;", 1)
+            self.line("k.s = s;", 1)
+            self.line("k.f = f;", 1)
+            self.line("k.ctx = ctx;", 1)
+            self.line(f"{self.p}{st.feeder.ident}_push(&s->feeder, data, len, "
+                      f"{t}_feed_, &k);", 1)
+        elif st.custom:
+            self.line("s->decode(s->ctx, data, len, f, ctx);", 1)
+        else:
+            sync = "frame" if st.fixed else "flag"
+            self.line(f"xtce_pk_{sync}_sync_push(&s->sync, data, len, f, ctx);",
+                      1)
         self.line("}")
 
     def valid_test(self, vt: VType, x: str) -> str:

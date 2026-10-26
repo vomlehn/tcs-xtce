@@ -5,9 +5,9 @@ from __future__ import annotations
 import textwrap
 
 from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
-                     notes, stream_doc, Ref, fast_order, field_range, flt,
-                     header_lines, inputs, invertible, math_value, size_args,
-                     string_spec)
+                     notes, stream_doc, stream_fn, Ref, fast_order, field_range,
+                     flt, header_lines, inputs, invertible, math_value,
+                     size_args, string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
@@ -489,19 +489,33 @@ class PythonEmitter:
     def stream(self, st) -> None:
         self.line()
         self.line()
-        base = "FrameSync" if st.fixed else "FlagSync"
-        self.line(f"class {st.ident}(pk.{base}):")
-        doc = stream_doc(st).replace(st.key,
-                                     f"``{st.key}``").replace(
-            st.container, f"``{st.container}``")
+        params = [stream_fn(k, x) for k, x in st.functions()]
+        if st.custom:
+            self.line(f"class {st.ident}:")
+        else:
+            base = "FrameSync" if st.fixed else "FlagSync"
+            self.line(f"class {st.ident}(pk.{base}):")
+        doc = stream_doc(st).replace(st.key, f"``{st.key}``")
+        if st.container:
+            doc = doc.replace(st.container, f"``{st.container}``")
+        if st.feeder is not None:
+            doc += (f" Its input is what stream ``{st.feeder.key}`` gives, "
+                    "from the bytes pushed.")
+        if params:
+            doc += (" The application gives it its functions: "
+                    + ", ".join(params) + ".")
         for k, text in enumerate(textwrap.wrap(doc, 70)):
             self.line(('"""' if k == 0 else "") + text, 1)
         self.line('"""', 1)
         self.line()
-        self.line(f"CONTAINER: ClassVar[str] = {pstr(st.container)}", 1)
-        self.line()
-        self.line("def __init__(self) -> None:", 1)
-        if st.fixed:
+        if not st.custom:
+            self.line(f"CONTAINER: ClassVar[str] = {pstr(st.container)}", 1)
+            self.line()
+        self.line(f"def __init__(self{''.join(', ' + p for p in params)}) -> "
+                  "None:", 1)
+        if st.custom:
+            self.line(f"self._decode = {stream_fn('decode', st)}", 2)
+        elif st.fixed:
             self.line(f"super().__init__({st.frame_bits}, 0x{st.pattern:x}, "
                       f"0x{st.mask:x}, {st.pattern_bits}, {st.location}, "
                       f"{st.max_errors}, {st.aperture}, {st.verify}, "
@@ -510,6 +524,26 @@ class PythonEmitter:
         else:
             self.line(f"super().__init__({st.flag_bits}, {st.flag_ones}, "
                       f"{st.max_bits}, {pstr(st.pcm)}, {st.inverted})", 2)
+        if st.inverter:
+            self.line(f"self.invert = {stream_fn('invert', st)}", 2)
+        if st.feeder is not None:
+            args = ", ".join(f"{p}={p}"
+                             for p in (stream_fn(k, x)
+                                       for k, x in st.feeder.functions()))
+            self.line(f"self._feeder = {st.feeder.ident}({args})", 2)
+        if not (st.custom or st.feeder is not None):
+            return
+        self.line()
+        self.line("def push(self, data) -> list:", 1)
+        what = "decoded bytes" if st.custom else "frames"
+        self.line(f'"""The {what} that ``data``, the next bytes of the stream, '
+                  'gives."""', 2)
+        ins = "self._feeder.push(data)" if st.feeder is not None else "[data]"
+        if st.custom:
+            self.line(f"return [y for y in (self._decode(x) for x in {ins}) if "
+                      "y]", 2)
+        else:
+            self.line(f"return [f for x in {ins} for f in super().push(x)]", 2)
 
     def wrapped(self, items: list, depth: int) -> None:
         """A tuple of ``items``, wrapped to fit 80 columns."""

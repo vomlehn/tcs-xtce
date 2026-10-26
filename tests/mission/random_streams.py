@@ -12,6 +12,7 @@ import sys
 ASM = [int(b) for b in f"{0x1ACFFC1D:032b}"]
 DEEP = [int(b) for b in f"{0xFAF320034ACFFC1D5A5A:080b}"]
 BEACON = [int(b) for b in f"{0xC3A55A3CF00FF0E1D2:072b}"]
+CLEAR = [int(b) for b in f"{0xC3A5965A:032b}"]
 
 
 def bits_of(data: bytes) -> list:
@@ -137,12 +138,51 @@ def relay(rng) -> list:
     return biphase(hdlc(rng), "M")
 
 
+def scramble(bits: list) -> list:
+    """``bits`` as the Scrambled stream sends them: each byte XOR 0x55."""
+    bits = bits + [0] * (-len(bits) % 8)
+    return [b ^ ((0x55 >> (7 - i % 8)) & 1) for i, b in enumerate(bits)]
+
+
+def scrambled(rng) -> list:
+    return [rng.randrange(2) for _ in range(8 * rng.randrange(1, 40))]
+
+
+def clear_frames(rng, payload: list) -> list:
+    """Clear's 64-bit frames, carrying ``payload`` 32 bits a frame, with
+    bit errors, noise and inversions, among noise."""
+    out = [rng.randrange(2) for _ in range(rng.randrange(100))]
+    invert = False
+    for k in range(0, len(payload), 32):
+        frame = CLEAR + (payload[k:k + 32] + [0] * 32)[:32]
+        r = rng.random()
+        if r < 0.05:
+            frame[rng.randrange(32)] ^= 1
+        elif r < 0.08:
+            frame = [rng.randrange(2) for _ in frame]
+        elif r < 0.1:
+            invert = not invert
+        out += [b ^ invert for b in frame]
+    return out
+
+
+def clear(rng) -> list:
+    payload = [rng.randrange(2) for _ in range(32 * rng.randrange(1, 12))]
+    return scramble(clear_frames(rng, payload))
+
+
+def nested(rng) -> list:
+    return scramble(clear_frames(rng, hdlc(rng)))
+
+
 def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
-        name = rng.choice(["downlink", "uplink", "deep", "beacon", "relay"])
+        name = rng.choice(["downlink", "uplink", "deep", "beacon", "relay",
+                           "scrambled", "clear", "nested"])
         bits = {"downlink": downlink, "uplink": uplink, "deep": deep,
-                "beacon": beacon, "relay": relay}[name](rng)
+                "beacon": beacon, "relay": relay, "scrambled": scrambled,
+                "clear": clear, "nested": nested}[name](rng)
         hexes = to_hex(bits)
         at = 0
         while at < len(hexes):

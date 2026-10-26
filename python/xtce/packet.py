@@ -1869,6 +1869,9 @@ class FrameSync:
         self.good = 0
         self.searched = 0
         self.flip = 0
+        # An InvertAlgorithm: what a bit is once AutoInvert has inverted the
+        # stream, in place of its complement.
+        self.invert = None
 
     def push(self, data) -> list:
         """The frames that ``data``, the next bytes of the stream, completes,
@@ -1883,7 +1886,10 @@ class FrameSync:
         return frames
 
     def _bit(self, i: int) -> int:
-        return self.bits[i - self.base] ^ self.flip
+        b = self.bits[i - self.base]
+        if self.flip and self.invert is not None:
+            return self.invert(b)
+        return b ^ self.flip
 
     def _matches(self, s: int) -> bool:
         errors = 0

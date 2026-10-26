@@ -10,7 +10,7 @@ from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
                      notes, stream_capacity, stream_doc, MATH_OPS, Ref,
                      fast_order, field_range, flt, header_lines, inputs,
                      int_enc, invertible, math_value, size_args, str_cap,
-                     string_spec, wire_region)
+                     stream_fn, string_spec, wire_region)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
@@ -729,61 +729,101 @@ class RustEmitter:
         return "\n".join(self.out) + "\n"
 
     def stream(self, st) -> None:
-        bits, size = stream_capacity(st)
         sync = "FrameSync" if st.fixed else "FlagSync"
         pcm = {"NRZL": "Nrzl", "NRZM": "Nrzm", "NRZS": "Nrzs",
                "BiPhaseL": "BiphaseL", "BiPhaseM": "BiphaseM",
                "BiPhaseS": "BiphaseS"}[st.pcm]
+        fns = [(k, stream_fn(k, x)) for k, x in st.functions()]
+        types = {"decode": "pk::StreamDecode", "invert": "pk::BitInvert"}
         self.line()
-        doc = stream_doc(st).replace(st.key,
-                                     f"`{st.key}`").replace(st.container,
-                                                            f"`{st.container}`")
+        doc = stream_doc(st).replace(st.key, f"`{st.key}`")
+        if st.container:
+            doc = doc.replace(st.container, f"`{st.container}`")
+        if st.feeder is not None:
+            doc += (f" Its input is what stream `{st.feeder.key}` gives, from "
+                    "the bytes pushed.")
+        if fns:
+            doc += (" The application gives it its functions: "
+                    + ", ".join(f"`{n}`" for _, n in fns) + ".")
         for text in textwrap.wrap(doc, 72):
             self.line(f"/// {text}")
         self.line("#[derive(Debug, Clone)]")
-        self.line(f"pub struct {st.ident}(pk::{sync}<{bits}, {size}>);")
-        self.line()
-        self.line(f"impl Default for {st.ident} {{")
-        self.line("fn default() -> Self {", 1)
-        self.line("Self::new()", 2)
-        self.line("}", 1)
+        self.line(f"pub struct {st.ident} {{")
+        if st.custom:
+            self.line("decode: pk::StreamDecode,", 1)
+        else:
+            bits, size = stream_capacity(st)
+            self.line(f"sync: pk::{sync}<{bits}, {size}>,", 1)
+        if st.feeder is not None:
+            self.line(f"feeder: {st.feeder.ident},", 1)
         self.line("}")
         self.line()
+        if not fns:
+            self.line(f"impl Default for {st.ident} {{")
+            self.line("fn default() -> Self {", 1)
+            self.line("Self::new()", 2)
+            self.line("}", 1)
+            self.line("}")
+            self.line()
         self.line(f"impl {st.ident} {{")
-        self.line("/// The container that each frame is.", 1)
-        self.line(f"pub const CONTAINER: &'static str = {rstr(st.container)};",
-                  1)
-        if st.fixed:
-            self.line("pub const SPEC: pk::FrameSpec = pk::FrameSpec {", 1)
-            fields = (("frame_bits", st.frame_bits),
-                      ("pattern", byte_slice(st.pattern, st.pattern_bits)),
-                      ("mask", byte_slice(st.mask, st.pattern_bits)),
-                      ("pattern_bits", st.pattern_bits),
-                      ("location", st.location), ("max_errors", st.max_errors),
-                      ("aperture", st.aperture), ("verify", st.verify),
-                      ("check", st.check), ("invert_after", st.invert_after),
-                      ("pcm", f"pk::Pcm::{pcm}"),
-                      ("inverted", str(st.inverted).lower()))
+        if not st.custom:
+            self.line("/// The container that each frame is.", 1)
+            self.line("pub const CONTAINER: &'static str = "
+                      f"{rstr(st.container)};", 1)
+            if st.fixed:
+                self.line("pub const SPEC: pk::FrameSpec = pk::FrameSpec {", 1)
+                fields = (
+                    ("frame_bits", st.frame_bits),
+                    ("pattern", byte_slice(st.pattern, st.pattern_bits)),
+                    ("mask", byte_slice(st.mask, st.pattern_bits)),
+                    ("pattern_bits", st.pattern_bits),
+                    ("location", st.location), ("max_errors", st.max_errors),
+                    ("aperture", st.aperture), ("verify", st.verify),
+                    ("check", st.check), ("invert_after", st.invert_after),
+                    ("pcm", f"pk::Pcm::{pcm}"),
+                    ("inverted", str(st.inverted).lower()))
+            else:
+                self.line("pub const SPEC: pk::FlagSpec = pk::FlagSpec {", 1)
+                fields = (("flag_bits", st.flag_bits),
+                          ("flag_ones", str(st.flag_ones).lower()),
+                          ("max_bits", st.max_bits), ("pcm", f"pk::Pcm::{pcm}"),
+                          ("inverted", str(st.inverted).lower()))
+            for name, v in fields:
+                self.line(f"{name}: {v},", 2)
+            self.line("};", 1)
+            self.line()
+        params = ", ".join(f"{n}: {types[k]}" for k, n in fns)
+        self.line(f"pub fn new({params}) -> Self {{", 1)
+        self.line("Self {", 2)
+        if st.custom:
+            self.line(f"decode: {stream_fn('decode', st)},", 3)
+        elif st.inverter:
+            self.line(f"sync: pk::{sync}::new(Self::SPEC).with_invert("
+                      f"{stream_fn('invert', st)}),", 3)
         else:
-            self.line("pub const SPEC: pk::FlagSpec = pk::FlagSpec {", 1)
-            fields = (("flag_bits", st.flag_bits),
-                      ("flag_ones", str(st.flag_ones).lower()),
-                      ("max_bits", st.max_bits), ("pcm", f"pk::Pcm::{pcm}"),
-                      ("inverted", str(st.inverted).lower()))
-        for name, v in fields:
-            self.line(f"{name}: {v},", 2)
-        self.line("};", 1)
-        self.line()
-        self.line("pub fn new() -> Self {", 1)
-        self.line(f"Self(pk::{sync}::new(Self::SPEC))", 2)
+            self.line(f"sync: pk::{sync}::new(Self::SPEC),", 3)
+        if st.feeder is not None:
+            args = ", ".join(stream_fn(k, x) for k, x in st.feeder.functions())
+            self.line(f"feeder: {st.feeder.ident}::new({args}),", 3)
+        self.line("}", 2)
         self.line("}", 1)
         self.line()
-        self.line("/// Takes the next bytes of the stream, and gives `f` each "
-                  "frame they", 1)
-        self.line("/// complete (its bits padded with zeros).", 1)
-        self.line("pub fn push(&mut self, data: &[u8], f: impl FnMut(&[u8])) {",
-                  1)
-        self.line("self.0.push(data, f);", 2)
+        what = ("the bytes it decodes" if st.custom
+                else "each frame they complete (its bits padded with zeros)")
+        self.line("/// Takes the next bytes of the stream, and gives `f` "
+                  f"{what}.", 1)
+        self.line("pub fn push(&mut self, data: &[u8], mut f: impl "
+                  "FnMut(&[u8])) {", 1)
+        if st.custom and st.feeder is None:
+            self.line("(self.decode)(data, &mut f);", 2)
+        elif st.custom:
+            self.line("let decode = self.decode;", 2)
+            self.line("self.feeder.push(data, |x| decode(x, &mut f));", 2)
+        elif st.feeder is None:
+            self.line("self.sync.push(data, f);", 2)
+        else:
+            self.line("let sync = &mut self.sync;", 2)
+            self.line("self.feeder.push(data, |x| sync.push(x, &mut f));", 2)
         self.line("}", 1)
         self.line("}")
 

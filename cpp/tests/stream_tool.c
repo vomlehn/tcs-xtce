@@ -19,6 +19,27 @@ static demo_UplinkStream uplink;
 static demo_DeepStream deep;
 static demo_BeaconStream beacon;
 static demo_RelayStream relay;
+static demo_ScrambledStream scrambled;
+static demo_ClearStream clear;
+static demo_NestedStream nested;
+
+/* The demo's Descramble: each byte XOR 0x55. */
+static void descramble(void* ctx, const uint8_t* data, size_t len,
+                       void (*out)(void*, const uint8_t*, size_t),
+                       void* out_ctx) {
+        uint8_t buf[64];
+        (void)ctx;
+        while (len) {
+                size_t n = len < sizeof buf ? len : sizeof buf, i;
+                for (i = 0; i < n; ++i) buf[i] = (uint8_t)(data[i] ^ 0x55);
+                out(out_ctx, buf, n);
+                data += n;
+                len -= n;
+        }
+}
+
+/* The demo's Invert: the bit's complement, as AutoInvert does without it. */
+static uint8_t invert(uint8_t bit) { return (uint8_t)(bit ^ 1); }
 static uint8_t input[65536];
 static int frames;
 
@@ -47,6 +68,9 @@ int main(int argc, char** argv) {
         demo_DeepStream_init(&deep);
         demo_BeaconStream_init(&beacon);
         demo_RelayStream_init(&relay);
+        demo_ScrambledStream_init(&scrambled, descramble, NULL);
+        demo_ClearStream_init(&clear, descramble, NULL, invert);
+        demo_NestedStream_init(&nested, descramble, NULL, invert);
         while (fgets(line, sizeof line, in)) {
                 static char name[16], hex[sizeof line];
                 size_t n = 0, i;
@@ -70,6 +94,13 @@ int main(int argc, char** argv) {
                         demo_BeaconStream_push(&beacon, input, n, take, NULL);
                 } else if (strcmp(name, "relay") == 0) {
                         demo_RelayStream_push(&relay, input, n, take, NULL);
+                } else if (strcmp(name, "scrambled") == 0) {
+                        demo_ScrambledStream_push(&scrambled, input, n, take,
+                                                  NULL);
+                } else if (strcmp(name, "clear") == 0) {
+                        demo_ClearStream_push(&clear, input, n, take, NULL);
+                } else if (strcmp(name, "nested") == 0) {
+                        demo_NestedStream_push(&nested, input, n, take, NULL);
                 } else {
                         fprintf(stderr, "unknown stream %s\n", name);
                         return 1;

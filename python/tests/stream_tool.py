@@ -16,10 +16,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
 import demo  # noqa: E402
 
 
+def descramble(data: bytes) -> bytes:
+    """The demo's Descramble: each byte XOR 0x55."""
+    return bytes(x ^ 0x55 for x in data)
+
+
+def invert(bit: int) -> int:
+    """The demo's Invert: the bit's complement, as AutoInvert does without
+    it."""
+    return bit ^ 1
+
+
 def main() -> None:
     streams = {"downlink": demo.DownlinkStream(), "uplink": demo.UplinkStream(),
                "deep": demo.DeepStream(), "beacon": demo.BeaconStream(),
-               "relay": demo.RelayStream()}
+               "relay": demo.RelayStream(),
+               "scrambled": demo.ScrambledStream(descramble),
+               "clear": demo.ClearStream(descramble, invert),
+               "nested": demo.NestedStream(descramble, invert)}
     for line in Path(sys.argv[1]).read_text().splitlines():
         line = line.split("#")[0].split()
         if line:

@@ -2910,6 +2910,7 @@ class Compiler:
                 streams.append(self.stream(key))
             except Unsupported as e:
                 roots.append(str(e))
+        streams = self.link_streams(streams, roots)
         msgs = roots + derived
         if msgs and not self.skip_unsupported:
             if derived:
@@ -2992,11 +2993,15 @@ class Compiler:
         """A FixedFrameStream or VariableFrameStream."""
         path, kind, st = self.streams[key]
         where = f"stream {qname(key)}"
-        if kind == "CustomStream":
-            raise Unsupported(f"{where}: CustomStream")
-        if st.stream_ref is not None:
-            raise Unsupported(f"{where}: a StreamRef")
         pcm = st.pcm_type.value if st.pcm_type else "NRZL"
+        if kind == "CustomStream":
+            # Its input is bytes of the encoded stream, which the
+            # application's DecodingAlgorithm decodes; it has no frames.
+            out = Stream(qname(key), "", "", False, pcm, bool(st.inverted),
+                         custom=True, decoder=st.decoding_algorithm.name)
+            out._refs = (path, None, st.decoded_stream_ref,
+                         st.encoded_stream_ref)
+            return out
         if (pcm not in ("NRZL", "NRZM", "NRZS", "BiPhaseL", "BiPhaseM",
                         "BiPhaseS")):
             raise Unsupported(f"{where}: pcmType {pcm}")
@@ -3022,10 +3027,15 @@ class Compiler:
             ckey = qname(self.resolve(st.choice.value.container_ref, path,
                                       self.containers, "container"))
         ss = st.sync_strategy
-        if ss.auto_invert is not None and ss.auto_invert.invert_algorithm:
-            raise Unsupported(f"{where}: an InvertAlgorithm")
         out = Stream(qname(key), "", ckey, kind == "FixedFrameStream", pcm,
                      bool(st.inverted), service=service)
+        out._refs = (path, st.stream_ref.stream_ref if st.stream_ref else None,
+                     None, None)
+        if ss.auto_invert is not None and ss.auto_invert.invert_algorithm:
+            if not out.fixed:
+                raise Unsupported(f"{where}: an InvertAlgorithm on a variable "
+                                  "stream, which doesn't invert")
+            out.inverter = ss.auto_invert.invert_algorithm.name
         if not out.fixed:
             flag = ss.flag
             out.flag_bits = flag.flag_size_in_bits or 6
@@ -3060,6 +3070,61 @@ class Compiler:
         if ss.auto_invert is not None:
             out.invert_after = ((ss.auto_invert.bad_frames_to_auto_invert
                                  or 1024) * out.frame_bits)
+        return out
+
+    def link_streams(self, streams: list, errors: list) -> list:
+        """Connects each stream to the one that feeds it, and leaves out
+        (adding why to ``errors``) those whose chain doesn't work."""
+        by_key = {st.key: st for st in streams}
+
+        def find(path, ref, where):
+            key = qname(self.resolve(ref, path, self.streams, "stream"))
+            if key not in by_key:
+                raise Unsupported(f"{where}: stream {key} is not supported")
+            return by_key[key]
+
+        bad = {}
+        for st in streams:
+            path, ref, decoded, encoded = st._refs
+            where = f"stream {st.key}"
+            try:
+                if ref is not None:
+                    st.feeder = find(path, ref, where)
+                if st.custom:
+                    target = find(path, decoded, where)
+                    if target.feeder not in (None, st):
+                        raise Unsupported(f"{where}: decodes into "
+                                          f"{target.key}, which "
+                                          f"{target.feeder.key} feeds")
+                    if target is st:
+                        raise Unsupported(f"{where}: decodes into itself")
+                    target.feeder = st
+                    source = find(path, encoded, where)
+                    if source is not st:
+                        st.feeder = source
+            except Unsupported as e:
+                bad[st.key] = str(e)
+        for st in streams:
+            seen, s = [], st
+            while s is not None:
+                if s in seen:
+                    bad.setdefault(st.key,
+                                   f"stream {st.key}: its streams feed each "
+                                   "other in a cycle")
+                    break
+                if s.key in bad and s is not st:
+                    bad.setdefault(st.key,
+                                   f"stream {st.key}: fed by {s.key}, which is "
+                                   "not supported")
+                    break
+                seen.append(s)
+                s = s.feeder
+        errors += bad.values()
+        # Each stream after those that feed it, whose types it holds.
+        out: list = []
+        for st in streams:
+            if st.key not in bad:
+                out += [s for s in reversed(st.chain()) if s not in out]
         return out
 
     def hook(self, kind: str, name: str, outputs: int = 0) -> Hook:

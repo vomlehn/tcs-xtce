@@ -10,6 +10,22 @@
 #[path = "../tests/mission/demo.rs"]
 mod demo;
 
+/// The demo's Descramble: each byte XOR 0x55.
+fn descramble(data: &[u8], out: &mut dyn FnMut(&[u8])) {
+    let mut buf = [0u8; 64];
+    for chunk in data.chunks(buf.len()) {
+        for (b, &x) in buf.iter_mut().zip(chunk) {
+            *b = x ^ 0x55;
+        }
+        out(&buf[..chunk.len()]);
+    }
+}
+
+/// The demo's Invert: the bit's complement, as AutoInvert does without it.
+fn invert(bit: u8) -> u8 {
+    bit ^ 1
+}
+
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
@@ -22,6 +38,9 @@ fn main() {
     let mut deep = demo::DeepStream::new();
     let mut beacon = demo::BeaconStream::new();
     let mut relay = demo::RelayStream::new();
+    let mut scrambled = demo::ScrambledStream::new(descramble);
+    let mut clear = demo::ClearStream::new(descramble, invert);
+    let mut nested = demo::NestedStream::new(descramble, invert);
     for line in text.lines() {
         let line = line.split('#').next().unwrap_or("");
         let mut words = line.split_whitespace();
@@ -40,6 +59,9 @@ fn main() {
             "deep" => deep.push(&data, &mut take),
             "beacon" => beacon.push(&data, &mut take),
             "relay" => relay.push(&data, &mut take),
+            "scrambled" => scrambled.push(&data, &mut take),
+            "clear" => clear.push(&data, &mut take),
+            "nested" => nested.push(&data, &mut take),
             _ => panic!("unknown stream {name}"),
         }
         if frames.is_empty() {

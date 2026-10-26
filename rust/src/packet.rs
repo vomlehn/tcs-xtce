@@ -3371,10 +3371,26 @@ pub struct FrameSync<const BITS: usize, const BYTES: usize> {
     good: u32,
     searched: u64,
     flip: u8,
+    invert: Option<BitInvert>,
     frame: [u8; BYTES],
 }
 
+/// An InvertAlgorithm: what a bit is once AutoInvert has inverted the
+/// stream, in place of the bit's complement.
+pub type BitInvert = fn(u8) -> u8;
+
+/// A CustomStream's DecodingAlgorithm: gives `out` the decoded bytes of
+/// the next bytes of the encoded stream, in pieces of any size.
+pub type StreamDecode = fn(&[u8], &mut dyn FnMut(&[u8]));
+
 impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
+    /// The synchronizer, inverting bits with `f` rather than complementing
+    /// them once AutoInvert inverts the stream.
+    pub fn with_invert(mut self, f: BitInvert) -> Self {
+        self.invert = Some(f);
+        self
+    }
+
     pub fn new(spec: FrameSpec) -> Self {
         Self {
             spec,
@@ -3391,6 +3407,7 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
             good: 0,
             searched: 0,
             flip: 0,
+            invert: None,
             frame: [0; BYTES],
         }
     }
@@ -3419,7 +3436,11 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
     }
 
     fn bit(&self, i: usize) -> u8 {
-        self.bits[i - self.base] ^ self.flip
+        let b = self.bits[i - self.base];
+        match self.invert {
+            Some(f) if self.flip == 1 => f(b),
+            _ => b ^ self.flip,
+        }
     }
 
     fn matches(&self, s: usize) -> bool {

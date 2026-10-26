@@ -988,6 +988,15 @@ later search flip with the rest.</p>
 zeros: a flag is the run of flag bits ended by a bit of the other kind,
 the frame is what came before it less the flag's leading bit, and a bit
 of the other kind after one fewer than a flag's run is a stuffed bit.</p>
+<p>Streams chain: a stream's feeder (from a <tt class="docutils literal">StreamRef</tt>, or a custom
+stream's <tt class="docutils literal">decodedStreamRef</tt> and <tt class="docutils literal">encodedStreamRef</tt>) gives it its
+input, so each generated type holds its feeder's type and pushes what the
+feeder gives into its own synchronizer. The application's functions for
+custom streams and inversion are given when a type is made rather than
+registered globally like custom algorithms', because a stream exists
+only as the object the application pushes into; Rust takes plain
+function pointers, so a stream type stays <tt class="docutils literal">Clone</tt> and allocates
+nothing.</p>
 <p>Both take bits from a line decoder, which turns levels into data bits
 before anything else sees them; a bi-phase decoder gives a bit for every
 second level, pairing them from the start of the stream, since nothing

@@ -2142,11 +2142,53 @@ Streams
    settings don't apply. The demo's ``Uplink`` carries CCSDS packets
    between flags, NRZ-M coded, and ``Relay`` Bi-phase-M coded.
 
+   A ``CustomStream`` is processing XTCE leaves to the application, such
+   as descrambling or decompression: its type gives the bytes that the
+   application's function for its ``DecodingAlgorithm`` decodes from its
+   input. They feed the stream its ``decodedStreamRef`` names, and its
+   input is what its ``encodedStreamRef`` stream gives, unless that is
+   the custom stream itself. A frame stream's ``StreamRef`` names the
+   stream whose output is its input: another stream's frames, or a custom
+   stream's decoded bytes. Each stream type takes the raw stream's bytes,
+   and holds the types of the streams that feed it, so the application
+   pushes bytes into the last stream of a chain. Streams only find
+   frames, so an ``EncodingAlgorithm`` is not used.
+
+   An ``InvertAlgorithm`` under ``AutoInvert`` replaces the complement of
+   each bit once the stream is inverted: the application's function gives
+   each bit instead.
+
+   A stream type whose chain needs functions takes them when it is made,
+   named for their streams (``scrambled_decode``, ``clear_invert``):
+
+   .. list-table::
+      :header-rows: 1
+      :widths: auto
+
+      * - Language
+        - Decoding function
+        - Inverting function
+      * - Rust
+        - ``fn(&[u8], &mut dyn FnMut(&[u8]))``: gives the decoded bytes
+          to the second argument, in pieces of any size
+        - ``fn(u8) -> u8``
+      * - C/C++
+        - ``xtce_pk_stream_decode_fn``, and a context it is called with:
+          ``void f(void* ctx, const uint8_t* data, size_t len, void
+          (*out)(void* out_ctx, const uint8_t* bytes, size_t n), void*
+          out_ctx)``
+        - ``uint8_t (*)(uint8_t bit)``
+      * - Python
+        - a function from ``bytes`` to the decoded ``bytes``
+        - a function from a bit to a bit
+
+   The demo's ``Scrambled`` stream XORs each byte with 0x55; its
+   ``Descramble`` gives the ``Clear`` stream, whose frames carry the
+   ``Nested`` stream's HDLC frames.
+
    ``tests/stream_check.sh`` checks that every runtime finds the same
    frames, in ``tests/mission/streams.txt`` and in random streams with
-   slips, bit errors, inversions and aborts. Not supported: a
-   ``StreamRef`` from a stream it connects to, a ``CustomStream`` and an
-   ``InvertAlgorithm``.
+   slips, bit errors, inversions and aborts.
 
 Messages
    A ``MessageSet``'s ``Message`` picks out its container by its
@@ -2175,16 +2217,15 @@ Name references
    documents (see `Missions in several documents`_).
 
 Not supported
-   ``IndirectParameterRefEntry`` chosen by an integer or
-   string without an ``aliasNameSpace``, the stream constructs listed under
-   Streams, instances of values in other packets, repeated segment entries
-   with an ``order`` or located from the end of their container,
-   transform algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
-   deprecates),
-   least-significant-bit-first strings and binary data that may not start on
-   a byte boundary, integers of more than 64 bits used other than as
-   values (see "Integer encoding"), and a location from the end of an
-   included container whose size varies.
+   ``IndirectParameterRefEntry`` chosen by an integer or string without
+   an ``aliasNameSpace``, instances of values in other packets, repeated
+   segment entries with an ``order`` or located from the end of their
+   container, transform algorithms, ``ErrorDetectCorrect`` in a data
+   encoding (which XTCE deprecates), least-significant-bit-first strings
+   and binary data that may not start on a byte boundary, integers of
+   more than 64 bits used other than as values (see "Integer encoding"),
+   and a location from the end of an included container whose size
+   varies.
 
 Known limitations
 -----------------

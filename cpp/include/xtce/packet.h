@@ -3204,8 +3204,21 @@ typedef struct xtce_pk_frame_sync {
         unsigned good;
         uint64_t searched;
         uint8_t flip;
+        /* An InvertAlgorithm: what a bit is once AutoInvert has inverted
+         * the stream, in place of its complement (NULL for that). */
+        uint8_t (*invert)(uint8_t bit);
         uint8_t* frame;
 } xtce_pk_frame_sync;
+
+/* A CustomStream's DecodingAlgorithm: gives `out` (with `out_ctx`) the
+ * decoded bytes of the next `len` bytes of the encoded stream, in pieces of
+ * any size; `ctx` is what the application gave the stream. */
+typedef void (*xtce_pk_stream_decode_fn)(void* ctx, const uint8_t* data,
+                                         size_t len,
+                                         void (*out)(void* out_ctx,
+                                                     const uint8_t* bytes,
+                                                     size_t n),
+                                         void* out_ctx);
 
 enum { XTCE_PK_SEARCH, XTCE_PK_VERIFY, XTCE_PK_LOCK, XTCE_PK_CHECK };
 
@@ -3226,7 +3239,9 @@ static inline void xtce_pk_frame_sync_init(xtce_pk_frame_sync* s,
 
 static inline uint8_t xtce_pk_frame_bit(const xtce_pk_frame_sync* s,
                                         size_t i) {
-        return (uint8_t)(s->bits[i - s->base] ^ s->flip);
+        uint8_t b = s->bits[i - s->base];
+        if (s->flip && s->invert) return s->invert(b);
+        return (uint8_t)(b ^ s->flip);
 }
 
 static inline bool xtce_pk_frame_matches(const xtce_pk_frame_sync* s,

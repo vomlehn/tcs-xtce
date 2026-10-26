@@ -87,6 +87,40 @@ class StreamTests(unittest.TestCase):
                                              'syncApertureInBits="100"')))
         self.assertEqual(m.streams[0].aperture, 100)
 
+    def test_chains(self):
+        custom = ('<CustomStream name="C" encodedStreamRef="C" '
+                  'decodedStreamRef="S"><EncodingAlgorithm name="E"/>'
+                  '<DecodingAlgorithm name="D"/></CustomStream>')
+        nested = ('<VariableFrameStream name="V"><ContainerRef '
+                  'containerRef="F"/><StreamRef streamRef="S"/><SyncStrategy>'
+                  '<Flag/></SyncStrategy></VariableFrameStream>')
+        inverted = fixed('pattern="1ACF" patternLengthInBits="16"',
+                         '<AutoInvert><InvertAlgorithm name="I"/></AutoInvert>')
+        m = compile_xml(stream_mission(nested + inverted + custom))
+        c, s, v = m.streams  # each after the streams that feed it
+        self.assertEqual((c.key, c.custom, c.decoder, c.feeder),
+                         ("/Sat/C", True, "D", None))
+        self.assertEqual((s.feeder, s.inverter), (c, "I"))
+        self.assertIs(v.feeder, s)
+        self.assertEqual([(k, x.key) for k, x in v.functions()],
+                         [("decode", "/Sat/C"), ("invert", "/Sat/S")])
+
+    def test_bad_chains(self):
+        custom = ('<CustomStream name="C" encodedStreamRef="C" '
+                  'decodedStreamRef="{0}"><EncodingAlgorithm name="E"/>'
+                  '<DecodingAlgorithm name="D"/></CustomStream>')
+        looped = ('<VariableFrameStream name="V"><ContainerRef '
+                  'containerRef="F"/><StreamRef streamRef="W"/><SyncStrategy>'
+                  '<Flag/></SyncStrategy></VariableFrameStream>'
+                  '<VariableFrameStream name="W"><ContainerRef '
+                  'containerRef="F"/><StreamRef streamRef="V"/><SyncStrategy>'
+                  '<Flag/></SyncStrategy></VariableFrameStream>')
+        for stream, why in ((custom.format("C"), "decodes into itself"),
+                            (looped, "feed each other in a cycle")):
+            with self.subTest(why=why):
+                m = compile_xml(stream_mission(stream), skip_unsupported=True)
+                self.assertIn(why, " ".join(m.skipped))
+
     def test_unsupported(self):
         for stream, why in ((fixed('pattern="1ACF" patternLengthInBits="16" '
                                    'bitLocationFromStartOfContainer="50"'),
