@@ -768,12 +768,16 @@ class Verify:
 @dataclass
 class Require:
     """Criteria that must hold where it stands: the RestrictionCriteria of
-    an included container with a BaseContainer.  Decoding and encoding fail
+    an included container with a BaseContainer, or the argument
+    assignments of an included meta-command.  Decoding and encoding fail
     with Mismatch, naming ``container``, when they don't."""
 
     criteria: list["Term"]
     container: str
     text: str
+    # Argument assignments of an included meta-command: outside a Cond,
+    # the values they assign are fixed, as a command's own are.
+    fixes: bool = False
     bits = 0  # it occupies nothing
 
 

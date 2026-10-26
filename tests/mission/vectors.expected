@@ -192,3 +192,9 @@ Wide{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_co
 error:InvalidValue | -
 SetWide{seq_count=1, offset=-5, key=43556142965880123323311949751266331066375} | 112ec001001d11fffffffffffffffffffffffb0700000000000000000000000000000080
 SetWide{seq_count=2, offset=1000000000000000001, key=1} | error:OutOfRange
+Repeated{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, rep_word=305419896, rep_tail_segment0=[1, 2, 3], section_segment0=[171, 205], rep_after=153} | 0a30c02a00090312345678123ab0cd99
+Repeated{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, rep_word=3735928559, rep_tail_segment0=[], section_segment0=[1, 2], rep_after=none} | 0a30c02a000700deadbeef010020
+error:BadSize | -
+SetLimits{seq_count=1, both=false, lo=-5, hi=300, limit_kind=none, lo2=none, hi2=none} | 112ec0010006120007fffb012c
+SetLimits{seq_count=2, both=true, lo=-1, hi=1, limit_kind=7, lo2=-2, hi2=2} | 112ec002000b120107ffff000107fffe0002
+error:Mismatch | -

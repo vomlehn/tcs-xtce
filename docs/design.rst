@@ -479,6 +479,25 @@ looks them up in ``tc_containers``, which holds the
 than its base meta-command's container, starts with that container's
 items. A ``SizeInBits`` adds the same ``Pad`` or ``Fill`` as in telemetry.
 
+A ``ContainerRefEntry`` naming another meta-command's container, which
+``tc_containers`` doesn't hold, is flattened by ``mc_include``: the
+container it extends first (recursively, for a base meta-command), then
+its own entries, read with that meta-command's argument scope. Its
+argument assignments become a ``Require`` marked ``fixes``. Outside a
+``Cond``, ``_finish`` treats those like a command's own ``==`` criteria
+and fixes the values, so callers needn't set what the included
+meta-command assigns; inside one they stay checks, since a fixed value
+of an optional field would have nowhere to be absent. Unlike a
+command's own assignments they don't select the command when decoding:
+the document chose the included container, so the assignments can only
+confirm it.
+
+Segments are kept in step with their parameter by counting them per
+entry list. A ``RepeatEntry`` with a fixed count and no ``Offset`` is
+expanded into that many segments, which can still assemble the value;
+any other repeat makes the segments a raw array through ``repeat``, the
+same path a repeated parameter takes.
+
 Alarms
 ------
 

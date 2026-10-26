@@ -1846,6 +1846,22 @@ Commands
    is an array of aggregates, as in telemetry: the demo's ``Pairs`` sends
    ``PairCount`` copies of ``Pair``.
 
+   A ``ContainerRefEntry`` may also name the ``CommandContainer`` of
+   another meta-command, often an abstract one that only defines a part of
+   commands. Its entries are included with that meta-command's arguments,
+   after those of the container it extends (its ``BaseMetaCommand``'s,
+   included the same way, or a container of a ``CommandContainerSet``),
+   and its ``BaseContainer``'s ``RestrictionCriteria`` are checked. Its
+   argument assignments fix what they assign, as a command's own do,
+   except in an included container with an ``IncludeCondition``, where
+   they are checked instead: decoding and encoding fail with
+   ``Mismatch`` when they don't hold. The demo's ``SetLimits`` includes
+   ``Limits``' container, which extends ``LimitsBase``'s and assigns
+   ``LimitKind`` 7, and a second copy when ``Both`` is true. A command
+   still has at most one packet length field, so it can't include a whole
+   command with one of its own when it has one too, and such a container
+   can't be repeated.
+
 Segments
    ``ParameterSegmentRefEntry``, ``ContainerSegmentRefEntry`` and
    ``StreamSegmentEntry``, in telemetry and command containers. When the
@@ -1868,6 +1884,15 @@ Segments
    ``Segmented`` packet splits a 16-bit word around another value and
    sends a float's halves low half first; ``Split`` sends a command
    parameter's bytes the same way.
+
+   A segment entry repeated a fixed number of times, one right after
+   another, is that many segments, so they can still make up a value. One
+   whose ``RepeatEntry`` count another value gives, or with an ``Offset``
+   between the repeats, is a list of raw segments, like an array. A
+   repeated segment can't have an ``order``, or be located from the end of
+   its container. The demo's ``Repeated`` packet assembles ``RepWord``
+   from four repeated 8-bit segments, sends ``RepCount`` 4-bit segments of
+   ``RepTail``, and two segments of ``Section`` 4 bits apart.
 
 Indirect entries
    ``IndirectParameterRefEntry``, which dwell telemetry uses: the entry
@@ -2106,9 +2131,10 @@ Not supported
    references to elements of arrays whose count varies in a dimension other
    than the first, ``IndirectParameterRefEntry`` chosen by an integer or
    string without an ``aliasNameSpace``, the stream constructs listed under
-   Streams, instances of values in other packets, repeated segment entries,
-   commands that include another meta-command's container, transform
-   algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
+   Streams, instances of values in other packets, repeated segment entries
+   with an ``order`` or located from the end of their container, a
+   repeated container of a meta-command, an included command's packet
+   length field in a command with one of its own, transform algorithms, ``ErrorDetectCorrect`` in a data encoding (which XTCE
    deprecates), calibrators inside aggregate types that use other values,
    least-significant-bit-first strings and binary data that may not start on
    a byte boundary, integers of more than 64 bits used other than as

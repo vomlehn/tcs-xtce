@@ -1000,6 +1000,10 @@
           </CustomAlarm>
         </DefaultAlarm>
       </IntegerParameterType>
+      <IntegerParameterType name="RepCountType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="5"/>
+      </IntegerParameterType>
       <!-- Integers of more than 64 bits, in every encoding and order. -->
       <IntegerParameterType name="WideU72" signed="false">
         <IntegerDataEncoding sizeInBits="72"/>
@@ -1250,6 +1254,10 @@
       <Parameter name="HkSum" parameterTypeRef="U8"/>
       <Parameter name="HkMin" parameterTypeRef="DrDoubleType"/>
       <Parameter name="HkMax" parameterTypeRef="DrDoubleType"/>
+      <Parameter name="RepCount" parameterTypeRef="RepCountType"/>
+      <Parameter name="RepWord" parameterTypeRef="U32"/>
+      <Parameter name="RepTail" parameterTypeRef="U16"/>
+      <Parameter name="RepAfter" parameterTypeRef="U8"/>
       <Parameter name="WideTiny" parameterTypeRef="S16"/>
       <Parameter name="WideA" parameterTypeRef="WideU72"/>
       <Parameter name="WideB" parameterTypeRef="WideLe80"/>
@@ -2136,6 +2144,50 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <!-- Repeated segments: four 8-bit ones in a row are RepWord's 32
+           bits, assembled; a count from RepCount, or an Offset between
+           repeats, leaves the segments raw. -->
+      <SequenceContainer name="Repeated">
+        <EntryList>
+          <ParameterRefEntry parameterRef="RepCount"/>
+          <ParameterSegmentRefEntry parameterRef="RepWord" sizeInBits="8">
+            <RepeatEntry>
+              <Count>
+                <FixedValue>4</FixedValue>
+              </Count>
+            </RepeatEntry>
+          </ParameterSegmentRefEntry>
+          <ParameterSegmentRefEntry parameterRef="RepTail" sizeInBits="4">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="RepCount"/>
+                </DynamicValue>
+              </Count>
+            </RepeatEntry>
+          </ParameterSegmentRefEntry>
+          <ContainerSegmentRefEntry containerRef="Section" sizeInBits="8">
+            <RepeatEntry>
+              <Count>
+                <FixedValue>2</FixedValue>
+              </Count>
+              <Offset>
+                <FixedValue>4</FixedValue>
+              </Offset>
+            </RepeatEntry>
+          </ContainerSegmentRefEntry>
+          <ParameterRefEntry parameterRef="RepAfter">
+            <IncludeCondition>
+              <Comparison parameterRef="RepWord" value="305419896"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="560"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="Wide">
         <EntryList>
           <ParameterRefEntry parameterRef="WideTiny"/>
@@ -2467,6 +2519,15 @@
       <IntegerArgumentType name="LevelArgType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
       </IntegerArgumentType>
+      <IntegerArgumentType name="LimitArgType">
+        <IntegerDataEncoding sizeInBits="16" encoding="twosComplement"/>
+      </IntegerArgumentType>
+      <IntegerArgumentType name="LimitKindArgType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </IntegerArgumentType>
+      <BooleanArgumentType name="BothArgType">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </BooleanArgumentType>
       <IntegerArgumentType name="WideArgType">
         <IntegerDataEncoding sizeInBits="96" encoding="twosComplement"/>
         <ValidRangeSet>
@@ -2905,6 +2966,63 @@
           <EntryList>
             <ArgumentRefEntry argumentRef="Offset"/>
             <ArgumentRefEntry argumentRef="Key"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <!-- Limits is a fragment that commands include: its container
+           extends LimitsBase's, and its assignment fixes LimitKind. -->
+      <MetaCommand name="LimitsBase" abstract="true">
+        <ArgumentList>
+          <Argument name="LimitKind" argumentTypeRef="LimitKindArgType"/>
+        </ArgumentList>
+        <CommandContainer name="LimitsBaseContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="LimitKind"/>
+          </EntryList>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Limits" abstract="true">
+        <BaseMetaCommand metaCommandRef="LimitsBase">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="LimitKind" argumentValue="7"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Lo" argumentTypeRef="LimitArgType"/>
+          <Argument name="Hi" argumentTypeRef="LimitArgType"/>
+        </ArgumentList>
+        <CommandContainer name="LimitsContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Lo"/>
+            <ArgumentRefEntry argumentRef="Hi"/>
+          </EntryList>
+          <BaseContainer containerRef="LimitsBaseContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <!-- Includes Limits' container, and a second copy when Both: there,
+           in a condition, LimitKind is checked rather than fixed. -->
+      <MetaCommand name="SetLimits">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="18"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="Both" argumentTypeRef="BothArgType"/>
+        </ArgumentList>
+        <CommandContainer name="SetLimitsContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="Both"/>
+            <ContainerRefEntry containerRef="LimitsContainer"/>
+            <ContainerRefEntry containerRef="LimitsContainer">
+              <IncludeCondition>
+                <Comparison value="true">
+                  <ArgumentInstanceRef argumentRef="Both"/>
+                </Comparison>
+              </IncludeCondition>
+            </ContainerRefEntry>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

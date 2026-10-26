@@ -850,6 +850,23 @@ looks them up in <tt class="docutils literal">tc_containers</tt>, which holds th
 <tt class="docutils literal">CommandContainer</tt> whose <tt class="docutils literal">BaseContainer</tt> names one of them, rather
 than its base meta-command's container, starts with that container's
 items. A <tt class="docutils literal">SizeInBits</tt> adds the same <tt class="docutils literal">Pad</tt> or <tt class="docutils literal">Fill</tt> as in telemetry.</p>
+<p>A <tt class="docutils literal">ContainerRefEntry</tt> naming another meta-command's container, which
+<tt class="docutils literal">tc_containers</tt> doesn't hold, is flattened by <tt class="docutils literal">mc_include</tt>: the
+container it extends first (recursively, for a base meta-command), then
+its own entries, read with that meta-command's argument scope. Its
+argument assignments become a <tt class="docutils literal">Require</tt> marked <tt class="docutils literal">fixes</tt>. Outside a
+<tt class="docutils literal">Cond</tt>, <tt class="docutils literal">_finish</tt> treats those like a command's own <tt class="docutils literal">==</tt> criteria
+and fixes the values, so callers needn't set what the included
+meta-command assigns; inside one they stay checks, since a fixed value
+of an optional field would have nowhere to be absent. Unlike a
+command's own assignments they don't select the command when decoding:
+the document chose the included container, so the assignments can only
+confirm it.</p>
+<p>Segments are kept in step with their parameter by counting them per
+entry list. A <tt class="docutils literal">RepeatEntry</tt> with a fixed count and no <tt class="docutils literal">Offset</tt> is
+expanded into that many segments, which can still assemble the value;
+any other repeat makes the segments a raw array through <tt class="docutils literal">repeat</tt>, the
+same path a repeated parameter takes.</p>
 </div>
 <div class="section" id="alarms">
 <h2><a class="toc-backref" href="#toc-entry-16">Alarms</a></h2>

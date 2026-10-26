@@ -192,3 +192,9 @@ tm 0a26c0010094eb3df53729c619c60a3cab0cba9e2a5de70f4a9620d017ed50d6c326225e68a0a
 tm 0a26c0010094eb3df53729c619c60a3cab0cba9e2a5de70f4a9620d017ed50d6c326225e68a0a8c9632ea6928f6236bf300000000000000000b0cde91f7f35634a61212764933032621392178050200050209050500020007060301060453916a3718802a7c1b93ef90b864254c1e10e6d8e6568068b9b52a43abad8d194a9892139600ddb74d1cd18a669a5af84e6b21b24891917b121dc511330  # wide: a packed BCD digit of 10
 tc 112ec001001d11fffffffffffffffffffffffb0700000000000000000000000000000080  # set wide: a 96-bit offset and a 136-bit key
 tc 112ec002001d11000000000de0b6b3a76400010100000000000000000000000000000000  # set wide: an offset past its valid range
+tm 0a30c02a00090312345678123abfcd99  # repeated: RepWord from four repeated segments, so RepAfter; three raw tail segments; two section segments 4 bits apart
+tm 0a30c02a000700deadbeef010020  # repeated: no tail segments, and no RepAfter
+tm 0a30c02a000a0600000000000000000000  # repeated: a tail segment count beyond its ValidRange
+tc 112ec0010006120007fffb012c  # set limits: Limits' container, its LimitKind fixed at 7
+tc 112ec002000b120107ffff000107fffe0002  # set limits: both copies of Limits' container
+tc 112ec002000b120107ffff000108fffe0002  # set limits: the second copy's LimitKind isn't 7

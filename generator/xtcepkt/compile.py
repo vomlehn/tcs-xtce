@@ -1561,6 +1561,9 @@ class Compiler:
                                  scope, where)
             if ch.name in SEGMENTS:
                 if out and isinstance(out[-1], EndSeek):
+                    if e.repeat_entry is not None:
+                        raise Unsupported(f"{where}: a repeated {ch.name} "
+                                          "located from the container's end")
                     out[-1] = self.end_seek(out[-1], sc, None, where,
                                             e.size_in_bits)
                 out += self.segment(ch.name, e, path, where, segs,
@@ -1633,25 +1636,58 @@ class Compiler:
         return items
 
     def segment(self, name: str, e, path: Key, where: str, segs: dict,
-                cond: bool, scope: list) -> list[Item]:
+                cond: bool, scope: list, arg_key=None) -> list[Item]:
         """Items for a segment entry.  The segments of a parameter in one
         entry list that make up its whole encoding (at most 64 bits) are
         assembled into the value, which is in ``scope`` after its last
         segment; ``segs`` keeps those still incomplete, which
         raw_segments makes fields of their own.  Container and stream
         segments, and segments with an IncludeCondition, are always their
-        own fields: the rest of the value is in other packets."""
-        if e.repeat_entry is not None:
-            raise Unsupported(f"{where}: a repeated {name}")
-        bits = e.size_in_bits
+        own fields: the rest of the value is in other packets.
+
+        A segment repeated a fixed number of times, one right after
+        another, is that many segments.  Repeated otherwise (a count that
+        another value gives, or an Offset between the repeats), its
+        segments are a list of raw fields."""
+        rp = e.repeat_entry
+        if rp is None:
+            return self.one_segment(name, e, path, where, segs, cond, scope)
+        if e.order is not None:
+            raise Unsupported(f"{where}: a repeated {name} with an order")
+        count = self.int_value(rp.count, path, "RepeatEntry Count", where)
+        gap = (self.int_value(rp.offset, path, "RepeatEntry Offset", where)
+               if rp.offset is not None else 0)
+        if isinstance(count, int) and gap == 0:
+            if count < 1:
+                raise Unsupported(f"{where}: RepeatEntry Count {count} is not "
+                                  "positive")
+            out: list[Item] = []
+            for _ in range(count):
+                out += self.one_segment(name, e, path, where, segs, cond, scope)
+            return out
+        ref = self.segment_ref(name, e, path)
+        counts = segs.setdefault("#counts", {})
+        k = counts.get(ref, 0)
+        counts[ref] = k + 1
+        lc = self.raw_segment(ref, k, e.size_in_bits, where)
+        lc = self.bind(self.repeat(lc, e, path, where), scope, where, arg_key)
+        scope.append(lc)
+        return [Value(lc)]
+
+    def segment_ref(self, name: str, e, path: Key) -> str:
+        """What a segment entry is a segment of."""
         if name == "ParameterSegmentRefEntry":
-            pkey = self.resolve(e.parameter_ref, path, self.params, "parameter")
-            ref = qname(pkey)
-        elif name == "ContainerSegmentRefEntry":
-            ref = qname(self.resolve(e.container_ref, path, self.containers,
-                                     "container"))
-        else:
-            ref = e.stream_ref
+            return qname(self.resolve(e.parameter_ref, path, self.params,
+                                      "parameter"))
+        if name == "ContainerSegmentRefEntry":
+            return qname(self.resolve(e.container_ref, path, self.containers,
+                                      "container"))
+        return e.stream_ref
+
+    def one_segment(self, name: str, e, path: Key, where: str, segs: dict,
+                    cond: bool, scope: list) -> list[Item]:
+        bits = e.size_in_bits
+        ref = self.segment_ref(name, e, path)
         counts = segs.setdefault("#counts", {})
         k = counts.get(ref, 0)
         counts[ref] = k + 1
@@ -2439,9 +2475,15 @@ class Compiler:
                                  values, where, arg_key)
             if ch.name in SEGMENTS:
                 out += self.segment(ch.name, e, path, where, segs,
-                                    cond is not None, values)
+                                    cond is not None, values, arg_key)
             elif ch.name == "IndirectParameterRefEntry":
                 out += self.indirect(e, path, values, where, arg_key)
+            elif (ch.name == "ContainerRefEntry"
+                  and (owner := self.mc_owner(e.container_ref, path))):
+                if e.repeat_entry is not None:
+                    raise Unsupported(f"{where}: a repeated CommandContainer "
+                                      f"of meta-command {qname(owner)}")
+                out += self.mc_include(owner, where, values, stack)
             elif ch.name == "ContainerRefEntry":
                 ckey = self.resolve(e.container_ref, path, self.tc_containers,
                                     "container")
@@ -2514,6 +2556,106 @@ class Compiler:
         cpath, inc = self.tc_containers[ckey]
         return (items + inner
                 + self.size_pad(inc, inner, m, where, values, cpath))
+
+    def mc_owner(self, ref: str, path: Key) -> Optional[Key]:
+        """The meta-command whose CommandContainer ``ref`` names, if it
+        names no container of a CommandContainerSet or of telemetry."""
+        try:
+            self.resolve(ref, path, self.tc_containers, "container")
+            return None
+        except Unsupported:
+            pass
+        try:
+            return self.mc_containers[self.resolve(ref, path,
+                                                   self.mc_containers,
+                                                   "command container")]
+        except Unsupported:
+            return None
+
+    def mc_include(self, key: Key, where: str, values: list,
+                   stack: tuple) -> list[Item]:
+        """Items for the CommandContainer of meta-command ``key``, which a
+        command includes: those of the container it extends (its
+        BaseMetaCommand's, included the same way, or another), then its
+        own, with its own arguments; its argument assignments, which fix
+        what they assign; and padding up to its size."""
+        mark = ("meta-command",) + key
+        if mark in stack:
+            raise Unsupported(f"{where}: the CommandContainer of {qname(key)} "
+                              "includes itself")
+        stack += (mark,)
+        path, mc = self.mcs[key]
+        cc = mc.command_container
+        if cc is None:
+            raise Unsupported(f"{where}: meta-command {qname(key)} has no "
+                              "CommandContainer")
+        if edc_items(cc):
+            raise Unsupported(f"{where}: ErrorDetectCorrect in the container "
+                              f"of meta-command {qname(key)}, which a command "
+                              "includes")
+        scope = self.arg_scope(key)
+
+        def arg_key(name: str) -> str:
+            return self.arg_key_of(scope, name, where)
+
+        m = self._id()
+        start = len(values)
+        inner: list[Item] = []
+        bkey = (self.resolve(mc.base_meta_command.meta_command_ref, path,
+                             self.mcs, "meta-command")
+                if mc.base_meta_command is not None else None)
+        bc = shared = None
+        if cc.base_container is not None:
+            ref = cc.base_container.container_ref
+            try:
+                bc = self.resolve(ref, path, self.mc_containers,
+                                  "command container")
+            except Unsupported:
+                shared = self.resolve(ref, path, self.tc_containers,
+                                      "container")
+        if shared is not None:
+            if bkey is not None:
+                raise Unsupported(f"{where}: the CommandContainer of "
+                                  f"{qname(key)} extends a container other "
+                                  "than its BaseMetaCommand's")
+            inner += self.tc_include(shared, scope, where, values, stack)
+        elif bkey is not None:
+            if bc is not None and self.mc_containers[bc] != bkey:
+                raise Unsupported(f"{where}: the CommandContainer of "
+                                  f"{qname(key)} extends {qname(bc)}, which is "
+                                  "not the container of its BaseMetaCommand")
+            inner += self.mc_include(bkey, where, values, stack)
+            crit = []
+            al = mc.base_meta_command.argument_assignment_list
+            for asg in al.argument_assignment if al else []:
+                name = asg.argument_name
+                if name not in scope:
+                    raise Unsupported(f"{where}: assignment to unknown "
+                                      f"argument {name!r}")
+                akey = f"{qname(scope[name][0])}#{name}"
+                local = next((lc for lc in reversed(values[start:])
+                              if lc.key == akey), None)
+                if local is not None:
+                    value = self.literal(local.vtype, asg.argument_value, False,
+                                         where)
+                    crit.append(Criterion(local, "==", value,
+                                          f"{name} = {asg.argument_value}"))
+            if crit:
+                inner.append(Require(crit, qname(key),
+                                     " and ".join(c.text for c in crit),
+                                     fixes=True))
+        rc = (cc.base_container.restriction_criteria
+              if cc.base_container is not None else None)
+        if rc is not None:
+            if rc.next_container is not None:
+                raise Unsupported(f"{where}: NextContainer on a "
+                                  "CommandContainer")
+            terms = self.match(rc, path, values, where, arg_key)
+            inner.append(Require(terms, qname(key),
+                                 " and ".join(t.text for t in terms)))
+        inner += self.tc_items(cc, scope, path, where, values, m, stack)
+        return ([Mark(m)] + inner
+                + self.size_pad(cc, inner, m, where, values, path))
 
     def arg_key_of(self, scope: dict, name: str, where: str) -> str:
         if name not in scope:
@@ -2961,6 +3103,13 @@ class Compiler:
                      and c.other is None)
             if fixes and c.local not in fixed:
                 fixed[c.local] = c.value
+        # An included meta-command's argument assignments, unless inside a
+        # Cond (which walk would splice in).
+        for it in n.all_items():
+            if isinstance(it, Require) and it.fixes:
+                for c in it.criteria:
+                    if c.local not in fixed and not c.local.optional:
+                        fixed[c.local] = c.value
         n.fixed = fixed
         n.derived = derived_sizes(n)
         names = Namer()

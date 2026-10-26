@@ -350,6 +350,27 @@ def wide(rng) -> bytes:
     return bits(f)
 
 
+def repeated(rng) -> bytes:
+    """A Repeated body: a count mostly in range, RepWord now and then the
+    value that brings RepAfter."""
+    n = rng.choice([0, 1, 3, 5, rng.randrange(8)])
+    word = rng.choice([0x12345678, rng.getrandbits(32)])
+    f = [(8, n), (32, word)] + [(4, rng.randrange(16)) for _ in range(n)]
+    f += [(8, rng.randrange(256)), (4, rng.randrange(16)),
+          (8, rng.randrange(256))]
+    return bits(f + [(8, rng.randrange(256))])
+
+
+def set_limits(rng) -> bytes:
+    """A SetLimits body: Both mostly 0 or 1, LimitKind mostly 7."""
+    both = rng.choice([0, 1, 1, rng.randrange(256)])
+    out = bytes([both])
+    for _ in range(2 if both == 1 else 1):
+        out += bytes([rng.choice([7] * 9 + [rng.randrange(256)])])
+        out += rng.randbytes(4)
+    return out
+
+
 def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
@@ -359,7 +380,7 @@ def main() -> None:
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
                                430, 440, 450, 460, 470, 480, 490, 500, 510, 520,
-                               530, 550, 550, rng.randrange(1 << 11)])
+                               530, 550, 550, 560, 560, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -432,6 +453,8 @@ def main() -> None:
                     + [(8, rng.randrange(256)) for _ in range(2)])
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
+            elif apid == 560 and rng.random() < 0.9:
+                data += repeated(rng)
             elif apid == 550 and rng.random() < 0.9:
                 data += wide(rng)
             elif apid == 340 and rng.random() < 0.8:
@@ -442,7 +465,7 @@ def main() -> None:
         else:
             data = header(rng, 1, rng.choice([300, 301, 302]))
             opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
-                                 12, 13, 13, 14, 15, 16, 17, 17,
+                                 12, 13, 13, 14, 15, 16, 17, 17, 18, 18,
                                  rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
@@ -479,6 +502,8 @@ def main() -> None:
                 if rng.random() < 0.3:
                     body = body[:4] + bytes([rng.randrange(256)])
                 data += body
+            elif opcode == 18 and rng.random() < 0.9:
+                data += set_limits(rng)
             elif opcode == 17 and rng.random() < 0.9:
                 # SetWide: a 96-bit offset, mostly in its valid range when
                 # re-encoded, and a 136-bit key.

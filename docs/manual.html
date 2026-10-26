@@ -2264,7 +2264,7 @@ The <tt class="docutils literal">RestrictionCriteria</tt> of a <tt class="docuti
 <tt class="docutils literal">BaseContainer</tt> (which XTCE gives on parameters in the command) act
 the same way. The demo's <tt class="docutils literal">Arm</tt> has an optional argument and a
 72-bit pattern sent twice.</p>
-<p class="last">A command container may also hold <tt class="docutils literal">ContainerRefEntry</tt>, naming a
+<p>A command container may also hold <tt class="docutils literal">ContainerRefEntry</tt>, naming a
 container of a <tt class="docutils literal">CommandContainerSet</tt> or of telemetry, whose entries
 (and its bases', each base's <tt class="docutils literal">RestrictionCriteria</tt> checked after its
 entries) are included as in telemetry. A <tt class="docutils literal">CommandContainer</tt> of a
@@ -2275,6 +2275,21 @@ included container, as in telemetry. The demo's <tt class="docutils literal">Sta
 <tt class="docutils literal">TrailerKind</tt> of 7, and is padded to 16 bytes. A repeated container
 is an array of aggregates, as in telemetry: the demo's <tt class="docutils literal">Pairs</tt> sends
 <tt class="docutils literal">PairCount</tt> copies of <tt class="docutils literal">Pair</tt>.</p>
+<p class="last">A <tt class="docutils literal">ContainerRefEntry</tt> may also name the <tt class="docutils literal">CommandContainer</tt> of
+another meta-command, often an abstract one that only defines a part of
+commands. Its entries are included with that meta-command's arguments,
+after those of the container it extends (its <tt class="docutils literal">BaseMetaCommand</tt>'s,
+included the same way, or a container of a <tt class="docutils literal">CommandContainerSet</tt>),
+and its <tt class="docutils literal">BaseContainer</tt>'s <tt class="docutils literal">RestrictionCriteria</tt> are checked. Its
+argument assignments fix what they assign, as a command's own do,
+except in an included container with an <tt class="docutils literal">IncludeCondition</tt>, where
+they are checked instead: decoding and encoding fail with
+<tt class="docutils literal">Mismatch</tt> when they don't hold. The demo's <tt class="docutils literal">SetLimits</tt> includes
+<tt class="docutils literal">Limits</tt>' container, which extends <tt class="docutils literal">LimitsBase</tt>'s and assigns
+<tt class="docutils literal">LimitKind</tt> 7, and a second copy when <tt class="docutils literal">Both</tt> is true. A command
+still has at most one packet length field, so it can't include a whole
+command with one of its own when it has one too, and such a container
+can't be repeated.</p>
 </dd>
 <dt>Segments</dt>
 <dd><p class="first"><tt class="docutils literal">ParameterSegmentRefEntry</tt>, <tt class="docutils literal">ContainerSegmentRefEntry</tt> and
@@ -2286,7 +2301,7 @@ none of them must have one) or else in the order they come, decoded as
 if it started at the beginning of a byte. The value becomes a field
 after its last segment, and later entries may use it. Encoding encodes
 the value and writes each segment's share of its bits.</p>
-<p class="last">XTCE's segments may also be spread over several packets, which a
+<p>XTCE's segments may also be spread over several packets, which a
 packet codec can't put together. So a segment of a parameter that the
 entry list doesn't complete (or that varies in size, or has more than
 64 bits, or has an <tt class="docutils literal">IncludeCondition</tt>), and every container or stream
@@ -2297,6 +2312,14 @@ that thing's segments in the entry list: <tt class="docutils literal">SegPartSeg
 <tt class="docutils literal">Segmented</tt> packet splits a 16-bit word around another value and
 sends a float's halves low half first; <tt class="docutils literal">Split</tt> sends a command
 parameter's bytes the same way.</p>
+<p class="last">A segment entry repeated a fixed number of times, one right after
+another, is that many segments, so they can still make up a value. One
+whose <tt class="docutils literal">RepeatEntry</tt> count another value gives, or with an <tt class="docutils literal">Offset</tt>
+between the repeats, is a list of raw segments, like an array. A
+repeated segment can't have an <tt class="docutils literal">order</tt>, or be located from the end of
+its container. The demo's <tt class="docutils literal">Repeated</tt> packet assembles <tt class="docutils literal">RepWord</tt>
+from four repeated 8-bit segments, sends <tt class="docutils literal">RepCount</tt> 4-bit segments of
+<tt class="docutils literal">RepTail</tt>, and two segments of <tt class="docutils literal">Section</tt> 4 bits apart.</p>
 </dd>
 <dt>Indirect entries</dt>
 <dd><tt class="docutils literal">IndirectParameterRefEntry</tt>, which dwell telemetry uses: the entry
@@ -2529,9 +2552,10 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 <dd>references to elements of arrays whose count varies in a dimension other
 than the first, <tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer or
 string without an <tt class="docutils literal">aliasNameSpace</tt>, the stream constructs listed under
-Streams, instances of values in other packets, repeated segment entries,
-commands that include another meta-command's container, transform
-algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
+Streams, instances of values in other packets, repeated segment entries
+with an <tt class="docutils literal">order</tt> or located from the end of their container, a
+repeated container of a meta-command, an included command's packet
+length field in a command with one of its own, transform algorithms, <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE
 deprecates), calibrators inside aggregate types that use other values,
 least-significant-bit-first strings and binary data that may not start on
 a byte boundary, integers of more than 64 bits used other than as

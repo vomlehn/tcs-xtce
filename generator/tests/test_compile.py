@@ -2019,10 +2019,15 @@ def segment_mission(entries: str) -> str:
         </ContainerSet>""")
 
 
-def seg(name: str, bits: int, order: str = "") -> str:
+def seg(name: str, bits: int, order: str = "", repeat: str = "") -> str:
     order = f' order="{order}"' if order else ""
     return (f'<ParameterSegmentRefEntry parameterRef="{name}" '
-            f'sizeInBits="{bits}"{order}/>')
+            f'sizeInBits="{bits}"{order}>{repeat}</ParameterSegmentRefEntry>')
+
+
+def repeat(count: str, offset: str = "") -> str:
+    offset = f"<Offset>{offset}</Offset>" if offset else ""
+    return f"<RepeatEntry><Count>{count}</Count>{offset}</RepeatEntry>"
 
 
 class SegmentTests(unittest.TestCase):
@@ -2051,8 +2056,28 @@ class SegmentTests(unittest.TestCase):
                          ["W", "WSegment0", "VSegment0"])
         self.assertEqual(n.fields[1][1].vtype.enc.bits, 8)
 
+    def test_repeated_fixed(self):
+        # Four 4-bit segments in a row are W's 16 bits.
+        *segs, v = self.items(seg("W", 4, repeat=repeat(fixed(4))))
+        self.assertEqual([s.shift for s in segs], [12, 8, 4, 0])
+        self.assertEqual(v.assembled, 16)
+
+    def test_repeated_raw(self):
+        # A count from W, or an Offset, leaves a list of raw segments.
+        for entries in ('<ParameterRefEntry parameterRef="W"/>'
+                        + seg("V", 8, repeat=repeat(dynamic("W"))),
+                        seg("W", 8, repeat=repeat(fixed(2), fixed(1)))):
+            with self.subTest(entries=entries):
+                n = compile_xml(segment_mission(entries)).nodes[0]
+                vt = n.fields[-1][1].vtype
+                self.assertEqual((vt.kind, vt.elem.enc.bits), ("array", 8))
+
     def test_rejected(self):
         for entries, why in (
+                (seg("W", 8, "1", repeat(fixed(2))),
+                 "a repeated ParameterSegmentRefEntry with an order"),
+                (seg("W", 8, repeat=repeat(fixed(0))),
+                 "RepeatEntry Count 0 is not positive"),
                 (seg("W", 8, "1") + seg("W", 8, "1"),
                  "segments of /Sat/W whose order is missing or repeated"),
                 (seg("W", 8) + seg("W", 12),
@@ -2127,13 +2152,41 @@ class CommandContainerSetTests(unittest.TestCase):
             shared_mission("", '<ContainerRefEntry containerRef="Body"/>'))
         self.assertEqual([lc.name for _, lc in n.fields], ["X", "K", "T"])
 
+    def test_includes_meta_command(self):
+        frag = ('<MetaCommand name="Base" abstract="true"><ArgumentList>'
+                '<Argument name="Kind" argumentTypeRef="U8A"/></ArgumentList>'
+                '<CommandContainer name="BaseC"><EntryList><ArgumentRefEntry '
+                'argumentRef="Kind"/></EntryList></CommandContainer>'
+                '</MetaCommand><MetaCommand name="Frag" abstract="true">'
+                '<BaseMetaCommand metaCommandRef="Base">'
+                '<ArgumentAssignmentList><ArgumentAssignment '
+                'argumentName="Kind" argumentValue="7"/>'
+                '</ArgumentAssignmentList></BaseMetaCommand><ArgumentList>'
+                '<Argument name="Y" argumentTypeRef="U8A"/></ArgumentList>'
+                '<CommandContainer name="FragC"><EntryList><ArgumentRefEntry '
+                'argumentRef="Y"/></EntryList><BaseContainer '
+                'containerRef="BaseC"/></CommandContainer></MetaCommand>')
+        text = shared_mission("", '<ContainerRefEntry containerRef="FragC"/>')
+        text = text.replace("<MetaCommandSet>", "<MetaCommandSet>" + frag)
+        text = text.replace("</ArgumentTypeSet>",
+                            '<IntegerArgumentType name="U8A" signed="false">'
+                            '<IntegerDataEncoding sizeInBits="8"/>'
+                            '</IntegerArgumentType></ArgumentTypeSet>')
+        n = self.node(text)
+        # Kind is fixed by Frag's assignment; Y is a field.
+        self.assertEqual([lc.name for _, lc in n.fields], ["X", "Y"])
+        self.assertEqual([v for lc, v in n.fixed.items() if lc.name == "Kind"],
+                         [7])
+
     def test_rejected(self):
         meta = '<BaseMetaCommand metaCommandRef="B"/>'
         for text, why in (
                 (shared_mission("Body", base_meta=meta),
                  "extends a container other than its BaseMetaCommand's"),
                 (shared_mission("", '<ContainerRefEntry containerRef="CC"/>'),
-                 "unresolved container reference 'CC'")):
+                 "the CommandContainer of /Sat/C includes itself"),
+                (shared_mission("", '<ContainerRefEntry containerRef="ZZ"/>'),
+                 "unresolved container reference 'ZZ'")):
             with self.subTest(why=why):
                 c = compile_xml(text, skip_unsupported=True)
                 self.assertFalse(any(n.name == "C" for n in c.nodes))
