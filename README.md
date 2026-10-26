@@ -213,21 +213,28 @@ Supported features:
 
 * every XTCE data type: integers (any size, every signed encoding and
   BCD; past 64 bits they are held with the bnum crate in Rust and with
-  `xtce/bnum.h`, a C and C++ library that mirrors it), floats (IEEE 754 16 to 128 bits, MIL-STD-1750A, DEC,
-  IBM, TI), strings in every character set, binary, enumerations,
-  booleans, times, arrays and aggregates, in any bit and byte order, with
-  valid ranges checked when encoding;
-* polynomial, spline, math operation and context calibrators;
+  `xtce/bnum.h`, a C and C++ library that mirrors it), floats (IEEE 754
+  16 to 128 bits, MIL-STD-1750A, DEC, IBM, TI), strings in every
+  character set, binary, enumerations, booleans, times, arrays and
+  aggregates, in any bit and byte order, with valid ranges checked when
+  encoding;
+* polynomial, spline, math operation and context calibrators, also in
+  aggregate members;
 * container inheritance with comparisons and boolean expressions,
-  included and repeated containers, locations, include conditions,
-  container sizes, parameter segments, indirect entries and messages;
-* packet length fields, sizes and counts from other values, and error
-  detection: CRCs, checksums, XOR and parity;
-* commands, including containers from a `CommandContainerSet`;
+  included and repeated containers, locations from either end and from
+  the next entry, include conditions, container sizes, parameter
+  segments (repeated too), indirect entries, messages, and transform
+  algorithms the application supplies;
+* packet length fields, also of included containers, sizes and counts
+  from other values, and error detection: CRCs, checksums, XOR and
+  parity;
+* commands, including containers from a `CommandContainerSet` and
+  other meta-commands' containers, even whole commands;
 * missions split across several documents, with one digest for the set;
 * alarms, including the ones that depend on earlier samples, and
   `MathAlgorithm`s;
-* fixed and variable frame streams, with frame synchronization;
+* fixed and variable frame streams, with frame synchronization, every
+  PCM code including bi-phase, and custom streams that chain into them;
 * custom algorithms, which the application supplies as functions.
 
 See the manual for the exact list. `tests/packet_check.sh` checks that
