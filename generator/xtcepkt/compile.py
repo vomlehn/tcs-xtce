@@ -2974,9 +2974,6 @@ class Compiler:
             raise Unsupported(f"{where}: a sync pattern outside the frame")
         out.max_errors = ss.max_bit_errors_in_sync_pattern or 0
         out.aperture = st.sync_aperture_in_bits or 0
-        if 2 * out.aperture >= out.frame_bits:
-            raise Unsupported(f"{where}: a sync aperture of half a frame or "
-                              "more")
         if ss.verify_to_lock_good_frames is not None:
             out.verify = ss.verify_to_lock_good_frames
         if ss.check_to_lock_good_frames is not None:

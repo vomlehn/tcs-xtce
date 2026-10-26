@@ -3237,7 +3237,10 @@ static inline void xtce_pk_frame_run(xtce_pk_frame_sync* s,
                 next = s->cur + sp->frame_bits;
                 if (next + sp->aperture + span > end) break;
                 for (d = 0; d <= sp->aperture && !found; ++d) {
-                        if (xtce_pk_frame_matches(s, next - d)) {
+                        /* After the current frame's pattern, which a wide
+                         * aperture could reach back to. */
+                        if (d < next - s->cur &&
+                            xtce_pk_frame_matches(s, next - d)) {
                                 found = true;
                                 at = next - d;
                         } else if (d && xtce_pk_frame_matches(s, next + d)) {

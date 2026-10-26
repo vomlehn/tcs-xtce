@@ -81,13 +81,16 @@ class StreamTests(unittest.TestCase):
                 self.assertEqual((st.pcm, st.pattern_bits), (pcm, 80))
                 self.assertEqual(st.pattern, 0xFAF320034ACFFC1D5A5A)
 
+    def test_wide_aperture(self):
+        m = compile_xml(stream_mission(fixed('pattern="1ACF" '
+                                             'patternLengthInBits="16"', "",
+                                             'syncApertureInBits="100"')))
+        self.assertEqual(m.streams[0].aperture, 100)
+
     def test_unsupported(self):
         for stream, why in ((fixed('pattern="1ACF" patternLengthInBits="16" '
                                    'bitLocationFromStartOfContainer="50"'),
-                             "a sync pattern outside the frame"),
-                            (fixed('pattern="1ACF" patternLengthInBits="16"',
-                                   "", 'syncApertureInBits="32"'),
-                             "a sync aperture of half a frame or more")):
+                             "a sync pattern outside the frame"),):
             with self.subTest(why=why):
                 m = compile_xml(stream_mission(stream), skip_unsupported=True)
                 self.assertEqual(m.streams, [])

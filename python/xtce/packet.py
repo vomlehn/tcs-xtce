@@ -1887,7 +1887,10 @@ class FrameSync:
             found = None
             for d in range(self.aperture + 1):
                 for e in ((0,) if d == 0 else (-d, d)):
-                    if found is None and self._matches(nxt + e):
+                    # After the current frame's pattern, which a wide
+                    # aperture could reach back to.
+                    if (found is None and nxt + e > self.cur
+                            and self._matches(nxt + e)):
                         found = nxt + e
             if found is not None:
                 if self.state != self.LOCK:

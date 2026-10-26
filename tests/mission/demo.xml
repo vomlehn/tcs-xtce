@@ -2322,9 +2322,9 @@
         </SyncStrategy>
       </FixedFrameStream>
       <!-- 128-bit frames, Bi-phase-S coded and inverted, found by a 72-bit
-           pattern. -->
+           pattern, with slip of up to 100 bits allowed. -->
       <FixedFrameStream name="Beacon" frameLengthInBits="128"
-        pcmType="BiPhaseS" inverted="true">
+        syncApertureInBits="100" pcmType="BiPhaseS" inverted="true">
         <ContainerRef containerRef="DlFrame"/>
         <SyncStrategy verifyToLockGoodFrames="1">
           <SyncPattern pattern="C3A55A3CF00FF0E1D2" patternLengthInBits="72"/>

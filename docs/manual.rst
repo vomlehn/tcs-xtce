@@ -2102,7 +2102,8 @@ Streams
    length. It works as the schema
    says: in Search it looks for the pattern at every bit; in Verify it
    needs ``verifyToLockGoodFrames`` frames in a row whose patterns are
-   one frame apart, give or take ``syncApertureInBits``, and then locks;
+   one frame apart, give or take ``syncApertureInBits`` (the nearest
+   first, and always after the frame before), and then locks;
    in Lock it gives each frame whose pattern it found, and a missed
    pattern sends it to Check, where ``checkToLockGoodFrames`` good
    patterns in a row lock it again (the missed frame isn't given) and a
@@ -2111,7 +2112,8 @@ Streams
    bits. The demo's ``Downlink`` has 128-bit frames led by the CCSDS
    sync marker; ``Deep`` has Bi-phase-L frames led by an 80-bit pattern
    with a byte masked out, and ``Beacon`` inverted Bi-phase-S frames led
-   by a 72-bit one.
+   by a 72-bit one, which may slip up to 100 bits. A frame is given once
+   the bits that could hold the next pattern have come.
 
    A variable stream's frames lie between flags of ``flagSizeInBits``
    ones (or zeros), with a bit of the other kind on either side, as
@@ -2126,9 +2128,8 @@ Streams
    ``tests/stream_check.sh`` checks that every runtime finds the same
    frames, in ``tests/mission/streams.txt`` and in random streams with
    slips, bit errors, inversions and aborts. Not supported: a
-   ``StreamRef`` from a stream it connects to, a ``CustomStream``, an
-   ``InvertAlgorithm``, and a ``syncApertureInBits`` of half a frame or
-   more.
+   ``StreamRef`` from a stream it connects to, a ``CustomStream`` and an
+   ``InvertAlgorithm``.
 
 Messages
    A ``MessageSet``'s ``Message`` picks out its container by its

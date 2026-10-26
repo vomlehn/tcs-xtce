@@ -3420,7 +3420,10 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
             }
             let mut found = None;
             'search: for d in 0..=self.spec.aperture {
-                for at in [next - d, next + d] {
+                // After the current frame's pattern, which a wide aperture
+                // could reach back to.
+                let back = (d < next - self.cur).then(|| next - d);
+                for at in [back, Some(next + d)].into_iter().flatten() {
                     if self.matches(at) {
                         found = Some(at);
                         break 'search;
