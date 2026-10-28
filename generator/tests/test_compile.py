@@ -1114,6 +1114,40 @@ class YamcsDialectTests(unittest.TestCase):
         self.assertEqual((e.vtype.enc.dyn, e.vtype.enc.size_tag_bits),
                          (None, 8))
 
+    SLASH = mission(tm="""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+          <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <AggregateParameterType name="H"><MemberList>
+            <Member name="V" typeRef="U8"/><Member name="A" typeRef="U8"/>
+          </MemberList></AggregateParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="Hdr" parameterTypeRef="H"/>
+          <Parameter name="X" parameterTypeRef="U8"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="Base" abstract="true"><EntryList>
+            <ParameterRefEntry parameterRef="Hdr"/>
+          </EntryList></SequenceContainer>
+          <SequenceContainer name="P"><EntryList>
+            <ParameterRefEntry parameterRef="X"/></EntryList>
+            <BaseContainer containerRef="Base"><RestrictionCriteria>
+              <Comparison parameterRef="Hdr/A" value="5"/>
+            </RestrictionCriteria></BaseContainer></SequenceContainer>
+        </ContainerSet>""")
+
+    def test_member_after_slash(self):
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(self.SLASH)
+        self.assertIn("unresolved parameter reference 'Hdr/A'",
+                      str(cm.exception))
+        m = compile_xml(dialect(self.SLASH, "yamcs"))
+        p = next(n for n in m.nodes if n.name == "P")
+        c = p.criteria[0]
+        self.assertEqual((c.text, c.path, c.value),
+                         ("/Sat/Hdr.A == 5", ("a",), 5))
+
     EMBEDDED = mission(tc="""
         <ArgumentTypeSet>
           <BinaryArgumentType name="Tc"><AncillaryDataSet>

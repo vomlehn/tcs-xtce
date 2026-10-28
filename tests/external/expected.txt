@@ -229,9 +229,7 @@ yamcs-examples/downstream-embedded.xml: schema valid; loaded by the binding
   2 packets, 0 not supported
   digest e959372fbc917d533c02e06681e372f3
 yamcs-examples/packet-viewer.xml: schema valid; loaded by the binding
-  3 packets, 2 not supported
-    unsupported: /myproject/TelemetryPacket: unresolved parameter reference 'CCSDS_Packet_ID/Version' in /myproject
-    unsupported: /myproject/Spacecraft: base container /myproject/TelemetryPacket is not supported
+  5 packets, 0 not supported
   digest 7b00068808f52c343d81f6d48b99dcc4
 yamcs-xtce/basetype.xml: schema invalid; rejected by the binding
   digest e7216dc80a4195a72bcc72ffb1d11903
@@ -247,9 +245,7 @@ yamcs-xtce/to-string.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
   digest 85a218ee79c14e3f3dce7a1926c93067
 yamcs-quickstart/xtce.xml: schema valid; loaded by the binding
-  3 packets, 2 not supported
-    unsupported: /myproject/TelemetryPacket: unresolved parameter reference 'CCSDS_Packet_ID/Version' in /myproject
-    unsupported: /myproject/Spacecraft: base container /myproject/TelemetryPacket is not supported
+  5 packets, 0 not supported
   digest f4e9c3a82122855c10f71a5c4fbb39c4
 yamcs-cfs/CFE_EVS.xml: schema invalid (facets only); loaded by the binding
   0 packets, 6 not supported

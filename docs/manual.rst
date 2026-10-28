@@ -2107,7 +2107,10 @@ Dialects
      sets that field from the value's size, as Yamcs's command
      post-processor does; the sequence count and any CRC stay as the
      application gives them. The value must be from 7 bytes to the
-     maximum field size. The demo's ``Embed`` command carries one.
+     maximum field size. The demo's ``Embed`` command carries one;
+   * a parameter reference such as ``CCSDS_Packet_ID/Version`` that
+     names no parameter: a member of an aggregate parameter, as
+     ``CCSDS_Packet_ID.Version`` names it in XTCE.
 
    .. code-block:: xml
 

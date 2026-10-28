@@ -218,6 +218,9 @@ def hex_bytes(text: str, where: str) -> bytes:
 STEP = re.compile(r"\.([^.\[\]:/ \t]+)|\[(\d+)\]")
 
 
+MEMBER = re.compile(r"[A-Za-z_][\w-]*")
+
+
 def member_path(ref: str) -> tuple[str, tuple]:
     """Splits a reference to an aggregate member or array element
     (``P.a.b``, ``P[2]``, ``P[1].a``) into the reference to its parameter
@@ -650,6 +653,29 @@ class Compiler:
                     return key
         raise Unsupported(f"unresolved {what} reference {ref!r} in "
                           f"{qname(cur)}")
+
+    def param_ref(self, ref: str, cur: Key) -> tuple[Key, tuple]:
+        """The parameter and member steps that ``ref`` names.  In the Yamcs
+        dialect a path that names no parameter may end in member names
+        after ``/`` (``CCSDS_Packet_ID/Version``), as Yamcs allows."""
+        base, members = member_path(ref)
+        try:
+            return self.resolve(base, cur, self.params, "parameter"), members
+        except Unsupported:
+            parts = base.split("/")
+            if self.dialect != "yamcs" or members:
+                raise
+            for i in range(len(parts) - 1, 0, -1):
+                head, steps = "/".join(parts[:i]), parts[i:]
+                if (not head.strip("/")
+                        or not all(MEMBER.fullmatch(p) for p in steps)):
+                    continue
+                try:
+                    key = self.resolve(head, cur, self.params, "parameter")
+                except Unsupported:
+                    continue
+                return key, tuple(steps)
+            raise
 
     def _id(self) -> int:
         self._ids += 1
@@ -1096,9 +1122,10 @@ class Compiler:
                               "LinearAdjustment")
         if kind == "ParameterInstanceRef":
             name = ref.parameter_ref.strip()
-            base, members = member_path(name)
+            members = member_path(name)[1]
             try:
-                key = qname(self.resolve(base, path, self.params, "parameter"))
+                key, members = self.param_ref(name, path)
+                key = qname(key)
             except Unsupported:
                 key = None  # an error unless it names an aggregate member
             return DynSize(key=key, name=name, members=members, slope=slope,
@@ -2539,8 +2566,8 @@ class Compiler:
             base, members = member_path(ref.argument_ref)
             pkey = arg_key(base)
         else:
-            base, members = member_path(ref.parameter_ref)
-            pkey = qname(self.resolve(base, path, self.params, "parameter"))
+            pkey, members = self.param_ref(ref.parameter_ref, path)
+            pkey = qname(pkey)
         local = instance_of(scope, pkey, getattr(ref, "instance", None) or 0,
                             where)
         if local is None:

@@ -528,7 +528,8 @@ DynSize, leaving its leading size; ``Yamcs:EmbeddedTc`` turns a binary
 value that would take the rest of the packet into ``BinaryEnc`` with
 ``embedded``, a variable size the runtimes read from the value's own
 CCSDS header (``embedded_bytes``) and write back when encoding
-(``write_embedded``). A repeated container's copy is an aggregate, so
+(``write_embedded``); ``param_ref`` reads a reference such as
+``P/m`` that names no parameter as member ``m`` of ``P``. A repeated container's copy is an aggregate, so
 a size from an earlier entry of the copy binds to that member, as one
 inside an aggregate type does (``member_bound``).
 

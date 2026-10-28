@@ -2525,7 +2525,10 @@ length field gives its size, so entries may follow it. Encoding
 sets that field from the value's size, as Yamcs's command
 post-processor does; the sequence count and any CRC stay as the
 application gives them. The value must be from 7 bytes to the
-maximum field size. The demo's <tt class="docutils literal">Embed</tt> command carries one.</li>
+maximum field size. The demo's <tt class="docutils literal">Embed</tt> command carries one;</li>
+<li>a parameter reference such as <tt class="docutils literal">CCSDS_Packet_ID/Version</tt> that
+names no parameter: a member of an aggregate parameter, as
+<tt class="docutils literal">CCSDS_Packet_ID.Version</tt> names it in XTCE.</li>
 </ul>
 <pre class="code xml literal-block">
 <span class="name tag">&lt;SpaceSystem</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;Rover&quot;</span><span class="name tag">&gt;</span><span class="whitespace">

@@ -896,7 +896,8 @@ DynSize, leaving its leading size; <tt class="docutils literal">Yamcs:EmbeddedTc
 value that would take the rest of the packet into <tt class="docutils literal">BinaryEnc</tt> with
 <tt class="docutils literal">embedded</tt>, a variable size the runtimes read from the value's own
 CCSDS header (<tt class="docutils literal">embedded_bytes</tt>) and write back when encoding
-(<tt class="docutils literal">write_embedded</tt>). A repeated container's copy is an aggregate, so
+(<tt class="docutils literal">write_embedded</tt>); <tt class="docutils literal">param_ref</tt> reads a reference such as
+<tt class="docutils literal">P/m</tt> that names no parameter as member <tt class="docutils literal">m</tt> of <tt class="docutils literal">P</tt>. A repeated container's copy is an aggregate, so
 a size from an earlier entry of the copy binds to that member, as one
 inside an aggregate type does (<tt class="docutils literal">member_bound</tt>).</p>
 <p>A length field inside an included container can't mean the packet's
