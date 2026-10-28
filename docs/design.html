@@ -1255,10 +1255,18 @@ scope, latest first (<tt class="docutils literal">instance_of</tt>); a size keep
 be named, so a positive instance, or one that reaches past the start of
 the packet, is unsupported.</p>
 <p>An <tt class="docutils literal">IndirectParameterRefEntry</tt> needs no item of its own: each
-parameter its selector can name (by an enumeration label, or by an alias
-in its <tt class="docutils literal">aliasNameSpace</tt>) becomes a <tt class="docutils literal">Cond</tt> on <tt class="docutils literal">selector == name</tt>
-holding that parameter, so the generated code is an optional field per
-choice, as for an <tt class="docutils literal">IncludeCondition</tt>.</p>
+parameter its selector can name (by an enumeration label, by an alias
+in its <tt class="docutils literal">aliasNameSpace</tt>, or for a string without one, by its name or
+path: <tt class="docutils literal">named_by</tt>) becomes a <tt class="docutils literal">Cond</tt> on <tt class="docutils literal">selector == name</tt> holding
+that parameter, so the generated code is an optional field per choice,
+as for an <tt class="docutils literal">IncludeCondition</tt>. A choice that can't be compiled there
+holds instead a <tt class="docutils literal">Require</tt> that never holds, so naming it fails
+decoding rather than misreading the packet.</p>
+<p>The choices' Conds share a <tt class="docutils literal">group</tt>: at most one holds, so each starts
+where the first does. <tt class="docutils literal">alternatives</tt> gathers them for <tt class="docutils literal">max_bits</tt>,
+which counts the largest, and <tt class="docutils literal">check_aligned</tt> starts each at the same
+place. <tt class="docutils literal">_finish</tt> names the packet's own fields before the choices
+(<tt class="docutils literal">chosen_locals</tt>), so a choice that shares a name gets the suffix.</p>
 <p>An <tt class="docutils literal">ArrayEnc</tt> keeps each dimension's first index (<tt class="docutils literal">starts</tt>) and,
 when all are fixed, its size (<tt class="docutils literal">shape</tt>). An array entry with a
 <tt class="docutils literal">DimensionList</tt> replaces the value's type with one for the subset,

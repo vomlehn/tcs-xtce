@@ -471,10 +471,10 @@ def main() -> None:
             apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
                                280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
-                               430, 440, 450, 460, 470, 480, 490, 500, 510, 520,
-                               530, 550, 550, 560, 560, 570, 570, 580, 590, 600,
-                               600, 610, 610, 620, 620, 630, 630, 640, 640, 650,
-                               650, rng.randrange(1 << 11)])
+                               430, 440, 450, 460, 470, 475, 475, 480, 490, 500,
+                               510, 520, 530, 550, 550, 560, 560, 570, 570, 580,
+                               590, 600, 600, 610, 610, 620, 620, 630, 630, 640,
+                               640, 650, 650, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -547,6 +547,15 @@ def main() -> None:
                     + [(8, rng.randrange(256)) for _ in range(2)])
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
+            elif apid == 475 and rng.random() < 0.9:
+                # DwellByName: a parameter's name, mostly one of a few, then
+                # bytes for its value and DwellEnd.
+                name = rng.choice(["DwellTemp", "DwellVolt", "/Demo/DwellVolt",
+                                   "Mode", "Rest", "Nothing", "Label",
+                                   "".join(rng.choice("ab")
+                                           for _ in range(rng.randrange(4)))])
+                data += bytes([len(name)]) + name.encode()
+                data += rng.randbytes(rng.choice([1, 2, 3, 5]))
             elif apid == 640 and rng.random() < 0.9:
                 # OptZip: OptFlag mostly 0 or 1, ZipBlock's doubled bytes
                 # when it is 1, mostly, and OptEnd.

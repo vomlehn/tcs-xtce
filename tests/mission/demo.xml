@@ -836,6 +836,14 @@
           <Enumeration value="2" label="DwellVolt"/>
         </EnumerationList>
       </EnumeratedParameterType>
+      <!-- A parameter's name, short or its full path. -->
+      <StringParameterType name="DwellNameType">
+        <StringDataEncoding encoding="UTF-8">
+          <Variable maxSizeInBits="136">
+            <LeadingSize sizeInBitsOfSizeTag="8"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
       <EnumeratedParameterType name="DwellAliasSelType">
         <IntegerDataEncoding sizeInBits="8"/>
         <EnumerationList>
@@ -1359,6 +1367,7 @@
         <AliasSet><Alias nameSpace="dwell" alias="V1"/></AliasSet>
       </Parameter>
       <Parameter name="DwellEnd" parameterTypeRef="U8"/>
+      <Parameter name="DwellName" parameterTypeRef="DwellNameType"/>
       <Parameter name="GuardOn" parameterTypeRef="Flag8Type"/>
       <Parameter name="GuardEnd" parameterTypeRef="U8"/>
       <Parameter name="HistVal" parameterTypeRef="U8"/>
@@ -2149,6 +2158,22 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="470"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Dwell telemetry by name: DwellName is the name of the parameter
+           that follows it, any in the mission. -->
+      <SequenceContainer name="DwellByName">
+        <EntryList>
+          <ParameterRefEntry parameterRef="DwellName"/>
+          <IndirectParameterRefEntry>
+            <ParameterInstance parameterRef="DwellName"/>
+          </IndirectParameterRefEntry>
+          <ParameterRefEntry parameterRef="DwellEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="475"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

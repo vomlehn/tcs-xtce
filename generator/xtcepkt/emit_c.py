@@ -524,16 +524,21 @@ class CEmitter:
             # Indexes are numbered by depth: an aggregate element may hold
             # another array.
             i = f"i{depth}"
-            self.line("{", depth)
-            d = depth + 1
-            self.size(e.count, "r->err", f, ref, d)
-            self.line(f"{dst}.len = n;", d)
-            self.line(f"for (size_t {i} = 0; {i} < n; ++{i}) {{", d)
+            # A fixed count needs no block to hold it.
+            fixed = isinstance(e.count, int)
+            d = depth if fixed else depth + 1
+            if not fixed:
+                self.line("{", depth)
+                self.size(e.count, "r->err", f, ref, d)
+            n = e.count if fixed else "n"
+            self.line(f"{dst}.len = {n};", d)
+            self.line(f"for (size_t {i} = 0; {i} < {n}; ++{i}) {{", d)
             if e.gap:
                 self.gap(e, "read", f, ref, i, d + 1)
             self.read_value(e.elem, f"{dst}.data[{i}]", f, d + 1, ref)
             self.line("}", d)
-            self.line("}", depth)
+            if not fixed:
+                self.line("}", depth)
         elif isinstance(e, XformEnc):
             h = self.transform_hook(e.decode)
             has, raw = bool_lit(e.raw is not None), e.raw or 0
@@ -768,16 +773,21 @@ class CEmitter:
             return
         if isinstance(e, ArrayEnc):
             i = f"i{depth}"
-            self.line("{", depth)
-            d = depth + 1
-            self.size(e.count, "w->err", f, ref, d)
-            self.line(f"if ({x}.len != n) {bad}", d)
-            self.line(f"for (size_t {i} = 0; {i} < n; ++{i}) {{", d)
+            # A fixed count needs no block to hold it.
+            fixed = isinstance(e.count, int)
+            d = depth if fixed else depth + 1
+            if not fixed:
+                self.line("{", depth)
+                self.size(e.count, "w->err", f, ref, d)
+            n = e.count if fixed else "n"
+            self.line(f"if ({x}.len != {n}) {bad}", d)
+            self.line(f"for (size_t {i} = 0; {i} < {n}; ++{i}) {{", d)
             if e.gap:
                 self.gap(e, "write", f, ref, i, d + 1)
             self.write_value(e.elem, f"{x}.data[{i}]", f, d + 1, ref)
             self.line("}", d)
-            self.line("}", depth)
+            if not fixed:
+                self.line("}", depth)
             return
         if isinstance(e, XformEnc):
             h = self.transform_hook(e.encode)

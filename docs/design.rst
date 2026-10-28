@@ -923,10 +923,19 @@ be named, so a positive instance, or one that reaches past the start of
 the packet, is unsupported.
 
 An ``IndirectParameterRefEntry`` needs no item of its own: each
-parameter its selector can name (by an enumeration label, or by an alias
-in its ``aliasNameSpace``) becomes a ``Cond`` on ``selector == name``
-holding that parameter, so the generated code is an optional field per
-choice, as for an ``IncludeCondition``.
+parameter its selector can name (by an enumeration label, by an alias
+in its ``aliasNameSpace``, or for a string without one, by its name or
+path: ``named_by``) becomes a ``Cond`` on ``selector == name`` holding
+that parameter, so the generated code is an optional field per choice,
+as for an ``IncludeCondition``. A choice that can't be compiled there
+holds instead a ``Require`` that never holds, so naming it fails
+decoding rather than misreading the packet.
+
+The choices' Conds share a ``group``: at most one holds, so each starts
+where the first does. ``alternatives`` gathers them for ``max_bits``,
+which counts the largest, and ``check_aligned`` starts each at the same
+place. ``_finish`` names the packet's own fields before the choices
+(``chosen_locals``), so a choice that shares a name gets the suffix.
 
 An ``ArrayEnc`` keeps each dimension's first index (``starts``) and,
 when all are fixed, its size (``shape``). An array entry with a

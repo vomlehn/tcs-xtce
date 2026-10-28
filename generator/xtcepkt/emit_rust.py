@@ -1124,7 +1124,7 @@ class RustEmitter:
                               f"{f} }})?;", depth)
                     x = (f"o{lc.id}"
                          if lc.vtype.kind in ("string", "binary", "array",
-                                              "aggregate") else f"*o{lc.id}")
+                                              "aggregate") else f"(*o{lc.id})")
                 else:
                     x = self.place(n, lc, names)
                 self.line(write_stmt(written(n, lc), x, f,

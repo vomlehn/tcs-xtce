@@ -1953,9 +1953,26 @@ Indirect entries
    nothing. In the demo's ``Dwell`` packet, ``DwellSel`` chooses
    ``DwellTemp`` or ``DwellVolt``, and ``DwellAliasSel`` chooses them
    again by their ``dwell`` aliases, as ``dwell_temp2`` and
-   ``dwell_volt2``. Without an ``aliasNameSpace``, an integer or string
-   selector is not supported, since the parameters it may name can't be
-   known.
+   ``dwell_volt2``.
+
+   Without an ``aliasNameSpace``, a string selector holds a parameter's
+   name: any parameter in the mission, by its own name (when that finds
+   it from the entry's ``SpaceSystem``, as a reference would) or its full
+   path, such as ``DwellTemp`` or ``/Demo/DwellTemp``. Names too long
+   for the string are left out. The packet then has an optional field
+   for every other parameter, so its generated code grows with the
+   mission; an enumeration or an alias name space keeps it to the
+   parameters meant. A value naming a parameter that can't be read
+   there (one that takes the rest of the packet, or whose size comes
+   from a value the packet doesn't have) fails with ``Mismatch``. An
+   integer selector likewise holds a name, so it can only name
+   parameters whose names are numbers; it is unsupported when there are
+   none. The demo's ``DwellByName`` packet has ``DwellName``.
+
+   The packet's own fields keep their names; a parameter the selector
+   can choose that has the same name as one of them gets a number
+   after it (``dwell_end2``). Only one of the choices is ever there, so
+   ``MAX_BYTES`` counts the largest of them.
 
 Alarms
    A parameter type's ``DefaultAlarm`` and ``ContextAlarmList``. The first
@@ -2340,8 +2357,9 @@ Name references
    documents (see `Missions in several documents`_).
 
 Not supported
-   ``IndirectParameterRefEntry`` chosen by an integer or string without
-   an ``aliasNameSpace``, instances of values in other packets, repeated
+   ``IndirectParameterRefEntry`` chosen by an integer without an
+   ``aliasNameSpace`` when no parameter's name is a number, instances of
+   values in other packets, repeated
    segment entries with an ``order`` or located from the end of their
    container, transformed containers included in a repeated container
    or holding a length field, a checksum or an entry located from the

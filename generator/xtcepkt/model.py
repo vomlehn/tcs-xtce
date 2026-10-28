@@ -884,10 +884,14 @@ class Fixed:
 
 @dataclass
 class Cond:
-    """Entries present only when all ``criteria`` hold (IncludeCondition)."""
+    """Entries present only when all ``criteria`` hold (IncludeCondition).
+    Adjacent Conds with the same nonzero ``group`` are alternatives, of
+    which at most one holds (the parameters an IndirectParameterRefEntry
+    can select): each starts where the first does."""
 
     criteria: list["Term"]
     items: list["Item"]
+    group: int = 0
 
 
 @dataclass(eq=False)

@@ -2702,15 +2702,87 @@ class IndirectTests(unittest.TestCase):
         self.assertTrue(all(c.items[0].local.optional for c in conds))
 
     def test_rejected(self):
-        for text, why in ((indirect_mission("I"),
-                           "an IndirectParameterRefEntry chosen by int value "
-                           "/Sat/I without an aliasNameSpace"),
-                          (indirect_mission("E", "X Y"),
-                           "no label of /Sat/E names a parameter")):
+        for text, why in (
+                (indirect_mission("I"),
+                 "no parameter has a name that integer /Sat/I can hold"),
+                (indirect_mission("E", "X Y"),
+                 "no label of /Sat/E names a parameter")):
             with self.subTest(why=why):
                 with self.assertRaises(Unsupported) as cm:
                     compile_xml(text)
                 self.assertIn(why, str(cm.exception))
+
+
+def named_mission() -> str:
+    """Telemetry whose container P has a string N, of at most 8 bytes, that
+    names the parameter after it, and then Z.  LongName12 is too long for
+    N to name, and R, which takes the rest of the packet, can't be read
+    there."""
+    return mission(tm="""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+          <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <IntegerParameterType name="U32" signed="false">
+          <IntegerDataEncoding sizeInBits="32"/></IntegerParameterType>
+          <StringParameterType name="NT"><StringDataEncoding>
+          <Variable maxSizeInBits="72"><LeadingSize sizeInBitsOfSizeTag="8"/>
+          </Variable></StringDataEncoding></StringParameterType>
+          <BinaryParameterType name="RT"><BinaryDataEncoding><SizeInBits>
+          <FixedValue>-1</FixedValue></SizeInBits></BinaryDataEncoding>
+          </BinaryParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="N" parameterTypeRef="NT"/>
+          <Parameter name="A" parameterTypeRef="U8"/>
+          <Parameter name="B" parameterTypeRef="U32"/>
+          <Parameter name="LongName12" parameterTypeRef="U8"/>
+          <Parameter name="R" parameterTypeRef="RT"/>
+          <Parameter name="Z" parameterTypeRef="U8"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="P"><EntryList>
+            <ParameterRefEntry parameterRef="N"/>
+            <IndirectParameterRefEntry>
+            <ParameterInstance parameterRef="N"/>
+            </IndirectParameterRefEntry>
+            <ParameterRefEntry parameterRef="Z"/>
+          </EntryList></SequenceContainer>
+        </ContainerSet>""")
+
+
+class NamedIndirectTests(unittest.TestCase):
+    """A string that is the name of the parameter after it."""
+
+    def node(self):
+        return next(n for n in compile_xml(named_mission()).nodes
+                    if n.name == "P")
+
+    def test_any_parameter_by_name_or_path(self):
+        conds = [it for it in self.node().items if isinstance(it, Cond)]
+        self.assertEqual([c.criteria[0].text for c in conds],
+                         ["/Sat/N == N or /Sat/N == /Sat/N",
+                          "/Sat/N == A or /Sat/N == /Sat/A",
+                          "/Sat/N == B or /Sat/N == /Sat/B",
+                          "/Sat/N == R or /Sat/N == /Sat/R",
+                          "/Sat/N == Z or /Sat/N == /Sat/Z"])
+        # Alternatives: at most one of them is there.
+        self.assertEqual(len({c.group for c in conds}), 1)
+        self.assertTrue(conds[0].group)
+
+    def test_one_that_cant_be_read_fails(self):
+        (r,) = [it for it in self.node().items if isinstance(it, Cond)
+                and isinstance(it.items[0], Require)]
+        self.assertIn("/Sat/N names /Sat/R, which can't be read here",
+                      r.items[0].text)
+
+    def test_largest_alternative_counts(self):
+        # N (a tag and 8 bytes), then the largest alternative (N again, not
+        # every one added up), then Z.
+        self.assertEqual(self.node().max_bytes, 9 + 9 + 1)
+
+    def test_own_fields_keep_their_names(self):
+        self.assertEqual([f for f, _ in self.node().fields],
+                         ["n", "n2", "a", "b", "z2", "z"])
 
 
 def lsb_mission(entries: str) -> str:

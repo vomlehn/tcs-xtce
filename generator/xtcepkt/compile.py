@@ -13,6 +13,7 @@ another whose root SpaceSystem is ``PUS``.
 
 from __future__ import annotations
 
+import codecs
 import dataclasses
 import keyword
 import math
@@ -1961,10 +1962,11 @@ class Compiler:
         """An IndirectParameterRefEntry: the parameter that the value of
         its ParameterInstance names.  Each parameter it can name becomes a
         field, present when the value names it.  The value is an
-        enumeration whose labels name parameters, or with an
-        aliasNameSpace, an enumeration, integer or string that gives an
-        alias in that name space, as Yamcs reads it.  Values that name no
-        parameter select nothing."""
+        enumeration whose labels name parameters; with an aliasNameSpace,
+        an enumeration, integer or string that gives an alias in that name
+        space, as Yamcs reads it; or without one, an integer or string
+        that is a parameter's name.  Values that name no parameter select
+        nothing."""
         if e.repeat_entry is not None:
             raise Unsupported(f"{where}: a repeated IndirectParameterRefEntry")
         sel = e.parameter_instance
@@ -1984,29 +1986,88 @@ class Compiler:
                     except Unsupported:
                         key = None
                 if key is not None:
-                    choices.append((lab.label, key))
+                    choices.append(([lab.label], key))
         elif aliases is not None and vt.kind in ("int", "string"):
-            choices = [(a, key) for a, key in aliases.items()
+            choices = [([a], key) for a, key in aliases.items()
                        if vt.kind == "string" or re.fullmatch(r"-?\d+", a)]
+        elif vt.kind in ("int", "string"):
+            choices = self.named_by(vt, path)
         else:
-            why = (" without an aliasNameSpace" if vt.kind in ("int", "string")
-                   else "")
             raise Unsupported(f"{where}: an IndirectParameterRefEntry chosen "
-                              f"by {vt.kind} value {pkey}{why}")
+                              f"by {vt.kind} value {pkey}")
         out: list[Item] = []
-        for text, key in choices:
-            crit = self.comparison("ParameterInstanceRef", sel, "==", text,
-                                   path, scope, where, arg_key)
-            lc = self.bind(self.param_local("/" + "/".join(key), ()), scope,
-                           where, arg_key)
+        group = self._id()
+        for texts, key in choices:
+            terms = [self.comparison("ParameterInstanceRef", sel, "==", t, path,
+                                     scope, where, arg_key) for t in texts]
+            crit = (terms[0] if len(terms) == 1
+                    else AnyOf(terms, " or ".join(t.text for t in terms)))
+            try:
+                lc = self.bind(self.param_local("/" + "/".join(key), ()), scope,
+                               where, arg_key)
+                if lc.computed:
+                    raise Unsupported(f"{where}: an IndirectParameterRefEntry "
+                                      f"selects length field {lc.name}")
+                if is_rest(lc.vtype):
+                    raise Unsupported(f"{lc.name} takes the rest of the packet")
+            except Unsupported as x:
+                if vt.kind == "enum" or aliases is not None:
+                    raise
+                # Any parameter in the mission can be named: one that
+                # can't be decoded here fails decoding when it is.
+                text = f"{pkey} names {qname(key)}, which can't be read here"
+                never = self.comparison("ParameterInstanceRef", sel, "!=",
+                                        texts[0], path, scope, where, arg_key)
+                out.append(Cond([crit],
+                                [Require([never], where, f"{text} ({x})")],
+                                group))
+                continue
             lc.optional = True
-            if lc.computed:
-                raise Unsupported(f"{where}: an IndirectParameterRefEntry "
-                                  f"selects length field {lc.name}")
-            out.append(Cond([crit], [Value(lc)]))
+            out.append(Cond([crit], [Value(lc)], group))
             scope.append(lc)
-        if not out:
+        if not any(isinstance(it.items[0], Value) for it in out):
+            if vt.kind == "int" and aliases is None:
+                raise Unsupported(f"{where}: no parameter has a name that "
+                                  f"integer {pkey} can hold")
             raise Unsupported(f"{where}: no label of {pkey} names a parameter")
+        return out
+
+    def named_by(self, vt: VType, path: Key) -> list[tuple[list, Key]]:
+        """(names, parameter) for each parameter that a string or integer
+        value of type ``vt`` can name: its full path, and its own name when
+        that finds it from SpaceSystem ``path``, as references do.  Names a
+        string is too short to hold, or an integer can't be, are left out.
+        """
+        e = vt.enc
+        limit = None
+        if isinstance(e, StringEnc):
+            # The most bits of content: without the size tag or terminator.
+            limit = (e.fixed_bits
+                     or (e.max_bits
+                         - (e.size_tag_bits if e.size_tag_bits is not None
+                            else 8 * len(e.terminator or b""))))
+            try:
+                codecs.lookup(e.charset)
+            except LookupError:
+                limit = None
+        out = []
+        for key in self.params:
+            names = []
+            try:
+                if self.resolve(key[-1], path, self.params, "parameter") == key:
+                    names.append(key[-1])
+            except Unsupported:
+                pass
+            names.append("/" + "/".join(key))
+            if vt.kind == "int":
+                lo, hi = int_bounds(vt)
+                names = [n for n in names if re.fullmatch(r"-?\d+", n)
+                         and lo <= int(n) <= hi]
+            elif limit is not None:
+                names = [n for n in names
+                         if 8 * len(n.encode(e.charset)) <= limit]
+            if names:
+                out.append((names, key))
         return out
 
     def aliases(self, space: str) -> dict:
@@ -3622,13 +3683,31 @@ class Compiler:
                         fixed[c.local] = c.value
         n.fixed = fixed
         n.derived = derived_sizes(n)
+        values = [it.local for it in walk(n.all_items())
+                  if isinstance(it, Value) and it.local not in fixed
+                  and not it.local.computed and it.local not in n.derived]
+        # The values an IndirectParameterRefEntry can select are named
+        # last, so the packet's own keep their names.
+        chosen = {id(lc) for lc in chosen_locals(n.all_items())}
         names = Namer()
-        n.fields = [(names.take(snake(it.local.name)), it.local)
-                    for it in walk(n.all_items()) if isinstance(it, Value)
-                    and it.local not in fixed and not it.local.computed
-                    and it.local not in n.derived]
+        idents = {id(lc): names.take(snake(lc.name)) for lc in values
+                  if id(lc) not in chosen}
+        idents.update({id(lc): names.take(snake(lc.name)) for lc in values
+                       if id(lc) in chosen})
+        n.fields = [(idents[id(lc)], lc) for lc in values]
         n.max_bytes = (max_bits(n.all_items()) + 7) // 8
         n.hooks = self.node_hooks(n)
+
+
+def chosen_locals(items: list) -> list[Local]:
+    """The values in ``items`` that alternatives hold (the parameters an
+    IndirectParameterRefEntry can select)."""
+    out = []
+    for it in items:
+        if isinstance(it, Cond):
+            out += ([x.local for x in walk(it.items) if isinstance(x, Value)]
+                    if it.group else chosen_locals(it.items))
+    return out
 
 
 def edc_items(container) -> list:
@@ -3812,7 +3891,16 @@ def check_aligned(items: list[Item], where: str) -> None:
     marks = {0: 0}
 
     def walk_items(items: list, pos: Optional[int]) -> Optional[int]:
+        group = start = 0
         for it in items:
+            if isinstance(it, Cond) and it.group:
+                # Alternatives each start where the first does.
+                if it.group != group:
+                    group, start = it.group, pos
+                after = walk_items(it.items, start)
+                pos = pos if after == start else None
+                continue
+            group = 0
             if isinstance(it, Cond):
                 after = walk_items(it.items, pos)
                 pos = pos if after == pos else None
@@ -4099,26 +4187,63 @@ def max_bits(items: list[Item]) -> int:
     """Upper bound on the bits a packet with these items occupies."""
     pos = extent = 0
     marks = {0: 0}
-    for it in walk(items, inner=False):
-        if isinstance(it, Transform):
-            # Encoding writes its items, then what it gives after them.
-            extent = max(extent, pos + 8 * (it.cap + it.out_cap))
-        if isinstance(it, Seek):
-            pos = ((marks[it.from_start] if it.from_start is not None else pos)
-                   + it.max_offset)
-        elif isinstance(it, Fill):
-            pos = max(pos, marks[it.start] + it.max_size)
-        elif isinstance(it, Mark):
-            marks[it.id] = pos
-        elif isinstance(it, Value):
-            vt = it.local.vtype
-            pos += 0 if it.assembled else item_bits(vt)
-            extent = max(extent, pos + 8 * work_bytes(vt))
-        else:
-            pos += it.bits
-        extent = max(extent, pos)
+
+    def run(items: list) -> None:
+        nonlocal pos, extent
+        for it in items:
+            if isinstance(it, list):
+                # Alternatives: each starts where the first does, and the
+                # longest counts.
+                start, ends = pos, []
+                for branch in it:
+                    pos = start
+                    run(branch)
+                    ends.append(pos)
+                pos = max(ends)
+                continue
+            if isinstance(it, Transform):
+                # Encoding writes its items, then what it gives after them.
+                extent = max(extent, pos + 8 * (it.cap + it.out_cap))
+            if isinstance(it, Seek):
+                pos = ((marks[it.from_start] if it.from_start is not None
+                        else pos) + it.max_offset)
+            elif isinstance(it, Fill):
+                pos = max(pos, marks[it.start] + it.max_size)
+            elif isinstance(it, Mark):
+                marks[it.id] = pos
+            elif isinstance(it, Value):
+                vt = it.local.vtype
+                pos += 0 if it.assembled else item_bits(vt)
+                extent = max(extent, pos + 8 * work_bytes(vt))
+            else:
+                pos += it.bits
+            extent = max(extent, pos)
+
+    run(alternatives(items))
     return extent
 
+
+def alternatives(items: list[Item]) -> list:
+    """``items`` as walk(inner=False) gives them, but with each run of
+    Conds that are alternatives (the same nonzero group) as one list of
+    branches, each branch itself given this way."""
+    out: list = []
+    group = 0
+    for it in items:
+        if isinstance(it, Cond) and it.group:
+            branch = alternatives(it.items)
+            if it.group == group:
+                out[-1].append(branch)
+            else:
+                out.append([branch])
+            group = it.group
+            continue
+        group = 0
+        if isinstance(it, Cond):
+            out += alternatives(it.items)
+        else:
+            out.append(it)
+    return out
 
 def compile_document(root, skip_unsupported: bool = False,
                      dialect: Optional[str] = None) -> Mission:
