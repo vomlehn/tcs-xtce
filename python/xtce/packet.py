@@ -2148,6 +2148,12 @@ class FlagSync:
         self.run = 0
 
 
+def within(data: bytes, read):
+    """What ``read`` reads from a BitReader over ``data``: a copy of a
+    repeated container, from the bytes its transform gives."""
+    return read(BitReader(data))
+
+
 def checked(value, ok, container: str, text: str):
     """``value``, a copy of a repeated container, if ``ok(value)``; raises
     Mismatch naming ``container`` and the criterion ``text`` otherwise."""

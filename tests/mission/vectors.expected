@@ -212,6 +212,14 @@ TwoRowBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented,
 error:BadSize | -
 ZipBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, zip_a=4660, zip_b=86} | 0a58c02a0005121234345656
 error:InvalidValue | -
+OptZip{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, opt_flag=1, zip_a=4660, zip_b=86, opt_end=119} | 0a80c02a00070112123434565677
+OptZip{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, opt_flag=0, zip_a=none, zip_b=none, opt_end=119} | 0a80c02a00010077
+error:InvalidValue | -
+error:Truncated | -
+ZipRepeat{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, zip_copy=[{zip_c=4386}, {zip_c=13124}], opt_end=119} | 0a8ac02a000902111122223333444477
+ZipRepeat{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, zip_copy=[], opt_end=119} | 0a8ac02a00010077
+error:InvalidValue | -
+error:BadSize | -
 XorBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, xor_blob=0xaabbccdd, xor_tail=119} | 0a62c02a0004f0e1968777
 error:Truncated | -
 StuffBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, stuffed=0xaabbcc, stuff_tail=17, ms_stamp=1.234, var_delay=0.3, stuff_end=34} | 0a6cc02a000b03aabbcc11000004d2ac0222

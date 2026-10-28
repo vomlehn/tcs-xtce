@@ -9,6 +9,7 @@ nothing is allocated: callers supply the buffers.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import textwrap
 from typing import Optional
@@ -486,7 +487,26 @@ class CEmitter:
         """Reads into ``dst``; ``ref`` gives the expression for a value that
         gives a size or count."""
         e = vt.enc
-        if isinstance(e, AggregateEnc):
+        if isinstance(e, AggregateEnc) and e.transform is not None:
+            # Read the members from what the transform makes of its bytes.
+            x, d = e.transform, depth + 1
+            self.line("{", depth)
+            self.line(f"size_t k{d};", d)
+            self.line(f"uint8_t t{d}[{x.cap}];", d)
+            self.line("XTCE_PK_TRY(xtce_pk_read_binary_from(r, "
+                      f"{self.transform_hook(x.decode)}, true, {x.raw}, t{d}, "
+                      f"{x.cap}, {f}, &k{d}));", d)
+            self.line(f"xtce_pk_reader s{d} = xtce_pk_reader_init(t{d}, k{d}, "
+                      "r->err);", d)
+            self.line(f"xtce_pk_reader* rr{d} = r;", d)
+            self.line(f"r = &s{d};", d)
+            self.read_value(
+                dataclasses.replace(vt,
+                                    enc=dataclasses.replace(e, transform=None)),
+                dst, f, d, ref)
+            self.line(f"r = rr{d};", d)
+            self.line("}", depth)
+        elif isinstance(e, AggregateEnc):
             inner = Ref(lambda d: f"{dst}.{d.member}" if d.member else ref(d),
                         ref.place)
             for m in e.members:
@@ -718,6 +738,20 @@ class CEmitter:
         is_lit = fixed is not None
         e = vt.enc
         bad = f"return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, {f}, NULL);"
+        if isinstance(e, AggregateEnc) and e.transform is not None:
+            # Write the members, then what the transform makes of them.
+            t, d = e.transform, depth + 1
+            self.line("{", depth)
+            self.line(f"size_t t{d} = w->pos;", d)
+            self.write_value(
+                dataclasses.replace(vt,
+                                    enc=dataclasses.replace(e, transform=None)),
+                x, f, d, ref)
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_transform(w, t{d}, "
+                      f"{self.transform_hook(t.encode)}, true, {t.raw}, "
+                      f"{t.raw}, {f}));", d)
+            self.line("}", depth)
+            return
         if isinstance(e, AggregateEnc):
             inner = Ref(lambda d: f"{x}.{d.member}" if d.member else ref(d),
                         ref.place)

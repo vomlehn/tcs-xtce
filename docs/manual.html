@@ -2490,9 +2490,12 @@ or aggregate members.</p>
 container's) are read from what the transform makes of its bytes,
 and its <tt class="docutils literal">SizeInBits</tt> is their size on the wire; an included
 container needs one, while a packet's own container without one
-takes the rest of the packet. A transformed container can't have an
-<tt class="docutils literal">IncludeCondition</tt>, be repeated, or hold a length field, a
-checksum or an entry located from the container's end.</p>
+takes the rest of the packet. A transformed container may have an
+<tt class="docutils literal">IncludeCondition</tt>, as the demo's <tt class="docutils literal">OptZip</tt> does, and may be
+repeated, as in its <tt class="docutils literal">ZipRepeat</tt>: each copy is then transformed on
+its own, and is its <tt class="docutils literal">SizeInBits</tt> on the wire. It can't hold a length
+field, a checksum or an entry located from the container's end, or be
+included in a repeated container.</p>
 <p>Either way the transformed data starts on a byte boundary, and a
 transform that makes more than fits fails with <tt class="docutils literal">TooLong</tt>, one that
 can't (a function giving nothing) with <tt class="docutils literal">InvalidValue</tt>, and one that
@@ -2760,9 +2763,9 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 <dd><tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer or string without
 an <tt class="docutils literal">aliasNameSpace</tt>, instances of values in other packets, repeated
 segment entries with an <tt class="docutils literal">order</tt> or located from the end of their
-container, transformed containers with an <tt class="docutils literal">IncludeCondition</tt>, in a
-repeated container, or holding a length field, a checksum or an entry
-located from the end,
+container, transformed containers included in a repeated container
+or holding a length field, a checksum or an entry located from the
+end,
 <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE deprecates), least-significant-bit-first strings
 and binary data that may not start on a byte boundary, integers of
 more than 64 bits used other than as values (see &quot;Integer encoding&quot;),

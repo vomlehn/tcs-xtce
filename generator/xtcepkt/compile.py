@@ -1866,9 +1866,6 @@ class Compiler:
                             self.included_checks.append(
                                 (inc, cpath, m, end, list(scope), qname(ckey)))
             if cond is not None:
-                if any(isinstance(it, Transform) for it in walk(out)):
-                    raise Unsupported(f"{where}: transformed data with an "
-                                      "IncludeCondition")
                 for it in walk(out):
                     if isinstance(it, Value):
                         it.local.optional = True
@@ -2179,10 +2176,35 @@ class Compiler:
         # Its entries are values of each copy, so sizes can't come from
         # values outside it; ones from values inside are rejected below.
         items = self.tm_items(inc, cpath, stack + [ckey], m, [])
-        items += self.size_pad(inc, items, m, where)
+        xf = self.copy_transform(inc, items, what, cpath)
+        if xf is None:
+            items += self.size_pad(inc, items, m, where)
         vt = self.aggregate_of(items, m, what, qname(ckey), inc.name)
+        vt.enc.transform = xf
         self.ctypes[ckey] = vt
         return vt
+
+    def copy_transform(self, sc, items: list, what: str,
+                       path: Key) -> Optional[XformEnc]:
+        """The transform of each copy of repeated container ``sc``, whose
+        entries are ``items``, if its BinaryEncoding has transform
+        algorithms; its SizeInBits is then its size on the wire."""
+        be = sc.binary_encoding
+        names = self.transform_names(be, what) if be is not None else None
+        if names is None:
+            return None
+        if edc_items(sc):
+            raise Unsupported(f"{what} has ErrorDetectCorrect and transform "
+                              "algorithms")
+        size = (self.int_value(be.size_in_bits, path, "container SizeInBits",
+                               what) if be.size_in_bits is not None else None)
+        if not isinstance(size, int) or size % 8 or size < 0:
+            raise Unsupported(f"{what} has transform algorithms and no "
+                              "SizeInBits of whole bytes")
+        fa, ta = names
+        return XformEnc(size // 8, self.hook("binary_from", fa) if fa else None,
+                        self.hook("binary_to", ta) if ta else None,
+                        (max_bits(items) + 7) // 8)
 
     def mc_container_type(self, key: Key, where: str, stack: tuple) -> VType:
         """container_type for the CommandContainer of meta-command ``key``,
@@ -2907,9 +2929,6 @@ class Compiler:
             else:
                 out += self.fixed_entry(e, path, where)
             if cond is not None:
-                if any(isinstance(it, Transform) for it in walk(out)):
-                    raise Unsupported(f"{where}: transformed data with an "
-                                      "IncludeCondition")
                 for it in walk(out):
                     if isinstance(it, Value):
                         it.local.optional = True
@@ -3833,10 +3852,17 @@ def check_aligned(items: list[Item], where: str) -> None:
                 raise Unsupported(f"{where}: {name} has bitOrder "
                                   "leastSignificantBitFirst but may not start "
                                   "on a byte boundary")
+        if isinstance(e, AggregateEnc) and e.transform is not None:
+            if pos != 0:
+                raise Unsupported(f"{where}: transformed data {name} may not "
+                                  "start on a byte boundary")
+            pos = 0
         if isinstance(e, AggregateEnc):
             for m in e.members:
                 pos = None if pos is None else (pos + m.skip) % 8
                 pos = advance(m.vtype, pos, name)
+            if e.transform is not None:
+                return 0
             return None if pos is None else (pos + e.pad) % 8
         if isinstance(e, ArrayEnc):
             gap = e.gap if isinstance(e.gap, int) else None
@@ -3887,6 +3913,8 @@ def fixed_bits(vt: VType) -> Optional[int]:
         if not isinstance(e.count, int) or b is None:
             return None
         return e.count * b + max(e.count - 1, 0) * e.max_gap
+    if isinstance(e, AggregateEnc) and e.transform is not None:
+        return e.transform.bits
     if isinstance(e, AggregateEnc):
         bs = [fixed_bits(m.vtype) for m in e.members]
         return (None if None in bs
@@ -4036,12 +4064,30 @@ def is_rest(vt: VType) -> bool:
             or (isinstance(e, XformEnc) and e.raw is None and not e.sized))
 
 
+def work_bytes(vt: VType) -> int:
+    """The bytes after a value that encoding it may use for a while:
+    encoding transformed bytes writes them, then what the transform gives
+    after them."""
+    e = vt.enc
+    inner = max((work_bytes(t)
+                 for t in ([e.elem] if isinstance(e, ArrayEnc)
+                           else [m.vtype for m in e.members]
+                           if isinstance(e, AggregateEnc) else [])), default=0)
+    if isinstance(e, XformEnc) and not e.time:
+        return e.cap
+    if isinstance(e, AggregateEnc) and e.transform is not None:
+        return e.transform.cap + inner
+    return inner
+
+
 def item_bits(vt: VType) -> int:
     """The most bits a value of this type occupies."""
     e = vt.enc
     if isinstance(e, ArrayEnc):
         n = e.max_count
         return n * item_bits(e.elem) + max(n - 1, 0) * e.max_gap
+    if isinstance(e, AggregateEnc) and e.transform is not None:
+        return e.transform.bits
     if isinstance(e, AggregateEnc):
         return sum(m.skip + item_bits(m.vtype) for m in e.members) + e.pad
     if isinstance(e, StringEnc):
@@ -4067,12 +4113,7 @@ def max_bits(items: list[Item]) -> int:
         elif isinstance(it, Value):
             vt = it.local.vtype
             pos += 0 if it.assembled else item_bits(vt)
-            # Encoding transformed bytes writes them, then what the
-            # transform gives after them.
-            work = [t.enc.cap for t in vt.tree() if isinstance(t.enc, XformEnc)
-                    and not t.enc.time]
-            if work:
-                extent = max(extent, pos + 8 * max(work))
+            extent = max(extent, pos + 8 * work_bytes(vt))
         else:
             pos += it.bits
         extent = max(extent, pos)

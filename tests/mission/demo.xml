@@ -1406,6 +1406,10 @@
       <Parameter name="RecLabel" parameterTypeRef="YamcsLabelType"/>
       <Parameter name="ZipA" parameterTypeRef="U16"/>
       <Parameter name="ZipB" parameterTypeRef="U8"/>
+      <Parameter name="OptFlag" parameterTypeRef="U8"/>
+      <Parameter name="OptEnd" parameterTypeRef="U8"/>
+      <Parameter name="ZipC" parameterTypeRef="U16"/>
+      <Parameter name="ZipCount" parameterTypeRef="RecCountType"/>
       <Parameter name="TwoRowCols" parameterTypeRef="RepCountType"/>
       <Parameter name="TwoRows" parameterTypeRef="TwoRowType"/>
       <Parameter name="TwoRowNote" parameterTypeRef="U8"/>
@@ -2366,6 +2370,69 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="600"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- ZipA and ZipB doubled, as in ZipBlock, when OptFlag says so. -->
+      <SequenceContainer name="OptZipPart">
+        <BinaryEncoding>
+          <SizeInBits>
+            <FixedValue>48</FixedValue>
+          </SizeInBits>
+          <FromBinaryTransformAlgorithm name="Shrink"/>
+          <ToBinaryTransformAlgorithm name="Expand"/>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipA"/>
+          <ParameterRefEntry parameterRef="ZipB"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="OptZip">
+        <EntryList>
+          <ParameterRefEntry parameterRef="OptFlag"/>
+          <ContainerRefEntry containerRef="OptZipPart">
+            <IncludeCondition>
+              <Comparison parameterRef="OptFlag" value="1"/>
+            </IncludeCondition>
+          </ContainerRefEntry>
+          <ParameterRefEntry parameterRef="OptEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="640"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- One copy: ZipC, each byte doubled on the wire. -->
+      <SequenceContainer name="ZipCopy">
+        <BinaryEncoding>
+          <SizeInBits>
+            <FixedValue>32</FixedValue>
+          </SizeInBits>
+          <FromBinaryTransformAlgorithm name="Shrink"/>
+          <ToBinaryTransformAlgorithm name="Expand"/>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipC"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="ZipRepeat">
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipCount"/>
+          <ContainerRefEntry containerRef="ZipCopy">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="ZipCount"/>
+                </DynamicValue>
+              </Count>
+            </RepeatEntry>
+          </ContainerRefEntry>
+          <ParameterRefEntry parameterRef="OptEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="650"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

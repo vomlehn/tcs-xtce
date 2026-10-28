@@ -212,6 +212,14 @@ tm 0a4ec02a000603010203040508  # two rows: TwoRows[1][2] is 8
 tm 0a4ec02a00040201020304  # two rows: two columns, so no TwoRows[1][2]
 tm 0a58c02a0005121234345656  # zip: ZipA 0x1234 and ZipB 0x56, each byte doubled on the wire
 tm 0a58c02a00041234565678  # zip: five bytes, which Shrink can't halve
+tm 0a80c02a00070112123434565677  # optional zip: present, then OptEnd
+tm 0a80c02a00010077  # optional zip: absent
+tm 0a80c02a00070112133434565677  # optional zip: a byte not doubled
+tm 0a80c02a0002011212  # optional zip: truncated
+tm 0a8ac02a000902111122223333444477  # repeated zip: two copies, each doubled
+tm 0a8ac02a00010077  # repeated zip: no copies
+tm 0a8ac02a0005011112222277  # repeated zip: a copy not doubled
+tm 0a8ac02a00010477  # repeated zip: more copies than ZipCount allows
 tm 0a62c02a0004f0e1968777  # xor: XorBlob aabbccdd, masked on the wire
 tm 0a62c02a0002010203  # xor: three bytes, not XorBlob's four
 tm 0a6cc02a000b03aabbcc11000004d2ac0222  # stuffed: aabbcc framed by its length, then 1.234 s and a 300 ms varint

@@ -879,6 +879,14 @@ bytes with the transform's, working in the output buffer after them,
 which <tt class="docutils literal">max_bits</tt> counts. <tt class="docutils literal">walk</tt> splices a Transform's items in for
 everything that looks at values, and keeps it whole (<tt class="docutils literal">inner=False</tt>)
 for everything that places bits on the wire.</p>
+<p>A repeated container's copies are aggregates (<tt class="docutils literal">container_type</tt>), so a
+transformed one keeps its transform on its <tt class="docutils literal">AggregateEnc</tt>
+(<tt class="docutils literal">copy_transform</tt>), as an <tt class="docutils literal">XformEnc</tt> of the copy's size on the wire
+and the most bytes its members take. The emitters wrap the aggregate's
+code as they do a Transform's: decoding reads the members with a reader
+over what the transform makes of each copy, and encoding writes them,
+then transforms them in place; <tt class="docutils literal">work_bytes</tt> counts the room that
+takes.</p>
 <p>A transformed binary or time value is instead an ordinary <tt class="docutils literal">Value</tt>
 whose encoding is an <tt class="docutils literal">XformEnc</tt>, so it can be optional, repeated or
 inside an array or aggregate like any value. The runtimes' readers

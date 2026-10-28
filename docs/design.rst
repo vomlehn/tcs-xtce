@@ -510,6 +510,15 @@ which ``max_bits`` counts. ``walk`` splices a Transform's items in for
 everything that looks at values, and keeps it whole (``inner=False``)
 for everything that places bits on the wire.
 
+A repeated container's copies are aggregates (``container_type``), so a
+transformed one keeps its transform on its ``AggregateEnc``
+(``copy_transform``), as an ``XformEnc`` of the copy's size on the wire
+and the most bytes its members take. The emitters wrap the aggregate's
+code as they do a Transform's: decoding reads the members with a reader
+over what the transform makes of each copy, and encoding writes them,
+then transforms them in place; ``work_bytes`` counts the room that
+takes.
+
 A transformed binary or time value is instead an ordinary ``Value``
 whose encoding is an ``XformEnc``, so it can be optional, repeated or
 inside an array or aggregate like any value. The runtimes' readers

@@ -331,11 +331,21 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
                    "}")
             if e.pad:
                 agg = f"{{ let a = {agg}; r.pad({e.pad}, {f})?; a }}"
-        if not e.checks:
-            return agg
-        # A repeated container's own criteria, on each copy.
-        c = f"c{depth}"
-        return f"{{ let {c} = {agg}; {checks(e, c)} {c} }}"
+        if e.checks:
+            # A repeated container's own criteria, on each copy.
+            c = f"c{depth}"
+            agg = f"{{ let {c} = {agg}; {checks(e, c)} {c} }}"
+        x = e.transform
+        if x is not None:
+            # Read the members from what the transform makes of its bytes.
+            h, raw = transform_hook(x.decode), opt_size(x.raw)
+            t = (f"pk::read_binary_from(&mut r, {h}, {raw}, {x.cap}, {f})?"
+                 if alloc
+                 else f"pk::read_fixed_binary_from::<{x.cap}>(&mut r, {h}, "
+                      f"{raw}, {f})?")
+            agg = (f"{{ let t{depth} = {t}; let mut r = "
+                   f"BitReader::new(&t{depth}[..]); {agg} }}")
+        return agg
     if isinstance(e, ArrayEnc):
         gap = (f"if i > 0 {{ r.skip({gap_expr(e, ref, f)}, {f})?; }}" if e.gap
                else "")
@@ -498,12 +508,19 @@ def write_value_stmt(vt: VType, x: str, f: str, ref) -> str:
         inner = Ref(lambda d: f"{x}.{d.member}" if d.member else ref(d),
                     ref.place)
         parts = [checks(e, x)] if e.checks else []
+        t = e.transform
+        if t is not None:
+            # Write the members, then what the transform makes of them.
+            parts.append("let t = w.position();")
         for m in e.members:
             if m.skip:
                 parts.append(f"w.zeros({m.skip});")
             parts.append(write_stmt(m.vtype, f"{x}.{m.ident}", f, inner))
         if e.pad:
             parts.append(f"w.zeros({e.pad});")
+        if t is not None:
+            parts.append(f"w.transform(t, {transform_hook(t.encode)}, "
+                         f"{opt_size(t.raw)}, {t.raw}, {f})?;")
         return "{ " + " ".join(parts) + " }"
     if isinstance(e, ArrayEnc):
         gap = (f"if i > 0 {{ w.skip({gap_expr(e, ref, f)}, {f})?; }}" if e.gap

@@ -2070,9 +2070,12 @@ Transform algorithms
    container's) are read from what the transform makes of its bytes,
    and its ``SizeInBits`` is their size on the wire; an included
    container needs one, while a packet's own container without one
-   takes the rest of the packet. A transformed container can't have an
-   ``IncludeCondition``, be repeated, or hold a length field, a
-   checksum or an entry located from the container's end.
+   takes the rest of the packet. A transformed container may have an
+   ``IncludeCondition``, as the demo's ``OptZip`` does, and may be
+   repeated, as in its ``ZipRepeat``: each copy is then transformed on
+   its own, and is its ``SizeInBits`` on the wire. It can't hold a length
+   field, a checksum or an entry located from the container's end, or be
+   included in a repeated container.
 
    Either way the transformed data starts on a byte boundary, and a
    transform that makes more than fits fails with ``TooLong``, one that
@@ -2340,9 +2343,9 @@ Not supported
    ``IndirectParameterRefEntry`` chosen by an integer or string without
    an ``aliasNameSpace``, instances of values in other packets, repeated
    segment entries with an ``order`` or located from the end of their
-   container, transformed containers with an ``IncludeCondition``, in a
-   repeated container, or holding a length field, a checksum or an entry
-   located from the end,
+   container, transformed containers included in a repeated container
+   or holding a length field, a checksum or an entry located from the
+   end,
    ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates), least-significant-bit-first strings
    and binary data that may not start on a byte boundary, integers of
    more than 64 bits used other than as values (see "Integer encoding"),

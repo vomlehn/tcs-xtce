@@ -236,6 +236,11 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
                                 for t in c.criteria)
             agg = (f"pk.checked({agg}, lambda _c: {cond}, {pstr(c.container)}, "
                    f"{pstr(c.text)})")
+        x = e.transform
+        if x is not None:
+            # Read the members from what the transform makes of its bytes.
+            agg = (f"pk.within(r.binary_from({transform_hook(x.decode)}, "
+                   f"{x.raw}, {x.cap}, {f}), lambda r: {agg})")
         return agg
     if isinstance(e, ArrayEnc):
         return (f"pk.read_list(r, {count(vt, ref, f)}, {gap_expr(e, ref, f)}, "
@@ -453,6 +458,7 @@ class PythonEmitter:
         self.source = source
         self.out: list[str] = []
         self.dfas: list = []
+        self.transforms = 0  # numbers the start of each transformed copy
 
     def line(self, s: str = "", depth: int = 0) -> None:
         self.out.append("    " * depth + s if s else "")
@@ -812,12 +818,21 @@ class PythonEmitter:
                         ref.place)
             for c in e.checks:
                 self.require(c, lambda lc: x, depth)
+            t = e.transform
+            if t is not None:
+                # Write the members, then what the transform makes of them.
+                self.transforms += 1
+                start = f"_x{self.transforms}"
+                self.line(f"{start} = w.pos", depth)
             for m in e.members:
                 if m.skip:
                     self.line(f"w.zeros({m.skip})", depth)
                 self.write_value(m.vtype, f"{x}.{m.ident}", f, inner, depth)
             if e.pad:
                 self.line(f"w.zeros({e.pad})", depth)
+            if t is not None:
+                self.line(f"w.transform({start}, {transform_hook(t.encode)}, "
+                          f"{t.raw}, {t.raw}, {f})", depth)
         elif isinstance(e, ArrayEnc):
             # Loop variables are numbered by depth: an aggregate element may
             # hold another array.

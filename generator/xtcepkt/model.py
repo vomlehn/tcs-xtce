@@ -254,6 +254,10 @@ class AggregateEnc:
     # with Mismatch when one doesn't hold.
     checks: list = field(default_factory=list)
     this: Optional["Local"] = None
+    # A repeated container's transform algorithms: each copy is ``raw``
+    # bytes on the wire, from which decoding reads the members, at most
+    # ``cap`` bytes of them, and into which encoding turns them.
+    transform: Optional["XformEnc"] = None
 
 
 @dataclass

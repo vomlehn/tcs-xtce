@@ -9,10 +9,10 @@ import textwrap
 
 from xtcegen import CRATE, REPOSITORY
 
-from .model import (BinaryEnc, Cond, ContextCal, Criterion, DynSize, Fill,
-                    FloatEnc, IntEnc, MathOp, Node, Polynomial, Require, Seek,
-                    Spline, StringEnc, Value, Verify, VType, term_hooks, walk,
-                    Transform, XformEnc)
+from .model import (AggregateEnc, BinaryEnc, Cond, ContextCal, Criterion,
+                    DynSize, Fill, FloatEnc, IntEnc, MathOp, Node, Polynomial,
+                    Require, Seek, Spline, StringEnc, Value, Verify, VType,
+                    term_hooks, walk, Transform, XformEnc)
 
 # The runtimes' integer encodings.  BCD values are decoded to unsigned ones.
 ENCODINGS = {"unsigned": "Unsigned", "twosComplement": "TwosComplement",
@@ -298,8 +298,10 @@ def items_hooks(items: list) -> list:
         if isinstance(it, Value):
             dyns += [t.dyn for t in it.local.vtype.tree() if t.dyn]
             for t in it.local.vtype.tree():
-                if isinstance(t.enc, XformEnc):
-                    transforms += [h for h in (t.enc.decode, t.enc.encode) if h]
+                x = (t.enc.transform if isinstance(t.enc, AggregateEnc)
+                     else t.enc)
+                if isinstance(x, XformEnc):
+                    transforms += [h for h in (x.decode, x.encode) if h]
         for d in dyns:
             terms += [c for crit, _ in d.lookup or [] for c in crit]
     out = terms_hooks(terms)

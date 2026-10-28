@@ -473,8 +473,8 @@ def main() -> None:
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
                                430, 440, 450, 460, 470, 480, 490, 500, 510, 520,
                                530, 550, 550, 560, 560, 570, 570, 580, 590, 600,
-                               600, 610, 610, 620, 620, 630, 630,
-                               rng.randrange(1 << 11)])
+                               600, 610, 610, 620, 620, 630, 630, 640, 640, 650,
+                               650, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -547,6 +547,26 @@ def main() -> None:
                     + [(8, rng.randrange(256)) for _ in range(2)])
             elif apid == 330 and rng.random() < 0.8:
                 data += route(rng)
+            elif apid == 640 and rng.random() < 0.9:
+                # OptZip: OptFlag mostly 0 or 1, ZipBlock's doubled bytes
+                # when it is 1, mostly, and OptEnd.
+                flag = rng.choice([0, 1, 1, rng.randrange(256)])
+                data += bytes([flag])
+                if flag == 1:
+                    body = rng.randbytes(3)
+                    data += (bytes(x for x in body for _ in range(2))
+                             if rng.random() < 0.8 else rng.randbytes(6))
+                data += rng.randbytes(rng.choice([1, 1, 0, 2]))
+            elif apid == 650 and rng.random() < 0.9:
+                # ZipRepeat: ZipCount mostly up to 3, then that many copies
+                # of two bytes doubled, mostly, and OptEnd.
+                n = rng.choice([0, 1, 2, 3, rng.randrange(256)])
+                data += bytes([n])
+                for _ in range(min(n, 3)):
+                    body = rng.randbytes(2)
+                    data += (bytes(x for x in body for _ in range(2))
+                             if rng.random() < 0.9 else rng.randbytes(4))
+                data += rng.randbytes(rng.choice([1, 1, 0, 2]))
             elif apid == 600 and rng.random() < 0.9:
                 # ZipBlock: its bytes doubled on the wire, mostly.
                 body = rng.randbytes(3)

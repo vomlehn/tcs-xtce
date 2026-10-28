@@ -1068,8 +1068,7 @@ class TransformTests(unittest.TestCase):
                          ("Unzip", None))
 
     def test_conditional(self):
-        # A transformed value may be optional; a transformed container may
-        # not.
+        # A transformed value may be optional.
         n = compile_xml(
             transform_mission(
                 entries='<ParameterRefEntry parameterRef="A"/>'
@@ -1077,6 +1076,54 @@ class TransformTests(unittest.TestCase):
                         '<Comparison parameterRef="A" value="1"/>'
                         '</IncludeCondition></ParameterRefEntry>')).nodes[0]
         self.assertTrue(n.fields[1][1].optional)
+
+    @staticmethod
+    def with_q(text: str,
+               size: str = "<SizeInBits><FixedValue>16</FixedValue>"
+                           "</SizeInBits>") -> str:
+        """``text`` with a container Q of A, transformed, ``size`` bits."""
+        return text.replace(
+            '<SequenceContainer name="P">',
+            f'<SequenceContainer name="Q"><BinaryEncoding>{size}{TRANSFORMS}'
+            '</BinaryEncoding><EntryList><ParameterRefEntry parameterRef="A"/>'
+            '</EntryList></SequenceContainer><SequenceContainer name="P">')
+
+    def test_conditional_container(self):
+        # So may a transformed container.
+        text = self.with_q(
+            transform_mission(
+                entries='<ParameterRefEntry parameterRef="A"/>'
+                        '<ContainerRefEntry containerRef="Q"><IncludeCondition>'
+                        '<Comparison parameterRef="A" value="1"/>'
+                        '</IncludeCondition></ContainerRefEntry>'))
+        p = next(n for n in compile_xml(text).nodes if n.name == "P")
+        cond = p.items[-1]
+        self.assertIsInstance(cond, Cond)
+        self.assertIsInstance(cond.items[-1], Transform)
+        self.assertTrue(p.fields[1][1].optional)
+
+    REPEAT = ('<ParameterRefEntry parameterRef="A"/><ContainerRefEntry '
+              'containerRef="Q"><RepeatEntry><Count><DynamicValue>'
+              '<ParameterInstanceRef parameterRef="A"/></DynamicValue></Count>'
+              '</RepeatEntry></ContainerRefEntry>')
+
+    def test_repeated_container(self):
+        # Each copy is transformed: 2 bytes on the wire, from which A is
+        # read.
+        text = self.with_q(transform_mission(entries=self.REPEAT))
+        p = next(n for n in compile_xml(text).nodes if n.name == "P")
+        copy = p.items[-1].local.vtype.enc.elem
+        x = copy.enc.transform
+        self.assertEqual((x.raw, x.cap, x.decode.name, x.encode.name),
+                         (2, 1, "Unzip", "Zip"))
+        self.assertEqual([m.name for m in copy.enc.members], ["A"])
+
+    def test_repeated_container_needs_a_size(self):
+        text = self.with_q(transform_mission(entries=self.REPEAT), size="")
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("repeated container /Sat/Q has transform algorithms and "
+                      "no SizeInBits of whole bytes", str(cm.exception))
 
 
 class YamcsDialectTests(unittest.TestCase):
