@@ -504,11 +504,12 @@ class BitReader:
         if (self.end + 7) // 8 * 8 != self.nbits:
             raise PacketError("BadLength", field)
 
-    def rest_bytes(self, max_: int, field: str) -> int:
-        """The bytes from the current position to the end of the packet, for
-        a field that takes the rest of it.  Raises ``BadSize`` unless they
-        are whole bytes, at most ``max_`` of them."""
-        bits = max(self.nbits - self.pos, 0)
+    def rest_bytes(self, max_: int, tail: int, field: str) -> int:
+        """The bytes from the current position to ``tail`` bits before the
+        end of the packet, for a field that takes the rest of it but the
+        ``tail`` bits of the entries after it.  Raises ``BadSize`` unless
+        they are whole bytes, at most ``max_`` of them."""
+        bits = max(self.nbits - self.pos - tail, 0)
         if bits % 8 or bits // 8 > max_:
             raise PacketError("BadSize", field)
         return bits // 8

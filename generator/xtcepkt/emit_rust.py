@@ -395,7 +395,7 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
     if isinstance(e, BinaryEnc):
         read = "bytes" if alloc else f"fixed_bytes::<{e.bits // 8}>"
         if e.rest:
-            return (f"{{ let n = r.rest_bytes({e.bits // 8}, {f})?; "
+            return (f"{{ let n = r.rest_bytes({e.bits // 8}, {e.tail}, {f})?; "
                     f"r.{read}(n, {f})? }}")
         if e.embedded:
             return (f"{{ let n = r.embedded_bytes({e.bits // 8}, {f})?; "

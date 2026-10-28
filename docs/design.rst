@@ -533,6 +533,13 @@ CCSDS header (``embedded_bytes``) and write back when encoding
 a size from an earlier entry of the copy binds to that member, as one
 inside an aggregate type does (``member_bound``).
 
+Binary data of size -1 may have entries after it when they always take
+the same bits: ``check_rest`` sums them (``tail_bits``) into
+``BinaryEnc.tail``, and decoding gives the data the rest of the packet
+but those bits (``rest_bytes``). The value's Local is shared by a base
+container and the packets built on it, so ``check_rest`` refuses one
+whose tail differs from packet to packet.
+
 A length field inside an included container can't mean the packet's
 length, so ``measure`` makes it measure the container: it marks the
 field and puts a ``LengthEnd`` where the container ends, where decoding

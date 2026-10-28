@@ -529,7 +529,7 @@ class CEmitter:
             if e.rest:
                 self.line("size_t n;", depth + 1)
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_rest(r, {e.bits // 8}, "
-                          f"{f}, &n));", depth + 1)
+                          f"{e.tail}, {f}, &n));", depth + 1)
             elif e.embedded:
                 self.line("size_t n;", depth + 1)
                 self.line("XTCE_PK_TRY(xtce_pk_read_embedded(r, "

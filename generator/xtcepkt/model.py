@@ -147,12 +147,14 @@ class StringEnc:
 class BinaryEnc:
     """Bytes on the wire: exactly ``bits``, or with ``dyn`` the bits another
     value gives, at most ``bits``.  With ``rest`` (an XTCE size of -1) the
-    value is the rest of the packet, at most ``bits``; nothing may follow it.
-    """
+    value is the rest of the packet but its last ``tail`` bits, at most
+    ``bits``: only entries of a fixed size, ``tail`` bits in all, may follow
+    it."""
 
     bits: int
     dyn: Optional[DynSize] = None
     rest: bool = False
+    tail: int = 0
     lsb: bool = False  # bitOrder leastSignificantBitFirst
     # A complete CCSDS packet whose packet length field gives its size, at
     # most ``bits`` (Yamcs:EmbeddedTc, in the Yamcs dialect).

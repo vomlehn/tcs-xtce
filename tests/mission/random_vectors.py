@@ -588,7 +588,7 @@ def main() -> None:
             data = header(rng, 1, rng.choice([300, 301, 302]))
             opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
                                  12, 13, 13, 14, 15, 16, 17, 17, 18, 18, 19, 19,
-                                 20, 20, 21, 21, rng.randrange(256)])
+                                 20, 20, 21, 21, 22, 22, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
@@ -624,6 +624,11 @@ def main() -> None:
                 if rng.random() < 0.3:
                     body = body[:4] + bytes([rng.randrange(256)])
                 data += body
+            elif opcode == 22 and rng.random() < 0.9:
+                # Tailed: data, mostly whole bytes, and a float.
+                data += rng.randbytes(rng.choice([0, 1, 3, 4, 9]))
+                data += rng.choice([bytes.fromhex("3fc00000"),
+                                    rng.randbytes(4)])
             elif opcode == 21 and rng.random() < 0.9:
                 # Embed: a command packet, its length mostly right, and a
                 # byte.

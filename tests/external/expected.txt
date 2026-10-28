@@ -3,8 +3,7 @@ yamcs/BogusSAT-1.xml: schema invalid; rejected by the binding
 yamcs/BogusSAT-2.xml: schema invalid; rejected by the binding
   digest da4c0fa02dac76749bb8f5abc316751a
 yamcs/VariableBinary.xml: schema valid; loaded by the binding
-  2 packets, 1 not supported
-    unsupported: /VariableBinaryTest/Command1: meta-command /VariableBinaryTest/Command1: data takes the rest of the packet but is not last
+  3 packets, 0 not supported
   digest 5202e1a10e6c6019564ec93ef3453cf8
 yamcs/a1.xml: schema valid; loaded by the binding
   0 packets, 0 not supported

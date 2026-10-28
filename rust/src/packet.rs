@@ -739,11 +739,17 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
-    /// The bytes from the current position to the end of the packet, for a
-    /// field that takes the rest of it.  Fails with `BadSize` unless they
-    /// are whole bytes, at most `max` of them.
-    pub fn rest_bytes(&self, max: usize, field: &'static str) -> Result<usize> {
-        let bits = (self.data.len() * 8).saturating_sub(self.pos);
+    /// The bytes from the current position to `tail` bits before the end of
+    /// the packet, for a field that takes the rest of it but the `tail` bits
+    /// of the entries after it.  Fails with `BadSize` unless they are whole
+    /// bytes, at most `max` of them.
+    pub fn rest_bytes(
+        &self,
+        max: usize,
+        tail: usize,
+        field: &'static str,
+    ) -> Result<usize> {
+        let bits = (self.data.len() * 8).saturating_sub(self.pos + tail);
         if bits % 8 != 0 || bits / 8 > max {
             return Err(PacketError::BadSize { field });
         }

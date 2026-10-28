@@ -1818,9 +1818,9 @@ wire. Python's <tt class="docutils literal">decode_text(bytes, charset, field)</
 (C/C++) and <tt class="docutils literal">sized(spec, bytes)</tt> (Python) give the spec of a string
 whose size another field gives. The reader's <tt class="docutils literal">pad(bits, field)</tt>
 (<tt class="docutils literal">xtce_pk_read_pad</tt>) skips padding that must be present. The
-reader's <tt class="docutils literal">rest_bytes(max, field)</tt>
+reader's <tt class="docutils literal">rest_bytes(max, tail, field)</tt>
 (<tt class="docutils literal">xtce_pk_read_rest</tt> in C/C++) gives the size of a binary value that
-takes the rest of the packet, and <tt class="docutils literal">write_rest</tt> writes one (C/C++
+takes the rest of the packet but the <tt class="docutils literal">tail</tt> bits after it, and <tt class="docutils literal">write_rest</tt> writes one (C/C++
 generates it inline). <tt class="docutils literal">string_from_bytes(bytes, field)</tt> (Rust,
 Python), <tt class="docutils literal">xtce_pk_read_utf8</tt> and <tt class="docutils literal">xtce_pk_write_utf8</tt> (C/C++) read
 and write strings encoded as binary. Python's <tt class="docutils literal">bool_from_string(s,
@@ -2111,13 +2111,16 @@ must differ and fit the encoding. In the demo, <tt class="docutils literal">Repl
 must have exactly that length.</p>
 <p class="last">A <tt class="docutils literal">SizeInBits</tt> of <tt class="docutils literal"><span class="pre">-1</span></tt> (a Yamcs convention for &quot;the size of the
 value given&quot;) takes the rest of the packet, up to the maximum field
-size (64 KiB by default). It must be
-the last entry of every packet that contains it, and can't be an array
-element, an aggregate member or repeated. Decoding fails with
-<tt class="docutils literal">BadSize</tt> unless what is left is whole bytes, and encoding fails
-with <tt class="docutils literal">TooLong</tt> above that size. Yamcs also allows such values before
-other entries, where only the sender knows their size; those packets
-are not supported.</p>
+size (64 KiB by default). Only entries that always have the same size
+may follow it, outside any <tt class="docutils literal">IncludeCondition</tt>, and it then takes the
+rest but those: a float after it is the packet's last 4 bytes, as in
+the demo's <tt class="docutils literal">Tailed</tt> command. A packet that contains it must always
+have the same entries after it, and it can't be an array element, an
+aggregate member or repeated. Decoding fails with <tt class="docutils literal">BadSize</tt> unless
+what is left is whole bytes, and encoding fails with <tt class="docutils literal">TooLong</tt> above
+that size. Yamcs also allows such values before entries whose size
+varies, where only the sender knows their size; those packets are not
+supported.</p>
 </dd>
 <dt>Times</dt>
 <dd><p class="first"><tt class="docutils literal">AbsoluteTime</tt> and <tt class="docutils literal">RelativeTime</tt> types with an integer or float

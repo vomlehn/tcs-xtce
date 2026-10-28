@@ -1357,9 +1357,9 @@ Strings and binary
    (C/C++) and ``sized(spec, bytes)`` (Python) give the spec of a string
    whose size another field gives. The reader's ``pad(bits, field)``
    (``xtce_pk_read_pad``) skips padding that must be present. The
-   reader's ``rest_bytes(max, field)``
+   reader's ``rest_bytes(max, tail, field)``
    (``xtce_pk_read_rest`` in C/C++) gives the size of a binary value that
-   takes the rest of the packet, and ``write_rest`` writes one (C/C++
+   takes the rest of the packet but the ``tail`` bits after it, and ``write_rest`` writes one (C/C++
    generates it inline). ``string_from_bytes(bytes, field)`` (Rust,
    Python), ``xtce_pk_read_utf8`` and ``xtce_pk_write_utf8`` (C/C++) read
    and write strings encoded as binary. Python's ``bool_from_string(s,
@@ -1670,13 +1670,16 @@ Binary
 
    A ``SizeInBits`` of ``-1`` (a Yamcs convention for "the size of the
    value given") takes the rest of the packet, up to the maximum field
-   size (64 KiB by default). It must be
-   the last entry of every packet that contains it, and can't be an array
-   element, an aggregate member or repeated. Decoding fails with
-   ``BadSize`` unless what is left is whole bytes, and encoding fails
-   with ``TooLong`` above that size. Yamcs also allows such values before
-   other entries, where only the sender knows their size; those packets
-   are not supported.
+   size (64 KiB by default). Only entries that always have the same size
+   may follow it, outside any ``IncludeCondition``, and it then takes the
+   rest but those: a float after it is the packet's last 4 bytes, as in
+   the demo's ``Tailed`` command. A packet that contains it must always
+   have the same entries after it, and it can't be an array element, an
+   aggregate member or repeated. Decoding fails with ``BadSize`` unless
+   what is left is whole bytes, and encoding fails with ``TooLong`` above
+   that size. Yamcs also allows such values before entries whose size
+   varies, where only the sender knows their size; those packets are not
+   supported.
 
 Times
    ``AbsoluteTime`` and ``RelativeTime`` types with an integer or float

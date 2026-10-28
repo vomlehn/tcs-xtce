@@ -504,6 +504,7 @@ class Compiler:
         self.nodes: dict[Key, Node] = {}
         self.order: list[Node] = []
         self._ids = 0
+        self.tailed: set[int] = set()  # Local ids check_rest has seen
         # aggregates being compiled, to find cycles
         self._aggregating: set = set()
         # container key -> aggregate of a repeated container
@@ -2458,19 +2459,36 @@ class Compiler:
         from_end = v.reference is not None and v.reference.value == "end"
         return Check(spec, local, start, end, skip, from_end, container)
 
-    @staticmethod
-    def check_rest(node: Node, where: str) -> None:
+    def check_rest(self, node: Node, where: str) -> None:
         """A value that takes the rest of the packet must come last, as
-        must a transformed one that does."""
-        items = walk(node.all_items(), inner=False)
-        for i, it in enumerate(items[:-1]):
-            if ((isinstance(it, Value) and is_rest(it.local.vtype))
-                    or (isinstance(it, Transform) and it.raw is None)):
-                if all(isinstance(x, (Require, Mark)) for x in items[i + 1:]):
-                    continue
-                what = (it.name if isinstance(it, Transform) else it.local.name)
-                raise Unsupported(f"{where}: {what} takes the rest of the "
-                                  "packet but is not last")
+        must a transformed one that does, unless it is binary data with
+        only entries of a fixed size after it: then it takes the rest but
+        them, which its ``tail`` records."""
+        top = node.all_items()
+        items = walk(top, inner=False)
+        for i, it in enumerate(items):
+            if (not ((isinstance(it, Value) and is_rest(it.local.vtype))
+                     or (isinstance(it, Transform) and it.raw is None))):
+                continue
+            what = (it.name if isinstance(it, Transform) else it.local.name)
+            tail = 0
+            if not all(isinstance(x, (Require, Mark)) for x in items[i + 1:]):
+                tail = (tail_bits(top, it) if isinstance(it, Value)
+                        and isinstance(it.local.vtype.enc, BinaryEnc) else None)
+                if tail is None:
+                    raise Unsupported(f"{where}: {what} takes the rest of the "
+                                      "packet but is not last")
+            if not isinstance(it, Value):
+                continue
+            local, vt = it.local, it.local.vtype
+            if isinstance(vt.enc, BinaryEnc) and vt.enc.tail != tail:
+                if local.id in self.tailed:
+                    raise Unsupported(f"{where}: {what} takes the rest of the "
+                                      "packet, with a different size of "
+                                      "entries after it in another packet")
+                local.vtype = dataclasses.replace(
+                    vt, enc=dataclasses.replace(vt.enc, tail=tail))
+            self.tailed.add(local.id)
 
     @staticmethod
     def check_length(node: Node, where: str) -> None:
@@ -3987,6 +4005,28 @@ def conds(it: Item) -> list[Term]:
     if not isinstance(it, Cond):
         return []
     return it.criteria + [c for i in it.items for c in conds(i)]
+
+
+def tail_bits(items: list[Item], it: Value) -> Optional[int]:
+    """The bits of the entries after value ``it`` in ``items``, or None
+    when ``it`` is in a conditional block or they vary."""
+    i = next((i for i, x in enumerate(items) if x is it), None)
+    if i is None:
+        return None
+    bits = 0
+    for x in items[i + 1:]:
+        if isinstance(x, (Require, Mark, Verify, LengthEnd)):
+            continue
+        if isinstance(x, (Segment, Pad, Fixed)):
+            bits += x.bits
+        elif isinstance(x, Value) and not x.local.optional:
+            b = 0 if x.assembled else fixed_bits(x.local.vtype)
+            if b is None:
+                return None
+            bits += b
+        else:
+            return None
+    return bits
 
 
 def is_rest(vt: VType) -> bool:

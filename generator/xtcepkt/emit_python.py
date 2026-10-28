@@ -275,7 +275,7 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
         return f"r.binary_from({h}, {e.raw}, {e.cap}, {f})"
     if isinstance(e, BinaryEnc):
         if e.rest:
-            return f"r.bytes(r.rest_bytes({e.bits // 8}, {f}), {f})"
+            return f"r.bytes(r.rest_bytes({e.bits // 8}, {e.tail}, {f}), {f})"
         if e.embedded:
             return f"r.bytes(r.embedded_bytes({e.bits // 8}, {f}), {f})"
         n = size(e.dyn, ref(e.dyn), f) if e.dyn else e.bits // 8

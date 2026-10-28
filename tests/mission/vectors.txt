@@ -225,3 +225,6 @@ tm 0a76c02a00030105aabb  # records: a length past the packet
 tm 0a76c02a00120011616161616161616161616161616161616161  # records: a label of 17 bytes, one too many
 tc 112ec005000915112cc0000001010233  # embed: a SetMode command, then a byte
 tc 112ec005000615112cc0000009  # embed: a command whose length runs past the packet
+tc 112ec005000716abcdef3fc00000  # tailed: three bytes of data, then 1.5
+tc 112ec00500041640490fdb  # tailed: no data, then pi
+tc 112ec0050002160102  # tailed: too short for the float

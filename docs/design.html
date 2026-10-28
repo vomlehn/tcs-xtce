@@ -900,6 +900,12 @@ CCSDS header (<tt class="docutils literal">embedded_bytes</tt>) and write back w
 <tt class="docutils literal">P/m</tt> that names no parameter as member <tt class="docutils literal">m</tt> of <tt class="docutils literal">P</tt>. A repeated container's copy is an aggregate, so
 a size from an earlier entry of the copy binds to that member, as one
 inside an aggregate type does (<tt class="docutils literal">member_bound</tt>).</p>
+<p>Binary data of size -1 may have entries after it when they always take
+the same bits: <tt class="docutils literal">check_rest</tt> sums them (<tt class="docutils literal">tail_bits</tt>) into
+<tt class="docutils literal">BinaryEnc.tail</tt>, and decoding gives the data the rest of the packet
+but those bits (<tt class="docutils literal">rest_bytes</tt>). The value's Local is shared by a base
+container and the packets built on it, so <tt class="docutils literal">check_rest</tt> refuses one
+whose tail differs from packet to packet.</p>
 <p>A length field inside an included container can't mean the packet's
 length, so <tt class="docutils literal">measure</tt> makes it measure the container: it marks the
 field and puts a <tt class="docutils literal">LengthEnd</tt> where the container ends, where decoding

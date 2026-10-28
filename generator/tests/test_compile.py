@@ -471,13 +471,39 @@ class RestTests(unittest.TestCase):
         self.assertTrue(vt.enc.rest)
         self.assertEqual(vt.enc.bits, MAX_FIELD_BITS)
 
-    def test_must_be_last(self):
+    def test_fixed_entries_may_follow(self):
         text = calibrated_mission(calibrated(),
                                   '<ParameterRefEntry parameterRef="Rest"/>'
+                                  '<ParameterRefEntry parameterRef="X"/>'
                                   '<ParameterRefEntry parameterRef="X"/>')
+        e = compile_xml(text).nodes[0].fields[0][1].vtype.enc
+        self.assertEqual((e.rest, e.tail), (True, 16))
+
+    def test_must_be_last_before_a_varying_size(self):
+        text = calibrated_mission(calibrated(),
+                                  '<ParameterRefEntry parameterRef="Rest"/>'
+                                  '<ParameterRefEntry parameterRef="Rest"/>')
         with self.assertRaises(Unsupported) as cm:
             compile_xml(text)
         self.assertIn("Rest takes the rest of the packet but is not last",
+                      str(cm.exception))
+
+    def test_same_entries_after_in_every_packet(self):
+        # Base is a packet itself, with nothing after Rest; Child adds X.
+        text = calibrated_mission(calibrated()).replace(
+            '<SequenceContainer name="Status"><EntryList><ParameterRefEntry '
+            'parameterRef="X"/></EntryList>',
+            '<SequenceContainer name="Base"><EntryList><ParameterRefEntry '
+            'parameterRef="X"/><ParameterRefEntry parameterRef="Rest"/>'
+            '</EntryList></SequenceContainer><SequenceContainer name="Child">'
+            '<EntryList><ParameterRefEntry parameterRef="X"/></EntryList>'
+            '<BaseContainer containerRef="Base"><RestrictionCriteria>'
+            '<Comparison parameterRef="X" value="1"/></RestrictionCriteria>'
+            '</BaseContainer>')
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("Rest takes the rest of the packet, with a different "
+                      "size of entries after it in another packet",
                       str(cm.exception))
 
     def test_not_repeated(self):
@@ -1166,11 +1192,9 @@ class YamcsDialectTests(unittest.TestCase):
                        + "</MetaCommandSet>")
 
     def test_embedded_tc(self):
-        # Standard XTCE: T takes the rest of the packet, so Y can't follow.
-        with self.assertRaises(Unsupported) as cm:
-            compile_xml(self.EMBEDDED)
-        self.assertIn("T takes the rest of the packet but is not last",
-                      str(cm.exception))
+        # Standard XTCE: T takes the rest of the packet but Y.
+        e = compile_xml(self.EMBEDDED).nodes[0].fields[0][1].vtype.enc
+        self.assertEqual((e.embedded, e.rest, e.tail), (False, True, 8))
         n = compile_xml(dialect(self.EMBEDDED, "yamcs")).nodes[0]
         e = n.fields[0][1].vtype.enc
         self.assertEqual((e.embedded, e.rest, e.bits), (True, False, 8 * 65536))

@@ -225,3 +225,6 @@ error:Truncated | -
 error:TooLong | -
 Embed{seq_count=5, embed_tc=0x112cc00000010102, embed_tail=51} | 112ec005000915112cc0000001010233
 error:Truncated | -
+Tailed{seq_count=5, tail_data=0xabcdef, tail_value=1.5} | 112ec005000716abcdef3fc00000
+Tailed{seq_count=5, tail_data=0x, tail_value=3.1415927410125732} | 112ec00500041640490fdb
+error:Truncated | -

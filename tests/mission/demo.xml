@@ -2762,6 +2762,9 @@
           </SizeInBits>
         </BinaryDataEncoding>
       </BinaryArgumentType>
+      <FloatArgumentType name="TailValueType">
+        <FloatDataEncoding sizeInBits="32"/>
+      </FloatArgumentType>
       <EnumeratedArgumentType name="ModeArgType">
         <IntegerDataEncoding sizeInBits="8"/>
         <EnumerationList>
@@ -3443,6 +3446,26 @@
           <EntryList>
             <ArgumentRefEntry argumentRef="EmbedTc"/>
             <ArgumentRefEntry argumentRef="EmbedTail"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <!-- Data that takes the rest of the packet but the float after it. -->
+      <MetaCommand name="Tailed">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="22"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="TailData" argumentTypeRef="RestArgType"/>
+          <Argument name="TailValue" argumentTypeRef="TailValueType"/>
+        </ArgumentList>
+        <CommandContainer name="TailedContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="TailData"/>
+            <ArgumentRefEntry argumentRef="TailValue"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

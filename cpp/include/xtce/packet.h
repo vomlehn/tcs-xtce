@@ -537,12 +537,14 @@ static inline int xtce_pk_read_finish(const xtce_pk_reader* r, const char* f) {
         return 0;
 }
 
-/* The bytes from the current position to the end of the packet, for a field
- * that takes the rest of it.  Fails with XTCE_PK_BAD_SIZE unless they are
- * whole bytes, at most `max` of them. */
+/* The bytes from the current position to `tail` bits before the end of the
+ * packet, for a field that takes the rest of it but the `tail` bits of the
+ * entries after it.  Fails with XTCE_PK_BAD_SIZE unless they are whole
+ * bytes, at most `max` of them. */
 static inline int xtce_pk_read_rest(const xtce_pk_reader* r, size_t max,
-                                    const char* f, size_t* out) {
-        size_t bits = r->len * 8 > r->pos ? r->len * 8 - r->pos : 0;
+                                    size_t tail, const char* f, size_t* out) {
+        size_t bits = r->len * 8 > r->pos + tail ? r->len * 8 - r->pos - tail
+                                                 : 0;
         if (bits % 8 || bits / 8 > max)
                 return xtce_pk_fail(r->err, XTCE_PK_BAD_SIZE, f, NULL);
         *out = bits / 8;
