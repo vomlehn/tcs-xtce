@@ -161,7 +161,7 @@ tm 09d6c02a00040001010055  # dwell: nothing, then temperature 256 by alias
 tm 09d6c02a0002030066  # dwell: an unlisted selector, then nothing
 tm 09dbc02a000c094477656c6c54656d70fffe55  # dwell by name: temperature -2
 tm 09dbc02a00110f2f44656d6f2f4477656c6c566f6c743355  # dwell by name: volts 0x33, by full path
-tm 09dbc02a0008074e6f7468696e6755  # dwell by name: a name of no parameter, then nothing
+tm 09dbc02a0008074e6f7468696e6755  # dwell by name: a name of no parameter, which fails
 tm 09dbc02a0005045265737455  # dwell by name: a parameter that can't be read there
 tm 09e0c02a00070112345a12345a77  # guarded: both blocks, each with fletcher8 90
 tm 09e0c02a00010077  # guarded: no blocks

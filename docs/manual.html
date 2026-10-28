@@ -2375,8 +2375,8 @@ That value may be an enumeration whose labels are parameter names.
 With an <tt class="docutils literal">aliasNameSpace</tt>, it may instead be an enumeration whose
 labels, or an integer or string whose values, are aliases in that name
 space, as Yamcs reads it. Each parameter the value can name gives an
-optional field, present when the value names it; other values select
-nothing. In the demo's <tt class="docutils literal">Dwell</tt> packet, <tt class="docutils literal">DwellSel</tt> chooses
+optional field, present when the value names it; enumeration labels
+and aliases that name no parameter select nothing. In the demo's <tt class="docutils literal">Dwell</tt> packet, <tt class="docutils literal">DwellSel</tt> chooses
 <tt class="docutils literal">DwellTemp</tt> or <tt class="docutils literal">DwellVolt</tt>, and <tt class="docutils literal">DwellAliasSel</tt> chooses them
 again by their <tt class="docutils literal">dwell</tt> aliases, as <tt class="docutils literal">dwell_temp2</tt> and
 <tt class="docutils literal">dwell_volt2</tt>.</p>
@@ -2384,7 +2384,9 @@ again by their <tt class="docutils literal">dwell</tt> aliases, as <tt class="do
 name: any parameter in the mission, by its own name (when that finds
 it from the entry's <tt class="docutils literal">SpaceSystem</tt>, as a reference would) or its full
 path, such as <tt class="docutils literal">DwellTemp</tt> or <tt class="docutils literal">/Demo/DwellTemp</tt>. Names too long
-for the string are left out. The packet then has an optional field
+for the string are left out. A name that is no parameter's fails
+with <tt class="docutils literal">Mismatch</tt>, when decoding and when encoding, before anything
+after it is read or written. The packet then has an optional field
 for every other parameter, so its generated code grows with the
 mission; an enumeration or an alias name space keeps it to the
 parameters meant. A value naming a parameter that can't be read

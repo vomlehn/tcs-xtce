@@ -2769,6 +2769,22 @@ class NamedIndirectTests(unittest.TestCase):
         self.assertEqual(len({c.group for c in conds}), 1)
         self.assertTrue(conds[0].group)
 
+    def test_unknown_name_fails(self):
+        # Before any choice, N must name a parameter.
+        req = self.node().items[1]
+        self.assertIsInstance(req, Require)
+        self.assertEqual(req.text, "/Sat/N names no parameter")
+        self.assertEqual(len(req.criteria[0].terms), 5)
+
+    def test_choices_compare_the_selector(self):
+        # N can name itself, but every choice, even after that one, is
+        # chosen by N itself, not by the choice that is a copy of it.
+        n = self.node()
+        sel = n.items[0].local
+        conds = [it for it in n.items if isinstance(it, Cond)]
+        self.assertTrue(all(t.local is sel for c in conds
+                            for t in c.criteria[0].terms))
+
     def test_one_that_cant_be_read_fails(self):
         (r,) = [it for it in self.node().items if isinstance(it, Cond)
                 and isinstance(it.items[0], Require)]

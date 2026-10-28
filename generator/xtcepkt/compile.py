@@ -1965,8 +1965,9 @@ class Compiler:
         enumeration whose labels name parameters; with an aliasNameSpace,
         an enumeration, integer or string that gives an alias in that name
         space, as Yamcs reads it; or without one, an integer or string
-        that is a parameter's name.  Values that name no parameter select
-        nothing."""
+        that is a parameter's name.  An enumeration label or alias that
+        names no parameter selects nothing; a name that names none fails.
+        """
         if e.repeat_entry is not None:
             raise Unsupported(f"{where}: a repeated IndirectParameterRefEntry")
         sel = e.parameter_instance
@@ -1997,14 +1998,21 @@ class Compiler:
                               f"by {vt.kind} value {pkey}")
         out: list[Item] = []
         group = self._id()
+        named = vt.kind in ("int", "string") and aliases is None
+        # Only one choice is there, so each sees only the values before the
+        # entry: the selector itself, not a choice that is a copy of it.
+        before = list(scope)
+        chosen = []
+        crits = []
         for texts, key in choices:
             terms = [self.comparison("ParameterInstanceRef", sel, "==", t, path,
-                                     scope, where, arg_key) for t in texts]
+                                     before, where, arg_key) for t in texts]
             crit = (terms[0] if len(terms) == 1
                     else AnyOf(terms, " or ".join(t.text for t in terms)))
+            crits.append(crit)
             try:
-                lc = self.bind(self.param_local("/" + "/".join(key), ()), scope,
-                               where, arg_key)
+                lc = self.bind(self.param_local("/" + "/".join(key), ()),
+                               before, where, arg_key)
                 if lc.computed:
                     raise Unsupported(f"{where}: an IndirectParameterRefEntry "
                                       f"selects length field {lc.name}")
@@ -2017,19 +2025,26 @@ class Compiler:
                 # can't be decoded here fails decoding when it is.
                 text = f"{pkey} names {qname(key)}, which can't be read here"
                 never = self.comparison("ParameterInstanceRef", sel, "!=",
-                                        texts[0], path, scope, where, arg_key)
+                                        texts[0], path, before, where, arg_key)
                 out.append(Cond([crit],
                                 [Require([never], where, f"{text} ({x})")],
                                 group))
                 continue
             lc.optional = True
             out.append(Cond([crit], [Value(lc)], group))
-            scope.append(lc)
+            chosen.append(lc)
+        scope += chosen
         if not any(isinstance(it.items[0], Value) for it in out):
             if vt.kind == "int" and aliases is None:
                 raise Unsupported(f"{where}: no parameter has a name that "
                                   f"integer {pkey} can hold")
             raise Unsupported(f"{where}: no label of {pkey} names a parameter")
+        if named:
+            # A name is meant to name a parameter: one that names none
+            # fails, before anything after it is read.
+            out.insert(0,
+                       Require([AnyOf(crits, f"{pkey} names a parameter")],
+                               where, f"{pkey} names no parameter"))
         return out
 
     def named_by(self, vt: VType, path: Key) -> list[tuple[list, Key]]:

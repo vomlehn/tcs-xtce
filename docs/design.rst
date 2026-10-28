@@ -929,7 +929,11 @@ path: ``named_by``) becomes a ``Cond`` on ``selector == name`` holding
 that parameter, so the generated code is an optional field per choice,
 as for an ``IncludeCondition``. A choice that can't be compiled there
 holds instead a ``Require`` that never holds, so naming it fails
-decoding rather than misreading the packet.
+decoding rather than misreading the packet. For a name, a ``Require``
+before the choices fails when it names no parameter. The choices are
+compiled against the values before the entry, since only one of them is
+there: the selector can name itself, and a choice that is a copy of it
+must not stand in for it.
 
 The choices' Conds share a ``group``: at most one holds, so each starts
 where the first does. ``alternatives`` gathers them for ``max_bits``,
