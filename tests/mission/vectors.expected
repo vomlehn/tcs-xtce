@@ -219,3 +219,9 @@ StuffBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, 
 error:InvalidValue | -
 StuffBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, stuffed=0x, stuff_tail=17, ms_stamp=0.001, var_delay=0.0, stuff_end=34} | 0a6cc02a00070011000000010022
 error:InvalidValue | -
+RecordList{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, record_element=[{rec_len=1, rec_data=0xaa}, {rec_len=3, rec_data=0xbbccdd}], rec_label="hi"} | 0a76c02a00090201aa03bbccdd026869
+RecordList{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, record_element=[], rec_label=""} | 0a76c02a00010000
+error:Truncated | -
+error:TooLong | -
+Embed{seq_count=5, embed_tc=0x112cc00000010102, embed_tail=51} | 112ec005000915112cc0000001010233
+error:Truncated | -

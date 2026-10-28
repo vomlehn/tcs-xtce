@@ -1053,6 +1053,95 @@ class TransformTests(unittest.TestCase):
         self.assertTrue(n.fields[1][1].optional)
 
 
+class YamcsDialectTests(unittest.TestCase):
+    REPEATED = mission(tm="""
+        <ParameterTypeSet>
+          <IntegerParameterType name="U8" signed="false">
+          <IntegerDataEncoding sizeInBits="8"/></IntegerParameterType>
+          <BinaryParameterType name="Data"><BinaryDataEncoding><SizeInBits>
+            <DynamicValue><ParameterInstanceRef parameterRef="L"/>
+            <LinearAdjustment slope="8"/></DynamicValue>
+          </SizeInBits></BinaryDataEncoding></BinaryParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="N" parameterTypeRef="U8"/>
+          <Parameter name="L" parameterTypeRef="U8"/>
+          <Parameter name="D" parameterTypeRef="Data"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="E"><EntryList>
+            <ParameterRefEntry parameterRef="L"/>
+            <ParameterRefEntry parameterRef="D"/>
+          </EntryList></SequenceContainer>
+          <SequenceContainer name="P"><EntryList>
+            <ParameterRefEntry parameterRef="N"/>
+            <ContainerRefEntry containerRef="E"><RepeatEntry><Count>
+              <DynamicValue><ParameterInstanceRef parameterRef="N"/>
+              </DynamicValue></Count></RepeatEntry></ContainerRefEntry>
+          </EntryList></SequenceContainer>
+        </ContainerSet>""")
+
+    def test_size_from_an_entry_of_each_copy(self):
+        m = compile_xml(self.REPEATED)
+        p = next(n for n in m.nodes if n.name == "P")
+        copy = p.fields[-1][1].vtype.enc.elem
+        d = copy.enc.members[1].vtype.dyn
+        self.assertEqual((d.member, d.max), ("l", 255))
+
+    LABEL = mission(tm="""
+        <ParameterTypeSet>
+          <StringParameterType name="Label"><StringDataEncoding>
+            <Variable maxSizeInBits="64"><DynamicValue>
+              <ParameterInstanceRef parameterRef="_yamcs_ignore"/>
+            </DynamicValue><LeadingSize sizeInBitsOfSizeTag="8"/>
+            </Variable></StringDataEncoding></StringParameterType>
+        </ParameterTypeSet>
+        <ParameterSet>
+          <Parameter name="S" parameterTypeRef="Label"/>
+        </ParameterSet>
+        <ContainerSet>
+          <SequenceContainer name="P"><EntryList>
+            <ParameterRefEntry parameterRef="S"/>
+          </EntryList></SequenceContainer>
+        </ContainerSet>""")
+
+    def test_yamcs_ignore(self):
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(self.LABEL)
+        self.assertIn("unresolved parameter reference '_yamcs_ignore'",
+                      str(cm.exception))
+        e = compile_xml(dialect(self.LABEL, "yamcs")).nodes[0].fields[0][1]
+        self.assertEqual((e.vtype.enc.dyn, e.vtype.enc.size_tag_bits),
+                         (None, 8))
+
+    EMBEDDED = mission(tc="""
+        <ArgumentTypeSet>
+          <BinaryArgumentType name="Tc"><AncillaryDataSet>
+            <AncillaryData name="Yamcs:EmbeddedTc"/></AncillaryDataSet>
+            <BinaryDataEncoding><SizeInBits><FixedValue>-1</FixedValue>
+            </SizeInBits></BinaryDataEncoding></BinaryArgumentType>
+          <IntegerArgumentType name="U8" signed="false">
+          <IntegerDataEncoding sizeInBits="8"/></IntegerArgumentType>
+        </ArgumentTypeSet>
+        <MetaCommandSet>"""
+                       + command("C",
+                                 '<Argument name="T" argumentTypeRef="Tc"/>'
+                                 '<Argument name="Y" argumentTypeRef="U8"/>',
+                                 '<ArgumentRefEntry argumentRef="T"/>'
+                                 '<ArgumentRefEntry argumentRef="Y"/>')
+                       + "</MetaCommandSet>")
+
+    def test_embedded_tc(self):
+        # Standard XTCE: T takes the rest of the packet, so Y can't follow.
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(self.EMBEDDED)
+        self.assertIn("T takes the rest of the packet but is not last",
+                      str(cm.exception))
+        n = compile_xml(dialect(self.EMBEDDED, "yamcs")).nodes[0]
+        e = n.fields[0][1].vtype.enc
+        self.assertEqual((e.embedded, e.rest, e.bits), (True, False, 8 * 65536))
+
+
 class LocationTests(unittest.TestCase):
     def items(self, *refs: str, record: str = "") -> list:
         return compile_xml(packet_mission(*refs, record=record)).nodes[0].items

@@ -751,6 +751,23 @@ impl<'a> BitReader<'a> {
     }
 
     /// Reads `n` whole bytes (which need not be byte aligned).
+    /// The size of the CCSDS packet that starts here, from its packet
+    /// length field, for an embedded packet (Yamcs:EmbeddedTc); fails with
+    /// TooLong if it is more than `max` bytes.
+    pub fn embedded_bytes(
+        &self,
+        max: usize,
+        field: &'static str,
+    ) -> Result<usize> {
+        let mut p = self.clone();
+        p.pad(32, field)?;
+        let n = p.uint(16, field)? as usize + 7;
+        if n > max {
+            return Err(PacketError::TooLong { field });
+        }
+        Ok(n)
+    }
+
     pub fn bytes(&mut self, n: usize, field: &'static str) -> Result<Vec<u8>> {
         let mut out = Vec::new();
         self.bytes_into(n, &mut out, field)?;
@@ -3172,6 +3189,25 @@ pub fn write_rest(
         return Err(PacketError::TooLong { field });
     }
     w.bytes(b);
+    Ok(())
+}
+
+/// Writes an embedded CCSDS packet (Yamcs:EmbeddedTc): `b`, at least 7 and
+/// at most `max` bytes, with its packet length field set to its size.
+pub fn write_embedded(
+    w: &mut BitWriter<'_>,
+    b: &[u8],
+    max: usize,
+    field: &'static str,
+) -> Result<()> {
+    if b.len() > max {
+        return Err(PacketError::TooLong { field });
+    }
+    let n = u16::try_from(b.len().wrapping_sub(7))
+        .map_err(|_| PacketError::BadSize { field })?;
+    w.bytes(&b[..4]);
+    w.bytes(&n.to_be_bytes());
+    w.bytes(&b[6..]);
     Ok(())
 }
 

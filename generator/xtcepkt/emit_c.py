@@ -530,6 +530,10 @@ class CEmitter:
                 self.line("size_t n;", depth + 1)
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_rest(r, {e.bits // 8}, "
                           f"{f}, &n));", depth + 1)
+            elif e.embedded:
+                self.line("size_t n;", depth + 1)
+                self.line("XTCE_PK_TRY(xtce_pk_read_embedded(r, "
+                          f"{e.bits // 8}, {f}, &n));", depth + 1)
             else:
                 self.size(e.dyn, "r->err", f, ref, depth + 1)
             if vt.kind == "string":
@@ -754,6 +758,12 @@ class CEmitter:
                       f"XTCE_PK_TOO_LONG, {f}, NULL);", depth)
             self.line(f"XTCE_PK_TRY(xtce_pk_write_binary_to(w, {h}, {data}, "
                       f"{n}, {has}, {raw}, {e.bits // 8}, {f}));", depth)
+            return
+        if isinstance(e, BinaryEnc) and e.embedded:
+            data, n = ((f"(const uint8_t*){x}", str(len(fixed))) if is_lit
+                       else (f"{x}.data", f"{x}.len"))
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_embedded(w, {data}, {n}, "
+                      f"{e.bits // 8}, {f}));", depth)
             return
         if isinstance(e, BinaryEnc) and e.rest:
             data, n = ((f"(const uint8_t*){x}", str(len(fixed))) if is_lit

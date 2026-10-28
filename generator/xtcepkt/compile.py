@@ -410,6 +410,14 @@ MAX_FIELD_TAG = "tcs-xtce.max-field-bytes"
 # documents follow where the standard leaves something open.
 DIALECT_TAG = "tcs-xtce.dialect"
 DIALECTS = ("yamcs",)
+# The AncillaryData that, in the Yamcs dialect, makes binary data of size
+# -1 a complete CCSDS packet, whose packet length field gives its size.
+EMBEDDED_TC_TAG = "Yamcs:EmbeddedTc"
+# The most bytes a CCSDS space packet takes: 6 of header, and 65536 more.
+CCSDS_MAX_BYTES = 65542
+# The parameter that, in the Yamcs dialect, a string's Variable size names
+# when its LeadingSize or TerminationChar alone gives the size.
+YAMCS_IGNORE = "_yamcs_ignore"
 
 
 def ancillary_str(item, tag: str, where: str) -> Optional[str]:
@@ -785,6 +793,11 @@ class Compiler:
                 raise Unsupported(f"{where}: {base.lower()} with transform "
                                   "algorithms")
             enc = self.xform(enc, False, where)
+        elif (isinstance(enc, BinaryEnc) and enc.rest and base == "Binary"
+              and self.dialect == "yamcs"
+              and ancillary_str(t, EMBEDDED_TC_TAG, where) is not None):
+            # Its own packet length field gives its size.
+            enc = BinaryEnc(min(enc.bits, 8 * CCSDS_MAX_BYTES), embedded=True)
         vt = VType(key=qname(key), name=t.name, kind="", enc=enc,
                    calibrator=cal)
         if base == "Float":
@@ -1191,11 +1204,16 @@ class Compiler:
                 if v.choice1.name == "DynamicValue":
                     dyn = self.dyn_size(v.choice1.value, path, "string size",
                                         where)
+                    if (self.dialect == "yamcs" and dyn.name == YAMCS_IGNORE
+                            and dyn.table is None):
+                        # The schema needs a size; Yamcs ignores this one.
+                        dyn = None
                 elif v.choice1.name == "DiscreteLookupList":
                     dyn = DynSize(table=(path, v.choice1.value))
                 else:
                     raise Unsupported(f"{where}: string size from "
                                       f"{v.choice1.name}")
+            if dyn is not None:
                 dyn.unit = 8
             mx = self._size(v.max_size_in_bits, "string", where)
             if v.choice2.name == "LeadingSize":
@@ -2153,11 +2171,11 @@ class Compiler:
         self.ctypes[ckey] = vt
         return vt
 
-    @staticmethod
-    def aggregate_of(items: list, m: int, what: str, key: str,
+    def aggregate_of(self, items: list, m: int, what: str, key: str,
                      name: str) -> VType:
         """The aggregate of a repeated container's items, which start at
-        mark ``m``."""
+        mark ``m``.  A size or count from an earlier value of the copy is
+        that member's."""
         this = Local(0, name, key, None)
         idents: dict = {}  # id(Local) -> member
         checks: list = []
@@ -2215,8 +2233,8 @@ class Compiler:
             else:
                 vt = it.local.vtype
                 if vt.dyn is not None:
-                    raise Unsupported(f"{what}: {it.local.name} has a size "
-                                      "that another value gives")
+                    vt = self.member_bound(vt, members, idents, items, what,
+                                           it.local.name)
                 if it.local.computed:
                     raise Unsupported(f"{what}: {it.local.name} is a packet "
                                       "length or checksum field")
@@ -2235,6 +2253,29 @@ class Compiler:
         this.vtype = vt
         vt.doc = "one copy of a repeated container"
         return vt
+
+    def member_bound(self, vt: VType, members: list, idents: dict, items: list,
+                     what: str, name: str) -> VType:
+        """``vt``, whose size or count another value gives, bound to the
+        latest earlier member of a repeated container's copy that is
+        that value."""
+        d = vt.dyn
+        locs = {id(it.local): it.local for it in items if isinstance(it, Value)}
+        sib = None
+        for lid, mem in idents.items():
+            lc = locs[lid]
+            if ((d.key is not None and lc.key == d.key)
+                    or (d.arg is not None and lc.name == d.arg)):
+                sib = mem
+        if (sib is None or d.table is not None or d.members or d.instance != 0):
+            raise Unsupported(f"{what}: {name} has a size that another value "
+                              "gives, other than an earlier entry of the "
+                              "container")
+        if sib.vtype.kind != "int":
+            raise Unsupported(f"{what}: size or count from {sib.vtype.kind} "
+                              f"entry {sib.name}")
+        return bounded(vt, dataclasses.replace(d, member=sib.ident),
+                       int_bounds(sib.vtype), self.max_field_bits)
 
     def tm_node(self, key: Key) -> Node:
         if key in self.nodes:

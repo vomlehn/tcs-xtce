@@ -89,6 +89,9 @@ def need(vt: VType) -> tuple[Optional[int], str]:
         return None, f"size from {vt.dyn.source}, at most {nbytes(vt.dyn.max)}"
     if isinstance(e, BinaryEnc) and e.rest:
         return None, f"rest of the packet, at most {nbytes(e.bits // 8)}"
+    if isinstance(e, BinaryEnc) and e.embedded:
+        return None, ("a CCSDS packet, whose length field gives its size, at "
+                      f"most {nbytes(e.bits // 8)}")
     if isinstance(e, XformEnc):
         return None, "made by transform algorithms"
     if vt.kind == "int" and vt.calibrator is not None:

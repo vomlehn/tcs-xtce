@@ -154,6 +154,9 @@ class BinaryEnc:
     dyn: Optional[DynSize] = None
     rest: bool = False
     lsb: bool = False  # bitOrder leastSignificantBitFirst
+    # A complete CCSDS packet whose packet length field gives its size, at
+    # most ``bits`` (Yamcs:EmbeddedTc, in the Yamcs dialect).
+    embedded: bool = False
     # The names of its FromBinaryTransformAlgorithm and
     # ToBinaryTransformAlgorithm, which make it an XformEnc.
     transform: Optional[tuple] = None
@@ -161,7 +164,7 @@ class BinaryEnc:
     @property
     def variable(self) -> bool:
         """Whether the number of bytes varies from packet to packet."""
-        return self.dyn is not None or self.rest
+        return self.dyn is not None or self.rest or self.embedded
 
 
 @dataclass

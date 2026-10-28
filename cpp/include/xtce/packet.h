@@ -549,6 +549,21 @@ static inline int xtce_pk_read_rest(const xtce_pk_reader* r, size_t max,
         return 0;
 }
 
+/* The size of the CCSDS packet that starts here, from its packet length
+ * field, into *out, for an embedded packet (Yamcs:EmbeddedTc); fails with
+ * XTCE_PK_TOO_LONG if it is more than `max` bytes. */
+static inline int xtce_pk_read_embedded(const xtce_pk_reader* r, size_t max,
+                                        const char* f, size_t* out) {
+        xtce_pk_reader p = *r;
+        uint64_t v;
+        XTCE_PK_TRY(xtce_pk_read_pad(&p, 32, f));
+        XTCE_PK_TRY(xtce_pk_read_uint(&p, 16, false, f, &v));
+        if (v + 7 > max)
+                return xtce_pk_fail(r->err, XTCE_PK_TOO_LONG, f, NULL);
+        *out = (size_t)v + 7;
+        return 0;
+}
+
 static inline int xtce_pk_read_bytes(xtce_pk_reader* r, size_t n, const char* f,
                                      uint8_t* out) {
         size_t i;
@@ -763,6 +778,23 @@ static inline int xtce_pk_write_transform(xtce_pk_writer* w, size_t start,
         w->len = a + n;
         w->pos = 8 * (a + n);
         return 0;
+}
+
+/* Writes an embedded CCSDS packet (Yamcs:EmbeddedTc): the `n` bytes at
+ * `data`, at least 7 and at most `max`, with its packet length field set to
+ * its size. */
+static inline int xtce_pk_write_embedded(xtce_pk_writer* w,
+                                         const uint8_t* data, size_t n,
+                                         size_t max, const char* f) {
+        uint8_t len[2];
+        if (n > max) return xtce_pk_fail(w->err, XTCE_PK_TOO_LONG, f, NULL);
+        if (n < 7 || n - 7 > 0xFFFF)
+                return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, f, NULL);
+        len[0] = (uint8_t)((n - 7) >> 8);
+        len[1] = (uint8_t)(n - 7);
+        XTCE_PK_TRY(xtce_pk_write_bytes(w, data, 4));
+        XTCE_PK_TRY(xtce_pk_write_bytes(w, len, 2));
+        return xtce_pk_write_bytes(w, data + 6, n - 6);
 }
 
 /* Writes what the transform `fn` makes of the `n` bytes at `data`, as

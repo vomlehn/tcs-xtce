@@ -35,9 +35,7 @@ yamcs/ccsds-green-book.xml: schema invalid; rejected by the binding
 yamcs/container-entry.xml: schema invalid (facets only); rejected by the binding
   digest b1ef9b15ff10fb93de6c899532d7378a
 yamcs/embedded-tc.xml: schema valid; loaded by the binding
-  2 packets, 2 not supported
-    unsupported: /EmbeddedTcTest/single: meta-command /EmbeddedTcTest/single: tc takes the rest of the packet but is not last
-    unsupported: /EmbeddedTcTest/list: type /EmbeddedTcTest/ActivityType: member tc takes the rest of the packet
+  4 packets, 0 not supported
   digest 54fa721a8c5b8f84f8a1f1fba2e83703
 yamcs/empty-match-criteria.xml: schema valid; loaded by the binding
   2 packets, 0 not supported
@@ -57,9 +55,7 @@ yamcs/refsolver3.xml: schema valid; loaded by the binding
   0 packets, 0 not supported
   digest 93b25335dd27b35ec8b947814009786c
 yamcs/strings-cmd.xml: schema valid; loaded by the binding
-  4 packets, 2 not supported
-    unsupported: /StringsCmd/command3: meta-command /StringsCmd/command3: unresolved parameter reference '_yamcs_ignore'
-    unsupported: /StringsCmd/command5: meta-command /StringsCmd/command5: unresolved parameter reference '_yamcs_ignore'
+  6 packets, 0 not supported
   digest ff23a09fefa83eff320e82e722b31b53
 yamcs/strings-tm.xml: schema invalid; rejected by the binding
   digest 268da767ca1b981a0422dc5693a5eb3d
@@ -275,13 +271,8 @@ yamcs-cfs/tutorial.xml: schema invalid; rejected by the binding
   digest 51d78ba9ef5ab2f366459606f42a5ff5
 yamcs-cfs/ocpoc.xml: schema invalid; rejected by the binding
   digest 2c8841271cb1758d2684ad621de8c618
-mission pus (9 documents): 82 packets, 6 not supported
-    unsupported: /PUS5/event2: container /PUS5/event2: unresolved parameter reference '_yamcs_ignore'
-    unsupported: /PUS11/DETAIL_REPORT/DETAIL_REPORT: container /PUS11/DETAIL_REPORT/DETAIL_REPORT: repeated container /PUS11/DETAIL_REPORT/DETAIL_REPORT_ELEMENT: tc_data has a size that another value gives
+mission pus (9 documents): 87 packets, 1 not supported
     unsupported: /PUS20/TM(20,2)_parameter_value_report: unresolved parameter reference 'number_of_parameters' in /PUS20
-    unsupported: /PUS22/DETAIL_REPORT/DETAIL_REPORT: container /PUS22/DETAIL_REPORT/DETAIL_REPORT: repeated container /PUS22/DETAIL_REPORT/DETAIL_REPORT_ELEMENT: tc_data has a size that another value gives
-    unsupported: /PUS11/INSERT_ACTIVITIES: type /PUS11/ActivityType: member tc takes the rest of the packet
-    unsupported: /PUS19/ADD_EVENT_ACTIONS: type /PUS19/EventActionType: member tc takes the rest of the packet
   digest 98800cd14e818edf63bdfb4168bf7632
 mission pus-verifiers (2 documents): 9 packets, 0 not supported
   digest 6aada7e9d6a206b424f7360fa678e71e

@@ -253,6 +253,19 @@ def tally(rng) -> bytes:
     return body
 
 
+def records(rng) -> bytes:
+    """A RecordList body: a count mostly in range, records of a length byte
+    and that many bytes, and a label after its length byte, now and then
+    too long."""
+    n = rng.choice([0, 1, 2, 3, 3, rng.randrange(6)])
+    out = bytes([n])
+    for _ in range(min(n, 4)):
+        k = rng.randrange(5)
+        out += bytes([k]) + rng.randbytes(k)
+    k = rng.choice([0, 3, 16, rng.randrange(20)])
+    return out + bytes([k]) + text(rng, "abc", "ascii", k)
+
+
 def stuffed(rng) -> bytes:
     """A StuffBlock body: a length byte and that many bytes, a byte, four
     bytes of milliseconds, a varint of milliseconds and a byte; now and
@@ -460,7 +473,8 @@ def main() -> None:
                                380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
                                430, 440, 450, 460, 470, 480, 490, 500, 510, 520,
                                530, 550, 550, 560, 560, 570, 570, 580, 590, 600,
-                               600, 610, 610, 620, 620, rng.randrange(1 << 11)])
+                               600, 610, 610, 620, 620, 630, 630,
+                               rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
@@ -541,6 +555,8 @@ def main() -> None:
                 keep = rng.random() < 0.5
                 if keep:
                     data = with_length(data, len(data))
+            elif apid == 630 and rng.random() < 0.9:
+                data += records(rng)
             elif apid == 620 and rng.random() < 0.9:
                 data += stuffed(rng)
                 keep = rng.random() < 0.5
@@ -572,7 +588,7 @@ def main() -> None:
             data = header(rng, 1, rng.choice([300, 301, 302]))
             opcode = rng.choice([1, 2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12,
                                  12, 13, 13, 14, 15, 16, 17, 17, 18, 18, 19, 19,
-                                 20, 20, rng.randrange(256)])
+                                 20, 20, 21, 21, rng.randrange(256)])
             data += bytes([opcode])
             if opcode == 2 and rng.random() < 0.7:
                 n = rng.randrange(16)
@@ -608,6 +624,13 @@ def main() -> None:
                 if rng.random() < 0.3:
                     body = body[:4] + bytes([rng.randrange(256)])
                 data += body
+            elif opcode == 21 and rng.random() < 0.9:
+                # Embed: a command packet, its length mostly right, and a
+                # byte.
+                body = rng.randbytes(rng.randrange(1, 7))
+                n = rng.choice([len(body) - 1] * 3 + [0, rng.randrange(9)])
+                data += (bytes.fromhex("112cc000") + n.to_bytes(2, "big") + body
+                         + rng.randbytes(1))
             elif opcode == 20 and rng.random() < 0.9:
                 # Forward: a SetMode command, its length mostly right.
                 data += (bytes.fromhex("112cc000")

@@ -1297,8 +1297,10 @@ included container's entries, named like the container (or
 <tt class="docutils literal">&lt;Name&gt;Item</tt> when a packet already has that name). In the demo,
 <tt class="docutils literal">Log</tt> has <tt class="docutils literal">log_record</tt>, a list of <tt class="docutils literal">LogRecord {channel, reading}</tt>.
 The included container's entries can have locations, but can't have an
-<tt class="docutils literal">IncludeCondition</tt>, overlap, or take a size or count from another
-value. Gaps that locations leave are written as zeros. A
+<tt class="docutils literal">IncludeCondition</tt> or overlap. An entry can take its size or count
+from an earlier integer entry of the same copy, as the demo's
+<tt class="docutils literal">RecordElement</tt> takes <tt class="docutils literal">RecData</tt>'s from <tt class="docutils literal">RecLen</tt>, but not from a
+value outside the copy. Gaps that locations leave are written as zeros. A
 <tt class="docutils literal">containerStart</tt> location is relative to the start of each copy.</p>
 <p><strong>Container sizes.</strong> A <tt class="docutils literal">BinaryEncoding</tt> with a fixed <tt class="docutils literal">SizeInBits</tt> on
 a container (other than one with a <tt class="docutils literal">BaseContainer</tt>) makes it take
@@ -2509,8 +2511,22 @@ milliseconds and a delay in a varint, with entries after each.</p>
 <dd><p class="first">Where XTCE leaves a meaning open and a ground system settles it, an
 <tt class="docutils literal">AncillaryData</tt> named <tt class="docutils literal"><span class="pre">tcs-xtce.dialect</span></tt> on a document's root
 <tt class="docutils literal">SpaceSystem</tt> says whose reading to follow. The one dialect is
-<tt class="docutils literal">yamcs</tt>, which reads a transformed value's <tt class="docutils literal">SizeInBits</tt> of <tt class="docutils literal"><span class="pre">-1</span></tt>
-as Yamcs does (see Transform algorithms):</p>
+<tt class="docutils literal">yamcs</tt>, which reads as Yamcs does:</p>
+<ul class="simple">
+<li>a transformed value's <tt class="docutils literal">SizeInBits</tt> of <tt class="docutils literal"><span class="pre">-1</span></tt>: the algorithm finds
+the size, and entries may follow (see Transform algorithms);</li>
+<li>a string's <tt class="docutils literal">Variable</tt> size from <tt class="docutils literal">_yamcs_ignore</tt>: the schema
+requires a size, and this one stands for none, so the
+<tt class="docutils literal">LeadingSize</tt> or <tt class="docutils literal">TerminationChar</tt> alone gives it, as for the
+demo's <tt class="docutils literal">RecLabel</tt>;</li>
+<li>binary data of size <tt class="docutils literal"><span class="pre">-1</span></tt> whose type has an <tt class="docutils literal">AncillaryData</tt>
+named <tt class="docutils literal">Yamcs:EmbeddedTc</tt>: a complete CCSDS packet, whose packet
+length field gives its size, so entries may follow it. Encoding
+sets that field from the value's size, as Yamcs's command
+post-processor does; the sequence count and any CRC stay as the
+application gives them. The value must be from 7 bytes to the
+maximum field size. The demo's <tt class="docutils literal">Embed</tt> command carries one.</li>
+</ul>
 <pre class="code xml literal-block">
 <span class="name tag">&lt;SpaceSystem</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;Rover&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
   </span><span class="name tag">&lt;AncillaryDataSet&gt;</span><span class="whitespace">

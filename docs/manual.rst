@@ -827,8 +827,10 @@ included container's entries, named like the container (or
 ``<Name>Item`` when a packet already has that name). In the demo,
 ``Log`` has ``log_record``, a list of ``LogRecord {channel, reading}``.
 The included container's entries can have locations, but can't have an
-``IncludeCondition``, overlap, or take a size or count from another
-value. Gaps that locations leave are written as zeros. A
+``IncludeCondition`` or overlap. An entry can take its size or count
+from an earlier integer entry of the same copy, as the demo's
+``RecordElement`` takes ``RecData``'s from ``RecLen``, but not from a
+value outside the copy. Gaps that locations leave are written as zeros. A
 ``containerStart`` location is relative to the start of each copy.
 
 **Container sizes.** A ``BinaryEncoding`` with a fixed ``SizeInBits`` on
@@ -2091,8 +2093,21 @@ Dialects
    Where XTCE leaves a meaning open and a ground system settles it, an
    ``AncillaryData`` named ``tcs-xtce.dialect`` on a document's root
    ``SpaceSystem`` says whose reading to follow. The one dialect is
-   ``yamcs``, which reads a transformed value's ``SizeInBits`` of ``-1``
-   as Yamcs does (see Transform algorithms):
+   ``yamcs``, which reads as Yamcs does:
+
+   * a transformed value's ``SizeInBits`` of ``-1``: the algorithm finds
+     the size, and entries may follow (see Transform algorithms);
+   * a string's ``Variable`` size from ``_yamcs_ignore``: the schema
+     requires a size, and this one stands for none, so the
+     ``LeadingSize`` or ``TerminationChar`` alone gives it, as for the
+     demo's ``RecLabel``;
+   * binary data of size ``-1`` whose type has an ``AncillaryData``
+     named ``Yamcs:EmbeddedTc``: a complete CCSDS packet, whose packet
+     length field gives its size, so entries may follow it. Encoding
+     sets that field from the value's size, as Yamcs's command
+     post-processor does; the sequence count and any CRC stay as the
+     application gives them. The value must be from 7 bytes to the
+     maximum field size. The demo's ``Embed`` command carries one.
 
    .. code-block:: xml
 

@@ -397,6 +397,9 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
         if e.rest:
             return (f"{{ let n = r.rest_bytes({e.bits // 8}, {f})?; "
                     f"r.{read}(n, {f})? }}")
+        if e.embedded:
+            return (f"{{ let n = r.embedded_bytes({e.bits // 8}, {f})?; "
+                    f"r.{read}(n, {f})? }}")
         n = size(e.dyn, ref(e.dyn), f) if e.dyn else e.bits // 8
         b = f"r.{read}({n}, {f})?"
         if vt.kind != "string":
@@ -559,6 +562,8 @@ def write_value_stmt(vt: VType, x: str, f: str, ref) -> str:
         return raw_write(e, raw if e.bits > 64 else f"({raw} as u64)")
     if isinstance(e, BinaryEnc) and e.rest:
         return f"pk::write_rest(w, &{x}, {e.bits // 8}, {f})?;"
+    if isinstance(e, BinaryEnc) and e.embedded:
+        return f"pk::write_embedded(w, &{x}, {e.bits // 8}, {f})?;"
     if isinstance(e, BinaryEnc):
         return f"pk::write_binary(w, {data}, {e.bits // 8}, {f})?;"
     if vt.kind == "bool":

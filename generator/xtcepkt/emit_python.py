@@ -276,6 +276,8 @@ def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
     if isinstance(e, BinaryEnc):
         if e.rest:
             return f"r.bytes(r.rest_bytes({e.bits // 8}, {f}), {f})"
+        if e.embedded:
+            return f"r.bytes(r.embedded_bytes({e.bits // 8}, {f}), {f})"
         n = size(e.dyn, ref(e.dyn), f) if e.dyn else e.bits // 8
         b = f"r.bytes({n}, {f})"
         return f"pk.string_from_bytes({b}, {f})" if vt.kind == "string" else b
@@ -325,6 +327,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         return f"w.{way}({h}, {x}, {e.raw}, {e.bits // 8}, {f})"
     if isinstance(e, BinaryEnc) and e.rest:
         return f"pk.write_rest(w, {x}, {e.bits // 8}, {f})"
+    if isinstance(e, BinaryEnc) and e.embedded:
+        return f"pk.write_embedded(w, {x}, {e.bits // 8}, {f})"
     if isinstance(e, BinaryEnc):
         data = f"{x}.encode()" if vt.kind == "string" else x
         return f"pk.write_binary(w, {data}, {e.bits // 8}, {f})"

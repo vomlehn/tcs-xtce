@@ -219,3 +219,9 @@ tm 0a6cc02a00070011000000000022  # stuffed: nothing framed, times of zero
 tm 0a6cc02a000209aabb  # stuffed: a length past the packet, which Unstuff can't take
 tm 0a6cc02a0008001100000001800022  # stuffed: a varint of two bytes for zero, re-encoded in one
 tm 0a6cc02a000a001100000000ffffffffff  # stuffed: a varint that never ends
+tm 0a76c02a00090201aa03bbccdd026869  # records: two, each its own length, and the label "hi"
+tm 0a76c02a00010000  # records: none, and an empty label
+tm 0a76c02a00030105aabb  # records: a length past the packet
+tm 0a76c02a00120011616161616161616161616161616161616161  # records: a label of 17 bytes, one too many
+tc 112ec005000915112cc0000001010233  # embed: a SetMode command, then a byte
+tc 112ec005000615112cc0000009  # embed: a command whose length runs past the packet

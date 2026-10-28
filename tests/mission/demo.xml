@@ -1111,6 +1111,34 @@
           </BinaryDataEncoding>
         </Encoding>
       </RelativeTimeParameterType>
+      <!-- Bytes as many as the RecLen before them, in each copy of a
+           repeated container. -->
+      <BinaryParameterType name="RecDataType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="RecLen"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
+      <IntegerParameterType name="RecCountType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="3"/>
+      </IntegerParameterType>
+      <!-- In the Yamcs dialect, _yamcs_ignore is a size the schema asks
+           for and the leading size replaces. -->
+      <StringParameterType name="YamcsLabelType">
+        <StringDataEncoding encoding="UTF-8">
+          <Variable maxSizeInBits="128">
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="_yamcs_ignore"/>
+            </DynamicValue>
+            <LeadingSize sizeInBitsOfSizeTag="8"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
       <IntegerParameterType name="RepCountType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
         <ValidRange minInclusive="0" maxInclusive="5"/>
@@ -1372,6 +1400,10 @@
       <Parameter name="MsStamp" parameterTypeRef="MsStampType"/>
       <Parameter name="VarDelay" parameterTypeRef="VarDelayType"/>
       <Parameter name="StuffEnd" parameterTypeRef="U8"/>
+      <Parameter name="RecCount" parameterTypeRef="RecCountType"/>
+      <Parameter name="RecLen" parameterTypeRef="U8"/>
+      <Parameter name="RecData" parameterTypeRef="RecDataType"/>
+      <Parameter name="RecLabel" parameterTypeRef="YamcsLabelType"/>
       <Parameter name="ZipA" parameterTypeRef="U16"/>
       <Parameter name="ZipB" parameterTypeRef="U8"/>
       <Parameter name="TwoRowCols" parameterTypeRef="RepCountType"/>
@@ -2364,6 +2396,33 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <!-- One record: its data's size, then the data. -->
+      <SequenceContainer name="RecordElement">
+        <EntryList>
+          <ParameterRefEntry parameterRef="RecLen"/>
+          <ParameterRefEntry parameterRef="RecData"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="RecordList">
+        <EntryList>
+          <ParameterRefEntry parameterRef="RecCount"/>
+          <ContainerRefEntry containerRef="RecordElement">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="RecCount"/>
+                </DynamicValue>
+              </Count>
+            </RepeatEntry>
+          </ContainerRefEntry>
+          <ParameterRefEntry parameterRef="RecLabel"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="630"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="TwoRowBlock">
         <EntryList>
           <ParameterRefEntry parameterRef="TwoRowCols"/>
@@ -2636,6 +2695,18 @@
       <IntegerArgumentType name="U16Arg" signed="false">
         <IntegerDataEncoding sizeInBits="16"/>
       </IntegerArgumentType>
+      <!-- A complete command packet: in the Yamcs dialect its own packet
+           length field gives its size, and encoding sets that field. -->
+      <BinaryArgumentType name="EmbeddedTcArgType">
+        <AncillaryDataSet>
+          <AncillaryData name="Yamcs:EmbeddedTc"/>
+        </AncillaryDataSet>
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <FixedValue>-1</FixedValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryArgumentType>
       <IntegerArgumentType name="OpcodeType" signed="false">
         <IntegerDataEncoding sizeInBits="8"/>
       </IntegerArgumentType>
@@ -3353,6 +3424,25 @@
         <CommandContainer name="ForwardContainer">
           <EntryList>
             <ContainerRefEntry containerRef="SetModeContainer"/>
+          </EntryList>
+          <BaseContainer containerRef="CCSDSCommandContainer"/>
+        </CommandContainer>
+      </MetaCommand>
+      <MetaCommand name="Embed">
+        <BaseMetaCommand metaCommandRef="CCSDSCommand">
+          <ArgumentAssignmentList>
+            <ArgumentAssignment argumentName="APID" argumentValue="302"/>
+            <ArgumentAssignment argumentName="Opcode" argumentValue="21"/>
+          </ArgumentAssignmentList>
+        </BaseMetaCommand>
+        <ArgumentList>
+          <Argument name="EmbedTc" argumentTypeRef="EmbeddedTcArgType"/>
+          <Argument name="EmbedTail" argumentTypeRef="OpcodeType"/>
+        </ArgumentList>
+        <CommandContainer name="EmbedContainer">
+          <EntryList>
+            <ArgumentRefEntry argumentRef="EmbedTc"/>
+            <ArgumentRefEntry argumentRef="EmbedTail"/>
           </EntryList>
           <BaseContainer containerRef="CCSDSCommandContainer"/>
         </CommandContainer>

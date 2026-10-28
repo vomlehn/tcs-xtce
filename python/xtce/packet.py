@@ -513,6 +513,18 @@ class BitReader:
             raise PacketError("BadSize", field)
         return bits // 8
 
+    def embedded_bytes(self, max_: int, field: str) -> int:
+        """The size of the CCSDS packet that starts here, from its packet
+        length field, for an embedded packet (Yamcs:EmbeddedTc).  Raises
+        ``TooLong`` if it is more than ``max_`` bytes."""
+        pos, end = self.pos, self.end
+        self.pad(32, field)
+        n = self.uint(16, field) + 7
+        self.pos, self.end = pos, end
+        if n > max_:
+            raise PacketError("TooLong", field)
+        return n
+
     def bytes(self, n: int, field: str) -> bytes:
         if self.pos + n * 8 > self.nbits:
             raise PacketError("Truncated", field)
@@ -1729,6 +1741,17 @@ def write_rest(w: BitWriter, b: bytes, max_: int, field: str) -> None:
     if len(b) > max_:
         raise PacketError("TooLong", field)
     w.bytes(b)
+
+
+def write_embedded(w: BitWriter, b: bytes, max_: int, field: str) -> None:
+    """Write an embedded CCSDS packet (Yamcs:EmbeddedTc): ``b``, at least
+    7 and at most ``max_`` bytes, with its packet length field set to its
+    size."""
+    if len(b) > max_:
+        raise PacketError("TooLong", field)
+    if len(b) < 7:
+        raise PacketError("BadSize", field)
+    w.bytes(bytes(b[:4]) + (len(b) - 7).to_bytes(2, "big") + bytes(b[6:]))
 
 
 def enum_value(cls, v: int):

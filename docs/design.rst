@@ -522,6 +522,16 @@ Yamcs's, selected by the ``tcs-xtce.dialect`` AncillaryData or
 follow it. ``XformEnc.sized`` records the choice only so that
 ``check_rest`` knows whether entries may follow.
 
+The Yamcs dialect changes only how the compiler reads a document, never
+the runtimes' meaning of a model: ``_yamcs_ignore`` drops a string's
+DynSize, leaving its leading size; ``Yamcs:EmbeddedTc`` turns a binary
+value that would take the rest of the packet into ``BinaryEnc`` with
+``embedded``, a variable size the runtimes read from the value's own
+CCSDS header (``embedded_bytes``) and write back when encoding
+(``write_embedded``). A repeated container's copy is an aggregate, so
+a size from an earlier entry of the copy binds to that member, as one
+inside an aggregate type does (``member_bound``).
+
 A length field inside an included container can't mean the packet's
 length, so ``measure`` makes it measure the container: it marks the
 field and puts a ``LengthEnd`` where the container ends, where decoding
