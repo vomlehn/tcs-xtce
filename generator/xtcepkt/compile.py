@@ -1965,9 +1965,9 @@ class Compiler:
         enumeration whose labels name parameters; with an aliasNameSpace,
         an enumeration, integer or string that gives an alias in that name
         space, as Yamcs reads it; or without one, an integer or string
-        that is a parameter's name.  An enumeration label or alias that
-        names no parameter selects nothing; a name that names none fails.
-        """
+        that is a parameter's name.  An enumeration label that names no
+        parameter (such as ``NONE``) selects nothing; a value that is none
+        of the enumeration's labels, or names no parameter, fails."""
         if e.repeat_entry is not None:
             raise Unsupported(f"{where}: a repeated IndirectParameterRefEntry")
         sel = e.parameter_instance
@@ -1998,7 +1998,6 @@ class Compiler:
                               f"by {vt.kind} value {pkey}")
         out: list[Item] = []
         group = self._id()
-        named = vt.kind in ("int", "string") and aliases is None
         # Only one choice is there, so each sees only the values before the
         # entry: the selector itself, not a choice that is a copy of it.
         before = list(scope)
@@ -2039,12 +2038,18 @@ class Compiler:
                 raise Unsupported(f"{where}: no parameter has a name that "
                                   f"integer {pkey} can hold")
             raise Unsupported(f"{where}: no label of {pkey} names a parameter")
-        if named:
-            # A name is meant to name a parameter: one that names none
-            # fails, before anything after it is read.
-            out.insert(0,
-                       Require([AnyOf(crits, f"{pkey} names a parameter")],
-                               where, f"{pkey} names no parameter"))
+        # A selector must be one of its labels, or name a parameter: one
+        # that isn't fails, before anything after it is read.
+        if vt.kind == "enum":
+            crits = [self.comparison("ParameterInstanceRef", sel, "==",
+                                     lab.label, path, before, where, arg_key)
+                     for lab in vt.labels]
+            why = "is none of its labels"
+        else:
+            why = "names no parameter"
+        out.insert(0,
+                   Require([AnyOf(crits, f"not {pkey} {why}")], where,
+                           f"{pkey} {why}"))
         return out
 
     def named_by(self, vt: VType, path: Key) -> list[tuple[list, Key]]:

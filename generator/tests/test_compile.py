@@ -2701,6 +2701,29 @@ class IndirectTests(unittest.TestCase):
         self.assertEqual([c.items[0].local.name for c in conds], ["A", "I"])
         self.assertTrue(all(c.items[0].local.optional for c in conds))
 
+    def test_selector_must_be_a_label(self):
+        # NONE names no parameter, so it selects nothing; a value that is
+        # none of E's labels fails.
+        n = compile_xml(indirect_mission("E", "NONE A I")).nodes[0]
+        req = next(it for it in n.items if isinstance(it, Require))
+        self.assertEqual(req.text, "/Sat/E is none of its labels")
+        self.assertEqual([t.text for t in req.criteria[0].terms],
+                         ["/Sat/E == NONE", "/Sat/E == A", "/Sat/E == I"])
+
+    def test_alias_must_name_a_parameter(self):
+        text = indirect_mission("I").replace(
+            '<Parameter name="A" parameterTypeRef="U8"/>',
+            '<Parameter name="A" parameterTypeRef="U8"><AliasSet><Alias '
+            'nameSpace="ns" alias="7"/></AliasSet>'
+            '</Parameter>').replace("<IndirectParameterRefEntry>",
+                                    '<IndirectParameterRefEntry '
+                                    'aliasNameSpace="ns">')
+        n = compile_xml(text).nodes[0]
+        req = next(it for it in n.items if isinstance(it, Require))
+        self.assertEqual(req.text, "/Sat/I names no parameter")
+        self.assertEqual([t.text for t in req.criteria[0].terms],
+                         ["/Sat/I == 7"])
+
     def test_rejected(self):
         for text, why in (
                 (indirect_mission("I"),

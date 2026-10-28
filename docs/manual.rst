@@ -1949,8 +1949,11 @@ Indirect entries
    With an ``aliasNameSpace``, it may instead be an enumeration whose
    labels, or an integer or string whose values, are aliases in that name
    space, as Yamcs reads it. Each parameter the value can name gives an
-   optional field, present when the value names it; enumeration labels
-   and aliases that name no parameter select nothing. In the demo's ``Dwell`` packet, ``DwellSel`` chooses
+   optional field, present when the value names it. An enumeration
+   label that names no parameter, such as the demo's ``NONE``, selects
+   nothing; a value that is none of the enumeration's labels, or (for an
+   integer or string) names no parameter, fails with ``Mismatch``, when
+   decoding and when encoding, before anything after it. In the demo's ``Dwell`` packet, ``DwellSel`` chooses
    ``DwellTemp`` or ``DwellVolt``, and ``DwellAliasSel`` chooses them
    again by their ``dwell`` aliases, as ``dwell_temp2`` and
    ``dwell_volt2``.
@@ -1959,9 +1962,7 @@ Indirect entries
    name: any parameter in the mission, by its own name (when that finds
    it from the entry's ``SpaceSystem``, as a reference would) or its full
    path, such as ``DwellTemp`` or ``/Demo/DwellTemp``. Names too long
-   for the string are left out. A name that is no parameter's fails
-   with ``Mismatch``, when decoding and when encoding, before anything
-   after it is read or written. The packet then has an optional field
+   for the string are left out. The packet then has an optional field
    for every other parameter, so its generated code grows with the
    mission; an enumeration or an alias name space keeps it to the
    parameters meant. A value naming a parameter that can't be read
