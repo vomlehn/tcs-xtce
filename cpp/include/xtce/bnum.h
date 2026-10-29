@@ -993,26 +993,39 @@ static inline int xtce_bn_from_str_radix(uint8_t* out, size_t n, bool s,
 
 /* --- floats -------------------------------------------------------------- */
 
+/* Bit `k` of |a|, for `a` of `n` bytes, negative when `neg`, whose lowest
+ * set bit is bit `low`: past it, a negative value's magnitude is its bits
+ * inverted. */
+static inline bool xtce_bn_mag_bit_(const uint8_t* a, size_t n, bool neg,
+                                    unsigned low, unsigned k) {
+        if (!neg || k < low) return xtce_bn_bit(a, n, k);
+        return k == low || !xtce_bn_bit(a, n, k);
+}
+
 /* `a` as a double, as bnum's `as` converts: to the nearest, ties to even,
  * and infinite past the largest double; a negative value is its magnitude's
- * negated.  `scratch` is n bytes. */
-static inline double xtce_bn_to_f64(const uint8_t* a, size_t n, bool s,
-                                    uint8_t* scratch) {
+ * negated.
+ *
+ * @param a  The integer, least significant byte first.
+ * @param n  Its size in bytes.
+ * @param s  Whether it is signed.
+ * @return   The double. */
+static inline double xtce_bn_to_f64(const uint8_t* a, size_t n, bool s) {
         bool neg = xtce_bn_is_negative(a, n, s);
-        const uint8_t* m = a;
-        unsigned w, shift, i;
+        unsigned low = xtce_bn_trailing_zeros(a, n), w, shift, i;
         uint64_t mant = 0, bits;
         double d;
-        if (neg) {
-                xtce_bn_unsigned_abs(scratch, a, n, true);
-                m = scratch;
-        }
-        w = xtce_bn_bit_width(m, n);
-        if (w == 0) return 0.0;
+        if (xtce_bn_is_zero(a, n)) return 0.0;
+        /* The magnitude's width: a negative value's is its top bit's, less
+         * one when all the bits above its lowest are set (a power of two). */
+        for (w = (unsigned)(8 * n); w > 0; --w)
+                if (xtce_bn_mag_bit_(a, n, neg, low, w - 1)) break;
         shift = w > 53 ? w - 53 : 0;
-        for (i = w; i-- > shift;) mant = (mant << 1) | xtce_bn_bit(m, n, i);
-        if (w - 1 < 1024 && shift && xtce_bn_bit(m, n, shift - 1) &&
-            ((mant & 1) || xtce_bn_trailing_zeros(m, n) != shift - 1)) {
+        for (i = w; i-- > shift;)
+                mant = (mant << 1) | xtce_bn_mag_bit_(a, n, neg, low, i);
+        if (w - 1 < 1024 && shift &&
+            xtce_bn_mag_bit_(a, n, neg, low, shift - 1) &&
+            ((mant & 1) || low != shift - 1)) {
                 /* At least a half, and not a tie with an even mantissa. */
                 if (++mant >> 53) {
                         mant >>= 1;

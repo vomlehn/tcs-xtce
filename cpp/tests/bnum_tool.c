@@ -281,7 +281,7 @@ static void run(const char* op, char** arg) {
                 xtce_bn_to_str_radix(a.b, n, s, k, t.b, buf, sizeof buf);
                 puts(buf);
         } else if (IS("to_f64")) {
-                double d = xtce_bn_to_f64(a.b, n, s, t.b);
+                double d = xtce_bn_to_f64(a.b, n, s);
                 uint64_t bits;
                 memcpy(&bits, &d, sizeof bits);
                 printf("%016llx\n", (unsigned long long)bits);

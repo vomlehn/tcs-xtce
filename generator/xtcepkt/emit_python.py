@@ -1202,7 +1202,7 @@ class PythonEmitter:
             self.line("return pk.AlarmLevel(lv)", 2)
         else:
             if a.history:
-                self.line("s.push(float(x), t)", 2)
+                self.line("s.push(pk.int_float(x), t)", 2)
             self.line("return pk.AlarmLevel(s.update(lv, mv, mc))", 2)
         self.line()
 
@@ -1215,8 +1215,8 @@ class PythonEmitter:
         start = len(self.out)
         if live and ad.change is not None:
             c = ad.change
-            self.line(f"d = s.change(float(x), t, {c.samples}, {c.per_second}, "
-                      f"{c.percent})", depth)
+            self.line(f"d = s.change(pk.int_float(x), t, {c.samples}, "
+                      f"{c.per_second}, {c.percent})", depth)
             self.line("if d is not None:", depth)
             for b in c.bands:
                 test = (f"pk.in_band(d, {b.lo!r}, {b.lo_incl}, {b.hi!r}, "

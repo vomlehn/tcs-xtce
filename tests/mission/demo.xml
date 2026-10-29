@@ -1228,6 +1228,35 @@
           </DefaultCalibrator>
         </IntegerDataEncoding>
       </FloatParameterType>
+      <!-- Alarms on a 104-bit integer: its ranges compared exactly, its
+           change per sample through doubles. -->
+      <IntegerParameterType name="WideRealIntType" signed="false">
+        <IntegerDataEncoding sizeInBits="104"/>
+        <DefaultAlarm>
+          <StaticAlarmRanges>
+            <WarningRange maxInclusive="1e30"/>
+            <CriticalRange maxInclusive="1e31"/>
+          </StaticAlarmRanges>
+          <ChangeAlarmRanges changeType="changePerSample">
+            <WarningRange minInclusive="-1e30" maxInclusive="1e30"/>
+          </ChangeAlarmRanges>
+        </DefaultAlarm>
+      </IntegerParameterType>
+      <!-- Its raw value plus WideRealInt / 10^30: a wide integer as a
+           calibrator's operand. -->
+      <FloatParameterType name="WideRealScaledType" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="8">
+          <DefaultCalibrator>
+            <MathOperationCalibrator>
+              <ThisParameterOperand/>
+              <ParameterInstanceRefOperand parameterRef="WideRealInt"/>
+              <ValueOperand>1e30</ValueOperand>
+              <Operator>/</Operator>
+              <Operator>+</Operator>
+            </MathOperationCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
       <IntegerParameterType name="WideU72" signed="false">
         <IntegerDataEncoding sizeInBits="72"/>
       </IntegerParameterType>
@@ -1528,6 +1557,9 @@
       <Parameter name="WideRealCal" parameterTypeRef="WideRealCalType"/>
       <Parameter name="WideRealTime" parameterTypeRef="WideRealTimeType"/>
       <Parameter name="WideRealBcd" parameterTypeRef="WideRealBcdType"/>
+      <Parameter name="WideRealInt" parameterTypeRef="WideRealIntType"/>
+      <Parameter name="WideRealScaled" parameterTypeRef="WideRealScaledType"/>
+      <Parameter name="WideRealHalf" parameterTypeRef="DrDoubleType"/>
       <Parameter name="WideTiny" parameterTypeRef="S16"/>
       <Parameter name="WideA" parameterTypeRef="WideU72"/>
       <Parameter name="WideB" parameterTypeRef="WideLe80"/>
@@ -2845,6 +2877,19 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <!-- A 104-bit integer as a calibrator's operand, and as the input
+           of WideHalf. -->
+      <SequenceContainer name="WideOperand">
+        <EntryList>
+          <ParameterRefEntry parameterRef="WideRealInt"/>
+          <ParameterRefEntry parameterRef="WideRealScaled"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="569"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <SequenceContainer name="Wide">
         <EntryList>
           <ParameterRefEntry parameterRef="WideTiny"/>
@@ -2995,6 +3040,17 @@
           <Operator>*</Operator>
           <TriggerSet>
             <OnParameterUpdateTrigger parameterRef="DrSpeed"/>
+          </TriggerSet>
+        </MathOperation>
+      </MathAlgorithm>
+      <!-- Half of a 104-bit integer, through a double. -->
+      <MathAlgorithm name="WideHalf">
+        <MathOperation outputParameterRef="WideRealHalf">
+          <ParameterInstanceRefOperand parameterRef="WideRealInt"/>
+          <ValueOperand>0.5</ValueOperand>
+          <Operator>*</Operator>
+          <TriggerSet>
+            <OnParameterUpdateTrigger parameterRef="WideRealInt"/>
           </TriggerSet>
         </MathOperation>
       </MathAlgorithm>

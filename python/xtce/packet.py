@@ -973,14 +973,33 @@ def from_unsigned(v: int, bits: int, field: str) -> int:
     return v
 
 
-def int_to_float(raw: int, bits: int, enc: str) -> float:
-    """A raw field as a float: rounded to the nearest, ties to even, and
-    infinite past the largest float, as the Rust runtime converts."""
-    v = to_signed(raw, bits, enc)
+def int_float(v: int) -> float:
+    """An integer as a float, as the Rust runtime converts it.
+
+    Args:
+        v: The integer, of any size.
+
+    Returns:
+        The nearest float, ties to even, or an infinity past the largest.
+    """
     try:
         return float(v)
     except OverflowError:
         return math.copysign(math.inf, v)
+
+
+def int_to_float(raw: int, bits: int, enc: str) -> float:
+    """A raw field as a float.
+
+    Args:
+        raw:  The raw field.
+        bits: The bits of the field.
+        enc:  Its integer encoding, as in the XTCE schema.
+
+    Returns:
+        Its value, as :func:`int_float` converts it.
+    """
+    return int_float(to_signed(raw, bits, enc))
 
 
 def bcd_decode(raw: int, bits: int, packed: bool, field: str) -> int:
@@ -1037,7 +1056,18 @@ def float_to_int(x: float, bits: int, enc: str, field: str) -> int:
 
 
 def float_to_wide(x: float, bits: int, enc: str, field: str) -> int:
-    """:func:`float_to_int` for fields of more than 64 bits."""
+    """:func:`float_to_int` for fields of more than 64 bits.
+
+    Args:
+        x:     The engineering value, after any inverse calibrator.
+        bits:  The bits of the field.
+        enc:   Its integer encoding, as in the XTCE schema.
+        field: The field's name, for errors.
+
+    Returns:
+        The raw field; raises ``OutOfRange`` unless it holds the value
+        rounded half away from zero.
+    """
     if not math.isfinite(x):
         raise PacketError("OutOfRange", field)
     return from_signed(_round(x), bits, enc, field)

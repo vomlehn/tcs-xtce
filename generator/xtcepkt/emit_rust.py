@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import textwrap
+from typing import Optional
 
 from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
                      notes, stream_capacity, stream_doc, MATH_OPS, Ref,
@@ -1569,17 +1570,18 @@ class RustEmitter:
                       else f"let x = {x};", 2)
         self.line("let mut lv = 0u8;", d)
         live = state is not None
+        et = vt.elem if vt.kind == "array" else vt
         for k, (terms, ad) in enumerate(a.contexts):
             cond = conjunction([term(c, place) for c in terms])
             self.line(f"{'if' if k == 0 else '} else if'} {cond} {{", d)
-            self.alarm_def(ad, kind, place, d + 1, live)
+            self.alarm_def(ad, et, place, d + 1, live)
         if a.contexts:
             if a.default is not None:
                 self.line("} else {", d)
-                self.alarm_def(a.default, kind, place, d + 1, live)
+                self.alarm_def(a.default, et, place, d + 1, live)
             self.line("}", d)
         elif a.default is not None:
-            self.alarm_def(a.default, kind, place, d, live)
+            self.alarm_def(a.default, et, place, d, live)
         if vt.kind == "array":
             self.line("worst = worst.max(lv);", d)
             self.line("}", 2)
@@ -1588,30 +1590,43 @@ class RustEmitter:
             self.line("Some(pk::AlarmLevel::from_index(lv))", 2)
         else:
             if a.history:
-                self.line("s.push(x as f64, t);", 2)
+                self.line(f"s.push({math_value(et, 'x', 'rust')}, t);", 2)
             self.line("Some(pk::AlarmLevel::from_index(s.update(lv, mv, mc)))",
                       2)
         self.line("}", 1)
 
-    def alarm_def(self, ad, kind: str, place, depth: int,
+    def alarm_def(self, ad, vt: VType, place, depth: int,
                   live: bool = False) -> None:
-        """Statements raising ``lv`` to the level that alarm definition
-        ``ad`` gives value ``x`` (of kind ``kind``); when ``live``, with
-        its change ranges (on AlarmState ``s``, at time ``t``) and setting
-        ``mv`` and ``mc`` to its minViolations and minConformance."""
+        """Statements raising ``lv`` to the level that an alarm definition
+        gives the value ``x``.
+
+        Args:
+            ad:    The alarm definition.
+            vt:    The value's type (an array's element's).
+            place: Where the packet's fields are, for context criteria.
+            depth: The indentation of the statements.
+            live:  Whether to check its change ranges, on AlarmState ``s``
+                   at time ``t``, and set ``mv`` and ``mc`` to its
+                   minViolations and minConformance.
+
+        Returns:
+            Nothing; it writes the statements.
+        """
+        kind = vt.kind
         if live and ad.change is not None:
             c = ad.change
-            self.line(f"if let Some(d) = s.change(x as f64, t, {c.samples}, "
-                      f"{str(c.per_second).lower()}, {str(c.percent).lower()}) "
-                      "{", depth)
+            self.line("if let Some(d) = "
+                      f"s.change({math_value(vt, 'x', 'rust')}, t, "
+                      f"{c.samples}, {str(c.per_second).lower()}, "
+                      f"{str(c.percent).lower()}) {{", depth)
             for b in c.bands:
-                self.band(b, "d", "float", depth + 1)
+                self.band(b, "d", None, depth + 1)
             self.line("}", depth)
         if live and (ad.min_violations, ad.min_conformance) != (1, 1):
             self.line(f"mv = {ad.min_violations};", depth)
             self.line(f"mc = {ad.min_conformance};", depth)
         for b in ad.bands:
-            self.band(b, "x", kind, depth)
+            self.band(b, "x", vt, depth)
         if kind == "enum" and (ad.labels or ad.default):
             labels = ", ".join(f"({lo}, {hi}, {lv})"
                                for lo, hi, lv in ad.labels)
@@ -1632,10 +1647,26 @@ class RustEmitter:
             self.line(f"lv = lv.max({level});", depth + 1)
             self.line("}", depth)
 
-    def band(self, b, x: str, kind: str, depth: int) -> None:
-        """Raises ``lv`` to the Band's level if value ``x`` (of kind
-        ``kind``) violates it."""
-        if kind == "int":
+    def band(self, b, x: str, vt: Optional[VType], depth: int) -> None:
+        """Raises ``lv`` to a band's level if a value violates it.
+
+        Args:
+            b:     The band.
+            x:     The expression for the value.
+            vt:    Its type, or None for a double.
+            depth: The indentation of the statements.
+
+        Returns:
+            Nothing; it writes the statements.
+        """
+        kind = vt.kind if vt is not None else "float"
+        if kind == "int" and vt.wide:
+            # Exactly, with literals of the field's own type.
+            parts = (
+                ([f"{x} >= {literal(vt, b.lo)}"] if b.lo is not None else [])
+                + ([f"{x} <= {literal(vt, b.hi)}"] if b.hi is not None else []))
+            test = " && ".join(parts) or "true"
+        elif kind == "int":
             parts = ([f"{b.lo}i128 <= {x} as i128"] if b.lo is not None
                      else []) + ([f"{x} as i128 <= {b.hi}i128"]
                                  if b.hi is not None else [])

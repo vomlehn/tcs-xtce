@@ -1986,17 +1986,23 @@ that integers of <a class="reference internal" href="#integers-of-any-size">Inte
 it. It is decoded, encoded (checking its <tt class="docutils literal">ValidRange</tt>), described and
 compared, with a value or with another integer of any size, in every
 criterion.</p>
-<p class="last">A float, a time or a calibrated integer may also have an integer
+<p>A float, a time or a calibrated integer may also have an integer
 encoding of more than 64 bits: its raw value is converted to a double,
 rounded to the nearest (ties to even) as bnum converts, and encoding
 rounds the double back half away from zero, failing with
 <tt class="docutils literal">OutOfRange</tt> if the encoding can't hold it. A double holds 53 bits
 exactly, so values past 2<sup>53</sup> lose their low bits: the demo's
 <tt class="docutils literal">WideReal</tt> has a float, a calibrated integer, a time and a packed BCD
-float of 72 to 96 bits. An integer of more than 64 bits still can't be
-an enumeration or a boolean, give a size, count or location, be used by
-a calibrator or an algorithm, have an alarm (the alarm is left out,
-with a note), or be a packet length or checksum field. The demo's <tt class="docutils literal">Wide</tt> packet has integers of 65 to 200 bits in
+float of 72 to 96 bits.</p>
+<p class="last">An integer of more than 64 bits may be an operand of a
+<tt class="docutils literal">MathOperationCalibrator</tt> or an input of an algorithm, which take it
+as a double in the same way, and may have alarms: their ranges' bounds
+are whole numbers compared with it exactly, and change ranges take it
+as a double. The demo's <tt class="docutils literal">WideOperand</tt> has <tt class="docutils literal">WideRealInt</tt>, 104 bits,
+which <tt class="docutils literal">WideRealScaled</tt>'s calibrator adds and <tt class="docutils literal">WideHalf</tt> halves, and
+whose alarm warns past 10<sup>30</sup>. It still can't be an enumeration
+or a boolean, give a size, count or location, or be a packet length or
+checksum field. The demo's <tt class="docutils literal">Wide</tt> packet has integers of 65 to 200 bits in
 every encoding and order, and <tt class="docutils literal">SetWide</tt> command arguments of 96 and
 136 bits.</p>
 </dd>

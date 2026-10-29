@@ -320,16 +320,18 @@ class WideIntegerTests(unittest.TestCase):
                 self.assertEqual((vt.kind, vt.enc.bits, vt.wide),
                                  (kind, 65, False))
 
-    def test_alarm_left_out(self):
+    def test_alarm(self):
+        # Its range's bounds are whole numbers, compared exactly.
         alarm = ('<IntegerParameterType name="A" signed="false">'
                  '<IntegerDataEncoding sizeInBits="72"/><DefaultAlarm>'
-                 '<StaticAlarmRanges><WarningRange maxInclusive="10"/>'
+                 '<StaticAlarmRanges><WarningRange maxInclusive="1e20"/>'
                  '</StaticAlarmRanges></DefaultAlarm></IntegerParameterType>')
         m = compile_xml(
             wide_mission(alarm, '<ParameterRefEntry parameterRef="X"/>',
                          '<Parameter name="X" parameterTypeRef="A"/>'))
-        self.assertIn("an alarm on a 72-bit integer",
-                      " ".join(m.nodes[0].alarm_notes))
+        self.assertEqual(m.nodes[0].alarm_notes, [])
+        _, _, a = m.nodes[0].alarms[0]
+        self.assertEqual(a.default.bands[0].hi, 10**20)
 
 
 def calibrated_mission(itype: str,

@@ -123,8 +123,7 @@ class Integer {
         template <class T>
         T as() const {
                 if constexpr (std::is_same_v<T, double>) {
-                        std::uint8_t scratch[N];
-                        return xtce_bn_to_f64(p(), N, S, scratch);
+                        return xtce_bn_to_f64(p(), N, S);
                 } else if constexpr (std::is_integral_v<T>) {
                         std::uint8_t out[sizeof(T)];
                         xtce_bn_cast(out, sizeof(T), p(), N, S);

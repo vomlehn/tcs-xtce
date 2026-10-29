@@ -80,9 +80,27 @@ def leaf_calibrators(cal) -> list:
 
 
 def math_value(vt: VType, x: str, lang: str) -> str:
-    """Expression converting the value ``x`` of type ``vt`` to a double in
-    ``lang`` ("rust", "c" or "python"), for a MathOperationCalibrator."""
+    """Expression converting a value to a double, for a calibrator, an
+    algorithm or an alarm.
+
+    Args:
+        vt:   The value's type.
+        x:    The expression for the value.
+        lang: The language: "rust", "c" or "python".
+
+    Returns:
+        The expression.  An integer of more than 64 bits is rounded to the
+        nearest double, ties to even, as bnum converts, and is infinite past
+        the largest.
+    """
     k = vt.kind
+    if vt.wide:
+        if lang == "rust":
+            return f"pk::wide_f64({x})"
+        if lang == "c":
+            return (f"xtce_bn_to_f64(({x}).bytes, {vt.width // 8}, "
+                    f"{'true' if vt.signed else 'false'})")
+        return f"pk.int_float({x})"
     if lang == "rust":
         return {"float": f"({x})", "enum": f"(({x}).0 as f64)",
                 "bool": f"(if {x} {{ 1.0 }} else {{ 0.0 }})"}.get(

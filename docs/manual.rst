@@ -1547,10 +1547,17 @@ Integer encoding
    ``OutOfRange`` if the encoding can't hold it. A double holds 53 bits
    exactly, so values past 2\ :sup:`53` lose their low bits: the demo's
    ``WideReal`` has a float, a calibrated integer, a time and a packed BCD
-   float of 72 to 96 bits. An integer of more than 64 bits still can't be
-   an enumeration or a boolean, give a size, count or location, be used by
-   a calibrator or an algorithm, have an alarm (the alarm is left out,
-   with a note), or be a packet length or checksum field. The demo's ``Wide`` packet has integers of 65 to 200 bits in
+   float of 72 to 96 bits.
+
+   An integer of more than 64 bits may be an operand of a
+   ``MathOperationCalibrator`` or an input of an algorithm, which take it
+   as a double in the same way, and may have alarms: their ranges' bounds
+   are whole numbers compared with it exactly, and change ranges take it
+   as a double. The demo's ``WideOperand`` has ``WideRealInt``, 104 bits,
+   which ``WideRealScaled``'s calibrator adds and ``WideHalf`` halves, and
+   whose alarm warns past 10\ :sup:`30`. It still can't be an enumeration
+   or a boolean, give a size, count or location, or be a packet length or
+   checksum field. The demo's ``Wide`` packet has integers of 65 to 200 bits in
    every encoding and order, and ``SetWide`` command arguments of 96 and
    136 bits.
 

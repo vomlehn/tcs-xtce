@@ -1894,8 +1894,36 @@ pub fn wide_from_signed<const N: usize>(
     }
 }
 
+/// An integer of more than 64 bits as a double, for a calibrator, an
+/// algorithm or an alarm: rounded to the nearest, ties to even, and
+/// infinite past the largest double.
+///
+/// # Arguments
+///
+/// * `x` -- the integer: a u128, an i128 or one of bnum's.
+///
+/// # Returns
+///
+/// The double, as bnum converts it.
+pub fn wide_f64<T>(x: T) -> f64
+where
+    f64: bnum::cast::CastFrom<T>,
+{
+    <f64 as bnum::cast::CastFrom<T>>::cast_from(x)
+}
+
 /// [`int_to_f64`] for fields of more than 64 bits: rounded to the nearest
 /// double, ties to even, as bnum converts.
+///
+/// # Arguments
+///
+/// * `raw`  -- the raw field.
+/// * `bits` -- the bits of the field.
+/// * `enc`  -- its integer encoding.
+///
+/// # Returns
+///
+/// The field's value as a double.
 pub fn wide_int_to_f64<const N: usize>(
     raw: Uint<N>,
     bits: u32,
@@ -1909,8 +1937,18 @@ pub fn wide_int_to_f64<const N: usize>(
 }
 
 /// [`f64_to_int`] for fields of more than 64 bits: rounds (half away from
-/// zero) an engineering value to a raw field, and fails with `OutOfRange`
-/// unless the field holds it.
+/// zero) an engineering value to a raw field.
+///
+/// # Arguments
+///
+/// * `x`     -- the engineering value, after any inverse calibrator.
+/// * `bits`  -- the bits of the field.
+/// * `enc`   -- its integer encoding.
+/// * `field` -- the field's name, for errors.
+///
+/// # Returns
+///
+/// The raw field, or `OutOfRange` unless the field holds the rounded value.
 pub fn f64_to_wide<const N: usize>(
     x: f64,
     bits: u32,

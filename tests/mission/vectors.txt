@@ -197,6 +197,8 @@ tm 0a26c0010094eb3df53729c619c60a3cab0cba9e2a5de70f4a9620d017ed50d6c326225e68a0a
 tm 0a38c02a002a400000000000000001000069e10de76676d0800000000017979cfe3d85cd15000000000000000000012345  # wide real: a float, a calibrated integer, a time and a BCD float of 72 to 96 bits, through doubles
 tm 0a38c02a002a800000000000000000ffffffffffffffffffffffff00000000000000000000999999999999999999999999  # wide real: the most negative float, the largest calibrated integer, time zero, all BCD nines
 tm 0a38c02a002a000000000000000003000000000000000000000000ffffffffffffffffffff0000000000000000000000a1  # wide real: a BCD digit of 10, which fails
+tm 0a39c02a000d25dd85d670d35ec9bec000000007  # wide operand: WideRealScaled 7 + 3e30 / 1e30, and WideRealHalf half of 3e30, through doubles
+tm 0a39c02a000dffffffffffffffffffffffffffff  # wide operand: the largest 104-bit integer, rounded to a double
 tc 112ec001001d11fffffffffffffffffffffffb0700000000000000000000000000000080  # set wide: a 96-bit offset and a 136-bit key
 tc 112ec002001d11000000000de0b6b3a76400010100000000000000000000000000000000  # set wide: an offset past its valid range
 tm 0a30c02a00090312345678123abfcd99  # repeated: RepWord from four repeated segments, so RepAfter; three raw tail segments; two section segments 4 bits apart

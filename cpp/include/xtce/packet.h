@@ -1523,22 +1523,36 @@ static inline int xtce_pk_wide_from_signed(uint8_t* v, size_t n,
         return 0;
 }
 
-/* xtce_pk_int_to_double for the raw field of `bits` bits in the `n` bytes
- * at `raw`: rounded to the nearest double, ties to even, as bnum converts.
- * `scratch` is `n` bytes. */
+/* xtce_pk_int_to_double for a raw field of more than 64 bits: rounded to
+ * the nearest double, ties to even, as bnum converts.
+ *
+ * @param raw      The raw field, least significant byte first.
+ * @param n        The bytes at `raw` and at `scratch`.
+ * @param bits     The bits of the field.
+ * @param enc      Its integer encoding (XTCE_PK_UNSIGNED and so on).
+ * @param scratch  Room for the field's value, `n` bytes.
+ * @return         The value as a double. */
 static inline double xtce_pk_wide_to_double(const uint8_t* raw, size_t n,
                                             unsigned bits, int enc,
                                             uint8_t* scratch) {
-        if (enc == XTCE_PK_UNSIGNED)
-                return xtce_bn_to_f64(raw, n, false, scratch);
+        if (enc == XTCE_PK_UNSIGNED) return xtce_bn_to_f64(raw, n, false);
         memcpy(scratch, raw, n);
         xtce_pk_wide_to_signed(scratch, n, bits, enc);
-        return xtce_bn_to_f64(scratch, n, true, scratch);
+        return xtce_bn_to_f64(scratch, n, true);
 }
 
-/* xtce_pk_double_to_int for a raw field of `bits` bits in the `n` bytes at
- * `out`: rounds (half away from zero) an engineering value, and fails with
- * XTCE_PK_OUT_OF_RANGE unless the field holds it. */
+/* xtce_pk_double_to_int for a raw field of more than 64 bits: rounds (half
+ * away from zero) an engineering value to the field.
+ *
+ * @param x     The engineering value, after any inverse calibrator.
+ * @param bits  The bits of the field.
+ * @param enc   Its integer encoding (XTCE_PK_UNSIGNED and so on).
+ * @param f     The field's name, for errors.
+ * @param err   Where an error is described.
+ * @param out   The raw field, least significant byte first.
+ * @param n     The bytes at `out`.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE (after filling in `err`) unless
+ *              the field holds the rounded value. */
 static inline int xtce_pk_double_to_wide(double x, unsigned bits, int enc,
                                          const char* f, xtce_pk_error* err,
                                          uint8_t* out, size_t n) {

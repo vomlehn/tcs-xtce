@@ -719,9 +719,6 @@ class Compiler:
                      min_conformance=a.min_conformance or 1)
         if a.disabled:
             return d
-        if vt.wide:
-            raise Unsupported(f"{where}: an alarm on a {vt.enc.bits}-bit "
-                              "integer")
         if a.choice is not None and a.choice.name == "CustomAlarm":
             alg = a.choice.value.input_algorithm
             d.custom = (self.hook("alarm", qname(path + (alg.name,))), alg)
@@ -1705,9 +1702,6 @@ class Compiler:
         if vt.kind not in ("int", "float", "enum", "bool"):
             raise Unsupported(f"{where}: MathOperationCalibrator uses "
                               f"{vt.kind} value {name}")
-        if vt.wide:
-            raise Unsupported(f"{where}: MathOperationCalibrator uses "
-                              f"{vt.enc.bits}-bit integer {name}")
         if local.computed:
             raise Unsupported(f"{where}: MathOperationCalibrator uses packet "
                               f"length or checksum field {name}")
@@ -3583,9 +3577,6 @@ class Compiler:
             if vt.kind not in ("int", "float", "enum", "bool"):
                 raise Unsupported(f"{where}: custom algorithm input {name} is "
                                   f"a {vt.kind} value")
-            if vt.wide:
-                raise Unsupported(f"{where}: custom algorithm input {name} is "
-                                  f"a {vt.enc.bits}-bit integer")
             if v.use_calibrated_value is False and vt.calibrator is not None:
                 raise Unsupported(f"{where}: the raw value of calibrated "
                                   f"{name}")
@@ -3686,9 +3677,6 @@ class Compiler:
                               "packet")
         if vt.kind not in ("int", "float", "enum", "bool"):
             raise Unsupported(f"{where}: input {name} is a {vt.kind} value")
-        if vt.wide:
-            raise Unsupported(f"{where}: input {name} is a {vt.enc.bits}-bit "
-                              "integer")
         if r.ref.use_calibrated_value is False and vt.calibrator is not None:
             raise Unsupported(f"{where}: the raw value of calibrated {name}")
         return ("value", ValueRef(r.ref, r.path, local, member, vt))

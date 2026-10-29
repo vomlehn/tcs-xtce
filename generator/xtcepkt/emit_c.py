@@ -1884,24 +1884,36 @@ class CEmitter:
             self.line("}", d)
             self.line("{", d)
             self.line("int lv = worst;", d + 1)
-            self.level(i, state, a, d + 1)
+            self.level(i, state, a, d + 1, elem)
             self.line("}", d)
         else:
-            self.level(i, state, a, d)
+            self.level(i, state, a, d, elem)
         if lc.optional:
             d -= 1
             self.line("}", d)
         self.line("}", 1)
 
-    def level(self, i: int, state, a, depth: int) -> None:
-        """Stores ``lv`` (through the monitor's state, if ``state``) in
-        ``out[i]``."""
+    def level(self, i: int, state, a, depth: int, vt: VType) -> None:
+        """Stores ``lv`` in ``out[i]``.
+
+        Args:
+            i:     The alarm's place in ``out``.
+            state: The AlarmMonitor field that keeps the parameter's
+                   earlier samples, or None.
+            a:     The alarm.
+            depth: The indentation of the statements.
+            vt:    The type of the value ``x`` (an array's element's).
+
+        Returns:
+            Nothing; it writes the statements.
+        """
         if state is None:
             self.line(f"out[{i}].level = lv;", depth)
             return
         if a.history:
             self.line(f"xtce_pk_alarm_push(s, m->{state}_values, "
-                      f"m->{state}_times, {a.history}, (double)x, t);", depth)
+                      f"m->{state}_times, {a.history}, "
+                      f"{math_value(vt, 'x', 'c')}, t);", depth)
         self.line(f"out[{i}].level = xtce_pk_alarm_update(s, lv, mv, mc);",
                   depth)
 
@@ -1918,9 +1930,10 @@ class CEmitter:
             self.line("{", depth)
             self.line("double d;", depth + 1)
             self.line(f"if (xtce_pk_alarm_change(s, m->{state}_values, "
-                      f"m->{state}_times, {history}, (double)x, t, "
-                      f"{c.samples}, {bool_lit(c.per_second)}, "
-                      f"{bool_lit(c.percent)}, &d)) {{", depth + 1)
+                      f"m->{state}_times, {history}, "
+                      f"{math_value(vt, 'x', 'c')}, t, {c.samples}, "
+                      f"{bool_lit(c.per_second)}, {bool_lit(c.percent)}, &d)) "
+                      "{", depth + 1)
             for b in c.bands:
                 self.band(b, "d", vt, depth + 2, float_value=True)
             self.line("}", depth + 1)
@@ -1977,7 +1990,15 @@ class CEmitter:
              float_value: bool = False) -> None:
         """Raises ``lv`` to the Band's level if value ``x`` (of type ``vt``,
         or a double when ``float_value``) violates it."""
-        if vt.kind == "int" and not float_value:
+        if vt.kind == "int" and vt.wide and not float_value:
+            def cmp(v):
+                return (f"xtce_bn_cmp(({x}).bytes, "
+                        f"({self.literal(vt, v)}).bytes, {vt.width // 8}, "
+                        f"{bool_lit(vt.signed)})")
+            parts = (([f"{cmp(b.lo)} >= 0"] if b.lo is not None else [])
+                     + ([f"{cmp(b.hi)} <= 0"] if b.hi is not None else []))
+            test = "(" + (" && ".join(parts) or "true") + ")"
+        elif vt.kind == "int" and not float_value:
             lit = slit if vt.signed else ulit
             parts = (([f"{x} >= {lit(b.lo)}"] if b.lo is not None else [])
                      + ([f"{x} <= {lit(b.hi)}"] if b.hi is not None else []))
