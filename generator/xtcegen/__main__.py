@@ -13,7 +13,16 @@ from .wrap import WIDTH, split_rust_strings, wrap
 
 
 def write_if_changed(path: str, text: str) -> None:
-    """Only touch files whose contents change, so make stays incremental."""
+    """Writes a file only if its contents change, so make stays
+    incremental.
+
+    Creates the file's directory if need be, and prints the file's name
+    when it writes it.
+
+    Args:
+        path: The file.
+        text: Its new contents.
+    """
     try:
         with open(path, encoding="utf-8") as f:
             if f.read() == text:
@@ -27,8 +36,15 @@ def write_if_changed(path: str, text: str) -> None:
 
 
 def rustfmt(text: str) -> str:
-    """Format Rust with rustfmt at the project's line width, then wrap what
-    rustfmt leaves too long: comments, and code it can't lay out."""
+    """Formats Rust with rustfmt at the project's line width, then wraps
+    what rustfmt leaves too long: comments, and code it can't lay out.
+
+    Args:
+        text: The Rust source.
+
+    Returns:
+        The formatted source, as cargo fmt would leave it.
+    """
     text = wrap(_rustfmt(split_rust_strings(text)), "rust")
     # Format the wrapped code again, so that it is what cargo fmt would
     # make of it.
@@ -36,6 +52,16 @@ def rustfmt(text: str) -> str:
 
 
 def _rustfmt(text: str) -> str:
+    """Runs rustfmt once over Rust source, at the project's line width.
+
+    Exits the program if rustfmt is missing or fails.
+
+    Args:
+        text: The Rust source.
+
+    Returns:
+        The source as rustfmt lays it out.
+    """
     exe = shutil.which("rustfmt")
     if exe is None:
         sys.exit("error: rustfmt is required to generate Rust code")
@@ -48,6 +74,10 @@ def _rustfmt(text: str) -> str:
 
 
 def main() -> None:
+    """Parses the schema named on the command line and writes the
+    outputs asked for: the Rust module, the C++ header and source, the
+    Python module and the sample documents.
+    """
     p = argparse.ArgumentParser(prog="xtcegen", description=__doc__)
     p.add_argument("--xsd", required=True, help="path to SpaceSystem.xsd")
     p.add_argument("--rust", help="output path of the generated Rust module")

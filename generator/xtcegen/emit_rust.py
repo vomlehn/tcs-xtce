@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from . import header_lines
+from . import docs, header_lines
 from .binding import (MANY, ONE, OPT, Binding, ChoiceField, ChoiceType,
                       ElemField, Record)
 from .model import (BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED,
@@ -20,26 +20,46 @@ KEYWORDS = set("as async await break const continue crate dyn else enum extern "
 
 
 def ident(name: str) -> str:
+    """The Rust identifier for a name: the name, with ``_`` after a keyword.
+    """
     return name + "_" if name in KEYWORDS else name
 
 
+def code(s: str) -> str:
+    """A name quoted as code in a doc comment: in backticks."""
+    return f"`{s}`"
+
+
 def lit(s: str) -> str:
+    """A Rust string literal whose value is ``s``."""
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def doc(text: str, indent: str = "") -> list[str]:
+    """A one-line doc comment holding ``text``, or none if it is empty."""
     if not text:
         return []
     return [f"{indent}/// {text}"]
 
 
 def base_type(t: TypeRef) -> str:
+    """The Rust type of a value of schema type ``t``, before boxing."""
     if isinstance(t, ScalarRef):
         return SCALARS[t.kind]
     return t.name
 
 
 def field_type(t: str, card: str, boxed: bool) -> str:
+    """Gives the type of a struct field.
+
+    Args:
+        t:     The Rust type of one value.
+        card:  The field's cardinality: ONE, OPT or MANY.
+        boxed: Whether each value is boxed, to break a type cycle.
+
+    Returns:
+        ``t``, boxed and wrapped in ``Option`` or ``Vec`` as needed.
+    """
     if boxed:
         t = f"Box<{t}>"
     if card == OPT:
@@ -50,18 +70,33 @@ def field_type(t: str, card: str, boxed: bool) -> str:
 
 
 def is_complex(t: TypeRef) -> bool:
+    """Whether ``t`` is a complex type, one with a struct of its own."""
     return isinstance(t, ComplexRef)
 
 
 class RustEmitter:
+    """Writes the Rust module for a binding.
+
+    Args:
+        b: The binding to write.
+    """
+
     def __init__(self, b: Binding):
         self.b = b
         self.out: list[str] = []
+        # The types whose writers can fail, and why.
+        self.fails = docs.write_failures(b, False)
 
     def w(self, line: str = "") -> None:
+        """Appends one line to the module."""
         self.out.append(line)
 
     def emit(self) -> str:
+        """Writes the whole module.
+
+        Returns:
+            The module's text, before rustfmt lays it out.
+        """
         s = self.b.schema
         for line in header_lines():
             self.w("// " + line)
@@ -96,6 +131,12 @@ class RustEmitter:
     # -- enumerations -------------------------------------------------------
 
     def enum(self, name: str) -> None:
+        """Writes the enum for an enumerated simple type, with its methods
+        and its ``Value`` and ``Display`` implementations.
+
+        Args:
+            name: The simple type's name.
+        """
         e = self.b.schema.enums[name]
         idents, used = [], set()
         for v in e.values:
@@ -120,7 +161,10 @@ class RustEmitter:
         self.w("    pub const ALL: &'static [Self] = "
                f"&[{', '.join('Self::' + i for i in idents)}];")
         self.w("")
-        self.w("    /// The XML lexical value.")
+        values = docs.series([code(v) for v in e.values], "or")
+        self.out += docs.rust(f"Gives the XML lexical value of this `{name}` "
+                              "value, spelled as the schema spells it.",
+                              returns=f"The value: {values}.", indent="    ")
         self.w("    pub fn as_str(self) -> &'static str {")
         self.w("        match self {")
         for i, v in zip(idents, e.values):
@@ -156,6 +200,12 @@ class RustEmitter:
     # -- records ------------------------------------------------------------
 
     def record(self, r: Record) -> None:
+        """Writes the struct for a complex type and its ``XmlElement``
+        implementation, whose methods the trait documents.
+
+        Args:
+            r: The complex type's record.
+        """
         self.out += doc(r.doc)
         self.w("#[derive(Debug, Clone, PartialEq, Default)]")
         self.w(f"pub struct {r.name} {{")
@@ -190,12 +240,26 @@ class RustEmitter:
         self.w("")
 
     def write_value(self, xml: str, t: TypeRef, expr: str, ind: str) -> None:
+        """Writes the statement that writes one child element.
+
+        Args:
+            xml:  The element's name.
+            t:    Its type.
+            expr: The Rust expression for its value.
+            ind:  The statement's indentation.
+        """
         if is_complex(t):
             self.w(f"{ind}{expr}.write_xml(w, {lit(xml)})?;")
         else:
             self.w(f"{ind}w.leaf({lit(xml)}, {expr});")
 
     def write_fn(self, r: Record) -> None:
+        """Writes a record's ``write_xml``: its attributes, its text and
+        its child elements in schema order.
+
+        Args:
+            r: The record.
+        """
         self.w("    fn write_xml(&self, w: &mut Writer<'_>, tag: &str) -> "
                "Result<()> {")
         self.w("        w.start(tag);")
@@ -242,6 +306,14 @@ class RustEmitter:
         self.w("    }")
 
     def count_check(self, r: Record, f, what: str) -> None:
+        """Writes the check that a repeated field holds as many items as
+        the schema allows, unless it allows any number.
+
+        Args:
+            r:    The record.
+            f:    The repeated field, an ElemField or a ChoiceField.
+            what: What the error message calls the field's items.
+        """
         if f.min == 0 and f.max == UNBOUNDED:
             return
         mx = "None" if f.max == UNBOUNDED else f"Some({f.max})"
@@ -249,9 +321,16 @@ class RustEmitter:
                f"{mx}, {lit(r.name + '.' + what)})?;")
 
     def read_value(self, t: TypeRef) -> str:
+        """The expression that reads a child element of type ``t``."""
         return "r.read_child()?" if is_complex(t) else "r.read_leaf()?"
 
     def read_fn(self, r: Record) -> None:
+        """Writes a record's ``read_xml``: its attributes, then its text or
+        its child elements, checked against the content model.
+
+        Args:
+            r: The record.
+        """
         has_fields = bool(r.attrs or r.text or r.content)
         self.w("    fn read_xml<'a>(r: &mut Reader<'a>, tag: &Tag<'a>) -> "
                "Result<Self> {")
@@ -352,6 +431,11 @@ class RustEmitter:
     # -- choices ------------------------------------------------------------
 
     def choice(self, c: ChoiceType) -> None:
+        """Writes the enum for a ``<choice>`` and its methods.
+
+        Args:
+            c: The choice.
+        """
         self.w(f"/// Alternatives of a `<choice>` in [`{c.owner}`].")
         self.w("#[derive(Debug, Clone, PartialEq)]")
         self.w(f"pub enum {c.name} {{")
@@ -369,13 +453,21 @@ class RustEmitter:
         self.w("}")
         self.w("")
         names = " | ".join(lit(v.xml) for v in c.variants)
+        alts = docs.choice_names(c, code)
+        ind = "    "
         self.w(f"impl {c.name} {{")
-        self.w("    /// Whether `name` starts one of the alternatives.")
+        self.out += docs.rust(
+            "Says whether an element named `name` starts an alternative of "
+            f"the `<choice>` in [`{c.owner}`].",
+            [("name", "An element's local name.")],
+            f"`true` if `name` is {alts}; otherwise `false`.", indent=ind)
         self.w("    pub fn accepts(name: &str) -> bool {")
         self.w(f"        matches!(name, {names})")
         self.w("    }")
         self.w("")
-        self.w("    /// The element name of the selected alternative.")
+        self.out += docs.rust("Gives the element name of the selected "
+                              "alternative.", returns=f"The name: {alts}.",
+                              indent=ind)
         self.w("    pub fn xml_name(&self) -> &'static str {")
         self.w("        match self {")
         for v in c.variants:
@@ -383,6 +475,13 @@ class RustEmitter:
         self.w("        }")
         self.w("    }")
         self.w("")
+        how = self.fails.get(c.name)
+        self.out += docs.rust(
+            f"Writes the selected alternative as its element, {alts}.",
+            [("w", "The writer that receives the XML.")], None,
+            f"An error {docs.write_error(how, 'the alternative')}." if how
+            else "Never fails; it returns a `Result` as the writers of other "
+                 "choices do.", indent=ind)
         self.w("    pub fn write_xml(&self, w: &mut Writer<'_>) -> Result<()> "
                "{")
         self.w("        match self {")
@@ -397,6 +496,16 @@ class RustEmitter:
         self.w("        Ok(())")
         self.w("    }")
         self.w("")
+        self.out += docs.rust(
+            "Reads the alternative that the reader's next child element "
+            f"starts, which must be {alts}.",
+            [("r",
+              "The reader, positioned before the child element; it is left "
+              "after the child's end tag.")], "The alternative read.",
+            "An error if there is no next child or it is none of "
+            f"{docs.choice_names(c, code, 'and')}, if the alternative's "
+            "element is invalid (see the `read_xml` of its type) or if the "
+            "XML is malformed.", indent=ind)
         self.w("    pub fn read_xml(r: &mut Reader<'_>) -> Result<Self> {")
         self.w("        Ok(match r.peek_child()? {")
         for v in c.variants:
@@ -411,4 +520,5 @@ class RustEmitter:
 
 
 def emit(b: Binding) -> str:
+    """The Rust module for binding ``b``, before rustfmt lays it out."""
     return RustEmitter(b).emit()

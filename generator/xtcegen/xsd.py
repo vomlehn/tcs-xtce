@@ -23,6 +23,14 @@ class XsdError(Exception):
 
 
 def _local(qname: str) -> tuple[Optional[str], str]:
+    """Splits a qualified XML name.
+
+    Args:
+        qname: The name, with or without a prefix.
+
+    Returns:
+        The prefix, or None if there is none, and the local name.
+    """
     if ":" in qname:
         prefix, name = qname.split(":", 1)
         return prefix, name
@@ -30,6 +38,15 @@ def _local(qname: str) -> tuple[Optional[str], str]:
 
 
 def _doc(node: ET.Element) -> str:
+    """Reads a schema node's documentation annotation.
+
+    Args:
+        node: The XSD element, such as an xs:complexType.
+
+    Returns:
+        The text of its xs:annotation/xs:documentation with runs of
+        whitespace collapsed to single spaces, or ``""`` if it has none.
+    """
     d = node.find(f"{XS}annotation/{XS}documentation")
     if d is None or d.text is None:
         return ""
@@ -37,6 +54,15 @@ def _doc(node: ET.Element) -> str:
 
 
 def _occurs(node: ET.Element) -> tuple[int, int]:
+    """Reads a particle's occurrence bounds.
+
+    Args:
+        node: The xs:element, xs:sequence or xs:choice.
+
+    Returns:
+        Its minOccurs and maxOccurs, each 1 by default; ``unbounded`` is
+        UNBOUNDED.
+    """
     lo = int(node.get("minOccurs", "1"))
     hi_s = node.get("maxOccurs", "1")
     hi = UNBOUNDED if hi_s == "unbounded" else int(hi_s)
@@ -44,11 +70,17 @@ def _occurs(node: ET.Element) -> tuple[int, int]:
 
 
 def _strip_type(name: str) -> str:
+    """``name`` without a ``Type`` suffix, unless that is all it is."""
     return name[:-4] if name.endswith("Type") and len(name) > 4 else name
 
 
 class _Parser:
     def __init__(self, root: ET.Element):
+        """Starts parsing a schema.
+
+        Args:
+            root: The schema's xs:schema element.
+        """
         self.root = root
         self.ns = root.get("targetNamespace", "")
         self.schema = Schema(namespace=self.ns, version=root.get("version", ""))
@@ -60,7 +92,19 @@ class _Parser:
     # -- simple types -----------------------------------------------------
 
     def simple_ref(self, name: str) -> TypeRef:
-        """Resolve a named simple type (XSD builtin or schema-defined)."""
+        """Resolves a named simple type, an XSD builtin or one the schema
+        defines, defining it first if need be.
+
+        Args:
+            name: The type's name, possibly with a prefix.
+
+        Returns:
+            An EnumRef for an enumeration, otherwise a ScalarRef.
+
+        Raises:
+            XsdError: If the schema doesn't define the type and it isn't a
+                      supported builtin, or its definition is unsupported.
+        """
         prefix, local = _local(name)
         if (prefix is None and local in BUILTINS
                 and local not in self.simple_nodes):
@@ -77,6 +121,20 @@ class _Parser:
         return self.define_simple(local, node)
 
     def define_simple(self, name: str, node: ET.Element) -> TypeRef:
+        """Defines a simple type: an enumeration, a restriction of another
+        simple type, or a union or list, kept as a string.
+
+        Args:
+            name: The type's name, or the name made up for an anonymous one.
+            node: Its xs:simpleType.
+
+        Returns:
+            An EnumRef for an enumeration, otherwise a ScalarRef.
+
+        Raises:
+            XsdError: If it is a restriction without a base or isn't a
+                      restriction, union or list.
+        """
         restriction = node.find(f"{XS}restriction")
         if restriction is not None:
             values = [e.get("value", "")
@@ -103,7 +161,20 @@ class _Parser:
         raise XsdError(f"unsupported simpleType {name}")
 
     def type_of(self, node: ET.Element, owner: str) -> TypeRef:
-        """Type of an <element> or <attribute> (named or anonymous)."""
+        """Gives the type of an xs:element or xs:attribute, named or
+        anonymous; an anonymous type is defined under a made-up name.
+
+        Args:
+            node:  The xs:element or xs:attribute.
+            owner: The name of the complex type it is in, which the name of an
+                   anonymous type starts with.
+
+        Returns:
+            A reference to the type; a string for an untyped node.
+
+        Raises:
+            XsdError: If a simple type it uses can't be resolved.
+        """
         t = node.get("type")
         if t is not None:
             _, local = _local(t)
@@ -125,6 +196,15 @@ class _Parser:
         return ScalarRef(STRING)
 
     def unique(self, name: str) -> str:
+        """Makes a type name that no schema type or made-up one has.
+
+        Args:
+            name: The name wanted.
+
+        Returns:
+            ``name``, or ``name`` followed by the smallest number from 2 that
+            makes it unique.
+        """
         base, n = name, 2
         taken = lambda s: (  # noqa: E731
             s in self.complex_nodes or s in self.simple_nodes or s in self.raw
@@ -137,6 +217,19 @@ class _Parser:
     # -- complex types ----------------------------------------------------
 
     def parse_attribute(self, node: ET.Element, owner: str) -> Attribute:
+        """Parses an xs:attribute.
+
+        Args:
+            node:  The xs:attribute.
+            owner: The name of the complex type it is in.
+
+        Returns:
+            The attribute; one referenced with ``ref`` (only xml:base is) is
+            a string.
+
+        Raises:
+            XsdError: If it has neither a name nor a ref.
+        """
         ref = node.get("ref")
         if ref is not None:
             # Only xml:base is referenced by XTCE.
@@ -150,6 +243,18 @@ class _Parser:
                          default=node.get("default"), doc=_doc(node))
 
     def parse_particle(self, node: ET.Element, owner: str):
+        """Parses a particle and, for a group, the particles in it.
+
+        Args:
+            node:  The xs:element, xs:sequence or xs:choice.
+            owner: The name of the complex type it is in.
+
+        Returns:
+            An Element, Sequence or Choice.
+
+        Raises:
+            XsdError: If it is another kind of particle, or holds one.
+        """
         lo, hi = _occurs(node)
         tag = node.tag
         if tag == f"{XS}element":
@@ -169,7 +274,17 @@ class _Parser:
         raise XsdError(f"unsupported particle {tag} in {owner}")
 
     def parse_body(self, ct: ComplexType, node: ET.Element) -> None:
-        """Parse attributes and the content model directly under ``node``."""
+        """Parses the attributes and the content model directly under a node
+        into a complex type.
+
+        Args:
+            ct:   The complex type, updated in place.
+            node: The xs:complexType or xs:extension.
+
+        Raises:
+            XsdError: If the node holds xs:anyAttribute, xs:group or
+                      xs:attributeGroup.
+        """
         for child in node:
             if child.tag == f"{XS}attribute":
                 ct.attributes.append(self.parse_attribute(child, ct.name))
@@ -185,6 +300,21 @@ class _Parser:
 
     def parse_complex(self, name: str, node: ET.Element,
                       anonymous: bool = False) -> ComplexType:
+        """Parses an xs:complexType, before inheritance is flattened.
+
+        Args:
+            name:      The type's name, or the name made up for an anonymous
+                       one.
+            node:      The xs:complexType.
+            anonymous: Whether the type is anonymous.
+
+        Returns:
+            The complex type, with its base type's name if it extends one.
+
+        Raises:
+            XsdError: If it restricts complex or simple content, mixes text
+                      with elements or uses an unsupported construct.
+        """
         ct = ComplexType(name=name, abstract=node.get("abstract") == "true",
                          doc=_doc(node), anonymous=anonymous)
         cc = node.find(f"{XS}complexContent")
@@ -218,6 +348,16 @@ class _Parser:
     # -- driver -----------------------------------------------------------
 
     def run(self) -> Schema:
+        """Parses the whole schema: its simple types, complex types and root
+        elements, then flattens inheritance.
+
+        Returns:
+            The schema model.
+
+        Raises:
+            XsdError: If the schema uses an unsupported construct or a root
+                      element isn't of a complex type.
+        """
         for node in self.root:
             name = node.get("name")
             if node.tag == f"{XS}simpleType":
@@ -245,6 +385,15 @@ class _Parser:
         return self.schema
 
     def flatten(self, name: str) -> ComplexType:
+        """Flattens a complex type's inheritance: its base types' attributes
+        and content come first.
+
+        Args:
+            name: The type's name.
+
+        Returns:
+            The type with every attribute and its full content model.
+        """
         ct = self.raw[name]
         if ct.base is None:
             return ct
@@ -262,4 +411,15 @@ class _Parser:
 
 
 def parse(path: str) -> Schema:
+    """Parses an XTCE schema.
+
+    Args:
+        path: The schema file, such as SpaceSystem.xsd.
+
+    Returns:
+        The schema model.
+
+    Raises:
+        XsdError: If the schema uses a construct that isn't supported.
+    """
     return _Parser(ET.parse(path).getroot()).run()

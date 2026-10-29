@@ -42,6 +42,14 @@ STRINGS = ["text", 'a < b & "c" > \'d\'', "multi\nline", "üñïçødé"]
 
 class _Gen:
     def __init__(self, b: Binding, seed: int, done: set[tuple[str, str]]):
+        """Starts one sample document.
+
+        Args:
+            b:    The binding.
+            seed: The sample's number, which rotates the values and
+                  alternatives it picks.
+            done: The (type, element) slots earlier samples covered.
+        """
         self.b = b
         self.done = done
         self.seed = seed
@@ -53,10 +61,25 @@ class _Gen:
         self.out: list[str] = []
 
     def next(self) -> int:
+        """Counts one more value, so that successive values differ."""
         self.counter += 1
         return self.counter
 
     def scalar(self, t: TypeRef, owner: str, name: str) -> str:
+        """Picks a schema-valid value for an attribute, a simple element or
+        text content.
+
+        Args:
+            t:     The value's simple type.
+            owner: The name of the type that holds it.
+            name:  The attribute's or element's name; names and references
+                   get identifier-like values.
+
+        Returns:
+            The value's lexical form, unescaped: an enumeration's values in
+            turn, values that match a pattern type, small integers and
+            doubles for restricted types, or rotating plain strings.
+        """
         if isinstance(t, EnumRef):
             values = self.b.schema.enums[t.name].values
             k = self.enum_turn.get(t.name, self.seed)
@@ -82,6 +105,16 @@ class _Gen:
 
     def element(self, tag: str, t: TypeRef, path: tuple[str, ...],
                 minimal: bool, fixed=None) -> None:
+        """Appends an element to the sample.
+
+        Args:
+            tag:     The element's name.
+            t:       Its type.
+            path:    The names of the types it is nested in, to stop
+                     recursion.
+            minimal: Whether to write only what the schema requires.
+            fixed:   The element's fixed value, if the schema gives one.
+        """
         if isinstance(t, ComplexRef):
             self.record(self.b.records[t.name], tag, path, minimal)
         else:
@@ -91,6 +124,20 @@ class _Gen:
 
     def record(self, r: Record, tag: str, path: tuple[str, ...], minimal: bool,
                root=False) -> None:
+        """Appends an element of a complex type to the sample, with its
+        attributes and content.
+
+        A type already on the path, or already expanded EXPANSIONS_PER_TYPE
+        times, is written minimally.
+
+        Args:
+            r:       The type's record.
+            tag:     The element's name.
+            path:    The names of the types it is nested in.
+            minimal: Whether to write only what the schema requires.
+            root:    Whether it is the document root, which declares the
+                     namespace.
+        """
         if not minimal:
             seen = self.expanded.get(r.name, 0)
             if r.name in path or seen >= EXPANSIONS_PER_TYPE:
@@ -134,6 +181,14 @@ class _Gen:
 
     def choice(self, f: ChoiceField, path: tuple[str, ...],
                minimal: bool) -> None:
+        """Appends one alternative of a choice: the default one when minimal,
+        otherwise one no sample has covered yet, or the next in turn.
+
+        Args:
+            f:       The choice field.
+            path:    The names of the types it is nested in.
+            minimal: Whether to write only what the schema requires.
+        """
         c = f.choice
         if minimal:
             v = c.variants[c.default_variant]
@@ -152,7 +207,17 @@ class _Gen:
 
 
 def _all_targets(b: Binding, root: str) -> set[tuple[str, str]]:
-    """Every element slot of every type reachable from the root."""
+    """Finds every element slot of every type reachable from the root.
+
+    Args:
+        b:    The binding.
+        root: The name of the root element's type.
+
+    Returns:
+        A (type, element name) pair for each element of each record and
+        each alternative of each choice, except the single children of
+        keyed sets.
+    """
     targets: set[tuple[str, str]] = set()
     seen: set[str] = set()
     todo = [root]
@@ -179,7 +244,16 @@ def _all_targets(b: Binding, root: str) -> set[tuple[str, str]]:
 
 
 def generate(b: Binding) -> list[tuple[str, str]]:
-    """Return ``(file name, xml text)`` pairs covering the schema."""
+    """Makes sample documents that together cover the schema.
+
+    Args:
+        b: The binding.
+
+    Returns:
+        ``(file name, xml text)`` pairs: up to MAX_SAMPLES samples, each
+        covering something earlier ones didn't, then COVERAGE.txt, which
+        reports what they cover.
+    """
     root_tag, root_type = next(iter(b.schema.roots.items()))
     targets = _all_targets(b, root_type)
     covered: set[tuple[str, str]] = set()
