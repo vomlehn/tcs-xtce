@@ -22,7 +22,18 @@ ENCODINGS = {"unsigned": "Unsigned", "twosComplement": "TwosComplement",
 
 
 def flt(x: float) -> str:
-    """A float literal valid in Rust, C++ and Python (finite values only)."""
+    """Writes a float literal valid in Rust, C++ and Python.
+
+    Args:
+        x: The value, which must be finite.
+
+    Returns:
+        The literal, with a decimal point or exponent so that it is a
+        float in every language.
+
+    Raises:
+        ValueError: ``x`` is infinite or NaN.
+    """
     if not math.isfinite(x):
         raise ValueError(f"non-finite constant {x}")
     s = repr(float(x))
@@ -71,8 +82,16 @@ def c_op(op: str) -> str:
 
 
 def leaf_calibrators(cal) -> list:
-    """The polynomials and splines in a calibrator, the cases of a context
-    calibrator first."""
+    """Finds the polynomials and splines in a calibrator.
+
+    Args:
+        cal: The calibrator: a Polynomial, a Spline, a ContextCal or
+             another kind.
+
+    Returns:
+        The polynomials and splines it uses, a context calibrator's cases'
+        first and its default's last; none for another kind.
+    """
     if isinstance(cal, ContextCal):
         out = [x for _, c in cal.cases for x in leaf_calibrators(c)]
         return out + leaf_calibrators(cal.default)
@@ -146,8 +165,17 @@ def encode_text(s: str, charset: str) -> bytes:
 
 
 def find_unit(b: bytes, term: bytes, unit: int) -> int:
-    """The first position of ``term`` in ``b`` that starts a code unit, or
-    -1."""
+    """Finds a terminator in a string's bytes.
+
+    Args:
+        b:    The string's bytes.
+        term: The terminator's bytes.
+        unit: The bytes in one code unit of the string's encoding.
+
+    Returns:
+        The first position of ``term`` in ``b`` that starts a code unit,
+        or -1 if there is none.
+    """
     i = b.find(term)
     while i >= 0 and i % unit:
         i = b.find(term, i + 1)
@@ -172,8 +200,17 @@ def binary_cap(vt: VType) -> int:
 
 
 def wire_cap(vt: VType) -> int:
-    """The most bytes of content a string field (or a boolean encoded as a
-    string) can hold on the wire, in its charset."""
+    """Says how much content a string field can hold on the wire.
+
+    Args:
+        vt: The type of a string field, or of a boolean encoded as a
+            string, or of a string encoded as binary.
+
+    Returns:
+        The most bytes of content, in its charset, that the field can
+        hold: what its fixed size, its maximum size, its terminator and
+        its size tag leave room for.
+    """
     if isinstance(vt.enc, BinaryEnc):
         return vt.enc.bits // 8  # a string encoded as binary fills its field
     fixed, mx, term, tag = string_spec(vt)
@@ -189,11 +226,19 @@ def wire_cap(vt: VType) -> int:
 
 
 def str_cap(vt: VType) -> int:
-    """The most bytes of UTF-8 a string field (or a boolean encoded as a
-    string) can hold.  In a charset other than UTF-8 and US-ASCII, the C
-    runtime reads the field's bytes into the end of the storage and
-    converts them into its start, so the storage holds the most UTF-8 the
-    whole field can give."""
+    """Says how much UTF-8 a string field's storage must hold.
+
+    In a charset other than UTF-8 and US-ASCII, the C runtime reads the
+    field's bytes into the end of the storage and converts them into its
+    start, so the storage holds the most UTF-8 the whole field can give.
+
+    Args:
+        vt: The type of a string field, or of a boolean encoded as a
+            string, or of a string encoded as binary.
+
+    Returns:
+        The most bytes of UTF-8 the field can hold.
+    """
     if isinstance(vt.enc, BinaryEnc) or vt.enc.charset in ("UTF-8", "US-ASCII"):
         return wire_cap(vt)
     w = wire_region(vt)
@@ -226,8 +271,15 @@ def criteria_by_node(node: Node) -> list[tuple[Node, list[Criterion]]]:
 
 
 def stream_capacity(st) -> tuple[int, int]:
-    """The bits a stream's synchronizer keeps, and the bytes of its
-    frames, at most."""
+    """Sizes the buffers of a stream's synchronizer.
+
+    Args:
+        st: A FixedFrameStream or VariableFrameStream.
+
+    Returns:
+        The most bits its synchronizer keeps, and the most bytes of one
+        of its frames.
+    """
     if st.fixed:
         bits = ((max(st.verify, 2) + 2) * st.frame_bits + 2 * st.aperture
                 + st.location + st.pattern_bits + 16)
@@ -243,7 +295,16 @@ def stream_fn(kind: str, st) -> str:
 
 
 def stream_doc(st) -> str:
-    """What a stream type's documentation says it is."""
+    """Describes a stream, for its generated type's documentation.
+
+    Args:
+        st: The stream.
+
+    Returns:
+        One or two sentences saying what kind of stream it is and what
+        it gives: frames of its container or service, or the bytes its
+        DecodingAlgorithm decodes.
+    """
     if st.custom:
         return (f"Custom stream {st.key}: gives the bytes that the "
                 f"application's DecodingAlgorithm {st.decoder} decodes from "
@@ -274,7 +335,14 @@ HOOK_DOCS = {
 
 
 def terms_hooks(terms: list) -> list:
-    """The hooks that criteria call."""
+    """Lists the hooks that criteria call.
+
+    Args:
+        terms: The criteria, each a Criterion or a tree of them.
+
+    Returns:
+        Each hook they call, once, in the order they first call it.
+    """
     out: list = []
     for t in terms:
         out += [h for h in term_hooks(t) if h not in out]
@@ -282,7 +350,15 @@ def terms_hooks(terms: list) -> list:
 
 
 def checks_hooks(checks: list) -> list:
-    """The hooks of custom checksums."""
+    """Lists the hooks of custom checksums.
+
+    Args:
+        checks: The checks, whose ``spec`` is ``("custom", hook)`` for a
+                custom checksum.
+
+    Returns:
+        Each custom checksum's hook, once, in order.
+    """
     out: list = []
     for c in checks:
         if c.spec[0] == "custom" and c.spec[1] not in out:
@@ -291,9 +367,16 @@ def checks_hooks(checks: list) -> list:
 
 
 def items_hooks(items: list) -> list:
-    """The hooks that reading or writing ``items`` calls: in include
-    conditions, a container's restriction criteria, lookups and the checks
-    of conditionally included containers."""
+    """Lists the hooks that reading or writing entries calls.
+
+    Args:
+        items: The entries of a container or meta-command.
+
+    Returns:
+        Each hook they call, once: first those that criteria call
+        (include conditions, then restriction criteria and the lookups of
+        dynamic sizes), then custom checksums', then transforms'.
+    """
     def conds(it) -> list:
         return (it.criteria + [c for x in it.items for c in conds(x)]
                 if isinstance(it, Cond) else [])
@@ -344,7 +427,16 @@ def notes(n: Node) -> list[str]:
 
 
 def inputs(e: tuple) -> list:
-    """The values (Locals, each once) that a MathOp tree uses."""
+    """Lists the values that a MathOperation uses.
+
+    Args:
+        e: The operation's tree: ``("const", x)``, ``("raw",)``,
+           ``("value", ref)`` or an operator with its operands.
+
+    Returns:
+        The Locals of the values it refers to, each once, in the order
+        it first uses them.
+    """
     out: list = []
     if e[0] == "value":
         out.append(e[1].local)
@@ -359,7 +451,15 @@ def values(node: Node) -> list:
 
 
 def header_lines(mission, source: str) -> list:
-    """The notice at the top of every generated file, without comment markers.
+    """Writes the notice at the top of every generated file.
+
+    Args:
+        mission: The compiled mission, whose SpaceSystems it names.
+        source:  The name of the XTCE documents it was generated from.
+
+    Returns:
+        The notice's lines, without comment markers; the first sentence,
+        which names the documents, is wrapped at 76 columns.
     """
     spaces = ", ".join(repr(s) for s in mission.spaces)
     plural = "s" if len(mission.spaces) > 1 else ""
@@ -374,9 +474,118 @@ def header_lines(mission, source: str) -> list:
     return first + rest
 
 
+# The widest line of generated code.
+WIDTH = 80
+
+
+def _fill(text: str, first: str, rest: str, width: int) -> list[str]:
+    """Wraps text at spaces into lines of at most ``width`` columns.
+
+    Args:
+        text:  The text to wrap.
+        first: What starts the first line.
+        rest:  What starts each later line.
+        width: The widest line, in columns.
+
+    Returns:
+        The lines; a word longer than a line is left whole.
+    """
+    return (textwrap.wrap(" ".join(text.split()), width, initial_indent=first,
+                          subsequent_indent=rest, break_long_words=False,
+                          break_on_hyphens=False) or [first.rstrip()])
+
+
+def doc_header(lang: str, summary: str, params: list[tuple[str, str]] = (),
+               returns: str | None = None, errors: str | None = None,
+               raises: list[tuple[str, str]] = (),
+               indent: int = 0) -> list[str]:
+    """Formats the documentation header of a generated function.
+
+    The header follows the language's convention: rustdoc for Rust,
+    Doxygen for C and C++, a Google style docstring for Python.  Each
+    parameter's description, continuation lines included, starts in one
+    column, and every line fits ``WIDTH`` columns after ``indent``.
+
+    Args:
+        lang:    The language: "rust", "c" or "python".
+        summary: What the function does, one or more sentences.
+        params:  Each parameter, in order, with what it means; for Rust
+                 and Python without the receiver.
+        returns: What the function returns, or None if it returns
+                 nothing.  In C it should say what the error codes are.
+        errors:  For Rust, when the function returns an error (its
+                 ``# Errors`` section); ignored in the other languages.
+        raises:  For Python, each exception the function raises, with
+                 when; ignored in the other languages.
+        indent:  The columns the lines will be indented by.
+
+    Returns:
+        The header's lines without that indentation: for Rust ``///``
+        lines, for C one ``/** ... */`` comment, for Python the docstring
+        with its quotes.
+
+    Raises:
+        ValueError: ``lang`` is none of the three.
+    """
+    width = WIDTH - indent
+    names = [n for n, _ in params]
+    if lang == "rust":
+        out = _fill(summary, "/// ", "/// ", width)
+        if params:
+            out += ["///", "/// # Arguments", "///"]
+            col = max(len(f"`{n}`") for n in names)
+            for n, d in params:
+                head = f"/// * {f'`{n}`':<{col}} - "
+                out += _fill(d, head, "///" + " " * (len(head) - 3), width)
+        for title, text in (("Returns", returns), ("Errors", errors)):
+            if text is not None:
+                out += ["///", f"/// # {title}", "///"]
+                out += _fill(text, "/// ", "/// ", width)
+        return out
+    if lang == "c":
+        out = _fill(summary, "/** ", " * ", width)
+        if params or returns is not None:
+            out.append(" *")
+            col = max([len(n) for n in names] + [1]) + 2
+            tag = len(" * @param ") + col
+            for n, d in params:
+                out += _fill(d, f" * @param {n:<{col}}", " *" + " " * (tag - 2),
+                             width)
+            if returns is not None:
+                head = (f" * {'@return':<{tag - 3}}" if params
+                        else " * @return ")
+                out += _fill(returns, head, " *" + " " * (len(head) - 2), width)
+        # Close the comment on its last line when it fits, else below it.
+        if len(out[-1]) + 3 <= width:
+            out[-1] += " */"
+        else:
+            out.append(" */")
+        return out
+    if lang == "python":
+        out = _fill(summary, '"""', "", width)
+        if params:
+            out += ["", "Args:"]
+            col = max(len(n) for n in names) + 2
+            for n, d in params:
+                out += _fill(d, f"    {n + ':':<{col}}", " " * (4 + col), width)
+        if returns is not None:
+            out += ["", "Returns:"] + _fill(returns, "    ", "    ", width)
+        if raises:
+            out += ["", "Raises:"]
+            for exc, d in raises:
+                out += _fill(d, f"    {exc}: ", "        ", width)
+        if len(out) == 1 and len(out[0]) + 3 <= width:
+            out[0] += '"""'
+        else:
+            out.append('"""')
+        return out
+    raise ValueError(f"unknown language {lang!r}")
+
+
 __all__ = ["Criterion", "FloatEnc", "IntEnc", "Polynomial", "Spline",
            "StringEnc", "criteria_by_node", "field_range", "size_args",
            "stream_fn", "header_lines", "flt", "int_enc", "invertible", "le",
            "raw_is_int", "str_cap", "string_spec", "values", "wire_cap",
            "wire_region", "code_unit", "encode_text", "find_unit", "fast_order",
-           "Ref", "MATH_OPS", "c_op", "leaf_calibrators", "math_value"]
+           "Ref", "MATH_OPS", "c_op", "leaf_calibrators", "math_value",
+           "doc_header"]
