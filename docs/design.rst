@@ -1340,3 +1340,23 @@ Limitations and future work
   still set by the application, which must make it agree with the data:
   a string's size can't be worked out from its content, and a member's
   field is part of an aggregate the application builds.
+
+See Also
+========
+
+`XTCE, the OMG specification <https://www.omg.org/spec/XTCE/>`__
+    The Object Management Group's XML Telemetric and Command Exchange
+    standard, which tcs-xtce implements: its latest version, currently 1.3.
+    ``make references`` downloads its schema, ``SpaceSystem.xsd``, and its
+    specification, ``XTCE.pdf``, from this page.
+
+`CCSDS 660.0-B-2, XML Telemetric and Command Exchange (XTCE)`__
+    The CCSDS Blue Book that adopts XTCE 1.2 as a space data systems
+    standard.
+
+.. __: https://ccsds.org/Pubs/660x0b2.pdf
+
+`tcs-xtce manual <https://vomlehn.github.io/tcs-xtce/docs/manual.html>`__
+    tcs-xtce turns an XTCE description of telemetry and command packets
+    into Rust, C, C++ and Python code that encodes and decodes them. The
+    manual says how to generate that code and use it.

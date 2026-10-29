@@ -3119,3 +3119,22 @@ Apache-2.0``.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
+
+See Also
+========
+
+`XTCE, the OMG specification <https://www.omg.org/spec/XTCE/>`__
+    The Object Management Group's XML Telemetric and Command Exchange
+    standard, which tcs-xtce implements: its latest version, currently 1.3.
+    ``make references`` downloads its schema, ``SpaceSystem.xsd``, and its
+    specification, ``XTCE.pdf``, from this page.
+
+`CCSDS 660.0-B-2, XML Telemetric and Command Exchange (XTCE)`__
+    The CCSDS Blue Book that adopts XTCE 1.2 as a space data systems
+    standard.
+
+.. __: https://ccsds.org/Pubs/660x0b2.pdf
+
+`tcs-xtce design <https://vomlehn.github.io/tcs-xtce/docs/design.html>`__
+    How tcs-xtce works inside, and why: the generator, which compiles an
+    XTCE document and emits code from it, and the runtimes the code uses.
