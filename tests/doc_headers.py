@@ -799,9 +799,14 @@ def check_c(probs: Problems, text: str, header: bool,
                       r"constexpr|friend|typename|class|struct)\b|"
                       r"\[\[[^\]]*\]\]", " ", pre)
         spec = re.sub(r"\btemplate\s*<.*>", " ", spec).strip()
+        # A constructor is named after its class: the class it is in, or
+        # the one its qualified name gives.  A name like that at file scope
+        # with no return type is a macro.
+        parts = name.split("::")
         ctor = (base.startswith("~")
                 or (not spec
-                    and (base == cls or base == name.split("::")[-2:][0])))
+                    and ((cls and base == cls)
+                         or (len(parts) > 1 and parts[-2] == base))))
         if not spec and not ctor:
             return  # A macro, at file scope.
         if "->" in post:
