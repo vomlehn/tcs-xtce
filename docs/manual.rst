@@ -186,12 +186,6 @@ Maximum field size
    targets, but its generated C and Rust refuse to compile on 32-bit
    ones.
 
-CCSDS space packets
-   A space packet's 16-bit length field limits it to 65542 bytes: 6 of
-   header and at most 65536 of data. That is the packet format's limit,
-   not tcs-xtce's: encoding a packet too long for its length field fails
-   with ``OutOfRange``.
-
 Integers
    Integers of any width are decoded, encoded and compared, but sizes,
    counts, locations, calibrators, algorithms and alarms compute with at

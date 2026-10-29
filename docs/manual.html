@@ -595,11 +595,6 @@ changes that to anything from 1 to 4294967295 bytes, and a
 <dd>A packet of more than 512 MiB (2<sup>32</sup> - 1 bits) builds on 64-bit
 targets, but its generated C and Rust refuse to compile on 32-bit
 ones.</dd>
-<dt>CCSDS space packets</dt>
-<dd>A space packet's 16-bit length field limits it to 65542 bytes: 6 of
-header and at most 65536 of data. That is the packet format's limit,
-not tcs-xtce's: encoding a packet too long for its length field fails
-with <tt class="docutils literal">OutOfRange</tt>.</dd>
 <dt>Integers</dt>
 <dd>Integers of any width are decoded, encoded and compared, but sizes,
 counts, locations, calibrators, algorithms and alarms compute with at
