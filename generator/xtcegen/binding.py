@@ -31,12 +31,31 @@ class BindingError(Exception):
 
 
 def cardinality(lo: int, hi: int) -> str:
+    """Classifies an occurrence range.
+
+    Args:
+        lo: The fewest occurrences allowed.
+        hi: The most allowed, or UNBOUNDED.
+
+    Returns:
+        ONE for exactly one, OPT for zero or one, otherwise MANY.
+    """
     if hi == 1:
         return ONE if lo == 1 else OPT
     return MANY
 
 
 def snake(name: str) -> str:
+    """Converts an XML name to snake case.
+
+    Args:
+        name: The name, in camel or Pascal case, which may hold acronyms
+              and characters that aren't allowed in identifiers.
+
+    Returns:
+        The name in lower case, with ``_`` between its words and in place
+        of each run of other characters.
+    """
     s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
     s = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s)
     s = re.sub(r"[^A-Za-z0-9]+", "_", s)
@@ -44,7 +63,16 @@ def snake(name: str) -> str:
 
 
 def pascal_ident(value: str) -> str:
-    """Identifier for an enumeration value, keeping its spelling recognisable.
+    """Makes an identifier for an enumeration value, keeping its spelling
+    recognisable.
+
+    Args:
+        value: The value as the schema spells it.
+
+    Returns:
+        Its alphanumeric parts, each capitalized, joined with ``_`` where
+        digits would otherwise run together; ``V`` before a leading digit,
+        and ``Empty`` for a value with no alphanumeric characters.
     """
     parts = [p for p in re.split(r"[^A-Za-z0-9]+", value) if p]
     if not parts:
@@ -137,6 +165,7 @@ class Binding:
     order: list[str]  # records and choices, dependencies first
 
     def first(self, f: ContentField) -> list[str]:
+        """The names an element of field ``f`` may start with."""
         if isinstance(f, ElemField):
             return [f.xml]
         return [v.xml for v in f.choice.variants]
@@ -146,13 +175,25 @@ class Binding:
 
 
 def _mul(a: int, b: int) -> int:
+    """Multiplies occurrence bounds, either of which may be UNBOUNDED."""
     if a == UNBOUNDED or b == UNBOUNDED:
         return 0 if (a == 0 or b == 0) else UNBOUNDED
     return a * b
 
 
 def _normalize(p):
-    """Simplify a particle tree without changing the language it accepts."""
+    """Simplifies a particle tree without changing the language it accepts.
+
+    Groups of the same kind that occur exactly once are spliced into their
+    parent, and a group with one item becomes that item, with its bounds
+    multiplied by the group's.
+
+    Args:
+        p: The particle: an Element, Sequence or Choice.
+
+    Returns:
+        The simplified particle; ``p`` itself if it is an Element.
+    """
     if isinstance(p, Element):
         return p
     items = []
@@ -175,6 +216,11 @@ def _normalize(p):
 
 class _Builder:
     def __init__(self, schema: Schema):
+        """Starts building a binding.
+
+        Args:
+            schema: The schema to build it for.
+        """
         self.schema = schema
         self.records: dict[str, Record] = {}
         self.choices: dict[str, ChoiceType] = {}
@@ -182,6 +228,15 @@ class _Builder:
                       | set(schema.simple))
 
     def unique_type_name(self, base: str) -> str:
+        """Reserves a type name that no schema type or earlier choice has.
+
+        Args:
+            base: The name wanted.
+
+        Returns:
+            ``base``, or ``base`` followed by the smallest number from 2 that
+            makes it unique.
+        """
         name, n = base, 2
         while name in self.names:
             name = f"{base}{n}"
@@ -190,6 +245,16 @@ class _Builder:
         return name
 
     def build(self) -> Binding:
+        """Builds the binding: a record for every complex type, its choices,
+        and the analysis of boxing, order and defaults.
+
+        Returns:
+            The binding.
+
+        Raises:
+            BindingError: If a content model can't be bound, or a type has no
+                          finite instance.
+        """
         for ct in self.schema.complex.values():
             self.records[ct.name] = self.record(ct)
         b = Binding(self.schema, self.records, self.choices, [])
@@ -197,10 +262,33 @@ class _Builder:
         return b
 
     def record(self, ct: ComplexType) -> Record:
+        """Builds the record for one complex type, and the choices in it.
+
+        Args:
+            ct: The complex type, flattened.
+
+        Returns:
+            The record, with a field for each attribute, for text content
+            and for each item of its top-level sequence.
+
+        Raises:
+            BindingError: If a choice's alternatives aren't single elements
+                          or repeat one, the content has a nested sequence, or
+                          one element of lookahead can't decode it.
+        """
         rec = Record(ct.name, ct.doc, ct.abstract)
         used: set[str] = set()
 
         def ident(base: str) -> str:
+            """Reserves a field name not yet used in the record.
+
+            Args:
+                base: The name wanted.
+
+            Returns:
+                ``base``, or ``base`` followed by ``_`` and the smallest number
+                from 2 that makes it unique.
+            """
             name, n = base, 2
             while name in used:
                 name = f"{base}_{n}"
@@ -261,7 +349,15 @@ class _Builder:
 
 
 def _check_deterministic(rec: Record) -> None:
-    """Verify one-element lookahead is enough to decode the content model."""
+    """Verifies one-element lookahead is enough to decode the content model.
+
+    Args:
+        rec: The record.
+
+    Raises:
+        BindingError: If an item may start with a name that an earlier,
+                      variably repeated item still accepts.
+    """
     # Decoding is greedy: an item with min < max keeps accepting its first
     # names, so no later item may start with one of them until a fixed-count
     # item has been read.
@@ -283,7 +379,17 @@ def _check_deterministic(rec: Record) -> None:
 
 
 def _edges(b: Binding, node: str) -> list[tuple[str, bool, object]]:
-    """Outgoing (target, by_value, holder) edges of a record or choice."""
+    """Lists the outgoing edges of a record or choice in the type graph.
+
+    Args:
+        b:    The binding.
+        node: The record's or choice's name.
+
+    Returns:
+        A (target, by_value, holder) tuple for each complex type or choice
+        it holds: the target's name, whether it is held by value (not in a
+        list), and the field or variant that holds it.
+    """
     out = []
     if node in b.records:
         for f in b.records[node].content:
@@ -300,6 +406,16 @@ def _edges(b: Binding, node: str) -> list[tuple[str, bool, object]]:
 
 
 def _analyze(b: Binding) -> None:
+    """Boxes the fields and variants that break recursive type cycles,
+    orders records and choices with dependencies first, and picks the
+    choices' defaults.
+
+    Args:
+        b: The binding, updated in place.
+
+    Raises:
+        BindingError: If a type has no finite instance.
+    """
     nodes = sorted(b.records) + sorted(b.choices)
     # Tarjan's strongly connected components (iterative).
     index: dict[str, int] = {}
@@ -357,12 +473,28 @@ def _analyze(b: Binding) -> None:
 
 
 def _defaults(b: Binding) -> None:
-    """Pick, for each choice, the alternative with the smallest finite default.
+    """Picks, for each choice, the alternative with the smallest finite
+    default.
+
+    Args:
+        b: The binding; each choice's ``default_variant`` is set.
+
+    Raises:
+        BindingError: If a record or choice has no finite instance.
     """
     inf = float("inf")
     cost = {n: inf for n in list(b.records) + list(b.choices)}
 
     def rec_cost(r: Record) -> float:
+        """Estimates the size of a record's smallest instance.
+
+        Args:
+            r: The record.
+
+        Returns:
+            One, plus the minimum number of each required complex element or
+            choice times its current cost.
+        """
         total = 1.0
         for f in r.content:
             if f.min == 0:
@@ -375,6 +507,7 @@ def _defaults(b: Binding) -> None:
         return total
 
     def var_cost(v: Variant) -> float:
+        """The cost of an alternative: its type's, or 1 for a simple type."""
         return cost[v.type.name] if isinstance(v.type, ComplexRef) else 1.0
 
     changed = True
@@ -397,12 +530,25 @@ def _defaults(b: Binding) -> None:
 
 
 def build(schema: Schema) -> Binding:
+    """Builds the binding for a schema.
+
+    Args:
+        schema: The parsed schema.
+
+    Returns:
+        The binding.
+
+    Raises:
+        BindingError: If the schema's content models can't be bound.
+    """
     return _Builder(schema).build()
 
 
 def scalar_kind(b: Binding, t: TypeRef) -> Optional[str]:
+    """The scalar kind of ``t``, or None if it isn't a scalar."""
     return t.kind if isinstance(t, ScalarRef) else None
 
 
 def is_enum(t: TypeRef) -> bool:
+    """Whether ``t`` is an enumerated type."""
     return isinstance(t, EnumRef)

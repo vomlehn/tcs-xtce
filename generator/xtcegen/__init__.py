@@ -6,7 +6,11 @@ CRATE = "https://crates.io/crates/tcs-xtce"
 
 
 def header_lines() -> list:
-    """The notice at the top of every generated file, without comment markers.
+    """Gives the notice at the top of every generated file.
+
+    Returns:
+        The notice's lines, without comment markers: what made the file,
+        not to edit it, and where tcs-xtce and its crate are.
     """
     return ["@generated automatically by tcs-xtce (generator/xtcegen) from "
             "references/SpaceSystem.xsd.",

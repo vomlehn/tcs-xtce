@@ -39,19 +39,30 @@ HARD = ("hard",)
 
 
 def line(flat=" ", pre="", post=""):
-    """A place to break: ``flat`` when the line doesn't break, otherwise
-    ``pre``, a newline, the indentation and ``post``."""
+    """Makes a place to break: ``flat`` when the line doesn't break,
+    otherwise ``pre``, a newline, the indentation and ``post``.
+    """
     return ("line", flat, pre, post)
 
 
 def cat(*ds):
+    """Concatenates documents, dropping empty strings."""
     return ("cat", [d for d in ds if d != ""])
 
 
 def fits(items, rest, rem):
-    """Whether ``items`` (indent, mode, document) laid out from here, then
-    what follows on the stack ``rest`` up to its next break, take at most
-    ``rem`` columns."""
+    """Says whether documents fit in the room left on the line.
+
+    Args:
+        items: The (indent, mode, document) entries to lay out from here.
+        rest:  The stack of what follows; its entries count up to its next
+               break.
+        rem:   The columns left on the line.
+
+    Returns:
+        Whether ``items``, then what follows up to its next break, take at
+        most ``rem`` columns.
+    """
     items = list(items)
     ri = len(rest) - 1
     while rem >= 0:
@@ -91,8 +102,16 @@ def fits(items, rest, rem):
 
 
 def render(doc, col, ind):
-    """The text of ``doc``, starting at column ``col`` with indentation
-    ``ind``."""
+    """Lays out a document.
+
+    Args:
+        doc: The document.
+        col: The column it starts at.
+        ind: The indentation of its lines.
+
+    Returns:
+        Its text.
+    """
     out = []
     stack = [(ind, BREAK, doc)]
     while stack:
@@ -174,7 +193,15 @@ def render(doc, col, ind):
 
 
 def tail_len(stack):
-    """How far what follows on the stack runs before it can break."""
+    """Measures how far what follows on the stack runs before it can
+    break.
+
+    Args:
+        stack: The layout stack of (indent, mode, document) entries.
+
+    Returns:
+        The number of columns.
+    """
     n, items, ri = 0, [], len(stack) - 1
     while True:
         if not items:
@@ -208,15 +235,28 @@ def tail_len(stack):
 
 
 def closing(parts, i):
-    """What a break at parts[i] leaves at the end of the line before it."""
+    """Says what a break at ``parts[i]`` leaves at the end of the line
+    before it: the break's ``pre`` text, or ``""``.
+    """
     if i < len(parts) and parts[i][0] == "line":
         return parts[i][2]
     return ""
 
 
 def measure(doc, col, ind, tail):
-    """The lines, the widest line and the hanging breaks of ``doc`` laid out
-    from column ``col``, followed by ``tail`` columns that can't break."""
+    """Lays out a document to compare it with another layout.
+
+    Args:
+        doc:  The document.
+        col:  The column it starts at.
+        ind:  The indentation of its lines.
+        tail: The columns that follow it and can't break.
+
+    Returns:
+        The number of lines, the width of the widest, the number of
+        hanging breaks (lines that end by opening a bracket), and 1 if the
+        first break is inside an inner bracket (a staircase), else 0.
+    """
     text = " " * col + render(cat(doc, " " * tail), col, ind)
     lines = text.split("\n")
     # Lines that end by opening a bracket: hanging breaks.
@@ -229,8 +269,18 @@ def measure(doc, col, ind, tail):
 
 
 def pick(d, col, ind, stack):
-    """The layout of a ``choose`` to use: aligned, unless hanging fits where
-    aligned doesn't or takes fewer lines without a staircase."""
+    """Chooses the layout of a ``choose``: aligned, unless hanging fits
+    where aligned doesn't or takes fewer lines without a staircase.
+
+    Args:
+        d:     The ``choose`` document.
+        col:   The column it starts at.
+        ind:   The indentation of its lines.
+        stack: The layout stack of what follows it.
+
+    Returns:
+        The document of the layout chosen.
+    """
     al, hg = d[1], d[2]
     if al is None:
         return hg
@@ -258,6 +308,16 @@ class Atom:
     """A token, or a whole f-string, with where it was."""
 
     def __init__(self, kind, text, row, col, erow, ecol):
+        """Makes an atom.
+
+        Args:
+            kind: The token's type name, such as ``NAME`` or ``STRING``.
+            text: Its text.
+            row:  The line it starts on, from 1.
+            col:  The column it starts at, from 0.
+            erow: The line it ends on.
+            ecol: The column just past its end.
+        """
         self.kind, self.text = kind, text
         self.row, self.col, self.erow, self.ecol = row, col, erow, ecol
 
@@ -266,13 +326,21 @@ class Atom:
 
 
 def atoms_of(src):
-    """The tokens of ``src``, with each f-string as one STRING atom."""
+    """Tokenizes Python source.
+
+    Args:
+        src: The source.
+
+    Returns:
+        Its tokens as Atoms, with each f-string as one STRING atom.
+    """
     lines = src.splitlines(keepends=True)
     offs = [0]
     for ln in lines:
         offs.append(offs[-1] + len(ln))
 
     def sl(a, b):
+        """The text of ``src`` between token positions ``a`` and ``b``."""
         return src[offs[a[0] - 1] + a[1]:offs[b[0] - 1] + b[1]]
 
     toks = list(tokenize.generate_tokens(io.StringIO(src).readline))
@@ -305,7 +373,14 @@ def atoms_of(src):
 
 
 def parse_str(text):
-    """(prefix, quote, body) of a string literal; None if triple-quoted."""
+    """Takes a string literal apart.
+
+    Args:
+        text: The literal.
+
+    Returns:
+        Its prefix, quote and body, or None if it is triple-quoted.
+    """
     i = 0
     while text[i] not in "\"'":
         i += 1
@@ -321,7 +396,16 @@ def fields(body):
 
 
 def requote(text, quote):
-    """The literal with the other quote character, or None."""
+    """Writes a string literal with the other quote character.
+
+    Args:
+        text:  The literal.
+        quote: The quote character wanted.
+
+    Returns:
+        The literal with ``quote``; None if it is triple-quoted or its body
+        holds ``quote`` or an escaped quote.
+    """
     p = parse_str(text)
     if p is None:
         return None
@@ -334,7 +418,15 @@ def requote(text, quote):
 
 
 def newline_end(text):
-    """Whether a literal ends with a newline escape."""
+    """Says whether a literal ends with a newline escape.
+
+    Args:
+        text: The literal.
+
+    Returns:
+        Whether its body ends with a newline escape whose backslash isn't
+        itself escaped; False for a raw or triple-quoted literal.
+    """
     p = parse_str(text)
     if p is None or "r" in p[0].lower():
         return False
@@ -343,7 +435,17 @@ def newline_end(text):
 
 
 def mergeable(a, b):
-    """Whether literal ``b`` can join literal ``a`` as one literal."""
+    """Says whether literal ``b`` can join literal ``a`` as one literal.
+
+    Args:
+        a: The first literal.
+        b: The literal after it.
+
+    Returns:
+        Whether they have the same prefix, apart from f, that isn't bytes
+        or raw, ``b`` can take ``a``'s quote, and ``a`` doesn't end a line of
+        text with a newline escape.
+    """
     pa, pb = parse_str(a), parse_str(b)
     if pa is None or pb is None:
         return False
@@ -357,10 +459,20 @@ def mergeable(a, b):
 
 
 def quotes_for(text):
+    """The quote characters ``text`` can be written with."""
     return {q for q in "\"'" if requote(text, q) is not None}
 
 
 def merge(pieces):
+    """Joins adjacent string literals into one.
+
+    Args:
+        pieces: The literals, which ``mergeable`` allows joining.
+
+    Returns:
+        The joined literal's prefix, quote and body; an f prefix if any
+        piece has one, with the braces of the others doubled.
+    """
     qs = set("\"'")
     for p in pieces:
         qs &= quotes_for(p)
@@ -378,8 +490,18 @@ def merge(pieces):
 
 
 def cut_ok(body, k, raw, is_f):
-    """Whether a literal's body can be split before index ``k``: not inside
-    an escape sequence or an f-string's replacement field."""
+    """Says whether a literal's body can be split before index ``k``: not
+    inside an escape sequence or an f-string's replacement field.
+
+    Args:
+        body: The literal's body.
+        k:    Where it would be split.
+        raw:  Whether the literal is raw.
+        is_f: Whether it is an f-string.
+
+    Returns:
+        Whether it can.
+    """
     if k <= 0 or k >= len(body):
         return False
     j, slashes = k - 1, 0
@@ -409,9 +531,21 @@ def cut_ok(body, k, raw, is_f):
 
 
 def string_breaks(pre, quote, body):
-    """A literal that breaks into adjacent literals at word and tag
-    boundaries.  Every piece keeps the prefix; f prefixes that pieces don't
-    need are dropped afterwards (see drop_needless_f)."""
+    """Makes a literal that breaks into adjacent literals at word and tag
+    boundaries.
+
+    Every piece keeps the prefix; f prefixes that pieces don't need are
+    dropped afterwards (see drop_needless_f).
+
+    Args:
+        pre:   The literal's prefix.
+        quote: Its quote.
+        body:  Its body.
+
+    Returns:
+        The document; for an f-string, one that prefers breaking at spaces
+        to breaking at replacement fields.
+    """
     raw, is_f = "r" in pre, "f" in pre
     good = [k for k in range(1, len(body))
             if ((body[k - 1] == " " and body[k] != " ") or body[k] == "<"
@@ -428,6 +562,18 @@ def string_breaks(pre, quote, body):
 
 
 def pieces_doc(pre, quote, body, cuts):
+    """Makes the document of a literal cut into pieces.
+
+    Args:
+        pre:   The literal's prefix.
+        quote: Its quote.
+        body:  Its body.
+        cuts:  The indices in ``body`` where it may be cut.
+
+    Returns:
+        The literal as a string if there are no cuts, otherwise a fill of
+        the pieces, each a literal of its own, with breaks between them.
+    """
     bounds = [0] + cuts + [len(body)]
     chunks = [body[a:b] for a, b in zip(bounds, bounds[1:])]
     parts = []
@@ -443,8 +589,15 @@ def pieces_doc(pre, quote, body, cuts):
 
 
 def drop_needless_f(text):
-    """In each run of adjacent literals that is an f-string, drop the f from
-    pieces without fields.  The run's value and AST are unchanged."""
+    """Drops the f from pieces without fields in each run of adjacent
+    literals that is an f-string.  The run's value and AST are unchanged.
+
+    Args:
+        text: The source.
+
+    Returns:
+        The source with those prefixes dropped.
+    """
     atoms = [a for a in atoms_of(text) if a.kind not in ("NL", "COMMENT")]
     runs, cur = [], []
     for a in atoms:
@@ -483,6 +636,11 @@ class Group:
     """A bracket and the elements between its commas."""
 
     def __init__(self, open_atom):
+        """Starts a group at its opening bracket.
+
+        Args:
+            open_atom: The opening bracket.
+        """
         self.open = open_atom
         self.elems = [[]]
         self.close = None
@@ -493,11 +651,19 @@ class Group:
 
 
 def is_comment(p):
+    """Whether part ``p`` is a comment."""
     return not isinstance(p, Group) and p.kind == "COMMENT"
 
 
 def tree_of(atoms):
-    """Nest atoms into Groups; returns the top-level list of parts."""
+    """Nests atoms into Groups.
+
+    Args:
+        atoms: A statement's atoms.
+
+    Returns:
+        The top-level list of parts: atoms and Groups.
+    """
     top = []
     stack = [top]
     groups = []
@@ -548,16 +714,26 @@ def tree_of(atoms):
 
 
 def first_atom(p):
+    """The first atom of part ``p``."""
     return p.open if isinstance(p, Group) else p
 
 
 def last_atom(p):
+    """The last atom of part ``p``."""
     return p.close if isinstance(p, Group) else p
 
 
 def gap(prev, nxt):
-    """The space between two parts: as written when they were on one line,
-    otherwise what Python style puts there."""
+    """Gives the space between two parts: as written when they were on one
+    line, otherwise what Python style puts there.
+
+    Args:
+        prev: The first part.
+        nxt:  The part after it.
+
+    Returns:
+        The space, possibly empty.
+    """
     a, b = last_atom(prev), first_atom(nxt)
     if b.kind == "COMMENT":
         return "  "
@@ -570,6 +746,16 @@ def gap(prev, nxt):
 
 
 def is_value_end(p):
+    """Says whether a part can end a value, so that a bracket after it is
+    a call or subscript and an operator after it is binary.
+
+    Args:
+        p: The part.
+
+    Returns:
+        Whether it is a name (not a keyword other than None, True or
+        False), a number, a string or a closed bracket.
+    """
     a = last_atom(p)
     if a.kind == "NAME":
         return (not keyword.iskeyword(a.text)
@@ -578,9 +764,17 @@ def is_value_end(p):
 
 
 def breaks_before(parts, i):
-    """0 if the element can't break before parts[i]; 1 before a keyword
-    (comprehension, conditional or boolean), which binds loosest; 2 before
-    a binary operator."""
+    """Says whether, and how loosely, an element may break before a part.
+
+    Args:
+        parts: The element's parts.
+        i:     The index of the part.
+
+    Returns:
+        0 if the element can't break before ``parts[i]``; 1 before a
+        keyword (comprehension, conditional or boolean), which binds
+        loosest; 2 before a binary operator.
+    """
     p = parts[i]
     if isinstance(p, Group) or i == 0:
         return 0
@@ -594,12 +788,30 @@ def breaks_before(parts, i):
 
 class Builder:
     def __init__(self, hang, plus=None):
+        """Starts building a statement's document.
+
+        Args:
+            hang: The hanging indent for top-level brackets.
+            plus: The bracket of ``if (``, whose contents line up with the
+                  body unless continuation lines go in further, or None.
+        """
         self.hang = hang  # hanging indent for top-level brackets
         # The bracket of "if (", whose contents line up with the body
         # unless continuation lines go in further.
         self.plus = plus
 
     def group_doc(self, g, top):
+        """Makes the document of a bracket and its elements.
+
+        Args:
+            g:   The group.
+            top: Whether it is at the statement's top level, where it hangs
+                 by the statement's indent.
+
+        Returns:
+            The document: a choice of the aligned and hanging layouts, or only
+            hanging when comments are inside.
+        """
         n = len(g.elems)
         if n == 0:
             return g.open.text + g.close.text
@@ -645,7 +857,16 @@ class Builder:
         return ("group", ("choose", al, hg))
 
     def seq_doc(self, parts, top=False):
-        """Parts on one line; brackets inside may break."""
+        """Makes the document of parts on one line; brackets inside may
+        break.
+
+        Args:
+            parts: The parts.
+            top:   Whether they are the statement's top level.
+
+        Returns:
+            The document.
+        """
         out = []
         prev = None
         i = 0
@@ -673,6 +894,17 @@ class Builder:
         return cat(*out)
 
     def strings_doc(self, atoms, breakable):
+        """Makes the document of adjacent string literals.
+
+        Args:
+            atoms:     The literals.
+            breakable: Whether they are inside brackets, so may break.
+
+        Returns:
+            The document: mergeable literals joined and broken at word and
+            tag boundaries, a literal that ends a line of text ending the
+            source line.
+        """
         texts = [a.text for a in atoms]
         if not breakable:
             return " ".join(texts)
@@ -704,8 +936,16 @@ class Builder:
         return ("align", ("fill", parts))
 
     def elem_doc(self, parts):
-        """An element of a bracket: may break before boolean, conditional
-        and binary operators, and between string literals."""
+        """Makes the document of an element of a bracket: it may break before
+        boolean, conditional and binary operators, and between string
+        literals.
+
+        Args:
+            parts: The element's parts.
+
+        Returns:
+            The document.
+        """
         parts = list(parts)
         lead = []
         while parts and is_comment(parts[0]):
@@ -736,8 +976,15 @@ class Builder:
         return doc
 
     def terms_doc(self, parts):
-        """Parts that may break before binary operators, which bind more
-        tightly than the keywords elem_doc breaks before."""
+        """Makes the document of parts that may break before binary operators,
+        which bind more tightly than the keywords elem_doc breaks before.
+
+        Args:
+            parts: The parts.
+
+        Returns:
+            The document.
+        """
         runs = [[]]
         for i, p in enumerate(parts):
             if runs[-1] and not is_comment(p) and breaks_before(parts, i) == 2:
@@ -755,7 +1002,15 @@ class Builder:
 
 
 def statements(atoms):
-    """(atoms, NEWLINE atom) per logical line, without layout tokens."""
+    """Splits a file's atoms into logical lines.
+
+    Args:
+        atoms: The file's atoms.
+
+    Yields:
+        Each logical line's atoms, without layout tokens or leading
+        comments, and its NEWLINE atom.
+    """
     cur = []
     for a in atoms:
         if a.kind in ("NL", "INDENT", "DEDENT", "ENCODING", "ENDMARKER"):
@@ -771,7 +1026,15 @@ def statements(atoms):
 
 
 def parenthesize_with(stmt):
-    """``with a, b:`` as ``with (a, b):``, which can break between items."""
+    """Writes ``with a, b:`` as ``with (a, b):``, which can break between
+    items.
+
+    Args:
+        stmt: The statement's atoms.
+
+    Returns:
+        The new atoms, or ``stmt`` if it has one item.
+    """
     depth, commas, colon = 0, False, None
     for a in stmt[1:]:
         if a.text in OPEN:
@@ -798,8 +1061,16 @@ SPLITS = BINOPS | {",", "if", "and", "or", "not", "in", "is", "==", "!=", "<",
 
 
 def parenthesize_value(stmt):
-    """``x = a + b`` as ``x = (a + b)``, which can break between terms; None
-    if the value has no operator outside brackets to break at."""
+    """Writes ``x = a + b`` as ``x = (a + b)``, which can break between
+    terms.
+
+    Args:
+        stmt: The statement's atoms.
+
+    Returns:
+        The new atoms, or None if it assigns, returns or yields no value
+        with an operator outside brackets to break at.
+    """
     depth, start = 0, None
     if stmt[0].text in ("return", "yield"):
         start = 1
@@ -831,8 +1102,15 @@ def parenthesize_value(stmt):
 
 
 def parenthesize_condition(stmt):
-    """``if a and b:`` as ``if (a and b):``; None if the condition is
-    already one bracket or the statement isn't if, elif or while."""
+    """Writes ``if a and b:`` as ``if (a and b):``.
+
+    Args:
+        stmt: The statement's atoms.
+
+    Returns:
+        The new atoms, or None if the condition is already one bracket or
+        the statement isn't if, elif or while.
+    """
     if stmt[0].text not in ("if", "elif", "while"):
         return None
     depth, colon = 0, None
@@ -856,7 +1134,14 @@ def parenthesize_condition(stmt):
 
 
 def matching(atoms):
-    """The index of the bracket that closes atoms[0]."""
+    """Finds the bracket that closes ``atoms[0]``.
+
+    Args:
+        atoms: Atoms starting with an opening bracket.
+
+    Returns:
+        The index of the closing bracket, or -1 if there is none.
+    """
     depth = 0
     for i, a in enumerate(atoms):
         if a.text in OPEN:
@@ -874,18 +1159,36 @@ def fits_width(indent, text):
 
 
 def score(text):
-    """Lines, with each hanging break counting as two more."""
+    """Counts a layout's lines, with each hanging break counting as two
+    more.
+    """
     lines = text.split("\n")
     return (len(lines) + 2
             * sum(1 for x in lines[:-1] if x.rstrip()[-1:] in OPEN))
 
 
 def lay_out(stmt, indent):
-    """The text of the statement ``stmt`` (its atoms), indented by
-    ``indent``."""
+    """Lays out one statement.
+
+    Args:
+        stmt:   The statement's atoms.
+        indent: Its indentation.
+
+    Returns:
+        Its text, indented, with brackets added around a value or
+        condition when that lays it out better.
+    """
     hang = 8 if stmt[0].text in COMPOUND else 4
 
     def run(stmt):
+        """Lays out the statement's atoms.
+
+        Args:
+            stmt: The atoms.
+
+        Returns:
+            The text, without its first line's indentation.
+        """
         plus = (stmt[1] if stmt[0].text == "if" and stmt[1].text == "("
                 else None)
         return render(Builder(hang, plus).seq_doc(tree_of(stmt), top=True),
@@ -908,11 +1211,22 @@ def lay_out(stmt, indent):
 
 
 def align(src: str) -> str:
-    """``src`` with every statement that spans several lines laid out in the
-    compact aligned style.  A statement that would come out wider than
-    ``WIDTH`` when it fits now is left as it is, and so is ``src`` if it
-    isn't a whole module.  Raises ``ValueError`` if the layout would change
-    what the code means, which would be a bug here."""
+    """Lays out every statement that spans several lines in the compact
+    aligned style.
+
+    A statement that would come out wider than ``WIDTH`` when it fits now
+    is left as it is, and so is ``src`` if it isn't a whole module.
+
+    Args:
+        src: The module's source.
+
+    Returns:
+        The laid-out source.
+
+    Raises:
+        ValueError: If the layout would change what the code means, which
+                    would be a bug here.
+    """
     try:
         before = ast.dump(ast.parse(src))
     except SyntaxError:
@@ -947,8 +1261,16 @@ def align(src: str) -> str:
 
 
 def main(argv=None) -> int:
-    """``python3 -m xtcegen.pyalign [--check] FILE...``: lay out each file,
-    or with ``--check`` report the files whose layout would change."""
+    """Runs ``python3 -m xtcegen.pyalign [--check] FILE...``: lays out
+    each file, or with ``--check`` reports the files whose layout would
+    change.
+
+    Args:
+        argv: The arguments, or None for the command line's.
+
+    Returns:
+        The exit status: 1 if ``--check`` finds a file to change, else 0.
+    """
     ap = argparse.ArgumentParser(
         prog="pyalign", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)

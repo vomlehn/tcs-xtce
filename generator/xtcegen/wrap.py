@@ -40,8 +40,20 @@ _PY_KEYWORDS = ("and", "or", "if", "else", "for")
 
 
 def wrap(text: str, lang: str, width: int = WIDTH) -> str:
-    """Wrap ``text`` in language ``lang``: "c" (C or C++), "python" or
-    "rust"."""
+    """Wraps generated code so that its lines fit, where they can.
+
+    Args:
+        text:  The code.
+        lang:  Its language: "c" (C or C++), "python" or "rust".
+        width: The widest a line may be.
+
+    Returns:
+        The wrapped code; Python is also laid out in the aligned style
+        when ``width`` is pyalign's.
+
+    Raises:
+        ValueError: If ``lang`` is none of those.
+    """
     if lang not in ("c", "python", "rust"):
         raise ValueError(f"unknown language {lang!r}")
     w = _Wrapper(lang, width)
@@ -76,6 +88,12 @@ class _Scan:
 
 class _Wrapper:
     def __init__(self, lang: str, width: int) -> None:
+        """Starts wrapping a file.
+
+        Args:
+            lang:  Its language: "c", "python" or "rust".
+            width: The widest a line may be.
+        """
         self.lang = lang
         self.width = width
         # State carried from line to line.
@@ -89,6 +107,14 @@ class _Wrapper:
     # -- lines --
 
     def line(self, line: str) -> list[str]:
+        """Wraps one line, given what the lines before it left open.
+
+        Args:
+            line: The line, without its newline.
+
+        Returns:
+            The lines it becomes.
+        """
         if self.lang == "rust":
             return self._rust(line)
         if self.lang == "c" and self.block:
@@ -115,6 +141,16 @@ class _Wrapper:
         return self._code(line, indent)
 
     def _rust(self, line: str) -> list[str]:
+        """Wraps one line of Rust that rustfmt has laid out: rewraps a
+        comment that is too long and breaks code rustfmt left too long.
+
+        Args:
+            line: The line.
+
+        Returns:
+            The lines it becomes; the line itself if it fits or holds a char
+            literal, a lifetime or a continued string.
+        """
         if self.rust_string is not None:
             # Rust skips the whitespace that starts a continued string line.
             line = self.rust_string + line.lstrip()
@@ -142,13 +178,35 @@ class _Wrapper:
 
     def _comment(self, line: str, indent: str, marker: str,
                  text: str) -> list[str]:
+        """Rewraps a ``//`` or ``#`` comment line that is too long.
+
+        Args:
+            line:   The line.
+            indent: Its indentation.
+            marker: The comment marker and its space, repeated on each line.
+            text:   The comment's text.
+
+        Returns:
+            The lines it becomes.
+        """
         if len(line) <= self.width:
             return [line]
         return _fill(text.strip(), indent + marker, indent + marker, self.width)
 
     def _c_block_start(self, line: str, indent: str,
                        stripped: str) -> list[str]:
-        """A line that starts a block comment: `/* ... */` or `/* ...`."""
+        """Wraps a line that starts a block comment: ``/* ... */`` or
+        ``/* ...``.
+
+        Args:
+            line:     The line.
+            indent:   Its indentation.
+            stripped: The line without its indentation.
+
+        Returns:
+            The lines it becomes; the line itself if it fits or code follows
+            the comment.
+        """
         end = stripped.find("*/", 2)
         if end >= 0 and stripped[end + 2 :].strip():
             # Code follows the comment; leave it alone.
@@ -165,7 +223,15 @@ class _Wrapper:
         return lines
 
     def _c_block(self, line: str) -> list[str]:
-        """A line inside a block comment."""
+        """Wraps a line inside a block comment.
+
+        Args:
+            line: The line.
+
+        Returns:
+            The lines it becomes; the line itself if it fits or doesn't start
+            with ``*``.
+        """
         stripped = line.strip()
         closed = "*/" in stripped
         if closed:
@@ -183,6 +249,18 @@ class _Wrapper:
 
     def _docstring_start(self, line: str, indent: str, stripped: str,
                          m: re.Match) -> list[str]:
+        """Wraps a line that starts a Python triple-quoted string.
+
+        Args:
+            line:     The line.
+            indent:   Its indentation.
+            stripped: The line without its indentation.
+            m:        The match of the string's prefix and opening quotes.
+
+        Returns:
+            The lines it becomes; the line itself if it fits or code follows
+            the string.
+        """
         quote = m.group(1)
         rest = stripped[m.end() :]
         end = rest.find(quote)
@@ -201,6 +279,15 @@ class _Wrapper:
         return lines
 
     def _docstring_body(self, line: str) -> list[str]:
+        """Wraps a line inside a Python triple-quoted string.
+
+        Args:
+            line: The line.
+
+        Returns:
+            The lines it becomes; the line itself if it fits, is blank or has
+            code after the closing quotes.
+        """
         quote = self.triple
         assert quote is not None
         end = line.find(quote)
@@ -220,6 +307,16 @@ class _Wrapper:
     # -- code --
 
     def _code(self, line: str, indent: str) -> list[str]:
+        """Wraps a line of code, moving a comment after the code to its own
+        lines above it.
+
+        Args:
+            line:   The line.
+            indent: Its indentation.
+
+        Returns:
+            The lines it becomes.
+        """
         start_depth = self.depth
         scan = self._scan(line)
         if len(line) <= self.width:
@@ -255,7 +352,18 @@ class _Wrapper:
 
     def _break(self, line: str, indent: str, start_depth: int,
                scan: _Scan) -> list[str]:
-        """Break code ``line`` into pieces that fit, where it can."""
+        """Breaks a code line into pieces that fit, where it can.
+
+        Args:
+            line:        The line.
+            indent:      Its indentation.
+            start_depth: The bracket depth at its start.
+            scan:        What ``_scan`` found in it.
+
+        Returns:
+            The pieces, continuation lines indented CONTINUATION columns
+            further; a piece that can't be broken is left too long.
+        """
         cont = len(indent) + CONTINUATION
         need_depth = 1 if self.lang == "python" else 0
         breaks = [p for p, d in scan.breaks if d >= need_depth]
@@ -302,20 +410,51 @@ class _Wrapper:
                 s += 1
 
     def _piece(self, text: str, lead: int, indent: str) -> str:
-        """A continuation piece, indented less than usual if that makes it
-        fit, but never less than the line it continues."""
+        """Indents a continuation piece, less than usual if that makes it fit,
+        but never less than the line it continues.
+
+        Args:
+            text:   The piece.
+            lead:   The usual indentation.
+            indent: The indentation of the line it continues.
+
+        Returns:
+            The indented piece.
+        """
         if lead > len(indent) and lead + len(text) > self.width:
             lead = max(len(indent), self.width - len(text))
         return " " * lead + text
 
     def _rescan(self, line: str, start_depth: int) -> _Scan:
+        """Scans a line again from the bracket depth at its start.
+
+        Args:
+            line:        The line.
+            start_depth: The bracket depth at its start.
+
+        Returns:
+            What ``_scan`` finds in it.
+        """
         self.depth = start_depth
         return self._scan(line)
 
     def _split_string(self, line: str, s: int, lead: int, scan: _Scan,
                       need_depth: int) -> int | None:
-        """Where to split a string literal that runs past the width in the
-        piece starting at ``s``, or None."""
+        """Finds where to split a string literal that runs past the width in
+        the piece starting at ``s``.
+
+        Args:
+            line:       The line.
+            s:          Where the piece starts.
+            lead:       The piece's indentation.
+            scan:       What ``_scan`` found in the line.
+            need_depth: The bracket depth a break needs (1 in Python).
+
+        Returns:
+            The index to split at, after a space or a separator if there is
+            one, never inside an escape or an f-string field; None if no
+            literal there can be split.
+        """
         limit = s + self.width - lead - 1  # room for the closing quote
         for start, end, prefix, quote in scan.strings:
             if start < s or start >= limit:
@@ -351,6 +490,15 @@ class _Wrapper:
         return None
 
     def _depth_at(self, scan: _Scan, index: int) -> int:
+        """Finds the bracket depth at a position, as the breaks record it.
+
+        Args:
+            scan:  What ``_scan`` found in the line.
+            index: The position.
+
+        Returns:
+            The depth of the last break at or before it, 0 if there is none.
+        """
         depth = 0
         for p, d in scan.breaks:
             if p > index:
@@ -360,8 +508,18 @@ class _Wrapper:
 
     def _parenthesize(self, line: str, indent: str,
                       start_depth: int) -> list[str] | None:
-        """Put the value of a Python assignment or return in parentheses, so
-        that it can break, or None if the line is neither."""
+        """Puts the value of a Python assignment or return in parentheses, so
+        that it can break.
+
+        Args:
+            line:        The line.
+            indent:      Its indentation.
+            start_depth: The bracket depth at its start.
+
+        Returns:
+            The lines it becomes, or None if it is neither an assignment nor
+            a return, or starts inside brackets.
+        """
         if start_depth:
             return None
         body = line.strip()
@@ -381,8 +539,15 @@ class _Wrapper:
         return [f"{indent}{head} ("] + body + [f"{indent})"]
 
     def _scan(self, line: str) -> _Scan:
-        """Find the break points, string literals and any trailing comment
-        of a code line, and update the bracket depth."""
+        """Finds the break points, string literals and any trailing comment
+        of a code line, and updates the bracket depth.
+
+        Args:
+            line: The line.
+
+        Returns:
+            What it holds.
+        """
         scan = _Scan()
         i, n = 0, len(line)
         py = self.lang == "python"
@@ -469,8 +634,15 @@ class _Wrapper:
 
 
 def _rust_continues(line: str) -> bool:
-    """Whether a line of Rust ends inside a string literal, after a
-    backslash that continues it on the next line."""
+    """Says whether a line of Rust ends inside a string literal, after a
+    backslash that continues it on the next line.
+
+    Args:
+        line: The line.
+
+    Returns:
+        Whether it does.
+    """
     if not line.endswith("\\"):
         return False
     i, n = 0, len(line)
@@ -499,8 +671,17 @@ def _rust_continues(line: str) -> bool:
 
 
 def _string_start(line: str, i: int, py: bool) -> tuple[str, str] | None:
-    """The prefix and quote of a string literal starting at ``i``, if one
-    does."""
+    """Finds the string literal starting at a position, if one does.
+
+    Args:
+        line: The line.
+        i:    The position.
+        py:   Whether the line is Python, whose literals may have
+              prefixes and triple quotes.
+
+    Returns:
+        The literal's prefix and quote, or None if none starts there.
+    """
     if py:
         m = re.match(r'([rRbBuUfF]{0,2})("""|\'\'\'|"|\')', line[i:])
         if m is None:
@@ -519,8 +700,16 @@ def _string_start(line: str, i: int, py: bool) -> tuple[str, str] | None:
 
 
 def _string_end(line: str, i: int, quote: str) -> int:
-    """The index just past the string literal whose contents start at
-    ``i``, or -1 if it doesn't end on this line."""
+    """Finds the end of a string literal.
+
+    Args:
+        line:  The line.
+        i:     Where the literal's contents start.
+        quote: Its quote.
+
+    Returns:
+        The index just past it, or -1 if it doesn't end on this line.
+    """
     n = len(line)
     while i < n:
         if line[i] == "\\":
@@ -533,7 +722,18 @@ def _string_end(line: str, i: int, quote: str) -> int:
 
 
 def _operator_at(line: str, i: int, py: bool) -> str | None:
-    """The operator a line may break before, if one starts at ``i``."""
+    """Finds the operator a line may break before, if one starts at a
+    position.
+
+    Args:
+        line: The line.
+        i:    The position.
+        py:   Whether the line is Python, which breaks before keywords;
+              C and C++ break before ``&&`` and ``||``.
+
+    Returns:
+        The operator, or None.
+    """
     if py:
         for k in _PY_KEYWORDS:
             if line.startswith(k + " ", i):
@@ -546,7 +746,17 @@ def _operator_at(line: str, i: int, py: bool) -> str | None:
 
 
 def _in_escape(line: str, start: int, k: int) -> bool:
-    """Whether splitting a string at ``k`` would cut an escape sequence."""
+    """Says whether splitting a string at ``k`` would cut an escape
+    sequence.
+
+    Args:
+        line:  The line.
+        start: Where the literal's contents start.
+        k:     Where it would be split.
+
+    Returns:
+        Whether it would.
+    """
     j = k - 1
     slashes = 0
     while j >= start and line[j] == "\\":
@@ -561,7 +771,17 @@ def _in_escape(line: str, start: int, k: int) -> bool:
 
 
 def _in_field(line: str, start: int, k: int) -> bool:
-    """Whether ``k`` is inside a replacement field of an f-string."""
+    """Says whether a position is inside a replacement field of an
+    f-string.
+
+    Args:
+        line:  The line.
+        start: Where the f-string's contents start.
+        k:     The position.
+
+    Returns:
+        Whether it is.
+    """
     depth = 0
     i = start
     while i < k:
@@ -577,7 +797,15 @@ def _in_field(line: str, start: int, k: int) -> bool:
 
 
 def _split_quote(scan: _Scan, k: int) -> str:
-    """What ends the first half of the string literal split at ``k``."""
+    """Says what ends the first half of a string literal split at ``k``.
+
+    Args:
+        scan: What ``_scan`` found in the line.
+        k:    Where the literal is split.
+
+    Returns:
+        The literal's quote.
+    """
     for start, end, prefix, quote in scan.strings:
         if start < k < end:
             return quote
@@ -585,7 +813,16 @@ def _split_quote(scan: _Scan, k: int) -> str:
 
 
 def _split_resume(scan: _Scan, k: int) -> str:
-    """What starts the second half of the string literal split at ``k``."""
+    """Says what starts the second half of a string literal split at
+    ``k``.
+
+    Args:
+        scan: What ``_scan`` found in the line.
+        k:    Where the literal is split.
+
+    Returns:
+        A space, the literal's prefix and its quote.
+    """
     for start, end, prefix, quote in scan.strings:
         if start < k < end:
             return " " + prefix + quote
@@ -593,8 +830,14 @@ def _split_resume(scan: _Scan, k: int) -> str:
 
 
 def _top_level_assignment(body: str) -> int | None:
-    """The index of the ``=`` of a Python assignment statement, if ``body``
-    is one."""
+    """Finds the ``=`` of a Python assignment statement.
+
+    Args:
+        body: The statement, without its indentation.
+
+    Returns:
+        The index of its ``=``, or None if it isn't an assignment.
+    """
     depth = 0
     i = 0
     while i < len(body):
@@ -620,7 +863,17 @@ def _top_level_assignment(body: str) -> int | None:
 
 
 def _fill(text: str, first: str, rest: str, width: int) -> list[str]:
-    """Fill ``text`` into lines starting with ``first``, then ``rest``."""
+    """Fills text into lines at spaces.
+
+    Args:
+        text:  The text.
+        first: What the first line starts with.
+        rest:  What the other lines start with.
+        width: The widest a line may be.
+
+    Returns:
+        The lines; a word too long to fit gets a line of its own.
+    """
     words = text.split()
     if not words:
         return [first.rstrip()]
@@ -637,8 +890,18 @@ def _fill(text: str, first: str, rest: str, width: int) -> list[str]:
 
 
 def _close(lines: list[str], closer: str, indent: str, width: int) -> list[str]:
-    """Append ``closer`` to the last line, or put it on a line of its own,
-    indented by ``indent``, if it doesn't fit."""
+    """Appends a closer to the last line, or puts it on a line of its own
+    if it doesn't fit.
+
+    Args:
+        lines:  The lines, the last one updated in place.
+        closer: The closer, such as ``*/``, with its leading space.
+        indent: The indentation of a line of its own.
+        width:  The widest a line may be.
+
+    Returns:
+        The lines.
+    """
     if len(lines[-1]) + len(closer) <= width:
         lines[-1] += closer
     else:
@@ -652,12 +915,18 @@ _RUST_PIECE = 40
 
 
 def split_rust_strings(text: str) -> str:
-    """Split long Rust string literals over lines, before rustfmt lays out
-    the code, which it can't do around a literal too long to fit.
+    """Splits long Rust string literals over lines, before rustfmt lays
+    out the code, which it can't do around a literal too long to fit.
 
     A backslash at the end of a line inside a Rust string drops the newline
     and the next line's leading whitespace, so each literal keeps its value.
     Pieces end after a ``|`` or a space and never start with whitespace.
+
+    Args:
+        text: The Rust source.
+
+    Returns:
+        The source with its long literals split.
     """
     out = []
     for line in text.split("\n"):
@@ -669,6 +938,15 @@ def split_rust_strings(text: str) -> str:
 
 
 def _split_rust_line(line: str) -> str:
+    """Splits the long string literals in one line of Rust.
+
+    Args:
+        line: The line, not a comment.
+
+    Returns:
+        The line, with backslash-newlines inside each literal longer than
+        _RUST_PIECE.
+    """
     pieces = []
     i, n = 0, len(line)
     last = 0
@@ -701,7 +979,15 @@ def _split_rust_line(line: str) -> str:
 
 
 def _rust_pieces(content: str) -> str:
-    """``content`` with backslash-newlines inserted between pieces."""
+    """Breaks the contents of a long Rust string literal into pieces.
+
+    Args:
+        content: The literal's contents.
+
+    Returns:
+        ``content`` with backslash-newlines between pieces of at most
+        about _RUST_PIECE characters.
+    """
     parts = []
     start = 0
     while len(content) - start > _RUST_PIECE:
