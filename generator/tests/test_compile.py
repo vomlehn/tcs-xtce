@@ -3,6 +3,7 @@
 import sys
 import unittest
 from pathlib import Path
+from typing import Sequence
 
 # The compiler reads XTCE documents with the generated `xtce` Python package.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
@@ -2208,7 +2209,8 @@ class EncodingRuleTests(unittest.TestCase):
         self.assertIn("'€' is not US-ASCII", self.rejected(text))
 
 
-def calibrated_by(cal: str, before: str = "", ptype: str = "Float") -> str:
+def calibrated_by(cal: str, before: Sequence[str] = (),
+                  ptype: str = "Float") -> str:
     """Builds a mission with a calibrated parameter X.
 
     Args:
@@ -2587,9 +2589,6 @@ class ContainerFeatureTests(unittest.TestCase):
         self.assertEqual((c.local.name, c.value), ("Mode", 3))
         self.assertEqual(go.fixed, {c.local: 3})
 
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 def length_tag(adjust: str = "-1") -> str:
@@ -3348,3 +3347,7 @@ class MessageTests(unittest.TestCase):
         m = compile_xml(self.mission("Q"), skip_unsupported=True)
         self.assertEqual([n.name for n in m.nodes], ["R"])
         self.assertIn("unresolved container reference 'Q'", m.skipped[0])
+
+
+if __name__ == "__main__":
+    unittest.main()
