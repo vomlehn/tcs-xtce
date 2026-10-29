@@ -199,6 +199,12 @@ tm 0a38c02a002a800000000000000000ffffffffffffffffffffffff00000000000000000000999
 tm 0a38c02a002a000000000000000003000000000000000000000000ffffffffffffffffffff0000000000000000000000a1  # wide real: a BCD digit of 10, which fails
 tm 0a39c02a000d25dd85d670d35ec9bec000000007  # wide operand: WideRealScaled 7 + 3e30 / 1e30, and WideRealHalf half of 3e30, through doubles
 tm 0a39c02a000dffffffffffffffffffffffffffff  # wide operand: the largest 104-bit integer, rounded to a double
+tm 0a3dc02a000c00000000000000000311223377  # wide sized: WideBlob of the 3 bytes a 72-bit WideLen gives
+tm 0a3dc02a000900000000000000000077  # wide sized: no bytes
+tm 0a3dc02a000c01000000000000000311223377  # wide sized: a WideLen past 2^64, beyond any size, which fails
+tm 0a3ec02a0011004000000000000000400000000000000000  # wide choice: WideEnum HIGH, and WideFlag true from a raw value past 64 bits
+tm 0a3ec02a0011ffffffffffffffffff000000000000000000  # wide choice: WideEnum BELOW, -1 in 72 bits, and WideFlag false
+tm 0a3ec02a0011010000000000000000000000000000000001  # wide choice: a WideEnum of 2^64, which no 64-bit value holds, and fails
 tc 112ec001001d11fffffffffffffffffffffffb0700000000000000000000000000000080  # set wide: a 96-bit offset and a 136-bit key
 tc 112ec002001d11000000000de0b6b3a76400010100000000000000000000000000000000  # set wide: an offset past its valid range
 tm 0a30c02a00090312345678123abfcd99  # repeated: RepWord from four repeated segments, so RepAfter; three raw tail segments; two section segments 4 bits apart

@@ -152,13 +152,16 @@ class ErrorTests(unittest.TestCase):
                 </SequenceContainer>''' for i in range(3))
         text = mission(tm=f"""
             <ParameterTypeSet>
-              <EnumeratedParameterType name="E65">
-                <IntegerDataEncoding sizeInBits="65"/>
+              <EnumeratedParameterType name="EC">
+                <IntegerDataEncoding sizeInBits="8"><DefaultCalibrator>
+                <PolynomialCalibrator><Term coefficient="2" exponent="1"/>
+                </PolynomialCalibrator></DefaultCalibrator>
+                </IntegerDataEncoding>
                 <EnumerationList><Enumeration value="0" label="A"/>
                 </EnumerationList>
               </EnumeratedParameterType>
             </ParameterTypeSet>
-            <ParameterSet><Parameter name="X" parameterTypeRef="E65"/>
+            <ParameterSet><Parameter name="X" parameterTypeRef="EC"/>
             </ParameterSet>
             <ContainerSet>
               <SequenceContainer name="Base" abstract="true">
@@ -167,7 +170,7 @@ class ErrorTests(unittest.TestCase):
               {derived}
             </ContainerSet>""")
         msg = self.unsupported(text)
-        why = "enumerated in a 65-bit integer encoding"
+        why = "calibrator on an enumerated type"
         self.assertEqual(msg.count(why), 1, msg)
         self.assertNotIn("/Sat/D0", msg)
         self.assertIn("3 containers or meta-commands derived from them", msg)
@@ -266,24 +269,11 @@ class WideIntegerTests(unittest.TestCase):
         self.assertTrue(opt.optional)
 
     def test_rejected(self):
-        e65 = ('<IntegerDataEncoding sizeInBits="65"/>')
         for why, types, entries, params in (
-                ("enumerated in a 65-bit integer encoding",
-                 f'<EnumeratedParameterType name="T">{e65}<EnumerationList>'
-                 '<Enumeration value="0" label="A"/></EnumerationList>'
-                 '</EnumeratedParameterType>', "", ""),
-                ("boolean in a 65-bit integer encoding",
-                 f'<BooleanParameterType name="T">{e65}</BooleanParameterType>',
-                 "", ""),
-                ("size or count from 72-bit integer W",
-                 '<BinaryParameterType name="T"><BinaryDataEncoding>'
-                 '<SizeInBits><DynamicValue><ParameterInstanceRef '
-                 'parameterRef="W"/></DynamicValue></SizeInBits>'
-                 '</BinaryDataEncoding></BinaryParameterType>', "", ""),
                 ("a 72-bit packet length field", "", "",
                  '<Parameter name="L" parameterTypeRef="W72"><AncillaryDataSet>'
                  '<AncillaryData name="tcs-xtce.length">0</AncillaryData>'
-                 '</AncillaryDataSet></Parameter>')):
+                 '</AncillaryDataSet></Parameter>'),):
             with self.subTest(why):
                 if types:
                     params = ((params or "")
@@ -319,6 +309,34 @@ class WideIntegerTests(unittest.TestCase):
                 vt = n.fields[-1][1].vtype
                 self.assertEqual((vt.kind, vt.enc.bits, vt.wide),
                                  (kind, 65, False))
+
+    def test_size_and_choices(self):
+        # A size from a wide integer stays a field the application sets;
+        # an enumeration and a boolean may have wide encodings.
+        e65 = '<IntegerDataEncoding sizeInBits="65"/>'
+        sized = ('<BinaryParameterType name="T"><BinaryDataEncoding>'
+                 '<SizeInBits><DynamicValue><ParameterInstanceRef '
+                 'parameterRef="W"/></DynamicValue></SizeInBits>'
+                 '</BinaryDataEncoding></BinaryParameterType>')
+        n = compile_xml(wide_mission(sized,
+                                     '<ParameterRefEntry parameterRef="W"/>'
+                                     '<ParameterRefEntry parameterRef="X"/>',
+                                     '<Parameter name="X" '
+                                     'parameterTypeRef="T"/>')).nodes[0]
+        self.assertEqual(n.fields[-1][1].vtype.dyn.wide_type.enc.bits, 72)
+        self.assertEqual(n.derived, {})
+        for types, kind in (
+                (f'<EnumeratedParameterType name="T">{e65}<EnumerationList>'
+                 '<Enumeration value="0" label="A"/></EnumerationList>'
+                 '</EnumeratedParameterType>', "enum"),
+                (f'<BooleanParameterType name="T">{e65}</BooleanParameterType>',
+                 "bool")):
+            with self.subTest(kind=kind):
+                n = compile_xml(
+                    wide_mission(types, '<ParameterRefEntry parameterRef="X"/>',
+                                 '<Parameter name="X" '
+                                 'parameterTypeRef="T"/>')).nodes[0]
+                self.assertEqual(n.fields[-1][1].vtype.kind, kind)
 
     def test_alarm(self):
         # Its range's bounds are whole numbers, compared exactly.

@@ -1912,6 +1912,29 @@ where
     <f64 as bnum::cast::CastFrom<T>>::cast_from(x)
 }
 
+/// An integer of more than 64 bits as the i64 an enumeration holds.
+///
+/// # Arguments
+///
+/// * `v`     -- the field's value.
+/// * `field` -- the field's name, for errors.
+///
+/// # Returns
+///
+/// The value, or `OutOfRange` when an i64 can't hold it.
+pub fn wide_to_i64<const N: usize>(
+    v: Int<N>,
+    field: &'static str,
+) -> Result<i64> {
+    use bnum::cast::{As, CastFrom};
+    let small = v.as_::<i64>();
+    if Int::<N>::cast_from(small) == v {
+        Ok(small)
+    } else {
+        Err(PacketError::OutOfRange { field })
+    }
+}
+
 /// [`int_to_f64`] for fields of more than 64 bits: rounded to the nearest
 /// double, ties to even, as bnum converts.
 ///

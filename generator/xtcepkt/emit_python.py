@@ -277,6 +277,9 @@ def read_value_expr(vt: VType, f: str, ref, depth: int) -> str:
             return f"pk.to_signed({raw}, {e.bits}, {enc})" if vt.signed else raw
         if vt.kind == "enum":
             v = f"pk.to_signed({raw}, {e.bits}, {enc})" if vt.signed else raw
+            if e.bits > 64:
+                # An enumeration holds a 64-bit value, as in the others.
+                v = f"pk.fits_i64({v}, {f})"
             return f"pk.enum_value({vt.ident}, {v})"
         if vt.kind == "bool":
             return f"{raw} != 0"

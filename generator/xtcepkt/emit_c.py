@@ -449,7 +449,8 @@ class CEmitter:
                           for p in term_paths(c)])
             self.element_guards(refs, ref.place, err, depth)
         self.line("size_t n;", depth)
-        x = f"(double)({ref(d)})"
+        x = (math_value(d.wide_type, ref(d), "c") if d.wide_type is not None
+             else f"(double)({ref(d)})")
         args = (f"{x}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, {d.max}, "
                 f"{f}, {err}, &n")
         self.line(f"XTCE_PK_TRY(xtce_pk_dynamic_size({args}));", depth)
@@ -586,6 +587,9 @@ class CEmitter:
             self.line("}", depth)
         elif isinstance(e, IntEnc) and vt.wide:
             self.read_wide(vt, dst, f, depth)
+        elif (isinstance(e, IntEnc) and e.bits > 64
+              and vt.kind in ("enum", "bool")):
+            self.read_wide_choice(vt, dst, f, depth)
         elif isinstance(e, IntEnc) and e.bits > 64:
             self.read_wide_f64(vt, dst, f, depth, ref)
         elif isinstance(e, (IntEnc, FloatEnc)):
@@ -678,6 +682,81 @@ class CEmitter:
             self.line(f"xtce_pk_wide_to_signed(raw, {n}, {e.bits}, "
                       f"{ENC[int_enc(vt)]});", d)
         self.line(f"memcpy({dst}.bytes, raw, {n});", d)
+        self.line("}", depth)
+
+    def read_wide_choice(self, vt: VType, dst: str, f: str, depth: int) -> None:
+        """Reads an enumeration or a boolean whose integer encoding has more
+        than 64 bits into ``dst``.
+
+        Args:
+            vt:    The type, whose encoding is an IntEnc.
+            dst:   The place to read into.
+            f:     The field's name, as a C string literal, for errors.
+            depth: The indentation of the statements.
+
+        Returns:
+            Nothing; it writes the statements, which fail with
+            XTCE_PK_OUT_OF_RANGE when an enumeration's int64_t can't hold
+            the value.
+        """
+        e, d = vt.enc, depth + 1
+        # A byte more than the field, so that an unsigned value stays
+        # positive.
+        n = e.bits // 8 + 1
+        self.line("{", depth)
+        self.line(f"uint8_t raw[{n}], s[{n}];", d)
+        self.line("(void)s;", d)
+        args = self.order_args(e, d)
+        self.line(f"XTCE_PK_TRY(xtce_pk_read_wide(r, {e.bits}, {args}, {f}, "
+                  f"raw, {n}));", d)
+        if e.bcd:
+            self.line(f"XTCE_PK_TRY(xtce_pk_wide_bcd_decode(raw, {n}, "
+                      f"{e.bits}, {bool_lit(e.encoding == 'packedBCD')}, {f}, "
+                      "r->err, s));", d)
+        if vt.kind == "bool":
+            self.line(f"{dst} = !xtce_bn_is_zero(raw, {n});", d)
+        else:
+            self.line(f"xtce_pk_wide_to_signed(raw, {n}, {e.bits}, "
+                      f"{ENC[int_enc(vt)]});", d)
+            self.line(f"if (!xtce_bn_to_i64(raw, {n}, true, &{dst}))", d)
+            self.line(f"return xtce_pk_fail(r->err, XTCE_PK_OUT_OF_RANGE, {f}, "
+                      "NULL);", d + 1)
+        self.line("}", depth)
+
+    def write_wide_choice(self, vt: VType, x: str, f: str, depth: int) -> None:
+        """Writes ``x``, an enumeration or a boolean whose integer encoding
+        has more than 64 bits.
+
+        Args:
+            vt:    The type, whose encoding is an IntEnc.
+            x:     The value to write.
+            f:     The field's name, as a C string literal, for errors.
+            depth: The indentation of the statements.
+
+        Returns:
+            Nothing; it writes the statements, which fail with
+            XTCE_PK_OUT_OF_RANGE when the encoding can't hold an
+            enumeration's value.
+        """
+        e, d = vt.enc, depth + 1
+        n = e.bits // 8 + 1
+        self.line("{", depth)
+        self.line(f"uint8_t raw[{n}], s[{n}];", d)
+        self.line("(void)s;", d)
+        if vt.kind == "bool":
+            self.line(f"xtce_bn_from_u64(raw, {n}, ({x}) ? 1u : 0u);", d)
+        else:
+            self.line(f"xtce_bn_from_i64(raw, {n}, {x});", d)
+            enc = "XTCE_PK_UNSIGNED" if e.bcd else ENC[int_enc(vt)]
+            self.line(f"XTCE_PK_TRY(xtce_pk_wide_from_signed(raw, {n}, "
+                      f"{e.bits}, {enc}, {f}, w->err));", d)
+            if e.bcd:
+                self.line(f"XTCE_PK_TRY(xtce_pk_wide_bcd_encode(raw, {n}, "
+                          f"{e.bits}, {bool_lit(e.encoding == 'packedBCD')}, "
+                          f"{f}, w->err, s));", d)
+        args = self.order_args(e, d)
+        self.line(f"XTCE_PK_TRY(xtce_pk_write_wide(w, {e.bits}, {args}, raw));",
+                  d)
         self.line("}", depth)
 
     def read_wide_f64(self, vt: VType, dst: str, f: str, depth: int,
@@ -943,6 +1022,9 @@ class CEmitter:
             return
         if isinstance(e, IntEnc) and vt.wide:
             self.write_wide(vt, x, f, depth)
+        elif (isinstance(e, IntEnc) and e.bits > 64
+              and vt.kind in ("enum", "bool")):
+            self.write_wide_choice(vt, x, f, depth)
         elif isinstance(e, IntEnc) and e.bits > 64:
             self.write_wide_f64(vt, x, f, depth, ref)
         elif isinstance(e, FloatEnc):

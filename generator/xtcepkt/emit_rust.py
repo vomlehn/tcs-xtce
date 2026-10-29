@@ -228,8 +228,9 @@ def offset(s: Seek, ref, f: str) -> str:
 
 def size(d: DynSize, x: str, f: str) -> str:
     """Expression for a size or count that the value ``x`` gives."""
-    n = (f"pk::dynamic_size({x} as f64, {flt(d.slope)}, {flt(d.intercept)}, "
-         f"{d.unit}, {d.max}, {f})?")
+    v = f"pk::wide_f64({x})" if d.wide_type is not None else f"{x} as f64"
+    n = (f"pk::dynamic_size({v}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, "
+         f"{d.max}, {f})?")
     return f"{n} * {d.factor}" if d.factor != 1 else n
 
 
@@ -385,6 +386,8 @@ def read_value_expr(vt: VType, f: str, ref, alloc: bool, depth: int) -> str:
                 f"{f})?")
     if isinstance(e, IntEnc) and vt.wide:
         return read_wide(vt, f)
+    if isinstance(e, IntEnc) and e.bits > 64 and vt.kind in ("enum", "bool"):
+        return read_wide_choice(vt, f)
     if isinstance(e, IntEnc):
         raw = raw_read(e, f)
         if e.bcd:
@@ -503,6 +506,63 @@ def f64_int_write(vt: VType, y: str, f: str) -> str:
     raw = f"pk::f64_to_wide::<{wide_bytes(e.bits)}>({y}, {e.bits}, {enc}, {f})?"
     if e.bcd:
         raw = f"pk::wide_bcd_encode({raw}, {e.bits}, {packed}, {f})?"
+    return (f"w.wide({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, "
+            f"&{raw}.to_le_bytes());")
+
+
+def read_wide_choice(vt: VType, f: str) -> str:
+    """Expression reading an enumeration or a boolean whose integer
+    encoding has more than 64 bits.
+
+    Args:
+        vt: The type, whose encoding is an IntEnc.
+        f:  The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        The expression: a boolean that is true for any raw value but 0, or
+        an enumeration holding the value, which fails with OutOfRange when
+        an i64 can't hold it.
+    """
+    e = vt.enc
+    # A bit more than the field, so that an unsigned value stays positive.
+    n = (e.bits + 8) // 8
+    raw = (f"r.wide::<{n}>({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, "
+           f"{f})?")
+    if e.bcd:
+        raw = (f"pk::wide_bcd_decode({raw}, {e.bits}, "
+               f"{str(e.encoding == 'packedBCD').lower()}, {f})?")
+    if vt.kind == "bool":
+        return f"!{raw}.is_zero()"
+    v = f"pk::wide_to_signed({raw}, {e.bits}, IntEncoding::{int_enc(vt)})"
+    return f"{vt.ident}(pk::wide_to_i64({v}, {f})?)"
+
+
+def write_wide_choice(vt: VType, x: str, f: str) -> str:
+    """Statement writing ``x``, an enumeration or a boolean whose integer
+    encoding has more than 64 bits.
+
+    Args:
+        vt: The type, whose encoding is an IntEnc.
+        x:  The value to write.
+        f:  The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        The statement, which fails with OutOfRange when the encoding can't
+        hold an enumeration's value.
+    """
+    e = vt.enc
+    n = (e.bits + 8) // 8
+    packed = str(e.encoding == "packedBCD").lower()
+    if vt.kind == "bool":
+        raw = (f"pk::wide_from_unsigned(pk::widen::<{n}, _>({x} as "
+               f"u8).cast_unsigned(), {e.bits}, {f})?")
+    elif e.bcd:
+        v = (f"pk::wide_from_signed(pk::widen::<{n}, _>({x}.0), {e.bits}, "
+             f"IntEncoding::Unsigned, {f})?")
+        raw = f"pk::wide_bcd_encode({v}, {e.bits}, {packed}, {f})?"
+    else:
+        raw = (f"pk::wide_from_signed(pk::widen::<{n}, _>({x}.0), {e.bits}, "
+               f"IntEncoding::{int_enc(vt)}, {f})?")
     return (f"w.wide({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, "
             f"&{raw}.to_le_bytes());")
 
@@ -631,6 +691,8 @@ def write_bytes_stmt(vt: VType, x: str, f: str, ref) -> str:
                 f"w.bytes({data}); }}")
     if isinstance(e, IntEnc) and vt.wide:
         return write_wide(vt, x, f)
+    if isinstance(e, IntEnc) and e.bits > 64 and vt.kind in ("enum", "bool"):
+        return write_wide_choice(vt, x, f)
     if isinstance(e, IntEnc):
         bits = e.bits
         enc = f"IntEncoding::{int_enc(vt)}"

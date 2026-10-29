@@ -807,10 +807,6 @@ class Compiler:
             raise Unsupported(f"{where}: no data encoding")
         enc_name, e = t.choice.name, t.choice.value
         enc, cal = self.encoding(enc_name, e, path, where)
-        if (isinstance(enc, IntEnc) and enc.bits > 64
-                and base in ("Enumerated", "Boolean")):
-            raise Unsupported(f"{where}: {base.lower()} in a {enc.bits}-bit "
-                              "integer encoding")
         if isinstance(enc, BinaryEnc) and enc.transform is not None:
             if base != "Binary":
                 raise Unsupported(f"{where}: {base.lower()} with transform "
@@ -1752,10 +1748,9 @@ class Compiler:
         if vt.kind != "int":
             raise Unsupported(f"{where}: size or count from {vt.kind} value "
                               f"{d.name or name}")
-        if vt.wide:
-            raise Unsupported(f"{where}: size or count from {vt.enc.bits}-bit "
-                              f"integer {d.name or name}")
-        return dataclasses.replace(d, local=ref, path=member), int_bounds(vt)
+        return (dataclasses.replace(d, local=ref, path=member,
+                                    wide_type=vt if vt.wide else None),
+                int_bounds(vt))
 
     def param_local(self, ref: str, path: Key) -> Local:
         pkey = self.resolve(ref, path, self.params, "parameter")
@@ -2464,7 +2459,9 @@ class Compiler:
         if sib.vtype.kind != "int":
             raise Unsupported(f"{what}: size or count from {sib.vtype.kind} "
                               f"entry {sib.name}")
-        return bounded(vt, dataclasses.replace(d, member=sib.ident),
+        wide = sib.vtype if sib.vtype.wide else None
+        return bounded(vt,
+                       dataclasses.replace(d, member=sib.ident, wide_type=wide),
                        int_bounds(sib.vtype), self.max_field_bits)
 
     def tm_node(self, key: Key) -> Node:
@@ -4182,8 +4179,10 @@ def derived_sizes(n: Node) -> dict:
             continue
         lc = it.local
         vt = lc.vtype
+        # A wide one stays a field the application sets, which encoding
+        # checks against what it sizes.
         if (lc.optional or lc in n.fixed or lc.computed or vt.kind != "int"
-                or vt.calibrator is not None):
+                or vt.calibrator is not None or vt.wide):
             continue
         found = uses.get(lc, [])
         sizes = [u for u in found if u is not None and u is not READ]

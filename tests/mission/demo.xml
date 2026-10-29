@@ -1257,6 +1257,35 @@
           </DefaultCalibrator>
         </IntegerDataEncoding>
       </FloatParameterType>
+      <!-- A 72-bit size, which the application sets: encoding checks it
+           against WideBlob. -->
+      <IntegerParameterType name="WideLenType" signed="false">
+        <IntegerDataEncoding sizeInBits="72"/>
+      </IntegerParameterType>
+      <BinaryParameterType name="WideBlobType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="WideLen"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
+      <!-- An enumeration and a boolean on 72-bit integer encodings: the
+           enumeration holds a 64-bit value, and the boolean is true for
+           anything but 0. -->
+      <EnumeratedParameterType name="WideEnumType">
+        <IntegerDataEncoding sizeInBits="72" encoding="twosComplement"/>
+        <EnumerationList>
+          <Enumeration value="0" label="LOW"/>
+          <Enumeration value="4611686018427387904" label="HIGH"/>
+          <Enumeration value="-1" label="BELOW"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+      <BooleanParameterType name="WideFlagType">
+        <IntegerDataEncoding sizeInBits="72"/>
+      </BooleanParameterType>
       <IntegerParameterType name="WideU72" signed="false">
         <IntegerDataEncoding sizeInBits="72"/>
       </IntegerParameterType>
@@ -1558,6 +1587,11 @@
       <Parameter name="WideRealTime" parameterTypeRef="WideRealTimeType"/>
       <Parameter name="WideRealBcd" parameterTypeRef="WideRealBcdType"/>
       <Parameter name="WideRealInt" parameterTypeRef="WideRealIntType"/>
+      <Parameter name="WideLen" parameterTypeRef="WideLenType"/>
+      <Parameter name="WideBlob" parameterTypeRef="WideBlobType"/>
+      <Parameter name="WideAfter" parameterTypeRef="U8"/>
+      <Parameter name="WideEnum" parameterTypeRef="WideEnumType"/>
+      <Parameter name="WideFlag" parameterTypeRef="WideFlagType"/>
       <Parameter name="WideRealScaled" parameterTypeRef="WideRealScaledType"/>
       <Parameter name="WideRealHalf" parameterTypeRef="DrDoubleType"/>
       <Parameter name="WideTiny" parameterTypeRef="S16"/>
@@ -2887,6 +2921,29 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="569"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="WideSized">
+        <EntryList>
+          <ParameterRefEntry parameterRef="WideLen"/>
+          <ParameterRefEntry parameterRef="WideBlob"/>
+          <ParameterRefEntry parameterRef="WideAfter"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="573"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="WideChoice">
+        <EntryList>
+          <ParameterRefEntry parameterRef="WideEnum"/>
+          <ParameterRefEntry parameterRef="WideFlag"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="574"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

@@ -1555,9 +1555,18 @@ Integer encoding
    are whole numbers compared with it exactly, and change ranges take it
    as a double. The demo's ``WideOperand`` has ``WideRealInt``, 104 bits,
    which ``WideRealScaled``'s calibrator adds and ``WideHalf`` halves, and
-   whose alarm warns past 10\ :sup:`30`. It still can't be an enumeration
-   or a boolean, give a size, count or location, or be a packet length or
-   checksum field. The demo's ``Wide`` packet has integers of 65 to 200 bits in
+   whose alarm warns past 10\ :sup:`30`.
+
+   It may give a size, count or location, which goes through a double as
+   other sizes do: one past the size's bound fails with ``BadSize``. Such a
+   field is never computed when encoding; the application sets it, and
+   encoding checks it against what it sizes. The demo's ``WideSized`` has
+   a 72-bit ``WideLen``. An enumeration or a boolean may have an integer
+   encoding of more than 64 bits: an enumeration holds a signed 64-bit
+   value, and decoding fails with ``OutOfRange`` for a raw value it can't
+   hold; a boolean is true for any raw value but 0, and encodes true as 1.
+   The demo's ``WideChoice`` has both. An integer of more than 64 bits
+   still can't be a packet length or checksum field. The demo's ``Wide`` packet has integers of 65 to 200 bits in
    every encoding and order, and ``SetWide`` command arguments of 96 and
    136 bits.
 

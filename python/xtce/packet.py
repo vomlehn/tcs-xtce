@@ -988,6 +988,22 @@ def int_float(v: int) -> float:
         return math.copysign(math.inf, v)
 
 
+def fits_i64(v: int, field: str) -> int:
+    """An enumeration's value from a field of more than 64 bits.
+
+    Args:
+        v:     The field's value.
+        field: The field's name, for errors.
+
+    Returns:
+        ``v``; raises ``OutOfRange`` unless a signed 64-bit integer holds
+        it, as the other runtimes' enumerations do.
+    """
+    if not -(1 << 63) <= v < 1 << 63:
+        raise PacketError("OutOfRange", field)
+    return v
+
+
 def int_to_float(raw: int, bits: int, enc: str) -> float:
     """A raw field as a float.
 
@@ -1618,7 +1634,9 @@ def dynamic_size(x, slope: float, intercept: float, unit: int, max_: int,
     ``(slope * x + intercept) / unit``, where ``x`` is that field's value and
     ``unit`` is 8 for a size in bits used in whole bytes.  Raises ``BadSize``
     unless the result is a whole number from 0 to ``max_``."""
-    y = slope * float(x) + intercept
+    # int_float, so that an integer too large for a float is infinite, as
+    # in the other runtimes, rather than an OverflowError.
+    y = slope * int_float(x) + intercept
     if (not (y >= 0.0) or not y.is_integer() or not (y / unit).is_integer()
             or y / unit > max_):
         raise PacketError("BadSize", field)

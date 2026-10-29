@@ -107,6 +107,9 @@ class DynSize:
     instance: int = 0  # of the value: 0 the last decoded, -1 the one before
     local: Optional["Local"] = None
     max: int = 0
+    # Bound to an integer of more than 64 bits: its type, which the
+    # emitters convert it to a double by.
+    wide_type: Optional["VType"] = None
 
     @property
     def max_total(self) -> int:
