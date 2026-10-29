@@ -1189,6 +1189,45 @@
         <ValidRange minInclusive="0" maxInclusive="5"/>
       </IntegerParameterType>
       <!-- Integers of more than 64 bits, in every encoding and order. -->
+      <!-- Wide integer encodings of values that are computed with: a
+           float, a calibrated integer and a time, through doubles. -->
+      <FloatParameterType name="WideRealFloatType" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="72" encoding="twosComplement">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="1" exponent="0"/>
+              <Term coefficient="0.5" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+      <IntegerParameterType name="WideRealCalType" sizeInBits="32"
+        signed="true">
+        <IntegerDataEncoding sizeInBits="96">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="-1000" exponent="0"/>
+              <Term coefficient="0.00000000000000000001" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </IntegerParameterType>
+      <AbsoluteTimeParameterType name="WideRealTimeType">
+        <Encoding units="seconds" scale="0.000000001">
+          <IntegerDataEncoding sizeInBits="80"/>
+        </Encoding>
+        <ReferenceTime><Epoch>UNIX</Epoch></ReferenceTime>
+      </AbsoluteTimeParameterType>
+      <FloatParameterType name="WideRealBcdType" sizeInBits="64">
+        <IntegerDataEncoding sizeInBits="96" encoding="packedBCD">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="0" exponent="0"/>
+              <Term coefficient="0.01" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
       <IntegerParameterType name="WideU72" signed="false">
         <IntegerDataEncoding sizeInBits="72"/>
       </IntegerParameterType>
@@ -1485,6 +1524,10 @@
       <Parameter name="EndLead" parameterTypeRef="U8"/>
       <Parameter name="EndPair" parameterTypeRef="U8"/>
       <Parameter name="EndWord" parameterTypeRef="U16"/>
+      <Parameter name="WideRealFloat" parameterTypeRef="WideRealFloatType"/>
+      <Parameter name="WideRealCal" parameterTypeRef="WideRealCalType"/>
+      <Parameter name="WideRealTime" parameterTypeRef="WideRealTimeType"/>
+      <Parameter name="WideRealBcd" parameterTypeRef="WideRealBcdType"/>
       <Parameter name="WideTiny" parameterTypeRef="S16"/>
       <Parameter name="WideA" parameterTypeRef="WideU72"/>
       <Parameter name="WideB" parameterTypeRef="WideLe80"/>
@@ -2786,6 +2829,19 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="570"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="WideReal">
+        <EntryList>
+          <ParameterRefEntry parameterRef="WideRealFloat"/>
+          <ParameterRefEntry parameterRef="WideRealCal"/>
+          <ParameterRefEntry parameterRef="WideRealTime"/>
+          <ParameterRefEntry parameterRef="WideRealBcd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="568"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

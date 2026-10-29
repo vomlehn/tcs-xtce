@@ -391,8 +391,7 @@ def read_value_expr(vt: VType, f: str, ref, alloc: bool, depth: int) -> str:
                    f"{str(e.encoding == 'packedBCD').lower()}, {f})?")
         enc = f"IntEncoding::{int_enc(vt)}"
         if vt.kind == "int" and vt.calibrator is not None:
-            y = calibrate(vt, f"pk::int_to_f64({raw}, {e.bits}, {enc})", f,
-                          ref.place)
+            y = calibrate(vt, int_f64(vt, f), f, ref.place)
             lo, lim = vt.eng_limits
             return (f"pk::round_to_int({y}, {flt(lo)}, {flt(lim)}, {f})? as "
                     f"{field_type(vt, alloc)}")
@@ -406,8 +405,7 @@ def read_value_expr(vt: VType, f: str, ref, alloc: bool, depth: int) -> str:
             return f"{vt.ident}({raw} as i64)"
         if vt.kind == "bool":
             return f"{raw} != 0"
-        return calibrate(vt, f"pk::int_to_f64({raw}, {e.bits}, {enc})", f,
-                         ref.place)
+        return calibrate(vt, int_f64(vt, f), f, ref.place)
     if isinstance(e, FloatEnc):
         raw = raw_read(e, f)
         if e.fmt == "IEEE754" and e.bits in (32, 64):
@@ -438,6 +436,74 @@ def read_value_expr(vt: VType, f: str, ref, alloc: bool, depth: int) -> str:
         return (f"match {s}.as_str() {{ {rstr(vt.one_string)} => true, "
                 f"{rstr(vt.zero_string)} => false, _ => {bad} }}")
     return s
+
+
+def wide_bytes(bits: int) -> int:
+    """The bytes of the bnum integer that holds a raw field.
+
+    Args:
+        bits: The bits of the field, more than 64.
+
+    Returns:
+        16 up to 128 bits, as a u128 has, and otherwise the whole bytes
+        the bits fill.
+    """
+    return 16 if bits <= 128 else -(-bits // 8)
+
+
+def int_f64(vt: VType, f: str) -> str:
+    """Expression reading the raw integer encoding of a float or calibrated
+    integer as an f64, as its calibrator takes it.
+
+    Args:
+        vt: The type, whose encoding is an IntEnc.
+        f:  The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        The expression: pk::int_to_f64 of the raw value, or for more than
+        64 bits pk::wide_int_to_f64 of the bnum integer it is read into.
+    """
+    e = vt.enc
+    enc = f"IntEncoding::{int_enc(vt)}"
+    packed = str(e.encoding == "packedBCD").lower()
+    if e.bits <= 64:
+        raw = raw_read(e, f)
+        if e.bcd:
+            raw = f"pk::bcd_decode({raw}, {e.bits}, {packed}, {f})?"
+        return f"pk::int_to_f64({raw}, {e.bits}, {enc})"
+    raw = (f"r.wide::<{wide_bytes(e.bits)}>({e.bits}, {str(e.lsb).lower()}, "
+           f"{byte_order(e)}, {f})?")
+    if e.bcd:
+        raw = f"pk::wide_bcd_decode({raw}, {e.bits}, {packed}, {f})?"
+    return f"pk::wide_int_to_f64({raw}, {e.bits}, {enc})"
+
+
+def f64_int_write(vt: VType, y: str, f: str) -> str:
+    """Statement writing the f64 ``y``, rounded, as the raw integer encoding
+    of a float or calibrated integer.
+
+    Args:
+        vt: The type, whose encoding is an IntEnc.
+        y:  The expression for the value, after any inverse calibrator.
+        f:  The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        The statement, which fails with OutOfRange when the encoding can't
+        hold the rounded value.
+    """
+    e = vt.enc
+    enc = f"IntEncoding::{int_enc(vt)}"
+    packed = str(e.encoding == "packedBCD").lower()
+    if e.bits <= 64:
+        raw = f"pk::f64_to_int({y}, {e.bits}, {enc}, {f})?"
+        if e.bcd:
+            raw = f"pk::bcd_encode({raw}, {e.bits}, {packed}, {f})?"
+        return raw_write(e, raw)
+    raw = f"pk::f64_to_wide::<{wide_bytes(e.bits)}>({y}, {e.bits}, {enc}, {f})?"
+    if e.bcd:
+        raw = f"pk::wide_bcd_encode({raw}, {e.bits}, {packed}, {f})?"
+    return (f"w.wide({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, "
+            f"&{raw}.to_le_bytes());")
 
 
 def read_wide(vt: VType, f: str) -> str:
@@ -571,8 +637,8 @@ def write_bytes_stmt(vt: VType, x: str, f: str, ref) -> str:
             if not invertible(vt):
                 return (f"return Err(PacketError::NotInvertible {{ field: {f} "
                         "});")
-            y = uncalibrate(vt, f"{x} as f64", f, ref.place)
-            raw = (f"pk::f64_to_int({y}, {bits}, {enc}, {f})?")
+            return f64_int_write(
+                vt, uncalibrate(vt, f"{x} as f64", f, ref.place), f)
         elif vt.kind == "int":
             raw = (f"pk::from_signed({x} as i64, {bits}, {enc}, {f})?"
                    if vt.signed
@@ -585,8 +651,7 @@ def write_bytes_stmt(vt: VType, x: str, f: str, ref) -> str:
             if not invertible(vt):
                 return (f"return Err(PacketError::NotInvertible {{ field: {f} "
                         "});")
-            raw = (f"pk::f64_to_int({uncalibrate(vt, x, f, ref.place)}, "
-                   f"{bits}, {enc}, {f})?")
+            return f64_int_write(vt, uncalibrate(vt, x, f, ref.place), f)
         if e.bcd:
             raw = (f"pk::bcd_encode({raw}, {bits}, "
                    f"{str(e.encoding == 'packedBCD').lower()}, {f})?")

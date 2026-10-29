@@ -1538,11 +1538,19 @@ Integer encoding
    that integers of `Integers of any size`_, whose methods compute with
    it. It is decoded, encoded (checking its ``ValidRange``), described and
    compared, with a value or with another integer of any size, in every
-   criterion. Nothing computes with it, so it can't be an enumeration, a
-   boolean, a float, a time or a calibrated integer, give a size, count or
-   location, be used by a calibrator or an algorithm, have an alarm (the
-   alarm is left out, with a note), or be a packet length or checksum
-   field. The demo's ``Wide`` packet has integers of 65 to 200 bits in
+   criterion.
+
+   A float, a time or a calibrated integer may also have an integer
+   encoding of more than 64 bits: its raw value is converted to a double,
+   rounded to the nearest (ties to even) as bnum converts, and encoding
+   rounds the double back half away from zero, failing with
+   ``OutOfRange`` if the encoding can't hold it. A double holds 53 bits
+   exactly, so values past 2\ :sup:`53` lose their low bits: the demo's
+   ``WideReal`` has a float, a calibrated integer, a time and a packed BCD
+   float of 72 to 96 bits. An integer of more than 64 bits still can't be
+   an enumeration or a boolean, give a size, count or location, be used by
+   a calibrator or an algorithm, have an alarm (the alarm is left out,
+   with a note), or be a packet length or checksum field. The demo's ``Wide`` packet has integers of 65 to 200 bits in
    every encoding and order, and ``SetWide`` command arguments of 96 and
    136 bits.
 

@@ -316,11 +316,13 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
     e = vt.enc
     if isinstance(e, IntEnc):
         bits, enc = e.bits, int_encoding(e)
+        # Past 64 bits, the raw field is not bounded by a 64-bit integer.
+        to_int = "float_to_wide" if bits > 64 else "float_to_int"
         if vt.kind == "int" and vt.calibrator is not None:
             if not invertible(vt):
                 return f'raise pk.PacketError("NotInvertible", {f})'
             y = uncalibrate(vt, f"float({x})", f, ref.place)
-            raw = f"pk.float_to_int({y}, {bits}, {enc}, {f})"
+            raw = f"pk.{to_int}({y}, {bits}, {enc}, {f})"
         elif vt.kind == "int":
             raw = f"pk.from_signed({x}, {bits}, {enc}, {f})"
         elif vt.kind == "enum":
@@ -330,8 +332,8 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
         else:
             if not invertible(vt):
                 return f'raise pk.PacketError("NotInvertible", {f})'
-            raw = (f"pk.float_to_int({uncalibrate(vt, x, f, ref.place)}, "
-                   f"{bits}, {enc}, {f})")
+            raw = (f"pk.{to_int}({uncalibrate(vt, x, f, ref.place)}, {bits}, "
+                   f"{enc}, {f})")
         if e.bcd:
             raw = (f"pk.bcd_encode({raw}, {bits}, {e.encoding == 'packedBCD'}, "
                    f"{f})")

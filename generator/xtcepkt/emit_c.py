@@ -586,6 +586,8 @@ class CEmitter:
             self.line("}", depth)
         elif isinstance(e, IntEnc) and vt.wide:
             self.read_wide(vt, dst, f, depth)
+        elif isinstance(e, IntEnc) and e.bits > 64:
+            self.read_wide_f64(vt, dst, f, depth, ref)
         elif isinstance(e, (IntEnc, FloatEnc)):
             self.line("{", depth)
             d = depth + 1
@@ -676,6 +678,79 @@ class CEmitter:
             self.line(f"xtce_pk_wide_to_signed(raw, {n}, {e.bits}, "
                       f"{ENC[int_enc(vt)]});", d)
         self.line(f"memcpy({dst}.bytes, raw, {n});", d)
+        self.line("}", depth)
+
+    def read_wide_f64(self, vt: VType, dst: str, f: str, depth: int,
+                      ref) -> None:
+        """Reads a float or calibrated integer whose integer encoding has
+        more than 64 bits into ``dst``, through a double.
+
+        Args:
+            vt:    The type, whose encoding is an IntEnc.
+            dst:   The place to read into.
+            f:     The field's name, as a C string literal, for errors.
+            depth: The indentation of the statements.
+            ref:   The expressions for values its calibrator uses.
+
+        Returns:
+            Nothing; it writes the statements.
+        """
+        e, d = vt.enc, depth + 1
+        n = -(-e.bits // 8)
+        enc = ENC[int_enc(vt)]
+        self.line("{", depth)
+        self.line(f"uint8_t raw[{n}], s[{n}];", d)
+        args = self.order_args(e, d)
+        self.line(f"XTCE_PK_TRY(xtce_pk_read_wide(r, {e.bits}, {args}, {f}, "
+                  f"raw, {n}));", d)
+        if e.bcd:
+            self.line(f"XTCE_PK_TRY(xtce_pk_wide_bcd_decode(raw, {n}, "
+                      f"{e.bits}, {bool_lit(e.encoding == 'packedBCD')}, {f}, "
+                      "r->err, s));", d)
+        x = f"xtce_pk_wide_to_double(raw, {n}, {e.bits}, {enc}, s)"
+        if vt.kind == "int":
+            lo, lim = vt.eng_limits
+            self.line("double y, v;", d)
+            self.calibrate(vt, x, "y", f, d, ref)
+            self.line(f"XTCE_PK_TRY(xtce_pk_round_to_int(y, {flt(lo)}, "
+                      f"{flt(lim)}, {f}, r->err, &v));", d)
+            self.line(f"{dst} = ({self.ctype(vt)})v;", d)
+        else:
+            self.calibrate(vt, x, dst, f, d, ref)
+        self.line("}", depth)
+
+    def write_wide_f64(self, vt: VType, x: str, f: str, depth: int,
+                       ref) -> None:
+        """Writes ``x``, a float or calibrated integer whose integer
+        encoding has more than 64 bits, through a double.
+
+        Args:
+            vt:    The type, whose encoding is an IntEnc.
+            x:     The value to write.
+            f:     The field's name, as a C string literal, for errors.
+            depth: The indentation of the statements.
+            ref:   The expressions for values its inverse calibrator uses.
+
+        Returns:
+            Nothing; it writes the statements, which fail with
+            XTCE_PK_OUT_OF_RANGE when the encoding can't hold the value.
+        """
+        e, d = vt.enc, depth + 1
+        n = -(-e.bits // 8)
+        self.line("{", depth)
+        self.line(f"uint8_t raw[{n}], s[{n}];", d)
+        self.line("(void)s;", d)
+        self.uncalibrate(vt, f"(double)({x})" if vt.kind == "int" else x, f, d,
+                         ref)
+        self.line(f"XTCE_PK_TRY(xtce_pk_double_to_wide(y, {e.bits}, "
+                  f"{ENC[int_enc(vt)]}, {f}, w->err, raw, {n}));", d)
+        if e.bcd:
+            self.line(f"XTCE_PK_TRY(xtce_pk_wide_bcd_encode(raw, {n}, "
+                      f"{e.bits}, {bool_lit(e.encoding == 'packedBCD')}, {f}, "
+                      "w->err, s));", d)
+        args = self.order_args(e, d)
+        self.line(f"XTCE_PK_TRY(xtce_pk_write_wide(w, {e.bits}, {args}, raw));",
+                  d)
         self.line("}", depth)
 
     def write_wide(self, vt: VType, x: str, f: str, depth: int) -> None:
@@ -868,6 +943,8 @@ class CEmitter:
             return
         if isinstance(e, IntEnc) and vt.wide:
             self.write_wide(vt, x, f, depth)
+        elif isinstance(e, IntEnc) and e.bits > 64:
+            self.write_wide_f64(vt, x, f, depth, ref)
         elif isinstance(e, FloatEnc):
             self.line("{", depth)
             d = depth + 1

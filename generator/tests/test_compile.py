@@ -275,19 +275,6 @@ class WideIntegerTests(unittest.TestCase):
                 ("boolean in a 65-bit integer encoding",
                  f'<BooleanParameterType name="T">{e65}</BooleanParameterType>',
                  "", ""),
-                ("float in a 65-bit integer encoding",
-                 f'<FloatParameterType name="T">{e65}</FloatParameterType>', "",
-                 ""),
-                ("calibrated integer in a 65-bit integer encoding",
-                 '<IntegerParameterType name="T"><IntegerDataEncoding '
-                 'sizeInBits="65"><DefaultCalibrator><PolynomialCalibrator>'
-                 '<Term coefficient="2" exponent="1"/></PolynomialCalibrator>'
-                 '</DefaultCalibrator></IntegerDataEncoding>'
-                 '</IntegerParameterType>', "", ""),
-                ("time in a 65-bit integer encoding",
-                 f'<AbsoluteTimeParameterType name="T"><Encoding>{e65}'
-                 '</Encoding><ReferenceTime><Epoch>TAI</Epoch></ReferenceTime>'
-                 '</AbsoluteTimeParameterType>', "", ""),
                 ("size or count from 72-bit integer W",
                  '<BinaryParameterType name="T"><BinaryDataEncoding>'
                  '<SizeInBits><DynamicValue><ParameterInstanceRef '
@@ -307,6 +294,31 @@ class WideIntegerTests(unittest.TestCase):
                 with self.assertRaises(Unsupported) as cm:
                     compile_xml(wide_mission(types, entries, params))
                 self.assertIn(why, str(cm.exception))
+
+    def test_computed_through_doubles(self):
+        # A float, a calibrated integer and a time may have an integer
+        # encoding of more than 64 bits: their fields are doubles, or the
+        # calibrated integer's own size, not wide integers.
+        e65 = '<IntegerDataEncoding sizeInBits="65"/>'
+        for types, kind in (
+                (f'<FloatParameterType name="T">{e65}</FloatParameterType>',
+                 "float"),
+                ('<IntegerParameterType name="T"><IntegerDataEncoding '
+                 'sizeInBits="65"><DefaultCalibrator><PolynomialCalibrator>'
+                 '<Term coefficient="2" exponent="1"/></PolynomialCalibrator>'
+                 '</DefaultCalibrator></IntegerDataEncoding>'
+                 '</IntegerParameterType>', "int"),
+                (f'<AbsoluteTimeParameterType name="T"><Encoding>{e65}'
+                 '</Encoding><ReferenceTime><Epoch>TAI</Epoch></ReferenceTime>'
+                 '</AbsoluteTimeParameterType>', "float")):
+            with self.subTest(kind=kind):
+                n = compile_xml(
+                    wide_mission(types, '<ParameterRefEntry parameterRef="X"/>',
+                                 '<Parameter name="X" '
+                                 'parameterTypeRef="T"/>')).nodes[0]
+                vt = n.fields[-1][1].vtype
+                self.assertEqual((vt.kind, vt.enc.bits, vt.wide),
+                                 (kind, 65, False))
 
     def test_alarm_left_out(self):
         alarm = ('<IntegerParameterType name="A" signed="false">'

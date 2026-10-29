@@ -811,11 +811,9 @@ class Compiler:
         enc_name, e = t.choice.name, t.choice.value
         enc, cal = self.encoding(enc_name, e, path, where)
         if (isinstance(enc, IntEnc) and enc.bits > 64
-                and (base != "Integer" or cal is not None)):
-            # Only its integer value is kept; nothing computes with it.
-            what = ("calibrated integer" if base == "Integer" else base.lower())
-            raise Unsupported(f"{where}: {what} in a {enc.bits}-bit integer "
-                              "encoding")
+                and base in ("Enumerated", "Boolean")):
+            raise Unsupported(f"{where}: {base.lower()} in a {enc.bits}-bit "
+                              "integer encoding")
         if isinstance(enc, BinaryEnc) and enc.transform is not None:
             if base != "Binary":
                 raise Unsupported(f"{where}: {base.lower()} with transform "
@@ -939,9 +937,6 @@ class Compiler:
         what = "absolute" if base == "AbsoluteTime" else "relative"
         ref = self.reference_time(t.reference_time, where)
         e, cal = self.encoding(enc.choice.name, enc.choice.value, path, where)
-        if isinstance(e, IntEnc) and e.bits > 64:
-            raise Unsupported(f"{where}: time in a {e.bits}-bit integer "
-                              "encoding")
         if isinstance(e, (StringEnc, BinaryEnc)):
             if (units, scale, offset) != ("seconds", 1.0, 0.0):
                 raise Unsupported(f"{where}: a time encoded as "
