@@ -158,6 +158,62 @@ reads each field from where the document says it is.
      - Example XTCE files and programs in each language that use the code generated from them
 
 
+Limitations
+===========
+
+These are the limits on sizes and numbers. The parts of XTCE that
+tcs-xtce doesn't support are listed at the end of `Supported XTCE`_,
+and other behaviour to know about under `Known limitations`_.
+
+Message size
+   tcs-xtce sets no limit of its own on a packet's size. Each generated
+   packet type gives the most bytes it can take, ``MAX_BYTES`` (in C,
+   the type's ``_MAX_BYTES``), worked out from its encodings, and a
+   buffer of that size always holds it. What bounds a packet whose size
+   varies is the maximum field size.
+
+Maximum field size
+   A value whose size, count or location another value gives, or that
+   takes the rest of the packet, takes at most 64 KiB (65536 bytes) on
+   the wire. A ``tcs-xtce.max-field-bytes`` setting in the document
+   changes that to anything from 1 to 4294967295 bytes, and a
+   ``ValidRange`` on the size or count field bounds it more tightly: see
+   `Generated packet types`_. A size or count past its bound fails with
+   ``BadSize``.
+
+32-bit targets
+   A packet of more than 512 MiB (2\ :sup:`32` - 1 bits) builds on 64-bit
+   targets, but its generated C and Rust refuse to compile on 32-bit
+   ones.
+
+CCSDS space packets
+   A space packet's 16-bit length field limits it to 65542 bytes: 6 of
+   header and at most 65536 of data. That is the packet format's limit,
+   not tcs-xtce's: encoding a packet too long for its length field fails
+   with ``OutOfRange``.
+
+Integers
+   Integers of any width are decoded, encoded and compared, but sizes,
+   counts, locations, calibrators, algorithms and alarms compute with at
+   most 64 bits. Enumeration values must fit in a signed 64-bit integer.
+   Rust holds integers of up to 128 bits natively, and C and C++ of up
+   to 64; wider ones use the libraries under `Integers of any size`_.
+
+Floats
+   Engineering values are 64-bit doubles. Decoding a format with more
+   precision than a double (the 80-bit and 128-bit IEEE formats, IBM's
+   64-bit and 128-bit ones and DEC's 64-bit D_floating) rounds to the
+   nearest double, and encoding rounds to the nearest value of the
+   format.
+
+Strings and binary
+   A string's size tag is 1 to 32 bits. The size of binary data is a
+   whole number of bytes.
+
+Batches
+   A Python ``Batch`` holds at most 4294967295 bytes, as its length
+   prefix is 32 bits.
+
 Building and testing
 ====================
 
