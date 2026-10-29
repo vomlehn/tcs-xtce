@@ -2065,8 +2065,13 @@ class Compiler:
         scope += chosen
         if not any(isinstance(it.items[0], Value) for it in out):
             if vt.kind == "int" and aliases is None:
-                raise Unsupported(f"{where}: no parameter has a name that "
-                                  f"integer {pkey} can hold")
+                # Every value would name no parameter, which fails: the
+                # packet could never be read or written.
+                raise Unsupported(
+                    f"{where}: no parameter has a name that integer {pkey} can "
+                    "hold, so it can never select one; give the entry an "
+                    "aliasNameSpace whose aliases are numbers, or make the "
+                    "selector an enumeration of parameter names or a string")
             raise Unsupported(f"{where}: no label of {pkey} names a parameter")
         # A selector must be one of its labels, or name a parameter: one
         # that isn't fails, before anything after it is read.

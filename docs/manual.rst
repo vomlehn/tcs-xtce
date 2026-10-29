@@ -2037,8 +2037,11 @@ Indirect entries
    there (one that takes the rest of the packet, or whose size comes
    from a value the packet doesn't have) fails with ``Mismatch``. An
    integer selector likewise holds a name, so it can only name
-   parameters whose names are numbers; it is unsupported when there are
-   none. The demo's ``DwellByName`` packet has ``DwellName``.
+   parameters whose names are numbers. When there are none, it can never
+   select anything, and every packet would fail, so the generator refuses
+   the document, saying how to fix it: an ``aliasNameSpace`` whose
+   aliases are numbers, or a selector that is an enumeration of parameter
+   names or a string. The demo's ``DwellByName`` packet has ``DwellName``.
 
    The packet's own fields keep their names; a parameter the selector
    can choose that has the same name as one of them gets a number
@@ -2442,9 +2445,7 @@ Name references
    documents (see `Missions in several documents`_).
 
 Not supported
-   ``IndirectParameterRefEntry`` chosen by an integer without an
-   ``aliasNameSpace`` when no parameter's name is a number, instances of
-   values in other packets, repeated
+   Instances of values in other packets, repeated
    segment entries with an ``order`` (which XTCE leaves undefined) or
    located from the end of their container with a count or ``Offset``
    that varies, a packet length field in a transformed container, or a
