@@ -5,6 +5,7 @@
 
 use tcs_xtce::digest::{digest_file, digest_files};
 
+/// Prints the digests the command line asks for.
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--set") {

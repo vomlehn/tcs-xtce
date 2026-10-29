@@ -8,6 +8,12 @@
 #ifdef __cplusplus
 #include <iostream>
 
+/** Prints the digest of each document named, or of the set with --set.
+ *
+ * @param argc  The number of arguments.
+ * @param argv  The arguments: optionally "--set", then the documents'
+ *              paths.
+ * @return      0; a document that can't be read prints "error". */
 int main(int argc, char** argv) {
         if (argc > 1 && std::string(argv[1]) == "--set") {
                 std::vector<std::string> paths(argv + 2, argv + argc);
@@ -28,6 +34,12 @@ int main(int argc, char** argv) {
         return 0;
 }
 #else
+/** Prints the digest of each document named, or of the set with --set.
+ *
+ * @param argc  The number of arguments.
+ * @param argv  The arguments: optionally "--set", then the documents'
+ *              paths.
+ * @return      0; a document that can't be read prints "error". */
 int main(int argc, char** argv) {
         int i;
         char hex[33];

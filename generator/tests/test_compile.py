@@ -32,7 +32,17 @@ def compile_xml(text: str, **kw):
 
 def command(name: str, args: str = "", entries: str = "",
             base: str = "") -> str:
-    """A MetaCommand with its arguments and command container entries."""
+    """Builds a MetaCommand with its arguments and command container entries.
+
+    Args:
+        name:    The MetaCommand's name; its container is ``name`` + "C".
+        args:    The XML inside its ArgumentList; "" for no list.
+        entries: The XML of its container's entries.
+        base:    The name of the MetaCommand it extends; "" for none.
+
+    Returns:
+        The MetaCommand's XML.
+    """
     base = f'<BaseMetaCommand metaCommandRef="{base}"/>' if base else ""
     args = f"<ArgumentList>{args}</ArgumentList>" if args else ""
     return (f'<MetaCommand name="{name}">{base}{args}<CommandContainer '
@@ -210,8 +220,19 @@ class ErrorTests(unittest.TestCase):
 
 
 def wide_mission(types: str, entries: str, params: str = "") -> str:
-    """A container of integers W (72 bits, unsigned), S (130 bits, signed)
-    and N (16 bits) and ``params``, then ``entries``."""
+    """Builds telemetry with wide integers.
+
+    A container Status of integers W (72 bits, unsigned), S (130 bits,
+    signed) and N (16 bits), then ``entries``.
+
+    Args:
+        types:   More parameter types' XML.
+        entries: More of Status's entries' XML, after N.
+        params:  More parameters' XML.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="W72" signed="false">
@@ -350,7 +371,15 @@ class WideIntegerTests(unittest.TestCase):
 def calibrated_mission(itype: str,
                        entries: str = '<ParameterRefEntry '
                                       'parameterRef="X"/>') -> str:
-    """Telemetry with parameter X of type ``itype`` and a binary Rest."""
+    """Builds telemetry with parameter X of type T and a binary Rest.
+
+    Args:
+        itype:   The XML of X's type, named T.
+        entries: The XML of container Status's entries.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           {itype}
@@ -371,6 +400,15 @@ def calibrated_mission(itype: str,
 def calibrated(attrs: str = "",
                terms: str = '<Term coefficient="-4" exponent="0"/><Term '
                             'coefficient="0.5" exponent="1"/>') -> str:
+    """Builds an 8-bit integer type T with a default polynomial calibrator.
+
+    Args:
+        attrs: More attributes of the IntegerParameterType.
+        terms: The polynomial's Term elements.
+
+    Returns:
+        The type's XML.
+    """
     return (f'<IntegerParameterType name="T" {attrs}><IntegerDataEncoding '
             f'sizeInBits="8"><DefaultCalibrator><PolynomialCalibrator>{terms}'
             '</PolynomialCalibrator></DefaultCalibrator></IntegerDataEncoding>'
@@ -432,8 +470,15 @@ class CalibratedIntegerTests(unittest.TestCase):
 
 
 def max_field(text: str, value: str) -> str:
-    """``text`` with tcs-xtce.max-field-bytes ``value`` on its first
-    SpaceSystem."""
+    """Puts tcs-xtce.max-field-bytes on a document's first SpaceSystem.
+
+    Args:
+        text:  The XTCE document.
+        value: The ancillary data's value.
+
+    Returns:
+        ``text`` with the ancillary data added.
+    """
     at = text.index(">") + 1
     return (text[:at]
             + '<AncillaryDataSet><AncillaryData '
@@ -562,8 +607,20 @@ def dynamic(param: str, slope: str = "1", intercept: str = "0") -> str:
 
 def array_mission(dims: str, entries: str, count_type: str = "U8",
                   element: str = "U16") -> str:
-    """Telemetry with an array type ``A`` of ``element`` and the parameters
-    ``N`` (a count) and ``Arr``, and a container with ``entries``."""
+    """Builds telemetry with arrays.
+
+    An array type ``A`` of ``element``, the parameters ``N`` (a count) and
+    ``Arr``, and a container with ``entries``.
+
+    Args:
+        dims:       The XML inside A's DimensionList.
+        entries:    The XML of the container's entries.
+        count_type: The type of N.
+        element:    The type of A's elements.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U8" signed="false">
@@ -724,7 +781,15 @@ class ArrayTests(unittest.TestCase):
 def aggregate_mission(types: str,
                       entries: str = '<ParameterRefEntry '
                                      'parameterRef="Agg"/>') -> str:
-    """Telemetry with an aggregate parameter ``Agg`` of type ``A``."""
+    """Builds telemetry with an aggregate parameter ``Agg`` of type ``A``.
+
+    Args:
+        types:   More parameter types' XML, which must define A.
+        entries: The XML of container P's entries.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U8" signed="false">
@@ -813,8 +878,15 @@ class AggregateTests(unittest.TestCase):
 
 
 def container_mission(record: str, entry: str) -> str:
-    """Telemetry where Status includes container Record with ``entry``
-    (the inside of a ContainerRefEntry); ``record`` is Record's contents."""
+    """Builds telemetry where Status includes container Record.
+
+    Args:
+        record: The XML inside Record.
+        entry:  The XML inside Status's ContainerRefEntry to Record.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U4" signed="false">
@@ -856,6 +928,16 @@ def entries(*refs: str) -> str:
 
 
 def ref(name: str, offset: str = "") -> str:
+    """Builds a ParameterRefEntry.
+
+    Args:
+        name:   The parameter's name.
+        offset: "reference:bits" for a LocationInContainerInBits with that
+                referenceLocation and fixed offset; "" for none.
+
+    Returns:
+        The entry's XML.
+    """
     loc = ('<LocationInContainerInBits '
            f'referenceLocation="{offset.split(":")[0]}">'
            f"<FixedValue>{offset.split(':')[1]}</FixedValue>"
@@ -932,8 +1014,16 @@ class ContainerTests(unittest.TestCase):
 
 
 def packet_mission(*refs: str, record: str = "") -> str:
-    """container_mission, with Status's own entries ``refs`` after N, and
-    Record included first when ``record`` gives its contents."""
+    """Builds container_mission with Status's own entries.
+
+    Args:
+        *refs:  The XML of Status's entries after N.
+        record: Record's contents; when given, Record is included before
+                ``refs``.
+
+    Returns:
+        The XTCE document.
+    """
     inc = '<ContainerRefEntry containerRef="Record"/>' if record else ""
     return container_mission(record or entries(),
                              "").replace(
@@ -981,9 +1071,18 @@ class AggregateCalibratorTests(unittest.TestCase):
 
 def transform_mission(encoding: str = "", entries: str = "",
                       bits: int = 32) -> str:
-    """Telemetry with a binary B (``bits`` on the wire, transformed by F
-    and T) and a container P of ``entries`` with BinaryEncoding
-    ``encoding``."""
+    """Builds telemetry with a transformed binary.
+
+    A binary B, transformed by F and T, and a container P.
+
+    Args:
+        encoding: P's BinaryEncoding element, or "" for none.
+        entries:  The XML of P's entries.
+        bits:     B's size on the wire, in bits.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U8" signed="false">
@@ -1009,7 +1108,15 @@ TRANSFORMS = ("<FromBinaryTransformAlgorithm name='Unzip'/>"
 
 
 def dialect(text: str, value: str) -> str:
-    """``text`` with tcs-xtce.dialect ``value`` on its first SpaceSystem."""
+    """Puts tcs-xtce.dialect on a document's first SpaceSystem.
+
+    Args:
+        text:  The XTCE document.
+        value: The dialect.
+
+    Returns:
+        ``text`` with the ancillary data added.
+    """
     at = text.index(">") + 1
     return (text[:at]
             + '<AncillaryDataSet><AncillaryData '
@@ -1122,7 +1229,15 @@ class TransformTests(unittest.TestCase):
     def with_q(text: str,
                size: str = "<SizeInBits><FixedValue>16</FixedValue>"
                            "</SizeInBits>") -> str:
-        """``text`` with a container Q of A, transformed, ``size`` bits."""
+        """Adds a container Q of A, transformed, before container P.
+
+        Args:
+            text: The XTCE document, from transform_mission.
+            size: The XML of Q's size, inside its BinaryEncoding.
+
+        Returns:
+            ``text`` with Q added.
+        """
         return text.replace(
             '<SequenceContainer name="P">',
             f'<SequenceContainer name="Q"><BinaryEncoding>{size}{TRANSFORMS}'
@@ -1380,7 +1495,15 @@ class LocationTests(unittest.TestCase):
 
 
 def bool_string(attrs: str, bits: int = 32) -> str:
-    """Telemetry with a boolean X encoded as a fixed, terminated string."""
+    """Builds telemetry with a boolean X encoded as a terminated string.
+
+    Args:
+        attrs: More attributes of X's BooleanParameterType.
+        bits:  The string's fixed size in bits.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <BooleanParameterType name="T" {attrs}><StringDataEncoding>
@@ -1445,7 +1568,15 @@ class EncodingTests(unittest.TestCase):
 
 
 def lookup(*cases: tuple[str, int], default: int = 0) -> str:
-    """A DiscreteLookupList on parameter N: (value of N, result) pairs."""
+    """Builds a DiscreteLookupList on parameter N.
+
+    Args:
+        *cases:  (value of N, result) pairs.
+        default: The result when no case matches.
+
+    Returns:
+        The list's XML.
+    """
     body = "".join(f'<DiscreteLookup value="{v}"><Comparison parameterRef="N" '
                    f'value="{n}"/></DiscreteLookup>' for n, v in cases)
     return (f'<DiscreteLookupList defaultValue="{default}">{body}'
@@ -1532,8 +1663,18 @@ class MemberPathTests(unittest.TestCase):
 
 
 def gate_mission(criteria: str, types: str = "") -> str:
-    """Telemetry with U8 parameters A and B, a float F, and a derived
-    container chosen by ``criteria`` (the inside of RestrictionCriteria)."""
+    """Builds telemetry with a restricted derived container.
+
+    U8 parameters A and B, an S8 S, a float X, and a container Derived of
+    abstract Base chosen by ``criteria``.
+
+    Args:
+        criteria: The XML inside RestrictionCriteria.
+        types:    More parameter types' XML.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U8" signed="false">
@@ -1567,7 +1708,16 @@ def gate_mission(criteria: str, types: str = "") -> str:
 
 
 def check(lhs: str, op: str, rhs: str) -> str:
-    """A BooleanExpression Condition; ``rhs`` is a parameter name or =value."""
+    """Builds a BooleanExpression Condition comparing two values.
+
+    Args:
+        lhs: The parameter on the left.
+        op:  The comparison operator, such as "<=".
+        rhs: The parameter on the right, or "=" and a value.
+
+    Returns:
+        The Condition's XML.
+    """
     right = (f"<Value>{rhs[1:]}</Value>" if rhs.startswith("=")
              else f'<ParameterInstanceRef parameterRef="{rhs}"/>')
     op = op.replace("<", "&lt;").replace(">", "&gt;")
@@ -1652,7 +1802,15 @@ class DerivedSizeTests(unittest.TestCase):
 
 class ElementTests(unittest.TestCase):
     def condition(self, dims: str, ref: str) -> str:
-        """Arr of type A with ``dims``, then F included when ``ref`` == 1."""
+        """Builds Arr of type A, then F included when ``ref`` is 1.
+
+        Args:
+            dims: The XML inside A's DimensionList.
+            ref:  The parameter the IncludeCondition compares.
+
+        Returns:
+            The XTCE document.
+        """
         return array_mission(
             dims,
             '<ParameterRefEntry parameterRef="N"/><ParameterRefEntry '
@@ -1854,8 +2012,15 @@ class MultiDocumentTests(unittest.TestCase):
 
 
 def typed(types: str, ref: str = "T") -> str:
-    """A mission with the parameter types ``types`` and one packet holding a
-    parameter of type ``ref``."""
+    """Builds a mission with one packet P holding a parameter X.
+
+    Args:
+        types: The parameter types' XML.
+        ref:   The name of X's type.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>{types}</ParameterTypeSet>
         <ParameterSet><Parameter name="X" parameterTypeRef="{ref}"/>
@@ -2005,6 +2170,16 @@ class EncodingRuleTests(unittest.TestCase):
 
     def test_charsets(self):
         def string(cs: str, size: str = "64", term: str = "") -> str:
+            """Builds a fixed-size string type T.
+
+            Args:
+                cs:   The character set.
+                size: The size in bits.
+                term: The termination character in hex; "" for none.
+
+            Returns:
+                The type's XML.
+            """
             term = f"<TerminationChar>{term}</TerminationChar>" if term else ""
             return ('<StringParameterType name="T"><StringDataEncoding '
                     f'encoding="{cs}"><SizeInBits><Fixed><FixedValue>{size}'
@@ -2034,9 +2209,16 @@ class EncodingRuleTests(unittest.TestCase):
 
 
 def calibrated_by(cal: str, before: str = "", ptype: str = "Float") -> str:
-    """A mission with a parameter X, calibrated by ``cal`` (the XML inside
-    an IntegerDataEncoding), after the parameters ``before`` (name, type)
-    pairs of 8-bit unsigned integers."""
+    """Builds a mission with a calibrated parameter X.
+
+    Args:
+        cal:    The XML inside X's IntegerDataEncoding: its calibrator.
+        before: The names of 8-bit unsigned parameters to put before X.
+        ptype:  The kind of X's type, such as "Float" or "Integer".
+
+    Returns:
+        The XTCE document.
+    """
     params = "".join(f'<Parameter name="{n}" parameterTypeRef="U8"/>'
                      for n in before)
     entries = "".join(f'<ParameterRefEntry parameterRef="{n}"/>'
@@ -2057,6 +2239,16 @@ def calibrated_by(cal: str, before: str = "", ptype: str = "Float") -> str:
 
 
 def rpn(*items: str) -> str:
+    """Builds a default MathOperationCalibrator.
+
+    Args:
+        *items: The operation in reverse Polish: "x" for this parameter,
+                "@" and a name for that parameter, a number for a value,
+                anything else for an operator.
+
+    Returns:
+        The calibrator's XML.
+    """
     out = []
     for it in items:
         if it == "x":
@@ -2173,8 +2365,18 @@ class CalibratorTests(unittest.TestCase):
 
 
 def checked_mission(edc: str, entries: str = "", ctype: str = "U8") -> str:
-    """A container P of A (8 bits) and K (``ctype``), with the
-    ErrorDetectCorrect items ``edc``."""
+    """Builds telemetry with a checked container.
+
+    A container P of A (8 bits) and K, with ErrorDetectCorrect items.
+
+    Args:
+        edc:     The XML inside ErrorDetectCorrect.
+        entries: The XML of P's entries; "" for A then K.
+        ctype:   The type of K.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U8" signed="false">
@@ -2249,7 +2451,14 @@ class ErrorDetectionTests(unittest.TestCase):
 
 
 def timed(time_type: str) -> str:
-    """A mission with one packet holding a parameter of time type T."""
+    """Builds a mission with one packet holding a parameter of time type T.
+
+    Args:
+        time_type: The XML of type T.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>{time_type}</ParameterTypeSet>
         <ParameterSet><Parameter name="X" parameterTypeRef="T"/>
@@ -2390,8 +2599,20 @@ def length_tag(adjust: str = "-1") -> str:
 
 def length_mission(entries: str, len_type: str = "U16", tag: str = length_tag(),
                    containers: str = "") -> str:
-    """Telemetry with a packet length field Len, a second one Len2, and
-    values X, Data and Looked in container Status."""
+    """Builds telemetry with packet length fields.
+
+    A packet length field Len, a second one Len2, and values X, Data and
+    Looked in container Status.
+
+    Args:
+        entries:    The XML of Status's entries.
+        len_type:   The type of Len.
+        tag:        Len's ancillary data.
+        containers: More containers' XML.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U16" signed="false">
@@ -2518,8 +2739,16 @@ class LengthTests(unittest.TestCase):
 
 
 def segment_mission(entries: str) -> str:
-    """Telemetry with a 16-bit W, a variable-size binary V and a container
-    P whose entries are ``entries``."""
+    """Builds telemetry for segment tests.
+
+    A 16-bit W, a binary V whose size W gives, and a container P.
+
+    Args:
+        entries: The XML of P's entries.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U16" signed="false">
@@ -2541,8 +2770,20 @@ def segment_mission(entries: str) -> str:
 
 def seg(name: str, bits: int, order: str = "", repeat: str = "",
         end: str = "") -> str:
-    """A segment entry, located ``end`` bits from the container's end if
-    that is given."""
+    """Builds a ParameterSegmentRefEntry.
+
+    Args:
+        name:   The parameter's name.
+        bits:   The segment's size in bits.
+        order:  The segment's order; "" for none.
+        repeat: XML to put in the entry after its location, such as a
+                RepeatEntry.
+        end:    The segment's offset in bits from the container's end; ""
+                to leave it unlocated.
+
+    Returns:
+        The entry's XML.
+    """
     order = f' order="{order}"' if order else ""
     loc = ('<LocationInContainerInBits '
            f'referenceLocation="containerEnd">{fixed(end)}'
@@ -2632,9 +2873,19 @@ class SegmentTests(unittest.TestCase):
 
 
 def shared_mission(base: str, entries: str = "", base_meta: str = "") -> str:
-    """Commands with a CommandContainerSet holding Head (parameter K) and
-    Body (extending Head, with parameter T); meta-command C's container
-    has ``entries`` and extends ``base``."""
+    """Builds commands with shared command containers.
+
+    A CommandContainerSet holding Head (parameter K) and Body (extending
+    Head, with parameter T), and meta-command C with argument X.
+
+    Args:
+        base:      The container C's container extends; "" for none.
+        entries:   The XML of C's container's entries after X.
+        base_meta: XML to put first in C, such as a BaseMetaCommand.
+
+    Returns:
+        The XTCE document.
+    """
     bc = f'<BaseContainer containerRef="{base}"/>' if base else ""
     return mission(tc=f"""
         <ParameterTypeSet>
@@ -2696,9 +2947,17 @@ class CommandContainerSetTests(unittest.TestCase):
 
     @staticmethod
     def fragment_mission(entries: str) -> str:
-        """shared_mission with abstract meta-commands Base (argument Kind)
-        and Frag (extending it, assigning Kind 7, with argument Y), and C's
-        ``entries``."""
+        """Builds shared_mission with abstract meta-commands.
+
+        Adds Base (argument Kind) and Frag (extending it, assigning Kind 7,
+        with argument Y).
+
+        Args:
+            entries: The XML of C's container's entries.
+
+        Returns:
+            The XTCE document.
+        """
         frag = ('<MetaCommand name="Base" abstract="true"><ArgumentList>'
                 '<Argument name="Kind" argumentTypeRef="U8A"/></ArgumentList>'
                 '<CommandContainer name="BaseC"><EntryList><ArgumentRefEntry '
@@ -2775,9 +3034,18 @@ class CommandContainerSetTests(unittest.TestCase):
 
 
 def indirect_mission(selector: str, labels: str = "A") -> str:
-    """Telemetry with parameter A, an integer I and an enumeration E with
-    ``labels``, and a container whose IndirectParameterRefEntry is chosen
-    by ``selector``."""
+    """Builds telemetry for IndirectParameterRefEntry tests.
+
+    Parameter A, an integer I, an enumeration E, and a container whose
+    IndirectParameterRefEntry is chosen by ``selector``.
+
+    Args:
+        selector: The XML inside the IndirectParameterRefEntry.
+        labels:   E's labels, separated by spaces, valued from 0.
+
+    Returns:
+        The XTCE document.
+    """
     enums = "".join(f'<Enumeration value="{i}" label="{lab}"/>'
                     for i, lab in enumerate(labels.split()))
     return mission(tm=f"""
@@ -2850,10 +3118,15 @@ class IndirectTests(unittest.TestCase):
 
 
 def named_mission() -> str:
-    """Telemetry whose container P has a string N, of at most 8 bytes, that
-    names the parameter after it, and then Z.  LongName12 is too long for
-    N to name, and R, which takes the rest of the packet, can't be read
-    there."""
+    """Builds telemetry with a parameter named by a string.
+
+    Container P has a string N, of at most 8 bytes, that names the
+    parameter after it, and then Z.  LongName12 is too long for N to name,
+    and R, which takes the rest of the packet, can't be read there.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm="""
         <ParameterTypeSet>
           <IntegerParameterType name="U8" signed="false">
@@ -2938,8 +3211,17 @@ class NamedIndirectTests(unittest.TestCase):
 
 
 def lsb_mission(entries: str) -> str:
-    """Telemetry with a 4-bit N, a byte B, an lsbFirst 2-byte string S and
-    lsbFirst binary L whose size B gives, in a container with ``entries``."""
+    """Builds telemetry with least significant bit first fields.
+
+    A 4-bit N, a byte B, an lsbFirst 2-byte string S and lsbFirst binary L
+    whose size B gives, in a container.
+
+    Args:
+        entries: The XML of the container's entries.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U4" signed="false">
@@ -2990,7 +3272,14 @@ class LsbFirstTests(unittest.TestCase):
 
 class InstanceTests(unittest.TestCase):
     def mission(self, instance: str) -> str:
-        """A twice, then B when instance ``instance`` of A is 1."""
+        """Builds gate_mission with A twice, then B when A is 1 there.
+
+        Args:
+            instance: The instance of A the condition compares.
+
+        Returns:
+            The XTCE document.
+        """
         return gate_mission('<Comparison parameterRef="S" '
                             'value="0"/>').replace(
             '<ParameterRefEntry parameterRef="B"/>',
@@ -3024,7 +3313,14 @@ class InstanceTests(unittest.TestCase):
 
 class MessageTests(unittest.TestCase):
     def mission(self, container: str) -> str:
-        """Root container R with U8 K, and message M picking R when K is 4."""
+        """Builds root container R with U8 K, and message M picking a container.
+
+        Args:
+            container: The container M refers to when K is 4.
+
+        Returns:
+            The XTCE document.
+        """
         return mission(tm=f"""
             <ParameterTypeSet>
               <IntegerParameterType name="U8" signed="false">

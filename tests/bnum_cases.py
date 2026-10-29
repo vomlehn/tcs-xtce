@@ -45,7 +45,17 @@ def limits(signed: bool, n: int) -> tuple[int, int]:
 
 
 def values(rng: random.Random, signed: bool, n: int) -> list[int]:
-    """Edge values of the type, and random ones of every magnitude."""
+    """Edge values of a type, and random ones of every magnitude.
+
+    Args:
+        rng:    The random number generator.
+        signed: Whether the type is signed.
+        n:      The type's size in bytes.
+
+    Returns:
+        The edge values, sorted, then 40 or fewer random ones, all in the
+        type's range.
+    """
     lo, hi = limits(signed, n)
     edges = {0, 1, 2, 3, 7, 10, hi, hi - 1, lo, lo + 1, hi // 2, hi // 3}
     if signed:
@@ -67,8 +77,19 @@ def values(rng: random.Random, signed: bool, n: int) -> list[int]:
 
 
 def slice_hex(rng: random.Random, signed: bool, n: int) -> str:
-    """Bytes for from_le_slice and from_be_slice: shorter, as long and
-    longer than the type, often sign or zero extended."""
+    """Bytes for from_le_slice and from_be_slice.
+
+    They are shorter than, as long as or longer than the type, and the
+    bytes past its size are often a sign or zero extension.
+
+    Args:
+        rng:    The random number generator.
+        signed: Whether the type is signed.
+        n:      The type's size in bytes.
+
+    Returns:
+        The bytes in hex, or "x" when there are none.
+    """
     length = rng.randint(0, n + 3)
     b = bytearray(rng.getrandbits(8) for _ in range(length))
     if length > n and rng.random() < 0.7:
@@ -80,9 +101,21 @@ def slice_hex(rng: random.Random, signed: bool, n: int) -> str:
 
 
 def bnum_slice_bug(h: str, signed: bool, n: int, le: bool) -> bool:
-    """A slice that bnum 0.14 reads wrongly: a negative one longer than the
-    type, whose extra bytes are all 0xff but whose kept top byte isn't
-    negative.  It returns the truncated bytes instead of None."""
+    """Tells whether bnum 0.14 reads a slice wrongly.
+
+    It does for a negative slice longer than the type, whose extra bytes
+    are all 0xff but whose kept top byte isn't negative: it returns the
+    truncated bytes instead of None.
+
+    Args:
+        h:      The slice in hex, as slice_hex gives it.
+        signed: Whether the type is signed.
+        n:      The type's size in bytes.
+        le:     Whether the slice is little endian.
+
+    Returns:
+        True if bnum reads the slice wrongly.
+    """
     b = bytes.fromhex(h.strip("x"))
     if not signed or len(b) <= n:
         return False
@@ -93,9 +126,19 @@ def bnum_slice_bug(h: str, signed: bool, n: int, le: bool) -> bool:
 
 
 def double_bits(rng: random.Random, bits: int) -> str:
-    """A double's bits in hex for from_f64: whole numbers near every power
-    of two up to past the type's size, either sign, halves and other
-    fractions, and the special values."""
+    """A double's bits for from_f64.
+
+    The double is a whole number near a power of two up to past the
+    type's size, of either sign, a half or other fraction, or a special
+    value.
+
+    Args:
+        rng:  The random number generator.
+        bits: The type's size in bits.
+
+    Returns:
+        The double's bits in hex, big endian.
+    """
     kind = rng.random()
     if kind < 0.1:
         x = rng.choice([0.0, -0.0, 0.5, -0.5, 0.75, 1.5, 2.5, -2.5, 1e-310,
@@ -113,6 +156,20 @@ def double_bits(rng: random.Random, bits: int) -> str:
 
 
 def radix_text(rng: random.Random, signed: bool, n: int, radix: int) -> str:
+    """Text for from_str_radix to parse.
+
+    It is mostly digits of ``radix``, of either case, sometimes signed,
+    and now and then empty, a bad sign or ending in a bad character.
+
+    Args:
+        rng:    The random number generator.
+        signed: Whether the type is signed (unused).
+        n:      The type's size in bytes, which bounds the digit count.
+        radix:  The radix, 2 to 36.
+
+    Returns:
+        The text.
+    """
     digits = "0123456789abcdefghijklmnopqrstuvwxyz"[:radix]
     kind = rng.random()
     if kind < 0.05:
@@ -130,6 +187,9 @@ def radix_text(rng: random.Random, signed: bool, n: int, radix: int) -> str:
 
 
 def main() -> None:
+    """Prints COUNT random cases of each operation's type for every size and
+    signedness, seeded with SEED, as the module docstring describes.
+    """
     rng = random.Random(int(sys.argv[1]))
     count = int(sys.argv[2])
     c_only = "--c" in sys.argv[3:]

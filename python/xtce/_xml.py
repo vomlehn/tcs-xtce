@@ -31,7 +31,13 @@ class XtceError(ValueError):
 
 
 class Node:
-    """An element: local name, attributes, child elements, and direct text."""
+    """An element: local name, attributes, child elements, and direct text.
+
+    Args:
+        name:  The element's local name.
+        attrs: Its attributes by name, ``xml:`` ones with that prefix.
+        line:  The line it starts on, for error messages.
+    """
 
     __slots__ = ("name", "attrs", "children", "text", "line")
 
@@ -50,12 +56,32 @@ def _local(name: str) -> str:
 
 
 def parse(data) -> Node:
-    """Parse bytes-like ``data`` into a :class:`Node` tree."""
+    """Parses bytes-like ``data`` into a :class:`Node` tree.
+
+    Args:
+        data: The XML.
+
+    Returns:
+        The root element.
+
+    Raises:
+        XtceError: The XML isn't well formed.
+    """
     parser = expat.ParserCreate(namespace_separator=" ")
     stack: list[Node] = []
     root: list[Node] = []
 
     def start(name, attrs):
+        """Opens a new element below the current one.
+
+        Keeps attributes in no namespace and ``xml:`` ones; drops other
+        namespaced attributes.
+
+        Args:
+            name:  The element's name as expat reports it, ``"uri local"``
+                   when it has a namespace.
+            attrs: Its attributes by name, named the same way.
+        """
         clean = {}
         for k, val in attrs.items():
             if " " in k:
@@ -91,7 +117,14 @@ def parse(data) -> Node:
 
 
 class Cursor:
-    """Walks the child elements of a node with one element of lookahead."""
+    """Walks the child elements of a node with one element of lookahead.
+
+    Args:
+        node: The element whose children are walked.
+
+    Raises:
+        XtceError: The element mixes child elements with text.
+    """
 
     __slots__ = ("node", "i", "n")
 
@@ -111,6 +144,15 @@ class Cursor:
         return c
 
     def expected(self, what: str) -> XtceError:
+        """Makes the error for a missing child element.
+
+        Args:
+            what: The name of the element that was expected.
+
+        Returns:
+            An error naming the element found instead, or the parent if
+            there are no more children.
+        """
         if self.i < self.n:
             c = self.node.children[self.i]
             return XtceError(f"expected <{what}>, found <{c.name}>", c.line)
@@ -122,6 +164,11 @@ class Cursor:
                          f"<{self.node.name}>, found {found}", self.node.line)
 
     def end(self) -> None:
+        """Checks that every child has been taken.
+
+        Raises:
+            XtceError: A child element is left, or the node has text.
+        """
         if self.i < self.n:
             c = self.node.children[self.i]
             raise XtceError(f"unexpected element <{c.name}>", c.line)
@@ -131,6 +178,17 @@ class Cursor:
 
 
 def text_of(node: Node) -> str:
+    """Gets an element's text content.
+
+    Args:
+        node: The element, which must have no children.
+
+    Returns:
+        Its text, all pieces joined.
+
+    Raises:
+        XtceError: The element has a child element.
+    """
     if node.children:
         c = node.children[0]
         raise XtceError(f"unexpected element <{c.name}> in text content",
@@ -139,6 +197,17 @@ def text_of(node: Node) -> str:
 
 
 def check_attrs(node: Node, allowed: frozenset) -> None:
+    """Checks that an element has only allowed attributes.
+
+    ``xml:`` attributes are always allowed.
+
+    Args:
+        node:    The element.
+        allowed: The names of the attributes it may have.
+
+    Raises:
+        XtceError: The element has another attribute.
+    """
     for k in node.attrs:
         if k not in allowed and not k.startswith("xml:"):
             raise XtceError(f"unexpected attribute {k!r} on <{node.name}>",
@@ -146,6 +215,20 @@ def check_attrs(node: Node, allowed: frozenset) -> None:
 
 
 def req_attr(node: Node, name: str, parse_fn: Callable):
+    """Reads an attribute that must be present.
+
+    Args:
+        node:     The element.
+        name:     The attribute's name.
+        parse_fn: Converts the attribute's text to its value, raising
+                  ValueError if it is invalid.
+
+    Returns:
+        The attribute's value.
+
+    Raises:
+        XtceError: The attribute is missing or invalid.
+    """
     try:
         raw = node.attrs[name]
     except KeyError:
@@ -160,6 +243,19 @@ def opt_attr(node: Node, name: str, parse_fn: Callable):
 
 
 def value(node: Node, raw: str, parse_fn: Callable):
+    """Converts the text of an attribute or element with a parser.
+
+    Args:
+        node:     The element the text belongs to, for error messages.
+        raw:      The text.
+        parse_fn: Converts the text, raising ValueError if it is invalid.
+
+    Returns:
+        What ``parse_fn`` returns.
+
+    Raises:
+        XtceError: ``parse_fn`` raised ValueError.
+    """
     try:
         return parse_fn(raw)
     except ValueError as e:
@@ -167,6 +263,19 @@ def value(node: Node, raw: str, parse_fn: Callable):
 
 
 def leaf(node: Node, parse_fn: Callable):
+    """Reads an element that holds only a value in its text.
+
+    Args:
+        node:     The element, which may have only ``xml:`` attributes.
+        parse_fn: Converts its text, raising ValueError if it is invalid.
+
+    Returns:
+        The element's value.
+
+    Raises:
+        XtceError: The element has another attribute, a child element or
+                   invalid text.
+    """
     for k in node.attrs:
         if not k.startswith("xml:"):
             raise XtceError(f"unexpected attribute {k!r} on <{node.name}>",
@@ -185,6 +294,18 @@ def p_str(s: str) -> str:
 
 
 def p_bool(s: str) -> bool:
+    """Parses an XML Schema boolean.
+
+    Args:
+        s: The text, ``true``, ``false``, ``1`` or ``0`` with optional
+           surrounding white space.
+
+    Returns:
+        The boolean.
+
+    Raises:
+        ValueError: The text is none of those.
+    """
     t = s.strip()
     if t in ("true", "1"):
         return True
@@ -194,7 +315,29 @@ def p_bool(s: str) -> bool:
 
 
 def _p_int(lo: int, hi: int, kind: str) -> Callable[[str], int]:
+    """Makes a parser for integers in a range.
+
+    Args:
+        lo:   The smallest value allowed.
+        hi:   The largest value allowed.
+        kind: The type's name, for error messages.
+
+    Returns:
+        A function that parses a decimal integer and checks its range,
+        raising ValueError if it is invalid.
+    """
     def parse_int(s: str) -> int:
+        """Parses a decimal integer and checks its range.
+
+        Args:
+            s: The text, with optional sign and surrounding white space.
+
+        Returns:
+            The integer.
+
+        Raises:
+            ValueError: The text isn't an integer or is out of range.
+        """
         t = s.strip()
         if not _INT.match(t):
             raise ValueError(f"invalid {kind} {s!r}")
@@ -212,6 +355,18 @@ p_u16 = _p_int(0, 2**16 - 1, "u16")
 
 
 def p_double(s: str) -> float:
+    """Parses an XML Schema double.
+
+    Args:
+        s: The text, a decimal or ``INF``, ``+INF``, ``-INF`` or ``NaN``,
+           with optional surrounding white space.
+
+    Returns:
+        The value.
+
+    Raises:
+        ValueError: The text isn't a double.
+    """
     t = s.strip()
     if t in ("INF", "+INF"):
         return math.inf
@@ -237,7 +392,16 @@ def f_int(v: int) -> str:
 
 
 def f_double(v: float) -> str:
-    """Shortest round-trip form; matches the Rust and C++ libraries."""
+    """Formats a double in the shortest form that reads back the same.
+
+    Matches the Rust and C++ libraries.
+
+    Args:
+        v: The value.
+
+    Returns:
+        Its text: ``NaN``, ``INF``, ``-INF`` or Python's ``repr``.
+    """
     if v != v:
         return "NaN"
     if v == math.inf:
@@ -272,6 +436,7 @@ class Writer:
         self.reset()
 
     def reset(self) -> None:
+        """Empties the writer for a new document, keeping its storage."""
         self.parts.clear()
         self.depth = 0
         self.open = False
@@ -287,6 +452,14 @@ class Writer:
             self.parts.append("\n" + "  " * self.depth)
 
     def start(self, name: str) -> None:
+        """Starts an element, closing the previous start tag if it is open.
+
+        The first element after :attr:`root_ns` is set gets it as its
+        ``xmlns``.
+
+        Args:
+            name: The element's name.
+        """
         if self.open:
             self.parts.append(">")
             self.open = False
@@ -303,6 +476,11 @@ class Writer:
         self.parts.append(f' {name}="{value.translate(_ATTR_ESC)}"')
 
     def text(self, value: str) -> None:
+        """Writes escaped text into the current element.
+
+        Args:
+            value: The text.
+        """
         if self.open:
             self.parts.append(">")
             self.open = False
@@ -310,6 +488,11 @@ class Writer:
         self.last = _TEXT
 
     def end(self, name: str) -> None:
+        """Ends an element, as ``/>`` if it has no content.
+
+        Args:
+            name: The element's name.
+        """
         self.depth -= 1
         if self.open:
             self.parts.append("/>")
@@ -326,6 +509,11 @@ class Writer:
         self.end(name)
 
     def flush(self, buf: ManagedBuffer) -> None:
+        """Encodes the XML into a buffer and empties the writer.
+
+        Args:
+            buf: The buffer, whose contents are replaced.
+        """
         if self.indent:
             self.parts.append("\n")
         buf.load("".join(self.parts).encode("utf-8"))

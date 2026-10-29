@@ -61,6 +61,11 @@ static inline bool xtce_bn_is_negative(const uint8_t* a, size_t n, bool s) {
         return s && (a[n - 1] & 0x80) != 0;
 }
 
+/** Whether an integer is zero.
+ *
+ * @param a  The integer, least significant byte first.
+ * @param n  Its size in bytes, at least 1.
+ * @return   True if every byte is zero. */
 static inline bool xtce_bn_is_zero(const uint8_t* a, size_t n) {
         size_t i;
         for (i = 0; i < n; ++i)
@@ -68,6 +73,11 @@ static inline bool xtce_bn_is_zero(const uint8_t* a, size_t n) {
         return true;
 }
 
+/** Whether an integer is one.
+ *
+ * @param a  The integer, least significant byte first.
+ * @param n  Its size in bytes, at least 1.
+ * @return   True if its value is 1. */
 static inline bool xtce_bn_is_one(const uint8_t* a, size_t n) {
         size_t i;
         for (i = 1; i < n; ++i)
@@ -127,8 +137,15 @@ static inline void xtce_bn_cast(uint8_t* out, size_t n, const uint8_t* a,
         if (n > na) memset(out + na, fill, n - na);
 }
 
-/* Whether `a` (of `na` bytes, signed if `sa`) has the same value as an
- * integer of `n` bytes, signed if `s`: whether xtce_bn_cast keeps it. */
+/** Whether an integer has the same value as an integer of another size and
+ * signedness: whether xtce_bn_cast keeps it.
+ *
+ * @param a   The integer, least significant byte first.
+ * @param na  Its size in bytes.
+ * @param sa  Whether it is signed.
+ * @param n   The size of the other integer in bytes.
+ * @param s   Whether the other integer is signed.
+ * @return    True if `a`'s value is in the other integer's range. */
 static inline bool xtce_bn_fits(const uint8_t* a, size_t na, bool sa,
                                 size_t n, bool s) {
         bool neg = xtce_bn_is_negative(a, na, sa);
@@ -152,7 +169,13 @@ static inline void xtce_bn_from_i64(uint8_t* out, size_t n, int64_t v) {
         if (v < 0 && n > 8) memset(out + 8, 0xff, n - 8);
 }
 
-/* Whether `a` fits a uint64_t, and if so its value in *out. */
+/** Converts an integer to a uint64_t, if it fits one.
+ *
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param s    Whether it is signed.
+ * @param out  Where to put the value; left alone if it doesn't fit.
+ * @return     Whether `a` fits a uint64_t. */
 static inline bool xtce_bn_to_u64(const uint8_t* a, size_t n, bool s,
                                   uint64_t* out) {
         uint64_t v = 0;
@@ -163,6 +186,13 @@ static inline bool xtce_bn_to_u64(const uint8_t* a, size_t n, bool s,
         return true;
 }
 
+/** Converts an integer to an int64_t, if it fits one.
+ *
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param s    Whether it is signed.
+ * @param out  Where to put the value; left alone if it doesn't fit.
+ * @return     Whether `a` fits an int64_t. */
 static inline bool xtce_bn_to_i64(const uint8_t* a, size_t n, bool s,
                                   int64_t* out) {
         uint8_t b[8];
@@ -177,9 +207,16 @@ static inline bool xtce_bn_to_i64(const uint8_t* a, size_t n, bool s,
         return true;
 }
 
-/* `len` bytes at `src`, least (le) or most (be) significant first, as an
- * integer of `n` bytes: false if it doesn't fit.  A signed integer takes
- * the slice's top bit as its sign, as bnum does. */
+/** Reads an integer from bytes least significant first.  A signed integer takes
+ * the slice's top bit as its sign, as bnum does.
+ *
+ * @param out  Where to put the integer, `n` bytes; left alone if it doesn't
+ *             fit.
+ * @param n    The integer's size in bytes, at least 1.
+ * @param s    Whether the integer, and so the slice, is signed.
+ * @param src  The bytes, least significant first.
+ * @param len  How many there are; none is zero.
+ * @return     False if the slice's value doesn't fit the integer. */
 static inline bool xtce_bn_from_le_slice(uint8_t* out, size_t n, bool s,
                                          const uint8_t* src, size_t len) {
         size_t i;
@@ -195,7 +232,11 @@ static inline bool xtce_bn_from_le_slice(uint8_t* out, size_t n, bool s,
         return true;
 }
 
-/* The bytes of `a` the other way round: little to big endian, or back. */
+/** Reverses the order of an integer's bytes: little to big endian, or back.
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a`.
+ * @param a    The integer's bytes.
+ * @param n    Its size in bytes, at least 1. */
 static inline void xtce_bn_swap_bytes(uint8_t* out, const uint8_t* a,
                                       size_t n) {
         size_t i;
@@ -207,6 +248,16 @@ static inline void xtce_bn_swap_bytes(uint8_t* out, const uint8_t* a,
         if (n % 2) out[n / 2] = a[n / 2];
 }
 
+/** Reads an integer from bytes most significant first, as xtce_bn_from_le_slice
+ * does from bytes least significant first.
+ *
+ * @param out  Where to put the integer, `n` bytes; left alone if it doesn't
+ *             fit.
+ * @param n    The integer's size in bytes, at least 1.
+ * @param s    Whether the integer, and so the slice, is signed.
+ * @param src  The bytes, most significant first.
+ * @param len  How many there are; none is zero.
+ * @return     False if the slice's value doesn't fit the integer. */
 static inline bool xtce_bn_from_be_slice(uint8_t* out, size_t n, bool s,
                                          const uint8_t* src, size_t len) {
         size_t i;
@@ -233,7 +284,11 @@ static inline void xtce_bn_to_be_bytes(uint8_t* out, const uint8_t* a,
         xtce_bn_swap_bytes(out, a, n);
 }
 
-/* `a` with its bits in the reverse order. */
+/** Reverses the order of an integer's bits.
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a`.
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1. */
 static inline void xtce_bn_reverse_bits(uint8_t* out, const uint8_t* a,
                                         size_t n) {
         size_t i;
@@ -249,7 +304,13 @@ static inline void xtce_bn_reverse_bits(uint8_t* out, const uint8_t* a,
 
 /* --- comparison ---------------------------------------------------------- */
 
-/* -1, 0 or 1 as `a` is less than, equal to or greater than `b`. */
+/** Compares two integers of the same type.
+ *
+ * @param a  The first operand.
+ * @param b  The second operand.
+ * @param n  The size of each integer in bytes, at least 1.
+ * @param s  Whether they are signed.
+ * @return   -1, 0 or 1 as `a` is less than, equal to or greater than `b`. */
 static inline int xtce_bn_cmp(const uint8_t* a, const uint8_t* b, size_t n,
                               bool s) {
         bool an = xtce_bn_is_negative(a, n, s);
@@ -260,8 +321,16 @@ static inline int xtce_bn_cmp(const uint8_t* a, const uint8_t* b, size_t n,
         return 0;
 }
 
-/* xtce_bn_cmp for integers of any sizes and signedness, as their values
- * compare.  (Rust compares them after casting both to one type.) */
+/** Compares two integers of any sizes and signedness as their values compare.
+ * (Rust compares them after casting both to one type.)
+ *
+ * @param a   The first integer, least significant byte first.
+ * @param na  Its size in bytes.
+ * @param sa  Whether it is signed.
+ * @param b   The second integer, least significant byte first.
+ * @param nb  Its size in bytes.
+ * @param sb  Whether it is signed.
+ * @return    -1, 0 or 1 as `a` is less than, equal to or greater than `b`. */
 static inline int xtce_bn_cmp_mixed(const uint8_t* a, size_t na, bool sa,
                                     const uint8_t* b, size_t nb, bool sb) {
         bool an = xtce_bn_is_negative(a, na, sa);
@@ -311,6 +380,11 @@ static inline void xtce_bn_bitxor(uint8_t* out, const uint8_t* a,
         for (i = 0; i < n; ++i) out[i] = a[i] ^ b[i];
 }
 
+/** Counts the bits of an integer that are set.
+ *
+ * @param a  The integer, least significant byte first.
+ * @param n  Its size in bytes, at least 1.
+ * @return   The number of one bits. */
 static inline unsigned xtce_bn_count_ones(const uint8_t* a, size_t n) {
         unsigned c = 0;
         size_t i;
@@ -325,7 +399,12 @@ static inline unsigned xtce_bn_count_zeros(const uint8_t* a, size_t n) {
         return (unsigned)(8 * n) - xtce_bn_count_ones(a, n);
 }
 
-/* The number of leading (most significant) bits equal to `one`. */
+/** Counts an integer's leading (most significant) bits that equal `one`.
+ *
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param one  Whether to count ones rather than zeros.
+ * @return     The number of such bits, up to 8 * `n`. */
 static inline unsigned xtce_bn_leading_(const uint8_t* a, size_t n,
                                         bool one) {
         unsigned c = 0;
@@ -344,6 +423,12 @@ static inline unsigned xtce_bn_leading_(const uint8_t* a, size_t n,
         return c;
 }
 
+/** Counts an integer's trailing (least significant) bits that equal `one`.
+ *
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param one  Whether to count ones rather than zeros.
+ * @return     The number of such bits, up to 8 * `n`. */
 static inline unsigned xtce_bn_trailing_(const uint8_t* a, size_t n,
                                          bool one) {
         unsigned c = 0;
@@ -390,7 +475,12 @@ static inline bool xtce_bn_is_power_of_two(const uint8_t* a, size_t n) {
 
 /* --- shifts and rotations ------------------------------------------------ */
 
-/* `a` shifted left by `k` bits (any number), zeros coming in. */
+/** Shifts an integer left by any number of bits, zeros coming in.
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a`.
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param k    The number of bits; 8 * `n` or more gives zero. */
 static inline void xtce_bn_shl_bits_(uint8_t* out, const uint8_t* a,
                                      size_t n, size_t k) {
         size_t q = k / 8, i = n;
@@ -403,7 +493,13 @@ static inline void xtce_bn_shl_bits_(uint8_t* out, const uint8_t* a,
         }
 }
 
-/* `a` shifted right by `k` bits, copies of `fill` (0 or 0xff) coming in. */
+/** Shifts an integer right by any number of bits, copies of `fill` coming in.
+ *
+ * @param out   Where to put the result, `n` bytes; it may be `a`.
+ * @param a     The integer, least significant byte first.
+ * @param n     Its size in bytes, at least 1.
+ * @param k     The number of bits; 8 * `n` or more leaves only `fill`.
+ * @param fill  The byte shifted in: 0, or 0xff to extend a sign. */
 static inline void xtce_bn_shr_bits_(uint8_t* out, const uint8_t* a,
                                      size_t n, size_t k, uint8_t fill) {
         size_t q = k / 8, i;
@@ -464,7 +560,12 @@ static inline void xtce_bn_unbounded_shr(uint8_t* out, const uint8_t* a,
         xtce_bn_shr_bits_(out, a, n, k < 8 * n ? k : 8 * n, fill);
 }
 
-/* Rotations; `out` must not be `a`. */
+/** Rotates an integer's bits left (toward the most significant).
+ *
+ * @param out  Where to put the result, `n` bytes; it must not be `a`.
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param k    The number of bits, taken modulo 8 * `n`. */
 static inline void xtce_bn_rotate_left(uint8_t* out, const uint8_t* a,
                                        size_t n, unsigned k) {
         size_t bits = 8 * n, i;
@@ -474,6 +575,12 @@ static inline void xtce_bn_rotate_left(uint8_t* out, const uint8_t* a,
                                 xtce_bn_bit(a, n, (unsigned)i));
 }
 
+/** Rotates an integer's bits right (toward the least significant).
+ *
+ * @param out  Where to put the result, `n` bytes; it must not be `a`.
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param k    The number of bits, taken modulo 8 * `n`. */
 static inline void xtce_bn_rotate_right(uint8_t* out, const uint8_t* a,
                                         size_t n, unsigned k) {
         xtce_bn_rotate_left(out, a, n,
@@ -483,7 +590,14 @@ static inline void xtce_bn_rotate_right(uint8_t* out, const uint8_t* a,
 
 /* --- addition and subtraction -------------------------------------------- */
 
-/* `a + b + carry` as unsigned; the carry out. */
+/** Adds two integers and a carry, as unsigned.
+ *
+ * @param out    Where to put the result, `n` bytes; it may be `a` or `b`.
+ * @param a      The first operand.
+ * @param b      The second operand.
+ * @param n      The size of each integer in bytes, at least 1.
+ * @param carry  The carry in, 0 or 1.
+ * @return       The carry out, 0 or 1. */
 static inline unsigned xtce_bn_add_(uint8_t* out, const uint8_t* a,
                                     const uint8_t* b, size_t n,
                                     unsigned carry) {
@@ -496,7 +610,13 @@ static inline unsigned xtce_bn_add_(uint8_t* out, const uint8_t* a,
         return carry;
 }
 
-/* `a - b` as unsigned; the borrow out. */
+/** Subtracts one integer from another, as unsigned.
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a` or `b`.
+ * @param a    The integer subtracted from.
+ * @param b    The integer subtracted.
+ * @param n    The size of each integer in bytes, at least 1.
+ * @return     The borrow out, 0 or 1. */
 static inline unsigned xtce_bn_sub_(uint8_t* out, const uint8_t* a,
                                     const uint8_t* b, size_t n) {
         unsigned borrow = 0;
@@ -509,6 +629,14 @@ static inline unsigned xtce_bn_sub_(uint8_t* out, const uint8_t* a,
         return borrow;
 }
 
+/** Adds two integers, wrapping on overflow.
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a` or `b`.
+ * @param a    The first operand.
+ * @param b    The second operand.
+ * @param n    The size of each integer in bytes, at least 1.
+ * @param s    Whether they are signed.
+ * @return     Whether the sum overflowed. */
 static inline bool xtce_bn_overflowing_add(uint8_t* out, const uint8_t* a,
                                            const uint8_t* b, size_t n,
                                            bool s) {
@@ -519,6 +647,14 @@ static inline bool xtce_bn_overflowing_add(uint8_t* out, const uint8_t* a,
         return an == bn && xtce_bn_is_negative(out, n, s) != an;
 }
 
+/** Subtracts one integer from another, wrapping on overflow.
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a` or `b`.
+ * @param a    The integer subtracted from.
+ * @param b    The integer subtracted.
+ * @param n    The size of each integer in bytes, at least 1.
+ * @param s    Whether they are signed.
+ * @return     Whether the difference overflowed. */
 static inline bool xtce_bn_overflowing_sub(uint8_t* out, const uint8_t* a,
                                            const uint8_t* b, size_t n,
                                            bool s) {
@@ -529,7 +665,14 @@ static inline bool xtce_bn_overflowing_sub(uint8_t* out, const uint8_t* a,
         return an != bn && xtce_bn_is_negative(out, n, s) != an;
 }
 
-/* -a; for an unsigned integer it overflows unless `a` is zero. */
+/** Negates an integer, wrapping on overflow.  An unsigned integer overflows
+ * unless it is zero, and a signed one only if it is MIN.
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a`.
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param s    Whether it is signed.
+ * @return     Whether the negation overflowed. */
 static inline bool xtce_bn_overflowing_neg(uint8_t* out, const uint8_t* a,
                                            size_t n, bool s) {
         unsigned carry = 1;
@@ -545,6 +688,13 @@ static inline bool xtce_bn_overflowing_neg(uint8_t* out, const uint8_t* a,
         return an && xtce_bn_is_negative(out, n, s);
 }
 
+/** Takes an integer's absolute value, wrapping on overflow (MIN stays MIN).
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a`.
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param s    Whether it is signed.
+ * @return     Whether it overflowed, which only MIN does. */
 static inline bool xtce_bn_overflowing_abs(uint8_t* out, const uint8_t* a,
                                            size_t n, bool s) {
         if (!xtce_bn_is_negative(a, n, s)) {
@@ -560,7 +710,15 @@ static inline void xtce_bn_unsigned_abs(uint8_t* out, const uint8_t* a,
         (void)xtce_bn_overflowing_abs(out, a, n, s);
 }
 
-/* |a - b| as unsigned; `out` must not be `a` or `b`. */
+/** Takes the absolute difference |a - b| of two integers, as unsigned, which
+ * always fits.
+ *
+ * @param out  Where to put the difference, `n` bytes; it must not be `a` or
+ *             `b`.
+ * @param a    The first operand.
+ * @param b    The second operand.
+ * @param n    The size of each integer in bytes, at least 1.
+ * @param s    Whether they are signed. */
 static inline void xtce_bn_abs_diff(uint8_t* out, const uint8_t* a,
                                     const uint8_t* b, size_t n, bool s) {
         if (xtce_bn_cmp(a, b, n, s) >= 0)
@@ -580,6 +738,13 @@ typedef struct xtce_bn_mag_ {
         bool neg;
 } xtce_bn_mag_;
 
+/** Starts reading an integer's magnitude a byte at a time, without storing it.
+ *
+ * @param a  The integer, least significant byte first; it must outlive the
+ *           result.
+ * @param n  Its size in bytes, at least 1.
+ * @param s  Whether it is signed.
+ * @return   The reader, for xtce_bn_mag_byte_. */
 static inline xtce_bn_mag_ xtce_bn_mag_of_(const uint8_t* a, size_t n,
                                            bool s) {
         xtce_bn_mag_ m;
@@ -590,6 +755,12 @@ static inline xtce_bn_mag_ xtce_bn_mag_of_(const uint8_t* a, size_t n,
         return m;
 }
 
+/** Reads one byte of an integer's magnitude.
+ *
+ * @param m  The reader xtce_bn_mag_of_ made.
+ * @param k  The byte's index, below the integer's size; 0 is the least
+ *           significant.
+ * @return   The byte, 0 to 255. */
 static inline unsigned xtce_bn_mag_byte_(const xtce_bn_mag_* m, size_t k) {
         if (!m->neg) return m->p[k];
         if (k < m->z) return 0;
@@ -597,8 +768,13 @@ static inline unsigned xtce_bn_mag_byte_(const xtce_bn_mag_* m, size_t k) {
         return (uint8_t)~m->p[k];
 }
 
-/* Whether `a` is a negative integer's magnitude that fits: at most MAX, or
- * 2^(8n-1) (MIN's) if `neg`. */
+/** Whether an unsigned magnitude fits a signed integer of the same size:
+ * whether it is at most MAX, or at most 2^(8n-1), MIN's magnitude, if `neg`.
+ *
+ * @param a    The magnitude, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param neg  Whether the value is negative.
+ * @return     True if the signed value fits. */
 static inline bool xtce_bn_mag_fits_(const uint8_t* a, size_t n, bool neg) {
         size_t i;
         if (!(a[n - 1] & 0x80)) return true;
@@ -613,7 +789,14 @@ static inline void xtce_bn_negate_(uint8_t* a, size_t n) {
         (void)xtce_bn_overflowing_neg(a, a, n, false);
 }
 
-/* `a * b`; `out` must not be `a` or `b`. */
+/** Multiplies two integers, wrapping on overflow.
+ *
+ * @param out  Where to put the product, `n` bytes; it must not be `a` or `b`.
+ * @param a    The first operand.
+ * @param b    The second operand.
+ * @param n    The size of each integer in bytes, at least 1.
+ * @param s    Whether they are signed.
+ * @return     Whether the product overflowed. */
 static inline bool xtce_bn_overflowing_mul(uint8_t* out, const uint8_t* a,
                                            const uint8_t* b, size_t n,
                                            bool s) {
@@ -643,12 +826,19 @@ static inline bool xtce_bn_overflowing_mul(uint8_t* out, const uint8_t* a,
         return high;
 }
 
-/* `q = a / b` and `r = a % b`, rounding toward zero as Rust does, so that
- * `r` has the sign of `a`.  False, leaving both unspecified, if `b` is zero.
- * MIN / -1 overflows to MIN, with a remainder of 0; *overflow (if not NULL)
- * says whether it did.  `q` may be `a`; otherwise none of them may be the
- * same.  The division functions below take `scratch` for the result they
- * don't return, and their `out` must not be `b`. */
+/** Divides one integer by another, rounding toward zero as Rust does, so that
+ * the remainder has the sign of the dividend.  MIN / -1 overflows to MIN, with
+ * a remainder of 0.  Apart from `q` and `a`, none of the integers may be the
+ * same.
+ *
+ * @param q         Where to put the quotient, `n` bytes; it may be `a`.
+ * @param r         Where to put the remainder, `n` bytes.
+ * @param a         The dividend.
+ * @param b         The divisor.
+ * @param n         The size of each integer in bytes, at least 1.
+ * @param s         Whether they are signed.
+ * @param overflow  If not NULL, set to whether the quotient overflowed.
+ * @return          False, leaving `q` and `r` unspecified, if `b` is zero. */
 static inline bool xtce_bn_div_rem_(uint8_t* q, uint8_t* r, const uint8_t* a,
                                     const uint8_t* b, size_t n, bool s,
                                     bool* overflow) {
@@ -698,6 +888,17 @@ static inline bool xtce_bn_div_rem_(uint8_t* q, uint8_t* r, const uint8_t* a,
         return true;
 }
 
+/** Divides one integer by another, rounding toward zero.
+ *
+ * @param out      Where to put the quotient, `n` bytes; it may be `a`, but not
+ *                 `b`.
+ * @param a        The dividend.
+ * @param b        The divisor.
+ * @param n        The size of each integer in bytes, at least 1.
+ * @param s        Whether they are signed.
+ * @param scratch  `n` bytes of room for the remainder.
+ * @return         False, leaving `out` unspecified, if `b` is zero or the
+ *                 quotient overflows (MIN / -1). */
 static inline bool xtce_bn_checked_div(uint8_t* out, const uint8_t* a,
                                        const uint8_t* b, size_t n, bool s,
                                        uint8_t* scratch) {
@@ -706,6 +907,18 @@ static inline bool xtce_bn_checked_div(uint8_t* out, const uint8_t* a,
                !overflow;
 }
 
+/** Takes the remainder of dividing one integer by another, rounding toward
+ * zero, so that it has the sign of `a`.
+ *
+ * @param out      Where to put the remainder, `n` bytes; it may be `a`, but not
+ *                 `b`.
+ * @param a        The dividend.
+ * @param b        The divisor.
+ * @param n        The size of each integer in bytes, at least 1.
+ * @param s        Whether they are signed.
+ * @param scratch  `n` bytes of room for the quotient.
+ * @return         False, leaving `out` unspecified, if `b` is zero or the
+ *                 quotient overflows (MIN % -1). */
 static inline bool xtce_bn_checked_rem(uint8_t* out, const uint8_t* a,
                                        const uint8_t* b, size_t n, bool s,
                                        uint8_t* scratch) {
@@ -715,8 +928,19 @@ static inline bool xtce_bn_checked_rem(uint8_t* out, const uint8_t* a,
                !overflow;
 }
 
-/* bnum's overflowing_div and overflowing_rem: false (in *ok) if `b` is zero,
- * where bnum panics. */
+/** bnum's overflowing_div: divides one integer by another, rounding toward zero
+ * and wrapping on overflow (MIN / -1 is MIN).
+ *
+ * @param out      Where to put the quotient, `n` bytes; it may be `a`, but not
+ *                 `b`.
+ * @param a        The dividend.
+ * @param b        The divisor.
+ * @param n        The size of each integer in bytes, at least 1.
+ * @param s        Whether they are signed.
+ * @param scratch  `n` bytes of room for the remainder.
+ * @param ok       Set to false if `b` is zero, where bnum panics, leaving `out`
+ *                 unspecified; to true otherwise.
+ * @return         Whether the quotient overflowed. */
 static inline bool xtce_bn_overflowing_div(uint8_t* out, const uint8_t* a,
                                            const uint8_t* b, size_t n,
                                            bool s, uint8_t* scratch,
@@ -726,6 +950,19 @@ static inline bool xtce_bn_overflowing_div(uint8_t* out, const uint8_t* a,
         return overflow;
 }
 
+/** bnum's overflowing_rem: takes the remainder of dividing one integer by
+ * another, rounding toward zero (MIN % -1 is 0, and overflowed).
+ *
+ * @param out      Where to put the remainder, `n` bytes; it may be `a`, but not
+ *                 `b`.
+ * @param a        The dividend.
+ * @param b        The divisor.
+ * @param n        The size of each integer in bytes, at least 1.
+ * @param s        Whether they are signed.
+ * @param scratch  `n` bytes of room for the quotient.
+ * @param ok       Set to false if `b` is zero, where bnum panics, leaving `out`
+ *                 unspecified; to true otherwise.
+ * @return         Whether the quotient overflowed. */
 static inline bool xtce_bn_overflowing_rem(uint8_t* out, const uint8_t* a,
                                            const uint8_t* b, size_t n,
                                            bool s, uint8_t* scratch,
@@ -736,8 +973,18 @@ static inline bool xtce_bn_overflowing_rem(uint8_t* out, const uint8_t* a,
         return overflow;
 }
 
-/* Euclidean division: the remainder is never negative, and
- * a = b * q + r. */
+/** Divides one integer by another, Euclidean style: the remainder is never
+ * negative, and a = b * q + r.  Apart from `q` and `a`, none of the integers
+ * may be the same.
+ *
+ * @param q         Where to put the quotient, `n` bytes; it may be `a`.
+ * @param r         Where to put the remainder, `n` bytes.
+ * @param a         The dividend.
+ * @param b         The divisor.
+ * @param n         The size of each integer in bytes, at least 1.
+ * @param s         Whether they are signed.
+ * @param overflow  If not NULL, set to whether the quotient overflowed.
+ * @return          False, leaving `q` and `r` unspecified, if `b` is zero. */
 static inline bool xtce_bn_div_rem_euclid_(uint8_t* q, uint8_t* r,
                                            const uint8_t* a,
                                            const uint8_t* b, size_t n,
@@ -771,6 +1018,18 @@ static inline bool xtce_bn_div_rem_euclid_(uint8_t* q, uint8_t* r,
         return true;
 }
 
+/** Divides one integer by another, Euclidean style (see
+ * xtce_bn_div_rem_euclid_).
+ *
+ * @param out      Where to put the quotient, `n` bytes; it may be `a`, but not
+ *                 `b`.
+ * @param a        The dividend.
+ * @param b        The divisor.
+ * @param n        The size of each integer in bytes, at least 1.
+ * @param s        Whether they are signed.
+ * @param scratch  `n` bytes of room for the remainder.
+ * @return         False, leaving `out` unspecified, if `b` is zero or the
+ *                 quotient overflows (MIN / -1). */
 static inline bool xtce_bn_checked_div_euclid(uint8_t* out, const uint8_t* a,
                                               const uint8_t* b, size_t n,
                                               bool s, uint8_t* scratch) {
@@ -780,6 +1039,18 @@ static inline bool xtce_bn_checked_div_euclid(uint8_t* out, const uint8_t* a,
                !overflow;
 }
 
+/** Takes the Euclidean remainder, never negative, of dividing one integer by
+ * another (see xtce_bn_div_rem_euclid_).
+ *
+ * @param out      Where to put the remainder, `n` bytes; it may be `a`, but not
+ *                 `b`.
+ * @param a        The dividend.
+ * @param b        The divisor.
+ * @param n        The size of each integer in bytes, at least 1.
+ * @param s        Whether they are signed.
+ * @param scratch  `n` bytes of room for the quotient.
+ * @return         False, leaving `out` unspecified, if `b` is zero or the
+ *                 quotient overflows (MIN % -1). */
 static inline bool xtce_bn_checked_rem_euclid(uint8_t* out, const uint8_t* a,
                                               const uint8_t* b, size_t n,
                                               bool s, uint8_t* scratch) {
@@ -842,7 +1113,13 @@ static inline bool xtce_bn_checked_abs(uint8_t* out, const uint8_t* a,
         return !xtce_bn_overflowing_abs(out, a, n, s);
 }
 
-/* MAX, or MIN if the exact result is negative. */
+/** Sets an integer to the value an overflowing operation saturates to.
+ *
+ * @param out       Where to put it, `n` bytes.
+ * @param n         Its size in bytes, at least 1.
+ * @param s         Whether it is signed.
+ * @param negative  Whether the exact result is negative: MIN if so, else MAX.
+ */
 static inline void xtce_bn_saturate_(uint8_t* out, size_t n, bool s,
                                      bool negative) {
         if (negative)
@@ -867,7 +1144,13 @@ static inline void xtce_bn_saturating_sub(uint8_t* out, const uint8_t* a,
                 xtce_bn_saturate_(out, n, s, !s || an);
 }
 
-/* `out` must not be `a` or `b`. */
+/** Multiplies two integers, saturating at MIN or MAX on overflow.
+ *
+ * @param out  Where to put the product, `n` bytes; it must not be `a` or `b`.
+ * @param a    The first operand.
+ * @param b    The second operand.
+ * @param n    The size of each integer in bytes, at least 1.
+ * @param s    Whether they are signed. */
 static inline void xtce_bn_saturating_mul(uint8_t* out, const uint8_t* a,
                                           const uint8_t* b, size_t n,
                                           bool s) {
@@ -892,8 +1175,14 @@ static inline void xtce_bn_saturating_abs(uint8_t* out, const uint8_t* a,
 
 /* --- small operands ------------------------------------------------------ */
 
-/* out = a * m + add, for m and add below 2^24; the carry out.  As with the
- * other operations, `out` may be `a`. */
+/** Computes out = a * m + add, as unsigned.
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a`.
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param m    The multiplier, below 2^24.
+ * @param add  The addend, below 2^24.
+ * @return     The carry out: what is left above the `n` bytes. */
 static inline uint32_t xtce_bn_mul_small(uint8_t* out, const uint8_t* a,
                                          size_t n, uint32_t m, uint32_t add) {
         uint64_t c = add;
@@ -906,7 +1195,13 @@ static inline uint32_t xtce_bn_mul_small(uint8_t* out, const uint8_t* a,
         return (uint32_t)c;
 }
 
-/* out = a / d as unsigned, for d from 1 to 2^24; the remainder. */
+/** Computes out = a / d, as unsigned.
+ *
+ * @param out  Where to put the result, `n` bytes; it may be `a`.
+ * @param a    The integer, least significant byte first.
+ * @param n    Its size in bytes, at least 1.
+ * @param d    The divisor, from 1 to 2^24.
+ * @return     The remainder. */
 static inline uint32_t xtce_bn_div_small(uint8_t* out, const uint8_t* a,
                                          size_t n, uint32_t d) {
         uint64_t r = 0;
@@ -921,11 +1216,18 @@ static inline uint32_t xtce_bn_div_small(uint8_t* out, const uint8_t* a,
 
 /* --- text ---------------------------------------------------------------- */
 
-/* Writes `a` in `radix` (2 to 36), with lowercase digits after a '-' if
- * negative, as bnum's to_str_radix does, into `buf` of `cap` chars,
- * NUL-terminated.  Returns its length without the NUL; if that is `cap` or
- * more, `buf` was too small and holds only part of it.  `scratch` is `n`
- * bytes, and `a` is left alone. */
+/** Writes an integer in a radix, with lowercase digits after a '-' if negative,
+ * as bnum's to_str_radix does.
+ *
+ * @param a        The integer, least significant byte first.
+ * @param n        Its size in bytes, at least 1.
+ * @param s        Whether it is signed.
+ * @param radix    The radix, 2 to 36.
+ * @param scratch  `n` bytes of room to work in; `a` is left alone.
+ * @param buf      Where to write the text, NUL-terminated.
+ * @param cap      The size of `buf` in chars.
+ * @return         The text's length without the NUL; if that is `cap` or more,
+ *                 `buf` was too small and holds only part of it. */
 static inline size_t xtce_bn_to_str_radix(const uint8_t* a, size_t n, bool s,
                                           unsigned radix, uint8_t* scratch,
                                           char* buf, size_t cap) {
@@ -956,9 +1258,18 @@ static inline size_t xtce_bn_to_str_radix(const uint8_t* a, size_t n, bool s,
         return len;
 }
 
-/* Parses `len` chars at `str`: an optional '+' (or, if signed, '-'), then
- * digits in `radix` (2 to 36) of either case, as bnum's from_str_radix does.
- * Returns XTCE_BN_OK, or why it failed. */
+/** Parses an integer: an optional '+' (or, if signed, '-'), then digits in a
+ * radix of either case, as bnum's from_str_radix does.
+ *
+ * @param out    Where to put the integer, `n` bytes; unspecified on failure.
+ * @param n      The integer's size in bytes, at least 1.
+ * @param s      Whether it is signed.
+ * @param str    The text; it needn't be NUL-terminated.
+ * @param len    Its length in chars.
+ * @param radix  The radix, 2 to 36.
+ * @return       XTCE_BN_OK, or why it failed: XTCE_BN_EMPTY,
+ *               XTCE_BN_INVALID_DIGIT, XTCE_BN_POS_OVERFLOW or
+ *               XTCE_BN_NEG_OVERFLOW. */
 static inline int xtce_bn_from_str_radix(uint8_t* out, size_t n, bool s,
                                          const char* str, size_t len,
                                          unsigned radix) {
@@ -1002,12 +1313,12 @@ static inline bool xtce_bn_mag_bit_(const uint8_t* a, size_t n, bool neg,
         return k == low || !xtce_bn_bit(a, n, k);
 }
 
-/* `a` as a double, as bnum's `as` converts: to the nearest, ties to even,
- * and infinite past the largest double; a negative value is its magnitude's
- * negated.
+/** Converts an integer to a double, as bnum's `as` converts: to the nearest,
+ * ties to even, and infinite past the largest double; a negative value is its
+ * magnitude's negated.
  *
  * @param a  The integer, least significant byte first.
- * @param n  Its size in bytes.
+ * @param n  Its size in bytes, at least 1.
  * @param s  Whether it is signed.
  * @return   The double. */
 static inline double xtce_bn_to_f64(const uint8_t* a, size_t n, bool s) {
@@ -1044,9 +1355,13 @@ static inline double xtce_bn_to_f64(const uint8_t* a, size_t n, bool s) {
         return d;
 }
 
-/* The double `x` as an unsigned integer of `n` bytes, as bnum casts it:
- * toward zero, but [1/2, 1) other than 1/2 is 1; a negative value is 0, a
- * NaN 0 and anything too large MAX. */
+/** Converts a double to an unsigned integer, as bnum casts it: toward zero, but
+ * [1/2, 1) other than 1/2 is 1; a negative value is 0, a NaN 0 and anything too
+ * large MAX.
+ *
+ * @param out  Where to put the integer, `n` bytes.
+ * @param n    Its size in bytes, at least 1.
+ * @param x    The double. */
 static inline void xtce_bn_uint_from_f64_(uint8_t* out, size_t n, double x) {
         uint64_t bits, mant;
         int exp;
@@ -1085,9 +1400,13 @@ static inline void xtce_bn_uint_from_f64_(uint8_t* out, size_t n, double x) {
                 if ((mant >> i) & 1) xtce_bn_set_bit(out, n, exp + i, true);
 }
 
-/* The double `x` as an integer of `n` bytes, as bnum's `as` converts:
- * toward zero (see xtce_bn_uint_from_f64_), saturating at MIN and MAX, and
- * a NaN as 0. */
+/** Converts a double to an integer, as bnum's `as` converts: toward zero (see
+ * xtce_bn_uint_from_f64_), saturating at MIN and MAX, and a NaN as 0.
+ *
+ * @param out  Where to put the integer, `n` bytes.
+ * @param n    Its size in bytes, at least 1.
+ * @param s    Whether it is signed.
+ * @param x    The double. */
 static inline void xtce_bn_from_f64(uint8_t* out, size_t n, bool s,
                                     double x) {
         uint64_t bits;

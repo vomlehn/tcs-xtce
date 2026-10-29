@@ -51,7 +51,16 @@ def ms(s):
 
 
 def var_from(b):
-    """A LEB128 varint of one to five bytes, in milliseconds."""
+    """Decodes a LEB128 varint of one to five bytes, in milliseconds: the
+    demo's VarFrom transform.
+
+    Args:
+        b: The bytes the varint starts.
+
+    Returns:
+        How many bytes it takes and its value in seconds, or None if it
+        doesn't end within five bytes.
+    """
     v = 0
     for i, x in enumerate(b[:5]):
         v |= (x & 0x7F) << 7 * i
@@ -61,6 +70,15 @@ def var_from(b):
 
 
 def var_to(s):
+    """Encodes a time as a LEB128 varint of milliseconds: the demo's VarTo
+    transform.
+
+    Args:
+        s: The time in seconds.
+
+    Returns:
+        The varint, or None if the time isn't 0 to 2**32 - 1 milliseconds.
+    """
     v, out = ms(s), bytearray()
     if v is None:
         return None
@@ -81,7 +99,17 @@ demo.HOOKS.update(stuff=lambda b: bytes([len(b)]) + bytes(b) if len(b) < 256
 
 
 def header(rng, packet_type, apid):
-    """A primary header; packet_length() fills in its length."""
+    """A random primary header; packet_length() fills in its length.
+
+    Args:
+        rng:         The random number generator.
+        packet_type: 0 for telemetry, 1 for a command, which has a fixed
+                     version, secondary header flag and sequence flags.
+        apid:        The APID.
+
+    Returns:
+        The six header bytes, the packet length zero.
+    """
     seq = rng.randrange(1 << 14)
     word0 = (packet_type << 12) | (rng.randrange(2) << 11) | apid
     if packet_type:
@@ -101,7 +129,16 @@ def with_length(data: bytes, total: int) -> bytes:
 
 def decoded_size(kind, data: bytes) -> int:
     """The size at which the codec stops decoding ``data``: the shortest
-    packet that doesn't fail for being too short or too long."""
+    packet that doesn't fail for being too short or too long.
+
+    Args:
+        kind: The codec's packet kind, demo.CCSDSPacketKind or
+              demo.CCSDSCommandKind.
+        data: The packet, header first, and whatever follows it.
+
+    Returns:
+        The size in bytes, or ``len(data)`` if every size fails so.
+    """
     for total in range(7, len(data) + 1):
         try:
             kind.decode(with_length(data, total))
@@ -114,7 +151,16 @@ def decoded_size(kind, data: bytes) -> int:
 
 def packet_length(rng, kind, data: bytes) -> bytes:
     """``data`` with a packet length that ends where decoding stops, covers
-    all of it, or is wrong."""
+    all of it, or is wrong.
+
+    Args:
+        rng:  The random number generator.
+        kind: The codec's packet kind, as for decoded_size().
+        data: The packet, header first, and whatever follows it.
+
+    Returns:
+        ``data`` with the header's packet length replaced.
+    """
     r = rng.random()
     if r < 0.6:
         n = decoded_size(kind, data)
@@ -135,7 +181,15 @@ def bits(fields) -> bytes:
 
 
 def samples(rng, sec_hdr):
-    """A Samples body: counts and sizes mostly in range, contents random."""
+    """A Samples body: counts and sizes mostly in range, contents random.
+
+    Args:
+        rng:     The random number generator.
+        sec_hdr: Nonzero if the packet has a secondary header.
+
+    Returns:
+        The body's bytes.
+    """
     n = rng.choice([0, 1, 3, 6, rng.randrange(8)])
     f = [(8, n)] + [(16, rng.randrange(1 << 16)) for _ in range(min(n, 7))]
     if sec_hdr:
@@ -153,7 +207,15 @@ def samples(rng, sec_hdr):
 
 
 def targets(rng, sec_hdr):
-    """A Targets body: a target count mostly in range, random targets."""
+    """A Targets body: a target count mostly in range, random targets.
+
+    Args:
+        rng:     The random number generator.
+        sec_hdr: Nonzero if the packet has a secondary header.
+
+    Returns:
+        The body's bytes.
+    """
     n = rng.choice([0, 1, 3, rng.randrange(5)])
     f = [(16, rng.randrange(1 << 16)), (16, rng.randrange(1 << 16)), (8, n)]
     for _ in range(min(n, 4)):
@@ -169,7 +231,14 @@ def targets(rng, sec_hdr):
 
 
 def dump(rng) -> bytes:
-    """A Dump body: a calibrated record count mostly from 0 to 6."""
+    """A Dump body: a calibrated record count mostly from 0 to 6.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     raw = rng.choice([8, 9, 10, 12, 20, rng.randrange(256)])  # -4 + raw / 2
     n = max(round(-4 + raw / 2 + 1e-9), 0)
     body = bytes([rng.randrange(256), raw]) + rng.randbytes(min(n, 8))
@@ -183,7 +252,14 @@ def log(rng) -> bytes:
 
 
 def batches(rng) -> bytes:
-    """A Batches body: counts and sizes mostly in range, random values."""
+    """A Batches body: counts and sizes mostly in range, random values.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     n = rng.choice([0, 1, 3, 6, rng.randrange(8)])
     f = [(8, n)]
     for _ in range(min(n, 7)):
@@ -194,7 +270,14 @@ def batches(rng) -> bytes:
 
 
 def reply(rng) -> bytes:
-    """A Reply body: mostly valid answers, codes and notes."""
+    """A Reply body: mostly valid answers, codes and notes.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     answer = rng.choice([b"yes\0", b"yes\0", b"no\0\0", b"no\0z", b"yes!",
                          rng.randbytes(4)])
     code = rng.choice([b"ABC", b"ABC", b"\xc3\xa9a", b"a\xff\0",
@@ -208,7 +291,14 @@ def reply(rng) -> bytes:
 
 
 def frame(rng) -> bytes:
-    """A Frame body: a kind that picks the body size, and a gap."""
+    """A Frame body: a kind that picks the body size, and a gap.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     kind = rng.choice([0, 1, 2, rng.randrange(256)])
     gap = rng.randrange(16)
     body = {1: 2, 2: 4}.get(kind, 0)
@@ -226,7 +316,14 @@ def route(rng) -> bytes:
 
 def probe(rng) -> bytes:
     """A probe body: two probes, the first mostly with Id 1, and data
-    sized by the second probe's first gain."""
+    sized by the second probe's first gain.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     ident, size = (rng.choice([1, 1, rng.randrange(16)]),
                    rng.choice([0, 2, rng.randrange(16)]))
     head = bits([(4, ident), (8, rng.randrange(256)), (4, rng.randrange(16)),
@@ -235,9 +332,18 @@ def probe(rng) -> bytes:
 
 
 def tally(rng) -> bytes:
-    """A Tally body: a count mostly in range, then the tallies, data sized
-    by the first, an extra byte when the second is 7 and another when there
-    are three or more.  Short counts leave those elements missing."""
+    """A Tally body.
+
+    It is a count mostly in range, then the tallies, data sized by the
+    first, an extra byte when the second is 7 and another when there are
+    three or more.  Short counts leave those elements missing.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     n = rng.choice([0, 1, 2, 2, 3, 3, 4, rng.randrange(8)])
     tallies = [rng.choice([0, 1, 2, 7, rng.randrange(256)])
                for _ in range(min(n, 4))]
@@ -254,9 +360,17 @@ def tally(rng) -> bytes:
 
 
 def records(rng) -> bytes:
-    """A RecordList body: a count mostly in range, records of a length byte
-    and that many bytes, and a label after its length byte, now and then
-    too long."""
+    """A RecordList body.
+
+    It is a count mostly in range, records of a length byte and that many
+    bytes, and a label after its length byte, now and then too long.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     n = rng.choice([0, 1, 2, 3, 3, rng.randrange(6)])
     out = bytes([n])
     for _ in range(min(n, 4)):
@@ -267,9 +381,18 @@ def records(rng) -> bytes:
 
 
 def stuffed(rng) -> bytes:
-    """A StuffBlock body: a length byte and that many bytes, a byte, four
-    bytes of milliseconds, a varint of milliseconds and a byte; now and
-    then a length or varint that runs past the packet."""
+    """A StuffBlock body.
+
+    It is a length byte and that many bytes, a byte, four bytes of
+    milliseconds, a varint of milliseconds and a byte; now and then a
+    length or varint that runs past the packet.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     n = rng.randrange(6)
     out = bytes([n if rng.random() < 0.9 else rng.randrange(256)])
     out += rng.randbytes(n) + rng.randbytes(5)
@@ -286,7 +409,17 @@ def stuffed(rng) -> bytes:
 
 
 def bcd(rng, digits: int, packed: bool) -> bytes:
-    """BCD digits, now and then one above 9."""
+    """BCD digits, now and then one above 9.
+
+    Args:
+        rng:    The random number generator.
+        digits: How many digits; even when packed.
+        packed: Whether two digits share a byte; if not, each has a byte
+                whose high nibble is now and then 1.
+
+    Returns:
+        The digits' bytes, most significant first.
+    """
     out = []
     for _ in range(digits):
         d = rng.randrange(10) if rng.random() < 0.95 else rng.randrange(16)
@@ -301,9 +434,18 @@ def text(rng, chars: str, codec: str, n: int) -> bytes:
 
 
 def encodings(rng) -> bytes:
-    """An Encodings body: random integers and float bits (every float
-    format's special values among them), BCD digits mostly valid, and
-    strings in each character set, now and then invalid."""
+    """An Encodings body.
+
+    It holds random integers and float bits (every float format's special
+    values among them), BCD digits mostly valid, and strings in each
+    character set, now and then invalid.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     body = rng.randbytes(8) + bcd(rng, 4, True) + bcd(rng, 2, False)
     body += rng.randbytes(2 + 10 + 16 + 4 + 6 + 4 + 8 + 4 + 8 + 16 + 2 + 4 + 5)
     n = rng.choice([0, 3, 5, 8])
@@ -329,9 +471,21 @@ def configure(rng) -> bytes:
 
 
 def checked(rng, header: bytes):
-    """A Checked packet: half the time with every checksum right (encoded
-    by the codec, header and all; the result is then the whole packet, and
-    True), otherwise a random body, which they mostly reject (and False)."""
+    """A Checked packet or body.
+
+    Half the time it is a whole packet encoded by the codec, header and
+    all, with every checksum right, but now and then with a bit wrong;
+    otherwise it is a random body, which the checksums mostly reject.
+
+    Args:
+        rng:    The random number generator.
+        header: The primary header, whose secondary header flag the
+                encoded packet copies.
+
+    Returns:
+        The bytes, and True if they are the whole packet or False if they
+        are a body to follow the header.
+    """
     if rng.random() < 0.5:
         return rng.randbytes(11), False
     p = demo.Checked(
@@ -347,7 +501,16 @@ def checked(rng, header: bytes):
 
 def guarded(rng, header: bytes) -> bytes:
     """A whole Guarded packet, encoded by the codec, sometimes with a bit
-    wrong."""
+    wrong.
+
+    Args:
+        rng:    The random number generator.
+        header: The primary header, whose secondary header flag the packet
+                copies.
+
+    Returns:
+        The packet's bytes.
+    """
     on = rng.random() < 0.7
     p = demo.Guarded(sec_hdr_flag=bool(header[0] & 0x08),
                      seq_flags=demo.SeqFlagsType.UNSEGMENTED,
@@ -363,7 +526,14 @@ def guarded(rng, header: bytes) -> bytes:
 
 def nested(rng) -> bytes:
     """A Nested body: rows, a row count and gap, extra rows, and words of a
-    size mostly in range."""
+    size mostly in range.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     count, gap = rng.choice([0, 1, 2, 3, rng.randrange(16)]), rng.randrange(16)
     size = rng.choice([0, 1, 2, 4, rng.randrange(8)])
     f = [(4, rng.randrange(16)) for _ in range(6)] + [(4, count), (4, gap)]
@@ -378,7 +548,14 @@ def nested(rng) -> bytes:
 
 def framed(rng) -> bytes:
     """A Framed body: a section mostly of kind 2, a note, a bag of a size
-    mostly at least its item's, and a tray."""
+    mostly at least its item's, and a tray.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     note = bytes(rng.choice(b"hi") for _ in range(rng.randrange(6)))
     carton = (note + b"\0" + bytes(6))[:6]
     bag = rng.choice([8, 16, 40, rng.randrange(64)])
@@ -389,7 +566,14 @@ def framed(rng) -> bytes:
 
 
 def upload(rng) -> bytes:
-    """An Upload body: word count and tag size mostly in range."""
+    """An Upload body: word count and tag size mostly in range.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     n = rng.choice([1, 2, 4, rng.randrange(6)])
     f = [(8, n)] + [(16, rng.randrange(1 << 16)) for _ in range(min(n, 5))]
     f += [(16, rng.randrange(1 << 16)) for _ in range(2)]
@@ -409,7 +593,16 @@ def wide_value(rng, n: int) -> int:
 
 
 def bcd_digits(rng, digits: int, width: int) -> int:
-    """BCD digits in ``width`` bits each; now and then one isn't."""
+    """BCD digits in ``width`` bits each; now and then one isn't.
+
+    Args:
+        rng:    The random number generator.
+        digits: How many digits.
+        width:  Each digit's size in bits.
+
+    Returns:
+        The digits as one integer, the first most significant.
+    """
     bad = rng.randrange(digits) if rng.random() < 0.1 else -1
     v = 0
     for i in range(digits):
@@ -419,7 +612,14 @@ def bcd_digits(rng, digits: int, width: int) -> int:
 
 
 def wide(rng) -> bytes:
-    """A Wide body: integers of 65 to 200 bits."""
+    """A Wide body: integers of 65 to 200 bits, and some narrower.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     f = [(16, rng.randrange(1 << 16))]
     f += [(72, rng.choice([wide_value(rng, 72), 10**21, 10**21 + 1]))]
     f += [(n, wide_value(rng, n)) for n in (80, 65, 7, 100)]
@@ -434,7 +634,14 @@ def wide(rng) -> bytes:
 
 def repeated(rng) -> bytes:
     """A Repeated body: a count mostly in range, RepWord now and then the
-    value that brings RepAfter."""
+    value that brings RepAfter.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     n = rng.choice([0, 1, 3, 5, rng.randrange(8)])
     word = rng.choice([0x12345678, rng.getrandbits(32)])
     f = [(8, n), (32, word)] + [(4, rng.randrange(16)) for _ in range(n)]
@@ -445,7 +652,14 @@ def repeated(rng) -> bytes:
 
 def tail(rng) -> bytes:
     """A Tail body: a count mostly in range, TailFlag 4 bits before the
-    data, then often some bytes before TailSum and the last byte."""
+    data, then often some bytes before TailSum and the last byte.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     n = rng.choice([0, 1, 3, 5, rng.randrange(8)])
     f = [(8, n), (8, rng.randrange(256)), (4, rng.randrange(16))]
     f += [(16, rng.randrange(1 << 16)) for _ in range(min(n, 5))]
@@ -454,7 +668,14 @@ def tail(rng) -> bytes:
 
 
 def set_limits(rng) -> bytes:
-    """A SetLimits body: Both mostly 0 or 1, LimitKind mostly 7."""
+    """A SetLimits body: Both mostly 0 or 1, LimitKind mostly 7.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body's bytes.
+    """
     both = rng.choice([0, 1, 1, rng.randrange(256)])
     out = bytes([both])
     for _ in range(2 if both == 1 else 1):
@@ -464,6 +685,15 @@ def set_limits(rng) -> bytes:
 
 
 def main() -> None:
+    """Prints COUNT random packets, seeded with SEED, each as a line of
+    ``tm`` or ``tc`` and its bytes in hex.
+
+    Most are telemetry, of a random demo APID (or an unknown one), and the
+    rest commands of a random opcode; most carry a body made for their
+    type, and all have random bytes after.  Their packet length is then
+    set by packet_length() unless it is already right, and now and then
+    the packet is cut short.
+    """
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         keep = False  # whether the packet length is right as it is

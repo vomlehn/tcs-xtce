@@ -79,6 +79,22 @@ counting a tab as 8 columns, and names each line that is too wide.
   columns (`generator/xtcegen/wrap.py`), so generated code needs no
   formatting.
 
+**Every function has a header.** Each function, hand-written or
+generated, whose body is more than three lines starts with a comment that
+says what it does, lists its parameters with what each means, and says
+what it returns (no return section for a function that returns nothing).
+The parameters' descriptions, continuation lines included, start in one
+column. Each follows its language's conventions: Rust's rustdoc as RFC
+1574 and the standard library write it (`# Arguments` with
+`` * `name` - Meaning ``, `# Returns`, and `# Errors`, `# Panics` and
+`# Safety` where they apply), Doxygen `/** ... */` comments with `@param`
+and `@return` in C and C++, and PEP 257 docstrings in Google's style
+(`Args:`, `Returns:`, `Raises:`) in Python.
+`tests/doc_headers.py` (part of `make test`, or `make doc-headers` alone)
+gives the exact formats and the exemptions, such as tests and trait
+implementations, and names each function whose header is missing or
+wrong. The generators write such a header for every function they emit.
+
 **The digest is the same in every runtime.** `python/xtce/digest.py`,
 `rust/src/digest.rs` and `cpp/include/xtce/digest.h` compute the same XTCE
 digest, and `tests/digest_check.sh` (part of `make test`) checks that they

@@ -21,6 +21,15 @@ pub struct Error {
 }
 
 impl Error {
+    /// Makes an error not tied to a position in the input.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - What is wrong.
+    ///
+    /// # Returns
+    ///
+    /// The error, with line and column 0.
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -47,8 +56,32 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// A type that maps to an XML element.
 pub trait XmlElement: Sized {
     /// Writes `self` as an element named `tag`.
+    ///
+    /// # Arguments
+    ///
+    /// * `w`   - The writer the element goes to.
+    /// * `tag` - The element's name.
+    ///
+    /// # Errors
+    ///
+    /// Fails if `self` breaks a constraint of the schema, such as the
+    /// number of times an element may occur.
     fn write_xml(&self, w: &mut Writer<'_>, tag: &str) -> Result<()>;
     /// Reads the element whose start tag `tag` has just been consumed.
+    ///
+    /// # Arguments
+    ///
+    /// * `r`   - The reader, positioned just after the start tag; the
+    ///           element's end tag is consumed too.
+    /// * `tag` - The element's start tag.
+    ///
+    /// # Returns
+    ///
+    /// The value the element holds.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the XML is malformed or the element is not a valid `Self`.
     fn read_xml<'a>(r: &mut Reader<'a>, tag: &Tag<'a>) -> Result<Self>;
 }
 
@@ -63,6 +96,17 @@ impl<T: XmlElement> XmlElement for Box<T> {
 }
 
 /// Checks the number of occurrences of a repeated element before writing.
+///
+/// # Arguments
+///
+/// * `len`  - The number of occurrences.
+/// * `min`  - The fewest allowed.
+/// * `max`  - The most allowed, or `None` if unbounded.
+/// * `what` - The element's name, for the error message.
+///
+/// # Errors
+///
+/// Fails if `len` is below `min` or above `max`.
 pub fn check_count(
     len: usize,
     min: usize,
@@ -103,6 +147,15 @@ pub struct Writer<'b> {
 
 impl<'b> Writer<'b> {
     /// Creates a writer that appends to `buf` (which is not cleared).
+    ///
+    /// # Arguments
+    ///
+    /// * `buf`    - The buffer the XML is appended to.
+    /// * `indent` - Whether to pretty-print, two spaces per level.
+    ///
+    /// # Returns
+    ///
+    /// The writer.
     pub fn new(buf: &'b mut Buffer, indent: bool) -> Self {
         Self {
             buf,
@@ -127,6 +180,8 @@ impl<'b> Writer<'b> {
         self.root_ns = Some(ns);
     }
 
+    /// Starts a new line indented to the current depth, when indenting
+    /// and something has already been written.
     fn newline(&mut self) {
         if self.indent && self.last != Last::Nothing {
             self.buf.push(b'\n');
@@ -136,6 +191,7 @@ impl<'b> Writer<'b> {
         }
     }
 
+    /// Ends the open start tag with `>`, if one is open.
     fn close_start(&mut self) {
         if self.open {
             self.buf.push(b'>');
@@ -143,6 +199,14 @@ impl<'b> Writer<'b> {
         }
     }
 
+    /// Writes the start of an element's start tag, which stays open for
+    /// attributes until content or the end is written.  The first element
+    /// written declares the namespace given to
+    /// [`Writer::set_root_namespace`].
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The element's name.
     pub fn start(&mut self, name: &str) {
         self.close_start();
         self.newline();
@@ -156,6 +220,16 @@ impl<'b> Writer<'b> {
         }
     }
 
+    /// Writes an attribute into the open start tag, escaping its value.
+    ///
+    /// # Arguments
+    ///
+    /// * `name`  - The attribute's name.
+    /// * `value` - Its value, unescaped.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, if no start tag is open.
     pub fn attr_str(&mut self, name: &str, value: &str) {
         debug_assert!(self.open, "attribute written outside a start tag");
         self.buf.push(b' ');
@@ -165,6 +239,17 @@ impl<'b> Writer<'b> {
         self.buf.push(b'"');
     }
 
+    /// Writes an attribute into the open start tag, its value in XML
+    /// lexical form.
+    ///
+    /// # Arguments
+    ///
+    /// * `name`  - The attribute's name.
+    /// * `value` - Its value.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, if no start tag is open.
     pub fn attr<V: Value>(&mut self, name: &str, value: &V) {
         let mut s = std::mem::take(&mut self.scratch);
         s.clear();
@@ -179,6 +264,11 @@ impl<'b> Writer<'b> {
         self.last = Last::Text;
     }
 
+    /// Writes a value, in XML lexical form, as text content.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The value.
     pub fn text<V: Value>(&mut self, value: &V) {
         let mut s = std::mem::take(&mut self.scratch);
         s.clear();
@@ -187,6 +277,16 @@ impl<'b> Writer<'b> {
         self.scratch = s;
     }
 
+    /// Ends the current element: closes an empty one with `/>`, otherwise
+    /// writes its end tag.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The element's name, as given to [`Writer::start`].
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, if no element is open.
     pub fn end(&mut self, name: &str) {
         self.depth -= 1;
         if self.open {
@@ -218,6 +318,15 @@ impl<'b> Writer<'b> {
     }
 }
 
+/// Appends `s` to `buf`, replacing `&`, `<`, `>` and carriage returns
+/// with references and, in an attribute value, `"`, line feeds and tabs
+/// too.
+///
+/// # Arguments
+///
+/// * `buf`  - The buffer appended to.
+/// * `s`    - The text, unescaped.
+/// * `attr` - Whether `s` is an attribute value.
 fn escape_into(buf: &mut Buffer, s: &str, attr: bool) {
     let bytes = s.as_bytes();
     let mut start = 0;
@@ -328,6 +437,19 @@ pub struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
+    /// Makes a reader over a whole document, skipping a byte order mark.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - The document's bytes.
+    ///
+    /// # Returns
+    ///
+    /// The reader, at the start of the document.
+    ///
+    /// # Errors
+    ///
+    /// Fails if `src` is not UTF-8.
     pub fn new(src: &'a [u8]) -> Result<Self> {
         let src = std::str::from_utf8(src)
             .map_err(|e| Error::new(format!("input is not UTF-8: {e}")))?;
@@ -343,6 +465,15 @@ impl<'a> Reader<'a> {
     }
 
     /// Builds an error annotated with the line and column of `offset`.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset`  - The byte offset in the input the error is at.
+    /// * `message` - What is wrong.
+    ///
+    /// # Returns
+    ///
+    /// The error, with the 1-based line and column of `offset`.
     pub fn error_at(&self, offset: usize, message: impl Into<String>) -> Error {
         let before = &self.src[..offset.min(self.src.len())];
         let line = before.bytes().filter(|&b| b == b'\n').count() + 1;
@@ -359,6 +490,20 @@ impl<'a> Reader<'a> {
         self.error_at(at, message)
     }
 
+    /// Finds the end of a construct.
+    ///
+    /// # Arguments
+    ///
+    /// * `from` - The byte offset to search from.
+    /// * `pat`  - The text that ends the construct.
+    ///
+    /// # Returns
+    ///
+    /// The offset just past the first `pat` at or after `from`.
+    ///
+    /// # Errors
+    ///
+    /// Fails if `pat` doesn't appear.
     fn skip_past(&mut self, from: usize, pat: &str) -> Result<usize> {
         match self.src[from..].find(pat) {
             Some(i) => Ok(from + i + pat.len()),
@@ -369,6 +514,17 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Reads the next token, skipping processing instructions, comments
+    /// and DOCTYPE declarations.
+    ///
+    /// # Returns
+    ///
+    /// The token's byte offset and the token: a start tag, an end tag,
+    /// raw text, a CDATA section, or `Eof` at the end of the input.
+    ///
+    /// # Errors
+    ///
+    /// Fails if a construct is unterminated or a start tag has no name.
     fn lex(&mut self) -> Result<(usize, Token<'a>)> {
         loop {
             let start = self.pos;
@@ -461,6 +617,15 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Looks at the next token without consuming it.
+    ///
+    /// # Returns
+    ///
+    /// The token, kept for the next read.
+    ///
+    /// # Errors
+    ///
+    /// Fails as [`Reader::lex`] does.
     fn peek_token(&mut self) -> Result<&Token<'a>> {
         if self.peeked.is_none() {
             let t = self.lex()?;
@@ -475,6 +640,15 @@ impl<'a> Reader<'a> {
     }
 
     /// Reads up to and including the root start tag.
+    ///
+    /// # Returns
+    ///
+    /// The root's start tag.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the input is malformed or anything but whitespace,
+    /// comments, processing instructions and a DOCTYPE comes first.
     pub fn root(&mut self) -> Result<Tag<'a>> {
         loop {
             match self.take_token()? {
@@ -489,6 +663,10 @@ impl<'a> Reader<'a> {
     }
 
     /// Verifies that only whitespace and comments follow the root element.
+    ///
+    /// # Errors
+    ///
+    /// Fails if anything else follows the root element.
     pub fn finish(&mut self) -> Result<()> {
         loop {
             match self.take_token()? {
@@ -499,6 +677,12 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Records that a start tag was consumed: an empty element's end is
+    /// pending, any other element is pushed on the stack of open ones.
+    ///
+    /// # Arguments
+    ///
+    /// * `tag` - The start tag.
     fn opened(&mut self, tag: &Tag<'a>) {
         if tag.empty {
             self.pending_end = true;
@@ -507,7 +691,17 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// Local name of the next child element, or `None` at the parent's end.
+    /// Finds the local name of the next child element, skipping
+    /// whitespace.
+    ///
+    /// # Returns
+    ///
+    /// The name, or `None` at the parent's end.
+    ///
+    /// # Errors
+    ///
+    /// Fails on malformed input, the end of the input, or text that isn't
+    /// whitespace.
     pub fn peek_child(&mut self) -> Result<Option<&'a str>> {
         if self.pending_end {
             return Ok(None);
@@ -528,6 +722,14 @@ impl<'a> Reader<'a> {
     }
 
     /// Consumes the next child start tag (after [`Reader::peek_child`]).
+    ///
+    /// # Returns
+    ///
+    /// The start tag.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the next token is not a start tag.
     pub fn open(&mut self) -> Result<Tag<'a>> {
         match self.take_token()? {
             Token::Start(tag) => {
@@ -539,6 +741,11 @@ impl<'a> Reader<'a> {
     }
 
     /// Consumes the end tag of the current element.
+    ///
+    /// # Errors
+    ///
+    /// Fails if a child element or text comes first, or the end tag
+    /// doesn't match the element.
     pub fn close(&mut self) -> Result<()> {
         if self.pending_end {
             self.pending_end = false;
@@ -552,6 +759,12 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Consumes an end tag and pops the element it closes.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the next token is not an end tag or doesn't match the
+    /// innermost open element.
     fn consume_end(&mut self) -> Result<()> {
         let at = self.peeked.as_ref().map_or(self.pos, |(o, _)| *o);
         match self.take_token()? {
@@ -568,6 +781,16 @@ impl<'a> Reader<'a> {
     }
 
     /// Reads the text content of the current element and its end tag.
+    ///
+    /// # Returns
+    ///
+    /// The text, references replaced and CDATA sections included;
+    /// borrowed from the input when it is one piece needing no changes.
+    ///
+    /// # Errors
+    ///
+    /// Fails on a child element, a bad reference, the end of the input or
+    /// a mismatched end tag.
     pub fn read_text(&mut self) -> Result<Cow<'a, str>> {
         if self.pending_end {
             self.pending_end = false;
@@ -625,6 +848,16 @@ impl<'a> Reader<'a> {
     }
 
     /// Reads a child element holding a scalar value.
+    ///
+    /// # Returns
+    ///
+    /// The value.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the next token is not a start tag, the element has an
+    /// attribute other than a namespace declaration or a prefixed one,
+    /// or its content is not a valid `V`.
     pub fn read_leaf<V: Value>(&mut self) -> Result<V> {
         let tag = self.open()?;
         if !tag.raw_attrs.trim().is_empty() {
@@ -655,6 +888,15 @@ impl<'a> Reader<'a> {
 
     /// Handles an attribute the schema does not declare.  Namespace
     /// declarations and `xsi:`/`xml:` attributes are accepted and ignored.
+    ///
+    /// # Arguments
+    ///
+    /// * `tag`  - The start tag the attribute is on.
+    /// * `name` - The attribute's name.
+    ///
+    /// # Errors
+    ///
+    /// Fails for any attribute without a prefix other than `xmlns`.
     pub fn unknown_attr(&self, tag: &Tag<'a>, name: &str) -> Result<()> {
         if name == "xmlns" || name.contains(':') {
             return Ok(());
@@ -665,6 +907,16 @@ impl<'a> Reader<'a> {
         ))
     }
 
+    /// Builds the error for a required attribute that is missing.
+    ///
+    /// # Arguments
+    ///
+    /// * `tag`  - The start tag that lacks it.
+    /// * `name` - The attribute's name.
+    ///
+    /// # Returns
+    ///
+    /// The error, at the start tag's position.
     pub fn missing_attr(&self, tag: &Tag<'a>, name: &str) -> Error {
         self.error_at(
             tag.offset,
@@ -672,7 +924,16 @@ impl<'a> Reader<'a> {
         )
     }
 
-    /// Error for a missing or unexpected child element.
+    /// Builds the error for a missing or unexpected child element.
+    ///
+    /// # Arguments
+    ///
+    /// * `what` - The name of the element that was expected.
+    ///
+    /// # Returns
+    ///
+    /// The error, naming the element found instead, if any, or the error
+    /// from reading the next token.
     pub fn expected(&mut self, what: &str) -> Error {
         match self.peek_child() {
             Ok(Some(found)) => {
@@ -693,6 +954,19 @@ impl<'a> Reader<'a> {
 
 /// Replaces entity and character references and normalizes line endings.
 /// In attribute values, literal whitespace characters become spaces.
+///
+/// # Arguments
+///
+/// * `raw`  - The text as written.
+/// * `attr` - Whether it is an attribute value.
+///
+/// # Returns
+///
+/// The text; borrowed from `raw` when nothing needs replacing.
+///
+/// # Errors
+///
+/// A message if a reference is unterminated or unknown.
 pub fn unescape(
     raw: &str,
     attr: bool,

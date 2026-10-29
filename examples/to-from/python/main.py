@@ -112,6 +112,11 @@ def read() -> None:
 
 
 def main() -> None:
+    """Runs the reader or the writer, as the command line says.
+
+    Exits with status 2 for a bad command line, and with an error if the
+    program fails.
+    """
     if sys.argv[1:] == ["read"]:
         action = read
     elif sys.argv[1:] == ["write"]:

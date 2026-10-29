@@ -56,7 +56,14 @@ def fail(msg: str) -> None:
 
 
 def try_encode(codec: Codec, status: Status) -> None:
-    """Encode a Status that must fail, and print why it did."""
+    """Encodes a Status that must fail, and prints why it did.
+
+    Exits with an error if it encodes.
+
+    Args:
+        codec:  The codec to encode with.
+        status: The invalid Status.
+    """
     try:
         with codec.encode(status) as view:
             fail(f"encoding {status.describe()} gave {bytes(view).hex()}")
@@ -65,7 +72,15 @@ def try_encode(codec: Codec, status: Status) -> None:
 
 
 def try_decode(codec: Codec, data: bytes, why: str) -> None:
-    """Decode bytes that must fail, and print why they did."""
+    """Decodes bytes that must fail, and prints why they did.
+
+    Exits with an error if they decode.
+
+    Args:
+        codec: The codec to decode with.
+        data:  The invalid packet.
+        why:   What is wrong with it, for the output.
+    """
     codec.load(data)
     try:
         status = codec.decode(Status)
@@ -75,6 +90,10 @@ def try_decode(codec: Codec, data: bytes, why: str) -> None:
 
 
 def main() -> None:
+    """Writes the stream, reads it back, and shows what the code rejects.
+
+    Exits with an error if any result isn't what it must be.
+    """
     # The codec owns an input and an output buffer, both preallocated to
     # Status.MAX_BYTES (7) and reused for every packet.
     codec = Codec.for_packet(Status)

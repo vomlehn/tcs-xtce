@@ -14,6 +14,11 @@
 
 static int failures = 0;
 
+/** Records a check, printing it to standard error if it failed.
+ *
+ * @param ok    Whether the check passed.
+ * @param what  The checked expression's text.
+ * @param line  The line of this file the check is on. */
 static void check(bool ok, const char* what, int line) {
         if (!ok) {
                 fprintf(stderr, "packet_test.c:%d: check failed: %s\n", line,
@@ -48,6 +53,9 @@ static void set_str(char* data, size_t* n, const char* s, size_t sn) {
 #define SET_STR(field, s) \
         set_str((field).data, &(field).len, (s), sizeof(s) - 1)
 
+/** Makes the Housekeeping packet the tests encode.
+ *
+ * @return  The packet, with every field set to a known value. */
 static demo_Housekeeping housekeeping(void) {
         demo_Housekeeping hk;
         demo_Housekeeping_init(&hk);
@@ -67,6 +75,11 @@ static demo_Housekeeping housekeeping(void) {
         return hk;
 }
 
+/** Compares two Event packets by their descriptions.
+ *
+ * @param a  One packet.
+ * @param b  The other.
+ * @return   Whether their descriptions are the same. */
 static bool same_event(const demo_Event* a, const demo_Event* b) {
         char ta[512], tb[512];
         demo_Event_describe(a, ta, sizeof ta);
@@ -74,6 +87,9 @@ static bool same_event(const demo_Event* a, const demo_Event* b) {
         return strcmp(ta, tb) == 0;
 }
 
+/** Runs the tests.
+ *
+ * @return  EXIT_SUCCESS if every check passes, else EXIT_FAILURE. */
 int main(void) {
         demo_Housekeeping hk, hk2;
         demo_ScienceHousekeeping sci;

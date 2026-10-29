@@ -63,8 +63,18 @@ class IntBandTests(unittest.TestCase):
 
 
 def alarm_mission(alarm: str, entries: str = "A") -> str:
-    """Telemetry with a U8 parameter A whose type has ``alarm`` (the
-    elements after the encoding), U8 B, and a packet of ``entries``."""
+    """Builds telemetry for alarm tests.
+
+    Telemetry with a U8 parameter A whose type has ``alarm``, U8 B, and a
+    packet P of ``entries``.
+
+    Args:
+        alarm:   The XML that follows the encoding in A's type: its alarms.
+        entries: The names of the parameters in P, separated by spaces.
+
+    Returns:
+        The XTCE document.
+    """
     refs = "".join(f'<ParameterRefEntry parameterRef="{e}"/>'
                    for e in entries.split())
     return mission(tm=f"""

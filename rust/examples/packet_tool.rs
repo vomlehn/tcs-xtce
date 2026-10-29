@@ -21,6 +21,17 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+/// Describes a packet's alarms, and the monitor's levels if they differ.
+///
+/// # Arguments
+///
+/// * `a` - The packet's alarms.
+/// * `m` - The levels the alarm monitor gives for the same packet.
+///
+/// # Returns
+///
+/// ` | alarms: ...`, then ` | monitor: ...` when `m` differs from `a`, or
+/// nothing when the packet has no alarms.
 fn alarm_text<const N: usize>(a: &Alarms<N>, m: &Alarms<N>) -> String {
     let mut s = String::new();
     if !a.as_slice().is_empty() {
@@ -32,6 +43,15 @@ fn alarm_text<const N: usize>(a: &Alarms<N>, m: &Alarms<N>) -> String {
     s
 }
 
+/// Describes the outputs of the MathAlgorithms a packet triggers.
+///
+/// # Arguments
+///
+/// * `o` - The algorithms' outputs.
+///
+/// # Returns
+///
+/// ` | derived: ...`, or nothing when there are no outputs.
 fn derived_text<const N: usize>(o: &Outputs<N>) -> String {
     if o.as_slice().is_empty() {
         String::new()
@@ -40,6 +60,16 @@ fn derived_text<const N: usize>(o: &Outputs<N>) -> String {
     }
 }
 
+/// Decodes a packet, encodes it again and describes both.
+///
+/// # Arguments
+///
+/// * `data`   - The packet's bytes.
+/// * `alarms` - Describes the decoded packet's alarms and derived values.
+///
+/// # Returns
+///
+/// The line the tool prints for the vector.
 fn run<P: Packet + Display>(
     data: &[u8],
     alarms: impl FnOnce(&P) -> String,
@@ -206,6 +236,11 @@ fn set_hooks() {
         .ok();
 }
 
+/// Prints the line for each vector in the file on the command line.
+///
+/// # Panics
+///
+/// Without a vectors file, or if it can't be read or holds bad hex.
 fn main() {
     set_hooks();
     let path = std::env::args().nth(1).expect("usage: packet_tool VECTORS");

@@ -65,6 +65,11 @@ typedef struct xtce_pk_error {
         const char* detail;
 } xtce_pk_error;
 
+/** Names an error code as every runtime names it.
+ *
+ * @param code  An XTCE_PK_* error code.
+ * @return      The kind's name, such as "Truncated", a string constant;
+ *              "Unknown" if `code` is not an error code. */
 static inline const char* xtce_pk_error_kind(int code) {
         static const char* const kinds[] = {
                 "Ok",          "Truncated",     "BadPosition",   "NoMatch",
@@ -75,7 +80,13 @@ static inline const char* xtce_pk_error_kind(int code) {
         return code >= 0 && code <= XTCE_PK_NO_SPACE ? kinds[code] : "Unknown";
 }
 
-/* Writes the error message into `buf` like snprintf and returns its length. */
+/** Writes an error's message into a buffer, as snprintf does.
+ *
+ * @param e    The error to describe.
+ * @param buf  Where to write the message, NUL-terminated.
+ * @param cap  The size of `buf` in bytes.
+ * @return     The message's length, as snprintf returns it: more than
+ *             `cap` - 1 if it was cut short. */
 static inline int xtce_pk_error_message(const xtce_pk_error* e, char* buf,
                                         size_t cap) {
         const char* f = e->field ? e->field : "";
@@ -147,6 +158,13 @@ static inline int xtce_pk_error_message(const xtce_pk_error* e, char* buf,
         return snprintf(buf, cap, "unknown error %d", e->code);
 }
 
+/** Records an error and returns its code, for `return xtce_pk_fail(...)`.
+ *
+ * @param e       The error to fill in, or NULL to record nothing.
+ * @param code    The XTCE_PK_* error code.
+ * @param field   The field or container involved, a string constant.
+ * @param detail  The criterion of a Mismatch, a string constant, or NULL.
+ * @return        `code`. */
 static inline int xtce_pk_fail(xtce_pk_error* e, int code, const char* field,
                                const char* detail) {
         if (e) {
@@ -178,6 +196,15 @@ static inline uint64_t xtce_pk_mask(unsigned bits) {
         return bits >= 64 ? ~(uint64_t)0 : ((uint64_t)1 << bits) - 1;
 }
 
+/** Finds the bit position `offset` bits from `base`.
+ *
+ * @param base    The bit position the offset is from.
+ * @param offset  The offset in bits, which may be negative.
+ * @param f       The field placed there, for the error.
+ * @param err     The error to fill in, or NULL.
+ * @param out     Filled in with the position on success.
+ * @return        0, or XTCE_PK_BAD_POSITION if the position is before the
+ *                start of the packet. */
 static inline int xtce_pk_position(size_t base, int64_t offset, const char* f,
                                    xtce_pk_error* err, size_t* out) {
         int64_t p = (int64_t)base + offset;
@@ -186,6 +213,11 @@ static inline int xtce_pk_position(size_t base, int64_t offset, const char* f,
         return 0;
 }
 
+/** Reverses the order of the bytes of a field.
+ *
+ * @param v     The field's value, in its low `bits` bits.
+ * @param bits  The field's size in bits, a multiple of 8 up to 64.
+ * @return      `v` with its low `bits` / 8 bytes in reverse order. */
 static inline uint64_t xtce_pk_swap_bytes(uint64_t v, unsigned bits) {
         uint64_t out = 0;
         unsigned i;
@@ -209,6 +241,12 @@ typedef struct xtce_pk_reader {
         bool lsb;
 } xtce_pk_reader;
 
+/** Makes a reader of a packet, positioned at its first bit.
+ *
+ * @param data  The packet's bytes, which must outlive the reader.
+ * @param len   The packet's length in bytes.
+ * @param err   Where the reader records errors, or NULL.
+ * @return      The reader. */
 static inline xtce_pk_reader xtce_pk_reader_init(const uint8_t* data,
                                                  size_t len,
                                                  xtce_pk_error* err) {
@@ -240,9 +278,15 @@ static inline int xtce_pk_read_skip(xtce_pk_reader* r, int64_t offset,
         return xtce_pk_read_seek(r, r->pos, offset, f);
 }
 
-/* As xtce_pk_read_seek, but fails with BAD_POSITION before the current
+/** As xtce_pk_read_seek, but fails with BAD_POSITION before the current
  * position: an entry located from the end of a container whose size
- * another value gives, which must not overlap the entries before it. */
+ * another value gives, which must not overlap the entries before it.
+ *
+ * @param r       The reader.
+ * @param start   The bit position the offset is from.
+ * @param offset  The offset in bits, which may be negative.
+ * @param f       The entry being located, for the error.
+ * @return        0, or XTCE_PK_BAD_POSITION. */
 static inline int xtce_pk_read_seek_ahead(xtce_pk_reader* r, size_t start,
                                           int64_t offset, const char* f) {
         size_t p;
@@ -254,8 +298,14 @@ static inline int xtce_pk_read_seek_ahead(xtce_pk_reader* r, size_t start,
         return 0;
 }
 
-/* Moves to `back` bits before the end of the packet, which must not be
- * before the current position. */
+/** Moves to `back` bits before the end of the packet, which must not be
+ * before the current position.
+ *
+ * @param r     The reader.
+ * @param back  How many bits before the end of the packet to move to.
+ * @param f     The entry being located, for the error.
+ * @return      0, or XTCE_PK_BAD_POSITION if that is before the start of
+ *              the packet or the current position. */
 static inline int xtce_pk_read_seek_end(xtce_pk_reader* r, size_t back,
                                         const char* f) {
         size_t bits = r->len * 8;
@@ -273,7 +323,13 @@ static inline int xtce_pk_read_need(const xtce_pk_reader* r, size_t bits,
         return 0;
 }
 
-/* Reads an unsigned big-endian field of `bits` (1 to 64) bits. */
+/** Reads an unsigned big-endian field at the current position.
+ *
+ * @param r     The reader.
+ * @param bits  The field's size in bits, 1 to 64.
+ * @param f     The field, for the error.
+ * @param out   Filled in with the field's value.
+ * @return      0, or XTCE_PK_TRUNCATED if the packet ends first. */
 static inline int xtce_pk_read_bits(xtce_pk_reader* r, unsigned bits,
                                     const char* f, uint64_t* out) {
         uint64_t v = 0;
@@ -307,7 +363,13 @@ static inline int xtce_pk_read_uint(xtce_pk_reader* r, unsigned bits, bool le,
  * order list gives it. */
 enum { XTCE_PK_BIG = 0, XTCE_PK_LITTLE, XTCE_PK_LIST };
 
-/* ORs v << shift into the 128-bit value (*hi, *lo). */
+/** ORs `v` << `shift` into a 128-bit value; bits shifted past bit 127 are
+ * lost.
+ *
+ * @param hi     The value's high 64 bits, updated.
+ * @param lo     The value's low 64 bits, updated.
+ * @param v      The bits to OR in.
+ * @param shift  How far to shift them left; 128 or more ORs nothing. */
 static inline void xtce_pk_or128(uint64_t* hi, uint64_t* lo, uint64_t v,
                                  unsigned shift) {
         if (shift >= 128) return;
@@ -319,7 +381,12 @@ static inline void xtce_pk_or128(uint64_t* hi, uint64_t* lo, uint64_t v,
         }
 }
 
-/* The 128-bit value (hi, lo) shifted right by `shift`, low 64 bits. */
+/** Shifts a 128-bit value right.
+ *
+ * @param hi     The value's high 64 bits.
+ * @param lo     The value's low 64 bits.
+ * @param shift  How far to shift it right, in bits.
+ * @return       The low 64 bits of the shifted value. */
 static inline uint64_t xtce_pk_shr128(uint64_t hi, uint64_t lo,
                                       unsigned shift) {
         if (shift >= 128) return 0;
@@ -328,13 +395,25 @@ static inline uint64_t xtce_pk_shr128(uint64_t hi, uint64_t lo,
         return (lo >> shift) | (hi << (64 - shift));
 }
 
-/* Reads an unsigned field of `bits` (1 to 128) bits in any bit and byte order
- * into (*hi, *lo).  The field's bits are taken in groups of 8 (the last may
- * be shorter).  Within a group, `lsb` false numbers the bits of each byte
- * from the most significant (the usual order), and the group's first bit is
- * its most significant; `lsb` true numbers them from the least significant,
- * and the group's first bit is its least significant.  `order` combines the
- * groups; for XTCE_PK_LIST, `list` gives each byte's significance. */
+/** Reads an unsigned field of up to 128 bits in any bit and byte order.
+ *
+ * The field's bits are taken in groups of 8 (the last may be shorter).
+ * Within a group, `lsb` false numbers the bits of each byte from the most
+ * significant (the usual order), and the group's first bit is its most
+ * significant; `lsb` true numbers them from the least significant, and the
+ * group's first bit is its least significant.  `order` combines the groups.
+ *
+ * @param r      The reader.
+ * @param bits   The field's size in bits, 1 to 128.
+ * @param lsb    Whether bits are numbered from each byte's least
+ *               significant.
+ * @param order  XTCE_PK_BIG, XTCE_PK_LITTLE or XTCE_PK_LIST.
+ * @param list   For XTCE_PK_LIST, each group's significance in bytes, the
+ *               first group's first; otherwise unused and may be NULL.
+ * @param f      The field, for the error.
+ * @param hi     Filled in with the value's high 64 bits.
+ * @param lo     Filled in with the value's low 64 bits.
+ * @return       0, or XTCE_PK_TRUNCATED if the packet ends first. */
 static inline int xtce_pk_read_ordered(xtce_pk_reader* r, unsigned bits,
                                        bool lsb, int order,
                                        const uint8_t* list, const char* f,
@@ -393,7 +472,12 @@ static inline size_t xtce_pk_read_packet_end(const xtce_pk_reader* r) {
         return (r->end + 7) / 8 * 8;
 }
 
-/* Skips `bits` bits of padding, which must be in the packet. */
+/** Skips padding, which must be in the packet.
+ *
+ * @param r     The reader.
+ * @param bits  How many bits of padding to skip.
+ * @param f     The padding's entry, for the error.
+ * @return      0, or XTCE_PK_TRUNCATED if the packet ends first. */
 static inline int xtce_pk_read_pad(xtce_pk_reader* r, size_t bits,
                                    const char* f) {
         XTCE_PK_TRY(xtce_pk_read_need(r, bits, f));
@@ -402,9 +486,6 @@ static inline int xtce_pk_read_pad(xtce_pk_reader* r, size_t bits,
         return 0;
 }
 
-/* Ends the packet where the packet length field `f`, whose value `v` was
- * just read, says: `v - adjust` bytes after the field.  Fails with
- * XTCE_PK_TRUNCATED if the data is shorter. */
 /* A FromBinaryTransformAlgorithm that makes bytes: puts what it makes of
  * the first of the `n` bytes at `in` into the `cap` bytes at `out`, sets
  * *consumed to how many it took, and returns how many bytes it made (more
@@ -431,9 +512,18 @@ typedef bool (*xtce_pk_time_from_fn)(const uint8_t* in, size_t n,
 typedef size_t (*xtce_pk_time_to_fn)(double s, uint8_t* out, size_t cap);
 #define XTCE_PK_NO_TRANSFORM ((size_t)-1)
 
-/* The next `raw` whole bytes (the rest of the packet unless `has_raw`),
- * which must start on a byte boundary, into *out and *n without reading
- * them. */
+/** Finds the next `raw` whole bytes (the rest of the packet unless
+ * `has_raw`), which must start on a byte boundary, without reading them.
+ *
+ * @param r        The reader.
+ * @param has_raw  Whether `raw` gives the number of bytes.
+ * @param raw      The number of bytes when `has_raw`; otherwise unused.
+ * @param f        The field, for the error.
+ * @param out      Filled in with where the bytes start in the packet.
+ * @param n        Filled in with how many bytes there are.
+ * @return         0, XTCE_PK_BAD_POSITION if the position is not on a byte
+ *                 boundary, or XTCE_PK_TRUNCATED if the packet is shorter
+ *                 than `raw` bytes. */
 static inline int xtce_pk_read_offer(const xtce_pk_reader* r, bool has_raw,
                                      size_t raw, const char* f,
                                      const uint8_t** out, size_t* n) {
@@ -448,9 +538,17 @@ static inline int xtce_pk_read_offer(const xtce_pk_reader* r, bool has_raw,
         return 0;
 }
 
-/* Moves past the `k` bytes a transform took of the `n` that
- * xtce_pk_read_offer gave, which must be all `raw` of them when
- * `has_raw`. */
+/** Moves past the bytes a transform took of those xtce_pk_read_offer gave.
+ *
+ * @param r        The reader.
+ * @param k        How many bytes the transform took.
+ * @param n        How many bytes xtce_pk_read_offer gave.
+ * @param has_raw  Whether the field's size is given, in which case the
+ *                 transform must take all `raw` bytes.
+ * @param raw      The field's size in bytes when `has_raw`.
+ * @param f        The field, for the error.
+ * @return         0, or XTCE_PK_BAD_SIZE if `k` is more than `n` or, when
+ *                 `has_raw`, isn't `raw`. */
 static inline int xtce_pk_read_took(xtce_pk_reader* r, size_t k, size_t n,
                                     bool has_raw, size_t raw, const char* f) {
         if (k > n || (has_raw && k != raw))
@@ -460,10 +558,24 @@ static inline int xtce_pk_read_took(xtce_pk_reader* r, size_t k, size_t n,
         return 0;
 }
 
-/* Reads data that the transform `fn` decodes: offers it the next `raw`
- * bytes (the rest of the packet unless `has_raw`) and moves past those it
- * says it takes, which must be all `raw` of them.  The bytes it makes go
- * into the `cap` bytes at `out`, and how many into *len. */
+/** Reads data that a transform decodes: offers it the next `raw` bytes
+ * (the rest of the packet unless `has_raw`) and moves past those it says
+ * it takes, which must be all `raw` of them when `has_raw`.
+ *
+ * @param r        The reader.
+ * @param fn       The transform, or NULL when the document gives only the
+ *                 other direction.
+ * @param has_raw  Whether `raw` gives the encoded size.
+ * @param raw      The encoded size in bytes when `has_raw`.
+ * @param out      Where the transform puts the bytes it makes.
+ * @param cap      The size of `out` in bytes.
+ * @param f        The field, for the error.
+ * @param len      Filled in with how many bytes the transform made.
+ * @return         0; XTCE_PK_NOT_INVERTIBLE if `fn` is NULL;
+ *                 XTCE_PK_INVALID_VALUE if the transform can't decode the
+ *                 data; XTCE_PK_TOO_LONG if what it makes doesn't fit in
+ *                 `cap` bytes; or an error from xtce_pk_read_offer or
+ *                 xtce_pk_read_took. */
 static inline int xtce_pk_read_binary_from(xtce_pk_reader* r,
                                            xtce_pk_binary_from_fn fn,
                                            bool has_raw, size_t raw,
@@ -483,8 +595,20 @@ static inline int xtce_pk_read_binary_from(xtce_pk_reader* r,
         return 0;
 }
 
-/* Reads a time that the transform `fn` decodes, in seconds, into *s, as
- * xtce_pk_read_binary_from reads bytes. */
+/** Reads a time that a transform decodes, as xtce_pk_read_binary_from
+ * reads bytes.
+ *
+ * @param r        The reader.
+ * @param fn       The transform, or NULL when the document gives only the
+ *                 other direction.
+ * @param has_raw  Whether `raw` gives the encoded size.
+ * @param raw      The encoded size in bytes when `has_raw`.
+ * @param f        The field, for the error.
+ * @param s        Filled in with the time, in seconds.
+ * @return         0; XTCE_PK_NOT_INVERTIBLE if `fn` is NULL;
+ *                 XTCE_PK_INVALID_VALUE if the transform can't decode the
+ *                 data; or an error from xtce_pk_read_offer or
+ *                 xtce_pk_read_took. */
 static inline int xtce_pk_read_time_from(xtce_pk_reader* r,
                                          xtce_pk_time_from_fn fn,
                                          bool has_raw, size_t raw,
@@ -498,9 +622,17 @@ static inline int xtce_pk_read_time_from(xtce_pk_reader* r,
         return xtce_pk_read_took(r, k, n, has_raw, raw, f);
 }
 
-/* Where the container that the length field `f`, whose value `v` was just
- * read, measures ends: `v - adjust` bytes after the field, in bytes from
- * the packet's start, into *end. */
+/** Finds where the container that a length field measures ends:
+ * `v` - `adjust` bytes after the field, which was just read.
+ *
+ * @param r       The reader, just past the length field.
+ * @param v       The length field's value.
+ * @param adjust  What to subtract from `v` to get the bytes after the
+ *                field.
+ * @param f       The length field, for the error.
+ * @param end     Filled in with the end, in bytes from the packet's start.
+ * @return        0, or XTCE_PK_BAD_LENGTH if `v` is too large or
+ *                `v` - `adjust` is negative. */
 static inline int xtce_pk_read_span_end(const xtce_pk_reader* r, uint64_t v,
                                         int64_t adjust, const char* f,
                                         int64_t* end) {
@@ -520,6 +652,17 @@ static inline int xtce_pk_read_check_span(const xtce_pk_reader* r,
         return 0;
 }
 
+/** Ends the packet where the packet length field `f`, whose value `v` was
+ * just read, says: `v` - `adjust` bytes after the field.
+ *
+ * @param r       The reader, just past the length field; its length is
+ *                set to the packet's end.
+ * @param v       The length field's value.
+ * @param adjust  What to subtract from `v` to get the bytes after the
+ *                field; may be negative.
+ * @param f       The length field, for the error.
+ * @return        0; XTCE_PK_BAD_LENGTH if `v` is less than `adjust`; or
+ *                XTCE_PK_TRUNCATED if the data is shorter. */
 static inline int xtce_pk_read_limit(xtce_pk_reader* r, uint64_t v,
                                      int64_t adjust, const char* f) {
         size_t start = (r->pos + 7) / 8;
@@ -554,10 +697,17 @@ static inline int xtce_pk_read_finish(const xtce_pk_reader* r, const char* f) {
         return 0;
 }
 
-/* The bytes from the current position to `tail` bits before the end of the
- * packet, for a field that takes the rest of it but the `tail` bits of the
- * entries after it.  Fails with XTCE_PK_BAD_SIZE unless they are whole
- * bytes, at most `max` of them. */
+/** Finds the bytes from the current position to `tail` bits before the
+ * end of the packet, for a field that takes the rest of it but the `tail`
+ * bits of the entries after it.
+ *
+ * @param r     The reader.
+ * @param max   The most bytes the field may have.
+ * @param tail  The size in bits of the entries after the field.
+ * @param f     The field, for the error.
+ * @param out   Filled in with the field's size in bytes.
+ * @return      0, or XTCE_PK_BAD_SIZE unless the bits are whole bytes, at
+ *              most `max` of them. */
 static inline int xtce_pk_read_rest(const xtce_pk_reader* r, size_t max,
                                     size_t tail, const char* f, size_t* out) {
         size_t bits = r->len * 8 > r->pos + tail ? r->len * 8 - r->pos - tail
@@ -568,9 +718,17 @@ static inline int xtce_pk_read_rest(const xtce_pk_reader* r, size_t max,
         return 0;
 }
 
-/* The size of the CCSDS packet that starts here, from its packet length
- * field, into *out, for an embedded packet (Yamcs:EmbeddedTc); fails with
- * XTCE_PK_TOO_LONG if it is more than `max` bytes. */
+/** Finds the size of the CCSDS packet that starts here, from its packet
+ * length field, for an embedded packet (Yamcs:EmbeddedTc).  The reader
+ * does not move.
+ *
+ * @param r     The reader, at the embedded packet's first bit.
+ * @param max   The most bytes the embedded packet may have.
+ * @param f     The field holding the packet, for the error.
+ * @param out   Filled in with the embedded packet's size in bytes.
+ * @return      0; XTCE_PK_TRUNCATED if the packet ends before the length
+ *              field does; or XTCE_PK_TOO_LONG if the embedded packet is
+ *              more than `max` bytes. */
 static inline int xtce_pk_read_embedded(const xtce_pk_reader* r, size_t max,
                                         const char* f, size_t* out) {
         xtce_pk_reader p = *r;
@@ -591,7 +749,14 @@ static inline void xtce_pk_read_set_lsb(xtce_pk_reader* r, bool lsb) {
         r->lsb = lsb;
 }
 
-/* A string's size tag of `bits` bits, in its bit order. */
+/** Reads a string's size tag in the reader's bit order (see
+ * xtce_pk_read_set_lsb).
+ *
+ * @param r     The reader.
+ * @param bits  The tag's size in bits, 1 to 64.
+ * @param f     The string, for the error.
+ * @param out   Filled in with the tag's value.
+ * @return      0, or XTCE_PK_TRUNCATED if the packet ends first. */
 static inline int xtce_pk_read_tag(xtce_pk_reader* r, unsigned bits,
                                    const char* f, uint64_t* out) {
         if (r->lsb)
@@ -600,6 +765,14 @@ static inline int xtce_pk_read_tag(xtce_pk_reader* r, unsigned bits,
         return xtce_pk_read_bits(r, bits, f, out);
 }
 
+/** Reads bytes of a string or binary data in the reader's bit order (see
+ * xtce_pk_read_set_lsb).
+ *
+ * @param r     The reader.
+ * @param n     How many bytes to read.
+ * @param f     The field, for the error.
+ * @param out   Filled in with the `n` bytes.
+ * @return      0, or XTCE_PK_TRUNCATED if the packet ends first. */
 static inline int xtce_pk_read_bytes(xtce_pk_reader* r, size_t n, const char* f,
                                      uint8_t* out) {
         size_t i;
@@ -618,8 +791,13 @@ static inline int xtce_pk_read_bytes(xtce_pk_reader* r, size_t n, const char* f,
         return 0;
 }
 
-/* Puts a value's `total`-bit encoding, which its segments gathered into
- * `raw` (the encoding's last bit least significant), at the start of `b`. */
+/** Puts a value's encoding, which its segments gathered into one integer,
+ * at the start of a buffer, first bit first.
+ *
+ * @param b      Filled in with 8 bytes, the encoding's first bit the first
+ *               byte's most significant.
+ * @param raw    The encoding, its last bit least significant.
+ * @param total  The encoding's size in bits, 1 to 64. */
 static inline void xtce_pk_segment_bytes(uint8_t* b, uint64_t raw,
                                          unsigned total) {
         uint64_t v = raw << (64 - total);
@@ -628,8 +806,12 @@ static inline void xtce_pk_segment_bytes(uint8_t* b, uint64_t raw,
                 b[i] = (uint8_t)(v >> (56 - 8 * i));
 }
 
-/* The `total`-bit encoding at the start of `b`, as xtce_pk_segment_bytes
- * takes it. */
+/** Gets the encoding at the start of a buffer, as xtce_pk_segment_bytes
+ * puts it there.
+ *
+ * @param b      The 8 bytes holding the encoding.
+ * @param total  The encoding's size in bits, 1 to 64.
+ * @return       The encoding, its last bit least significant. */
 static inline uint64_t xtce_pk_segment_bits(const uint8_t* b, unsigned total) {
         uint64_t v = 0;
         unsigned i;
@@ -653,6 +835,13 @@ typedef struct xtce_pk_writer {
         bool lsb;
 } xtce_pk_writer;
 
+/** Makes a writer into a buffer the caller owns, positioned at its first
+ * bit, with nothing written.
+ *
+ * @param buf  The buffer, which must outlive the writer.
+ * @param cap  The size of `buf` in bytes.
+ * @param err  Where the writer records errors, or NULL.
+ * @return     The writer. */
 static inline xtce_pk_writer xtce_pk_writer_init(uint8_t* buf, size_t cap,
                                                  xtce_pk_error* err) {
         xtce_pk_writer w;
@@ -675,8 +864,14 @@ static inline int xtce_pk_write_skip(xtce_pk_writer* w, int64_t offset,
         return xtce_pk_position(w->pos, offset, f, w->err, &w->pos);
 }
 
-/* As xtce_pk_write_seek, but fails with BAD_POSITION before the current
- * position, as xtce_pk_read_seek_ahead does. */
+/** As xtce_pk_write_seek, but fails with BAD_POSITION before the current
+ * position, as xtce_pk_read_seek_ahead does.
+ *
+ * @param w       The writer.
+ * @param start   The bit position the offset is from.
+ * @param offset  The offset in bits, which may be negative.
+ * @param f       The entry being located, for the error.
+ * @return        0, or XTCE_PK_BAD_POSITION. */
 static inline int xtce_pk_write_seek_ahead(xtce_pk_writer* w, size_t start,
                                            int64_t offset, const char* f) {
         size_t p;
@@ -695,6 +890,13 @@ static inline int xtce_pk_write_seek_tail(xtce_pk_writer* w, size_t back) {
         return 0;
 }
 
+/** Writes an unsigned big-endian field at the current position, extending
+ * the packet (zero filled) to cover it.
+ *
+ * @param w     The writer.
+ * @param bits  The field's size in bits, 1 to 64.
+ * @param v     The value, in its low `bits` bits; higher bits are ignored.
+ * @return      0, or XTCE_PK_NO_SPACE when the buffer can't hold it. */
 static inline int xtce_pk_write_bits(xtce_pk_writer* w, unsigned bits,
                                      uint64_t v) {
         size_t end = (w->pos + bits + 7) / 8;
@@ -720,7 +922,7 @@ static inline int xtce_pk_write_bits(xtce_pk_writer* w, unsigned bits,
         return 0;
 }
 
-/* Writes the low `bits` bits of `v`, big endian, or little endian (whole
+/** Writes the low `bits` bits of `v`, big endian, or little endian (whole
  * bytes only) when `le`.
  *
  * @param w     The writer.
@@ -746,8 +948,19 @@ static inline int xtce_pk_write_uint(xtce_pk_writer* w, unsigned bits, bool le,
         return 0;
 }
 
-/* Writes the low `bits` bits of (hi, lo) in the bit and byte order that
- * xtce_pk_read_ordered reads. */
+/** Writes the low `bits` bits of a 128-bit value in the bit and byte order
+ * that xtce_pk_read_ordered reads.
+ *
+ * @param w      The writer.
+ * @param bits   The field's size in bits, 1 to 128.
+ * @param lsb    Whether bits are numbered from each byte's least
+ *               significant.
+ * @param order  XTCE_PK_BIG, XTCE_PK_LITTLE or XTCE_PK_LIST.
+ * @param list   For XTCE_PK_LIST, each group's significance in bytes, the
+ *               first group's first; otherwise unused and may be NULL.
+ * @param hi     The value's high 64 bits.
+ * @param lo     The value's low 64 bits.
+ * @return       0, or XTCE_PK_NO_SPACE when the buffer can't hold it. */
 static inline int xtce_pk_write_ordered(xtce_pk_writer* w, unsigned bits,
                                         bool lsb, int order,
                                         const uint8_t* list, uint64_t hi,
@@ -786,8 +999,14 @@ static inline int xtce_pk_write_ordered(xtce_pk_writer* w, unsigned bits,
         return 0;
 }
 
-/* Bytes start..start + n of the buffer, extending its length (zero filled)
- * to cover them; NULL, after failing with NO_SPACE, if they don't fit. */
+/** Gets bytes of the buffer to fill in directly, extending the packet's
+ * length (zero filled) to cover them.
+ *
+ * @param w      The writer.
+ * @param start  The first byte's offset in the buffer.
+ * @param n      How many bytes.
+ * @return       The bytes, or NULL, after failing with XTCE_PK_NO_SPACE,
+ *               if they don't fit. */
 static inline uint8_t* xtce_pk_write_span(xtce_pk_writer* w, size_t start,
                                           size_t n) {
         if (n > w->cap || start > w->cap - n) {
@@ -807,7 +1026,13 @@ static inline void xtce_pk_write_set_lsb(xtce_pk_writer* w, bool lsb) {
         w->lsb = lsb;
 }
 
-/* A string's size tag of `bits` bits, in its bit order. */
+/** Writes a string's size tag in the writer's bit order (see
+ * xtce_pk_write_set_lsb).
+ *
+ * @param w     The writer.
+ * @param bits  The tag's size in bits, 1 to 64.
+ * @param v     The tag's value.
+ * @return      0, or XTCE_PK_NO_SPACE when the buffer can't hold it. */
 static inline int xtce_pk_write_tag(xtce_pk_writer* w, unsigned bits,
                                     uint64_t v) {
         if (w->lsb)
@@ -816,7 +1041,13 @@ static inline int xtce_pk_write_tag(xtce_pk_writer* w, unsigned bits,
         return xtce_pk_write_bits(w, bits, v);
 }
 
-/* Writes whole bytes (which need not be byte aligned). */
+/** Writes whole bytes, which need not be byte aligned, in the writer's bit
+ * order (see xtce_pk_write_set_lsb).
+ *
+ * @param w     The writer.
+ * @param data  The bytes.
+ * @param n     How many bytes.
+ * @return      0, or XTCE_PK_NO_SPACE when the buffer can't hold them. */
 static inline int xtce_pk_write_bytes(xtce_pk_writer* w, const uint8_t* data,
                                       size_t n) {
         size_t i;
@@ -834,14 +1065,24 @@ static inline int xtce_pk_write_bytes(xtce_pk_writer* w, const uint8_t* data,
         return 0;
 }
 
-/* Writes `bits` zero bits, overwriting whatever a seek left there. */
-/* Fills in the packet length field `f` of `bits` bits at bit `at`, once the
- * whole packet is written: the number of bytes after the field plus
- * `adjust`. */
-/* Replaces the bytes written from bit `start`, on a byte boundary, with
- * what the transform `fn` makes of them: exactly `raw` bytes when
- * `has_raw`, and at most `cap`.  It works in the buffer, past what is
- * written, so the buffer needs `cap` bytes more. */
+/** Replaces the bytes written from bit `start`, on a byte boundary, with
+ * what a transform makes of them.  It works in the buffer, past what is
+ * written, so the buffer needs `cap` bytes more.
+ *
+ * @param w        The writer.
+ * @param start    The bit the bytes to transform start at.
+ * @param fn       The transform, or NULL when the document gives only the
+ *                 other direction.
+ * @param has_raw  Whether `raw` gives the encoded size.
+ * @param raw      How many bytes the transform must make when `has_raw`.
+ * @param cap      The most bytes the transform may make.
+ * @param f        The field, for the error.
+ * @return         0; XTCE_PK_NOT_INVERTIBLE if `fn` is NULL;
+ *                 XTCE_PK_NO_SPACE if the buffer lacks `cap` bytes more;
+ *                 XTCE_PK_INVALID_VALUE if the transform can't encode the
+ *                 bytes; XTCE_PK_TOO_LONG if it makes more than `cap`; or
+ *                 XTCE_PK_BAD_SIZE if it makes other than `raw` bytes when
+ *                 `has_raw`. */
 static inline int xtce_pk_write_transform(xtce_pk_writer* w, size_t start,
                                           xtce_pk_binary_to_fn fn,
                                           bool has_raw, size_t raw,
@@ -866,9 +1107,18 @@ static inline int xtce_pk_write_transform(xtce_pk_writer* w, size_t start,
         return 0;
 }
 
-/* Writes an embedded CCSDS packet (Yamcs:EmbeddedTc): the `n` bytes at
- * `data`, at least 7 and at most `max`, with its packet length field set to
- * its size. */
+/** Writes an embedded CCSDS packet (Yamcs:EmbeddedTc), with its packet
+ * length field set to its size.
+ *
+ * @param w     The writer.
+ * @param data  The embedded packet's bytes; its length field is ignored.
+ * @param n     How many bytes there are, at least 7.
+ * @param max   The most bytes the embedded packet may have.
+ * @param f     The field holding the packet, for the error.
+ * @return      0; XTCE_PK_TOO_LONG if `n` is more than `max`;
+ *              XTCE_PK_BAD_SIZE if `n` is less than 7 or too large for
+ *              the length field; or XTCE_PK_NO_SPACE when the buffer can't
+ *              hold it. */
 static inline int xtce_pk_write_embedded(xtce_pk_writer* w,
                                          const uint8_t* data, size_t n,
                                          size_t max, const char* f) {
@@ -883,8 +1133,21 @@ static inline int xtce_pk_write_embedded(xtce_pk_writer* w,
         return xtce_pk_write_bytes(w, data + 6, n - 6);
 }
 
-/* Writes what the transform `fn` makes of the `n` bytes at `data`, as
- * xtce_pk_write_transform does, on a byte boundary. */
+/** Writes what a transform makes of some bytes, as xtce_pk_write_transform
+ * does, on a byte boundary.
+ *
+ * @param w        The writer.
+ * @param fn       The transform, or NULL when the document gives only the
+ *                 other direction.
+ * @param data     The bytes to transform.
+ * @param n        How many bytes.
+ * @param has_raw  Whether `raw` gives the encoded size.
+ * @param raw      How many bytes the transform must make when `has_raw`.
+ * @param cap      The most bytes the transform may make.
+ * @param f        The field, for the error.
+ * @return         0, XTCE_PK_BAD_POSITION if the position is not on a byte
+ *                 boundary, or an error from xtce_pk_write_bytes or
+ *                 xtce_pk_write_transform. */
 static inline int xtce_pk_write_binary_to(xtce_pk_writer* w,
                                           xtce_pk_binary_to_fn fn,
                                           const uint8_t* data, size_t n,
@@ -897,8 +1160,23 @@ static inline int xtce_pk_write_binary_to(xtce_pk_writer* w,
         return xtce_pk_write_transform(w, start, fn, has_raw, raw, cap, f);
 }
 
-/* Writes what the transform `fn` makes of the time `s`, in seconds, on a
- * byte boundary: exactly `raw` bytes when `has_raw`, and at most `cap`. */
+/** Writes what a transform makes of a time, on a byte boundary.
+ *
+ * @param w        The writer.
+ * @param fn       The transform, or NULL when the document gives only the
+ *                 other direction.
+ * @param s        The time, in seconds.
+ * @param has_raw  Whether `raw` gives the encoded size.
+ * @param raw      How many bytes the transform must make when `has_raw`.
+ * @param cap      The most bytes the transform may make.
+ * @param f        The field, for the error.
+ * @return         0; XTCE_PK_NOT_INVERTIBLE if `fn` is NULL;
+ *                 XTCE_PK_BAD_POSITION if the position is not on a byte
+ *                 boundary; XTCE_PK_NO_SPACE if the buffer lacks `cap`
+ *                 bytes there; XTCE_PK_INVALID_VALUE if the transform
+ *                 can't encode the time; XTCE_PK_TOO_LONG if it makes more
+ *                 than `cap` bytes; or XTCE_PK_BAD_SIZE if it makes other
+ *                 than `raw` when `has_raw`. */
 static inline int xtce_pk_write_time_to(xtce_pk_writer* w,
                                         xtce_pk_time_to_fn fn, double s,
                                         bool has_raw, size_t raw, size_t cap,
@@ -924,9 +1202,17 @@ static inline int xtce_pk_write_time_to(xtce_pk_writer* w,
         return 0;
 }
 
-/* Fills in the length field `f` of `bits` bits at bit `at`, which measures
- * an included container that ends here: the bytes after the field plus
- * `adjust`. */
+/** Fills in a length field that measures an included container that ends
+ * here: the bytes after the field plus `adjust`.  The position is kept.
+ *
+ * @param w       The writer, at the end of the container.
+ * @param at      The bit the length field starts at.
+ * @param bits    The length field's size in bits.
+ * @param le      Whether the length field is little endian.
+ * @param adjust  What to add to the bytes after the field.
+ * @param f       The length field, for the error.
+ * @return        0, or XTCE_PK_OUT_OF_RANGE if the value is negative or
+ *                doesn't fit in `bits` bits. */
 static inline int xtce_pk_patch_span(xtce_pk_writer* w, size_t at,
                                      unsigned bits, bool le, int64_t adjust,
                                      const char* f) {
@@ -941,6 +1227,18 @@ static inline int xtce_pk_patch_span(xtce_pk_writer* w, size_t at,
         return 0;
 }
 
+/** Fills in a packet length field once the whole packet is written: the
+ * number of bytes after the field plus `adjust`.  The position is kept.
+ *
+ * @param w       The writer, the whole packet written.
+ * @param at      The bit the length field starts at.
+ * @param bits    The length field's size in bits.
+ * @param le      Whether the length field is little endian.
+ * @param adjust  What to add to the bytes after the field; may be
+ *                negative.
+ * @param f       The length field, for the error.
+ * @return        0, or XTCE_PK_OUT_OF_RANGE if the value is negative or
+ *                doesn't fit in `bits` bits. */
 static inline int xtce_pk_patch_length(xtce_pk_writer* w, size_t at,
                                        unsigned bits, bool le, int64_t adjust,
                                        const char* f) {
@@ -966,6 +1264,11 @@ static inline int xtce_pk_patch_length(xtce_pk_writer* w, size_t at,
         return 0;
 }
 
+/** Writes zero bits, overwriting whatever a seek left there.
+ *
+ * @param w     The writer.
+ * @param bits  How many zero bits to write.
+ * @return      0, or XTCE_PK_NO_SPACE when the buffer can't hold them. */
 static inline int xtce_pk_write_zeros(xtce_pk_writer* w, size_t bits) {
         size_t lead = (8 - w->pos % 8) % 8, whole;
         uint8_t* out;
@@ -1035,8 +1338,15 @@ static const uint8_t xtce_pk_damm[10][10] = {
         {5, 8, 6, 9, 7, 2, 0, 1, 3, 4}, {8, 9, 4, 5, 3, 6, 2, 0, 1, 7},
         {9, 4, 3, 8, 6, 1, 7, 2, 0, 5}, {2, 5, 8, 1, 4, 3, 6, 7, 9, 0}};
 
-/* The `width`-bit word at bit q of data, stopping at bit `end` and padding
- * with zero bits; *n gets the number of data bits in it. */
+/** Gets a word of data for a checksum, stopping at bit `end` and padding
+ * with zero bits.
+ *
+ * @param data   The packet.
+ * @param q      The bit the word starts at.
+ * @param end    The bit past the last the checksum covers.
+ * @param width  The word's size in bits, 1 to 64.
+ * @param n      Filled in with the number of data bits in the word.
+ * @return       The word, its first bit most significant. */
 static inline uint64_t xtce_pk_word_at(const uint8_t* data, size_t q,
                                        size_t end, unsigned width,
                                        unsigned* n) {
@@ -1048,6 +1358,12 @@ static inline uint64_t xtce_pk_word_at(const uint8_t* data, size_t q,
         return w << (width - *n);
 }
 
+/** Reverses the order of the low bits of a value, as reflected CRCs need.
+ *
+ * @param v     The value.
+ * @param bits  How many of its low bits to reverse, up to 64.
+ * @return      Those bits in reverse order; higher bits of `v` are
+ *              dropped. */
 static inline uint64_t xtce_pk_reflect(uint64_t v, unsigned bits) {
         uint64_t r = 0;
         unsigned i;
@@ -1055,8 +1371,18 @@ static inline uint64_t xtce_pk_reflect(uint64_t v, unsigned bits) {
         return r;
 }
 
-/* An XTCE ErrorDetectCorrect algorithm over the bits from start to end of
- * data, into *out. */
+/** Computes an XTCE ErrorDetectCorrect algorithm over bits of a packet.
+ *
+ * @param s      The algorithm and its parameters.
+ * @param data   The packet.
+ * @param start  The first bit the checksum covers.
+ * @param end    The bit past the last it covers; before `start`, none.
+ * @param f      The checksum field, for the error.
+ * @param err    The error to fill in, or NULL.
+ * @param out    Filled in with the checksum.
+ * @return       0; XTCE_PK_INVALID_VALUE if a Luhn, Verhoeff or Damm
+ *               digit is not a decimal digit; or XTCE_PK_NO_ALGORITHM if
+ *               XTCE_PK_CUSTOM has no function. */
 static inline int xtce_pk_checksum(const xtce_pk_checksum_spec* s,
                                    const uint8_t* data, size_t start,
                                    size_t end, const char* f,
@@ -1198,8 +1524,19 @@ static inline size_t xtce_pk_write_packet_end(const xtce_pk_writer* w) {
         return w->len * 8;
 }
 
-/* Fills in the checksum field f of `bits` bits at bit `at`: the checksum
- * spec of the bits from start to end, its low `bits` bits. */
+/** Fills in a checksum field: the checksum of the bits from `start` to
+ * `end`, its low `bits` bits.  The position is kept.
+ *
+ * @param w      The writer.
+ * @param spec   The algorithm and its parameters.
+ * @param start  The first bit the checksum covers.
+ * @param end    The bit past the last it covers.
+ * @param at     The bit the checksum field starts at.
+ * @param bits   The checksum field's size in bits.
+ * @param le     Whether the checksum field is little endian.
+ * @param f      The checksum field, for the error.
+ * @return       0, or an error from xtce_pk_checksum or
+ *               xtce_pk_write_uint. */
 static inline int xtce_pk_patch_checksum(xtce_pk_writer* w,
                                          const xtce_pk_checksum_spec* spec,
                                          size_t start, size_t end, size_t at,
@@ -1224,6 +1561,12 @@ enum {
         XTCE_PK_ONES_COMPLEMENT
 };
 
+/** Gets the value of a raw integer field.
+ *
+ * @param raw   The field, in its low `bits` bits.
+ * @param bits  The field's size in bits, 1 to 64.
+ * @param enc   Its integer encoding (XTCE_PK_UNSIGNED and so on).
+ * @return      The field's value; an unsigned field's value as it is. */
 static inline int64_t xtce_pk_to_signed(uint64_t raw, unsigned bits, int enc) {
         bool sign = (raw >> (bits - 1)) & 1;
         uint64_t low = raw & xtce_pk_mask(bits - 1);
@@ -1241,6 +1584,15 @@ static inline int64_t xtce_pk_to_signed(uint64_t raw, unsigned bits, int enc) {
         return (int64_t)raw;
 }
 
+/** Makes the raw field of an unsigned value.
+ *
+ * @param v     The value.
+ * @param bits  The field's size in bits, 1 to 64.
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param out   Filled in with the raw field.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE if `v` doesn't fit in `bits`
+ *              bits. */
 static inline int xtce_pk_from_unsigned(uint64_t v, unsigned bits,
                                         const char* f, xtce_pk_error* err,
                                         uint64_t* out) {
@@ -1250,6 +1602,16 @@ static inline int xtce_pk_from_unsigned(uint64_t v, unsigned bits,
         return 0;
 }
 
+/** Makes the raw field of a signed value in an integer encoding.
+ *
+ * @param v     The value.
+ * @param bits  The field's size in bits, 1 to 64.
+ * @param enc   The field's integer encoding (XTCE_PK_UNSIGNED and so on).
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param out   Filled in with the raw field, in its low `bits` bits.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE if the encoding can't hold `v`
+ *              in `bits` bits. */
 static inline int xtce_pk_from_signed(int64_t v, unsigned bits, int enc,
                                       const char* f, xtce_pk_error* err,
                                       uint64_t* out) {
@@ -1289,7 +1651,17 @@ static inline double xtce_pk_int_to_double(uint64_t raw, unsigned bits,
         return (double)xtce_pk_to_signed(raw, bits, enc);
 }
 
-/* Rounds (half away from zero) an engineering value to a raw integer field. */
+/** Rounds (half away from zero) an engineering value to a raw integer
+ * field.
+ *
+ * @param x     The engineering value, after any inverse calibrator.
+ * @param bits  The field's size in bits, 1 to 64.
+ * @param enc   Its integer encoding (XTCE_PK_UNSIGNED and so on).
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param out   Filled in with the raw field.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE unless the field holds the
+ *              rounded value. */
 static inline int xtce_pk_double_to_int(double x, unsigned bits, int enc,
                                         const char* f, xtce_pk_error* err,
                                         uint64_t* out) {
@@ -1307,12 +1679,18 @@ static inline int xtce_pk_double_to_int(double x, unsigned bits, int enc,
         return xtce_pk_from_signed((int64_t)r, bits, enc, f, err, out);
 }
 
-/* Rounds a calibrated value (half away from zero) to an integer from `lo` up
- * to but not including `lim`; fails with XTCE_PK_OUT_OF_RANGE otherwise. */
-/* The value of a BCD field: packed BCD has a decimal digit in every 4 bits,
- * and (unpacked) BCD one in the low 4 bits of every byte, whose high 4 bits
- * are zero; the first digit is the most significant.  Fails with
- * XTCE_PK_INVALID_VALUE for any other bits. */
+/** Gets the value of a BCD field.  Packed BCD has a decimal digit in every
+ * 4 bits, and (unpacked) BCD one in the low 4 bits of every byte, whose
+ * high 4 bits are zero; the first digit is the most significant.
+ *
+ * @param raw     The field, in its low `bits` bits.
+ * @param bits    The field's size in bits.
+ * @param packed  Whether it is packed BCD.
+ * @param f       The field, for the error.
+ * @param err     The error to fill in, or NULL.
+ * @param out     Filled in with the value.
+ * @return        0, or XTCE_PK_INVALID_VALUE for any bits that are not
+ *                BCD. */
 static inline int xtce_pk_bcd_decode(uint64_t raw, unsigned bits, bool packed,
                                      const char* f, xtce_pk_error* err,
                                      uint64_t* out) {
@@ -1331,8 +1709,16 @@ static inline int xtce_pk_bcd_decode(uint64_t raw, unsigned bits, bool packed,
         return 0;
 }
 
-/* The BCD field holding `v`; fails with XTCE_PK_OUT_OF_RANGE unless the
- * field's digits hold it. */
+/** Makes the BCD field holding a value, as xtce_pk_bcd_decode reads it.
+ *
+ * @param v       The value.
+ * @param bits    The field's size in bits.
+ * @param packed  Whether it is packed BCD.
+ * @param f       The field, for the error.
+ * @param err     The error to fill in, or NULL.
+ * @param out     Filled in with the field.
+ * @return        0, or XTCE_PK_OUT_OF_RANGE unless the field's digits
+ *                hold `v`. */
 static inline int xtce_pk_bcd_encode(uint64_t v, unsigned bits, bool packed,
                                      const char* f, xtce_pk_error* err,
                                      uint64_t* out) {
@@ -1349,6 +1735,17 @@ static inline int xtce_pk_bcd_encode(uint64_t v, unsigned bits, bool packed,
         return 0;
 }
 
+/** Rounds a calibrated value (half away from zero) to an integer in a
+ * range.
+ *
+ * @param y    The calibrated value.
+ * @param lo   The smallest integer allowed.
+ * @param lim  The integer just above the largest allowed.
+ * @param f    The field, for the error.
+ * @param err  The error to fill in, or NULL.
+ * @param out  Filled in with the rounded value.
+ * @return     0, or XTCE_PK_OUT_OF_RANGE unless it is from `lo` up to but
+ *             not including `lim`. */
 static inline int xtce_pk_round_to_int(double y, double lo, double lim,
                                        const char* f, xtce_pk_error* err,
                                        double* out) {
@@ -1408,8 +1805,20 @@ static inline unsigned xtce_pk_group_shift(unsigned bits, unsigned done,
         return 8u * list[j];
 }
 
-/* Reads an unsigned field of `bits` bits, in the bit and byte order that
- * xtce_pk_read_ordered reads, into the `n` bytes at `out`. */
+/** Reads an unsigned field of more than 64 bits, in the bit and byte order
+ * that xtce_pk_read_ordered reads.
+ *
+ * @param r      The reader.
+ * @param bits   The field's size in bits, at most 8 * `n`.
+ * @param lsb    Whether bits are numbered from each byte's least
+ *               significant.
+ * @param order  XTCE_PK_BIG, XTCE_PK_LITTLE or XTCE_PK_LIST.
+ * @param list   For XTCE_PK_LIST, each group's significance in bytes;
+ *               otherwise unused and may be NULL.
+ * @param f      The field, for the error.
+ * @param out    Filled in with the field, least significant byte first.
+ * @param n      The size of `out` in bytes.
+ * @return       0, or XTCE_PK_TRUNCATED if the packet ends first. */
 static inline int xtce_pk_read_wide(xtce_pk_reader* r, unsigned bits,
                                     bool lsb, int order, const uint8_t* list,
                                     const char* f, uint8_t* out, size_t n) {
@@ -1441,8 +1850,19 @@ static inline int xtce_pk_read_wide(xtce_pk_reader* r, unsigned bits,
         return 0;
 }
 
-/* Writes the low `bits` bits of the `n`-byte integer at `v` in the order
- * xtce_pk_read_wide reads. */
+/** Writes the low bits of a wide integer in the order xtce_pk_read_wide
+ * reads.
+ *
+ * @param w      The writer.
+ * @param bits   The field's size in bits.
+ * @param lsb    Whether bits are numbered from each byte's least
+ *               significant.
+ * @param order  XTCE_PK_BIG, XTCE_PK_LITTLE or XTCE_PK_LIST.
+ * @param list   For XTCE_PK_LIST, each group's significance in bytes;
+ *               otherwise unused and may be NULL.
+ * @param v      The integer, least significant byte first, of at least
+ *               `bits` bits.
+ * @return       0, or XTCE_PK_NO_SPACE when the buffer can't hold it. */
 static inline int xtce_pk_write_wide(xtce_pk_writer* w, unsigned bits,
                                      bool lsb, int order, const uint8_t* list,
                                      const uint8_t* v) {
@@ -1481,8 +1901,14 @@ static inline void xtce_pk_wide_keep(uint8_t* v, size_t n, unsigned k) {
         xtce_bn_unbounded_shr(v, v, n, false, drop);
 }
 
-/* Converts the raw field of `bits` bits in the `n` bytes at `v` to its value
- * in place, as xtce_pk_to_signed does. */
+/** Converts a wide raw field to its value in place, as xtce_pk_to_signed
+ * does.
+ *
+ * @param v     The raw field, least significant byte first; replaced by
+ *              its value, two's complement.
+ * @param n     The size of `v` in bytes.
+ * @param bits  The field's size in bits.
+ * @param enc   Its integer encoding (XTCE_PK_UNSIGNED and so on). */
 static inline void xtce_pk_wide_to_signed(uint8_t* v, size_t n, unsigned bits,
                                           int enc) {
         unsigned k = (unsigned)(8 * n) - bits;
@@ -1507,8 +1933,18 @@ static inline int xtce_pk_wide_from_unsigned(const uint8_t* v, size_t n,
         return 0;
 }
 
-/* Converts the signed value in the `n` bytes at `v` to its raw field of
- * `bits` bits in place, as xtce_pk_from_signed does. */
+/** Converts a wide signed value to its raw field in place, as
+ * xtce_pk_from_signed does.
+ *
+ * @param v     The value, two's complement, least significant byte
+ *              first; replaced by the raw field.
+ * @param n     The size of `v` in bytes.
+ * @param bits  The field's size in bits.
+ * @param enc   Its integer encoding (XTCE_PK_UNSIGNED and so on).
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE if the encoding can't hold the
+ *              value in `bits` bits. */
 static inline int xtce_pk_wide_from_signed(uint8_t* v, size_t n,
                                            unsigned bits, int enc,
                                            const char* f, xtce_pk_error* err) {
@@ -1543,7 +1979,7 @@ static inline int xtce_pk_wide_from_signed(uint8_t* v, size_t n,
         return 0;
 }
 
-/* xtce_pk_int_to_double for a raw field of more than 64 bits: rounded to
+/** xtce_pk_int_to_double for a raw field of more than 64 bits: rounded to
  * the nearest double, ties to even, as bnum converts.
  *
  * @param raw      The raw field, least significant byte first.
@@ -1561,7 +1997,7 @@ static inline double xtce_pk_wide_to_double(const uint8_t* raw, size_t n,
         return xtce_bn_to_f64(scratch, n, true);
 }
 
-/* xtce_pk_double_to_int for a raw field of more than 64 bits: rounds (half
+/** xtce_pk_double_to_int for a raw field of more than 64 bits: rounds (half
  * away from zero) an engineering value to the field.
  *
  * @param x     The engineering value, after any inverse calibrator.
@@ -1594,8 +2030,18 @@ static inline int xtce_pk_double_to_wide(double x, unsigned bits, int enc,
         return xtce_pk_wide_from_signed(out, n, bits, enc, f, err);
 }
 
-/* xtce_pk_bcd_decode for the raw field of `bits` bits in the `n` bytes at
- * `v`, in place; `scratch` is `n` bytes. */
+/** xtce_pk_bcd_decode for a raw field of more than 64 bits, in place.
+ *
+ * @param v        The raw field, least significant byte first; replaced
+ *                 by its value.
+ * @param n        The size of `v` and of `scratch` in bytes.
+ * @param bits     The field's size in bits.
+ * @param packed   Whether it is packed BCD.
+ * @param f        The field, for the error.
+ * @param err      The error to fill in, or NULL.
+ * @param scratch  Working room, `n` bytes.
+ * @return         0, or XTCE_PK_INVALID_VALUE for any bits that are not
+ *                 BCD. */
 static inline int xtce_pk_wide_bcd_decode(uint8_t* v, size_t n,
                                           unsigned bits, bool packed,
                                           const char* f, xtce_pk_error* err,
@@ -1616,8 +2062,19 @@ static inline int xtce_pk_wide_bcd_decode(uint8_t* v, size_t n,
         return 0;
 }
 
-/* xtce_pk_bcd_encode for the `n`-byte unsigned value at `v`, in place;
- * `scratch` is `n` bytes. */
+/** xtce_pk_bcd_encode for an unsigned value of more than 64 bits, in
+ * place.
+ *
+ * @param v        The value, least significant byte first; replaced by
+ *                 the BCD field.
+ * @param n        The size of `v` and of `scratch` in bytes.
+ * @param bits     The field's size in bits.
+ * @param packed   Whether it is packed BCD.
+ * @param f        The field, for the error.
+ * @param err      The error to fill in, or NULL.
+ * @param scratch  Working room, `n` bytes.
+ * @return         0, or XTCE_PK_OUT_OF_RANGE unless the field's digits
+ *                 hold the value. */
 static inline int xtce_pk_wide_bcd_encode(uint8_t* v, size_t n,
                                           unsigned bits, bool packed,
                                           const char* f, xtce_pk_error* err,
@@ -1640,6 +2097,11 @@ static inline int xtce_pk_wide_bcd_encode(uint8_t* v, size_t n,
 /* --- floats
  * ----------------------------------------------------------------------- */
 
+/** Gets the value of a raw IEEE 754 binary32 or binary64 field.
+ *
+ * @param raw   The field, in its low `bits` bits.
+ * @param bits  32, or anything else for 64.
+ * @return      The value. */
 static inline double xtce_pk_float_from_raw(uint64_t raw, unsigned bits) {
         if (bits == 32) {
                 uint32_t u = (uint32_t)raw;
@@ -1653,6 +2115,12 @@ static inline double xtce_pk_float_from_raw(uint64_t raw, unsigned bits) {
         }
 }
 
+/** Makes the raw IEEE 754 binary32 or binary64 field of a value.
+ *
+ * @param x     The value; for 32 bits it is rounded to nearest, ties to
+ *              even, as Rust's `as f32` does.
+ * @param bits  32, or anything else for 64.
+ * @return      The raw field, in its low `bits` bits. */
 static inline uint64_t xtce_pk_float_to_raw(double x, unsigned bits) {
         if (bits == 32) {
                 /* Like Rust's `as f32`: round to nearest, ties to even.  Finite
@@ -1690,7 +2158,10 @@ enum {
         XTCE_PK_TI,
 };
 
-/* The number of leading zero bits of `v` (64 for 0). */
+/** Counts the leading zero bits of a value.
+ *
+ * @param v  The value.
+ * @return   The number of leading zero bits, 64 for 0. */
 static inline int xtce_pk_clz64(uint64_t v) {
         int n = 0;
         if (!v) return 64;
@@ -1701,8 +2172,15 @@ static inline int xtce_pk_clz64(uint64_t v) {
         return n;
 }
 
-/* m / 2^shift rounded to the nearest integer, ties to even, where `sticky`
- * says that nonzero bits follow m; m * 2^-shift when shift is negative. */
+/** Divides by a power of two, rounding to the nearest integer, ties to
+ * even.
+ *
+ * @param m       The value to divide.
+ * @param shift   The power of two; when negative, `m` is multiplied by
+ *                2^-`shift` instead.
+ * @param sticky  Whether nonzero bits follow `m`, which breaks a tie
+ *                upwards.
+ * @return        `m` / 2^`shift`, rounded; 0 when `shift` is more than 64. */
 static inline uint64_t xtce_pk_round_shift(uint64_t m, int shift,
                                            bool sticky) {
         uint64_t q, r, half;
@@ -1720,8 +2198,15 @@ static inline uint64_t xtce_pk_round_shift(uint64_t m, int shift,
         return q + (r > half || (r == half && (sticky || (q & 1))));
 }
 
-/* (-1)^neg * (m + a fraction if sticky) * 2^e rounded to the nearest double,
- * ties to even; infinite when too large. */
+/** Makes the double nearest (-1)^`neg` * (`m` + a fraction if `sticky`) *
+ * 2^`e`, ties to even.
+ *
+ * @param neg     Whether the value is negative.
+ * @param m       Its significand.
+ * @param e       The power of two it is scaled by.
+ * @param sticky  Whether a nonzero fraction follows `m`.
+ * @return        The double, infinite when too large and a signed zero
+ *                when `m` is 0. */
 static inline double xtce_pk_make_double(bool neg, uint64_t m, int e,
                                          bool sticky) {
         double sign = neg ? -1.0 : 1.0, d;
@@ -1747,7 +2232,13 @@ static inline double xtce_pk_make_double(bool neg, uint64_t m, int e,
         return d * sign;
 }
 
-/* xtce_pk_make_double for a 128-bit m = (hi, lo). */
+/** xtce_pk_make_double for a 128-bit significand.
+ *
+ * @param neg  Whether the value is negative.
+ * @param hi   The significand's high 64 bits.
+ * @param lo   Its low 64 bits.
+ * @param e    The power of two it is scaled by.
+ * @return     The nearest double, ties to even. */
 static inline double xtce_pk_make_double128(bool neg, uint64_t hi,
                                             uint64_t lo, int e) {
         int n;
@@ -1759,8 +2250,13 @@ static inline double xtce_pk_make_double128(bool neg, uint64_t hi,
                                    (lo & xtce_pk_mask((unsigned)n)) != 0);
 }
 
-/* |x| == m * 2^e for finite nonzero x, with m of 53 bits; *power says
- * whether |x| is a power of two. */
+/** Splits a finite nonzero double into a 53-bit significand and an
+ * exponent: |`x`| == `m` * 2^`e`.
+ *
+ * @param x      The value, finite and not zero.
+ * @param m      Filled in with the significand, with its bit 52 set.
+ * @param e      Filled in with the exponent.
+ * @param power  Filled in with whether |`x`| is a power of two. */
 static inline void xtce_pk_magnitude(double x, uint64_t* m, int* e,
                                      bool* power) {
         uint64_t b;
@@ -1785,6 +2281,15 @@ static inline int64_t xtce_pk_sign_extend(uint64_t v, unsigned bits) {
                                       : (int64_t)v;
 }
 
+/** Gets the value of an IEEE 754 binary float field, rounded to the
+ * nearest double.
+ *
+ * @param hi    For 80 bits, the sign and exponent in its low 16 bits; for
+ *              128, the high 64 bits of the field; otherwise unused.
+ * @param lo    The rest of the field: the significand of an 80-bit field,
+ *              the low 64 bits of a 128-bit one, or all of a smaller one.
+ * @param bits  The field's size: 16, 32, 64, 80 or 128.
+ * @return      The value, which may be infinite or NaN. */
 static inline double xtce_pk_ieee_decode(uint64_t hi, uint64_t lo,
                                          unsigned bits) {
         unsigned ebits = bits == 16 ? 5 : bits == 32 ? 8 : bits == 64 ? 11 : 15;
@@ -1827,6 +2332,13 @@ static inline double xtce_pk_ieee_decode(uint64_t hi, uint64_t lo,
                                    exp - bias - (int)fbits, false);
 }
 
+/** Makes the IEEE 754 binary float field nearest a double, ties to even,
+ * overflowing to infinity.
+ *
+ * @param x     The value.
+ * @param bits  The field's size: 16, 32, 64, 80 or 128.
+ * @param hi    Filled in as xtce_pk_ieee_decode takes `hi`.
+ * @param lo    Filled in as xtce_pk_ieee_decode takes `lo`. */
 static inline void xtce_pk_ieee_encode(double x, unsigned bits, uint64_t* hi,
                                        uint64_t* lo) {
         uint64_t m, q;
@@ -1911,6 +2423,11 @@ static inline void xtce_pk_ieee_encode(double x, unsigned bits, uint64_t* hi,
                (q & xtce_pk_mask(fbits));
 }
 
+/** Gets the value of a MIL-STD-1750A float field.
+ *
+ * @param raw   The field, in its low `bits` bits.
+ * @param bits  The field's size: 32, or anything else for 48.
+ * @return      The value, rounded to the nearest double. */
 static inline double xtce_pk_mil1750a_decode(uint64_t raw, unsigned bits) {
         uint64_t mant;
         unsigned mbits = bits == 32 ? 24 : 40;
@@ -1927,6 +2444,15 @@ static inline double xtce_pk_mil1750a_decode(uint64_t raw, unsigned bits) {
                                    (int)exp - (int)(mbits - 1), false);
 }
 
+/** Makes the MIL-STD-1750A float field nearest a value, encoding values
+ * too small to normalize unnormalized.
+ *
+ * @param x     The value, finite.
+ * @param bits  The field's size: 32, or anything else for 48.
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param out   Filled in with the field.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE if `x` is too large. */
 static inline int xtce_pk_mil1750a_encode(double x, unsigned bits,
                                           const char* f, xtce_pk_error* err,
                                           uint64_t* out) {
@@ -1973,6 +2499,14 @@ static inline int xtce_pk_mil1750a_encode(double x, unsigned bits,
         return 0;
 }
 
+/** Gets the value of a DEC float field (F_floating or D_floating).
+ *
+ * @param raw   The field, in its low `bits` bits.
+ * @param bits  The field's size: 32, or anything else for 64.
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param out   Filled in with the value, rounded to the nearest double.
+ * @return      0, or XTCE_PK_INVALID_VALUE for a reserved operand. */
 static inline int xtce_pk_dec_decode(uint64_t raw, unsigned bits,
                                      const char* f, xtce_pk_error* err,
                                      double* out) {
@@ -1992,6 +2526,15 @@ static inline int xtce_pk_dec_decode(uint64_t raw, unsigned bits,
         return 0;
 }
 
+/** Makes the DEC float field nearest a value; values too small for it
+ * are zero.
+ *
+ * @param x     The value, finite.
+ * @param bits  The field's size: 32, or anything else for 64.
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param out   Filled in with the field.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE if `x` is too large. */
 static inline int xtce_pk_dec_encode(double x, unsigned bits, const char* f,
                                      xtce_pk_error* err, uint64_t* out) {
         int fb = bits == 32 ? 23 : 55, e, top, exp;
@@ -2014,6 +2557,12 @@ static inline int xtce_pk_dec_encode(double x, unsigned bits, const char* f,
         return 0;
 }
 
+/** Gets the value of an IBM hexadecimal float field.
+ *
+ * @param hi    For 128 bits, the field's high 64 bits; otherwise unused.
+ * @param lo    The field's low 64 bits, or all of a smaller one.
+ * @param bits  The field's size: 32, 64 or 128.
+ * @return      The value, rounded to the nearest double. */
 static inline double xtce_pk_ibm_decode(uint64_t hi, uint64_t lo,
                                         unsigned bits) {
         uint64_t m56 = xtce_pk_mask(56);
@@ -2034,6 +2583,16 @@ static inline double xtce_pk_ibm_decode(uint64_t hi, uint64_t lo,
         }
 }
 
+/** Makes the IBM hexadecimal float field nearest a value, encoding values
+ * too small to normalize unnormalized.
+ *
+ * @param x     The value, finite.
+ * @param bits  The field's size: 32, 64 or 128.
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param hi    Filled in with a 128-bit field's high 64 bits, else 0.
+ * @param lo    Filled in with the field's low 64 bits.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE if `x` is too large. */
 static inline int xtce_pk_ibm_encode(double x, unsigned bits, const char* f,
                                      xtce_pk_error* err, uint64_t* hi,
                                      uint64_t* lo) {
@@ -2090,6 +2649,11 @@ static inline int xtce_pk_ibm_encode(double x, unsigned bits, const char* f,
         return 0;
 }
 
+/** Gets the value of a TI TMS320C3x float field.
+ *
+ * @param raw   The field, in its low `bits` bits.
+ * @param bits  The field's size: 16, 32 or 40.
+ * @return      The value, rounded to the nearest double. */
 static inline double xtce_pk_ti_decode(uint64_t raw, unsigned bits) {
         unsigned ebits = bits == 16 ? 4 : 8;
         unsigned fb = bits == 16 ? 11 : bits == 32 ? 23 : 31;
@@ -2103,6 +2667,15 @@ static inline double xtce_pk_ti_decode(uint64_t raw, unsigned bits) {
                                    exp - (int)fb, false);
 }
 
+/** Makes the TI TMS320C3x float field nearest a value; values too small
+ * for it are its zero.
+ *
+ * @param x     The value, finite.
+ * @param bits  The field's size: 16, 32 or 40.
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param out   Filled in with the field.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE if `x` is too large. */
 static inline int xtce_pk_ti_encode(double x, unsigned bits, const char* f,
                                     xtce_pk_error* err, uint64_t* out) {
         unsigned ebits = bits == 16 ? 4 : 8;
@@ -2142,9 +2715,17 @@ static inline int xtce_pk_ti_encode(double x, unsigned bits, const char* f,
         return 0;
 }
 
-/* The value of a float field of `bits` bits in `fmt`, raw value (hi, lo),
- * rounded to the nearest double.  Fails with XTCE_PK_INVALID_VALUE for a DEC
- * reserved operand. */
+/** Gets the value of a float field, rounded to the nearest double.
+ *
+ * @param fmt   Its encoding, XTCE_PK_IEEE and so on.
+ * @param bits  The field's size in bits.
+ * @param hi    The high 64 bits of a field of more than 64 bits (see
+ *              xtce_pk_ieee_decode).
+ * @param lo    The rest of the field.
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param out   Filled in with the value.
+ * @return      0, or XTCE_PK_INVALID_VALUE for a DEC reserved operand. */
 static inline int xtce_pk_float_decode(int fmt, unsigned bits, uint64_t hi,
                                        uint64_t lo, const char* f,
                                        xtce_pk_error* err, double* out) {
@@ -2166,10 +2747,21 @@ static inline int xtce_pk_float_decode(int fmt, unsigned bits, uint64_t hi,
         }
 }
 
-/* The float field nearest `x` (ties to even), as xtce_pk_float_decode reads
- * it.  IEEE formats overflow to infinity; the others, which have no infinity
- * or NaN, fail with XTCE_PK_OUT_OF_RANGE for values too large for them and
- * for infinities and NaN, and encode values too small for them as zero. */
+/** Makes the float field nearest `x` (ties to even), as
+ * xtce_pk_float_decode reads it.  IEEE formats overflow to infinity; the
+ * others, which have no infinity or NaN, encode values too small for them
+ * as zero.
+ *
+ * @param fmt   The encoding, XTCE_PK_IEEE and so on.
+ * @param bits  The field's size in bits.
+ * @param x     The value.
+ * @param f     The field, for the error.
+ * @param err   The error to fill in, or NULL.
+ * @param hi    Filled in as xtce_pk_float_decode takes `hi`.
+ * @param lo    Filled in as xtce_pk_float_decode takes `lo`.
+ * @return      0, or XTCE_PK_OUT_OF_RANGE, in the formats other than
+ *              IEEE, for values too large for them and for infinities and
+ *              NaN. */
 static inline int xtce_pk_float_encode(int fmt, unsigned bits, double x,
                                        const char* f, xtce_pk_error* err,
                                        uint64_t* hi, uint64_t* lo) {
@@ -2205,6 +2797,13 @@ typedef struct xtce_pk_point {
         double calibrated;
 } xtce_pk_point;
 
+/** Applies a polynomial calibrator.
+ *
+ * @param x      The raw value.
+ * @param terms  The polynomial's terms.
+ * @param n      How many terms there are.
+ * @return       The sum of each term's coefficient times `x` to its
+ *               exponent. */
 static inline double xtce_pk_polynomial(double x, const xtce_pk_term* terms,
                                         size_t n) {
         double y = 0.0;
@@ -2229,6 +2828,22 @@ static inline double xtce_pk_lerp(double x, double x0, double y0, double x1,
         return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
 }
 
+/** Applies a spline calibrator whose segments all have one order.
+ *
+ * @param x            The raw value.
+ * @param p            The spline's points, in increasing order of raw
+ *                     value.
+ * @param n            How many points there are, at least 2.
+ * @param order        The spline's order: 0 holds each point's value up to
+ *                     the next point; any other order interpolates
+ *                     linearly.
+ * @param extrapolate  Whether to extend the first or last segment to a
+ *                     value outside the points.
+ * @param f            The field, for the error.
+ * @param err          The error to fill in, or NULL.
+ * @param out          Filled in with the calibrated value.
+ * @return             0, or XTCE_PK_CALIBRATION if `x` is outside the
+ *                     points and `extrapolate` is false. */
 static inline int xtce_pk_spline(double x, const xtce_pk_point* p, size_t n,
                                  unsigned order, bool extrapolate,
                                  const char* f, xtce_pk_error* err,
@@ -2264,10 +2879,23 @@ static inline int xtce_pk_spline(double x, const xtce_pk_point* p, size_t n,
         return 0;
 }
 
-/* A spline whose segments have their own orders: the segment from point i
- * has order orders[i], and one of order k interpolates through k + 1 points,
- * starting at point i or as close after it as the points allow.  Outside the
- * points, the first or last segment extrapolates. */
+/** Applies a spline whose segments have their own orders: the segment from
+ * point i has order orders[i], and one of order k interpolates through
+ * k + 1 points, starting at point i or as close after it as the points
+ * allow.  Outside the points, the first or last segment extrapolates.
+ *
+ * @param x            The raw value.
+ * @param p            The spline's points, in increasing order of raw
+ *                     value.
+ * @param n            How many points there are, at least 2.
+ * @param orders       Each segment's order, one per point.
+ * @param extrapolate  Whether to extrapolate to a value outside the
+ *                     points.
+ * @param f            The field, for the error.
+ * @param err          The error to fill in, or NULL.
+ * @param out          Filled in with the calibrated value.
+ * @return             0, or XTCE_PK_CALIBRATION if `x` is outside the
+ *                     points and `extrapolate` is false. */
 static inline int xtce_pk_spline_orders(double x, const xtce_pk_point* p,
                                         size_t n, const unsigned* orders,
                                         bool extrapolate, const char* f,
@@ -2343,7 +2971,11 @@ enum {
         XTCE_PK_OP_MAX,
 };
 
-/* x truncated to a 64-bit integer into *out; false if it has none. */
+/** Truncates a double to a 64-bit integer.
+ *
+ * @param x    The value.
+ * @param out  Filled in with `x` truncated toward zero.
+ * @return     True, or false if `x` is not finite or out of range. */
 static inline bool xtce_pk_to_i64(double x, int64_t* out) {
         if (!isfinite(x) || x < -9223372036854775808.0 ||
             x >= 9223372036854775808.0)
@@ -2352,8 +2984,14 @@ static inline bool xtce_pk_to_i64(double x, int64_t* out) {
         return true;
 }
 
-/* The value of a MathOperationCalibrator operator on the operands a and b
- * (b is ignored by unary operators); identical in every runtime. */
+/** Applies a MathOperationCalibrator operator; identical in every runtime.
+ *
+ * @param op  The operator, XTCE_PK_OP_DIV and so on.
+ * @param a   The first operand, the only one of a unary operator.
+ * @param b   The second operand; ignored by unary operators.
+ * @return    The result: NaN where the operation has none, and 1.0 or 0.0
+ *            for comparisons and logical operators.  Bitwise operators
+ *            work on the operands truncated to 64-bit integers. */
 static inline double xtce_pk_math(int op, double a, double b) {
         int64_t i, j;
         double m, r;
@@ -2463,6 +3101,19 @@ static inline double xtce_pk_math(int op, double a, double b) {
         }
 }
 
+/** Inverts a linear spline calibrator, for encoding: finds the raw value
+ * the first segment that reaches `y` maps to it.
+ *
+ * @param y            The calibrated value.
+ * @param p            The spline's points.
+ * @param n            How many points there are, at least 2.
+ * @param extrapolate  Whether to extend the first or last segment to a
+ *                     value outside the points.
+ * @param f            The field, for the error.
+ * @param err          The error to fill in, or NULL.
+ * @param out          Filled in with the raw value.
+ * @return             0, or XTCE_PK_CALIBRATION if no segment reaches `y`
+ *                     and `extrapolate` is false. */
 static inline int xtce_pk_spline_inverse(double y, const xtce_pk_point* p,
                                          size_t n, bool extrapolate,
                                          const char* f, xtce_pk_error* err,
@@ -2510,10 +3161,19 @@ static inline int xtce_pk_element_at(size_t len, size_t per, size_t need,
                                  : xtce_pk_fail(err, XTCE_PK_BAD_SIZE, f, NULL);
 }
 
-/* A size or count that another field gives (an XTCE DynamicValue):
- * (slope * x + intercept) / unit, where x is that field's value and unit is 8
- * for a size in bits used in whole bytes.  Fails with XTCE_PK_BAD_SIZE unless
- * the result is a whole number from 0 to `max`. */
+/** Computes a size or count that another field gives (an XTCE
+ * DynamicValue): (`slope` * `x` + `intercept`) / `unit`.
+ *
+ * @param x          The other field's value.
+ * @param slope      The linear adjustment's slope.
+ * @param intercept  Its intercept.
+ * @param unit       8 for a size in bits used in whole bytes, otherwise 1.
+ * @param max        The largest size or count allowed.
+ * @param f          The sized field, for the error.
+ * @param err        The error to fill in, or NULL.
+ * @param out        Filled in with the size or count.
+ * @return           0, or XTCE_PK_BAD_SIZE unless the result is a whole
+ *                   number from 0 to `max`. */
 static inline int xtce_pk_dynamic_size(double x, double slope, double intercept,
                                        unsigned unit, size_t max, const char* f,
                                        xtce_pk_error* err, size_t* out) {
@@ -2526,11 +3186,20 @@ static inline int xtce_pk_dynamic_size(double x, double slope, double intercept,
         return 0;
 }
 
-/* The value of the field that gives a size or count of `n` (the inverse of
- * xtce_pk_dynamic_size followed by multiplying by `factor`), for encoding a
- * field computed from the length of the value it sizes.  Fails with
- * BAD_SIZE, naming `f` (the sized value), when no whole number gives
- * exactly `n`. */
+/** Finds the value of the field that gives a size or count of `n` (the
+ * inverse of xtce_pk_dynamic_size followed by multiplying by `factor`),
+ * for encoding a field computed from the length of the value it sizes.
+ *
+ * @param n          The size or count.
+ * @param slope      The linear adjustment's slope.
+ * @param intercept  Its intercept.
+ * @param unit       As xtce_pk_dynamic_size takes it.
+ * @param factor     What the size or count is multiplied by to give `n`.
+ * @param f          The sized value, for the error.
+ * @param err        The error to fill in, or NULL.
+ * @param out        Filled in with the field's value.
+ * @return           0, or XTCE_PK_BAD_SIZE when no whole number gives
+ *                   exactly `n`. */
 static inline int xtce_pk_size_source(size_t n, double slope, double intercept,
                                       unsigned unit, size_t factor,
                                       const char* f, xtce_pk_error* err,
@@ -2589,8 +3258,11 @@ typedef struct xtce_pk_string_spec {
         int charset;
 } xtce_pk_string_spec;
 
-/* The spec of a string whose size another field gives: exactly `bytes` bytes.
- */
+/** Makes the spec of a string whose size another field gives.
+ *
+ * @param spec   The string's spec.
+ * @param bytes  The string's size in bytes.
+ * @return       `spec`, with the field exactly `bytes` bytes. */
 static inline xtce_pk_string_spec xtce_pk_string_spec_sized(
         const xtce_pk_string_spec* spec, size_t bytes) {
         xtce_pk_string_spec s = *spec;
@@ -2600,9 +3272,12 @@ static inline xtce_pk_string_spec xtce_pk_string_spec_sized(
         return s;
 }
 
-/* True when the `n` bytes at `s` are well-formed UTF-8 (no overlongs,
- * surrogates or values beyond U+10FFFF), matching the Rust and Python
- * decoders. */
+/** Checks that bytes are well-formed UTF-8 (no overlongs, surrogates or
+ * values beyond U+10FFFF), matching the Rust and Python decoders.
+ *
+ * @param s  The bytes.
+ * @param n  How many bytes there are.
+ * @return   True when they are well-formed UTF-8. */
 static inline bool xtce_pk_valid_utf8(const uint8_t* s, size_t n) {
         size_t i = 0;
         while (i < n) {
@@ -2646,8 +3321,15 @@ static const uint16_t xtce_pk_windows1252[32] = {
         0,      0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
         0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0,      0x017e, 0x0178};
 
-/* The first position of the `t` bytes at `term` in the `n` bytes at `b` that
- * starts a code unit of `unit` bytes, or `n` if there is none. */
+/** Finds a string's terminator where a code unit starts.
+ *
+ * @param b     The string's bytes.
+ * @param n     How many bytes there are.
+ * @param term  The terminator's bytes.
+ * @param t     How many bytes the terminator has.
+ * @param unit  The bytes in one code unit.
+ * @return      The first position of the terminator in `b` that starts a
+ *              code unit, or `n` if there is none. */
 static inline size_t xtce_pk_find_unit(const uint8_t* b, size_t n,
                                        const uint8_t* term, size_t t,
                                        size_t unit) {
@@ -2657,8 +3339,18 @@ static inline size_t xtce_pk_find_unit(const uint8_t* b, size_t n,
         return n;
 }
 
-/* Reads the bytes of a string's content, before its terminator, into the
- * `cap` bytes at `b`; the count goes to `*n`. */
+/** Reads the bytes of a string's content, before its terminator, as they
+ * are in the packet.
+ *
+ * @param r     The reader.
+ * @param spec  The string's layout.
+ * @param f     The string, for the error.
+ * @param b     Filled in with the content's bytes.
+ * @param cap   The size of `b` in bytes.
+ * @param n     Filled in with how many bytes of content there are.
+ * @return      0; XTCE_PK_TOO_LONG if the content doesn't fit in `cap`
+ *              bytes or its size tag exceeds the field; or
+ *              XTCE_PK_TRUNCATED if the packet ends first. */
 static inline int xtce_pk_read_wire(xtce_pk_reader* r,
                                     const xtce_pk_string_spec* spec,
                                     const char* f, uint8_t* b, size_t cap,
@@ -2726,8 +3418,15 @@ static inline int xtce_pk_read_wire(xtce_pk_reader* r,
         return 0;
 }
 
-/* Appends code point `c` as UTF-8 to `out` at *len (of `cap` bytes); false if
- * it is not a Unicode scalar value or doesn't fit. */
+/** Appends a code point to a string as UTF-8.
+ *
+ * @param c    The code point.
+ * @param out  The string.
+ * @param cap  The size of `out` in bytes.
+ * @param len  The string's length in bytes, increased by the bytes
+ *             appended.
+ * @return     True, or false, appending nothing, if `c` is not a Unicode
+ *             scalar value or doesn't fit. */
 static inline bool xtce_pk_put_utf8(uint32_t c, char* out, size_t cap,
                                     size_t* len) {
         uint8_t* o = (uint8_t*)out + *len;
@@ -2753,8 +3452,11 @@ static inline bool xtce_pk_put_utf8(uint32_t c, char* out, size_t cap,
         return true;
 }
 
-/* The code point of the UTF-8 sequence at s[*i], which is valid; advances
- * *i past it. */
+/** Decodes one UTF-8 sequence.
+ *
+ * @param s  Valid UTF-8.
+ * @param i  The position of the sequence in `s`, advanced past it.
+ * @return   The sequence's code point. */
 static inline uint32_t xtce_pk_next_utf8(const uint8_t* s, size_t* i) {
         uint32_t c = s[*i];
         size_t more = c < 0x80 ? 0 : c < 0xe0 ? 1 : c < 0xf0 ? 2 : 3, k;
@@ -2764,9 +3466,21 @@ static inline uint32_t xtce_pk_next_utf8(const uint8_t* s, size_t* i) {
         return c;
 }
 
-/* Converts the `n` bytes at `b`, a string in charset `cs`, to UTF-8 in the
- * `cap` bytes at `out`.  The input may lie in `out`, at or after the place
- * where its own conversion would end, as xtce_pk_read_string arranges. */
+/** Converts a string in a charset to UTF-8.  The input may lie in `out`,
+ * at or after the place where its own conversion would end, as
+ * xtce_pk_read_string arranges.
+ *
+ * @param cs   The string's charset, XTCE_PK_UTF8 and so on.
+ * @param b    The string's bytes.
+ * @param n    How many bytes there are.
+ * @param out  Filled in with the UTF-8, not NUL-terminated.
+ * @param cap  The size of `out` in bytes.
+ * @param len  Filled in with the UTF-8's length in bytes.
+ * @param f    The string, for the error.
+ * @param err  The error to fill in, or NULL.
+ * @return     0; XTCE_PK_INVALID_STRING if the bytes are not a string in
+ *             `cs` or the UTF-8 doesn't fit; or XTCE_PK_TOO_LONG if
+ *             UTF-8 or ASCII input doesn't fit in `cap` bytes. */
 static inline int xtce_pk_decode_text(int cs, const uint8_t* b, size_t n,
                                       char* out, size_t cap, size_t* len,
                                       const char* f, xtce_pk_error* err) {
@@ -2843,11 +3557,20 @@ static inline int xtce_pk_decode_text(int cs, const uint8_t* b, size_t n,
         return 0;
 }
 
-/* Reads a string into `out`, which holds `cap` bytes plus a terminating NUL
- * that is always written; the content length goes to `*len`.  In a charset
- * other than UTF-8 and US-ASCII, the bytes read go at the end of `out`, and
- * convert into its start: `cap` must be at least the most UTF-8 bytes the
- * most bytes the field holds can give, as the generated code makes it. */
+/** Reads a string as UTF-8.  In a charset other than UTF-8 and US-ASCII,
+ * the bytes read go at the end of `out`, and convert into its start.
+ *
+ * @param r     The reader.
+ * @param spec  The string's layout.
+ * @param f     The string, for the error.
+ * @param out   Filled in with the string; it holds `cap` bytes plus a
+ *              terminating NUL that is always written.
+ * @param cap   The most bytes of content `out` holds: at least the most
+ *              UTF-8 bytes the most bytes the field holds can give, as the
+ *              generated code makes it.
+ * @param len   Filled in with the content's length in bytes.
+ * @return      0, or an error from xtce_pk_read_wire or
+ *              xtce_pk_decode_text. */
 static inline int xtce_pk_read_string(xtce_pk_reader* r,
                                       const xtce_pk_string_spec* spec,
                                       const char* f, char* out, size_t cap,
@@ -2865,8 +3588,16 @@ static inline int xtce_pk_read_string(xtce_pk_reader* r,
         return 0;
 }
 
-/* Reads a string field encoded as binary: `n` bytes, which must be UTF-8,
- * into `out`, which has room for `n + 1`; NUL-terminates them. */
+/** Reads a string field encoded as binary: bytes that must be UTF-8.
+ *
+ * @param r    The reader.
+ * @param n    How many bytes to read.
+ * @param f    The field, for the error.
+ * @param out  Filled in with the bytes, NUL-terminated; it has room for
+ *             `n` + 1.
+ * @param len  Filled in with `n`.
+ * @return     0; XTCE_PK_TRUNCATED if the packet ends first; or
+ *             XTCE_PK_INVALID_STRING if the bytes are not UTF-8. */
 static inline int xtce_pk_read_utf8(xtce_pk_reader* r, size_t n, const char* f,
                                     char* out, size_t* len) {
         XTCE_PK_TRY(xtce_pk_read_bytes(r, n, f, (uint8_t*)out));
@@ -2885,7 +3616,12 @@ static inline int xtce_pk_write_utf8(xtce_pk_writer* w, const char* s, size_t n,
         return xtce_pk_write_bytes(w, (const uint8_t*)s, n);
 }
 
-/* The byte of code point `c` in the 8-bit charset `cs`, or -1. */
+/** Encodes a code point in an 8-bit charset.
+ *
+ * @param cs  The charset: XTCE_PK_ASCII, XTCE_PK_LATIN1 or
+ *            XTCE_PK_WINDOWS1252.
+ * @param c   The code point.
+ * @return    Its byte, or -1 if `cs` can't hold it. */
 static inline int xtce_pk_byte_of(int cs, uint32_t c) {
         int i;
         if (c < 0x80) return (int)c;
@@ -2898,8 +3634,12 @@ static inline int xtce_pk_byte_of(int cs, uint32_t c) {
         return -1;
 }
 
-/* The bytes of code point `c` in charset `cs` (not UTF-8) into `out`; their
- * count, or 0 if `cs` can't hold `c`. */
+/** Encodes a code point in a charset other than UTF-8.
+ *
+ * @param cs   The charset.
+ * @param c    The code point, a Unicode scalar value.
+ * @param out  Filled in with its bytes.
+ * @return     How many bytes there are, or 0 if `cs` can't hold `c`. */
 static inline size_t xtce_pk_char_bytes(int cs, uint32_t c, uint8_t out[4]) {
         size_t unit = xtce_pk_code_unit(cs), k;
         bool le = cs == XTCE_PK_UTF16LE || cs == XTCE_PK_UTF32LE;
@@ -2925,10 +3665,23 @@ static inline size_t xtce_pk_char_bytes(int cs, uint32_t c, uint8_t out[4]) {
         return 4;
 }
 
-/* The bytes of the `n` bytes of UTF-8 at `s` in charset `cs`: their count
- * goes to *len, and whether the terminator occurs where a code unit starts
- * to *has_term; each byte goes to `w`, unless it is NULL.  Fails with
- * XTCE_PK_INVALID_STRING if `cs` can't hold a character of `s`. */
+/** Converts a UTF-8 string to its bytes in a charset, measuring them and
+ * writing them if asked.
+ *
+ * @param cs        The charset.
+ * @param s         The string, valid UTF-8.
+ * @param n         Its length in bytes.
+ * @param spec      The string's layout, for its terminator.
+ * @param w         The writer that gets each byte, or NULL to only
+ *                  measure.
+ * @param f         The string, for the error.
+ * @param err       The error to fill in, or NULL.
+ * @param len       Filled in with how many bytes there are in `cs`.
+ * @param has_term  Filled in with whether the terminator occurs in them
+ *                  where a code unit starts.
+ * @return          0; XTCE_PK_INVALID_STRING if `cs` can't hold a
+ *                  character of `s`; or XTCE_PK_NO_SPACE when the buffer
+ *                  can't hold the bytes. */
 static inline int xtce_pk_wire_bytes(int cs, const uint8_t* s, size_t n,
                                      const xtce_pk_string_spec* spec,
                                      xtce_pk_writer* w, const char* f,
@@ -2965,6 +3718,19 @@ static inline int xtce_pk_wire_bytes(int cs, const uint8_t* s, size_t n,
         return 0;
 }
 
+/** Writes a string in its field's charset and layout: with its terminator
+ * (unless a fixed-size field is full) and zero padding, or after its size
+ * tag.
+ *
+ * @param w     The writer.
+ * @param spec  The string's layout.
+ * @param s     The string, which must be UTF-8.
+ * @param n     Its length in bytes.
+ * @param f     The string, for the error.
+ * @return      0; XTCE_PK_INVALID_STRING if `s` is not UTF-8, the charset
+ *              can't hold it or it holds the terminator; XTCE_PK_TOO_LONG
+ *              if it doesn't fit in its field or size tag; or
+ *              XTCE_PK_NO_SPACE when the buffer can't hold it. */
 static inline int xtce_pk_write_string(xtce_pk_writer* w,
                                        const xtce_pk_string_spec* spec,
                                        const char* s, size_t n, const char* f) {
@@ -3044,7 +3810,12 @@ typedef struct xtce_pk_inputs {
         double v[XTCE_PK_MAX_INPUTS];
 } xtce_pk_inputs;
 
-/* Inputs from `n` doubles. */
+/** Makes the inputs of a custom algorithm.
+ *
+ * @param n    How many inputs there are; only the first
+ *             XTCE_PK_MAX_INPUTS are kept.
+ * @param ...  The inputs, `n` doubles.
+ * @return     The inputs. */
 static inline xtce_pk_inputs xtce_pk_inputs_of(size_t n, ...) {
         xtce_pk_inputs in;
         va_list ap;
@@ -3089,7 +3860,12 @@ typedef struct xtce_pk_alarm {
         int level;
 } xtce_pk_alarm;
 
-/* XTCE's name for a level, or "none" for XTCE_PK_ABSENT. */
+/** Names a concern level as XTCE does.
+ *
+ * @param level  The level, XTCE_PK_NORMAL to XTCE_PK_SEVERE, or
+ *               XTCE_PK_ABSENT.
+ * @return       Its name, such as "warning", a string constant; "none" for
+ *               XTCE_PK_ABSENT or any other value. */
 static inline const char* xtce_pk_alarm_name(int level) {
         static const char* const names[] = {"normal",   "watch",
                                             "warning",  "distress",
@@ -3108,10 +3884,17 @@ typedef struct xtce_pk_alarm_state {
         size_t next;
 } xtce_pk_alarm_state;
 
-/* The level to report for a sample whose own level is `level`: an alarm is
- * raised after `min_violations` samples in a row are in alarm, and cleared
- * after `min_conformance` in a row are not; in between, the last level
- * raised stands. */
+/** Finds the level to report for a sample: an alarm is raised after
+ * `min_violations` samples in a row are in alarm, and cleared after
+ * `min_conformance` in a row are not; in between, the last level raised
+ * stands.
+ *
+ * @param s                The parameter's monitor state, updated.
+ * @param level            The sample's own level.
+ * @param min_violations   How many samples in a row must be in alarm to
+ *                         raise it.
+ * @param min_conformance  How many in a row must not be to clear it.
+ * @return                 The level to report. */
 static inline int xtce_pk_alarm_update(xtce_pk_alarm_state* s, int level,
                                        uint32_t min_violations,
                                        uint32_t min_conformance) {
@@ -3129,11 +3912,23 @@ static inline int xtce_pk_alarm_update(xtce_pk_alarm_state* s, int level,
         return s->level;
 }
 
-/* How much `x` (at time `t`) changed since the value `k` samples before it,
- * of the `cap` in `values` and `times`: as a percentage of that value when
- * `percent`, then per second when `per_second`.  False when there is no
- * such sample, or no change can be worked out (no time between them, or a
- * percentage of 0). */
+/** Works out how much a value changed since an earlier sample: as a
+ * percentage of that sample when `percent`, then per second when
+ * `per_second`.
+ *
+ * @param s           The parameter's monitor state.
+ * @param values      The samples it keeps.
+ * @param times       Their times, in seconds.
+ * @param cap         How many slots `values` and `times` have.
+ * @param x           The new value.
+ * @param t           Its time, in seconds.
+ * @param k           How many samples before `x` the earlier one is.
+ * @param per_second  Whether to give the change per second.
+ * @param percent     Whether to give the change as a percentage.
+ * @param out         Filled in with the change.
+ * @return            True, or false when there is no such sample, or no
+ *                    change can be worked out (no time between them, or a
+ *                    percentage of 0). */
 static inline bool xtce_pk_alarm_change(const xtce_pk_alarm_state* s,
                                         const double* values,
                                         const double* times, size_t cap,
@@ -3159,7 +3954,14 @@ static inline bool xtce_pk_alarm_change(const xtce_pk_alarm_state* s,
         return true;
 }
 
-/* Remembers a sample in the `cap` slots of `values` and `times`. */
+/** Remembers a sample, replacing the oldest when all slots are full.
+ *
+ * @param s       The parameter's monitor state, updated.
+ * @param values  The samples it keeps.
+ * @param times   Their times, in seconds.
+ * @param cap     How many slots `values` and `times` have.
+ * @param x       The sample's value.
+ * @param t       Its time, in seconds. */
 static inline void xtce_pk_alarm_push(xtce_pk_alarm_state* s, double* values,
                                       double* times, size_t cap, double x,
                                       double t) {
@@ -3184,8 +3986,14 @@ typedef struct xtce_pk_label_alarm {
         int level;
 } xtce_pk_label_alarm;
 
-/* The level of enumeration value `x`: that of the first of the `n`
- * `labels` holding it, else `def`. */
+/** Finds the alarm level of an enumeration value.
+ *
+ * @param x       The value.
+ * @param labels  The enumeration alarms.
+ * @param n       How many there are.
+ * @param def     The level when none holds `x`.
+ * @return        The level of the first of `labels` holding `x`, else
+ *                `def`. */
 static inline int xtce_pk_enum_alarm(int64_t x,
                                      const xtce_pk_label_alarm* labels,
                                      size_t n, int def) {
@@ -3211,7 +4019,12 @@ typedef struct xtce_pk_dfa {
         const bool* accept;
 } xtce_pk_dfa;
 
-/* Whether `dfa` accepts all `n` bytes at `s`. */
+/** Runs a string alarm's automaton over a string.
+ *
+ * @param dfa  The automaton.
+ * @param s    The string, UTF-8.
+ * @param n    Its length in bytes.
+ * @return     Whether `dfa` accepts all `n` bytes. */
 static inline bool xtce_pk_dfa_match(const xtce_pk_dfa* dfa, const char* s,
                                      size_t n) {
         size_t q = 0, k;
@@ -3233,8 +4046,15 @@ typedef struct xtce_pk_pattern {
         int level;
 } xtce_pk_pattern;
 
-/* The level of the `len` bytes at `s`: that of the first of the `n`
- * `patterns` they match, else `def`. */
+/** Finds the alarm level of a string.
+ *
+ * @param s         The string, UTF-8.
+ * @param len       Its length in bytes.
+ * @param patterns  The string alarms.
+ * @param n         How many there are.
+ * @param def       The level when none matches.
+ * @return          The level of the first of `patterns` the string
+ *                  matches, else `def`. */
 static inline int xtce_pk_pattern_alarm(const char* s, size_t len,
                                         const xtce_pk_pattern* patterns,
                                         size_t n, int def) {
@@ -3253,6 +4073,12 @@ typedef struct xtce_pk_text {
         size_t len;
 } xtce_pk_text;
 
+/** Makes an empty text accumulator.
+ *
+ * @param buf  Where the text goes, NUL-terminated; may be NULL when `cap`
+ *             is 0.
+ * @param cap  The size of `buf` in bytes.
+ * @return     The accumulator. */
 static inline xtce_pk_text xtce_pk_text_init(char* buf, size_t cap) {
         xtce_pk_text t;
         t.buf = buf;
@@ -3262,6 +4088,11 @@ static inline xtce_pk_text xtce_pk_text_init(char* buf, size_t cap) {
         return t;
 }
 
+/** Appends bytes to a text, truncating what does not fit but counting it.
+ *
+ * @param t  The text.
+ * @param s  The bytes.
+ * @param n  How many bytes there are. */
 static inline void xtce_pk_text_putn(xtce_pk_text* t, const char* s, size_t n) {
         if (t->len + 1 < t->cap) {
                 size_t room = t->cap - 1 - t->len;
@@ -3280,8 +4111,16 @@ static inline void xtce_pk_text_putc(xtce_pk_text* t, char c) {
         xtce_pk_text_putn(t, &c, 1);
 }
 
-/* Writes `field=level` for each of the `n` alarms, `none` for a field that is
- * absent, as every runtime writes them, like snprintf. */
+/** Writes `field=level` for each alarm, `none` for a field that is absent,
+ * separated by ", ", as every runtime writes them, like snprintf.
+ *
+ * @param a    The alarms.
+ * @param n    How many there are.
+ * @param buf  Where the text goes, NUL-terminated; may be NULL when `cap`
+ *             is 0.
+ * @param cap  The size of `buf` in bytes.
+ * @return     The text's whole length, which is `cap` or more if it was
+ *             cut short. */
 static inline size_t xtce_pk_describe_alarms(const xtce_pk_alarm* a, size_t n,
                                              char* buf, size_t cap) {
         xtce_pk_text t = xtce_pk_text_init(buf, cap);
@@ -3301,6 +4140,10 @@ static inline void xtce_pk_text_int(xtce_pk_text* t, int64_t v) {
                           (size_t)snprintf(b, sizeof b, "%lld", (long long)v));
 }
 
+/** Appends an unsigned integer in decimal.
+ *
+ * @param t  The text.
+ * @param v  The integer. */
 static inline void xtce_pk_text_uint(xtce_pk_text* t, uint64_t v) {
         char b[24];
         xtce_pk_text_putn(
@@ -3308,9 +4151,13 @@ static inline void xtce_pk_text_uint(xtce_pk_text* t, uint64_t v) {
                 (size_t)snprintf(b, sizeof b, "%llu", (unsigned long long)v));
 }
 
-/* The shortest round-trip form of `x` in the style of Python's `repr`: fixed
- * notation for exponents in [-4, 16), otherwise scientific notation with a
- * signed, at least two digit exponent.  Assumes the "C" locale. */
+/** Appends the shortest round-trip form of `x` in the style of Python's
+ * `repr`: fixed notation for exponents in [-4, 16), otherwise scientific
+ * notation with a signed, at least two digit exponent; NaN, INF and -INF
+ * otherwise.  Assumes the "C" locale.
+ *
+ * @param t  The text.
+ * @param x  The value. */
 static inline void xtce_pk_text_double(xtce_pk_text* t, double x) {
         char sci[48], digits[24];
         int prec, exp, nd = 0;
@@ -3379,8 +4226,16 @@ typedef struct xtce_pk_output {
         double value;
 } xtce_pk_output;
 
-/* Writes `name=value` for each of the `n` outputs, `none` for one that is
- * absent, as every runtime writes them, like snprintf. */
+/** Writes `name=value` for each output, `none` for one that is absent,
+ * separated by ", ", as every runtime writes them, like snprintf.
+ *
+ * @param o    The outputs.
+ * @param n    How many there are.
+ * @param buf  Where the text goes, NUL-terminated; may be NULL when `cap`
+ *             is 0.
+ * @param cap  The size of `buf` in bytes.
+ * @return     The text's whole length, which is `cap` or more if it was
+ *             cut short. */
 static inline size_t xtce_pk_describe_outputs(const xtce_pk_output* o,
                                               size_t n, char* buf,
                                               size_t cap) {
@@ -3398,6 +4253,12 @@ static inline size_t xtce_pk_describe_outputs(const xtce_pk_output* o,
         return t.len;
 }
 
+/** Appends a string in double quotes, with `"` and `\` escaped by a
+ * backslash and control characters as `\xHH`.
+ *
+ * @param t  The text.
+ * @param s  The string.
+ * @param n  Its length in bytes. */
 static inline void xtce_pk_text_str(xtce_pk_text* t, const char* s, size_t n) {
         static const char hex[] = "0123456789abcdef";
         size_t i;
@@ -3418,7 +4279,11 @@ static inline void xtce_pk_text_str(xtce_pk_text* t, const char* s, size_t n) {
         xtce_pk_text_putc(t, '"');
 }
 
-/* Bytes as "0x" followed by lower-case hex digits. */
+/** Appends bytes as "0x" followed by lower-case hex digits.
+ *
+ * @param t  The text.
+ * @param b  The bytes.
+ * @param n  How many bytes there are. */
 static inline void xtce_pk_text_bytes(xtce_pk_text* t, const uint8_t* b,
                                       size_t n) {
         static const char hex[] = "0123456789abcdef";
@@ -3458,9 +4323,12 @@ typedef struct xtce_pk_line {
         uint8_t half; /* a bi-phase bit's first half, or XTCE_PK_NO_BIT */
 } xtce_pk_line;
 
-/* The data bit that the level `raw` completes, or XTCE_PK_NO_BIT: a
- * bi-phase bit takes two levels, the stream starting on a bit's first
- * half. */
+/** Decodes one level of a PCM stream: a bi-phase bit takes two levels,
+ * the stream starting on a bit's first half.
+ *
+ * @param l    The line's code and state, updated.
+ * @param raw  The level, 0 or 1, before any inversion.
+ * @return     The data bit the level completes, or XTCE_PK_NO_BIT. */
 static inline uint8_t xtce_pk_line_decode(xtce_pk_line* l, uint8_t raw) {
         uint8_t level = (uint8_t)(raw ^ (l->inverted ? 1 : 0)), bit;
         if (l->pcm >= XTCE_PK_BIPHASE_L) {
@@ -3553,6 +4421,13 @@ typedef void (*xtce_pk_stream_decode_fn)(void* ctx, const uint8_t* data,
 
 enum { XTCE_PK_SEARCH, XTCE_PK_VERIFY, XTCE_PK_LOCK, XTCE_PK_CHECK };
 
+/** Starts finding the frames of a FixedFrameStream, in Search.
+ *
+ * @param s      The state to set up.
+ * @param spec   The stream's parameters, which must outlive `s`.
+ * @param bits   Room for `cap` bits, one per byte, which must outlive `s`.
+ * @param cap    How many bits `bits` holds.
+ * @param frame  Room for one frame's bytes, which must outlive `s`. */
 static inline void xtce_pk_frame_sync_init(xtce_pk_frame_sync* s,
                                            const xtce_pk_frame_spec* spec,
                                            uint8_t* bits, size_t cap,
@@ -3575,6 +4450,13 @@ static inline uint8_t xtce_pk_frame_bit(const xtce_pk_frame_sync* s,
         return (uint8_t)(b ^ s->flip);
 }
 
+/** Checks for the sync pattern, allowing the spec's `max_errors` wrong
+ * bits.
+ *
+ * @param s   The state.
+ * @param at  The bit, in the whole stream, the frame would start at.
+ * @return    Whether the pattern is there, at its `location` in the
+ *            frame. */
 static inline bool xtce_pk_frame_matches(const xtce_pk_frame_sync* s,
                                          size_t at) {
         const xtce_pk_frame_spec* sp = s->spec;
@@ -3591,6 +4473,12 @@ static inline bool xtce_pk_frame_matches(const xtce_pk_frame_sync* s,
         return true;
 }
 
+/** Gives the frame at a position to a callback.
+ *
+ * @param s    The state.
+ * @param at   The bit, in the whole stream, the frame starts at.
+ * @param f    The callback.
+ * @param ctx  What to pass `f`. */
 static inline void xtce_pk_frame_emit(xtce_pk_frame_sync* s, size_t at,
                                       xtce_pk_frame_fn f, void* ctx) {
         size_t i, n = s->spec->frame_bits;
@@ -3601,6 +4489,12 @@ static inline void xtce_pk_frame_emit(xtce_pk_frame_sync* s, size_t at,
         f(ctx, s->frame, (n + 7) / 8);
 }
 
+/** Runs the state machine of xtce_pk_frame_sync over the bits it holds,
+ * then drops the bits it no longer needs.
+ *
+ * @param s    The state.
+ * @param f    Given each frame found.
+ * @param ctx  What to pass `f`. */
 static inline void xtce_pk_frame_run(xtce_pk_frame_sync* s,
                                      xtce_pk_frame_fn f, void* ctx) {
         const xtce_pk_frame_spec* sp = s->spec;
@@ -3674,8 +4568,14 @@ static inline void xtce_pk_frame_run(xtce_pk_frame_sync* s,
         s->base = keep;
 }
 
-/* Takes the next `len` bytes of the stream, and gives `f` each frame they
- * complete. */
+/** Takes the next bytes of a FixedFrameStream, and gives `f` each frame
+ * they complete.
+ *
+ * @param s     The state.
+ * @param data  The bytes.
+ * @param len   How many bytes there are.
+ * @param f     Given each frame found.
+ * @param ctx   What to pass `f`. */
 static inline void xtce_pk_frame_sync_push(xtce_pk_frame_sync* s,
                                            const uint8_t* data, size_t len,
                                            xtce_pk_frame_fn f, void* ctx) {
@@ -3728,6 +4628,13 @@ typedef struct xtce_pk_flag_sync {
         uint8_t* frame;
 } xtce_pk_flag_sync;
 
+/** Starts finding the frames of a VariableFrameStream, hunting for a flag.
+ *
+ * @param s      The state to set up.
+ * @param spec   The stream's parameters, which must outlive `s`.
+ * @param bits   Room for `cap` bits, one per byte, which must outlive `s`.
+ * @param cap    How many bits `bits` holds: `max_bits` + `flag_bits` + 2.
+ * @param frame  Room for one frame's bytes, which must outlive `s`. */
 static inline void xtce_pk_flag_sync_init(xtce_pk_flag_sync* s,
                                           const xtce_pk_flag_spec* spec,
                                           uint8_t* bits, size_t cap,
@@ -3743,6 +4650,14 @@ static inline void xtce_pk_flag_sync_init(xtce_pk_flag_sync* s,
         s->hunting = true;
 }
 
+/** Takes one data bit of a VariableFrameStream: drops stuffed bits, ends
+ * a frame at a flag and aborts one that is too long or has more than
+ * `flag_bits` in a row.
+ *
+ * @param s    The state.
+ * @param b    The bit, 0 or 1.
+ * @param f    Given each frame found.
+ * @param ctx  What to pass `f`. */
 static inline void xtce_pk_flag_bit(xtce_pk_flag_sync* s, uint8_t b,
                                     xtce_pk_frame_fn f, void* ctx) {
         const xtce_pk_flag_spec* sp = s->spec;
@@ -3786,8 +4701,14 @@ static inline void xtce_pk_flag_bit(xtce_pk_flag_sync* s, uint8_t b,
         s->run = 0;
 }
 
-/* Takes the next `len` bytes of the stream, and gives `f` each frame they
- * complete. */
+/** Takes the next bytes of a VariableFrameStream, and gives `f` each frame
+ * they complete.
+ *
+ * @param s     The state.
+ * @param data  The bytes.
+ * @param len   How many bytes there are.
+ * @param f     Given each frame found.
+ * @param ctx   What to pass `f`. */
 static inline void xtce_pk_flag_sync_push(xtce_pk_flag_sync* s,
                                           const uint8_t* data, size_t len,
                                           xtce_pk_frame_fn f, void* ctx) {
@@ -3845,12 +4766,16 @@ static inline void xtce_pk_batch_init(xtce_pk_batch* b, uint8_t* buf,
         xtce_pk_batch_clear(b);
 }
 
-/* Where the next packet goes, and the bytes there are for it: never more
- * than the length can count. */
+/* Where the next packet goes. */
 static inline uint8_t* xtce_pk_batch_tail(const xtce_pk_batch* b) {
         return b->buf + b->len;
 }
 
+/** Finds the bytes there are for the next packet: never more than the
+ * length can count.
+ *
+ * @param b  The batch.
+ * @return   How many bytes there are at xtce_pk_batch_tail. */
 static inline size_t xtce_pk_batch_room(const xtce_pk_batch* b) {
         size_t room = b->cap - b->len;
         uint64_t most = UINT64_C(0xFFFFFFFF) -
@@ -3858,7 +4783,11 @@ static inline size_t xtce_pk_batch_room(const xtce_pk_batch* b) {
         return (uint64_t)room < most ? room : (size_t)most;
 }
 
-/* Adds the packet of `n` bytes just encoded at xtce_pk_batch_tail. */
+/** Adds the packet just encoded at xtce_pk_batch_tail, updating the
+ * length.
+ *
+ * @param b  The batch.
+ * @param n  The packet's size in bytes. */
 static inline void xtce_pk_batch_added(xtce_pk_batch* b, size_t n) {
         uint32_t total;
         int i;
@@ -3875,9 +4804,12 @@ static inline size_t xtce_pk_batch_remaining(const xtce_pk_batch* b) {
         return b->len - b->pos;
 }
 
-/* Checks the length at the start of the buffer, giving the number of
- * bytes after it in `*n`: fails with XTCE_PK_BAD_LENGTH if they don't fit
- * in the buffer. */
+/** Checks the length at the start of the buffer.
+ *
+ * @param b    The batch.
+ * @param n    Filled in with the number of bytes after the length.
+ * @param err  The error to fill in, or NULL.
+ * @return     0, or XTCE_PK_BAD_LENGTH if they don't fit in the buffer. */
 static inline int xtce_pk_batch_length(const xtce_pk_batch* b, size_t* n,
                                        xtce_pk_error* err) {
         uint32_t v = 0;
@@ -3894,10 +4826,16 @@ static inline int xtce_pk_batch_length(const xtce_pk_batch* b, size_t* n,
  * `ctx` is whatever the caller gave. */
 typedef int (*xtce_pk_read_fn)(void* ctx, uint8_t* buf, size_t n);
 
-/* Replaces the batch with two calls of `fn`: one for its length, one for
- * that many bytes.  Fails with XTCE_PK_BAD_LENGTH, before the second call,
- * if the length is more than the buffer holds, and with
- * XTCE_PK_TRUNCATED if `fn` fails; either way the batch is left empty. */
+/** Replaces the batch with two calls of `fn`: one for its length, one for
+ * that many bytes.  On failure the batch is left empty.
+ *
+ * @param b    The batch.
+ * @param fn   Reads the bytes.
+ * @param ctx  What to pass `fn`.
+ * @param err  The error to fill in, or NULL.
+ * @return     0; XTCE_PK_BAD_LENGTH, before the second call, if the
+ *             length is more than the buffer holds; or XTCE_PK_TRUNCATED
+ *             if `fn` fails. */
 static inline int xtce_pk_batch_read(xtce_pk_batch* b, xtce_pk_read_fn fn,
                                      void* ctx, xtce_pk_error* err) {
         size_t n;
@@ -3918,10 +4856,14 @@ static inline int xtce_pk_batch_read(xtce_pk_batch* b, xtce_pk_read_fn fn,
         return 0;
 }
 
-/* Takes the `n` bytes the caller put at the start of the buffer as a whole
- * batch received at once (a datagram, say).  Fails with
- * XTCE_PK_BAD_LENGTH, leaving the batch empty, unless its length is the
- * number of bytes after it. */
+/** Takes the bytes the caller put at the start of the buffer as a whole
+ * batch received at once (a datagram, say).
+ *
+ * @param b    The batch.
+ * @param n    How many bytes there are.
+ * @param err  The error to fill in, or NULL.
+ * @return     0, or XTCE_PK_BAD_LENGTH, leaving the batch empty, unless
+ *             its length is the number of bytes after it. */
 static inline int xtce_pk_batch_received(xtce_pk_batch* b, size_t n,
                                          xtce_pk_error* err) {
         size_t after;

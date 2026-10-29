@@ -12,8 +12,14 @@ def widest(text: str) -> int:
 
 class AlignTest(unittest.TestCase):
     def same_code(self, src: str) -> str:
-        """Align ``src`` and check that it still means the same thing and
-        fits."""
+        """Aligns ``src`` and checks that it still means the same and fits.
+
+        Args:
+            src: The Python source to align.
+
+        Returns:
+            The aligned source.
+        """
         out = align(src)
         self.assertEqual(ast.dump(ast.parse(src)), ast.dump(ast.parse(out)))
         self.assertLessEqual(widest(out), WIDTH)

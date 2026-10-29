@@ -26,7 +26,19 @@ ENTRIES = ('<ParameterRefEntry parameterRef="A"/>',
 
 def doc(types=TYPES, params=PARAMS, entries=ENTRIES,
         root=f'xmlns="{NS}" name="Sat"', prefix="") -> str:
-    """A small XTCE document; ``prefix`` is the namespace prefix to use."""
+    """Builds a small XTCE document: SpaceSystem Sat with container C.
+
+    Args:
+        types:   The parameter types' XML, one string each.
+        params:  The parameters' XML, one string each.
+        entries: C's entries' XML, one string each.
+        root:    The attributes of the root SpaceSystem element.
+        prefix:  The namespace prefix to put on every element, or "" for
+                 none.
+
+    Returns:
+        The document.
+    """
     p = f"{prefix}:" if prefix else ""
 
     def tag(s: str) -> str:
@@ -137,8 +149,18 @@ class SetTests(unittest.TestCase):
 
 class CommandLineTests(unittest.TestCase):
     def run_main(self, *texts_or_paths, opts=()):
-        """Runs xtce-digest on documents (strings) or paths (Path), and
-        returns its status, its output, and the names it was given."""
+        """Runs xtce-digest on documents or files.
+
+        Each string is written to a temporary file first.
+
+        Args:
+            *texts_or_paths: The documents, as strings, or files, as Paths.
+            opts:            Command-line options to put before the names.
+
+        Returns:
+            Its exit status, its standard output, its standard error, and the
+            file names it was given.
+        """
         with tempfile.TemporaryDirectory() as d:
             names = []
             for i, t in enumerate(texts_or_paths):

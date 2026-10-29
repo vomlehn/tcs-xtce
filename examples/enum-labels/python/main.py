@@ -21,7 +21,16 @@ def fail(msg: str) -> None:
 
 
 def encode(p) -> bytes:
-    """Encode a packet, print it, and return the bytes."""
+    """Encodes a packet, prints it, and returns the bytes.
+
+    Exits with an error if the packet can't be encoded.
+
+    Args:
+        p: The packet.
+
+    Returns:
+        The encoded packet.
+    """
     try:
         b = p.to_bytes()
     except PacketError as e:
@@ -31,7 +40,16 @@ def encode(p) -> bytes:
 
 
 def decode(b: bytes):
-    """Decode a status of either kind and print it, with its alarms."""
+    """Decodes a status of either kind and prints it, with its alarms.
+
+    Exits with an error if the bytes can't be decoded.
+
+    Args:
+        b: The encoded status.
+
+    Returns:
+        The Status or SafeStatus decoded.
+    """
     try:
         p = probe.StatusKind.decode(b)
     except PacketError as e:
@@ -42,6 +60,10 @@ def decode(b: bytes):
 
 
 def main() -> None:
+    """Shows the labels of some modes, then encodes and decodes statuses.
+
+    Exits with an error if any result isn't what it must be.
+    """
     # Labels name the values, and one label can name a range of them.
     for v in (0, 2, 20, 40):
         label = probe.ModeType.label_of(v)

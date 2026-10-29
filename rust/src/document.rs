@@ -5,6 +5,17 @@ use crate::generated::{SpaceSystemType, NAMESPACE, ROOT_ELEMENT};
 use crate::xml::{Error, Reader, Result, Writer, XmlElement};
 
 /// Serializes `value` as the element `tag` into `buf`, replacing its contents.
+///
+/// # Arguments
+///
+/// * `value`  - The value to serialize.
+/// * `tag`    - The name of the root element.
+/// * `buf`    - Receives the XML declaration and the element.
+/// * `indent` - Whether to pretty-print the output.
+///
+/// # Errors
+///
+/// Fails if `value` can't be written as XML.
 pub fn to_xml<T: XmlElement>(
     value: &T,
     tag: &str,
@@ -21,6 +32,20 @@ pub fn to_xml<T: XmlElement>(
 }
 
 /// Deserializes an element named `tag` from `bytes`.
+///
+/// # Arguments
+///
+/// * `bytes` - The XML text of a whole document.
+/// * `tag`   - The local name the root element must have.
+///
+/// # Returns
+///
+/// The value.
+///
+/// # Errors
+///
+/// Fails if the XML is malformed, the root element is not `tag`, the
+/// element is not a valid `T`, or anything follows it.
 pub fn from_xml<T: XmlElement>(bytes: &[u8], tag: &str) -> Result<T> {
     let mut r = Reader::new(bytes)?;
     let root = r.root()?;
@@ -63,6 +88,16 @@ impl Document {
     }
 
     /// Wraps `root` with explicitly sized input and output buffers.
+    ///
+    /// # Arguments
+    ///
+    /// * `root`   - The `SpaceSystem` the document holds.
+    /// * `input`  - The input buffer's initial capacity in bytes.
+    /// * `output` - The output buffer's initial capacity in bytes.
+    ///
+    /// # Returns
+    ///
+    /// The document, set to pretty-print its output.
     pub fn with_capacity(
         root: SpaceSystemType,
         input: usize,
@@ -77,6 +112,18 @@ impl Document {
     }
 
     /// Deserializes a document; the input buffer is sized to fit `bytes`.
+    ///
+    /// # Arguments
+    ///
+    /// * `bytes` - The XML text of an XTCE `SpaceSystem`.
+    ///
+    /// # Returns
+    ///
+    /// The document.
+    ///
+    /// # Errors
+    ///
+    /// Fails if `bytes` is not a valid `SpaceSystem`.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let mut doc = Self::with_capacity(
             SpaceSystemType::default(),
@@ -94,6 +141,14 @@ impl Document {
     }
 
     /// Replaces the root by deserializing everything `reader` yields.
+    ///
+    /// # Arguments
+    ///
+    /// * `reader` - The source of the XML text, read to its end.
+    ///
+    /// # Errors
+    ///
+    /// Fails if reading fails or the text is not a valid `SpaceSystem`.
     pub fn read_from<R: std::io::Read>(&mut self, reader: R) -> Result<()> {
         self.input
             .load_from(reader)
@@ -114,6 +169,14 @@ impl Document {
     }
 
     /// Serializes the root and writes it to `writer`.
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - Where the XML text goes.
+    ///
+    /// # Errors
+    ///
+    /// Fails if serializing or writing fails.
     pub fn write_to<W: std::io::Write>(&mut self, mut writer: W) -> Result<()> {
         let bytes = self.serialize()?;
         writer

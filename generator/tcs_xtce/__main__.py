@@ -44,9 +44,14 @@ LANGS = ("c", "c++", "rust", "python")
 
 
 def write(path, text: str) -> None:
-    """Write ``text`` to the file ``path``, or to standard output if ``path``
-    is None.  An unchanged file is left alone, so make doesn't rebuild what
-    depends on it."""
+    """Writes ``text`` to a file, or to standard output.  An unchanged file
+    is left alone, so make doesn't rebuild what depends on it.
+
+    Args:
+        path: The file, its directories made as needed, or None for
+              standard output.
+        text: What to write.
+    """
     if path is None:
         sys.stdout.write(text)
         return
@@ -57,6 +62,17 @@ def write(path, text: str) -> None:
 
 
 def main(argv=None) -> int:
+    """Runs the command (see the module docstring).
+
+    Args:
+        argv: The arguments, without the program name, or None for
+              ``sys.argv``'s.
+
+    Returns:
+        The exit status: 0 on success, 1 if a document can't be read or
+        uses something unsupported.  Bad arguments exit with status 2.
+    """
+
     ap = argparse.ArgumentParser(
         prog="tcs-xtce", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)

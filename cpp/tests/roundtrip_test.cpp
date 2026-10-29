@@ -20,6 +20,10 @@ int failures = 0;
                 }                                                   \
         } while (0)
 
+/** Reads a whole file.
+ *
+ * @param path  The file's path.
+ * @return      Its contents; empty if it can't be read. */
 std::string slurp(const char* path) {
         std::ifstream in(path, std::ios::binary);
         std::ostringstream s;
@@ -27,6 +31,10 @@ std::string slurp(const char* path) {
         return s.str();
 }
 
+/** Checks that a sample decodes, and that encoding it, decoding that and
+ * encoding again gives the same document and the same bytes.
+ *
+ * @param path  The sample's path. */
 void round_trip(const char* path) {
         std::string bytes = slurp(path);
         try {
@@ -41,6 +49,10 @@ void round_trip(const char* path) {
         }
 }
 
+/** Checks that serializing and loading again reuse a document's buffers
+ * rather than reallocating them.
+ *
+ * @param path  The path of a sample to load. */
 void buffers_are_retained(const char* path) {
         std::string bytes = slurp(path);
         xtce::Document doc = xtce::Document::from_bytes(bytes);
@@ -57,6 +69,8 @@ void buffers_are_retained(const char* path) {
         CHECK(doc.input().capacity() == in_cap);
 }
 
+/** Checks that decoding errors give the line they are on and name what is
+ * wrong. */
 void errors_have_positions() {
         try {
                 xtce::Document::from_bytes(
@@ -74,6 +88,8 @@ void errors_have_positions() {
         }
 }
 
+/** Checks that a document built in code serializes and decodes back to
+ * itself. */
 void builds_documents() {
         xtce::SpaceSystemType ss;
         ss.name = "Built";
@@ -84,6 +100,12 @@ void builds_documents() {
 
 }  // namespace
 
+/** Runs the tests on the samples named.
+ *
+ * @param argc  The number of arguments, at least 2.
+ * @param argv  The arguments: the samples' paths.
+ * @return      0 if every check passes, 1 if one fails, 2 for a usage
+ *              error. */
 int main(int argc, char** argv) {
         if (argc < 2) {
                 std::cerr << "usage: roundtrip_test SAMPLE...\n";

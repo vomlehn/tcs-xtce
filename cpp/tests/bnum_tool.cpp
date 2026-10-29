@@ -15,6 +15,10 @@ using xtce::bnum::IntErrorKind;
 
 namespace {
 
+/** Formats an optional result.
+ *
+ * @param o  The result: a built-in integer or an Integer.
+ * @return   Its value in decimal, or "none" if it is empty. */
 template <class T>
 std::string opt(const std::optional<T>& o) {
         if (!o) return "none";
@@ -29,6 +33,11 @@ std::string ovf(const std::pair<T, bool>& p) {
         return p.first.to_string() + (p.second ? " true" : " false");
 }
 
+/** Formats bytes in hexadecimal.
+ *
+ * @param b  The bytes.
+ * @param n  How many there are.
+ * @return   Two lowercase hexadecimal digits per byte. */
 std::string hex(const std::uint8_t* b, std::size_t n) {
         std::string s;
         char x[3];
@@ -39,6 +48,10 @@ std::string hex(const std::uint8_t* b, std::size_t n) {
         return s;
 }
 
+/** Converts a string of hexadecimal digit pairs to bytes.
+ *
+ * @param t  The digits, two per byte; an odd last digit is ignored.
+ * @return   The bytes. */
 std::vector<std::uint8_t> unhex(const std::string& t) {
         std::vector<std::uint8_t> out;
         for (std::size_t i = 0; i + 1 < t.size(); i += 2)
@@ -47,6 +60,10 @@ std::vector<std::uint8_t> unhex(const std::string& t) {
         return out;
 }
 
+/** Names a parse error's kind as Rust's IntErrorKind does.
+ *
+ * @param k  The kind.
+ * @return   Its name, such as "InvalidDigit", or "?" if it is unknown. */
 const char* kind(IntErrorKind k) {
         switch (k) {
                 case IntErrorKind::Empty:
@@ -64,6 +81,13 @@ const char* kind(IntErrorKind k) {
 template <bool S, std::size_t N>
 std::string cast(const Integer<S, N>& x, const std::string& to);
 
+/** Computes one case with Integer<S, N>.
+ *
+ * @param op  The operation's name, as bnum names it.
+ * @param a   Its operands: decimal integers of the type, or a shift,
+ *            power, radix or type name.
+ * @return    The result as the case should print it, or "unknown op" for
+ *            an operation it doesn't know. */
 template <bool S, std::size_t N>
 std::string run(const std::string& op, const std::vector<std::string>& a) {
         using T = Integer<S, N>;
@@ -203,6 +227,10 @@ std::string dispatch(const std::string& op, const std::string& ty,
 
 }  // namespace
 
+/** Runs the cases on standard input, one per line ("op type operands"),
+ * printing each result on standard output.
+ *
+ * @return  0. */
 int main() {
         std::string line;
         while (std::getline(std::cin, line)) {

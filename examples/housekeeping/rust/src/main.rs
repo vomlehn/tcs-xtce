@@ -38,6 +38,11 @@ struct Reading {
     heater_power: Option<f64>,
 }
 
+/// Builds the statuses the example encodes.
+///
+/// # Returns
+///
+/// Each status, with the values decoding it must give.
 fn readings() -> [Reading; 4] {
     let status = |heater_on, temperature, bus_voltage, heater_power| Status {
         heater_on,
@@ -82,7 +87,13 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
-/// Encodes a `Status` that must fail, and prints why it did.
+/// Encodes a `Status` that must fail, and prints why it did; exits with
+/// status 1 if it succeeds.
+///
+/// # Arguments
+///
+/// * `codec`  - The codec to encode with.
+/// * `status` - The status, which has a value encoding must reject.
 fn try_encode(codec: &mut Codec, status: &Status) {
     match codec.encode(status) {
         Ok(bytes) => fail(&format!("encoding {status} gave {}", hex(bytes))),
@@ -90,7 +101,14 @@ fn try_encode(codec: &mut Codec, status: &Status) {
     }
 }
 
-/// Decodes bytes that must fail, and prints why they did.
+/// Decodes bytes that must fail, and prints why they did; exits with
+/// status 1 if they decode.
+///
+/// # Arguments
+///
+/// * `codec` - The codec to decode with.
+/// * `data`  - The bytes.
+/// * `why`   - What is wrong with them, for the output.
 fn try_decode(codec: &mut Codec, data: &[u8], why: &str) {
     codec.load(data);
     match codec.decode::<Status>() {
@@ -101,6 +119,8 @@ fn try_decode(codec: &mut Codec, data: &[u8], why: &str) {
     }
 }
 
+/// Encodes the readings into a stream after the XTCE digest, decodes them
+/// from it and checks they decode and re-encode as they must.
 fn main() {
     // The codec owns an input and an output buffer, both preallocated to
     // Status::MAX_BYTES (7) and reused for every packet.

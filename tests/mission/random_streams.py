@@ -26,7 +26,17 @@ def to_hex(bits: list) -> str:
 
 
 def downlink(rng) -> list:
-    """Bits of frames: sync, count and data, with mishaps."""
+    """Bits of Downlink frames: sync, count and data, with mishaps.
+
+    Frames, after noise, have sync errors, slips, noise in their place
+    and changes of inversion.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The bits.
+    """
     out = [rng.randrange(2) for _ in range(rng.randrange(200))]
     invert = False
     for count in range(rng.randrange(1, 30)):
@@ -49,8 +59,19 @@ def downlink(rng) -> list:
 
 
 def fixed_frames(rng, sync: list, frame_bits: int, unmasked=()) -> list:
-    """Bits of frames led by ``sync``, whose bits at ``unmasked`` aren't
-    compared, with bit errors, slips and noise."""
+    """Bits of fixed-length frames among noise, with bit errors in the sync
+    pattern, slips and noise in place of frames.
+
+    Args:
+        rng:        The random number generator.
+        sync:       The sync pattern's bits, which lead each frame.
+        frame_bits: The frame's length in bits, sync included.
+        unmasked:   The indexes of the sync bits that aren't compared,
+                    which are random.
+
+    Returns:
+        The bits.
+    """
     out = [rng.randrange(2) for _ in range(rng.randrange(200))]
     for count in range(rng.randrange(1, 20)):
         frame = (sync
@@ -75,7 +96,15 @@ def fixed_frames(rng, sync: list, frame_bits: int, unmasked=()) -> list:
 
 
 def biphase(bits: list, code: str) -> list:
-    """Bi-phase-L, -M or -S levels for ``bits``, two a bit."""
+    """Bi-phase-L, -M or -S levels for ``bits``, two a bit.
+
+    Args:
+        bits: The bits to code.
+        code: "L", "M" or "S".
+
+    Returns:
+        The levels.
+    """
     out, level = [], 0
     for b in bits:
         if code == "L":
@@ -90,6 +119,14 @@ def biphase(bits: list, code: str) -> list:
 
 
 def stuff(bits: list) -> list:
+    """HDLC bit stuffing: a zero after every five ones in a row.
+
+    Args:
+        bits: The bits to stuff.
+
+    Returns:
+        The stuffed bits.
+    """
     out, run = [], 0
     for b in bits:
         out.append(b)
@@ -101,6 +138,15 @@ def stuff(bits: list) -> list:
 
 
 def nrzm(bits: list, level: int = 0) -> list:
+    """NRZ-M coding: a one changes the level and a zero doesn't.
+
+    Args:
+        bits:  The bits to code.
+        level: The level before the first bit.
+
+    Returns:
+        The levels.
+    """
     out = []
     for b in bits:
         level ^= b
@@ -109,7 +155,14 @@ def nrzm(bits: list, level: int = 0) -> list:
 
 
 def hdlc(rng) -> list:
-    """Bits of HDLC frames among noise, with aborts."""
+    """Bits of HDLC frames among noise, with aborts.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The bits, starting and ending with a flag.
+    """
     flag = [0, 1, 1, 1, 1, 1, 1, 0]
     out = [rng.randrange(2) for _ in range(rng.randrange(40))]
     for _ in range(rng.randrange(1, 8)):
@@ -150,7 +203,16 @@ def scrambled(rng) -> list:
 
 def clear_frames(rng, payload: list) -> list:
     """Clear's 64-bit frames, carrying ``payload`` 32 bits a frame, with
-    bit errors, noise and inversions, among noise."""
+    bit errors, noise and inversions, among noise.
+
+    Args:
+        rng:     The random number generator.
+        payload: The bits the frames carry; the last frame's are padded
+                 with zeros.
+
+    Returns:
+        The bits.
+    """
     out = [rng.randrange(2) for _ in range(rng.randrange(100))]
     invert = False
     for k in range(0, len(payload), 32):
@@ -176,6 +238,9 @@ def nested(rng) -> list:
 
 
 def main() -> None:
+    """Prints the bits of COUNT random streams, seeded with SEED, in hex
+    pieces of random length.
+    """
     rng = random.Random(int(sys.argv[1]))
     for _ in range(int(sys.argv[2])):
         name = rng.choice(["downlink", "uplink", "deep", "beacon", "relay",

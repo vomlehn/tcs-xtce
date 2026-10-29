@@ -59,6 +59,10 @@ static const char* const PARAGRAPH_2[] = {
 static const char* const* const PARAGRAPHS[N_PARAGRAPHS] = {PARAGRAPH_1,
                                                             PARAGRAPH_2};
 
+/** Prints an error message to standard error and exits with status 1.
+ *
+ * @param fmt  The message's printf format.
+ * @param ...  The values it formats. */
 static void fail(const char* fmt, ...) {
         va_list ap;
         va_start(ap, fmt);
@@ -69,7 +73,11 @@ static void fail(const char* fmt, ...) {
         exit(1);
 }
 
-/* Fills `p` with array `n`: one Line per line, one word per element. */
+/** Makes the Paragraph for one array: one Line per line, one word per
+ * element; exits if it doesn't fit the structure.
+ *
+ * @param n  The array's index in PARAGRAPHS.
+ * @param p  Filled in with the Paragraph. */
 static void paragraph(size_t n, variable_array_Paragraph* p) {
         size_t i;
         variable_array_Paragraph_init(p);
@@ -99,8 +107,12 @@ static void paragraph(size_t n, variable_array_Paragraph* p) {
         p->lines.len = i;
 }
 
-/* Fails, describing the first difference between `got` and `want`, if any.
- * `n` is the array's number, for the message. */
+/** Exits, describing the first difference between two Paragraphs, if
+ * there is one.
+ *
+ * @param n     The array's index, for the message.
+ * @param got   The Paragraph received.
+ * @param want  The Paragraph expected. */
 static void check(size_t n, const variable_array_Paragraph* got,
                   const variable_array_Paragraph* want) {
         size_t i, j;
@@ -125,7 +137,12 @@ static void check(size_t n, const variable_array_Paragraph* got,
         }
 }
 
-/* Sends `len` bytes from `buf`, in as many writes as it takes. */
+/** Sends bytes on a socket, in as many writes as it takes; exits on an
+ * error.
+ *
+ * @param fd   The socket.
+ * @param buf  The bytes.
+ * @param len  How many there are. */
 static void send_all(int fd, const uint8_t* buf, size_t len) {
         while (len > 0) {
                 ssize_t r = send(fd, buf, len, 0);
@@ -136,9 +153,12 @@ static void send_all(int fd, const uint8_t* buf, size_t len) {
         }
 }
 
-/* Connects to the address in `arg`, sends the digest of the XTCE file, then
- * sends each array: a Length packet, then the Paragraph packet in a single
- * write.  Then closes the connection. */
+/** The sender thread: connects, sends the digest of the XTCE file, then
+ * sends each array as a Length packet and then the Paragraph packet in a
+ * single write, and closes the connection.  Exits on an error.
+ *
+ * @param arg  The receiver's address, a struct sockaddr_in.
+ * @return     NULL. */
 static void* send_paragraphs(void* arg) {
         const struct sockaddr_in* addr = (const struct sockaddr_in*)arg;
         /* The output buffers are preallocated to
@@ -198,8 +218,14 @@ static void* send_paragraphs(void* arg) {
         return NULL;
 }
 
-/* Reads `len` bytes into `buf`.  Returns 0 if the stream ended before the
- * first byte, and fails if it ended part way through `what`. */
+/** Reads bytes from a socket, exiting if the stream ends part way
+ * through.
+ *
+ * @param fd    The socket.
+ * @param buf   Filled in with the bytes.
+ * @param len   How many to read.
+ * @param what  What they are, for the error message.
+ * @return      1, or 0 if the stream ended before the first byte. */
 static int read_all(int fd, uint8_t* buf, size_t len, const char* what) {
         size_t got = 0;
         while (got < len) {
@@ -215,10 +241,12 @@ static int read_all(int fd, uint8_t* buf, size_t len, const char* what) {
         return 1;
 }
 
-/* Accepts the connection, checks the sender's XTCE digest, and receives
- * arrays until it closes: for each, it reads and decodes the Length packet,
+/** Accepts the connection, checks the sender's XTCE digest, and receives
+ * arrays until it closes: for each, reads and decodes the Length packet,
  * then reads that many bytes, decodes the Paragraph, checks it and prints
- * it. */
+ * it.  Exits on a mismatch or error.
+ *
+ * @param listener  The listening socket. */
 static void receive_paragraphs(int listener) {
         /* The input buffers are preallocated to
          * variable_array_Paragraph_MAX_BYTES and
@@ -292,6 +320,11 @@ static void receive_paragraphs(int listener) {
                 fail("stream closed after %zu of %d arrays", n, N_PARAGRAPHS);
 }
 
+/** Sends the arrays from a thread to this one over a loopback TCP
+ * connection, printing them as they arrive; exits with status 1 on an
+ * error.
+ *
+ * @return  0. */
 int main(void) {
         struct sockaddr_in addr;
         socklen_t addr_len = sizeof addr;

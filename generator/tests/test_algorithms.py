@@ -7,8 +7,19 @@ from tests.test_compile import compile_xml, mission
 
 def algorithm_mission(operands: str, triggers: str,
                       entries: str = "A B") -> str:
-    """Telemetry with U8 A and B, float output O, container P holding
-    ``entries``, and MathAlgorithm M computing O from ``operands``."""
+    """Builds telemetry for MathAlgorithm tests.
+
+    Telemetry with U8 A and B, float output O, container P holding
+    ``entries``, and MathAlgorithm M computing O from ``operands``.
+
+    Args:
+        operands: The XML of M's MathOperation operands and operators.
+        triggers: The XML inside M's TriggerSet.
+        entries:  The names of the parameters in P, separated by spaces.
+
+    Returns:
+        The XTCE document.
+    """
     refs = "".join(f'<ParameterRefEntry parameterRef="{e}"/>'
                    for e in entries.split())
     return mission(tm=f"""

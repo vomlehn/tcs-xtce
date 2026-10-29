@@ -12,7 +12,12 @@
 
 namespace xtce {
 
-// Serializes `value` as the element `tag` into `buf`, replacing its contents.
+/** Serializes a value as an XML document, replacing a buffer's contents.
+ *
+ * @param value   The value, a generated XTCE type.
+ * @param tag     The name of its (root) element.
+ * @param buf     The buffer to write the document into.
+ * @param indent  Whether to pretty-print. */
 template <class T>
 void to_xml(const T& value, std::string_view tag, Buffer& buf,
             bool indent = true) {
@@ -24,7 +29,13 @@ void to_xml(const T& value, std::string_view tag, Buffer& buf,
         w.finish();
 }
 
-// Deserializes an element named `tag` from `bytes`.
+/** Deserializes a value from an XML document.
+ *
+ * @param bytes  The document.
+ * @param tag    The local name its root element must have.
+ * @return       The value.  Throws xtce::Error if the document is
+ *               malformed, its root is not `tag`, or it is not a valid
+ *               `T`. */
 template <class T>
 T from_xml(std::string_view bytes, std::string_view tag) {
         Reader r(bytes);
@@ -51,7 +62,11 @@ public:
                   input_(input_capacity),
                   output_(output_capacity) {}
 
-        // Deserializes a document; the buffers are sized to fit `bytes`.
+        /** Deserializes a document, sizing its buffers to fit.
+         *
+         * @param bytes  The XML.
+         * @return       The document.  Throws xtce::Error if `bytes` is not
+         *               a valid XTCE document. */
         static Document from_bytes(std::string_view bytes) {
                 std::size_t cap = bytes.size() > kDefaultCapacity
                                           ? bytes.size()

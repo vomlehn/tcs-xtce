@@ -1354,6 +1354,33 @@ Testing strategy
    Prose and data (reStructuredText, Markdown, XML, TOML) aren't
    checked.
 
+**Function headers**
+   Every function whose body is more than three lines, hand-written or
+   generated, starts with a header: what it does, its parameters with
+   what each means, and what it returns, left out for a function that
+   returns nothing. Each parameter's description, continuation lines
+   included, starts in one column. The headers follow each language's
+   conventions:
+
+   * Rust: rustdoc, as RFC 1574 and the standard library write it: a
+     third-person summary, ``# Arguments`` (``* `name` - Meaning``) and
+     ``# Returns`` sections, and ``# Errors``, ``# Panics`` and
+     ``# Safety`` where they apply. Receivers aren't listed.
+   * C and C++: Doxygen's ``/** ... */`` comments with ``@param`` and
+     ``@return``. A C++ member function is documented where its class
+     declares it.
+   * Python: PEP 257 docstrings in Google's style, with ``Args:``,
+     ``Returns:`` (``Yields:`` for a generator) and ``Raises:``.
+
+   Tests, Rust trait implementations, C++ overrides and Python special
+   methods other than ``__init__`` are exempt, since their names, the
+   trait, the base class or the language document them. The emitters
+   build each generated function's header from the model, naming the
+   XTCE item it handles. ``tests/doc_headers.py``, run by ``make test``
+   beside ``tests/line_width.py``, checks the code in git and the
+   generated code, and names each function whose header is missing or
+   wrong.
+
 Limitations and future work
 ============================
 

@@ -20,6 +20,11 @@ static void type_of(const char* t, size_t* nn, bool* ss) {
         *nn = (size_t)strtoul(t + 1, NULL, 10);
 }
 
+/** Parses a decimal integer of the current case's type, exiting with
+ * status 2 if it isn't one.
+ *
+ * @param text  The decimal digits, with a sign if any.
+ * @return      The integer. */
 static num parse(const char* text) {
         num v;
         if (xtce_bn_from_str_radix(v.b, n, s, text, strlen(text), 10)) {
@@ -29,6 +34,11 @@ static num parse(const char* text) {
         return v;
 }
 
+/** Prints an integer in decimal, without a newline.
+ *
+ * @param v   The integer's bytes, little endian.
+ * @param nn  Its size in bytes, at most MAXN.
+ * @param ss  Whether it is signed. */
 static void put(const uint8_t* v, size_t nn, bool ss) {
         uint8_t scratch[MAXN];
         char buf[8 * MAXN + 2];
@@ -46,6 +56,11 @@ static void overflowing(const num* v, bool o) {
         printf(" %s\n", o ? "true" : "false");
 }
 
+/** Prints the result of a checked operation: the value, or "none" if it
+ * failed.
+ *
+ * @param v   The value, of the current case's type.
+ * @param ok  Whether the operation succeeded. */
 static void checked(const num* v, bool ok) {
         if (ok)
                 value(v);
@@ -59,6 +74,11 @@ static void hex(const uint8_t* b, size_t len) {
         putchar('\n');
 }
 
+/** Converts a string of hexadecimal digit pairs to bytes.
+ *
+ * @param t    The digits, two per byte.
+ * @param out  Filled in with the bytes; must hold strlen(t) / 2.
+ * @return     How many bytes were written. */
 static size_t unhex(const char* t, uint8_t* out) {
         size_t len = strlen(t) / 2, i;
         for (i = 0; i < len; ++i) {
@@ -72,6 +92,12 @@ static size_t unhex(const char* t, uint8_t* out) {
 static const char* const kinds[] = {"", "Empty", "InvalidDigit",
                                     "PosOverflow", "NegOverflow"};
 
+/** Computes one case with the C functions and prints its result, or
+ * "skip" for an operation only the C++ class has.
+ *
+ * @param op   The operation's name, as bnum names it.
+ * @param arg  Its operands, null-terminated: decimal integers of the
+ *             current type, or a shift, power or radix. */
 static void run(const char* op, char** arg) {
         num a, b, r, t;
         unsigned k = 0;
@@ -299,6 +325,10 @@ static void run(const char* op, char** arg) {
 #undef IS
 }
 
+/** Runs the cases on standard input, one per line ("op type operands"),
+ * printing each result on standard output.
+ *
+ * @return  0. */
 int main(void) {
         char line[1024];
         while (fgets(line, sizeof line, stdin)) {

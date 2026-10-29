@@ -9,8 +9,24 @@ use std::fmt::{self, Write as _};
 /// A value that appears as attribute text or simple element content.
 pub trait Value: Sized {
     /// Parses the XML lexical form.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The attribute text or element content.
+    ///
+    /// # Returns
+    ///
+    /// The value.
+    ///
+    /// # Errors
+    ///
+    /// A message saying why `s` is not a valid one.
     fn parse_xml(s: &str) -> Result<Self, String>;
     /// Appends the canonical XML lexical form to `out`.
+    ///
+    /// # Arguments
+    ///
+    /// * `out` - The string the form is appended to.
     fn fmt_xml(&self, out: &mut String);
 }
 
@@ -93,6 +109,19 @@ pub fn format_double(x: f64, out: &mut String) {
 }
 
 /// [`format_double`] for any [`fmt::Write`]; it allocates nothing.
+///
+/// # Arguments
+///
+/// * `x`   - The value to format.
+/// * `out` - Where the text is written.
+///
+/// # Returns
+///
+/// `Ok(())` once the text is written.
+///
+/// # Errors
+///
+/// Fails if `out` does.
 pub fn write_double<W: fmt::Write + ?Sized>(
     x: f64,
     out: &mut W,

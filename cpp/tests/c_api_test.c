@@ -14,6 +14,9 @@
                 }                                                              \
         } while (0)
 
+/** Runs the checks, exiting with status 1 at the first that fails.
+ *
+ * @return  0 when every check passes. */
 int main(void) {
         static const char xml[] =
                 "<?xml version=\"1.0\"?>\n"

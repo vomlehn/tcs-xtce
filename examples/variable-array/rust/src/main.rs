@@ -54,7 +54,16 @@ fn fail(msg: &str) -> ! {
     process::exit(1);
 }
 
-/// Array `p` as a `Paragraph`: one `Line` per line, one word per element.
+/// Builds one of the arrays as a `Paragraph`: one `Line` per line, one
+/// word per element.
+///
+/// # Arguments
+///
+/// * `p` - The array's index in `PARAGRAPHS`.
+///
+/// # Returns
+///
+/// The `Paragraph`.
 fn paragraph(p: usize) -> Paragraph {
     let lines = PARAGRAPHS[p]
         .iter()
@@ -70,7 +79,17 @@ fn paragraph(p: usize) -> Paragraph {
     Paragraph { lines }
 }
 
-/// Describes the first difference between `got` and `want`, if any.
+/// Describes the first difference between two paragraphs.
+///
+/// # Arguments
+///
+/// * `got`  - The paragraph received.
+/// * `want` - The paragraph sent.
+///
+/// # Returns
+///
+/// The first difference in their lines or words, or `None` if they are
+/// the same.
 fn difference(got: &Paragraph, want: &Paragraph) -> Option<String> {
     if got.lines.len() != want.lines.len() {
         return Some(format!(
@@ -103,7 +122,11 @@ fn difference(got: &Paragraph, want: &Paragraph) -> Option<String> {
 
 /// Connects to `addr`, sends the digest of the XTCE file, then sends each
 /// array: a `Length` packet, then the `Paragraph` packet in a single write.
-/// Then closes the connection.
+/// Then closes the connection.  Exits with status 1 on any failure.
+///
+/// # Arguments
+///
+/// * `addr` - The receiver's address.
 fn send(addr: SocketAddr) {
     let mut stream = TcpStream::connect(addr)
         .unwrap_or_else(|e| fail(&format!("connect: {e}")));
@@ -143,8 +166,19 @@ fn send(addr: SocketAddr) {
     // more arrays.
 }
 
-/// Reads into all of `buf`. Returns false if the stream ended before the
-/// first byte, and fails if it ended part way through `what`.
+/// Reads into all of a buffer, exiting with status 1 if the stream closes
+/// part way through it or can't be read.
+///
+/// # Arguments
+///
+/// * `stream` - The connection to read.
+/// * `buf`    - The buffer to fill.
+/// * `what`   - What the buffer is to hold, for the error message.
+///
+/// # Returns
+///
+/// True if it filled `buf`; false if the stream closed before the first
+/// byte.
 fn read_all(stream: &mut TcpStream, buf: &mut [u8], what: &str) -> bool {
     let mut got = 0;
     while got < buf.len() {
@@ -162,7 +196,11 @@ fn read_all(stream: &mut TcpStream, buf: &mut [u8], what: &str) -> bool {
 /// Accepts the connection, checks the sender's XTCE digest, and receives
 /// arrays until it closes: for each, it reads and decodes the `Length`
 /// packet, then reads that many bytes, decodes the `Paragraph`, checks it
-/// and prints it.
+/// and prints it.  Exits with status 1 on any failure.
+///
+/// # Arguments
+///
+/// * `listener` - The socket the sender connects to.
 fn receive(listener: TcpListener) {
     let (mut stream, _) = listener
         .accept()
@@ -234,6 +272,7 @@ fn receive(listener: TcpListener) {
     }
 }
 
+/// Sends the arrays from one thread and receives them on this one.
 fn main() {
     // Listen on a port the system chooses, on the loopback interface only.
     let listener = TcpListener::bind("127.0.0.1:0")

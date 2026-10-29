@@ -4,6 +4,11 @@ use std::path::PathBuf;
 
 use tcs_xtce::{Buffer, Document, SpaceSystemType};
 
+/// Lists the sample documents, panicking if there are none.
+///
+/// # Returns
+///
+/// The paths of the `.xml` files in `tests/samples`, sorted.
 fn samples() -> Vec<PathBuf> {
     let dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/samples");

@@ -51,6 +51,19 @@ fn hex(b: &[u8]) -> String {
 type Text = FixedString<8192>;
 type Bytes = FixedBytes<4096>;
 
+/// Describes a packet's alarms, and the monitor's levels if they differ.
+///
+/// # Arguments
+///
+/// * `a` - The packet's alarms.
+/// * `m` - The levels the alarm monitor gives for the same packet.
+/// * `t` - Where to append ` | alarms: ...`, then ` | monitor: ...` when
+///         `m` differs from `a`; nothing is appended when the packet has
+///         no alarms.
+///
+/// # Panics
+///
+/// If the description doesn't fit in a `Text`.
 fn alarm_text<const N: usize>(a: &Alarms<N>, m: &Alarms<N>, t: &mut Text) {
     if !a.as_slice().is_empty() {
         write!(t, " | alarms: {a}").expect("alarms too long");
@@ -63,12 +76,40 @@ fn alarm_text<const N: usize>(a: &Alarms<N>, m: &Alarms<N>, t: &mut Text) {
     }
 }
 
+/// Describes the outputs of the MathAlgorithms a packet triggers.
+///
+/// # Arguments
+///
+/// * `o` - The algorithms' outputs.
+/// * `t` - Where to append ` | derived: ...`, if there are outputs.
+///
+/// # Panics
+///
+/// If the description doesn't fit in a `Text`.
 fn derived_text<const N: usize>(o: &Outputs<N>, t: &mut Text) {
     if !o.as_slice().is_empty() {
         write!(t, " | derived: {o}").expect("outputs too long");
     }
 }
 
+/// Decodes a packet, encodes it again and describes both, panicking if
+/// any of that allocates heap memory.
+///
+/// # Arguments
+///
+/// * `codec`  - The codec to encode with, sized for the packet.
+/// * `data`   - The packet's bytes.
+/// * `alarms` - Appends a description of the decoded packet's alarms and
+///              derived values to the text it is given.
+///
+/// # Returns
+///
+/// The line the tool prints for the vector.
+///
+/// # Panics
+///
+/// If decoding, encoding or describing the packet allocates heap
+/// memory, or the description or encoding doesn't fit.
 fn run<P: Packet + Display>(
     codec: &mut Codec,
     data: &[u8],
@@ -251,6 +292,12 @@ fn set_hooks() {
         .ok();
 }
 
+/// Prints the line for each vector in the file on the command line.
+///
+/// # Panics
+///
+/// Without a vectors file, if it can't be read or holds bad hex, or if
+/// handling a packet allocates heap memory.
 fn main() {
     set_hooks();
     let path = std::env::args()

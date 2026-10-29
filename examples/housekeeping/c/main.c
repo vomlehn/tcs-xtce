@@ -50,6 +50,10 @@ static const struct reading READINGS[N_READINGS] = {
         {false, 5.0, 28.0, 0, 5.0, 28.0, 0},
 };
 
+/** Prints an error message to standard error and exits with status 1.
+ *
+ * @param fmt  The message's printf format.
+ * @param ...  The values it formats. */
 static void fail(const char* fmt, ...) {
         va_list ap;
         va_start(ap, fmt);
@@ -71,6 +75,14 @@ static const char* text(const housekeeping_Status* s, char* buf, size_t cap) {
         return buf;
 }
 
+/** Makes a Status; it has a heater power only when the heater is on.
+ *
+ * @param s             Filled in with the Status.
+ * @param heater_on     Whether the heater is on.
+ * @param temperature   The temperature, in degrees Celsius.
+ * @param bus_voltage   The bus voltage, in volts.
+ * @param heater_power  The heater's power, in watts; ignored when the
+ *                      heater is off. */
 static void status(housekeeping_Status* s, bool heater_on, double temperature,
                    double bus_voltage, double heater_power) {
         housekeeping_Status_init(s);
@@ -81,6 +93,11 @@ static void status(housekeeping_Status* s, bool heater_on, double temperature,
         s->heater_power = s->has_heater_power ? heater_power : 0;
 }
 
+/** Compares two Statuses field by field, ignoring an absent heater power.
+ *
+ * @param a  One Status.
+ * @param b  The other.
+ * @return   Nonzero if they are the same. */
 static int same(const housekeeping_Status* a, const housekeeping_Status* b) {
         return a->heater_on == b->heater_on &&
                a->temperature == b->temperature &&
@@ -89,7 +106,10 @@ static int same(const housekeeping_Status* a, const housekeeping_Status* b) {
                (!a->has_heater_power || a->heater_power == b->heater_power);
 }
 
-/* Encodes a Status that must fail, and prints why it did. */
+/** Encodes a Status that must fail, and prints why it did; exits if it
+ * doesn't fail.
+ *
+ * @param s  The Status. */
 static void try_encode(const housekeeping_Status* s) {
         uint8_t out[housekeeping_Status_MAX_BYTES];
         char t[256], h[64], msg[128];
@@ -103,7 +123,12 @@ static void try_encode(const housekeeping_Status* s) {
                xtce_pk_error_kind(err.code), msg);
 }
 
-/* Decodes bytes that must fail, and prints why they did. */
+/** Decodes bytes that must fail, and prints why they did; exits if they
+ * don't fail.
+ *
+ * @param data  The bytes.
+ * @param len   How many there are.
+ * @param why   What is wrong with them, for the message. */
 static void try_decode(const uint8_t* data, size_t len, const char* why) {
         housekeeping_Status s;
         char t[256], h[64], msg[128];
@@ -116,6 +141,11 @@ static void try_decode(const uint8_t* data, size_t len, const char* why) {
                why, xtce_pk_error_kind(err.code), msg);
 }
 
+/** Writes a stream of housekeeping packets after the XTCE file's digest,
+ * reads it back, and shows what the generated code rejects; exits with
+ * status 1 if a result is not what it should be.
+ *
+ * @return  0. */
 int main(void) {
         /* The digest and the packets, one after another, and a buffer for
          * one packet, preallocated to housekeeping_Status_MAX_BYTES (7) and

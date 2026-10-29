@@ -10,6 +10,10 @@ from simple_string import SimpleString
 
 
 def main() -> None:
+    """Serializes and deserializes some strings, the last too long to fit.
+
+    Prints each result, then whether the buffers were reused.
+    """
     # The codec owns an input and an output buffer, both preallocated to
     # SimpleString.MAX_BYTES (8) and reused for every packet.
     codec = Codec.for_packet(SimpleString)

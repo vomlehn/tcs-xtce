@@ -64,7 +64,11 @@ DIGEST_TOOLS = [TOP / "rust" / "target" / "release" / "examples"
 
 
 def sources() -> list[tuple[str, str]]:
-    """(local name, SHA-256) of every document in sources.txt."""
+    """The documents listed in sources.txt.
+
+    Returns:
+        The local name and SHA-256, in hex, of each.
+    """
     out = []
     for line in (EXTERNAL / "sources.txt").read_text().splitlines():
         if line.strip() and not line.startswith("#"):
@@ -74,8 +78,11 @@ def sources() -> list[tuple[str, str]]:
 
 
 def missions() -> list[tuple[str, list[str]]]:
-    """(name, local names of its documents) of every mission in
-    missions.txt."""
+    """The missions listed in missions.txt.
+
+    Returns:
+        The name of each and the local names of its documents.
+    """
     out = []
     for line in (EXTERNAL / "missions.txt").read_text().splitlines():
         if not line.strip() or line.startswith("#"):
@@ -88,8 +95,18 @@ def missions() -> list[tuple[str, list[str]]]:
 
 
 def schema_verdict(path: Path) -> str:
-    """"valid" or "invalid" against the XTCE 1.3 schema, or "facets" when
-    only facets (patterns and ranges of values) are broken."""
+    """Validates a document against the XTCE 1.3 schema with xmllint.
+
+    Older XTCE namespaces, and a root without one, are read as 1.3, and
+    the document's own schemaLocation is ignored.
+
+    Args:
+        path: The document.
+
+    Returns:
+        "valid", "invalid", or "facets" when only facets (patterns and
+        ranges of values) are broken.
+    """
     data = OLD_NS.sub(NS13, path.read_bytes())
     # A root without a namespace is read as XTCE 1.3, as the binding reads
     # it.
@@ -114,7 +131,15 @@ def schema_verdict(path: Path) -> str:
 
 
 def run(cmd: list[str]) -> str:
-    """Runs a compiler; returns its first error line, or "" on success."""
+    """Runs a compiler.
+
+    Args:
+        cmd: The command and its arguments.
+
+    Returns:
+        "" on success; otherwise its first line that mentions an error, or
+        its first line of output, or its exit status if it printed nothing.
+    """
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode == 0:
         return ""
@@ -124,7 +149,18 @@ def run(cmd: list[str]) -> str:
 
 
 def build(mission, stem: str, out: Path) -> list[str]:
-    """Generates code in every language and compiles it; returns failures."""
+    """Generates code in every language and compiles it: the C header as
+    C11 and as C++20, the Rust module against the tcs-xtce crate, and the
+    Python module.
+
+    Args:
+        mission: The compiled mission.
+        stem:    The generated files' and modules' base name.
+        out:     The directory to write the generated files in.
+
+    Returns:
+        A line for each failure; empty if everything compiles.
+    """
     bad = []
     header = out / f"{stem}.h"
     header.write_text(emit_c.emit(mission, stem))
@@ -156,8 +192,20 @@ def build(mission, stem: str, out: Path) -> list[str]:
 
 
 def digests(paths: list[Path]) -> dict:
-    """Each document's digest line: the digest, or that the runtimes
-    disagree about it."""
+    """Each document's digest line, from the Python runtime and the digest
+    tools of the others.
+
+    Args:
+        paths: The documents.
+
+    Returns:
+        For each path, "digest" and the digest, or that the runtimes
+        disagree about it.  Python's digest is "error" when it can't read
+        the document.
+
+    Raises:
+        subprocess.CalledProcessError: A digest tool fails.
+    """
     results = [subprocess.run([str(t)] + [str(p) for p in paths],
                               capture_output=True, text=True,
                               check=True).stdout.split() for t in DIGEST_TOOLS]
@@ -175,7 +223,19 @@ def digests(paths: list[Path]) -> dict:
 
 
 def set_digest(paths: list[Path]) -> str:
-    """The digest line of a set of documents."""
+    """The digest line of a set of documents, as digests() gives one
+    document's.
+
+    Args:
+        paths: The documents.
+
+    Returns:
+        "digest" and the set's digest, or that the runtimes disagree
+        about it.
+
+    Raises:
+        subprocess.CalledProcessError: A digest tool fails.
+    """
     try:
         mine = digest_files(paths)
     except (OSError, xtce.XtceError):
@@ -198,9 +258,19 @@ def dialect(paths: list[Path]) -> str | None:
 
 def compiled(roots: list, stem: str, out: Path,
              dialect: str | None) -> list[str]:
-    """The summary lines of compiling the documents with root SpaceSystems
-    ``roots`` together, in ``dialect``, and building the code generated
-    from them."""
+    """The summary lines of compiling documents together and building the
+    code generated from them.
+
+    Args:
+        roots:   The documents' root SpaceSystems.
+        stem:    The generated files' base name.
+        out:     The directory to write the generated files in.
+        dialect: The XTCE dialect to compile in, or None for standard XTCE.
+
+    Returns:
+        The packet and unsupported counts, then each unsupported construct
+        and each build failure; or only that it wasn't compiled.
+    """
     try:
         mission = compile_documents(roots, skip_unsupported=True,
                                     dialect=dialect)
@@ -217,7 +287,16 @@ def compiled(roots: list, stem: str, out: Path,
 
 
 def check_mission(paths: list[Path], stem: str, out: Path) -> list[str]:
-    """The summary lines of one mission split across several documents."""
+    """The summary lines of one mission split across several documents.
+
+    Args:
+        paths: The mission's documents.
+        stem:  The generated files' base name.
+        out:   The directory to write the generated files in.
+
+    Returns:
+        The lines compiled() gives, or that the binding rejects a document.
+    """
     roots = []
     for p in paths:
         try:
@@ -228,7 +307,17 @@ def check_mission(paths: list[Path], stem: str, out: Path) -> list[str]:
 
 
 def check(path: Path, out: Path) -> list[str]:
-    """The summary lines of one document."""
+    """The summary lines of one document: its schema verdict, whether the
+    binding loads it and agrees, whether it writes back to an equal
+    document, and the lines compiled() gives.
+
+    Args:
+        path: The document.
+        out:  The directory to write the generated files in.
+
+    Returns:
+        The lines, the first the schema verdict and the binding's.
+    """
     verdict = schema_verdict(path)
     schema = {"valid": "schema valid", "invalid": "schema invalid",
               "facets": "schema invalid (facets only)"}[verdict]
@@ -248,6 +337,13 @@ def check(path: Path, out: Path) -> list[str]:
 
 
 def main() -> int:
+    """Checks every document and mission and compares the summaries with
+    expected.txt, or with --update, rewrites it.
+
+    Returns:
+        The exit status: 0 if the summaries match and flag nothing, else 1,
+        also when a tool is missing or a document's SHA-256 is wrong.
+    """
     update = sys.argv[1:] == ["--update"]
     for need in [RLIB] + DIGEST_TOOLS:
         if not need.exists():

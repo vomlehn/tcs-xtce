@@ -66,7 +66,12 @@ pub enum PacketError {
 }
 
 impl PacketError {
-    /// The error's name, identical in the Rust, C++ and Python runtimes.
+    /// Gives the error's name, identical in the Rust, C++ and Python
+    /// runtimes.
+    ///
+    /// # Returns
+    ///
+    /// The variant's name, such as `"Truncated"`.
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Truncated { .. } => "Truncated",
@@ -165,11 +170,30 @@ pub trait Packet: Sized {
         Self::decode_prefix(data).map(|(p, _)| p)
     }
 
-    /// Decodes a packet that starts at the first byte of `data`, and the
-    /// number of bytes it takes.
+    /// Decodes a packet that starts at the first byte of `data`.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The packet, possibly followed by other bytes.
+    ///
+    /// # Returns
+    ///
+    /// The packet and the number of bytes it takes.
+    ///
+    /// # Errors
+    ///
+    /// The [`PacketError`] that stopped decoding.
     fn decode_prefix(data: &[u8]) -> Result<(Self, usize)>;
 
     /// Writes the packet with `w`.
+    ///
+    /// # Arguments
+    ///
+    /// * `w` - The writer, positioned at the start of the packet.
+    ///
+    /// # Errors
+    ///
+    /// The [`PacketError`] that stopped encoding.
     fn encode_into(&self, w: &mut BitWriter<'_>) -> Result<()>;
 
     /// Replaces the contents of `buf` with the encoded packet.
@@ -194,7 +218,15 @@ pub struct Codec {
 }
 
 impl Codec {
-    /// Creates a codec with both buffers preallocated to `capacity` bytes.
+    /// Creates a codec with both buffers preallocated.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - The bytes to preallocate for each buffer.
+    ///
+    /// # Returns
+    ///
+    /// The codec, with both buffers empty.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             input: Buffer::with_capacity(capacity),
@@ -267,8 +299,16 @@ pub struct Batch {
 }
 
 impl Batch {
-    /// Creates an empty batch that holds up to `capacity` bytes of packets
-    /// (at most `u32::MAX`), preallocated.
+    /// Creates an empty batch, preallocated.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - The most bytes of packets it holds; values above
+    ///                `u32::MAX` are taken as `u32::MAX`.
+    ///
+    /// # Returns
+    ///
+    /// The batch, holding only its zero length.
     pub fn with_capacity(capacity: usize) -> Self {
         let capacity = capacity.min(u32::MAX as usize);
         let mut b = Self {
@@ -292,9 +332,17 @@ impl Batch {
         self.capacity
     }
 
-    /// Encodes `packet` after the packets already in the batch.  Fails with
-    /// `TooLong` if the batch would pass its capacity, leaving it as it
-    /// was.
+    /// Encodes a packet after the packets already in the batch and updates
+    /// the batch's length.
+    ///
+    /// # Arguments
+    ///
+    /// * `packet` - The packet to add.
+    ///
+    /// # Errors
+    ///
+    /// The packet's encoding error, or `TooLong` if the batch would pass
+    /// its capacity.  On error the batch is left as it was.
     pub fn push<P: Packet>(&mut self, packet: &P) -> Result<()> {
         packet.encode(&mut self.scratch)?;
         let len = self.len() + self.scratch.len();
@@ -331,9 +379,18 @@ impl Batch {
         writer.write_all(self.as_bytes())
     }
 
-    /// Replaces the batch with one read from `reader`: its length, then
-    /// that many bytes.  Fails with `InvalidData` if the length is above
-    /// the capacity, and `UnexpectedEof` if the batch ends early.
+    /// Replaces the batch with one read from a reader: its length, then
+    /// that many bytes.  Decoding starts again at the first packet.
+    ///
+    /// # Arguments
+    ///
+    /// * `reader` - Where the batch comes from.
+    ///
+    /// # Errors
+    ///
+    /// `InvalidData` if the length is above the capacity, `UnexpectedEof`
+    /// (leaving the batch empty) if the batch ends early, or any other
+    /// error from `reader`.
     pub fn read_from<R: Read>(&mut self, mut reader: R) -> io::Result<()> {
         let mut head = [0; BATCH_LENGTH_BYTES];
         reader.read_exact(&mut head)?;
@@ -349,9 +406,17 @@ impl Batch {
         r
     }
 
-    /// Replaces the batch with `bytes`, a whole batch received at once (a
-    /// datagram, say).  Fails with `InvalidData` unless its length is the
-    /// number of bytes after it, and at most the capacity.
+    /// Replaces the batch with a whole batch received at once (a datagram,
+    /// say).  Decoding starts again at the first packet.
+    ///
+    /// # Arguments
+    ///
+    /// * `bytes` - The batch, length first.
+    ///
+    /// # Errors
+    ///
+    /// `InvalidData` unless the length is the number of bytes after it and
+    /// at most the capacity.
     pub fn load(&mut self, bytes: &[u8]) -> io::Result<()> {
         let Some(head) = bytes.first_chunk::<BATCH_LENGTH_BYTES>() else {
             return Err(invalid_batch("a batch is shorter than its length"));
@@ -366,6 +431,19 @@ impl Batch {
         Ok(())
     }
 
+    /// Checks the length that starts a batch against the capacity.
+    ///
+    /// # Arguments
+    ///
+    /// * `head` - The length's bytes, big endian.
+    ///
+    /// # Returns
+    ///
+    /// The length.
+    ///
+    /// # Errors
+    ///
+    /// `InvalidData` if the length is above the capacity.
     fn check_length(
         &self,
         head: [u8; BATCH_LENGTH_BYTES],
@@ -389,8 +467,11 @@ impl Batch {
         self.buf.len() - self.pos
     }
 
-    /// Checks that every packet has been decoded: fails with `BadLength`
-    /// if bytes are left over.
+    /// Checks that every packet in the batch has been decoded.
+    ///
+    /// # Errors
+    ///
+    /// `BadLength` if bytes are left over.
     pub fn finish(&self) -> Result<()> {
         if self.remaining() != 0 {
             return Err(PacketError::BadLength { field: "batch" });
@@ -403,6 +484,15 @@ fn invalid_batch(why: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, why)
 }
 
+/// Makes a mask of the low bits of a 64-bit word.
+///
+/// # Arguments
+///
+/// * `bits` - How many low bits to set; 64 or more sets them all.
+///
+/// # Returns
+///
+/// The mask.
 fn mask(bits: u32) -> u64 {
     if bits >= 64 {
         u64::MAX
@@ -411,6 +501,21 @@ fn mask(bits: u32) -> u64 {
     }
 }
 
+/// Adds a signed offset to a position in bits.
+///
+/// # Arguments
+///
+/// * `base`   - The position the offset is from, in bits.
+/// * `offset` - The offset in bits, negative to move back.
+/// * `field`  - The field's name, for errors.
+///
+/// # Returns
+///
+/// The new position.
+///
+/// # Errors
+///
+/// `BadPosition` if it is before the packet start.
 fn position(base: usize, offset: i64, field: &'static str) -> Result<usize> {
     let p = base as i64 + offset;
     if p < 0 {
@@ -430,6 +535,15 @@ pub struct BitReader<'a> {
 }
 
 impl<'a> BitReader<'a> {
+    /// Creates a reader at the start of a packet.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The packet's bytes.
+    ///
+    /// # Returns
+    ///
+    /// The reader, positioned at bit 0, most significant bit first.
     pub fn new(data: &'a [u8]) -> Self {
         Self {
             data,
@@ -462,10 +576,21 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
-    /// As [`BitReader::seek`], but fails with `BadPosition` before the
-    /// current position: an entry located from the end of a container whose
-    /// size another value gives, which must not overlap the entries before
-    /// it.
+    /// Moves to `offset` bits from `start`, as [`BitReader::seek`], but not
+    /// back past the current position: for an entry located from the end
+    /// of a container whose size another value gives, which must not
+    /// overlap the entries before it.
+    ///
+    /// # Arguments
+    ///
+    /// * `start`  - The position the offset is from, in bits.
+    /// * `offset` - The offset in bits, negative to move back.
+    /// * `field`  - The entry's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `BadPosition` if the new position is before the packet start or the
+    /// current position.
     pub fn seek_ahead(
         &mut self,
         start: usize,
@@ -481,9 +606,18 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
-    /// Moves `offset` bits from the current position.
-    /// Moves to `back` bits before the end of the packet, which must not be
+    /// Moves to a position before the end of the packet, which must not be
     /// before the current position.
+    ///
+    /// # Arguments
+    ///
+    /// * `back`  - How many bits before the end of the packet.
+    /// * `field` - The entry's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `BadPosition` if the position is before the packet start or the
+    /// current position.
     pub fn seek_end(&mut self, back: usize, field: &'static str) -> Result<()> {
         match (self.data.len() * 8).checked_sub(back) {
             Some(p) if p >= self.pos => {
@@ -495,10 +629,30 @@ impl<'a> BitReader<'a> {
         }
     }
 
+    /// Moves `offset` bits from the current position.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset` - The bits to move, negative to move back.
+    /// * `field`  - The entry's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `BadPosition` if the new position is before the packet start.
     pub fn skip(&mut self, offset: i64, field: &'static str) -> Result<()> {
         self.seek(self.pos, offset, field)
     }
 
+    /// Checks that the packet has enough bits left after the position.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits`  - The bits about to be read.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first.
     fn need(&self, bits: usize, field: &'static str) -> Result<()> {
         if bits > (self.data.len() * 8).saturating_sub(self.pos) {
             Err(PacketError::Truncated { field })
@@ -507,7 +661,20 @@ impl<'a> BitReader<'a> {
         }
     }
 
-    /// Reads an unsigned big-endian field of `bits` (1 to 64) bits.
+    /// Reads an unsigned big-endian field of up to 64 bits.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits`  - The field's size in bits, 1 to 64.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The field's value.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first.
     pub fn uint(&mut self, bits: u32, field: &'static str) -> Result<u64> {
         self.need(bits as usize, field)?;
         let mut v = 0u64;
@@ -536,8 +703,7 @@ impl<'a> BitReader<'a> {
         Ok(if le { swap_bytes(v, bits) } else { v })
     }
 
-    /// Reads an unsigned field of `bits` (1 to 128) bits in any bit and
-    /// byte order.
+    /// Reads an unsigned field of up to 128 bits in any bit and byte order.
     ///
     /// The field's bits are taken in groups of 8 (the last may be shorter).
     /// Within a group, `lsb` false numbers the bits of each byte from the
@@ -545,6 +711,22 @@ impl<'a> BitReader<'a> {
     /// most significant; `lsb` true numbers them from the least significant,
     /// and the group's first bit is its least significant.  `order` combines
     /// the groups.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits`  - The field's size in bits, 1 to 128.
+    /// * `lsb`   - Whether bits are numbered from each byte's least
+    ///             significant bit.
+    /// * `order` - The order in which the groups combine.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The field's value.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first.
     pub fn uint_bits(
         &mut self,
         bits: u32,
@@ -578,8 +760,24 @@ impl<'a> BitReader<'a> {
         Ok(combine(&groups[..k], order))
     }
 
-    /// Reads an unsigned field of `bits` bits, as many as `N` bytes hold,
-    /// in the bit and byte order that [`BitReader::uint_bits`] reads.
+    /// Reads an unsigned field as wide as `N` bytes hold, in the bit and
+    /// byte order that [`BitReader::uint_bits`] reads.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits`  - The field's size in bits, at most `8 * N`.
+    /// * `lsb`   - Whether bits are numbered from each byte's least
+    ///             significant bit.
+    /// * `order` - The order in which the 8-bit groups combine.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The field's value.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first.
     pub fn wide<const N: usize>(
         &mut self,
         bits: u32,
@@ -628,7 +826,16 @@ impl<'a> BitReader<'a> {
         checksum(spec, self.data, start, end, field)
     }
 
-    /// Skips `bits` bits of padding, which must be in the packet.
+    /// Skips padding, which must be in the packet.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits`  - The padding's size in bits.
+    /// * `field` - The padding's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first.
     pub fn pad(&mut self, bits: usize, field: &'static str) -> Result<()> {
         self.need(bits, field)?;
         self.pos += bits;
@@ -636,9 +843,20 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
-    /// Ends the packet where the packet length field `field`, whose value
-    /// `v` was just read, says: `v - adjust` bytes after the field.  Fails
-    /// with `Truncated` if `data` is shorter.
+    /// Ends the packet where a packet length field just read says:
+    /// `v - adjust` bytes after the field.
+    ///
+    /// # Arguments
+    ///
+    /// * `v`      - The length field's value.
+    /// * `adjust` - What to subtract from `v` to get the bytes after the
+    ///              field.
+    /// * `field`  - The length field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `BadLength` if `v - adjust` is negative, and `Truncated` if the data
+    /// is shorter than the length says.
     pub fn limit(
         &mut self,
         v: u64,
@@ -657,8 +875,22 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
-    /// The next `n` whole bytes, the rest of the packet when None, which
-    /// must start on a byte boundary, without reading them.
+    /// Gives the next whole bytes without reading them.  They must start
+    /// on a byte boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `n`     - How many bytes, or `None` for the rest of the packet.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The bytes.
+    ///
+    /// # Errors
+    ///
+    /// `BadPosition` if the position is not on a byte boundary, and
+    /// `Truncated` if the packet has fewer than `n` bytes left.
     fn offer(&self, n: Option<usize>, field: &'static str) -> Result<&'a [u8]> {
         if self.pos % 8 != 0 {
             return Err(PacketError::BadPosition { field });
@@ -672,8 +904,18 @@ impl<'a> BitReader<'a> {
         Ok(&data[start..start + n])
     }
 
-    /// Moves past the `k` bytes a transform took of those `offer` gave,
-    /// which must be all `raw` of them when given.
+    /// Moves past the bytes a transform took of those `offer` gave.
+    ///
+    /// # Arguments
+    ///
+    /// * `k`       - How many bytes the transform took.
+    /// * `offered` - How many bytes `offer` gave it.
+    /// * `raw`     - The bytes it must take, if the size is known.
+    /// * `field`   - The field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `BadSize` if `k` is more than `offered` or differs from `raw`.
     fn took(
         &mut self,
         k: usize,
@@ -689,10 +931,29 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
-    /// Reads data that the transform `f` decodes: offers it the next `raw`
+    /// Reads data that a transform decodes: offers it the next `raw`
     /// bytes, or the rest of the packet when None, and moves past those it
-    /// says it takes, which must be all `raw` of them.  Gives how many
-    /// bytes it makes, in `out`.
+    /// says it takes, which must be all `raw` of them.
+    ///
+    /// # Arguments
+    ///
+    /// * `f`     - The transform, or `None` if the document gives only the
+    ///             other direction.
+    /// * `raw`   - The encoded size in bytes, or `None` for the rest of the
+    ///             packet.
+    /// * `out`   - Where the transform puts the decoded bytes.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// How many bytes the transform wrote to `out`.
+    ///
+    /// # Errors
+    ///
+    /// `NotInvertible` if `f` is `None`, `InvalidValue` if the transform
+    /// fails, `TooLong` if it makes more than `out` holds, and the errors
+    /// of offering and taking the bytes (`BadPosition`, `Truncated`,
+    /// `BadSize`).
     pub fn binary_from(
         &mut self,
         f: Option<BinaryFromFn>,
@@ -711,8 +972,26 @@ impl<'a> BitReader<'a> {
         Ok(n)
     }
 
-    /// Reads a time that the transform `f` decodes, in seconds, as
-    /// `binary_from` reads bytes.
+    /// Reads a time that a transform decodes, as `binary_from` reads
+    /// bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `f`     - The transform, or `None` if the document gives only the
+    ///             other direction.
+    /// * `raw`   - The encoded size in bytes, or `None` for the rest of the
+    ///             packet.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The time in seconds.
+    ///
+    /// # Errors
+    ///
+    /// `NotInvertible` if `f` is `None`, `InvalidValue` if the transform
+    /// fails, and the errors of offering and taking the bytes
+    /// (`BadPosition`, `Truncated`, `BadSize`).
     pub fn time_from(
         &mut self,
         f: Option<TimeFromFn>,
@@ -726,9 +1005,23 @@ impl<'a> BitReader<'a> {
         Ok(s)
     }
 
-    /// Where the container that the length field `field`, whose value `v`
-    /// was just read, measures ends: `v - adjust` bytes after the field, in
-    /// bytes from the packet's start.
+    /// Finds where the container that a length field just read measures
+    /// ends: `v - adjust` bytes after the field.
+    ///
+    /// # Arguments
+    ///
+    /// * `v`      - The length field's value.
+    /// * `adjust` - What to subtract from `v` to get the bytes after the
+    ///              field.
+    /// * `field`  - The length field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The container's end, in bytes from the packet's start.
+    ///
+    /// # Errors
+    ///
+    /// `BadLength` if `v - adjust` is negative.
     pub fn span_end(
         &self,
         v: u64,
@@ -742,8 +1035,18 @@ impl<'a> BitReader<'a> {
         Ok(self.pos.div_ceil(8) as i128 + after)
     }
 
-    /// Fails with BadLength unless the container that `field` measures ends
-    /// at byte `end`, here.
+    /// Checks that the container a length field measures ends here.
+    ///
+    /// # Arguments
+    ///
+    /// * `end`   - Where the container must end, in bytes from the
+    ///             packet's start, as `span_end` gave it.
+    /// * `field` - The length field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `BadLength` unless the current position, rounded up to a byte, is
+    /// `end`.
     pub fn check_span(&self, end: i128, field: &'static str) -> Result<()> {
         if self.pos.div_ceil(8) as i128 != end {
             return Err(PacketError::BadLength { field });
@@ -752,7 +1055,16 @@ impl<'a> BitReader<'a> {
     }
 
     /// Checks that the packet's entries reach the end that the packet
-    /// length field `field` gave.
+    /// length field gave.
+    ///
+    /// # Arguments
+    ///
+    /// * `field` - The packet length field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `BadLength` unless the furthest bit read ends in the packet's last
+    /// byte.
     pub fn finish(&self, field: &'static str) -> Result<()> {
         if self.end.div_ceil(8) != self.data.len() {
             return Err(PacketError::BadLength { field });
@@ -760,10 +1072,23 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
-    /// The bytes from the current position to `tail` bits before the end of
-    /// the packet, for a field that takes the rest of it but the `tail` bits
-    /// of the entries after it.  Fails with `BadSize` unless they are whole
-    /// bytes, at most `max` of them.
+    /// Counts the bytes from the current position to `tail` bits before
+    /// the end of the packet, for a field that takes the rest of it but the
+    /// `tail` bits of the entries after it.
+    ///
+    /// # Arguments
+    ///
+    /// * `max`   - The most bytes the field holds.
+    /// * `tail`  - The bits of the entries after the field.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The field's size in bytes.
+    ///
+    /// # Errors
+    ///
+    /// `BadSize` unless the bits are whole bytes, at most `max` of them.
     pub fn rest_bytes(
         &self,
         max: usize,
@@ -777,10 +1102,23 @@ impl<'a> BitReader<'a> {
         Ok(bits / 8)
     }
 
-    /// Reads `n` whole bytes (which need not be byte aligned).
-    /// The size of the CCSDS packet that starts here, from its packet
-    /// length field, for an embedded packet (Yamcs:EmbeddedTc); fails with
-    /// TooLong if it is more than `max` bytes.
+    /// Gives the size of the CCSDS packet that starts here, from its
+    /// packet length field, for an embedded packet (Yamcs:EmbeddedTc),
+    /// without moving.
+    ///
+    /// # Arguments
+    ///
+    /// * `max`   - The most bytes the embedded packet may take.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The embedded packet's size in bytes.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends before the length field, and
+    /// `TooLong` if the size is more than `max` bytes.
     pub fn embedded_bytes(
         &self,
         max: usize,
@@ -795,14 +1133,42 @@ impl<'a> BitReader<'a> {
         Ok(n)
     }
 
+    /// Reads whole bytes, which need not be byte aligned.
+    ///
+    /// # Arguments
+    ///
+    /// * `n`     - How many bytes.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The bytes, in a new vector.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first.
     pub fn bytes(&mut self, n: usize, field: &'static str) -> Result<Vec<u8>> {
         let mut out = Vec::new();
         self.bytes_into(n, &mut out, field)?;
         Ok(out)
     }
 
-    /// Reads `n` whole bytes into a fixed-capacity vector; fails with
-    /// `TooLong` if they do not fit.
+    /// Reads whole bytes, which need not be byte aligned, into a
+    /// fixed-capacity vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `n`     - How many bytes.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The bytes.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first, and `TooLong` if the bytes do
+    /// not fit in `N`.
     pub fn fixed_bytes<const N: usize>(
         &mut self,
         n: usize,
@@ -821,7 +1187,19 @@ impl<'a> BitReader<'a> {
         self.lsb = lsb;
     }
 
-    /// One byte of a string or binary value, in its bit order.
+    /// Reads one byte of a string or binary value, in its bit order.
+    ///
+    /// # Arguments
+    ///
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The byte.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first.
     fn byte(&mut self, field: &'static str) -> Result<u8> {
         Ok(if self.lsb {
             self.uint_bits(8, true, ByteOrder::Big, field)? as u8
@@ -830,7 +1208,20 @@ impl<'a> BitReader<'a> {
         })
     }
 
-    /// A string's size tag of `bits` bits, in its bit order.
+    /// Reads a string's size tag, in its bit order.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits`  - The tag's size in bits, 1 to 64.
+    /// * `field` - The string's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// The tag's value.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first.
     fn tag(&mut self, bits: u32, field: &'static str) -> Result<u64> {
         if self.lsb {
             Ok(self.uint_bits(bits, true, ByteOrder::Big, field)? as u64)
@@ -839,7 +1230,19 @@ impl<'a> BitReader<'a> {
         }
     }
 
-    /// Appends `n` whole bytes to `out`.
+    /// Reads whole bytes, which need not be byte aligned, and appends them
+    /// to a sink.
+    ///
+    /// # Arguments
+    ///
+    /// * `n`     - How many bytes.
+    /// * `out`   - Where to append them.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first, and `TooLong` if `out` cannot
+    /// hold them.
     fn bytes_into<S: ByteSink>(
         &mut self,
         n: usize,
@@ -865,9 +1268,37 @@ impl<'a> BitReader<'a> {
 /// Where [`BitReader`] puts the bytes it reads: a `Vec`, or a
 /// [`FixedBytes`] that never allocates.
 trait ByteSink {
+    /// Appends bytes to the sink.
+    ///
+    /// # Arguments
+    ///
+    /// * `bytes` - The bytes to append.
+    /// * `field` - The field they belong to, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `TooLong` if the sink cannot hold them.
     fn append(&mut self, bytes: &[u8], field: &'static str) -> Result<()>;
+
+    /// Counts the bytes in the sink.
+    ///
+    /// # Returns
+    ///
+    /// How many bytes it holds.
     fn len(&self) -> usize;
+
+    /// Shortens the sink, dropping the bytes past a length.
+    ///
+    /// # Arguments
+    ///
+    /// * `len` - The length to keep, in bytes.
     fn truncate(&mut self, len: usize);
+
+    /// Gives the bytes in the sink.
+    ///
+    /// # Returns
+    ///
+    /// The bytes.
     fn bytes(&self) -> &[u8];
 }
 
@@ -937,6 +1368,15 @@ pub struct BitWriter<'a> {
 }
 
 impl<'a> BitWriter<'a> {
+    /// Creates a writer that writes a packet into a buffer, clearing it.
+    ///
+    /// # Arguments
+    ///
+    /// * `buf` - The buffer the packet goes in; its allocation is reused.
+    ///
+    /// # Returns
+    ///
+    /// The writer, positioned at bit 0, most significant bit first.
     pub fn new(buf: &'a mut Buffer) -> Self {
         buf.clear();
         Self {
@@ -953,7 +1393,11 @@ impl<'a> BitWriter<'a> {
         self.lsb = lsb;
     }
 
-    /// One byte of a string or binary value, in its bit order.
+    /// Writes one byte of a string or binary value, in its bit order.
+    ///
+    /// # Arguments
+    ///
+    /// * `b` - The byte.
     fn byte(&mut self, b: u8) {
         if self.lsb {
             self.uint_bits(8, true, ByteOrder::Big, u128::from(b));
@@ -962,7 +1406,12 @@ impl<'a> BitWriter<'a> {
         }
     }
 
-    /// A string's size tag of `bits` bits, in its bit order.
+    /// Writes a string's size tag, in its bit order.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits` - The tag's size in bits, 1 to 64.
+    /// * `v`    - The tag's value.
     fn tag(&mut self, bits: u32, v: u64) {
         if self.lsb {
             self.uint_bits(bits, true, ByteOrder::Big, u128::from(v));
@@ -985,8 +1434,19 @@ impl<'a> BitWriter<'a> {
         Ok(())
     }
 
-    /// As [`BitWriter::seek`], but fails with `BadPosition` before the
-    /// current position, as [`BitReader::seek_ahead`] does.
+    /// Moves to `offset` bits from `start`, as [`BitWriter::seek`], but not
+    /// back past the current position, as [`BitReader::seek_ahead`] does.
+    ///
+    /// # Arguments
+    ///
+    /// * `start`  - The position the offset is from, in bits.
+    /// * `offset` - The offset in bits, negative to move back.
+    /// * `field`  - The entry's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `BadPosition` if the new position is before the packet start or the
+    /// current position.
     pub fn seek_ahead(
         &mut self,
         start: usize,
@@ -1012,7 +1472,13 @@ impl<'a> BitWriter<'a> {
         self.seek(self.pos, offset, field)
     }
 
-    /// Writes the low `bits` bits of `v`, big endian.
+    /// Writes an unsigned field of up to 64 bits, big endian, growing the
+    /// buffer to hold it.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits` - The field's size in bits, 0 to 64.
+    /// * `v`    - The value; only its low `bits` bits are written.
     pub fn uint(&mut self, bits: u32, v: u64) {
         let end = (self.pos + bits as usize).div_ceil(8);
         if self.buf.len() < end {
@@ -1038,14 +1504,11 @@ impl<'a> BitWriter<'a> {
     ///
     /// # Arguments
     ///
-    /// * `bits` -- the bits of the field: past 64, `v` with zeros above
-    ///   it, for a packet length or checksum field of more than 64 bits.
-    /// * `le`   -- whether the field is little endian.
-    /// * `v`    -- the value.
-    ///
-    /// # Returns
-    ///
-    /// Nothing.
+    /// * `bits` - The bits of the field: past 64, `v` with zeros above
+    ///            it, for a packet length or checksum field of more than
+    ///            64 bits.
+    /// * `le`   - Whether the field is little endian.
+    /// * `v`    - The value.
     pub fn uint_order(&mut self, bits: u32, le: bool, v: u64) {
         if bits > 64 {
             if le {
@@ -1060,8 +1523,17 @@ impl<'a> BitWriter<'a> {
         self.uint(bits, if le { swap_bytes(v, bits) } else { v });
     }
 
-    /// Writes the low `bits` bits of `v` in the bit and byte order that
-    /// [`BitReader::uint_bits`] reads.
+    /// Writes an unsigned field of up to 128 bits in the bit and byte
+    /// order that [`BitReader::uint_bits`] reads, growing the buffer to
+    /// hold it.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits`  - The field's size in bits, 0 to 128.
+    /// * `lsb`   - Whether bits are numbered from each byte's least
+    ///             significant bit.
+    /// * `order` - The order in which the 8-bit groups combine.
+    /// * `v`     - The value; only its low `bits` bits are written.
     pub fn uint_bits(
         &mut self,
         bits: u32,
@@ -1101,8 +1573,17 @@ impl<'a> BitWriter<'a> {
         self.pos = q;
     }
 
-    /// Writes the low `bits` bits of the integer whose bytes, least
-    /// significant first, are `v`, in the order [`BitReader::wide`] reads.
+    /// Writes a wide unsigned field in the order [`BitReader::wide`]
+    /// reads, growing the buffer to hold it.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits`  - The field's size in bits, at most `8 * v.len()`.
+    /// * `lsb`   - Whether bits are numbered from each byte's least
+    ///             significant bit.
+    /// * `order` - The order in which the 8-bit groups combine.
+    /// * `v`     - The value's bytes, least significant first; only its
+    ///             low `bits` bits are written.
     pub fn wide(&mut self, bits: u32, lsb: bool, order: ByteOrder, v: &[u8]) {
         let end = (self.pos + bits as usize).div_ceil(8);
         if self.buf.len() < end {
@@ -1127,7 +1608,12 @@ impl<'a> BitWriter<'a> {
         self.pos = q;
     }
 
-    /// Writes whole bytes (which need not be byte aligned).
+    /// Writes whole bytes, which need not be byte aligned, in the string
+    /// and binary bit order.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The bytes.
     pub fn bytes(&mut self, data: &[u8]) {
         if data.is_empty() {
             return;
@@ -1143,9 +1629,21 @@ impl<'a> BitWriter<'a> {
         self.pos += data.len() * 8;
     }
 
-    /// Fills in the packet length field `field` of `bits` bits at bit `at`,
-    /// once the whole packet is written: the number of bytes after the
-    /// field plus `adjust`.
+    /// Fills in a packet length field once the whole packet is written:
+    /// the number of bytes after the field plus `adjust`.
+    ///
+    /// # Arguments
+    ///
+    /// * `at`     - The field's position in bits.
+    /// * `bits`   - The field's size in bits.
+    /// * `le`     - Whether the field is little endian.
+    /// * `adjust` - What to add to the bytes after the field.
+    /// * `field`  - The field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `OutOfRange` if the length is negative or does not fit in `bits`
+    /// bits.
     pub fn patch_length(
         &mut self,
         at: usize,
@@ -1167,9 +1665,24 @@ impl<'a> BitWriter<'a> {
         Ok(())
     }
 
-    /// Replaces the bytes written from bit `start`, on a byte boundary, with
-    /// what the transform `f` makes of them: exactly `raw` bytes when given,
-    /// and at most `cap`.  It works in the buffer, past what is written.
+    /// Replaces the bytes written from a byte boundary with what a
+    /// transform makes of them.  It works in the buffer, past what is
+    /// written.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Where the bytes start, in bits, on a byte boundary.
+    /// * `f`     - The transform, or `None` if the document gives only the
+    ///             other direction.
+    /// * `raw`   - The size the result must have in bytes, if fixed.
+    /// * `cap`   - The most bytes the result may take.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `NotInvertible` if `f` is `None`, `InvalidValue` if the transform
+    /// fails, `TooLong` if it makes more than `cap` bytes, and `BadSize`
+    /// if it does not make `raw` bytes.
     pub fn transform(
         &mut self,
         start: usize,
@@ -1197,8 +1710,22 @@ impl<'a> BitWriter<'a> {
         Ok(())
     }
 
-    /// Writes what the transform `f` makes of `data`, as `transform` does,
+    /// Writes what a transform makes of some bytes, as `transform` does,
     /// on a byte boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `f`     - The transform, or `None` if the document gives only the
+    ///             other direction.
+    /// * `data`  - The bytes to transform.
+    /// * `raw`   - The size the result must have in bytes, if fixed.
+    /// * `cap`   - The most bytes the result may take.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `BadPosition` if the writer is not on a byte boundary, and the
+    /// errors of [`BitWriter::transform`].
     pub fn binary_to(
         &mut self,
         f: Option<BinaryToFn>,
@@ -1215,8 +1742,23 @@ impl<'a> BitWriter<'a> {
         self.transform(start, f, raw, cap, field)
     }
 
-    /// Writes what the transform `f` makes of the time `s`, in seconds, on
-    /// a byte boundary: exactly `raw` bytes when given, and at most `cap`.
+    /// Writes what a transform makes of a time, on a byte boundary.
+    ///
+    /// # Arguments
+    ///
+    /// * `f`     - The transform, or `None` if the document gives only the
+    ///             other direction.
+    /// * `s`     - The time in seconds.
+    /// * `raw`   - The size the result must have in bytes, if fixed.
+    /// * `cap`   - The most bytes the result may take.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `NotInvertible` if `f` is `None`, `BadPosition` if the writer is
+    /// not on a byte boundary, `InvalidValue` if the transform fails,
+    /// `TooLong` if it makes more than `cap` bytes, and `BadSize` if it
+    /// does not make `raw` bytes.
     pub fn time_to(
         &mut self,
         f: Option<TimeToFn>,
@@ -1244,9 +1786,21 @@ impl<'a> BitWriter<'a> {
         Ok(())
     }
 
-    /// Fills in the length field `field` of `bits` bits at bit `at`, which
-    /// measures an included container that ends here: the bytes after the
-    /// field plus `adjust`.
+    /// Fills in a length field that measures an included container that
+    /// ends here: the bytes after the field plus `adjust`.
+    ///
+    /// # Arguments
+    ///
+    /// * `at`     - The field's position in bits.
+    /// * `bits`   - The field's size in bits.
+    /// * `le`     - Whether the field is little endian.
+    /// * `adjust` - What to add to the bytes after the field.
+    /// * `field`  - The field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `OutOfRange` if the length is negative or does not fit in `bits`
+    /// bits.
     pub fn patch_span(
         &mut self,
         at: usize,
@@ -1273,9 +1827,22 @@ impl<'a> BitWriter<'a> {
         self.buf.len() * 8
     }
 
-    /// Fills in the checksum field `field` of `bits` bits at bit `at`: the
-    /// checksum `spec` of the bits from `start` to `end`, its low `bits`
-    /// bits.
+    /// Fills in a checksum field with the low bits of the checksum of the
+    /// bits written from `start` to `end`.
+    ///
+    /// # Arguments
+    ///
+    /// * `spec`  - The checksum algorithm.
+    /// * `start` - Where the checked data starts, in bits.
+    /// * `end`   - Where it ends, in bits.
+    /// * `at`    - The checksum field's position in bits.
+    /// * `bits`  - The checksum field's size in bits.
+    /// * `le`    - Whether the field is little endian.
+    /// * `field` - The checksum field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// The errors of computing the checksum (see [`checksum`]).
     #[allow(clippy::too_many_arguments)]
     pub fn patch_checksum(
         &mut self,
@@ -1295,10 +1862,18 @@ impl<'a> BitWriter<'a> {
         Ok(())
     }
 
-    /// Prepares to encode a value of `bits` bits (at most 64) that is split
-    /// into segments: the writer moves to the byte boundary at or before
-    /// its position, so the value is encoded as it would be at the start of
-    /// a buffer, over bits that [`BitWriter::unstash`] restores.
+    /// Prepares to encode a value that is split into segments: the writer
+    /// moves to the byte boundary at or before its position, so the value
+    /// is encoded as it would be at the start of a buffer, over bits that
+    /// [`BitWriter::unstash`] restores.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits` - The value's encoded size in bits, at most 64.
+    ///
+    /// # Returns
+    ///
+    /// What [`BitWriter::unstash`] needs to restore the writer.
     pub fn stash(&mut self, bits: u32) -> Stash {
         let at = self.pos / 8 * 8;
         let s = Stash {
@@ -1312,8 +1887,16 @@ impl<'a> BitWriter<'a> {
         s
     }
 
-    /// Returns the value encoded since [`BitWriter::stash`], its last bit
-    /// least significant, and restores the bits and position it saved.
+    /// Takes the value encoded since [`BitWriter::stash`] and restores the
+    /// bits and position it saved.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - What [`BitWriter::stash`] saved.
+    ///
+    /// # Returns
+    ///
+    /// The value encoded since, its last bit least significant.
     pub fn unstash(&mut self, s: Stash) -> u64 {
         let v = self.peek(s.at, s.bits);
         self.pos = s.at;
@@ -1325,7 +1908,17 @@ impl<'a> BitWriter<'a> {
         v
     }
 
-    /// The `bits` bits at `pos`; those past the buffer's end are zero.
+    /// Reads bits already written, without moving.
+    ///
+    /// # Arguments
+    ///
+    /// * `pos`  - Where the bits start, in bits.
+    /// * `bits` - How many bits, at most 64.
+    ///
+    /// # Returns
+    ///
+    /// The bits, the last least significant; those past the buffer's end
+    /// read as zero.
     fn peek(&self, pos: usize, bits: u32) -> u64 {
         let data = self.buf.as_bytes();
         (pos..pos + bits as usize).fold(0, |v, p| {
@@ -1334,7 +1927,11 @@ impl<'a> BitWriter<'a> {
         })
     }
 
-    /// Writes `bits` zero bits, overwriting whatever a seek left there.
+    /// Writes zero bits, overwriting whatever a seek left there.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits` - How many zero bits to write.
     pub fn zeros(&mut self, bits: usize) {
         if bits == 0 {
             return;
@@ -1355,7 +1952,16 @@ impl<'a> BitWriter<'a> {
         }
     }
 
-    /// Bytes `start..start + n` of the buffer, growing it to cover them.
+    /// Gives bytes of the buffer, growing it to cover them.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - The first byte's index.
+    /// * `n`     - How many bytes.
+    ///
+    /// # Returns
+    ///
+    /// Bytes `start..start + n` of the buffer.
     fn span(&mut self, start: usize, n: usize) -> &mut [u8] {
         if self.buf.len() < start + n {
             self.buf.resize(start + n);
@@ -1381,8 +1987,16 @@ pub enum ByteOrder {
     List(&'static [u8]),
 }
 
-/// The value of groups of bits ((value, length), in stream order) combined
-/// in `order`.
+/// Combines groups of bits into one value.
+///
+/// # Arguments
+///
+/// * `groups` - The groups as (value, length in bits), in stream order.
+/// * `order`  - How the groups combine.
+///
+/// # Returns
+///
+/// The combined value.
 fn combine(groups: &[(u8, u32)], order: ByteOrder) -> u128 {
     let mut v = 0u128;
     match order {
@@ -1407,8 +2021,20 @@ fn combine(groups: &[(u8, u32)], order: ByteOrder) -> u128 {
     v
 }
 
-/// The significance of the lowest bit of group `j`, of `n` bits, of a
-/// field of `bits` bits, the groups before which have `done` bits.
+/// Finds the significance of the lowest bit of one 8-bit group of a
+/// field.
+///
+/// # Arguments
+///
+/// * `bits`  - The field's size in bits.
+/// * `done`  - The bits in the groups before this one.
+/// * `n`     - The bits in this group, 1 to 8.
+/// * `j`     - The group's index, in stream order.
+/// * `order` - How the groups combine.
+///
+/// # Returns
+///
+/// The bit number, 0 for least significant, of the group's lowest bit.
 fn group_shift(
     bits: u32,
     done: u32,
@@ -1423,8 +2049,18 @@ fn group_shift(
     }
 }
 
-/// Group `j` of `v`, whose groups have `lengths` in stream order: the
-/// inverse of [`combine`].
+/// Takes one group of bits out of a value: the inverse of [`combine`].
+///
+/// # Arguments
+///
+/// * `v`       - The value.
+/// * `lengths` - The lengths in bits of its groups, in stream order.
+/// * `j`       - The index of the group to take.
+/// * `order`   - How the groups combine.
+///
+/// # Returns
+///
+/// The group's bits.
 fn split(v: u128, lengths: &[u32], j: usize, order: ByteOrder) -> u8 {
     let n = lengths[j];
     let shift: u32 = match order {
@@ -1510,9 +2146,16 @@ fn bit_at(data: &[u8], q: usize) -> u64 {
     ((data[q / 8] >> (7 - q % 8)) & 1) as u64
 }
 
-/// Calls `f` with each `width`-bit word of the bits from `start` to `end`,
-/// and the bits of it that are data; a last partial word is padded with
-/// zero bits.
+/// Calls a function with each word of a range of bits; a last partial
+/// word is padded with zero bits.
+///
+/// # Arguments
+///
+/// * `data`  - The bytes the bits are in, most significant bit first.
+/// * `start` - The first bit.
+/// * `end`   - The bit after the last.
+/// * `width` - The word size in bits, 1 to 64.
+/// * `f`     - Called with each word and how many of its bits are data.
 fn for_words(
     data: &[u8],
     start: usize,
@@ -1532,6 +2175,16 @@ fn for_words(
     }
 }
 
+/// Reverses the order of the low bits of a word.
+///
+/// # Arguments
+///
+/// * `v`    - The word.
+/// * `bits` - How many low bits to reverse, 0 to 64.
+///
+/// # Returns
+///
+/// The reversed bits; those above `bits` are zero.
 fn reflect(v: u64, bits: u32) -> u64 {
     if bits == 0 {
         0
@@ -1540,7 +2193,20 @@ fn reflect(v: u64, bits: u32) -> u64 {
     }
 }
 
-/// The decimal digits, one in every 4 bits, from `start` to `end`.
+/// Calls a function with each decimal digit, one in every 4 bits, of a
+/// range of bits.
+///
+/// # Arguments
+///
+/// * `data`  - The bytes the digits are in.
+/// * `start` - The first bit.
+/// * `end`   - The bit after the last.
+/// * `field` - The checksum field's name, for errors.
+/// * `f`     - Called with each digit, even one above 9.
+///
+/// # Errors
+///
+/// `InvalidValue` if any digit is above 9.
 fn digits(
     data: &[u8],
     start: usize,
@@ -1560,8 +2226,23 @@ fn digits(
     }
 }
 
-/// An XTCE ErrorDetectCorrect algorithm over the bits from `start` to `end`
-/// of `data`.
+/// Computes an XTCE ErrorDetectCorrect algorithm over a range of bits.
+///
+/// # Arguments
+///
+/// * `spec`  - The algorithm.
+/// * `data`  - The bytes the bits are in.
+/// * `start` - The first bit.
+/// * `end`   - The bit after the last; before `start` means none.
+/// * `field` - The checksum field's name, for errors.
+///
+/// # Returns
+///
+/// The checksum.
+///
+/// # Errors
+///
+/// `InvalidValue` if a Luhn, Verhoeff or Damm digit is above 9.
 pub fn checksum(
     spec: &Checksum,
     data: &[u8],
@@ -1699,6 +2380,16 @@ pub enum IntEncoding {
 }
 
 /// Converts a raw field to its signed value.
+///
+/// # Arguments
+///
+/// * `raw`  - The raw field.
+/// * `bits` - The field's size in bits, 1 to 64.
+/// * `enc`  - Its integer encoding.
+///
+/// # Returns
+///
+/// The signed value.
 pub fn to_signed(raw: u64, bits: u32, enc: IntEncoding) -> i64 {
     let sign = bits < 64 && (raw >> (bits - 1)) & 1 == 1
         || bits == 64 && (raw >> 63) == 1;
@@ -1730,6 +2421,21 @@ pub fn to_signed(raw: u64, bits: u32, enc: IntEncoding) -> i64 {
 }
 
 /// Converts a signed value to its raw field, checking that it fits.
+///
+/// # Arguments
+///
+/// * `v`     - The value.
+/// * `bits`  - The field's size in bits, 1 to 64.
+/// * `enc`   - Its integer encoding.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The raw field.
+///
+/// # Errors
+///
+/// `OutOfRange` if the field cannot hold the value.
 pub fn from_signed(
     v: i64,
     bits: u32,
@@ -1769,7 +2475,21 @@ pub fn from_signed(
     }
 }
 
-/// Checks that an unsigned value fits in `bits` bits.
+/// Checks that an unsigned value fits in a field.
+///
+/// # Arguments
+///
+/// * `v`     - The value.
+/// * `bits`  - The field's size in bits.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The value, unchanged.
+///
+/// # Errors
+///
+/// `OutOfRange` if it does not fit in `bits` bits.
 pub fn from_unsigned(v: u64, bits: u32, field: &'static str) -> Result<u64> {
     if v > mask(bits) {
         Err(PacketError::OutOfRange { field })
@@ -1779,6 +2499,16 @@ pub fn from_unsigned(v: u64, bits: u32, field: &'static str) -> Result<u64> {
 }
 
 /// Decodes a raw integer as unsigned or signed, as a float.
+///
+/// # Arguments
+///
+/// * `raw`  - The raw field.
+/// * `bits` - The field's size in bits, 1 to 64.
+/// * `enc`  - Its integer encoding.
+///
+/// # Returns
+///
+/// The field's value as a double.
 pub fn int_to_f64(raw: u64, bits: u32, enc: IntEncoding) -> f64 {
     match enc {
         IntEncoding::Unsigned => raw as f64,
@@ -1786,10 +2516,25 @@ pub fn int_to_f64(raw: u64, bits: u32, enc: IntEncoding) -> f64 {
     }
 }
 
-/// The value of a BCD field: packed BCD has a decimal digit in every 4
-/// bits, and (unpacked) BCD one in the low 4 bits of every byte, whose high
-/// 4 bits are zero; the first digit is the most significant.  Fails with
-/// `InvalidValue` for any other bits.
+/// Decodes a BCD field: packed BCD has a decimal digit in every 4 bits,
+/// and (unpacked) BCD one in the low 4 bits of every byte, whose high 4
+/// bits are zero; the first digit is the most significant.
+///
+/// # Arguments
+///
+/// * `raw`    - The raw field.
+/// * `bits`   - The field's size in bits.
+/// * `packed` - Whether it is packed BCD.
+/// * `field`  - The field's name, for errors.
+///
+/// # Returns
+///
+/// The field's value.
+///
+/// # Errors
+///
+/// `InvalidValue` if a digit is above 9 or an unpacked byte's high bits
+/// are not zero.
 pub fn bcd_decode(
     raw: u64,
     bits: u32,
@@ -1810,8 +2555,22 @@ pub fn bcd_decode(
     Ok(v)
 }
 
-/// The BCD field holding `v`; fails with `OutOfRange` unless the field's
-/// digits hold it.
+/// Encodes a value as a BCD field, as [`bcd_decode`] decodes it.
+///
+/// # Arguments
+///
+/// * `v`      - The value.
+/// * `bits`   - The field's size in bits.
+/// * `packed` - Whether it is packed BCD.
+/// * `field`  - The field's name, for errors.
+///
+/// # Returns
+///
+/// The raw field.
+///
+/// # Errors
+///
+/// `OutOfRange` unless the field's digits hold the value.
 pub fn bcd_encode(
     v: u64,
     bits: u32,
@@ -1851,8 +2610,18 @@ fn wide_mask<const N: usize>(k: u32) -> Uint<N> {
     Uint::<N>::MAX.unbounded_shr(8 * N as u32 - k)
 }
 
-/// Converts a raw field of `bits` bits to its value, as [`to_signed`]
-/// does.
+/// Converts a raw field of more than 64 bits to its signed value, as
+/// [`to_signed`] does.
+///
+/// # Arguments
+///
+/// * `raw`  - The raw field.
+/// * `bits` - The field's size in bits, 1 to `8 * N`.
+/// * `enc`  - Its integer encoding.
+///
+/// # Returns
+///
+/// The signed value.
 pub fn wide_to_signed<const N: usize>(
     raw: Uint<N>,
     bits: u32,
@@ -1872,8 +2641,23 @@ pub fn wide_to_signed<const N: usize>(
     (low & wide_mask(bits - 1)).cast_signed().wrapping_neg()
 }
 
-/// Converts a value to its raw field of `bits` bits, checking that it
-/// fits, as [`from_signed`] does.
+/// Converts a signed value to its raw field of more than 64 bits,
+/// checking that it fits, as [`from_signed`] does.
+///
+/// # Arguments
+///
+/// * `v`     - The value.
+/// * `bits`  - The field's size in bits, 1 to `8 * N`.
+/// * `enc`   - Its integer encoding.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The raw field.
+///
+/// # Errors
+///
+/// `OutOfRange` if the field cannot hold the value.
 pub fn wide_from_signed<const N: usize>(
     v: Int<N>,
     bits: u32,
@@ -1923,7 +2707,7 @@ pub fn wide_from_signed<const N: usize>(
 ///
 /// # Arguments
 ///
-/// * `x` -- the integer: a u128, an i128 or one of bnum's.
+/// * `x` - The integer: a u128, an i128 or one of bnum's.
 ///
 /// # Returns
 ///
@@ -1940,7 +2724,7 @@ where
 ///
 /// # Arguments
 ///
-/// * `x` -- the field's value: a u128 or one of bnum's integers.
+/// * `x` - The field's value: a u128 or one of bnum's integers.
 ///
 /// # Returns
 ///
@@ -1963,12 +2747,16 @@ where
 ///
 /// # Arguments
 ///
-/// * `v`     -- the field's value.
-/// * `field` -- the field's name, for errors.
+/// * `v`     - The field's value.
+/// * `field` - The field's name, for errors.
 ///
 /// # Returns
 ///
-/// The value, or `OutOfRange` when an i64 can't hold it.
+/// The value.
+///
+/// # Errors
+///
+/// `OutOfRange` when an i64 can't hold it.
 pub fn wide_to_i64<const N: usize>(
     v: Int<N>,
     field: &'static str,
@@ -1987,9 +2775,9 @@ pub fn wide_to_i64<const N: usize>(
 ///
 /// # Arguments
 ///
-/// * `raw`  -- the raw field.
-/// * `bits` -- the bits of the field.
-/// * `enc`  -- its integer encoding.
+/// * `raw`  - The raw field.
+/// * `bits` - The bits of the field.
+/// * `enc`  - Its integer encoding.
 ///
 /// # Returns
 ///
@@ -2011,14 +2799,18 @@ pub fn wide_int_to_f64<const N: usize>(
 ///
 /// # Arguments
 ///
-/// * `x`     -- the engineering value, after any inverse calibrator.
-/// * `bits`  -- the bits of the field.
-/// * `enc`   -- its integer encoding.
-/// * `field` -- the field's name, for errors.
+/// * `x`     - The engineering value, after any inverse calibrator.
+/// * `bits`  - The bits of the field.
+/// * `enc`   - Its integer encoding.
+/// * `field` - The field's name, for errors.
 ///
 /// # Returns
 ///
-/// The raw field, or `OutOfRange` unless the field holds the rounded value.
+/// The raw field.
+///
+/// # Errors
+///
+/// `OutOfRange` unless the field holds the rounded value.
 pub fn f64_to_wide<const N: usize>(
     x: f64,
     bits: u32,
@@ -2050,7 +2842,21 @@ pub fn f64_to_wide<const N: usize>(
     }
 }
 
-/// Checks that an unsigned value fits in `bits` bits.
+/// Checks that an unsigned value of more than 64 bits fits in a field.
+///
+/// # Arguments
+///
+/// * `v`     - The value.
+/// * `bits`  - The field's size in bits.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The value, unchanged.
+///
+/// # Errors
+///
+/// `OutOfRange` if it does not fit in `bits` bits.
 pub fn wide_from_unsigned<const N: usize>(
     v: Uint<N>,
     bits: u32,
@@ -2063,7 +2869,23 @@ pub fn wide_from_unsigned<const N: usize>(
     }
 }
 
-/// [`bcd_decode`] for fields of more than 64 bits.
+/// Decodes a BCD field of more than 64 bits, as [`bcd_decode`] does.
+///
+/// # Arguments
+///
+/// * `raw`    - The raw field.
+/// * `bits`   - The field's size in bits.
+/// * `packed` - Whether it is packed BCD.
+/// * `field`  - The field's name, for errors.
+///
+/// # Returns
+///
+/// The field's value.
+///
+/// # Errors
+///
+/// `InvalidValue` if a digit is above 9 or an unpacked byte's high bits
+/// are not zero.
 pub fn wide_bcd_decode<const N: usize>(
     raw: Uint<N>,
     bits: u32,
@@ -2085,7 +2907,23 @@ pub fn wide_bcd_decode<const N: usize>(
     Ok(v)
 }
 
-/// [`bcd_encode`] for fields of more than 64 bits.
+/// Encodes a value as a BCD field of more than 64 bits, as
+/// [`bcd_encode`] does.
+///
+/// # Arguments
+///
+/// * `v`      - The value.
+/// * `bits`   - The field's size in bits.
+/// * `packed` - Whether it is packed BCD.
+/// * `field`  - The field's name, for errors.
+///
+/// # Returns
+///
+/// The raw field.
+///
+/// # Errors
+///
+/// `OutOfRange` unless the field's digits hold the value.
 pub fn wide_bcd_encode<const N: usize>(
     v: Uint<N>,
     bits: u32,
@@ -2119,6 +2957,19 @@ where
 /// Writes an unsigned integer of more than 128 bits (so `N` is at least 8)
 /// in decimal, without allocating, as bnum formats only with its `alloc`
 /// feature.
+///
+/// # Arguments
+///
+/// * `v` - The integer.
+/// * `f` - Where to write it.
+///
+/// # Returns
+///
+/// `Ok(())` once the text is written.
+///
+/// # Errors
+///
+/// Any error from `f`.
 pub fn write_uint<W: fmt::Write + ?Sized, const N: usize>(
     v: Uint<N>,
     f: &mut W,
@@ -2135,7 +2986,21 @@ pub fn write_uint<W: fmt::Write + ?Sized, const N: usize>(
     write!(f, "{:019}", low(v % chunk))
 }
 
-/// Writes a signed integer of more than 128 bits in decimal.
+/// Writes a signed integer of more than 128 bits in decimal, as
+/// [`write_uint`] does.
+///
+/// # Arguments
+///
+/// * `v` - The integer.
+/// * `f` - Where to write it.
+///
+/// # Returns
+///
+/// `Ok(())` once the text is written.
+///
+/// # Errors
+///
+/// Any error from `f`.
 pub fn write_int<W: fmt::Write + ?Sized, const N: usize>(
     v: Int<N>,
     f: &mut W,
@@ -2146,7 +3011,24 @@ pub fn write_int<W: fmt::Write + ?Sized, const N: usize>(
     write_uint(v.unsigned_abs(), f)
 }
 
-/// Rounds an engineering value (half away from zero) to a raw integer field.
+/// Rounds an engineering value (half away from zero) to a raw integer
+/// field.
+///
+/// # Arguments
+///
+/// * `x`     - The engineering value, after any inverse calibrator.
+/// * `bits`  - The field's size in bits, 1 to 64.
+/// * `enc`   - Its integer encoding.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The raw field.
+///
+/// # Errors
+///
+/// `OutOfRange` unless the value is finite and the field holds it
+/// rounded.
 pub fn f64_to_int(
     x: f64,
     bits: u32,
@@ -2170,8 +3052,23 @@ pub fn f64_to_int(
     }
 }
 
-/// Rounds a calibrated value (half away from zero) to an integer from `lo`
-/// up to but not including `lim`; fails with `OutOfRange` otherwise.
+/// Rounds a calibrated value (half away from zero) to an integer in a
+/// range.
+///
+/// # Arguments
+///
+/// * `y`     - The value.
+/// * `lo`    - The least integer allowed.
+/// * `lim`   - The integer just past the greatest allowed.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The rounded value, from `lo` up to but not including `lim`.
+///
+/// # Errors
+///
+/// `OutOfRange` if the rounded value is outside that range or NaN.
 pub fn round_to_int(
     y: f64,
     lo: f64,
@@ -2188,6 +3085,16 @@ pub fn round_to_int(
 
 // --- floats ------------------------------------------------------------------
 
+/// Converts the bits of an IEEE single or double to its value.
+///
+/// # Arguments
+///
+/// * `raw`  - The bits.
+/// * `bits` - 32 for a single, anything else for a double.
+///
+/// # Returns
+///
+/// The value as a double.
 pub fn float_from_raw(raw: u64, bits: u32) -> f64 {
     if bits == 32 {
         f32::from_bits(raw as u32) as f64
@@ -2196,6 +3103,16 @@ pub fn float_from_raw(raw: u64, bits: u32) -> f64 {
     }
 }
 
+/// Converts a value to the bits of an IEEE single or double.
+///
+/// # Arguments
+///
+/// * `v`    - The value; for a single it is rounded to the nearest.
+/// * `bits` - 32 for a single, anything else for a double.
+///
+/// # Returns
+///
+/// The bits, in the low 32 for a single.
 pub fn float_to_raw(v: f64, bits: u32) -> u64 {
     if bits == 32 {
         (v as f32).to_bits() as u64
@@ -2219,8 +3136,17 @@ pub enum FloatFormat {
     Ti,
 }
 
-/// `m / 2**shift` rounded to the nearest integer, ties to even; `m * 2**-shift`
-/// when `shift` is negative.
+/// Shifts an integer right, rounding to the nearest, ties to even.
+///
+/// # Arguments
+///
+/// * `m`     - The integer.
+/// * `shift` - The bits to shift right; negative shifts left.
+///
+/// # Returns
+///
+/// `m / 2**shift` rounded to the nearest integer, ties to even, or
+/// `m * 2**-shift` when `shift` is negative.
 fn round_shift(m: u128, shift: i32) -> u128 {
     if shift <= 0 {
         return m << (-shift) as u32;
@@ -2236,6 +3162,16 @@ fn round_shift(m: u128, shift: i32) -> u128 {
     q + (r > half || (r == half && q & 1 == 1)) as u128
 }
 
+/// Rounds a sign, integer and power of two to the nearest double.
+///
+/// # Arguments
+///
+/// * `neg` - Whether the value is negative.
+/// * `m`   - Its magnitude, scaled by `2**-e`.
+/// * `e`   - The power of two that scales `m`.
+///
+/// # Returns
+///
 /// `(-1)**neg * m * 2**e` rounded to the nearest double, ties to even;
 /// infinite when too large.
 fn to_f64(neg: bool, m: u128, e: i32) -> f64 {
@@ -2265,8 +3201,16 @@ fn to_f64(neg: bool, m: u128, e: i32) -> f64 {
     f64::from_bits(bits) * sign
 }
 
-/// `(m, e, power)` for finite nonzero `x`: `|x| == m * 2**e` with `m` of 53
-/// bits, and whether `|x|` is a power of two.
+/// Splits a double into an integer and a power of two.
+///
+/// # Arguments
+///
+/// * `x` - The double, finite and nonzero.
+///
+/// # Returns
+///
+/// `(m, e, power)`: `|x| == m * 2**e` with `m` of 53 bits, and whether
+/// `|x|` is a power of two.
 fn magnitude(x: f64) -> (u128, i32, bool) {
     let b = x.to_bits();
     let exp = ((b >> 52) & 0x7ff) as i32;
@@ -2287,6 +3231,17 @@ fn signed(raw: u128, bits: u32) -> i128 {
     ((raw << shift) as i128) >> shift
 }
 
+/// Gives the layout of an IEEE 754 binary format.
+///
+/// # Arguments
+///
+/// * `bits` - The format's size: 16, 32, 64, 80, or anything else for
+///            128.
+///
+/// # Returns
+///
+/// The exponent's bits, the fraction's bits, and whether the integer
+/// bit is explicit (x87 extended).
 fn ieee_params(bits: u32) -> (u32, u32, bool) {
     match bits {
         16 => (5, 10, false),
@@ -2297,6 +3252,16 @@ fn ieee_params(bits: u32) -> (u32, u32, bool) {
     }
 }
 
+/// Decodes an IEEE 754 binary float.
+///
+/// # Arguments
+///
+/// * `raw`  - The field's bits.
+/// * `bits` - The format's size, as [`ieee_params`] takes it.
+///
+/// # Returns
+///
+/// The value rounded to the nearest double; NaN and infinities are kept.
 fn ieee_decode(raw: u128, bits: u32) -> f64 {
     let (ebits, fbits, explicit) = ieee_params(bits);
     let neg = (raw >> (bits - 1)) & 1 == 1;
@@ -2325,6 +3290,18 @@ fn ieee_decode(raw: u128, bits: u32) -> f64 {
     to_f64(neg, frac | (1 << fbits), exp - bias - fbits as i32)
 }
 
+/// Encodes a double as an IEEE 754 binary float, rounding to the nearest,
+/// ties to even.
+///
+/// # Arguments
+///
+/// * `x`    - The value.
+/// * `bits` - The format's size, as [`ieee_params`] takes it.
+///
+/// # Returns
+///
+/// The field's bits; values too large become infinite, and NaN a quiet
+/// NaN.
 fn ieee_encode(x: f64, bits: u32) -> u128 {
     let (ebits, fbits, explicit) = ieee_params(bits);
     let sign = if x.is_sign_negative() {
@@ -2366,6 +3343,16 @@ fn ieee_encode(x: f64, bits: u32) -> u128 {
     sign | (biased << fbits) | f
 }
 
+/// Decodes a MIL-STD-1750A float.
+///
+/// # Arguments
+///
+/// * `raw`  - The field's bits.
+/// * `bits` - 32, or anything else for the 48-bit format.
+///
+/// # Returns
+///
+/// The value rounded to the nearest double.
 fn mil1750a_decode(raw: u128, bits: u32) -> f64 {
     let (mant, exp, mbits) = if bits == 32 {
         (raw >> 8, raw & 0xff, 24)
@@ -2377,6 +3364,22 @@ fn mil1750a_decode(raw: u128, bits: u32) -> f64 {
     to_f64(mant < 0, mant.unsigned_abs(), exp - (mbits as i32 - 1))
 }
 
+/// Encodes a finite double as a MIL-STD-1750A float, rounding to the
+/// nearest; values too small to normalize are unnormalized.
+///
+/// # Arguments
+///
+/// * `x`     - The value, finite.
+/// * `bits`  - 32, or anything else for the 48-bit format.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The field's bits.
+///
+/// # Errors
+///
+/// `OutOfRange` if the value is too large for the format.
 fn mil1750a_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
     let mbits = if bits == 32 { 24 } else { 40 };
     let f = mbits - 1;
@@ -2422,6 +3425,21 @@ fn mil1750a_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
     })
 }
 
+/// Decodes a DEC (VAX) F_floating or D_floating float.
+///
+/// # Arguments
+///
+/// * `raw`   - The field's bits.
+/// * `bits`  - 32 for F_floating, anything else for D_floating.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The value rounded to the nearest double.
+///
+/// # Errors
+///
+/// `InvalidValue` for a reserved operand (sign set, exponent zero).
 fn dec_decode(raw: u128, bits: u32, field: &'static str) -> Result<f64> {
     let f = if bits == 32 { 23 } else { 55 };
     let neg = raw >> (bits - 1) == 1;
@@ -2436,6 +3454,22 @@ fn dec_decode(raw: u128, bits: u32, field: &'static str) -> Result<f64> {
     Ok(to_f64(neg, frac, exp - 129 - f as i32))
 }
 
+/// Encodes a finite double as a DEC (VAX) float, rounding to the
+/// nearest; values too small for it become zero.
+///
+/// # Arguments
+///
+/// * `x`     - The value, finite.
+/// * `bits`  - 32 for F_floating, anything else for D_floating.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The field's bits.
+///
+/// # Errors
+///
+/// `OutOfRange` if the value is too large for the format.
 fn dec_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
     let f = if bits == 32 { 23 } else { 55 };
     if x == 0.0 {
@@ -2459,6 +3493,16 @@ fn dec_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
     Ok(sign | ((exp as u128) << f) | (q - (1 << f)))
 }
 
+/// Decodes an IBM hexadecimal float.
+///
+/// # Arguments
+///
+/// * `raw`  - The field's bits.
+/// * `bits` - The format's size: 32, 64 or 128.
+///
+/// # Returns
+///
+/// The value rounded to the nearest double.
 fn ibm_decode(raw: u128, bits: u32) -> f64 {
     let neg = raw >> (bits - 1) == 1;
     let hi = if bits == 128 { raw >> 64 } else { raw };
@@ -2472,6 +3516,22 @@ fn ibm_decode(raw: u128, bits: u32) -> f64 {
     to_f64(neg, frac, 4 * (exp - 64) - f)
 }
 
+/// Encodes a finite double as an IBM hexadecimal float, rounding to the
+/// nearest; values too small to normalize are unnormalized.
+///
+/// # Arguments
+///
+/// * `x`     - The value, finite.
+/// * `bits`  - The format's size: 32, 64 or 128.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The field's bits.
+///
+/// # Errors
+///
+/// `OutOfRange` if the value is too large for the format.
 fn ibm_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
     let f = if bits == 128 { 112 } else { bits as i32 - 8 };
     if x == 0.0 {
@@ -2504,6 +3564,15 @@ fn ibm_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
     Ok((hi << 64) | lo)
 }
 
+/// Gives the layout of a TI TMS320C3x float.
+///
+/// # Arguments
+///
+/// * `bits` - The format's size: 16, 32, or anything else for 40.
+///
+/// # Returns
+///
+/// The exponent's bits and the fraction's bits.
 fn ti_params(bits: u32) -> (u32, u32) {
     match bits {
         16 => (4, 11),
@@ -2512,6 +3581,16 @@ fn ti_params(bits: u32) -> (u32, u32) {
     }
 }
 
+/// Decodes a TI TMS320C3x float.
+///
+/// # Arguments
+///
+/// * `raw`  - The field's bits.
+/// * `bits` - The format's size, as [`ti_params`] takes it.
+///
+/// # Returns
+///
+/// The value rounded to the nearest double; the least exponent is zero.
 fn ti_decode(raw: u128, bits: u32) -> f64 {
     let (ebits, f) = ti_params(bits);
     let exp = signed(raw >> (f + 1), ebits) as i32;
@@ -2526,6 +3605,22 @@ fn ti_decode(raw: u128, bits: u32) -> f64 {
     }
 }
 
+/// Encodes a finite double as a TI TMS320C3x float, rounding to the
+/// nearest; values too small for it become zero.
+///
+/// # Arguments
+///
+/// * `x`     - The value, finite.
+/// * `bits`  - The format's size, as [`ti_params`] takes it.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The field's bits.
+///
+/// # Errors
+///
+/// `OutOfRange` if the value is too large for the format.
 fn ti_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
     let (ebits, f) = ti_params(bits);
     let lo = -(1i32 << (ebits - 1)); // the exponent of zero
@@ -2564,8 +3659,22 @@ fn ti_encode(x: f64, bits: u32, field: &'static str) -> Result<u128> {
     Ok((((exp as u128) & emask) << (f + 1)) | (sign << f) | frac)
 }
 
-/// The value of a float field of `bits` bits in `fmt`, rounded to the
-/// nearest double.  Fails with `InvalidValue` for a DEC reserved operand.
+/// Decodes a float field, rounding to the nearest double.
+///
+/// # Arguments
+///
+/// * `fmt`   - The field's float format.
+/// * `bits`  - The field's size in bits, one the format has.
+/// * `raw`   - The field's bits.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The field's value.
+///
+/// # Errors
+///
+/// `InvalidValue` for a DEC reserved operand.
 pub fn float_decode(
     fmt: FloatFormat,
     bits: u32,
@@ -2581,11 +3690,26 @@ pub fn float_decode(
     })
 }
 
-/// The float field nearest `x` (ties to even), as [`float_decode`] reads
-/// it.  IEEE formats overflow to infinity; the others, which have no
-/// infinity or NaN, fail with `OutOfRange` for values too large for them
-/// and for infinities and NaN, and encode values too small for them as
-/// zero.
+/// Encodes the float field nearest a value (ties to even), as
+/// [`float_decode`] reads it.  IEEE formats overflow to infinity; the
+/// others, which have no infinity or NaN, encode values too small for
+/// them as zero.
+///
+/// # Arguments
+///
+/// * `fmt`   - The field's float format.
+/// * `bits`  - The field's size in bits, one the format has.
+/// * `x`     - The value.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The field's bits.
+///
+/// # Errors
+///
+/// `OutOfRange`, for formats other than IEEE, for infinities, NaN and
+/// values too large for the format.
 pub fn float_encode(
     fmt: FloatFormat,
     bits: u32,
@@ -2608,7 +3732,16 @@ pub fn float_encode(
 
 // --- calibrators -------------------------------------------------------------
 
-/// Evaluates a polynomial calibrator given as (coefficient, exponent) terms.
+/// Evaluates a polynomial calibrator.
+///
+/// # Arguments
+///
+/// * `x`     - The value to calibrate.
+/// * `terms` - The polynomial as (coefficient, exponent) terms.
+///
+/// # Returns
+///
+/// The sum of the terms at `x`.
 pub fn polynomial(x: f64, terms: &[(f64, i32)]) -> f64 {
     let mut y = 0.0;
     for &(c, e) in terms {
@@ -2630,7 +3763,30 @@ fn lerp(x: f64, (x0, y0): (f64, f64), (x1, y1): (f64, f64)) -> f64 {
     y0 + (x - x0) * (y1 - y0) / (x1 - x0)
 }
 
-/// Evaluates a spline calibrator over (raw, calibrated) points sorted by raw.
+/// Evaluates a spline calibrator of order 0 or 1.
+///
+/// # Arguments
+///
+/// * `x`           - The raw value.
+/// * `points`      - The (raw, calibrated) points, sorted by raw.
+/// * `order`       - 0 for steps, anything else for straight lines.
+/// * `extrapolate` - Whether values outside the points extend the first
+///                   or last segment.
+/// * `field`       - The field's name, for errors.
+///
+/// # Returns
+///
+/// The calibrated value.
+///
+/// # Errors
+///
+/// `Calibration` if `x` is outside the points and `extrapolate` is
+/// false.
+///
+/// # Panics
+///
+/// Can panic if `points` has fewer than two points, which XTCE does not
+/// allow.
 pub fn spline(
     x: f64,
     points: &[(f64, f64)],
@@ -2665,10 +3821,33 @@ pub fn spline(
     Ok(last.1)
 }
 
-/// A spline whose segments have their own orders: the segment from point
-/// `i` has order `orders[i]`, and one of order k interpolates through k + 1
-/// points, starting at point `i` or as close after it as the points allow.
-/// Outside the points, the first or last segment extrapolates.
+/// Evaluates a spline whose segments have their own orders: the segment
+/// from point `i` has order `orders[i]`, and one of order k interpolates
+/// through k + 1 points, starting at point `i` or as close after it as
+/// the points allow.  Outside the points, the first or last segment
+/// extrapolates.
+///
+/// # Arguments
+///
+/// * `x`           - The raw value.
+/// * `points`      - The (raw, calibrated) points, sorted by raw.
+/// * `orders`      - The order of the segment from each point.
+/// * `extrapolate` - Whether values outside the points are allowed.
+/// * `field`       - The field's name, for errors.
+///
+/// # Returns
+///
+/// The calibrated value.
+///
+/// # Errors
+///
+/// `Calibration` if `x` is outside the points and `extrapolate` is
+/// false.
+///
+/// # Panics
+///
+/// Can panic if `points` has fewer than two points, which XTCE does not
+/// allow.
 pub fn spline_orders(
     x: f64,
     points: &[(f64, f64)],
@@ -2758,12 +3937,49 @@ pub enum MathOperator {
 // the C library's, which the C and Python runtimes use; they would differ in
 // the last bit.  Every other function of `math` calls the C library already.
 extern "C" {
+    /// Computes the inverse hyperbolic sine, as the C library does.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - The value.
+    ///
+    /// # Returns
+    ///
+    /// asinh(x).
     fn asinh(x: f64) -> f64;
+
+    /// Computes the inverse hyperbolic cosine, as the C library does.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - The value, at least 1.
+    ///
+    /// # Returns
+    ///
+    /// acosh(x), or NaN below 1.
     fn acosh(x: f64) -> f64;
+
+    /// Computes the inverse hyperbolic tangent, as the C library does.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - The value, from -1 to 1.
+    ///
+    /// # Returns
+    ///
+    /// atanh(x): infinite at -1 and 1, NaN beyond.
     fn atanh(x: f64) -> f64;
 }
 
-/// `x` truncated to a 64-bit integer, if it has such a value.
+/// Truncates a double to a 64-bit integer.
+///
+/// # Arguments
+///
+/// * `x` - The double.
+///
+/// # Returns
+///
+/// `x` truncated, or `None` if it is not finite or an i64 can't hold it.
 fn to_i64(x: f64) -> Option<i64> {
     if x.is_finite()
         && (-9223372036854775808.0..9223372036854775808.0).contains(&x)
@@ -2774,6 +3990,15 @@ fn to_i64(x: f64) -> Option<i64> {
     }
 }
 
+/// Converts a boolean to the double a calibrator uses for it.
+///
+/// # Arguments
+///
+/// * `b` - The boolean.
+///
+/// # Returns
+///
+/// 1.0 for true, 0.0 for false.
 fn truth(b: bool) -> f64 {
     if b {
         1.0
@@ -2782,9 +4007,19 @@ fn truth(b: bool) -> f64 {
     }
 }
 
-/// The value of a MathOperationCalibrator operator on the operands `a` and
-/// `b` (`b` is ignored by unary operators); identical in every runtime.
-/// `+`, `-` and `*` are written as plain arithmetic.
+/// Applies a MathOperationCalibrator operator, identically in every
+/// runtime.  `+`, `-` and `*` are written as plain arithmetic.
+///
+/// # Arguments
+///
+/// * `op` - The operator.
+/// * `a`  - The first operand.
+/// * `b`  - The second operand, ignored by unary operators.
+///
+/// # Returns
+///
+/// The result; NaN where the operation has no value (such as a
+/// bitwise operator on a value an i64 can't hold).
 pub fn math(op: MathOperator, a: f64, b: f64) -> f64 {
     use MathOperator::*;
     match op {
@@ -2885,6 +4120,28 @@ pub fn math(op: MathOperator, a: f64, b: f64) -> f64 {
 }
 
 /// Inverts a linear spline whose calibrated values are strictly monotonic.
+///
+/// # Arguments
+///
+/// * `y`           - The calibrated value.
+/// * `points`      - The spline's (raw, calibrated) points.
+/// * `extrapolate` - Whether values outside the points extend the first
+///                   or last segment.
+/// * `field`       - The field's name, for errors.
+///
+/// # Returns
+///
+/// The raw value.
+///
+/// # Errors
+///
+/// `Calibration` if `y` is outside the points and `extrapolate` is
+/// false.
+///
+/// # Panics
+///
+/// Can panic if `points` has fewer than two points, which XTCE does not
+/// allow.
 pub fn spline_inverse(
     y: f64,
     points: &[(f64, f64)],
@@ -2913,10 +4170,25 @@ pub fn spline_inverse(
 
 // --- sizes from other fields -------------------------------------------------
 
-/// A size or count that another field gives (an XTCE `DynamicValue`):
-/// `(slope * x + intercept) / unit`, where `x` is that field's value and
-/// `unit` is 8 for a size in bits used in whole bytes.  Fails with `BadSize`
-/// unless the result is a whole number from 0 to `max`.
+/// Computes a size or count that another field gives (an XTCE
+/// `DynamicValue`): `(slope * x + intercept) / unit`.
+///
+/// # Arguments
+///
+/// * `x`         - The other field's value.
+/// * `slope`     - The linear adjustment's slope.
+/// * `intercept` - The linear adjustment's intercept.
+/// * `unit`      - 8 for a size in bits used in whole bytes, otherwise 1.
+/// * `max`       - The largest size or count allowed.
+/// * `field`     - The sized field's name, for errors.
+///
+/// # Returns
+///
+/// The size or count.
+///
+/// # Errors
+///
+/// `BadSize` unless the result is a whole number from 0 to `max`.
 pub fn dynamic_size(
     x: f64,
     slope: f64,
@@ -2947,10 +4219,27 @@ pub fn element<'a, T>(
     v.get(i).ok_or(PacketError::BadSize { field })
 }
 
-/// Element `i + stride * d` of `v`, a multi-dimensional array whose count
-/// varies in a dimension after the first, which has `d = v.len() / per`
-/// elements; fails with `BadSize`, naming `field`, unless d is at least
-/// `need`.
+/// Gives an element of a multi-dimensional array whose count varies in a
+/// dimension after the first.
+///
+/// # Arguments
+///
+/// * `v`      - The array, flattened.
+/// * `i`      - The element's index apart from the varying dimension.
+/// * `stride` - What one step in the varying dimension adds to `i`, as
+///              a multiple of that dimension's count.
+/// * `per`    - The elements for each step of the varying dimension, so
+///              that it has `d = v.len() / per` steps.
+/// * `need`   - The least `d` the reference needs.
+/// * `field`  - The array's name, for errors.
+///
+/// # Returns
+///
+/// Element `i + stride * d` of `v`.
+///
+/// # Errors
+///
+/// `BadSize` unless `d` is at least `need` and `v` has that element.
 pub fn element_at<'a, T>(
     v: &'a [T],
     i: usize,
@@ -2966,11 +4255,26 @@ pub fn element_at<'a, T>(
     v.get(i + stride * d).ok_or(PacketError::BadSize { field })
 }
 
-/// The value of the field that gives a size or count of `n` (the inverse of
-/// [`dynamic_size`] followed by multiplying by `factor`), for encoding a
-/// field computed from the length of the value it sizes.  Fails with
-/// `BadSize`, naming `field` (the sized value), when no whole number gives
-/// exactly `n`.
+/// Computes the value of the field that gives a size or count (the
+/// inverse of [`dynamic_size`] followed by multiplying by `factor`), for
+/// encoding a field computed from the length of the value it sizes.
+///
+/// # Arguments
+///
+/// * `n`         - The size or count.
+/// * `slope`     - The linear adjustment's slope.
+/// * `intercept` - The linear adjustment's intercept.
+/// * `unit`      - 8 for a size in bits used in whole bytes, otherwise 1.
+/// * `factor`    - What the decoded size or count is multiplied by.
+/// * `field`     - The sized value's name, for errors.
+///
+/// # Returns
+///
+/// The source field's value.
+///
+/// # Errors
+///
+/// `BadSize` when no whole number gives exactly `n`.
 pub fn size_source(
     n: usize,
     slope: f64,
@@ -3016,7 +4320,11 @@ pub enum Charset {
 }
 
 impl Charset {
-    /// The bytes in one code unit.
+    /// Gives the bytes in one code unit.
+    ///
+    /// # Returns
+    ///
+    /// 1, 2 or 4.
     pub fn unit(self) -> usize {
         match self {
             Charset::Utf16 | Charset::Utf16Be | Charset::Utf16Le => 2,
@@ -3050,8 +4358,15 @@ pub struct StringSpec {
 }
 
 impl StringSpec {
-    /// The spec of a string whose size another field gives: it occupies
-    /// exactly `bytes` bytes.
+    /// Makes the spec of a string whose size another field gives.
+    ///
+    /// # Arguments
+    ///
+    /// * `bytes` - The bytes the string occupies.
+    ///
+    /// # Returns
+    ///
+    /// This spec, but occupying exactly `bytes` bytes.
     pub fn sized(&self, bytes: usize) -> StringSpec {
         StringSpec {
             fixed_bits: Some(bytes * 8),
@@ -3076,6 +4391,23 @@ fn find_unit(b: &[u8], term: &[u8], unit: usize) -> Option<usize> {
         .find(|&i| &b[i..i + term.len()] == term)
 }
 
+/// Reads a string field.
+///
+/// # Arguments
+///
+/// * `r`     - The reader, at the field.
+/// * `spec`  - The field's layout.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The string, without its terminator or size tag.
+///
+/// # Errors
+///
+/// `Truncated` if the packet ends first, `TooLong` if the string is
+/// longer than its encoding allows, and `InvalidString` if its bytes are
+/// not valid in its character set or not valid UTF-8.
 pub fn read_string(
     r: &mut BitReader<'_>,
     spec: &StringSpec,
@@ -3088,8 +4420,23 @@ pub fn read_string(
     String::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
 }
 
-/// [`read_string`] into a string of at most `N` bytes, from at most `W`
-/// bytes on the wire; fails with `TooLong` if it does not fit.
+/// Reads a string field, as [`read_string`] does, into a string of at
+/// most `N` bytes, from at most `W` bytes on the wire.
+///
+/// # Arguments
+///
+/// * `r`     - The reader, at the field.
+/// * `spec`  - The field's layout.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The string, without its terminator or size tag.
+///
+/// # Errors
+///
+/// As [`read_string`], and `TooLong` if the string does not fit in `N`
+/// bytes or `W` bytes on the wire.
 pub fn read_fixed_string<const N: usize, const W: usize>(
     r: &mut BitReader<'_>,
     spec: &StringSpec,
@@ -3102,7 +4449,21 @@ pub fn read_fixed_string<const N: usize, const W: usize>(
     FixedString::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
 }
 
-/// Reads the bytes of a string's content, before its terminator.
+/// Reads the bytes of a string's content, before its terminator, and
+/// moves past the whole field.
+///
+/// # Arguments
+///
+/// * `r`     - The reader, at the field.
+/// * `spec`  - The field's layout.
+/// * `b`     - Where to append the content's bytes.
+/// * `field` - The field's name, for errors.
+///
+/// # Errors
+///
+/// `Truncated` if the packet ends first, and `TooLong` if the size tag
+/// or the bytes before the terminator pass the field's size or `b`'s
+/// capacity.
 fn read_wire<S: ByteSink>(
     r: &mut BitReader<'_>,
     spec: &StringSpec,
@@ -3159,8 +4520,20 @@ fn push_char<S: ByteSink>(
     out.append(c.encode_utf8(&mut buf).as_bytes(), field)
 }
 
-/// Appends to `out` the UTF-8 of the string whose bytes in `cs` are `b`;
-/// fails with `InvalidString` if they aren't valid.
+/// Converts a string's bytes in its character set to UTF-8.  UTF-16 and
+/// UTF-32 without a byte order honour a byte order mark.
+///
+/// # Arguments
+///
+/// * `cs`    - The character set.
+/// * `b`     - The string's bytes in `cs`.
+/// * `out`   - Where to append the UTF-8.
+/// * `field` - The field's name, for errors.
+///
+/// # Errors
+///
+/// `InvalidString` if the bytes are not valid in `cs`, and `TooLong` if
+/// `out` cannot hold the UTF-8.
 fn decode_text<S: ByteSink>(
     cs: Charset,
     b: &[u8],
@@ -3255,7 +4628,17 @@ fn decode_text<S: ByteSink>(
     }
 }
 
-/// The byte of `c` in an 8-bit character set, if it has one.
+/// Finds a character's byte in an 8-bit character set.
+///
+/// # Arguments
+///
+/// * `cs` - The character set: ASCII, Latin-1 or Windows-1252.
+/// * `c`  - The character.
+///
+/// # Returns
+///
+/// The byte, or `None` if `cs` has no byte for `c` or is not one of
+/// those character sets.
 fn byte_of(cs: Charset, c: char) -> Option<u8> {
     let u = c as u32;
     match cs {
@@ -3272,8 +4655,23 @@ fn byte_of(cs: Charset, c: char) -> Option<u8> {
     }
 }
 
-/// Calls `f` with each byte of `s` in `cs`, and returns how many there
-/// are; fails with `InvalidString` if `cs` can't hold a character of `s`.
+/// Encodes a string in a character set, a byte at a time.
+///
+/// # Arguments
+///
+/// * `cs`    - The character set; UTF-16 and UTF-32 are big endian unless
+///             little endian is named, with no byte order mark.
+/// * `s`     - The string.
+/// * `f`     - Called with each byte, in order.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// How many bytes there are.
+///
+/// # Errors
+///
+/// `InvalidString` if `cs` can't hold a character of `s`.
 fn wire_bytes(
     cs: Charset,
     s: &str,
@@ -3322,7 +4720,22 @@ fn wire_bytes(
     Ok(n)
 }
 
-/// Whether `term` occurs in `s`'s bytes in `cs` where a code unit starts.
+/// Checks whether a terminator occurs in a string's encoding where a code
+/// unit starts.
+///
+/// # Arguments
+///
+/// * `cs`   - The character set.
+/// * `s`    - The string.
+/// * `term` - The terminator's bytes, at most 16.
+///
+/// # Returns
+///
+/// Whether `term` occurs in the bytes of `s` in `cs`.
+///
+/// # Errors
+///
+/// `InvalidString` if `cs` can't hold a character of `s`.
 fn contains_term(cs: Charset, s: &str, term: &[u8]) -> Result<bool> {
     let (unit, t) = (cs.unit(), term.len());
     let mut window = [0u8; 16];
@@ -3343,6 +4756,21 @@ fn contains_term(cs: Charset, s: &str, term: &[u8]) -> Result<bool> {
     Ok(found)
 }
 
+/// Writes a string field, with its terminator or size tag, padding a
+/// fixed-size field with zeros.
+///
+/// # Arguments
+///
+/// * `w`     - The writer, at the field.
+/// * `spec`  - The field's layout.
+/// * `s`     - The string.
+/// * `field` - The field's name, for errors.
+///
+/// # Errors
+///
+/// `InvalidString` if the character set can't hold a character of `s`
+/// or `s` contains the terminator, and `TooLong` if it does not fit in
+/// the field or its size tag.
 pub fn write_string(
     w: &mut BitWriter<'_>,
     spec: &StringSpec,
@@ -3391,7 +4819,13 @@ pub fn write_string(
     Ok(())
 }
 
-/// Writes the bytes of `s` in `cs`, which can hold every character of it.
+/// Writes a string's bytes in a character set.
+///
+/// # Arguments
+///
+/// * `w`  - The writer.
+/// * `cs` - The character set, which can hold every character of `s`.
+/// * `s`  - The string.
 fn write_wire(w: &mut BitWriter<'_>, cs: Charset, s: &str) {
     if cs == Charset::Utf8 {
         w.bytes(s.as_bytes());
@@ -3415,6 +4849,18 @@ pub fn fixed_string_from_bytes<const N: usize>(
 }
 
 /// Writes a fixed-size binary field.
+///
+/// # Arguments
+///
+/// * `w`     - The writer, at the field.
+/// * `b`     - The field's value.
+/// * `n`     - The field's size in bytes.
+/// * `field` - The field's name, for errors.
+///
+/// # Errors
+///
+/// `TooLong` if `b` is longer than `n` bytes, and `OutOfRange` if it is
+/// shorter.
 pub fn write_binary(
     w: &mut BitWriter<'_>,
     b: &[u8],
@@ -3432,8 +4878,18 @@ pub fn write_binary(
     Ok(())
 }
 
-/// Writes a binary field that takes the rest of the packet: all of `b`,
-/// which must be at most `max` bytes.
+/// Writes a binary field that takes the rest of the packet.
+///
+/// # Arguments
+///
+/// * `w`     - The writer, at the field.
+/// * `b`     - The field's value, all of which is written.
+/// * `max`   - The most bytes the field may take.
+/// * `field` - The field's name, for errors.
+///
+/// # Errors
+///
+/// `TooLong` if `b` is more than `max` bytes.
 pub fn write_rest(
     w: &mut BitWriter<'_>,
     b: &[u8],
@@ -3447,8 +4903,20 @@ pub fn write_rest(
     Ok(())
 }
 
-/// Writes an embedded CCSDS packet (Yamcs:EmbeddedTc): `b`, at least 7 and
-/// at most `max` bytes, with its packet length field set to its size.
+/// Writes an embedded CCSDS packet (Yamcs:EmbeddedTc) with its packet
+/// length field set to its size.
+///
+/// # Arguments
+///
+/// * `w`     - The writer, at the field.
+/// * `b`     - The packet, header first.
+/// * `max`   - The most bytes it may take.
+/// * `field` - The field's name, for errors.
+///
+/// # Errors
+///
+/// `TooLong` if `b` is more than `max` bytes, and `BadSize` unless it
+/// is 7 to 65542 bytes, as a packet length field can give.
 pub fn write_embedded(
     w: &mut BitWriter<'_>,
     b: &[u8],
@@ -3483,7 +4951,15 @@ pub enum AlarmLevel {
 }
 
 impl AlarmLevel {
-    /// The level with index `i` (0 is `Normal`); larger ones are `Severe`.
+    /// Gives the level with an index.
+    ///
+    /// # Arguments
+    ///
+    /// * `i` - The index, 0 for `Normal`; 5 and above are `Severe`.
+    ///
+    /// # Returns
+    ///
+    /// The level.
     pub fn from_index(i: u8) -> Self {
         match i {
             0 => Self::Normal,
@@ -3495,7 +4971,11 @@ impl AlarmLevel {
         }
     }
 
-    /// XTCE's name for the level.
+    /// Gives XTCE's name for the level.
+    ///
+    /// # Returns
+    ///
+    /// The name, in lower case, such as `"warning"`.
     pub fn name(self) -> &'static str {
         match self {
             Self::Normal => "normal",
@@ -3535,6 +5015,11 @@ impl<const N: usize> Default for Alarms<N> {
 }
 
 impl<const N: usize> Alarms<N> {
+    /// Creates an empty list of alarms.
+    ///
+    /// # Returns
+    ///
+    /// The list, with room for `N` alarms.
     pub fn new() -> Self {
         Self {
             items: [Alarm {
@@ -3598,6 +5083,11 @@ impl<const H: usize> Default for AlarmState<H> {
 }
 
 impl<const H: usize> AlarmState<H> {
+    /// Creates the state of a parameter not in alarm, with no samples.
+    ///
+    /// # Returns
+    ///
+    /// The state.
     pub fn new() -> Self {
         Self {
             violations: 0,
@@ -3610,10 +5100,21 @@ impl<const H: usize> AlarmState<H> {
         }
     }
 
-    /// The level to report for a sample whose own level is `level`: an alarm
-    /// is raised after `min_violations` samples in a row are in alarm, and
-    /// cleared after `min_conformance` in a row are not; in between, the
-    /// last level raised stands.
+    /// Takes a sample's own level and decides the level to report: an
+    /// alarm is raised after `min_violations` samples in a row are in
+    /// alarm, and cleared after `min_conformance` in a row are not; in
+    /// between, the last level raised stands.
+    ///
+    /// # Arguments
+    ///
+    /// * `level`           - The sample's own level, 0 for none.
+    /// * `min_violations`  - The samples in alarm in a row that raise it.
+    /// * `min_conformance` - The samples out of alarm in a row that clear
+    ///                       it.
+    ///
+    /// # Returns
+    ///
+    /// The level to report, 0 for none.
     pub fn update(
         &mut self,
         level: u8,
@@ -3636,10 +5137,21 @@ impl<const H: usize> AlarmState<H> {
         self.level
     }
 
-    /// How much `x` (at time `t`) changed since the value `k` samples before
-    /// it: as a percentage of that value when `percent`, then per second
-    /// when `per_second`.  `None` when there is no such sample, or no change
-    /// can be worked out (no time between them, or a percentage of 0).
+    /// Works out how much a value changed since an earlier sample.
+    ///
+    /// # Arguments
+    ///
+    /// * `x`          - The value.
+    /// * `t`          - Its time, in seconds.
+    /// * `k`          - How many samples back the earlier one is, 1 to `H`.
+    /// * `per_second` - Whether to divide the change by the time between.
+    /// * `percent`    - Whether the change is a percentage of the earlier
+    ///                  value.
+    ///
+    /// # Returns
+    ///
+    /// The change, or `None` when there is no such sample or no change can
+    /// be worked out (no time between them, or a percentage of 0).
     pub fn change(
         &self,
         x: f64,
@@ -3670,7 +5182,13 @@ impl<const H: usize> AlarmState<H> {
         Some(d)
     }
 
-    /// Remembers a sample, for change ranges.
+    /// Remembers a sample, for change ranges, forgetting the oldest once
+    /// `H` are kept.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - The value.
+    /// * `t` - Its time, in seconds.
     pub fn push(&mut self, x: f64, t: f64) {
         if H == 0 {
             return;
@@ -3710,6 +5228,16 @@ struct LineDecoder {
 }
 
 impl LineDecoder {
+    /// Creates a decoder at the start of a stream.
+    ///
+    /// # Arguments
+    ///
+    /// * `pcm`      - How the levels become bits.
+    /// * `inverted` - Whether the levels are inverted first.
+    ///
+    /// # Returns
+    ///
+    /// The decoder.
     fn new(pcm: Pcm, inverted: bool) -> Self {
         Self {
             pcm,
@@ -3719,8 +5247,16 @@ impl LineDecoder {
         }
     }
 
-    /// The data bit that the level `raw` completes, if any: a bi-phase
-    /// bit takes two levels, the stream starting on a bit's first half.
+    /// Takes the next level of the stream; a bi-phase bit takes two
+    /// levels, the stream starting on a bit's first half.
+    ///
+    /// # Arguments
+    ///
+    /// * `raw` - The level, 0 or 1.
+    ///
+    /// # Returns
+    ///
+    /// The data bit that the level completes, if any.
     fn decode(&mut self, raw: u8) -> Option<u8> {
         let level = raw ^ u8::from(self.inverted);
         let bit = match self.pcm {
@@ -3744,8 +5280,17 @@ impl LineDecoder {
     }
 }
 
-/// Packs `bits`, most significant first, into the start of `out`, padded
-/// with zeros, and returns the bytes used.
+/// Packs bits into bytes, most significant first, padding the last byte
+/// with zeros.
+///
+/// # Arguments
+///
+/// * `bits` - The bits, each 0 or 1.
+/// * `out`  - Where the bytes go, from its start; it must hold them.
+///
+/// # Returns
+///
+/// The bytes used.
 fn pack_bits(bits: impl Iterator<Item = u8>, out: &mut [u8]) -> usize {
     let mut n = 0;
     for (i, b) in bits.enumerate() {
@@ -3836,7 +5381,26 @@ pub type TimeFromFn = fn(&[u8]) -> Option<(usize, f64)>;
 /// can't.
 pub type TimeToFn = fn(f64, &mut [u8]) -> Option<usize>;
 
-/// Reads binary data that the transform `f` decodes, at most `cap` bytes.
+/// Reads binary data that a transform decodes, as
+/// [`BitReader::binary_from`] does.
+///
+/// # Arguments
+///
+/// * `r`     - The reader, at the field.
+/// * `f`     - The transform, or `None` if the document gives only the
+///             other direction.
+/// * `raw`   - The encoded size in bytes, or `None` for the rest of the
+///             packet.
+/// * `cap`   - The most bytes the decoded data may take.
+/// * `field` - The field's name, for errors.
+///
+/// # Returns
+///
+/// The decoded bytes.
+///
+/// # Errors
+///
+/// As [`BitReader::binary_from`].
 pub fn read_binary_from(
     r: &mut BitReader<'_>,
     f: Option<BinaryFromFn>,
@@ -3879,6 +5443,15 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
         self
     }
 
+    /// Creates a synchronizer in Search, with no bits.
+    ///
+    /// # Arguments
+    ///
+    /// * `spec` - The stream's parameters.
+    ///
+    /// # Returns
+    ///
+    /// The synchronizer, complementing bits when AutoInvert inverts.
     pub fn new(spec: FrameSpec) -> Self {
         Self {
             spec,
@@ -3902,6 +5475,11 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
 
     /// Takes the next bytes of the stream, and gives `f` each frame they
     /// complete (its bits padded with zeros).
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The next bytes, most significant bit first.
+    /// * `f`    - Called with each frame.
     pub fn push(&mut self, data: &[u8], mut f: impl FnMut(&[u8])) {
         for &byte in data {
             for k in (0..8).rev() {
@@ -3923,6 +5501,15 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
         }
     }
 
+    /// Gives a kept bit, inverted if AutoInvert has inverted the stream.
+    ///
+    /// # Arguments
+    ///
+    /// * `i` - The bit's position in the stream, at least the base.
+    ///
+    /// # Returns
+    ///
+    /// The bit.
     fn bit(&self, i: usize) -> u8 {
         let b = self.bits[i - self.base];
         match self.invert {
@@ -3931,6 +5518,16 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
         }
     }
 
+    /// Checks for the sync pattern in a frame, allowing `max_errors`
+    /// bits that differ under the mask.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - Where the frame starts, in bits of the stream.
+    ///
+    /// # Returns
+    ///
+    /// Whether the pattern is at its location in the frame.
     fn matches(&self, s: usize) -> bool {
         let n = self.spec.pattern_bits;
         let at = s + self.spec.location;
@@ -3952,6 +5549,12 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
         true
     }
 
+    /// Packs a frame into bytes and gives it to `f`.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - Where the frame starts, in bits of the stream.
+    /// * `f` - Called with the frame.
     fn emit(&mut self, s: usize, f: &mut impl FnMut(&[u8])) {
         let mut frame = [0u8; BYTES];
         let n = pack_bits(
@@ -3962,6 +5565,13 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
         f(&self.frame[..n]);
     }
 
+    /// Runs the state machine over the bits kept, giving `f` each frame
+    /// found, until it needs more bits; then drops the bits it no longer
+    /// needs.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Called with each frame.
     fn run(&mut self, f: &mut impl FnMut(&[u8])) {
         let span = self.spec.location + self.spec.pattern_bits as usize;
         loop {
@@ -4088,6 +5698,15 @@ pub struct FlagSync<const BITS: usize, const BYTES: usize> {
 }
 
 impl<const BITS: usize, const BYTES: usize> FlagSync<BITS, BYTES> {
+    /// Creates a synchronizer hunting for a flag.
+    ///
+    /// # Arguments
+    ///
+    /// * `spec` - The stream's parameters.
+    ///
+    /// # Returns
+    ///
+    /// The synchronizer.
     pub fn new(spec: FlagSpec) -> Self {
         Self {
             spec,
@@ -4102,6 +5721,11 @@ impl<const BITS: usize, const BYTES: usize> FlagSync<BITS, BYTES> {
 
     /// Takes the next bytes of the stream, and gives `f` each frame they
     /// complete (its bits padded with zeros).
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The next bytes, most significant bit first.
+    /// * `f`    - Called with each frame.
     pub fn push(&mut self, data: &[u8], mut f: impl FnMut(&[u8])) {
         for &byte in data {
             for k in (0..8).rev() {
@@ -4112,6 +5736,13 @@ impl<const BITS: usize, const BYTES: usize> FlagSync<BITS, BYTES> {
         }
     }
 
+    /// Takes the next data bit: counts runs of flag bits, removes stuffed
+    /// bits, and gives `f` the frame a flag ends.
+    ///
+    /// # Arguments
+    ///
+    /// * `b` - The bit, 0 or 1.
+    /// * `f` - Called with each frame.
     fn bit(&mut self, b: u8, f: &mut impl FnMut(&[u8])) {
         let flag = u8::from(self.spec.flag_ones);
         let fb = self.spec.flag_bits;
@@ -4188,6 +5819,11 @@ impl<const N: usize> Default for Outputs<N> {
 }
 
 impl<const N: usize> Outputs<N> {
+    /// Creates an empty list of outputs.
+    ///
+    /// # Returns
+    ///
+    /// The list, with room for `N` outputs.
     pub fn new() -> Self {
         Self {
             items: [Output {
@@ -4238,8 +5874,17 @@ pub fn in_band(
         && hi.is_none_or(|hi| if hi_incl { x <= hi } else { x < hi })
 }
 
-/// The level of enumeration value `x`: that of the first (first value,
-/// last value, level) in `labels` holding it, else `default`.
+/// Finds the alarm level of an enumeration value.
+///
+/// # Arguments
+///
+/// * `x`       - The value.
+/// * `labels`  - (first value, last value, level) ranges, in order.
+/// * `default` - The level when no range holds `x`.
+///
+/// # Returns
+///
+/// The level of the first range holding `x`, else `default`.
 pub fn enum_alarm(x: i64, labels: &[(i64, i64, u8)], default: u8) -> u8 {
     labels
         .iter()
@@ -4256,6 +5901,15 @@ pub struct Dfa {
     pub accept: &'static [bool],
 }
 
+/// Runs an automaton over bytes.
+///
+/// # Arguments
+///
+/// * `dfa`  - The automaton; it starts in state 0.
+/// * `data` - The bytes.
+///
+/// # Returns
+///
 /// Whether `dfa` accepts all of `data`.
 pub fn dfa_match(dfa: &Dfa, data: &[u8]) -> bool {
     let mut q = 0usize;
@@ -4270,8 +5924,18 @@ pub fn dfa_match(dfa: &Dfa, data: &[u8]) -> bool {
     dfa.accept[q]
 }
 
-/// The level of string `s`: that of the first (automaton, level) in
-/// `patterns` it matches, else `default`.
+/// Finds the alarm level of a string.
+///
+/// # Arguments
+///
+/// * `s`        - The string.
+/// * `patterns` - (automaton, level) pairs, in order.
+/// * `default`  - The level when no automaton matches `s`.
+///
+/// # Returns
+///
+/// The level of the first automaton that accepts all of `s`, else
+/// `default`.
 pub fn pattern_alarm(s: &str, patterns: &[(&Dfa, u8)], default: u8) -> u8 {
     patterns
         .iter()
@@ -4286,6 +5950,22 @@ pub fn describe_f64<W: fmt::Write + ?Sized>(
     write_double(x, out)
 }
 
+/// Writes a string as every runtime's `describe` does: in double quotes,
+/// with `"` and backslash escaped by a backslash and control characters as
+/// `\xNN`.
+///
+/// # Arguments
+///
+/// * `s`   - The string.
+/// * `out` - Where to write it.
+///
+/// # Returns
+///
+/// `Ok(())` once the text is written.
+///
+/// # Errors
+///
+/// Any error from `out`.
 pub fn describe_str<W: fmt::Write + ?Sized>(
     s: &str,
     out: &mut W,
@@ -4307,6 +5987,21 @@ pub fn describe_str<W: fmt::Write + ?Sized>(
 /// Text for an optional field that is absent.
 pub const DESCRIBE_NONE: &str = "none";
 
+/// Writes bytes as every runtime's `describe` does: `0x` then two lower
+/// case hex digits a byte.
+///
+/// # Arguments
+///
+/// * `b`   - The bytes.
+/// * `out` - Where to write them.
+///
+/// # Returns
+///
+/// `Ok(())` once the text is written.
+///
+/// # Errors
+///
+/// Any error from `out`.
 pub fn describe_bytes<W: fmt::Write + ?Sized>(
     b: &[u8],
     out: &mut W,

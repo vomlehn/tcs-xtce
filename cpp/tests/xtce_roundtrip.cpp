@@ -5,6 +5,13 @@
 
 #include "xtce/document.hpp"
 
+/** Reads an XTCE document and writes it out again.
+ *
+ * @param argc  The number of arguments, 2 or 3.
+ * @param argv  The arguments: the input's path and, optionally, the
+ *              output's; without it the output goes to standard output.
+ * @return      0; 1 if the input can't be read or decoded; 2 for a usage
+ *              error. */
 int main(int argc, char** argv) {
         if (argc < 2 || argc > 3) {
                 std::cerr << "usage: xtce_roundtrip INPUT [OUTPUT]\n";

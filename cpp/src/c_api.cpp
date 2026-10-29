@@ -17,6 +17,14 @@ struct xtce_document {
 
 namespace {
 
+/** Runs `f`, turning any exception it throws into a status code and
+ * recording the error in the document.
+ *
+ * @param d  The document whose error and error line are set (cleared on
+ *           success).
+ * @param f  The operation to run.
+ * @return   XTCE_OK, XTCE_NO_MEMORY if `f` ran out of memory, or
+ *           XTCE_ERROR for any other exception. */
 template <class F>
 int guarded(xtce_document* d, F&& f) {
         try {
@@ -50,6 +58,11 @@ extern "C" {
 const char* xtce_schema_version(void) { return kVersion.c_str(); }
 const char* xtce_namespace(void) { return kNs.c_str(); }
 
+/** Creates an empty document with preallocated buffers.
+ *
+ * @param input_capacity   Bytes for the input buffer; 0 for the default.
+ * @param output_capacity  Bytes for the output buffer; 0 for the default.
+ * @return                 The document, or NULL if allocation fails. */
 xtce_document* xtce_document_new(size_t input_capacity,
                                  size_t output_capacity) {
         try {
@@ -62,6 +75,12 @@ xtce_document* xtce_document_new(size_t input_capacity,
 
 void xtce_document_free(xtce_document* doc) { delete doc; }
 
+/** Replaces the document by deserializing XML.
+ *
+ * @param doc   The document.
+ * @param data  The XML.
+ * @param len   The number of bytes at `data`.
+ * @return      XTCE_OK, XTCE_ERROR or XTCE_NO_MEMORY. */
 int xtce_document_load(xtce_document* doc, const void* data, size_t len) {
         return guarded(doc, [&] {
                 doc->doc.load(
@@ -69,6 +88,12 @@ int xtce_document_load(xtce_document* doc, const void* data, size_t len) {
         });
 }
 
+/** Serializes into the document's output buffer.
+ *
+ * @param doc      The document.
+ * @param out      Set on success to the serialized bytes.
+ * @param out_len  Set on success to the number of bytes at *out.
+ * @return         XTCE_OK, XTCE_ERROR or XTCE_NO_MEMORY. */
 int xtce_document_serialize(xtce_document* doc, const uint8_t** out,
                             size_t* out_len) {
         return guarded(doc, [&] {

@@ -48,8 +48,12 @@ class Cuc:
         return self.coarse + self.fine
 
     def pfield(self) -> bytes:
-        """Its P-field: one octet, or two when it has more than 4 coarse or
-        3 fine octets."""
+        """Makes its P-field.
+
+        Returns:
+            One octet, or two when it has more than 4 coarse or 3 fine
+            octets.
+        """
         ident = 1 if self.epoch == Epoch.CCSDS else 2
         c, f = min(self.coarse, 4), min(self.fine, 3)
         more = self.coarse > 4 or self.fine > 3
@@ -60,8 +64,15 @@ class Cuc:
 
     @staticmethod
     def from_pfield(data) -> Optional[tuple[Cuc, int]]:
-        """The layout that the P-field at the start of ``data`` gives, and
-        the P-field's length; None if it isn't a CUC P-field."""
+        """Reads a CUC P-field.
+
+        Args:
+            data: The octets from the P-field on.
+
+        Returns:
+            The layout the P-field gives and the P-field's length; None if
+            it isn't a CUC P-field.
+        """
         if not data:
             return None
         first = data[0]
@@ -82,8 +93,15 @@ class Cuc:
         return Cuc(coarse, fine, epoch), 2
 
     def decode_t(self, data) -> Optional[tuple[int, float]]:
-        """Decodes a T-field in this layout at the start of ``data``: the
-        octets read and the seconds since the epoch."""
+        """Decodes a T-field in this layout.
+
+        Args:
+            data: The octets from the T-field on.
+
+        Returns:
+            The octets read and the seconds since the epoch; None if
+            ``data`` is too short.
+        """
         n = self.t_len()
         if len(data) < n:
             return None
@@ -95,7 +113,15 @@ class Cuc:
         return n, float(whole) + frac
 
     def encode_t(self, seconds: float) -> Optional[bytes]:
-        """Encodes ``seconds`` as a T-field in this layout."""
+        """Encodes ``seconds`` as a T-field in this layout.
+
+        Args:
+            seconds: The time in seconds since the epoch.
+
+        Returns:
+            The T-field, or None if the time is negative, not a number, or
+            too large for the coarse octets.
+        """
         limit = float(1 << (8 * self.coarse))
         if not (seconds >= 0.0 and seconds < limit):
             return None
@@ -128,8 +154,16 @@ class Cuc:
 
 
 def decode_cuc(data) -> Optional[tuple[int, float]]:
-    """Decodes a CUC time that starts with its P-field: the octets read and
-    the seconds since its epoch, which the P-field names."""
+    """Decodes a CUC time that starts with its P-field.
+
+    Args:
+        data: The octets from the P-field on.
+
+    Returns:
+        The octets read and the seconds since the epoch the P-field
+        names; None if the P-field isn't a CUC one or ``data`` is too
+        short.
+    """
     found = Cuc.from_pfield(data)
     if found is None:
         return None
@@ -170,8 +204,14 @@ class Cds:
 
     @staticmethod
     def from_pfield(data) -> Optional[Cds]:
-        """The layout that the P-field at the start of ``data`` gives; None
-        if it isn't a CDS P-field."""
+        """Reads a CDS P-field.
+
+        Args:
+            data: The octets from the P-field on.
+
+        Returns:
+            The layout the P-field gives; None if it isn't a CDS P-field.
+        """
         if not data:
             return None
         p = data[0]
@@ -181,10 +221,16 @@ class Cds:
                    Epoch.AGENCY if p & 8 else Epoch.CCSDS)
 
     def decode_t(self, data) -> Optional[tuple[int, float]]:
-        """Decodes a T-field in this layout at the start of ``data``: the
-        octets read and the seconds since the epoch; None if a field is
-        beyond its range (milliseconds of a day count a leap second's
-        too)."""
+        """Decodes a T-field in this layout.
+
+        Args:
+            data: The octets from the T-field on.
+
+        Returns:
+            The octets read and the seconds since the epoch; None if
+            ``data`` is too short or a field is beyond its range
+            (milliseconds of a day count a leap second's too).
+        """
         n = self.t_len()
         if len(data) < n:
             return None
@@ -206,7 +252,15 @@ class Cds:
         return n, t
 
     def encode_t(self, seconds: float) -> Optional[bytes]:
-        """Encodes ``seconds`` as a T-field in this layout."""
+        """Encodes ``seconds`` as a T-field in this layout.
+
+        Args:
+            seconds: The time in seconds since the epoch.
+
+        Returns:
+            The T-field, or None if the time is negative, not a number, or
+            has more days than the day field holds.
+        """
         days = 1 << (24 if self.day24 else 16)
         if not (seconds >= 0.0 and seconds < float(days) * 86400.0):
             return None
@@ -231,8 +285,16 @@ class Cds:
 
 
 def decode_cds(data) -> Optional[tuple[int, float]]:
-    """Decodes a CDS time that starts with its P-field: the octets read and
-    the seconds since its epoch, which the P-field names."""
+    """Decodes a CDS time that starts with its P-field.
+
+    Args:
+        data: The octets from the P-field on.
+
+    Returns:
+        The octets read and the seconds since the epoch the P-field
+        names; None if the P-field isn't a CDS one or a T-field can't
+        be decoded.
+    """
     layout = Cds.from_pfield(data)
     if layout is None:
         return None

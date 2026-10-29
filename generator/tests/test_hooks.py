@@ -9,9 +9,20 @@ from xtcepkt.model import Custom, Unsupported
 
 def hook_mission(entries: str, alarm: str = "", algorithms: str = "",
                  encoding: str = "") -> str:
-    """Telemetry with U8 A (whose type has ``alarm``), U8 B, float O and P,
-    container C holding ``entries`` (with BinaryEncoding ``encoding``) and
-    ``algorithms`` in the AlgorithmSet."""
+    """Builds telemetry for hook tests.
+
+    Telemetry with U8 A (whose type has ``alarm``), U8 B, float O and P,
+    container C, and ``algorithms`` in the AlgorithmSet.
+
+    Args:
+        entries:    The XML of C's entries.
+        alarm:      The XML that follows the encoding in A's type.
+        algorithms: The XML inside the AlgorithmSet; "" for none.
+        encoding:   C's BinaryEncoding element, or "" for none.
+
+    Returns:
+        The XTCE document.
+    """
     algs = f"<AlgorithmSet>{algorithms}</AlgorithmSet>" if algorithms else ""
     return mission(tm=f"""
         <ParameterTypeSet>

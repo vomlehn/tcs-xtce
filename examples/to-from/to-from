@@ -34,6 +34,10 @@ def usage() -> None:
 
 
 def main() -> None:
+    """Runs the writer and the reader the command line names, piped together.
+
+    Exits with an error if a program is missing or either fails.
+    """
     if len(sys.argv) != 3 or not all(a in PROGRAMS for a in sys.argv[1:]):
         usage()
     to, from_ = sys.argv[1:]

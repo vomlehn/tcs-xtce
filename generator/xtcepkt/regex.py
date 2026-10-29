@@ -39,8 +39,16 @@ CATEGORIES = {
 
 
 def normalize(ranges: list) -> list:
-    """Sorted, merged code point ranges, without the surrogates (which
-    UTF-8 can't hold)."""
+    """Sorts and merges code point ranges, dropping the surrogates (which
+    UTF-8 can't hold).
+
+    Args:
+        ranges: The ranges, each an inclusive (first, last) pair of code
+                points, in any order and possibly overlapping.
+
+    Returns:
+        The same code points as sorted, disjoint, non-adjacent ranges.
+    """
     out: list = []
     for lo, hi in sorted(ranges):
         for a, b in ((lo, min(hi, 0xD7FF)), (max(lo, 0xE000), hi)):
@@ -54,6 +62,15 @@ def normalize(ranges: list) -> list:
 
 
 def negate(ranges: list) -> list:
+    """Complements a set of code point ranges.
+
+    Args:
+        ranges: The ranges, each an inclusive (first, last) pair.
+
+    Returns:
+        The normalized ranges of every code point up to ``MAX_CODE``,
+        except the surrogates, that isn't in ``ranges``.
+    """
     out, at = [], 0
     for lo, hi in normalize(ranges):
         if lo > at:
@@ -65,7 +82,15 @@ def negate(ranges: list) -> list:
 
 
 def fold(ranges: list) -> list:
-    """Adds the other case of the ASCII letters in ``ranges``."""
+    """Adds the other case of the ASCII letters in ``ranges``.
+
+    Args:
+        ranges: The ranges, each an inclusive (first, last) pair of code
+                points.
+
+    Returns:
+        The normalized ranges, with both cases of each ASCII letter.
+    """
     extra = []
     for lo, hi in ranges:
         for a, b, d in ((0x41, 0x5A, 32), (0x61, 0x7A, -32)):
@@ -80,8 +105,17 @@ def utf8(c: int) -> bytes:
 
 
 def utf8_sequences(lo: int, hi: int) -> list:
-    """The code points ``lo`` to ``hi`` as UTF-8: a list of byte range
-    sequences, each a list of (first, last) per byte."""
+    """Encodes a range of code points as UTF-8 byte ranges.
+
+    Args:
+        lo: The first code point.
+        hi: The last code point, at least ``lo``.
+
+    Returns:
+        A list of byte range sequences, each a list of (first, last)
+        per byte, that together match exactly the UTF-8 encodings of
+        ``lo`` to ``hi``.
+    """
     for limit in (0x7F, 0x7FF, 0xFFFF):
         if lo <= limit < hi:
             return utf8_sequences(lo, limit) + utf8_sequences(limit + 1, hi)
@@ -110,6 +144,14 @@ class Nfa:
         self.eps: list[list] = []
 
     def state(self) -> int:
+        """Adds a state with no edges.
+
+        Returns:
+            The new state's number.
+
+        Raises:
+            Unsupported: The automaton already has ``MAX_STATES`` states.
+        """
         if len(self.edges) >= MAX_STATES:
             raise Unsupported("a matchPattern too large to compile")
         self.edges.append([])
@@ -117,7 +159,14 @@ class Nfa:
         return len(self.edges) - 1
 
     def chars(self, ranges: list) -> tuple:
-        """A fragment (start, end) matching one code point in ``ranges``."""
+        """Adds a fragment that matches one code point in ``ranges``.
+
+        Args:
+            ranges: The code points, as inclusive (first, last) pairs.
+
+        Returns:
+            The fragment's (start, end) states.
+        """
         start, end = self.state(), self.state()
         for lo, hi in normalize(ranges):
             for seq in utf8_sequences(lo, hi):
@@ -133,6 +182,15 @@ class Nfa:
         return q, q
 
     def concat(self, frags: list) -> tuple:
+        """Joins fragments one after the other with epsilon edges.
+
+        Args:
+            frags: The fragments' (start, end) states, in order.
+
+        Returns:
+            The (start, end) states of the whole sequence; a new empty
+            fragment's when ``frags`` is empty.
+        """
         if not frags:
             return self.empty()
         for (_, e), (s, _) in zip(frags, frags[1:]):
@@ -140,6 +198,14 @@ class Nfa:
         return frags[0][0], frags[-1][1]
 
     def alt(self, frags: list) -> tuple:
+        """Adds a fragment that matches any one of ``frags``.
+
+        Args:
+            frags: The alternatives' (start, end) states.
+
+        Returns:
+            The (start, end) states of the alternation.
+        """
         start, end = self.state(), self.state()
         for s, e in frags:
             self.eps[start].append(s)
@@ -147,6 +213,14 @@ class Nfa:
         return start, end
 
     def star(self, frag: tuple) -> tuple:
+        """Adds a fragment that matches ``frag`` zero or more times.
+
+        Args:
+            frag: The repeated fragment's (start, end) states.
+
+        Returns:
+            The (start, end) states of the repetition.
+        """
         start, end = self.state(), self.state()
         s, e = frag
         self.eps[start] += [s, end]
@@ -155,6 +229,20 @@ class Nfa:
 
 
 def compile_pattern(pattern: str) -> Dfa:
+    """Compiles a ``matchPattern`` into a minimal DFA over UTF-8 bytes.
+
+    Args:
+        pattern: The pattern, in Python's syntax; it must match the
+                 whole string.
+
+    Returns:
+        The automaton.
+
+    Raises:
+        Unsupported: The pattern doesn't parse, uses something that
+                     isn't supported (see the module docstring) or is too
+                     large to compile.
+    """
     try:
         tree = sre_parse.parse(pattern)
     except Exception as e:  # re.error, or worse
@@ -166,6 +254,18 @@ def compile_pattern(pattern: str) -> Dfa:
         return nfa.chars(fold(ranges) if ignore else ranges)
 
     def seq(items, first: bool, last: bool) -> tuple:
+        """Builds the fragment for a sequence of parsed pattern items.
+
+        Args:
+            items: The items, each an (op, argument) pair from the parser.
+            first: Whether the sequence starts the pattern, so ``^`` may
+                   begin it.
+            last:  Whether the sequence ends the pattern, so ``$`` may
+                   end it.
+
+        Returns:
+            The sequence's (start, end) states.
+        """
         items = list(items)
         frags = []
         for k, (op, av) in enumerate(items):
@@ -174,6 +274,21 @@ def compile_pattern(pattern: str) -> Dfa:
         return nfa.concat(frags)
 
     def node(op, av, first: bool, last: bool) -> tuple:
+        """Builds the fragment for one parsed pattern item.
+
+        Args:
+            op:    The parser's opcode.
+            av:    Its argument.
+            first: Whether the item starts the pattern.
+            last:  Whether the item ends the pattern.
+
+        Returns:
+            The item's (start, end) states.
+
+        Raises:
+            Unsupported: The item isn't supported, or is a repeat too
+                         large to compile.
+        """
         if op is C.LITERAL:
             return chars([(av, av)])
         if op is C.NOT_LITERAL:
@@ -231,7 +346,30 @@ def compile_pattern(pattern: str) -> Dfa:
 
 
 def determinize(nfa: Nfa, start: int, final: int, pattern: str) -> Dfa:
+    """Turns an NFA into a minimal DFA by the subset construction.
+
+    Args:
+        nfa:     The automaton.
+        start:   Its start state.
+        final:   Its accepting state.
+        pattern: The pattern it came from, for messages.
+
+    Returns:
+        The minimized deterministic automaton.
+
+    Raises:
+        Unsupported: The DFA would have more than ``MAX_STATES`` states.
+    """
     def closure(qs) -> frozenset:
+        """Finds the states reachable by epsilon edges.
+
+        Args:
+            qs: The states to start from.
+
+        Returns:
+            Those states and every state reachable from them by epsilon
+            edges.
+        """
         seen, todo = set(qs), list(qs)
         while todo:
             for r in nfa.eps[todo.pop()]:
@@ -272,8 +410,19 @@ def determinize(nfa: Nfa, start: int, final: int, pattern: str) -> Dfa:
 
 
 def minimize(table: list, accept: list, pattern: str) -> Dfa:
-    """The smallest automaton equivalent to ``table`` (each state's
-    transitions), by refining the partition of its states (Moore)."""
+    """Finds the smallest automaton equivalent to ``table`` by refining
+    the partition of its states (Moore's algorithm).
+
+    Args:
+        table:   Each state's transitions, as sorted (lo, hi, next)
+                 byte ranges; state 0 is the start.
+        accept:  Whether each state accepts.
+        pattern: The pattern the automaton matches.
+
+    Returns:
+        The minimal automaton, its states numbered in the order they are
+        first reached from the start, unreachable ones dropped.
+    """
     cls = [int(a) for a in accept]
     while True:
         sigs = {}
@@ -321,7 +470,16 @@ def minimize(table: list, accept: list, pattern: str) -> Dfa:
 
 
 def matches(dfa: Dfa, data: bytes) -> bool:
-    """What the runtimes compute, for tests."""
+    """Runs an automaton over some bytes, as the runtimes do, for tests.
+
+    Args:
+        dfa:  The automaton.
+        data: The string, as UTF-8.
+
+    Returns:
+        Whether the whole of ``data`` matches.
+    """
+
     q = 0
     for b in data:
         for lo, hi, nxt in dfa.trans[dfa.starts[q]:dfa.starts[q + 1]]:

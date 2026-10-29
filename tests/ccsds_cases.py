@@ -21,6 +21,15 @@ def hexs(b: bytes) -> str:
 
 
 def cuc_pfield(rng) -> bytes:
+    """A random CUC P-field, often valid.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        One octet, or two when the coarse or fine time is too long for one
+        or now and then anyway; the second sometimes has reserved bits set.
+    """
     coarse, fine = rng.randint(1, 7), rng.randint(0, 10)
     ident = rng.choice([1, 2, 1, 2, rng.randrange(8)])
     c, f = min(coarse, 4), min(fine, 3)
@@ -35,6 +44,15 @@ def cuc_pfield(rng) -> bytes:
 
 
 def seconds(rng, limit: float) -> float:
+    """A random time to encode, often at the edge of a layout's range.
+
+    Args:
+        rng:   The random number generator.
+        limit: The first time, in seconds, too large for the layout.
+
+    Returns:
+        The time in seconds; it may be negative, infinite or NaN.
+    """
     return rng.choice(
         [0.0, 1.0, 0.5, limit, limit - 1.0, limit - 0.0001, limit * 2, -1.0,
          -0.0, math.inf, math.nan, rng.random(), rng.random() * limit,
@@ -43,6 +61,9 @@ def seconds(rng, limit: float) -> float:
 
 
 def main() -> None:
+    """Prints COUNT random cases, seeded with SEED, as the module docstring
+    describes.
+    """
     rng = random.Random(int(sys.argv[1]))
     out = []
     for _ in range(int(sys.argv[2])):

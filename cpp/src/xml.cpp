@@ -11,6 +11,10 @@ namespace xtce {
 // -- scalar values
 // --------------------------------------------------------------
 
+/** Trims XML whitespace (space, tab, CR and LF) from both ends.
+ *
+ * @param s  The text.
+ * @return   The trimmed view into `s`. */
 std::string_view trim(std::string_view s) {
         auto ws = [](char c) {
                 return c == ' ' || c == '\t' || c == '\n' || c == '\r';
@@ -35,6 +39,12 @@ void format_value(std::string& out, std::int64_t v) { format_int(out, v); }
 void format_value(std::string& out, std::uint16_t v) { format_int(out, v); }
 void format_value(std::string& out, double v) { format_double(out, v); }
 
+/** Appends the shortest text that reads back as the same double,
+ * formatted like Python's repr, with NaN, INF and -INF for the special
+ * values.
+ *
+ * @param out  The string to append to.
+ * @param x    The value. */
 void format_double(std::string& out, double x) {
         if (std::isnan(x)) {
                 out += "NaN";
@@ -94,6 +104,11 @@ void format_double(std::string& out, double x) {
 
 void parse_value(std::string_view s, std::string& v) { v.assign(s); }
 
+/** Parses an xs:boolean: true, false, 1 or 0, ignoring surrounding
+ * whitespace.  Throws std::invalid_argument on anything else.
+ *
+ * @param s  The text.
+ * @param v  Set to the value parsed. */
 void parse_value(std::string_view s, bool& v) {
         std::string_view t = trim(s);
         if (t == "true" || t == "1") {
@@ -106,6 +121,13 @@ void parse_value(std::string_view s, bool& v) {
         }
 }
 
+/** Parses a decimal integer with an optional sign, ignoring surrounding
+ * whitespace.  Throws std::invalid_argument if it is malformed or out of
+ * range of `I`.
+ *
+ * @param s     The text.
+ * @param v     Set to the value parsed.
+ * @param kind  The type's name, for the error message. */
 template <class I>
 static void parse_int(std::string_view s, I& v, const char* kind) {
         std::string_view t = trim(s);
@@ -123,6 +145,11 @@ void parse_value(std::string_view s, std::int32_t& v) {
 void parse_value(std::string_view s, std::int64_t& v) {
         parse_int(s, v, "i64");
 }
+/** Parses an unsigned 16-bit integer, rejecting a minus sign (even on
+ * zero).  Throws std::invalid_argument on bad input.
+ *
+ * @param s  The text.
+ * @param v  Set to the value parsed. */
 void parse_value(std::string_view s, std::uint16_t& v) {
         std::string_view t = trim(s);
         if (!t.empty() && t.front() == '-')
@@ -131,6 +158,12 @@ void parse_value(std::string_view s, std::uint16_t& v) {
         parse_int(s, v, "u16");
 }
 
+/** Parses an xs:double, including INF, +INF, -INF and NaN but not the
+ * other spellings std::from_chars accepts.  Throws std::invalid_argument
+ * on bad input.
+ *
+ * @param s  The text.
+ * @param v  Set to the value parsed. */
 void parse_value(std::string_view s, double& v) {
         std::string_view t = trim(s);
         if (t == "INF" || t == "+INF") {
@@ -161,6 +194,13 @@ void parse_value(std::string_view s, double& v) {
         }
 }
 
+/** Checks an element's number of occurrences against its bounds, throwing
+ * xtce::Error if `n` is outside [lo, hi].
+ *
+ * @param n     The number of occurrences found.
+ * @param lo    The fewest allowed.
+ * @param hi    The most allowed, or negative for unbounded.
+ * @param what  The element's name, for the error message. */
 void check_count(std::size_t n, std::size_t lo, long hi, const char* what) {
         if (n < lo || (hi >= 0 && n > static_cast<std::size_t>(hi))) {
                 throw Error(std::string(what) + ": " + std::to_string(n) +
@@ -318,6 +358,10 @@ bool AttrIter::next(const Reader& r) {
         return true;
 }
 
+/** Appends a code point's UTF-8 encoding.
+ *
+ * @param out  The string to append to.
+ * @param cp   The code point, at most 0x10FFFF. */
 static void push_utf8(std::string& out, std::uint32_t cp) {
         if (cp < 0x80) {
                 out += static_cast<char>(cp);
@@ -336,6 +380,14 @@ static void push_utf8(std::string& out, std::uint32_t cp) {
         }
 }
 
+/** Replaces entity and character references and normalizes line endings;
+ * in attribute values literal whitespace becomes a space.
+ *
+ * @param raw    The text as it appears in the document.
+ * @param attr   Whether it is an attribute value.
+ * @param out    The string the result is appended to.
+ * @param error  Set to a description when a reference is bad.
+ * @return       True, or false on an unterminated or unknown reference. */
 bool unescape(std::string_view raw, bool attr, std::string& out,
               std::string& error) {
         for (std::size_t i = 0; i < raw.size(); ++i) {

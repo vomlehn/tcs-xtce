@@ -29,6 +29,12 @@ static bool is_even(xtce_pk_inputs in) {
         return fmod(in.v[0], 2.0) == 0.0;
 }
 
+/** The MinMax algorithm: the smallest and largest of its inputs.
+ *
+ * @param in   The inputs.
+ * @param out  Filled in with the smallest, then the largest; HUGE_VAL and
+ *             -HUGE_VAL when there are no inputs.
+ * @return     True: it always succeeds. */
 static bool min_max(xtce_pk_inputs in, double* out) {
         size_t i;
         out[0] = HUGE_VAL;
@@ -44,6 +50,12 @@ static int bands(xtce_pk_inputs in) {
         return (int)(in.v[0] / 50.0);
 }
 
+/** The Twice checksum algorithm: twice the sum of the bytes checked.
+ *
+ * @param data   The packet.
+ * @param start  The first bit checked; only whole bytes count.
+ * @param end    The bit after the last one checked.
+ * @return       Twice the sum of the bytes from start / 8 to end / 8. */
 static uint64_t twice(const uint8_t* data, size_t start, size_t end) {
         uint64_t sum = 0;
         size_t i;
@@ -54,6 +66,15 @@ static uint64_t twice(const uint8_t* data, size_t start, size_t end) {
 /* The demo's transforms: Expand doubles every byte, Shrink takes every
  * other one (and gives nothing when a pair differs); Mask and Unmask are XOR
  * 0x5A. */
+
+/** The Expand transform: doubles every byte.
+ *
+ * @param in   The bytes to transform.
+ * @param n    How many there are.
+ * @param out  Where the result goes.
+ * @param cap  How many bytes `out` holds.
+ * @return     The result's length, 2 * n; more than `cap`, writing
+ *             nothing, if it doesn't fit. */
 static size_t expand(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
         size_t i;
         if (2 * n > cap) return 2 * n; /* the room it needs */
@@ -61,6 +82,16 @@ static size_t expand(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
         return 2 * n;
 }
 
+/** The Shrink transform, Expand's inverse: takes every other byte.
+ *
+ * @param in        The bytes to transform.
+ * @param n         How many there are; all are used.
+ * @param consumed  Filled in with how many bytes of `in` were used.
+ * @param out       Where the result goes.
+ * @param cap       How many bytes `out` holds.
+ * @return          The result's length, n / 2; more than `cap`, writing
+ *                  nothing, if it doesn't fit; XTCE_PK_NO_TRANSFORM if `n`
+ *                  is odd or a pair of bytes differs. */
 static size_t shrink(const uint8_t* in, size_t n, size_t* consumed,
                      uint8_t* out, size_t cap) {
         size_t i;
@@ -73,6 +104,14 @@ static size_t shrink(const uint8_t* in, size_t n, size_t* consumed,
         return n / 2;
 }
 
+/** The Mask transform: XORs every byte with 0x5A.
+ *
+ * @param in   The bytes to transform.
+ * @param n    How many there are.
+ * @param out  Where the result goes.
+ * @param cap  How many bytes `out` holds.
+ * @return     The result's length, `n`; more than `cap`, writing nothing,
+ *             if it doesn't fit. */
 static size_t mask(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
         size_t i;
         if (n > cap) return n;
@@ -89,6 +128,16 @@ static size_t unmask(const uint8_t* in, size_t n, size_t* consumed,
 /* Stuff and Unstuff frame bytes with their length; MsFrom and MsTo are
  * milliseconds in four bytes, VarFrom and VarTo milliseconds in a
  * varint. */
+
+/** The Stuff transform: prefixes the bytes with their length in a byte.
+ *
+ * @param in   The bytes to transform.
+ * @param n    How many there are, at most 255.
+ * @param out  Where the result goes.
+ * @param cap  How many bytes `out` holds.
+ * @return     The result's length, n + 1; more than `cap`, writing
+ *             nothing, if it doesn't fit; XTCE_PK_NO_TRANSFORM if `n` is
+ *             more than 255. */
 static size_t stuff(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
         if (n > 255) return XTCE_PK_NO_TRANSFORM;
         if (n + 1 > cap) return n + 1; /* the room it needs */
@@ -97,6 +146,18 @@ static size_t stuff(const uint8_t* in, size_t n, uint8_t* out, size_t cap) {
         return n + 1;
 }
 
+/** The Unstuff transform, Stuff's inverse: takes the bytes that a leading
+ * length byte counts.
+ *
+ * @param in        The bytes to transform, starting with the length.
+ * @param n         How many there are.
+ * @param consumed  Filled in with how many bytes of `in` were used, the
+ *                  length byte included.
+ * @param out       Where the result goes.
+ * @param cap       How many bytes `out` holds.
+ * @return          The result's length; more than `cap`, writing nothing,
+ *                  if it doesn't fit; XTCE_PK_NO_TRANSFORM if `in` is
+ *                  shorter than the length says. */
 static size_t unstuff(const uint8_t* in, size_t n, size_t* consumed,
                       uint8_t* out, size_t cap) {
         size_t k;
@@ -108,8 +169,11 @@ static size_t unstuff(const uint8_t* in, size_t n, size_t* consumed,
         return k;
 }
 
-/* Seconds as whole milliseconds into *v, or false outside 0 to
- * 2^32 - 1. */
+/** Converts seconds to whole milliseconds, rounding halves up.
+ *
+ * @param s  The seconds.
+ * @param v  Filled in with the milliseconds.
+ * @return   True, or false if they are outside 0 to 2^32 - 1. */
 static bool ms(double s, uint32_t* v) {
         double x = floor(s * 1000.0 + 0.5);
         if (!(x >= 0.0 && x < 4294967296.0)) return false;
@@ -117,6 +181,13 @@ static bool ms(double s, uint32_t* v) {
         return true;
 }
 
+/** The MsFrom time transform: milliseconds in four big-endian bytes.
+ *
+ * @param in        The bytes.
+ * @param n         How many there are.
+ * @param consumed  Filled in with how many were used, 4.
+ * @param s         Filled in with the time in seconds.
+ * @return          True, or false if there are fewer than four bytes. */
 static bool ms_from(const uint8_t* in, size_t n, size_t* consumed,
                     double* s) {
         if (n < 4) return false;
@@ -126,6 +197,14 @@ static bool ms_from(const uint8_t* in, size_t n, size_t* consumed,
         return true;
 }
 
+/** The MsTo time transform, MsFrom's inverse.
+ *
+ * @param s    The time in seconds.
+ * @param out  Where the four bytes go.
+ * @param cap  How many bytes `out` holds.
+ * @return     4; more than `cap`, writing nothing, if they don't fit;
+ *             XTCE_PK_NO_TRANSFORM if the milliseconds don't fit 32
+ *             bits. */
 static size_t ms_to(double s, uint8_t* out, size_t cap) {
         uint32_t v;
         if (!ms(s, &v)) return XTCE_PK_NO_TRANSFORM;
@@ -137,6 +216,15 @@ static size_t ms_to(double s, uint8_t* out, size_t cap) {
         return 4;
 }
 
+/** The VarFrom time transform: milliseconds in a little-endian base-128
+ * varint of up to five bytes.
+ *
+ * @param in        The bytes.
+ * @param n         How many there are.
+ * @param consumed  Filled in with how many the varint used.
+ * @param s         Filled in with the time in seconds.
+ * @return          True, or false if no varint ends within the first five
+ *                  bytes or `n`. */
 static bool var_from(const uint8_t* in, size_t n, size_t* consumed,
                      double* s) {
         uint64_t v = 0;
@@ -152,6 +240,14 @@ static bool var_from(const uint8_t* in, size_t n, size_t* consumed,
         return false;
 }
 
+/** The VarTo time transform, VarFrom's inverse.
+ *
+ * @param s    The time in seconds.
+ * @param out  Where the varint goes.
+ * @param cap  How many bytes `out` holds.
+ * @return     The varint's length; more than `cap`, writing nothing, if it
+ *             doesn't fit; XTCE_PK_NO_TRANSFORM if the milliseconds don't
+ *             fit 32 bits. */
 static size_t var_to(double s, uint8_t* out, size_t cap) {
         uint8_t buf[5];
         uint32_t v;
@@ -173,8 +269,12 @@ static demo_AlarmMonitor mon;
 static double now; /* the index of the vector */
 static char other[8192];
 
-/* Prints ` | alarms: field=level, ...` for a packet with alarms, and
- * ` | monitor: ...` when the monitor's levels are others. */
+/** Prints ` | alarms: field=level, ...` for a packet with alarms, and
+ * ` | monitor: ...` when the monitor's levels are others.
+ *
+ * @param a            The packet's alarms.
+ * @param n            How many there are; nothing is printed if none.
+ * @param monitored_n  How many alarms the monitor gave, in `monitored`. */
 static void print_alarms(const xtce_pk_alarm* a, size_t n,
                          size_t monitored_n) {
         if (!n) return;
@@ -230,6 +330,14 @@ static void print_hex(const uint8_t* b, size_t n) {
                 printf("\n");                                               \
         } while (0)
 
+/** Decodes, describes and re-encodes each vector in a file, printing a
+ * line for each.
+ *
+ * @param argc  The number of arguments, 2.
+ * @param argv  The arguments: the vectors file's path.
+ * @return      0; 1 if the file can't be opened or a vector's kind is
+ *              unknown; 2 for a usage error.  A description too long for
+ *              its buffer exits with status 1. */
 int main(int argc, char** argv) {
         FILE* in;
         static char line[16384];

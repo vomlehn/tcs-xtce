@@ -48,7 +48,14 @@ class Failed(Exception):
 
 
 def paragraph(p: int) -> Paragraph:
-    """Array ``p`` as a Paragraph: one Line per line, one word per element."""
+    """Makes array ``p`` a Paragraph: one Line per line, one word per element.
+
+    Args:
+        p: The index of the array in ``PARAGRAPHS``.
+
+    Returns:
+        The Paragraph.
+    """
     lines = []
     for line in PARAGRAPHS[p]:
         words = line.split(" ")
@@ -58,7 +65,15 @@ def paragraph(p: int) -> Paragraph:
 
 
 def difference(got: Paragraph, want: Paragraph):
-    """Describe the first difference between ``got`` and ``want``, if any."""
+    """Describes the first difference between ``got`` and ``want``, if any.
+
+    Args:
+        got:  The Paragraph received.
+        want: The Paragraph sent.
+
+    Returns:
+        The difference, or None if they are the same.
+    """
     if len(got.lines) != len(want.lines):
         return f"received {len(got.lines)} lines, expected {len(want.lines)}"
     for i, (g, w) in enumerate(zip(got.lines, want.lines), 1):
@@ -71,9 +86,16 @@ def difference(got: Paragraph, want: Paragraph):
 
 
 def send(address, errors: list) -> None:
-    """Connect to ``address``, send the digest of the XTCE file, then send
+    """Sends the digest and the arrays, then closes the connection.
+
+    Connects to ``address``, sends the digest of the XTCE file, then sends
     each array: a Length packet, then the Paragraph packet in a single
-    write. Then close the connection."""
+    write.
+
+    Args:
+        address: The receiver's host and port.
+        errors:  Gets the error, if one stops the sender.
+    """
     try:
         with socket.create_connection(address) as sock:
             # First the digest, so the receiver can check that it uses the
@@ -99,10 +121,22 @@ def send(address, errors: list) -> None:
 
 
 def receive(listener: socket.socket) -> None:
-    """Accept the connection, check the sender's XTCE digest, and receive
-    arrays until it closes: for each, read and decode the Length packet,
-    then read that many bytes, decode the Paragraph, check it and print
-    it."""
+    """Receives the arrays, checks them and prints them.
+
+    Accepts the connection, checks the sender's XTCE digest, and receives
+    arrays until it closes: for each, reads and decodes the Length packet,
+    then reads that many bytes, decodes the Paragraph, checks it and
+    prints it.
+
+    Args:
+        listener: The socket the sender connects to.
+
+    Raises:
+        Failed:      The digests differ, or an array is damaged, missing
+                     or extra.
+        PacketError: A packet can't be decoded.
+        OSError:     The connection fails.
+    """
     conn, _ = listener.accept()
     # The codecs' input buffers are preallocated to Paragraph.MAX_BYTES and
     # Length.MAX_BYTES (4) and reused for both arrays.
@@ -150,6 +184,10 @@ def receive(listener: socket.socket) -> None:
 
 
 def main() -> None:
+    """Runs the sender in a thread and the receiver in this one.
+
+    Exits with an error if either fails.
+    """
     # Listen on a port the system chooses, on the loopback interface only.
     with socket.create_server(("127.0.0.1", 0)) as listener:
         errors: list = []

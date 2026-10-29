@@ -36,7 +36,9 @@ public:
         }
         void load(std::string_view s) { load(s.data(), s.size()); }
 
-        // Replaces the contents with everything read from `in`.
+        /** Replaces the contents with everything read from a stream.
+         *
+         * @param in  The stream, read to its end. */
         void load_from(std::istream& in) {
                 data_.clear();
                 char chunk[16 * 1024];

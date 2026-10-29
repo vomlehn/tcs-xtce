@@ -23,6 +23,15 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+/// Parses hex digits as bytes.
+///
+/// # Arguments
+///
+/// * `h` - Two hex digits per byte.
+///
+/// # Returns
+///
+/// The bytes.
 fn bytes(h: &str) -> Vec<u8> {
     (0..h.len())
         .step_by(2)
@@ -30,7 +39,16 @@ fn bytes(h: &str) -> Vec<u8> {
         .collect()
 }
 
-/// Encodes a packet, prints it, and returns the bytes.
+/// Encodes a packet and prints it, exiting with status 1 if it can't be
+/// encoded.
+///
+/// # Arguments
+///
+/// * `p` - The packet.
+///
+/// # Returns
+///
+/// The encoded bytes.
 fn encode<P: Packet + std::fmt::Display>(p: &P) -> Vec<u8> {
     match p.to_bytes() {
         Ok(b) => {
@@ -41,7 +59,16 @@ fn encode<P: Packet + std::fmt::Display>(p: &P) -> Vec<u8> {
     }
 }
 
-/// Decodes a status of either kind and prints it, with its alarms.
+/// Decodes a status of either kind and prints it, with its alarms,
+/// exiting with status 1 if it can't be decoded.
+///
+/// # Arguments
+///
+/// * `b` - The encoded status.
+///
+/// # Returns
+///
+/// The decoded status.
 fn decode(b: &[u8]) -> StatusKind {
     match StatusKind::decode(b) {
         Ok(p) => {
@@ -52,6 +79,7 @@ fn decode(b: &[u8]) -> StatusKind {
     }
 }
 
+/// Prints the modes' labels, then encodes and decodes statuses by label.
 fn main() {
     // Labels name the values, and one label can name a range of them.
     for v in [0, 2, 20, 40] {

@@ -12,7 +12,14 @@ from .generated import (NAMESPACE, READERS, ROOT_ELEMENT, WRITERS,
 
 def to_xml(value: Any, tag: str, buf: ManagedBuffer, indent: bool = True,
            writer: Optional[X.Writer] = None) -> None:
-    """Serialize ``value`` as the element ``tag`` into ``buf`` (replacing it).
+    """Serializes ``value`` as the element ``tag`` into ``buf``, replacing it.
+
+    Args:
+        value:  The XTCE object to serialize.
+        tag:    The name of its element.
+        buf:    The buffer the XML goes into.
+        indent: Whether to indent the XML.
+        writer: A writer to reuse, or None to make a new one.
     """
     w = writer if writer is not None else X.Writer(indent)
     w.reset()
@@ -24,7 +31,18 @@ def to_xml(value: Any, tag: str, buf: ManagedBuffer, indent: bool = True,
 
 
 def from_xml(data, cls: type, tag: str):
-    """Deserialize an element ``tag`` of type ``cls`` from bytes-like ``data``.
+    """Deserializes an element ``tag`` of type ``cls`` from ``data``.
+
+    Args:
+        data: The bytes-like XML.
+        cls:  The class of the object the element holds.
+        tag:  The name the root element must have.
+
+    Returns:
+        The object read.
+
+    Raises:
+        XtceError: The XML is bad or its root isn't ``tag``.
     """
     root = X.parse(data)
     if root.name != tag:
@@ -39,6 +57,12 @@ class Document:
     Both buffers are preallocated when the document is created and reused by
     every :meth:`load` and :meth:`serialize`; they are released together with
     the document (or explicitly with :meth:`close` / a ``with`` block).
+
+    Args:
+        root:            The space system, or None for an empty one.
+        input_capacity:  Bytes to preallocate for the input buffer.
+        output_capacity: Bytes to preallocate for the output buffer.
+        indent:          Whether :meth:`serialize` indents the XML.
     """
 
     def __init__(self, root: Optional[SpaceSystemType] = None, *,
@@ -53,7 +77,14 @@ class Document:
 
     @classmethod
     def from_bytes(cls, data) -> "Document":
-        """Deserialize a document; the input buffer is sized to fit ``data``."""
+        """Deserializes a document; the input buffer is sized to fit ``data``.
+
+        Args:
+            data: The bytes-like XML.
+
+        Returns:
+            The new document.
+        """
         size = max(len(data), DEFAULT_CAPACITY)
         doc = cls(input_capacity=size, output_capacity=size)
         doc.load(data)
@@ -61,6 +92,14 @@ class Document:
 
     @classmethod
     def from_file(cls, path) -> "Document":
+        """Deserializes a document from a file.
+
+        Args:
+            path: The file's path.
+
+        Returns:
+            The new document.
+        """
         doc = cls()
         with open(path, "rb") as f:
             doc.read_from(f)

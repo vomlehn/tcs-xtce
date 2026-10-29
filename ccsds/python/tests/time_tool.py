@@ -23,6 +23,13 @@ def decoded(r) -> str:
 
 
 def main() -> None:
+    """Runs each case on standard input and prints its result.
+
+    Blank lines are skipped.  Each result is ``none`` when the operation
+    fails, a decoding's size and value bits in hex, or an encoding's bytes
+    in hex (``x`` when there are none) or ``needs N`` when it is longer
+    than the case's capacity.
+    """
     for line in sys.stdin:
         w = line.split()
         if not w:

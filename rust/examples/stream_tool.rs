@@ -10,7 +10,13 @@
 #[path = "../tests/mission/demo.rs"]
 mod demo;
 
-/// The demo's Descramble: each byte XOR 0x55.
+/// Implements the demo's Descramble algorithm: each byte XOR 0x55.
+///
+/// # Arguments
+///
+/// * `data` - The scrambled bytes.
+/// * `out`  - Called with each run of descrambled bytes, up to 64 at a
+///            time.
 fn descramble(data: &[u8], out: &mut dyn FnMut(&[u8])) {
     let mut buf = [0u8; 64];
     for chunk in data.chunks(buf.len()) {
@@ -30,6 +36,12 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+/// Feeds the file's bytes to the demo's streams and prints the frames.
+///
+/// # Panics
+///
+/// Without a streams file, if it can't be read or holds bad hex, or if
+/// it names an unknown stream.
 fn main() {
     let path = std::env::args().nth(1).expect("usage: stream_tool STREAMS");
     let text = std::fs::read_to_string(path).expect("cannot read streams");

@@ -9,6 +9,11 @@ mod demo;
 use demo::*;
 use tcs_xtce::packet::{Codec, Packet, PacketError};
 
+/// Builds the Housekeeping packet the tests encode.
+///
+/// # Returns
+///
+/// A packet with every field set to a distinctive in-range value.
 fn housekeeping() -> Housekeeping {
     Housekeeping {
         sec_hdr_flag: true,

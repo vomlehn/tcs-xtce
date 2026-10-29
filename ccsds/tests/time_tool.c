@@ -6,6 +6,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/** Converts a string of hexadecimal digit pairs to octets.
+ *
+ * @param s    The digits, two per octet.
+ * @param out  Filled in with the octets; must hold strlen(s) / 2.
+ * @return     How many octets were written. */
 static size_t unhex(const char* s, uint8_t* out) {
         size_t n = strlen(s) / 2, i;
         for (i = 0; i < n; ++i) {
@@ -16,6 +21,10 @@ static size_t unhex(const char* s, uint8_t* out) {
         return n;
 }
 
+/** Prints octets in hexadecimal on a line, or "x" if there are none.
+ *
+ * @param b  The octets.
+ * @param n  How many there are. */
 static void hex(const uint8_t* b, size_t n) {
         size_t i;
         if (!n) fputs("x", stdout);
@@ -23,8 +32,14 @@ static void hex(const uint8_t* b, size_t n) {
         putchar('\n');
 }
 
-/* Called after the decoding: C doesn't say in what order a call's
- * arguments are worked out. */
+/** Prints the result of a decoding: the octets read and the seconds as
+ * the hexadecimal of their IEEE bits, or "none" if it failed.  Called
+ * after the decoding: C doesn't say in what order a call's arguments are
+ * worked out.
+ *
+ * @param ok  Whether the decoding succeeded.
+ * @param k   The octets it read.
+ * @param s   The seconds it gave. */
 static void decoded(bool ok, const size_t* k, const double* s) {
         uint64_t bits;
         if (!ok) {
@@ -35,6 +50,12 @@ static void decoded(bool ok, const size_t* k, const double* s) {
         printf("%zu %016" PRIx64 "\n", *k, bits);
 }
 
+/** Prints the result of an encoding: "none" if the time doesn't fit the
+ * layout, "needs N" if the output was too small, else the octets.
+ *
+ * @param r    What the encoding function returned.
+ * @param out  The octets it wrote.
+ * @param cap  The size of the output it was given. */
 static void encoded(size_t r, const uint8_t* out, size_t cap) {
         if (r == CCSDS_NONE)
                 puts("none");
@@ -44,6 +65,10 @@ static void encoded(size_t r, const uint8_t* out, size_t cap) {
                 hex(out, r);
 }
 
+/** Reads seconds given as the hexadecimal of a double's IEEE bits.
+ *
+ * @param s  The hexadecimal digits.
+ * @return   The double. */
 static double secs(const char* s) {
         uint64_t bits = strtoull(s, NULL, 16);
         double d;
@@ -55,6 +80,10 @@ static ccsds_epoch epoch(const char* s) {
         return s[0] == '1' ? CCSDS_EPOCH_AGENCY : CCSDS_EPOCH_CCSDS;
 }
 
+/** Runs the cases on standard input, one per line, printing each result
+ * on standard output.
+ *
+ * @return  0. */
 int main(void) {
         char line[1024];
         static uint8_t data[512], out[512];

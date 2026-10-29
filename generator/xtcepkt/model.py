@@ -117,7 +117,12 @@ class DynSize:
 
     @property
     def source(self) -> str:
-        """The name of the value that gives the size, once bound."""
+        """Names the value that gives the size, for messages and reports.
+
+        Returns:
+            ``a DiscreteLookupList`` for a lookup, the bound value's
+            reference with its member steps, or else the unbound name.
+        """
         if self.lookup is not None:
             return "a DiscreteLookupList"
         if self.local is not None:
@@ -218,8 +223,16 @@ class Index:
 
 
 def ref_text(name: str, steps) -> str:
-    """A reference as XTCE writes it: ``name`` then ``.member`` and
-    ``[index]`` steps (names, or ints and Index for elements)."""
+    """Writes a reference as XTCE does.
+
+    Args:
+        name:  The value's name.
+        steps: The steps into it: member names, and ints or Index for
+               elements.
+
+    Returns:
+        ``name`` followed by a ``.member`` or ``[index]`` for each step.
+    """
     out = name
     for s in steps:
         if isinstance(s, Index):
@@ -340,6 +353,13 @@ class Spline:
 
     @property
     def invertible(self) -> bool:
+        """Says whether the spline can be inverted for encoding.
+
+        Returns:
+            True when it is linear throughout (order 1, no per-segment
+            orders) and its calibrated values strictly increase or
+            strictly decrease.
+        """
         if self.order != 1 or self.orders:
             return False
         cal = [c for _, c in self.points]
@@ -383,10 +403,19 @@ class MathOp:
     invertible = False
 
     def refs(self) -> list:
-        """The ValueRefs it uses."""
+        """Lists the other values of the packet the expression uses.
+
+        Returns:
+            Its ValueRefs, in the order the expression tree holds them.
+        """
         out = []
 
         def visit(e):
+            """Adds the ValueRefs in a subtree to ``out``.
+
+            Args:
+                e: The subtree.
+            """
             if e[0] == "value":
                 out.append(e[1])
             elif e[0] not in ("const", "raw"):
@@ -501,7 +530,12 @@ class VType:
 
     @property
     def dyn(self) -> Optional[DynSize]:
-        """The size or count another value gives this type, if any."""
+        """Finds the size or count another value gives this type.
+
+        Returns:
+            An array's DynSize count, or the encoding's ``dyn``; None if
+            there is none.
+        """
         e = self.enc
         if isinstance(e, ArrayEnc):
             return e.count if isinstance(e.count, DynSize) else None
@@ -513,8 +547,12 @@ class VType:
         return self.enc.elem if isinstance(self.enc, ArrayEnc) else self
 
     def tree(self) -> list["VType"]:
-        """This type and every type inside it (array elements, aggregate
-        members), inner types first."""
+        """Lists this type and every type inside it (array elements,
+        aggregate members).
+
+        Returns:
+            The types, inner types first and this one last.
+        """
         e = self.enc
         inner = ([e.elem] if isinstance(e, ArrayEnc)
                  else [m.vtype for m in e.members]
@@ -700,7 +738,12 @@ class Stream:
     inverter: str = ""
 
     def chain(self) -> list["Stream"]:
-        """This stream, then the streams that feed it, to the raw one."""
+        """Lists this stream and the streams that feed it.
+
+        Returns:
+            This stream, then each feeder in turn, to the one whose input
+            is the raw stream; it stops at a cycle.
+        """
         out, st = [], self
         while st is not None and st not in out:  # a cycle is an error
             out.append(st)
@@ -971,10 +1014,18 @@ Item = Union[Seek, Mark, Value, Segment, Fixed, Pad, Cond, Require, Fill,
 
 
 def walk(items: list, inner: bool = True) -> list:
-    """The items, with the contents of conditional blocks spliced in, and
-    of transformed containers after them unless ``inner`` is false (for
-    finding where items are on the wire, where a Transform stands for
-    its contents)."""
+    """Flattens a list of items.
+
+    Args:
+        items: The items.
+        inner: Whether to put the contents of each Transform after it;
+               false for finding where items are on the wire, where a
+               Transform stands for its contents.
+
+    Returns:
+        The items, with the contents of conditional blocks spliced in,
+        recursively.
+    """
     out = []
     for it in items:
         if isinstance(it, Cond):
@@ -1058,9 +1109,16 @@ def input_locals(inputs: list) -> list:
 
 
 def term_indexes(t) -> list:
-    """(local, path before the step, count) for every array element that
-    a term reads, so that encoding can check those arrays' lengths before
-    it indexes them."""
+    """Finds the array elements a term reads, so that encoding can check
+    those arrays' lengths before it indexes them.
+
+    Args:
+        t: The term.
+
+    Returns:
+        (local, path before the step, count) for each Index step with a
+        count in the paths the term reads.
+    """
     if isinstance(t, (Criterion, Custom)):
         pairs = (((t.local, t.path), (t.other, t.other_path))
                  if isinstance(t, Criterion)
@@ -1075,8 +1133,15 @@ def term_indexes(t) -> list:
 
 
 def term_paths(t) -> list:
-    """(local, path) for every value a term reads, with the member and
-    element steps into it."""
+    """Finds every value a term reads.
+
+    Args:
+        t: The term.
+
+    Returns:
+        (local, path) for each, the path the member and element steps
+        into it.
+    """
     if isinstance(t, Criterion):
         out = [(t.local, t.path)]
         if t.other is not None:
@@ -1092,7 +1157,14 @@ Term = Union[Criterion, Custom, AllOf, AnyOf]
 
 
 def term_locals(t: Term) -> list:
-    """The values a term reads."""
+    """Finds the values a term reads.
+
+    Args:
+        t: The term.
+
+    Returns:
+        The Locals, in the term's order, repeats included.
+    """
     if isinstance(t, Criterion):
         return [t.local] + ([t.other] if t.other is not None else [])
     if isinstance(t, Custom):
@@ -1101,7 +1173,14 @@ def term_locals(t: Term) -> list:
 
 
 def term_hooks(t: Term) -> list:
-    """The hooks a term calls."""
+    """Finds the hooks a term calls.
+
+    Args:
+        t: The term.
+
+    Returns:
+        The Hooks of its Custom terms, in order.
+    """
     if isinstance(t, Custom):
         return [t.hook]
     if isinstance(t, Criterion):
@@ -1150,7 +1229,12 @@ class Node:
     hooks: list = field(default_factory=list)
 
     def chain(self) -> list["Node"]:
-        """This node and its bases, root first."""
+        """Lists this node and its bases.
+
+        Returns:
+            The nodes, the root of the inheritance first and this one
+            last.
+        """
         out = []
         n: Optional[Node] = self
         while n is not None:
@@ -1171,6 +1255,13 @@ class Node:
                      and not it.local.measures), None)
 
     def descendants(self) -> list["Node"]:
+        """Lists every node that inherits from this one.
+
+        Returns:
+            The children and their descendants, depth first, each child
+            before its own descendants.
+        """
+
         out = []
         for c in self.children:
             out.append(c)

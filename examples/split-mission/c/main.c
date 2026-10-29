@@ -27,6 +27,10 @@
 static const char* const DOCUMENTS[] = {"dt.xml", "pus.xml", "rover.xml"};
 static const char* const SHUFFLED[] = {"rover.xml", "dt.xml", "pus.xml"};
 
+/** Prints an error message to standard error and exits with status 1.
+ *
+ * @param fmt  The message's printf format.
+ * @param ...  The values it formats. */
 static void fail(const char* fmt, ...) {
         va_list ap;
         va_start(ap, fmt);
@@ -49,7 +53,14 @@ static void digest(const char* const* paths, uint8_t* out) {
                 fail("%s", err.message);
 }
 
-/* A housekeeping packet: PUS service 3, subservice 25. */
+/** Makes a housekeeping packet: PUS service 3, subservice 25.
+ *
+ * @param k           Filled in with the packet.
+ * @param count       Its CCSDS sequence count and PUS message counter.
+ * @param battery     The battery voltage, in volts.
+ * @param motor_temp  The motor temperature, in degrees Celsius.
+ * @param left        The turns of the left wheel since the last report.
+ * @param right       The turns of the right wheel since the last report. */
 static void hk(rover_CcsdsKind* k, uint16_t count, double battery,
                double motor_temp, uint16_t left, uint16_t right) {
         rover_Hk* p = &k->u.Hk;
@@ -66,6 +77,11 @@ static void hk(rover_CcsdsKind* k, uint16_t count, double battery,
         p->right_turns = right;
 }
 
+/** Compares two packets by their kinds and descriptions.
+ *
+ * @param a  One packet.
+ * @param b  The other.
+ * @return   Nonzero if they are the same. */
 static int same(const rover_CcsdsKind* a, const rover_CcsdsKind* b) {
         char ta[512], tb[512];
         rover_CcsdsKind_describe(a, ta, sizeof ta);
@@ -73,6 +89,11 @@ static int same(const rover_CcsdsKind* a, const rover_CcsdsKind* b) {
         return a->tag == b->tag && strcmp(ta, tb) == 0;
 }
 
+/** Writes a stream of the mission's packets after the digest of its
+ * documents, reads it back, and shows what the generated code rejects;
+ * exits with status 1 if a result is not what it should be.
+ *
+ * @return  0. */
 int main(void) {
         static uint8_t stream[DIGEST_BYTES +
                               N_PACKETS * rover_CcsdsKind_MAX_BYTES];

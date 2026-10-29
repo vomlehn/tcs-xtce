@@ -20,6 +20,10 @@
 
 #define MAX_BYTES probe_StatusKind_MAX_BYTES
 
+/** Prints an error message to standard error and exits with status 1.
+ *
+ * @param fmt  The message's printf format.
+ * @param ...  The values it formats. */
 static void fail(const char* fmt, ...) {
         va_list ap;
         va_start(ap, fmt);
@@ -36,6 +40,11 @@ static const char* hex(const uint8_t* b, size_t n, char* buf, size_t cap) {
         return buf + 2; /* drop the "0x" */
 }
 
+/** Converts a string of hexadecimal digit pairs to bytes.
+ *
+ * @param h    The digits, two per byte; an odd last digit is ignored.
+ * @param out  Filled in with the bytes; must hold strlen(h) / 2.
+ * @return     How many bytes were written. */
 static size_t from_hex(const char* h, uint8_t* out) {
         size_t n = 0;
         for (; h[0] && h[1]; h += 2) {
@@ -45,7 +54,12 @@ static size_t from_hex(const char* h, uint8_t* out) {
         return n;
 }
 
-/* Encodes a status of either kind, prints it, and stores the bytes. */
+/** Encodes a status of either kind, prints it, and stores the bytes;
+ * exits if it can't be encoded.
+ *
+ * @param k    The status.
+ * @param out  Filled in with the packet; must hold MAX_BYTES.
+ * @return     The packet's length in bytes. */
 static size_t encode(const probe_StatusKind* k, uint8_t* out) {
         char t[256], h[64], msg[128];
         xtce_pk_error err;
@@ -59,7 +73,12 @@ static size_t encode(const probe_StatusKind* k, uint8_t* out) {
         return len;
 }
 
-/* Decodes a status of either kind and prints it, with its alarms. */
+/** Decodes a status of either kind and prints it, with its alarms; exits
+ * if it can't be decoded.
+ *
+ * @param data  The packet.
+ * @param len   Its length in bytes.
+ * @param k     Filled in with the status. */
 static void decode(const uint8_t* data, size_t len, probe_StatusKind* k) {
         char t[256], h[64], a[256], msg[128];
         xtce_pk_alarm alarms[probe_StatusKind_ALARMS];
@@ -75,6 +94,12 @@ static void decode(const uint8_t* data, size_t len, probe_StatusKind* k) {
                t, a);
 }
 
+/** Compares two Status packets field by field, ignoring fields that are
+ * absent.
+ *
+ * @param a  One status.
+ * @param b  The other.
+ * @return   Nonzero if they are the same. */
 static int same_status(const probe_Status* a, const probe_Status* b) {
         return a->mode == b->mode && a->battery == b->battery &&
                a->has_target == b->has_target &&
@@ -83,6 +108,10 @@ static int same_status(const probe_Status* a, const probe_Status* b) {
                (!a->has_station || a->station == b->station);
 }
 
+/** Shows how labels name the mode, encoding and decoding a status in each
+ * mode; exits with status 1 if a result is not what it should be.
+ *
+ * @return  0. */
 int main(void) {
         static const int64_t values[] = {0, 2, 20, 40};
         static const char* const odd[] = {"1463", "2850"};

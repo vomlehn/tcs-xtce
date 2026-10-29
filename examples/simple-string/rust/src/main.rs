@@ -20,6 +20,12 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+/// Serializes and deserializes strings that fit, are empty and are too
+/// long, then checks that the codec's buffers were never reallocated.
+///
+/// # Panics
+///
+/// If a string that serialized doesn't deserialize to itself.
 fn main() {
     // The codec owns an input and an output buffer, both preallocated to
     // SimpleString::MAX_BYTES (8) and reused for every packet.

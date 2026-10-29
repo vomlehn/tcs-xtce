@@ -55,7 +55,15 @@ def ms(s):
 
 
 def var_from(b):
-    """A LEB128 varint of one to five bytes, in milliseconds."""
+    """Decodes the demo's VarFrom: a LEB128 varint of milliseconds.
+
+    Args:
+        b: The bytes from the varint on; at most the first five are read.
+
+    Returns:
+        The number of bytes the varint takes and its value in seconds, or
+        None if it doesn't end within five bytes.
+    """
     v = 0
     for i, x in enumerate(b[:5]):
         v |= (x & 0x7F) << 7 * i
@@ -65,6 +73,15 @@ def var_from(b):
 
 
 def var_to(s):
+    """Encodes the demo's VarTo: seconds as a LEB128 varint of milliseconds.
+
+    Args:
+        s: The time in seconds.
+
+    Returns:
+        The varint, or None if the milliseconds are outside 0 to
+        2**32 - 1.
+    """
     v, out = ms(s), bytearray()
     if v is None:
         return None
@@ -85,6 +102,17 @@ demo.HOOKS.update(stuff=lambda b: bytes([len(b)]) + bytes(b) if len(b) < 256
 
 
 def run(kind: str, data: bytes, t: float) -> str:
+    """Decodes one vector, re-encodes it and describes the result.
+
+    Args:
+        kind: The decoder to use: ``tm``, ``tc`` or ``hk``.
+        data: The packet.
+        t:    The time the alarm monitor sees it at, in seconds.
+
+    Returns:
+        The line to print for the vector, as the module description
+        gives it.
+    """
     cls = DECODERS[kind]
     codec = Codec.for_packet(cls)
     codec.load(data)
@@ -109,6 +137,11 @@ def run(kind: str, data: bytes, t: float) -> str:
 
 
 def main() -> None:
+    """Prints the line for each vector in the file named on the command line.
+
+    Blank lines and ``#`` comments are skipped; each vector's index is the
+    time the alarm monitor sees it at.
+    """
     index = 0
     for line in Path(sys.argv[1]).read_text().splitlines():
         line = line.split("#")[0].split()

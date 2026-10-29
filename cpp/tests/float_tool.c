@@ -9,6 +9,10 @@
  * DATA.  Built as C and as C++. */
 #include <xtce/packet.h>
 
+/** Maps a FloatDataEncoding format name to its runtime code.
+ *
+ * @param name  The name, such as "IEEE754" or "MILSTD_1750A".
+ * @return      Its XTCE_PK_* format code; XTCE_PK_TI for any other name. */
 static int format(const char* name) {
         if (!strcmp(name, "IEEE754")) return XTCE_PK_IEEE;
         if (!strcmp(name, "MILSTD_1750A")) return XTCE_PK_MIL1750A;
@@ -24,6 +28,10 @@ static const char* const operators[] = {
         "||", "!", "abs", "div", "int", ">", ">=", "<", "<=", "==", "!=",
         "min", "max"};
 
+/** Maps a MathOperationCalibrator operator to its runtime code.
+ *
+ * @param name  The operator as XTCE spells it, such as "y^x" or "atan2".
+ * @return      Its XTCE_PK_OP_* code, or -1 if it isn't one. */
 static int operator_code(const char* name) {
         static const int codes[] = {
                 XTCE_PK_OP_DIV,
@@ -74,7 +82,11 @@ static int operator_code(const char* name) {
         return -1;
 }
 
-/* Parses up to 32 hex digits into (hi, lo). */
+/** Parses up to 32 lowercase hexadecimal digits into a 128-bit value.
+ *
+ * @param s   The digits.
+ * @param hi  Filled in with the value's high 64 bits.
+ * @param lo  Filled in with its low 64 bits. */
 static void parse_hex(const char* s, uint64_t* hi, uint64_t* lo) {
         size_t n = strlen(s), i;
         *hi = *lo = 0;
@@ -86,6 +98,11 @@ static void parse_hex(const char* s, uint64_t* hi, uint64_t* lo) {
         }
 }
 
+/** Prints a 128-bit value in hexadecimal, without leading zeros, on a
+ * line.
+ *
+ * @param hi  The value's high 64 bits.
+ * @param lo  Its low 64 bits. */
 static void print_hex(uint64_t hi, uint64_t lo) {
         if (hi)
                 printf("%llx%016llx\n", (unsigned long long)hi,
@@ -94,6 +111,10 @@ static void print_hex(uint64_t hi, uint64_t lo) {
                 printf("%llx\n", (unsigned long long)lo);
 }
 
+/** Runs the cases on standard input, printing each result on standard
+ * output.
+ *
+ * @return  0, or 1 if a case's operands can't be read. */
 int main(void) {
         char op[4], fmt[16], raw[40];
         unsigned bits;

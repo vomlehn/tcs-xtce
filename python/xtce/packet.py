@@ -189,8 +189,11 @@ class Batch:
     __slots__ = ("_buf", "_scratch", "_capacity", "_pos")
 
     def __init__(self, capacity: int = 64 * 1024) -> None:
-        """An empty batch that holds up to ``capacity`` bytes of packets (at
-        most 2**32 - 1), preallocated."""
+        """Makes an empty batch, preallocated.
+
+        Args:
+            capacity: The most bytes of packets it holds; at most 2**32 - 1.
+        """
         self._capacity = min(capacity, 0xFFFFFFFF)
         self._buf = ManagedBuffer(BATCH_LENGTH_BYTES + self._capacity)
         self._scratch = ManagedBuffer()
@@ -207,9 +210,16 @@ class Batch:
         return self._capacity
 
     def push(self, packet) -> None:
-        """Encode ``packet`` after the packets already in the batch.  Raises
-        ``TooLong`` if the batch would pass its capacity, leaving it as it
-        was."""
+        """Encodes ``packet`` after the packets already in the batch.
+
+        Args:
+            packet: The packet.
+
+        Raises:
+            PacketError: ``TooLong`` if the batch would pass its capacity,
+                         leaving it as it was, or why the packet can't be
+                         encoded.
+        """
         packet.encode(self._scratch)
         n = len(self) + len(self._scratch)
         if n > self._capacity:
@@ -238,9 +248,19 @@ class Batch:
             stream.write(v)
 
     def read_from(self, stream) -> None:
-        """Replace the batch with one read from a binary stream: its
-        length, then that many bytes.  Raises ``BadLength`` if the length
-        is above the capacity, and ``EOFError`` if the batch ends early."""
+        """Replaces the batch with one read from a binary stream.
+
+        Reads its length, then that many bytes.  On an error the batch is
+        left empty.
+
+        Args:
+            stream: A binary stream; its ``readinto`` is used if it has one,
+                    else its ``read``.
+
+        Raises:
+            PacketError: ``BadLength`` if the length is above the capacity.
+            EOFError:    The stream ends before the batch does.
+        """
         head = _read_exact(stream, BATCH_LENGTH_BYTES)
         n = self._check_length(head)
         try:
@@ -254,9 +274,15 @@ class Batch:
         self._pos = BATCH_LENGTH_BYTES
 
     def load(self, data) -> None:
-        """Replace the batch with ``data``, a whole batch received at once
-        (a datagram, say).  Raises ``BadLength`` unless its length is the
-        number of bytes after it, and at most the capacity."""
+        """Replaces the batch with ``data``, a whole batch received at once.
+
+        Args:
+            data: The batch, length first, such as a datagram.
+
+        Raises:
+            PacketError: ``BadLength`` unless its length is the number of
+                         bytes after it, and at most the capacity.
+        """
         if len(data) < BATCH_LENGTH_BYTES:
             raise PacketError("BadLength", "batch")
         n = self._check_length(bytes(data[:BATCH_LENGTH_BYTES]))
@@ -266,14 +292,34 @@ class Batch:
         self._pos = BATCH_LENGTH_BYTES
 
     def _check_length(self, head: bytes) -> int:
+        """Reads a batch's length and checks it against the capacity.
+
+        Args:
+            head: The length's bytes, big endian.
+
+        Returns:
+            The length: the number of bytes of packets.
+
+        Raises:
+            PacketError: ``BadLength`` if the length is above the capacity.
+        """
         n = int.from_bytes(head, "big")
         if n > self._capacity:
             raise PacketError("BadLength", "batch")
         return n
 
     def next(self, packet_class):
-        """Decode the next packet, which must be a ``packet_class`` (a
-        packet or kind)."""
+        """Decodes the next packet in the batch.
+
+        Args:
+            packet_class: The packet class, or kind, it must be.
+
+        Returns:
+            The packet.
+
+        Raises:
+            PacketError: Why it can't be decoded.
+        """
         with self._buf.view() as v:
             p, used = packet_class.decode_prefix(v[self._pos:])
         self._pos += used
@@ -292,6 +338,18 @@ class Batch:
 
 
 def _read_exact(stream, n: int) -> bytes:
+    """Reads exactly ``n`` bytes from a binary stream.
+
+    Args:
+        stream: The stream.
+        n:      How many bytes to read.
+
+    Returns:
+        The bytes.
+
+    Raises:
+        EOFError: The stream ends first.
+    """
     out = bytearray(n)
     with memoryview(out) as v:
         _read_into(stream, v)
@@ -299,7 +357,16 @@ def _read_exact(stream, n: int) -> bytes:
 
 
 def _read_into(stream, view: memoryview) -> None:
-    """Fill ``view`` from ``stream``, raising EOFError if it ends first."""
+    """Fills ``view`` from ``stream``.
+
+    Args:
+        stream: A binary stream; its ``readinto`` is used if it has one,
+                else its ``read``.
+        view:   Where the bytes go; all of it is filled.
+
+    Raises:
+        EOFError: The stream ends first.
+    """
     got = 0
     while got < len(view):
         if hasattr(stream, "readinto"):
@@ -314,6 +381,19 @@ def _read_into(stream, view: memoryview) -> None:
 
 
 def _position(base: int, offset: int, field: str) -> int:
+    """Computes the bit position ``offset`` bits from ``base``.
+
+    Args:
+        base:   The bit the offset counts from.
+        offset: The offset in bits, which may be negative.
+        field:  The entry placed there, for errors.
+
+    Returns:
+        The position in bits from the packet's start.
+
+    Raises:
+        PacketError: ``BadPosition`` if it is before the packet's start.
+    """
     p = base + offset
     if p < 0:
         raise PacketError("BadPosition", field)
@@ -326,6 +406,11 @@ class BitReader:
     __slots__ = ("data", "pos", "nbits", "end", "lsb")
 
     def __init__(self, data) -> None:
+        """Starts reading at the first bit of ``data``.
+
+        Args:
+            data: The packet, bytes-like; it is not copied.
+        """
         self.data = data
         self.pos = 0
         self.nbits = len(data) * 8
@@ -360,10 +445,21 @@ class BitReader:
         self.end = max(self.end, self.pos)
 
     def seek_ahead(self, start: int, offset: int, field: str) -> None:
-        """As :meth:`seek`, but raises ``BadPosition`` before the current
-        position: an entry located from the end of a container whose size
-        another value gives, which must not overlap the entries before
-        it."""
+        """Moves to ``offset`` bits from ``start``, not backwards.
+
+        As :meth:`seek`, but for an entry located from the end of a container
+        whose size another value gives, which must not overlap the entries
+        before it.
+
+        Args:
+            start:  The bit the offset counts from.
+            offset: The offset in bits.
+            field:  The entry placed there, for errors.
+
+        Raises:
+            PacketError: ``BadPosition`` if that is before the packet's start
+                         or the current position.
+        """
         p = _position(start, offset, field)
         if p < self.pos:
             raise PacketError("BadPosition", field)
@@ -374,8 +470,16 @@ class BitReader:
         self.seek(self.pos, offset, field)
 
     def seek_end(self, back: int, field: str) -> None:
-        """Move to ``back`` bits before the end of the packet, which must
-        not be before the current position."""
+        """Moves to ``back`` bits before the end of the packet.
+
+        Args:
+            back:  How many bits before the end.
+            field: The entry placed there, for errors.
+
+        Raises:
+            PacketError: ``BadPosition`` if that is before the current
+                         position.
+        """
         p = self.nbits - back
         if p < self.pos:
             raise PacketError("BadPosition", field)
@@ -383,6 +487,18 @@ class BitReader:
         self.end = max(self.end, p)
 
     def uint(self, bits: int, field: str) -> int:
+        """Reads an unsigned big-endian field.
+
+        Args:
+            bits:  The field's size in bits.
+            field: The field's name, for errors.
+
+        Returns:
+            The field's value.
+
+        Raises:
+            PacketError: ``Truncated`` if the packet ends first.
+        """
         end = self.pos + bits
         if end > self.nbits:
             raise PacketError("Truncated", field)
@@ -398,7 +514,7 @@ class BitReader:
                 else v)
 
     def uint_bits(self, bits: int, lsb: bool, order, field: str) -> int:
-        """Read an unsigned field of ``bits`` bits in any bit and byte order.
+        """Reads an unsigned field of ``bits`` bits in any bit and byte order.
 
         The field's bits are taken in groups of 8 (the last may be shorter).
         Within a group, ``lsb`` False numbers the bits of each byte from the
@@ -407,7 +523,20 @@ class BitReader:
         significant, and the group's first bit is its least significant.
         ``order`` combines the groups: ``"be"`` puts the first group most
         significant, ``"le"`` least significant, and a tuple gives each
-        (whole) byte's significance, as an XTCE byte order list does."""
+        (whole) byte's significance, as an XTCE byte order list does.
+
+        Args:
+            bits:  The field's size in bits.
+            lsb:   Whether bits are numbered from the least significant.
+            order: ``"be"``, ``"le"`` or a tuple of byte significances.
+            field: The field's name, for errors.
+
+        Returns:
+            The field's value.
+
+        Raises:
+            PacketError: ``Truncated`` if the packet ends first.
+        """
         if self.pos + bits > self.nbits:
             raise PacketError("Truncated", field)
         groups = []
@@ -439,16 +568,34 @@ class BitReader:
         return checksum(spec, self.data, start, end, field)
 
     def pad(self, bits: int, field: str) -> None:
-        """Skip ``bits`` bits of padding, which must be in the packet."""
+        """Skips ``bits`` bits of padding, which must be in the packet.
+
+        Args:
+            bits:  How many bits to skip.
+            field: The entry the padding belongs to, for errors.
+
+        Raises:
+            PacketError: ``Truncated`` if the packet ends first.
+        """
         if self.pos + bits > self.nbits:
             raise PacketError("Truncated", field)
         self.pos += bits
         self.end = max(self.end, self.pos)
 
     def limit(self, v: int, adjust: int, field: str) -> None:
-        """End the packet where the packet length field ``field``, whose
-        value ``v`` was just read, says: ``v - adjust`` bytes after the
-        field.  Raises ``Truncated`` if the data is shorter."""
+        """Ends the packet where its packet length field says.
+
+        The packet ends ``v - adjust`` bytes after the field.
+
+        Args:
+            v:      The value of the packet length field, just read.
+            adjust: What the field's value is more than the bytes after it.
+            field:  The packet length field's name, for errors.
+
+        Raises:
+            PacketError: ``BadLength`` if ``v`` is less than ``adjust``, and
+                         ``Truncated`` if the data is shorter.
+        """
         after = v - adjust
         if after < 0:
             raise PacketError("BadLength", field)
@@ -458,8 +605,19 @@ class BitReader:
         self.nbits = total * 8
 
     def _offer(self, n, field: str) -> bytes:
-        """The next ``n`` whole bytes, the rest of the packet when None,
-        which must start on a byte boundary, without reading them."""
+        """Gets the next whole bytes, without reading them.
+
+        Args:
+            n:     How many bytes, or None for the rest of the packet.
+            field: The field's name, for errors.
+
+        Returns:
+            The bytes.
+
+        Raises:
+            PacketError: ``BadPosition`` off a byte boundary, ``Truncated``
+                         if the packet ends first.
+        """
         if self.pos % 8:
             raise PacketError("BadPosition", field)
         if n is None:
@@ -470,8 +628,18 @@ class BitReader:
         return bytes(self.data[self.pos // 8:end // 8])
 
     def _took(self, k, offered: int, raw, field: str) -> None:
-        """Move past the ``k`` bytes a transform took of those ``_offer``
-        gave, which must be all ``raw`` of them when given."""
+        """Moves past the bytes a transform took of those ``_offer`` gave.
+
+        Args:
+            k:       How many bytes the transform says it took.
+            offered: How many bytes it was offered.
+            raw:     How many it must take, or None for any number.
+            field:   The field's name, for errors.
+
+        Raises:
+            PacketError: ``BadSize`` unless ``k`` is an integer from 0 to
+                         ``offered``, equal to ``raw`` when that is given.
+        """
         if (not isinstance(k, int) or not 0 <= k <= offered
                 or (raw is not None and k != raw)):
             raise PacketError("BadSize", field)
@@ -479,10 +647,28 @@ class BitReader:
         self.end = max(self.end, self.pos)
 
     def binary_from(self, f, raw, cap: int, field: str) -> bytes:
-        """Read data that the transform ``f`` decodes: offer it the next
-        ``raw`` bytes, or the rest of the packet when None, and move past
-        those it says it takes, which must be all ``raw`` of them.  Gives
-        the bytes it makes, at most ``cap``."""
+        """Reads data that the transform ``f`` decodes.
+
+        Offers it the next ``raw`` bytes, or the rest of the packet, and moves
+        past those it says it takes.
+
+        Args:
+            f:     The decoding transform: takes bytes, gives the bytes it took
+                   and the bytes it makes, or None if they are invalid.  None
+                   if the document gives only the encoding one.
+            raw:   How many bytes it must take, or None for any number.
+            cap:   The most bytes it may make.
+            field: The field's name, for errors.
+
+        Returns:
+            The bytes it makes.
+
+        Raises:
+            PacketError: ``NotInvertible`` with no transform, ``InvalidValue``
+                         if it gives None, ``TooLong`` if it makes more than
+                         ``cap`` bytes, or as :meth:`_offer` and
+                         :meth:`_took` do.
+        """
         if f is None:
             # The document gives only the other way.
             raise PacketError("NotInvertible", field)
@@ -497,8 +683,22 @@ class BitReader:
         return bytes(out)
 
     def time_from(self, f, raw, field: str) -> float:
-        """Read a time that the transform ``f`` decodes, in seconds, as
-        ``binary_from`` reads bytes."""
+        """Reads a time that the transform ``f`` decodes, as ``binary_from``
+        reads bytes.
+
+        Args:
+            f:     The decoding transform: takes bytes, gives the bytes it took
+                   and the time, or None if they are invalid.  None if the
+                   document gives only the encoding one.
+            raw:   How many bytes it must take, or None for any number.
+            field: The field's name, for errors.
+
+        Returns:
+            The time, in seconds.
+
+        Raises:
+            PacketError: As :meth:`binary_from`.
+        """
         if f is None:
             raise PacketError("NotInvertible", field)
         data = self._offer(raw, field)
@@ -530,19 +730,43 @@ class BitReader:
             raise PacketError("BadLength", field)
 
     def rest_bytes(self, max_: int, tail: int, field: str) -> int:
-        """The bytes from the current position to ``tail`` bits before the
-        end of the packet, for a field that takes the rest of it but the
-        ``tail`` bits of the entries after it.  Raises ``BadSize`` unless
-        they are whole bytes, at most ``max_`` of them."""
+        """Measures a field that takes the rest of the packet but a tail.
+
+        Args:
+            max_:  The most bytes the field holds.
+            tail:  The bits of the entries after the field.
+            field: The field's name, for errors.
+
+        Returns:
+            The bytes from the current position to ``tail`` bits before the
+            end of the packet.
+
+        Raises:
+            PacketError: ``BadSize`` unless they are whole bytes, at most
+                         ``max_`` of them.
+        """
         bits = max(self.nbits - self.pos - tail, 0)
         if bits % 8 or bits // 8 > max_:
             raise PacketError("BadSize", field)
         return bits // 8
 
     def embedded_bytes(self, max_: int, field: str) -> int:
-        """The size of the CCSDS packet that starts here, from its packet
-        length field, for an embedded packet (Yamcs:EmbeddedTc).  Raises
-        ``TooLong`` if it is more than ``max_`` bytes."""
+        """Measures the CCSDS packet that starts here, for an embedded packet.
+
+        Reads its packet length field (as Yamcs:EmbeddedTc does) without
+        moving.
+
+        Args:
+            max_:  The most bytes the embedded packet may have.
+            field: The field's name, for errors.
+
+        Returns:
+            The embedded packet's size in bytes.
+
+        Raises:
+            PacketError: ``Truncated`` if its header isn't all here, and
+                         ``TooLong`` if it is more than ``max_`` bytes.
+        """
         pos, end = self.pos, self.end
         self.pad(32, field)
         n = self.uint(16, field) + 7
@@ -552,6 +776,18 @@ class BitReader:
         return n
 
     def bytes(self, n: int, field: str) -> bytes:
+        """Reads ``n`` bytes, in the reader's bit order off a byte boundary.
+
+        Args:
+            n:     How many bytes.
+            field: The field's name, for errors.
+
+        Returns:
+            The bytes.
+
+        Raises:
+            PacketError: ``Truncated`` if the packet ends first.
+        """
         if self.pos + n * 8 > self.nbits:
             raise PacketError("Truncated", field)
         if self.pos % 8 == 0:
@@ -574,6 +810,11 @@ class BitWriter:
     __slots__ = ("buf", "pos", "lsb")
 
     def __init__(self, buf: ManagedBuffer) -> None:
+        """Starts writing at the first bit of ``buf``, which is cleared.
+
+        Args:
+            buf: The buffer the packet goes into.
+        """
         buf.clear()
         self.buf = buf
         self.pos = 0
@@ -586,7 +827,12 @@ class BitWriter:
         self.lsb = lsb
 
     def tag(self, bits: int, v: int) -> None:
-        """A string's size tag of ``bits`` bits, in its bit order."""
+        """Writes a string's size tag of ``bits`` bits, in its bit order.
+
+        Args:
+            bits: The tag's size in bits.
+            v:    Its value.
+        """
         if self.lsb:
             self.uint_bits(bits, True, "be", v)
         else:
@@ -599,8 +845,18 @@ class BitWriter:
         self.pos = _position(start, offset, field)
 
     def seek_ahead(self, start: int, offset: int, field: str) -> None:
-        """As :meth:`seek`, but raises ``BadPosition`` before the current
-        position, as :meth:`BitReader.seek_ahead` does."""
+        """Moves to ``offset`` bits from ``start``, not backwards, as
+        :meth:`BitReader.seek_ahead` does.
+
+        Args:
+            start:  The bit the offset counts from.
+            offset: The offset in bits.
+            field:  The entry placed there, for errors.
+
+        Raises:
+            PacketError: ``BadPosition`` if that is before the packet's start
+                         or the current position.
+        """
         p = _position(start, offset, field)
         if p < self.pos:
             raise PacketError("BadPosition", field)
@@ -616,6 +872,12 @@ class BitWriter:
         self.pos += -(self.pos + back) % 8
 
     def uint(self, bits: int, v: int) -> None:
+        """Writes an unsigned big-endian field, growing the buffer to hold it.
+
+        Args:
+            bits: The field's size in bits.
+            v:    Its value; only the low ``bits`` bits are written.
+        """
         end = self.pos + bits
         first, last = self.pos >> 3, (end + 7) >> 3
         if len(self.buf) < last:
@@ -634,8 +896,15 @@ class BitWriter:
         self.uint(bits, v)
 
     def uint_bits(self, bits: int, lsb: bool, order, v: int) -> None:
-        """Write the low ``bits`` bits of ``v`` in the bit and byte order that
-        ``BitReader.uint_bits`` reads."""
+        """Writes the low ``bits`` bits of ``v`` in the bit and byte order that
+        ``BitReader.uint_bits`` reads.
+
+        Args:
+            bits:  The field's size in bits.
+            lsb:   Whether bits are numbered from the least significant.
+            order: ``"be"``, ``"le"`` or a tuple of byte significances.
+            v:     The value.
+        """
         lengths = [8] * (bits // 8) + ([bits % 8] if bits % 8 else [])
         last = (self.pos + bits + 7) >> 3
         if len(self.buf) < last:
@@ -653,9 +922,20 @@ class BitWriter:
 
     def patch_length(self, at: int, bits: int, le: bool, adjust: int,
                      field: str) -> None:
-        """Fill in the packet length field ``field`` of ``bits`` bits at bit
-        ``at``, once the whole packet is written: the number of bytes after
-        the field plus ``adjust``."""
+        """Fills in a packet length field once the whole packet is written.
+
+        It holds the number of bytes after the field plus ``adjust``.
+
+        Args:
+            at:     The field's position in bits.
+            bits:   Its size in bits.
+            le:     Whether it is little endian.
+            adjust: What its value is more than the bytes after it.
+            field:  Its name, for errors.
+
+        Raises:
+            PacketError: ``OutOfRange`` if the field can't hold the value.
+        """
         v = len(self.buf) - (at + bits + 7) // 8 + adjust
         if not 0 <= v < 1 << bits:
             raise PacketError("OutOfRange", field)
@@ -665,9 +945,23 @@ class BitWriter:
         self.pos = end
 
     def transform(self, start: int, f, raw, cap: int, field: str) -> None:
-        """Replace the bytes written from bit ``start``, on a byte
-        boundary, with what the transform ``f`` makes of them: exactly
-        ``raw`` bytes when given, and at most ``cap``."""
+        """Replaces the bytes written from bit ``start`` with what the transform
+        ``f`` makes of them.
+
+        Args:
+            start: Where the bytes start, on a byte boundary.
+            f:     The encoding transform: takes bytes, gives bytes or None if
+                   it can't encode them.  None if the document gives only the
+                   decoding one.
+            raw:   How many bytes it must make, or None for any number.
+            cap:   The most bytes it may make.
+            field: The field's name, for errors.
+
+        Raises:
+            PacketError: ``NotInvertible`` with no transform, ``InvalidValue``
+                         if it gives None, ``TooLong`` if it makes more than
+                         ``cap`` bytes, and ``BadSize`` if not ``raw``.
+        """
         a, b = start // 8, (self.pos + 7) // 8
         if f is None:
             raise PacketError("NotInvertible", field)
@@ -683,8 +977,20 @@ class BitWriter:
         self.pos = 8 * len(self.buf)
 
     def binary_to(self, f, data: bytes, raw, cap: int, field: str) -> None:
-        """Write what the transform ``f`` makes of ``data``, as
-        ``transform`` does, on a byte boundary."""
+        """Writes what the transform ``f`` makes of ``data``, as ``transform``
+        does, on a byte boundary.
+
+        Args:
+            f:     The encoding transform, as for :meth:`transform`.
+            data:  The bytes to transform.
+            raw:   How many bytes it must make, or None for any number.
+            cap:   The most bytes it may make.
+            field: The field's name, for errors.
+
+        Raises:
+            PacketError: ``BadPosition`` off a byte boundary, or as
+                         :meth:`transform` does.
+        """
         if self.pos % 8:
             raise PacketError("BadPosition", field)
         start = self.pos
@@ -692,9 +998,24 @@ class BitWriter:
         self.transform(start, f, raw, cap, field)
 
     def time_to(self, f, t: float, raw, cap: int, field: str) -> None:
-        """Write what the transform ``f`` makes of the time ``t``, in
-        seconds, on a byte boundary: exactly ``raw`` bytes when given, and
-        at most ``cap``."""
+        """Writes what the transform ``f`` makes of the time ``t``, on a byte
+        boundary.
+
+        Args:
+            f:     The encoding transform: takes seconds, gives bytes or None
+                   if it can't encode them.  None if the document gives only
+                   the decoding one.
+            t:     The time, in seconds.
+            raw:   How many bytes it must make, or None for any number.
+            cap:   The most bytes it may make.
+            field: The field's name, for errors.
+
+        Raises:
+            PacketError: ``NotInvertible`` with no transform, ``BadPosition``
+                         off a byte boundary, ``InvalidValue`` if it gives
+                         None, ``TooLong`` if it makes more than ``cap`` bytes,
+                         and ``BadSize`` if not ``raw``.
+        """
         if f is None:
             raise PacketError("NotInvertible", field)
         if self.pos % 8:
@@ -712,9 +1033,21 @@ class BitWriter:
 
     def patch_span(self, at: int, bits: int, le: bool, adjust: int,
                    field: str) -> None:
-        """Fill in the length field ``field`` of ``bits`` bits at bit ``at``,
-        which measures an included container that ends here: the bytes
-        after the field plus ``adjust``."""
+        """Fills in a length field that measures an included container that ends
+        here.
+
+        It holds the bytes after the field plus ``adjust``.
+
+        Args:
+            at:     The field's position in bits.
+            bits:   Its size in bits.
+            le:     Whether it is little endian.
+            adjust: What its value is more than the bytes after it.
+            field:  Its name, for errors.
+
+        Raises:
+            PacketError: ``OutOfRange`` if the field can't hold the value.
+        """
         v = (self.pos + 7) // 8 - (at + bits + 7) // 8 + adjust
         if not 0 <= v < 1 << bits:
             raise PacketError("OutOfRange", field)
@@ -733,9 +1066,20 @@ class BitWriter:
 
     def patch_checksum(self, spec: tuple, start: int, end: int, at: int,
                        bits: int, le: bool, field: str) -> None:
-        """Fill in the checksum field ``field`` of ``bits`` bits at bit
-        ``at``: the checksum ``spec`` of the bits from ``start`` to ``end``,
-        its low ``bits`` bits."""
+        """Fills in a checksum field.
+
+        Args:
+            spec:  The checksum, as :func:`checksum` takes it.
+            start: The first bit it covers.
+            end:   The bit after the last it covers.
+            at:    The field's position in bits.
+            bits:  Its size in bits; the checksum's low ``bits`` bits go in it.
+            le:    Whether it is little endian.
+            field: Its name, for errors.
+
+        Raises:
+            PacketError: As :func:`checksum` does.
+        """
         v = checksum(spec, self.buf._data, start, end, field)
         pos = self.pos
         self.pos = at
@@ -743,6 +1087,11 @@ class BitWriter:
         self.pos = pos
 
     def bytes(self, data) -> None:
+        """Writes bytes, in the writer's bit order off a byte boundary.
+
+        Args:
+            data: The bytes.
+        """
         if data and self.lsb and self.pos % 8:
             for b in data:
                 self.uint_bits(8, True, "be", b)
@@ -769,8 +1118,15 @@ def segment_bits(w: BitWriter, total: int) -> int:
 
 
 def _combine(groups, order) -> int:
-    """The value of groups of bits ((value, length) pairs, in stream order)
-    combined in ``order`` (see ``BitReader.uint_bits``)."""
+    """Combines groups of bits into a value.
+
+    Args:
+        groups: The groups' (value, length) pairs, in stream order.
+        order:  How to combine them, as for ``BitReader.uint_bits``.
+
+    Returns:
+        The value.
+    """
     v = 0
     if order == "be":
         for g, n in groups:
@@ -787,8 +1143,16 @@ def _combine(groups, order) -> int:
 
 
 def _split(v: int, lengths, order) -> list:
-    """The groups (value, length) of ``v`` in stream order: the inverse of
-    ``_combine``."""
+    """Splits a value into groups of bits: the inverse of ``_combine``.
+
+    Args:
+        v:       The value.
+        lengths: Each group's length in bits, in stream order.
+        order:   How the groups combine, as for ``BitReader.uint_bits``.
+
+    Returns:
+        The groups' (value, length) pairs, in stream order.
+    """
     out = []
     if order == "be":
         shift = sum(lengths)
@@ -819,9 +1183,18 @@ _DAMM = ("0317598642", "7092154863", "4206871359", "1750983426", "6123045978",
 
 
 def _words(data, start: int, end: int, width: int) -> list:
-    """The ``width``-bit words of the bits from ``start`` to ``end`` of
-    ``data``, most significant bit first; a last partial word is padded
-    with zero bits."""
+    """Splits bits of data into words.
+
+    Args:
+        data:  The bytes-like data.
+        start: The first bit.
+        end:   The bit after the last.
+        width: The words' size in bits.
+
+    Returns:
+        The words, most significant bit first; a last partial word is
+        padded with zero bits.
+    """
     n = end - start
     if n <= 0:
         return []
@@ -840,7 +1213,20 @@ def _reflect(v: int, bits: int) -> int:
 
 
 def _digits(data, start: int, end: int, field: str) -> list:
-    """Decimal digits, one in every 4 bits."""
+    """Reads decimal digits, one in every 4 bits.
+
+    Args:
+        data:  The bytes-like data.
+        start: The first bit.
+        end:   The bit after the last.
+        field: The checksum field's name, for errors.
+
+    Returns:
+        The digits, the first most significant.
+
+    Raises:
+        PacketError: ``InvalidValue`` for 4 bits that aren't a digit.
+    """
     ds = _words(data, start, end, 4)
     if any(d > 9 for d in ds):
         raise PacketError("InvalidValue", field)
@@ -848,12 +1234,29 @@ def _digits(data, start: int, end: int, field: str) -> list:
 
 
 def checksum(spec: tuple, data, start: int, end: int, field: str) -> int:
-    """An XTCE ErrorDetectCorrect algorithm over the bits from ``start`` to
-    ``end`` of ``data``.  ``spec`` is ``("crc", width, polynomial, init,
-    final_xor, reflect_data, reflect_remainder)``, ``("sum", bits)``,
-    ``("unix_sum",)``, ``("fletcher", bits)``, ``("adler32",)``,
-    ``("luhn",)``, ``("verhoeff",)``, ``("damm",)``, ``("xor", bits)`` or
-    ``("parity", odd)``; the manual describes each."""
+    """Computes an XTCE ErrorDetectCorrect algorithm over bits of data.
+
+    Args:
+        spec:  ``("crc", width, polynomial, init, final_xor, reflect_data,
+               reflect_remainder)``, ``("sum", bits)``, ``("unix_sum",)``,
+               ``("fletcher", bits)``, ``("adler32",)``, ``("luhn",)``,
+               ``("verhoeff",)``, ``("damm",)``, ``("xor", bits)``,
+               ``("parity", odd)`` or ``("custom", function)``, where
+               ``function`` takes the data, start and end, or is None; the
+               manual describes each.
+        data:  The bytes-like data.
+        start: The first bit covered.
+        end:   The bit after the last.
+        field: The checksum field's name, for errors.
+
+    Returns:
+        The checksum.
+
+    Raises:
+        PacketError: ``InvalidValue`` for a non-digit under a decimal
+                     algorithm, ``NoAlgorithm`` for a custom one with no
+                     function.
+    """
     kind = spec[0]
     if kind == "crc":
         width, poly, init, final, ref_in, ref_out = spec[1:]
@@ -934,7 +1337,16 @@ def checksum(spec: tuple, data, start: int, end: int, field: str) -> int:
 
 
 def to_signed(raw: int, bits: int, enc: str) -> int:
-    """Convert a raw field to its value (``enc`` as in the XTCE schema)."""
+    """Converts a raw field to its value.
+
+    Args:
+        raw:  The raw field.
+        bits: Its size in bits.
+        enc:  Its integer encoding, as in the XTCE schema.
+
+    Returns:
+        The value.
+    """
     sign = (raw >> (bits - 1)) & 1
     low = (1 << (bits - 1)) - 1
     if enc == "unsigned" or not sign:
@@ -947,7 +1359,20 @@ def to_signed(raw: int, bits: int, enc: str) -> int:
 
 
 def from_signed(v: int, bits: int, enc: str, field: str) -> int:
-    """Convert a value to its raw field, checking that it fits."""
+    """Converts a value to its raw field, checking that it fits.
+
+    Args:
+        v:     The value.
+        bits:  The field's size in bits.
+        enc:   Its integer encoding, as in the XTCE schema.
+        field: The field's name, for errors.
+
+    Returns:
+        The raw field.
+
+    Raises:
+        PacketError: ``OutOfRange`` if the encoding can't hold the value.
+    """
     v = int(v)
     if enc == "unsigned":
         return from_unsigned(v, bits, field)
@@ -967,6 +1392,19 @@ def from_signed(v: int, bits: int, enc: str, field: str) -> int:
 
 
 def from_unsigned(v: int, bits: int, field: str) -> int:
+    """Checks that an unsigned field holds a value.
+
+    Args:
+        v:     The value.
+        bits:  The field's size in bits.
+        field: The field's name, for errors.
+
+    Returns:
+        The value, as an int.
+
+    Raises:
+        PacketError: ``OutOfRange`` unless it is from 0 to 2**bits - 1.
+    """
     v = int(v)
     if not 0 <= v < (1 << bits):
         raise PacketError("OutOfRange", field)
@@ -1035,10 +1473,24 @@ def int_to_float(raw: int, bits: int, enc: str) -> float:
 
 
 def bcd_decode(raw: int, bits: int, packed: bool, field: str) -> int:
-    """The value of a BCD field: packed BCD has a decimal digit in every 4
-    bits, and (unpacked) BCD one in the low 4 bits of every byte, whose high
-    4 bits are zero; the first digit is the most significant.  Raises
-    ``InvalidValue`` for any other bits."""
+    """Decodes a BCD field.
+
+    Packed BCD has a decimal digit in every 4 bits, and (unpacked) BCD one
+    in the low 4 bits of every byte, whose high 4 bits are zero; the first
+    digit is the most significant.
+
+    Args:
+        raw:    The raw field.
+        bits:   Its size in bits.
+        packed: Whether it is packed BCD.
+        field:  Its name, for errors.
+
+    Returns:
+        The value.
+
+    Raises:
+        PacketError: ``InvalidValue`` for any other bits.
+    """
     width = 4 if packed else 8
     v = 0
     for shift in range(bits - width, -1, -width):
@@ -1050,8 +1502,21 @@ def bcd_decode(raw: int, bits: int, packed: bool, field: str) -> int:
 
 
 def bcd_encode(v: int, bits: int, packed: bool, field: str) -> int:
-    """The BCD field holding ``v``; raises ``OutOfRange`` unless ``v`` is
-    from 0 to the most the field's digits hold."""
+    """Encodes ``v`` as a BCD field, as :func:`bcd_decode` decodes it.
+
+    Args:
+        v:      The value.
+        bits:   The field's size in bits.
+        packed: Whether it is packed BCD.
+        field:  Its name, for errors.
+
+    Returns:
+        The raw field.
+
+    Raises:
+        PacketError: ``OutOfRange`` unless ``v`` is from 0 to the most the
+                     field's digits hold.
+    """
     v = int(v)
     width = 4 if packed else 8
     digits = bits // width
@@ -1065,8 +1530,15 @@ def bcd_encode(v: int, bits: int, packed: bool, field: str) -> int:
 
 
 def _round(x: float) -> int:
-    """Round half away from zero, like Rust's ``f64::round`` and C++'s
-    ``std::round``."""
+    """Rounds half away from zero, like Rust's ``f64::round`` and C++'s
+    ``std::round``.
+
+    Args:
+        x: The value, finite.
+
+    Returns:
+        The nearest integer.
+    """
     i = math.trunc(x)
     frac = x - i
     if frac >= 0.5:
@@ -1077,7 +1549,21 @@ def _round(x: float) -> int:
 
 
 def float_to_int(x: float, bits: int, enc: str, field: str) -> int:
-    """Round an engineering value to a raw integer field."""
+    """Rounds an engineering value to a raw integer field.
+
+    Args:
+        x:     The value, after any inverse calibrator.
+        bits:  The field's size in bits, at most 64.
+        enc:   Its integer encoding, as in the XTCE schema.
+        field: Its name, for errors.
+
+    Returns:
+        The raw field.
+
+    Raises:
+        PacketError: ``OutOfRange`` unless the field holds the value
+                     rounded half away from zero.
+    """
     if not math.isfinite(x):
         raise PacketError("OutOfRange", field)
     r = _round(x)
@@ -1106,8 +1592,20 @@ def float_to_wide(x: float, bits: int, enc: str, field: str) -> int:
 
 
 def round_to_int(y: float, lo: float, lim: float, field: str) -> int:
-    """Round a calibrated value (half away from zero) to an integer from
-    ``lo`` up to but not including ``lim``; raises ``OutOfRange`` otherwise."""
+    """Rounds a calibrated value half away from zero to an integer in a range.
+
+    Args:
+        y:     The value.
+        lo:    The smallest integer allowed.
+        lim:   The integer after the largest allowed.
+        field: The field's name, for errors.
+
+    Returns:
+        The integer.
+
+    Raises:
+        PacketError: ``OutOfRange`` if it is not finite or out of range.
+    """
     if not math.isfinite(y):
         raise PacketError("OutOfRange", field)
     r = _round(y)
@@ -1127,6 +1625,18 @@ def float_from_raw(raw: int, bits: int) -> float:
 
 
 def float_to_raw(v: float, bits: int) -> int:
+    """Converts a value to the bits of a binary32 or binary64 float.
+
+    A binary32 too large for its range rounds to infinity, as Rust and C++
+    do.
+
+    Args:
+        v:    The value.
+        bits: 32 or 64.
+
+    Returns:
+        The raw field.
+    """
     if bits == 32:
         try:
             b = struct.pack(">f", v)
@@ -1137,8 +1647,17 @@ def float_to_raw(v: float, bits: int) -> int:
 
 
 def _to_float(neg: bool, m: int, e: int) -> float:
-    """``(-1)**neg * m * 2**e`` rounded to the nearest double, ties to
-    even; infinite when it is too large."""
+    """Computes ``(-1)**neg * m * 2**e`` rounded to the nearest double, ties
+    to even; infinite when it is too large.
+
+    Args:
+        neg: Whether it is negative.
+        m:   The significand, a non-negative integer.
+        e:   The exponent of two.
+
+    Returns:
+        The double.
+    """
     try:
         x = float(Fraction(m) * Fraction(2) ** e) if m else 0.0
     except OverflowError:
@@ -1154,7 +1673,15 @@ def _parts(x: float, p: int) -> tuple:
 
 
 def _round_shift(m: int, shift: int) -> int:
-    """``m / 2**shift`` rounded to the nearest integer, ties to even."""
+    """Computes ``m / 2**shift`` rounded to the nearest integer, ties to even.
+
+    Args:
+        m:     The integer, non-negative.
+        shift: The bits to shift right; negative shifts left.
+
+    Returns:
+        The result.
+    """
     if shift <= 0:
         return m << -shift
     q, r = divmod(m, 1 << shift)
@@ -1169,6 +1696,15 @@ _IEEE = {16: (5, 10, False), 32: (8, 23, False), 64: (11, 52, False),
 
 
 def _ieee_decode(raw: int, bits: int) -> float:
+    """Decodes an IEEE 754 binary float.
+
+    Args:
+        raw:  The raw field.
+        bits: Its size: 16, 32, 64, 80 (x87 extended) or 128.
+
+    Returns:
+        The nearest double, ties to even.
+    """
     ebits, fbits, explicit = _IEEE[bits]
     neg = raw >> (bits - 1) & 1
     exp = (raw >> fbits) & ((1 << ebits) - 1)
@@ -1189,8 +1725,16 @@ def _ieee_decode(raw: int, bits: int) -> float:
 
 
 def _ieee_encode(x: float, bits: int) -> int:
-    """The IEEE 754 binary format of ``bits`` bits nearest ``x``, ties to
-    even, overflowing to infinity."""
+    """Encodes ``x`` in an IEEE 754 binary format.
+
+    Args:
+        x:    The value.
+        bits: The format's size: 16, 32, 64, 80 (x87 extended) or 128.
+
+    Returns:
+        The raw field nearest ``x``, ties to even, overflowing to
+        infinity; a NaN is a quiet NaN.
+    """
     ebits, fbits, explicit = _IEEE[bits]
     sign = (1 << (bits - 1)) if math.copysign(1.0, x) < 0 else 0
     top = (1 << ebits) - 1
@@ -1228,6 +1772,15 @@ def _magnitude(x: float) -> tuple:
 
 
 def _mil1750a_decode(raw: int, bits: int) -> float:
+    """Decodes a MIL-STD-1750A float.
+
+    Args:
+        raw:  The raw field.
+        bits: Its size: 32 or 48.
+
+    Returns:
+        The nearest double, ties to even.
+    """
     if bits == 32:
         mant, exp = raw >> 8, raw & 0xFF
         mbits = 24
@@ -1241,6 +1794,22 @@ def _mil1750a_decode(raw: int, bits: int) -> float:
 
 
 def _mil1750a_encode(x: float, bits: int, field: str) -> int:
+    """Encodes ``x`` as a MIL-STD-1750A float.
+
+    A value too small for the format is unnormalized at the smallest
+    exponent.
+
+    Args:
+        x:     The value, finite.
+        bits:  The format's size: 32 or 48.
+        field: The field's name, for errors.
+
+    Returns:
+        The raw field nearest ``x``, ties to even.
+
+    Raises:
+        PacketError: ``OutOfRange`` if ``x`` is too large for the format.
+    """
     mbits = 24 if bits == 32 else 40
     f = mbits - 1  # fraction bits
     if x == 0:
@@ -1277,6 +1846,20 @@ def _mil1750a_encode(x: float, bits: int, field: str) -> int:
 
 
 def _dec_decode(raw: int, bits: int, field: str) -> float:
+    """Decodes a DEC F_floating (32 bits) or D_floating (64 bits) float.
+
+    Args:
+        raw:   The raw field.
+        bits:  Its size: 32 or 64.
+        field: The field's name, for errors.
+
+    Returns:
+        The nearest double, ties to even.
+
+    Raises:
+        PacketError: ``InvalidValue`` for a reserved operand: the sign set
+                     with a zero exponent.
+    """
     f = 23 if bits == 32 else 55
     neg = raw >> (bits - 1)
     exp = (raw >> f) & 0xFF
@@ -1288,6 +1871,21 @@ def _dec_decode(raw: int, bits: int, field: str) -> float:
 
 
 def _dec_encode(x: float, bits: int, field: str) -> int:
+    """Encodes ``x`` as a DEC F_floating (32 bits) or D_floating (64 bits)
+    float.
+
+    Args:
+        x:     The value, finite.
+        bits:  The format's size: 32 or 64.
+        field: The field's name, for errors.
+
+    Returns:
+        The raw field nearest ``x``, ties to even; zero for a value too
+        small for the format.
+
+    Raises:
+        PacketError: ``OutOfRange`` if ``x`` is too large for the format.
+    """
     f = 23 if bits == 32 else 55
     if x == 0:
         return 0
@@ -1306,6 +1904,15 @@ def _dec_encode(x: float, bits: int, field: str) -> int:
 
 
 def _ibm_decode(raw: int, bits: int) -> float:
+    """Decodes an IBM hexadecimal float.
+
+    Args:
+        raw:  The raw field.
+        bits: Its size: 32, 64 or 128.
+
+    Returns:
+        The nearest double, ties to even.
+    """
     neg = raw >> (bits - 1)
     hi = raw >> (bits - 64) if bits == 128 else raw
     exp = (hi >> (min(bits, 64) - 8)) & 0x7F
@@ -1319,6 +1926,23 @@ def _ibm_decode(raw: int, bits: int) -> float:
 
 
 def _ibm_encode(x: float, bits: int, field: str) -> int:
+    """Encodes ``x`` as an IBM hexadecimal float.
+
+    A value too small for the format is unnormalized at the smallest
+    exponent.  In the 128-bit format the low half repeats the sign and has
+    a characteristic 14 less.
+
+    Args:
+        x:     The value, finite.
+        bits:  The format's size: 32, 64 or 128.
+        field: The field's name, for errors.
+
+    Returns:
+        The raw field nearest ``x``, ties to even.
+
+    Raises:
+        PacketError: ``OutOfRange`` if ``x`` is too large for the format.
+    """
     f = 112 if bits == 128 else bits - 8
     if x == 0:
         return 0
@@ -1349,6 +1973,15 @@ _TI = {16: (4, 11), 32: (8, 23), 40: (8, 31)}
 
 
 def _ti_decode(raw: int, bits: int) -> float:
+    """Decodes a TI TMS320C3x float.
+
+    Args:
+        raw:  The raw field.
+        bits: Its size: 16, 32 or 40.
+
+    Returns:
+        The nearest double, ties to even; zero for the smallest exponent.
+    """
     ebits, f = _TI[bits]
     exp = to_signed(raw >> (f + 1), ebits, "twosComplement")
     if exp == -(1 << (ebits - 1)):
@@ -1360,6 +1993,20 @@ def _ti_decode(raw: int, bits: int) -> float:
 
 
 def _ti_encode(x: float, bits: int, field: str) -> int:
+    """Encodes ``x`` as a TI TMS320C3x float.
+
+    Args:
+        x:     The value, finite.
+        bits:  The format's size: 16, 32 or 40.
+        field: The field's name, for errors.
+
+    Returns:
+        The raw field nearest ``x``, ties to even; the format's zero for
+        a value too small for it.
+
+    Raises:
+        PacketError: ``OutOfRange`` if ``x`` is too large for the format.
+    """
     ebits, f = _TI[bits]
     lo = -(1 << (ebits - 1))  # the exponent of zero
     if x == 0:
@@ -1389,10 +2036,23 @@ def _ti_encode(x: float, bits: int, field: str) -> int:
 
 
 def float_decode(fmt: str, bits: int, raw: int, field: str) -> float:
-    """The value of a float field of ``bits`` bits in the XTCE encoding
-    ``fmt``: ``IEEE754`` (16, 32, 64, 80 or 128 bits), ``MILSTD_1750A`` (32
-    or 48), ``DEC`` (32 for F_floating, 64 for D_floating), ``IBM`` (32, 64
-    or 128) or ``TI`` (16, 32 or 40), rounded to the nearest double."""
+    """Decodes a float field.
+
+    Args:
+        fmt:   The XTCE encoding: ``IEEE754`` (16, 32, 64, 80 or 128 bits),
+               ``MILSTD_1750A`` (32 or 48), ``DEC`` (32 for F_floating, 64
+               for D_floating), ``IBM`` (32, 64 or 128) or ``TI`` (16, 32
+               or 40).
+        bits:  The field's size in bits.
+        raw:   The raw field.
+        field: The field's name, for errors.
+
+    Returns:
+        The value, rounded to the nearest double.
+
+    Raises:
+        PacketError: ``InvalidValue`` for a DEC reserved operand.
+    """
     if fmt == "IEEE754":
         return _ieee_decode(raw, bits)
     if fmt == "MILSTD_1750A":
@@ -1405,10 +2065,24 @@ def float_decode(fmt: str, bits: int, raw: int, field: str) -> float:
 
 
 def float_encode(fmt: str, bits: int, x: float, field: str) -> int:
-    """The float field nearest ``x`` (ties to even), as ``float_decode``
-    reads it.  IEEE formats overflow to infinity; the others, which have no
-    infinity or NaN, raise ``OutOfRange`` for values too large for them and
-    for infinities and NaN, and encode values too small for them as zero."""
+    """Encodes a float field, as ``float_decode`` reads it.
+
+    IEEE formats overflow to infinity; the others, which have no infinity
+    or NaN, encode values too small for them as zero (or unnormalized).
+
+    Args:
+        fmt:   The XTCE encoding, as for :func:`float_decode`.
+        bits:  The field's size in bits.
+        x:     The value.
+        field: The field's name, for errors.
+
+    Returns:
+        The raw field nearest ``x``, ties to even.
+
+    Raises:
+        PacketError: ``OutOfRange``, for a format other than IEEE, for
+                     values too large for it and for infinities and NaN.
+    """
     x = float(x)
     if fmt == "IEEE754":
         return _ieee_encode(x, bits)
@@ -1428,6 +2102,15 @@ def float_encode(fmt: str, bits: int, x: float, field: str) -> int:
 
 
 def polynomial(x: float, terms) -> float:
+    """Evaluates a PolynomialCalibrator.
+
+    Args:
+        x:     The raw value.
+        terms: The terms' (coefficient, exponent) pairs.
+
+    Returns:
+        The calibrated value.
+    """
     y = 0.0
     for c, e in terms:
         y += c if e == 0 else c * x if e == 1 else c * math.pow(x, e)
@@ -1445,6 +2128,23 @@ def _lerp(x: float, p0, p1) -> float:
 
 def spline(x: float, points, order: int, extrapolate: bool,
            field: str) -> float:
+    """Evaluates a SplineCalibrator of order 0 or 1.
+
+    Args:
+        x:           The raw value.
+        points:      The (raw, calibrated) points, in order of raw value.
+        order:       0 for steps, 1 for straight lines between the points.
+        extrapolate: Whether to extend the first and last segments past
+                     the points.
+        field:       The field's name, for errors.
+
+    Returns:
+        The calibrated value.
+
+    Raises:
+        PacketError: ``Calibration`` if ``x`` is outside the points and
+                     ``extrapolate`` is False.
+    """
     first, last = points[0], points[-1]
     if x < first[0] or x > last[0]:
         if not extrapolate:
@@ -1462,11 +2162,27 @@ def spline(x: float, points, order: int, extrapolate: bool,
 
 def spline_orders(x: float, points, orders, extrapolate: bool,
                   field: str) -> float:
-    """A spline whose segments have their own orders: the segment from point
-    ``i`` has order ``orders[i]``, and one of order k interpolates through
-    k + 1 points, starting at point ``i`` or as close after it as the
-    points allow.  Outside the points, the first or last segment
-    extrapolates."""
+    """Evaluates a spline whose segments have their own orders.
+
+    The segment from point ``i`` has order ``orders[i]``, and one of order
+    k interpolates through k + 1 points, starting at point ``i`` or as
+    close after it as the points allow.  Outside the points, the first or
+    last segment extrapolates.
+
+    Args:
+        x:           The raw value.
+        points:      The (raw, calibrated) points, in order of raw value.
+        orders:      Each segment's order.
+        extrapolate: Whether values outside the points are allowed.
+        field:       The field's name, for errors.
+
+    Returns:
+        The calibrated value.
+
+    Raises:
+        PacketError: ``Calibration`` if ``x`` is outside the points and
+                     ``extrapolate`` is False.
+    """
     n = len(points)
     if (x < points[0][0] or x > points[-1][0]) and not extrapolate:
         raise PacketError("Calibration", field)
@@ -1491,6 +2207,24 @@ def spline_orders(x: float, points, orders, extrapolate: bool,
 
 
 def spline_inverse(y: float, points, extrapolate: bool, field: str) -> float:
+    """Inverts a linear SplineCalibrator, for encoding.
+
+    Interpolates in the first segment whose calibrated values span ``y``.
+
+    Args:
+        y:           The calibrated value.
+        points:      The (raw, calibrated) points, in order of raw value.
+        extrapolate: Whether to extend the first and last segments past
+                     the points.
+        field:       The field's name, for errors.
+
+    Returns:
+        The raw value.
+
+    Raises:
+        PacketError: ``Calibration`` if no segment spans ``y`` and
+                     ``extrapolate`` is False.
+    """
     flip = [(c, r) for r, c in points]
     for i in range(len(points) - 1):
         a, b = points[i][1], points[i + 1][1]
@@ -1519,6 +2253,16 @@ def _wrap(v: int) -> float:
 
 
 def _call(f, *args) -> float:
+    """Calls a math function, giving C libm's result where Python's raises.
+
+    Args:
+        f:     The function.
+        *args: Its arguments.
+
+    Returns:
+        What ``f`` returns, or what libm gives on a domain error, overflow
+        or pole.
+    """
     try:
         return f(*args)
     except (ValueError, OverflowError, ZeroDivisionError):
@@ -1526,8 +2270,16 @@ def _call(f, *args) -> float:
 
 
 def _libm_result(f, *args) -> float:
-    """What C's libm gives where Python's math raises: NaN for domain
-    errors, infinity for overflow and poles."""
+    """Gives what C's libm returns where Python's math raises.
+
+    Args:
+        f:     The function that raised.
+        *args: Its arguments.
+
+    Returns:
+        NaN for domain errors, infinity of the right sign for overflow and
+        poles.
+    """
     if f is math.log or f is math.log10:
         return -math.inf if args[0] == 0 else math.nan
     if f is math.exp or f in (math.cosh, math.sinh):
@@ -1549,9 +2301,17 @@ def _libm_result(f, *args) -> float:
 
 
 def math_op(op: str, a: float, b: float = 0.0) -> float:
-    """The value of a MathOperationCalibrator operator on the operands ``a``
-    and ``b`` (``b`` is ignored by unary operators); identical in every
-    runtime.  See the manual for each operator."""
+    """Applies a MathOperationCalibrator operator; identical in every runtime.
+
+    Args:
+        op: The operator, as the XTCE schema names it; see the manual for
+            each.
+        a:  The first operand.
+        b:  The second operand, ignored by unary operators.
+
+    Returns:
+        The result.
+    """
     if op == "/":
         if b != 0:
             return a / b
@@ -1646,10 +2406,24 @@ def not_invertible(field: str):
 
 def dynamic_size(x, slope: float, intercept: float, unit: int, max_: int,
                  field: str) -> int:
-    """A size or count that another field gives (an XTCE ``DynamicValue``):
-    ``(slope * x + intercept) / unit``, where ``x`` is that field's value and
-    ``unit`` is 8 for a size in bits used in whole bytes.  Raises ``BadSize``
-    unless the result is a whole number from 0 to ``max_``."""
+    """Computes a size or count that another field gives (an XTCE
+    ``DynamicValue``): ``(slope * x + intercept) / unit``.
+
+    Args:
+        x:         The value of the field that gives it.
+        slope:     The linear adjustment's slope.
+        intercept: Its intercept.
+        unit:      8 for a size in bits used in whole bytes, else 1.
+        max_:      The largest size or count allowed.
+        field:     The sized field's name, for errors.
+
+    Returns:
+        The size or count.
+
+    Raises:
+        PacketError: ``BadSize`` unless the result is a whole number from
+                     0 to ``max_``.
+    """
     # int_float, so that an integer too large for a float is infinite, as
     # in the other runtimes, rather than an OverflowError.
     y = slope * int_float(x) + intercept
@@ -1661,11 +2435,26 @@ def dynamic_size(x, slope: float, intercept: float, unit: int, max_: int,
 
 def size_source(n: int, slope: float, intercept: float, unit: int, factor: int,
                 field: str) -> int:
-    """The value of the field that gives a size or count of ``n`` (the
-    inverse of ``dynamic_size`` followed by multiplying by ``factor``), for
-    encoding a field computed from the length of the value it sizes.  Raises
-    ``BadSize``, naming ``field`` (the sized value), when no whole number
-    gives exactly ``n``."""
+    """Computes the value of the field that gives a size or count of ``n``.
+
+    It is the inverse of ``dynamic_size`` followed by multiplying by
+    ``factor``, for encoding a field computed from the length of the
+    value it sizes.
+
+    Args:
+        n:         The size or count.
+        slope:     The linear adjustment's slope.
+        intercept: Its intercept.
+        unit:      8 for a size in bits used in whole bytes, else 1.
+        factor:    What the size or count is multiplied by.
+        field:     The sized value's name, for errors.
+
+    Returns:
+        The field's value.
+
+    Raises:
+        PacketError: ``BadSize`` when no whole number gives exactly ``n``.
+    """
     if n % factor:
         raise PacketError("BadSize", field)
     y = float(n // factor) * unit
@@ -1680,7 +2469,18 @@ def size_source(n: int, slope: float, intercept: float, unit: int, factor: int,
 
 
 def read_list(r: "BitReader", n: int, gap: int, field: str, read) -> list:
-    """``n`` values read by ``read()``, with ``gap`` bits between them."""
+    """Reads ``n`` values, with ``gap`` bits between them.
+
+    Args:
+        r:     The reader.
+        n:     How many values.
+        gap:   The bits to skip between values.
+        field: The array's name, for errors.
+        read:  Reads one value, called with no arguments.
+
+    Returns:
+        The values.
+    """
     out = []
     for i in range(n):
         if i and gap:
@@ -1698,10 +2498,26 @@ def element(v, i: int, field: str):
 
 
 def element_at(v, i: int, stride: int, per: int, need: int, field: str):
-    """Element ``i + stride * d`` of ``v``, a multi-dimensional array whose
-    count varies in a dimension after the first, which has ``d = len(v) /
-    per`` elements; raises ``BadSize``, naming ``field``, unless d is at
-    least ``need``."""
+    """Gets an element of a multi-dimensional array whose count varies in a
+    dimension after the first.
+
+    That dimension has ``d = len(v) / per`` elements.
+
+    Args:
+        v:      The array's elements, flattened.
+        i:      The part of the element's index that doesn't depend on
+                ``d``.
+        stride: What ``d`` is multiplied by in the index.
+        per:    The number of elements per element of that dimension.
+        need:   The least ``d`` that has the element.
+        field:  The array's name, for errors.
+
+    Returns:
+        Element ``i + stride * d`` of ``v``.
+
+    Raises:
+        PacketError: ``BadSize`` unless ``d`` is at least ``need``.
+    """
     d = len(v) // per
     if d < need:
         raise PacketError("BadSize", field)
@@ -1742,8 +2558,22 @@ def code_unit(charset: str) -> int:
 
 
 def decode_text(b: bytes, charset: str, field: str) -> str:
-    """The string whose bytes in ``charset`` are ``b``; raises
-    ``InvalidString`` if they aren't valid."""
+    """Decodes a string's bytes.
+
+    A UTF-16 or UTF-32 string with no byte order in its name may start
+    with a byte order mark; otherwise it is big endian.
+
+    Args:
+        b:       The bytes.
+        charset: The XTCE string encoding.
+        field:   The field's name, for errors.
+
+    Returns:
+        The string.
+
+    Raises:
+        PacketError: ``InvalidString`` if the bytes aren't valid.
+    """
     codec = _CODECS[charset]
     for bom, c in _BOMS.get(charset, ()):
         if b.startswith(bom):
@@ -1758,8 +2588,21 @@ def decode_text(b: bytes, charset: str, field: str) -> str:
 
 
 def encode_text(s: str, charset: str, field: str) -> bytes:
-    """The bytes of ``s`` in ``charset``; raises ``InvalidString`` if it
-    has characters that ``charset`` can't hold."""
+    """Encodes a string's bytes, big endian with no byte order mark for
+    UTF-16 and UTF-32 without a byte order.
+
+    Args:
+        s:       The string.
+        charset: The XTCE string encoding.
+        field:   The field's name, for errors.
+
+    Returns:
+        The bytes.
+
+    Raises:
+        PacketError: ``InvalidString`` if it has characters that
+                     ``charset`` can't hold.
+    """
     try:
         return s.encode(_CODECS[charset])
     except UnicodeEncodeError:
@@ -1767,8 +2610,17 @@ def encode_text(s: str, charset: str, field: str) -> bytes:
 
 
 def _find_unit(b: bytes, term: bytes, unit: int) -> int:
-    """The first position of ``term`` in ``b`` that starts a code unit, or
-    -1."""
+    """Finds a terminator that starts a code unit.
+
+    Args:
+        b:    The string's bytes.
+        term: The terminator's bytes.
+        unit: The bytes in a code unit.
+
+    Returns:
+        The first position of ``term`` in ``b`` that is a multiple of
+        ``unit``, or -1.
+    """
     i = b.find(term)
     while i >= 0 and i % unit:
         i = b.find(term, i + 1)
@@ -1776,8 +2628,24 @@ def _find_unit(b: bytes, term: bytes, unit: int) -> int:
 
 
 def read_string(r: BitReader, spec: tuple, field: str) -> str:
-    """Read a string; ``spec`` is (fixed_bits, max_bits, terminator,
-    size_tag_bits, charset), where the terminator is bytes or None."""
+    """Reads a string.
+
+    Args:
+        r:     The reader.
+        spec:  (fixed_bits, max_bits, terminator, size_tag_bits, charset):
+               the field's size in bits or None if it varies, the most bits
+               it may take, the terminator's bytes or None, the size tag's
+               bits, and the XTCE string encoding.
+        field: The field's name, for errors.
+
+    Returns:
+        The string.
+
+    Raises:
+        PacketError: ``Truncated`` if the packet ends first, ``TooLong``
+                     if the string passes its size, ``InvalidString`` if
+                     its bytes aren't valid.
+    """
     fixed, max_bits, term, tag, charset = spec
     unit = code_unit(charset)
     start = r.pos
@@ -1812,6 +2680,21 @@ def read_string(r: BitReader, spec: tuple, field: str) -> str:
 
 
 def write_string(w: BitWriter, spec: tuple, s: str, field: str) -> None:
+    """Writes a string, as :func:`read_string` reads it.
+
+    A fixed-size string with a terminator may fill its field; otherwise
+    the terminator follows it, and zeros fill the rest of a fixed size.
+
+    Args:
+        w:     The writer.
+        spec:  The string's layout, as for :func:`read_string`.
+        s:     The string.
+        field: The field's name, for errors.
+
+    Raises:
+        PacketError: ``InvalidString`` if ``charset`` can't hold it or it
+                     holds the terminator, ``TooLong`` if it doesn't fit.
+    """
     fixed, max_bits, term, tag, charset = spec
     b = encode_text(s, charset, field)
     if term is not None:
@@ -1847,8 +2730,18 @@ def write_binary(w: BitWriter, b: bytes, n: int, field: str) -> None:
 
 
 def string_from_bytes(b: bytes, field: str) -> str:
-    """The string a string field encoded as binary holds: all of its bytes,
-    which must be UTF-8."""
+    """Decodes the string that a string field encoded as binary holds.
+
+    Args:
+        b:     All of the field's bytes, which must be UTF-8.
+        field: The field's name, for errors.
+
+    Returns:
+        The string.
+
+    Raises:
+        PacketError: ``InvalidString`` if the bytes aren't UTF-8.
+    """
     try:
         return b.decode("utf-8")
     except UnicodeDecodeError:
@@ -1856,8 +2749,20 @@ def string_from_bytes(b: bytes, field: str) -> str:
 
 
 def bool_from_string(s: str, one: str, zero: str, field: str) -> bool:
-    """The value of a boolean encoded as one of two strings; raises
-    ``OutOfRange`` for any other string."""
+    """Decodes a boolean encoded as one of two strings.
+
+    Args:
+        s:     The string read.
+        one:   The string for True.
+        zero:  The string for False.
+        field: The field's name, for errors.
+
+    Returns:
+        The boolean.
+
+    Raises:
+        PacketError: ``OutOfRange`` for any other string.
+    """
     if s == one:
         return True
     if s == zero:
@@ -1874,9 +2779,19 @@ def write_rest(w: BitWriter, b: bytes, max_: int, field: str) -> None:
 
 
 def write_embedded(w: BitWriter, b: bytes, max_: int, field: str) -> None:
-    """Write an embedded CCSDS packet (Yamcs:EmbeddedTc): ``b``, at least
-    7 and at most ``max_`` bytes, with its packet length field set to its
-    size."""
+    """Writes an embedded CCSDS packet (Yamcs:EmbeddedTc), with its packet
+    length field set to its size.
+
+    Args:
+        w:     The writer.
+        b:     The packet.
+        max_:  The most bytes it may have.
+        field: The field's name, for errors.
+
+    Raises:
+        PacketError: ``TooLong`` if ``b`` is more than ``max_`` bytes, and
+                     ``BadSize`` if it is less than 7.
+    """
     if len(b) > max_:
         raise PacketError("TooLong", field)
     if len(b) < 7:
@@ -1885,7 +2800,15 @@ def write_embedded(w: BitWriter, b: bytes, max_: int, field: str) -> None:
 
 
 def enum_value(cls, v: int):
-    """``cls(v)`` for an IntEnum, keeping values the enumeration does not list.
+    """Makes ``cls(v)`` for an IntEnum, keeping values the enumeration does not
+    list.
+
+    Args:
+        cls: The IntEnum class.
+        v:   The value.
+
+    Returns:
+        The member, or for a value not listed a member with no name.
     """
     try:
         return cls(v)
@@ -1905,6 +2828,16 @@ def describe_float(x: float) -> str:
 
 
 def describe_str(s: str) -> str:
+    """Writes a string as every runtime describes it.
+
+    Args:
+        s: The string.
+
+    Returns:
+        ``s`` in double quotes, with double quotes and backslashes
+        escaped by a backslash and control characters as a backslash,
+        ``x`` and two hex digits.
+    """
     out = ['"']
     for c in s:
         if c == '"':
@@ -1940,8 +2873,17 @@ def in_band(x, lo, lo_incl: bool, hi, hi_incl: bool) -> bool:
 
 
 def enum_alarm(x: int, labels: tuple, default: int) -> int:
-    """The level of enumeration value ``x``: that of the first (first
-    value, last value, level) in ``labels`` holding it, else ``default``."""
+    """Gives the alarm level of an enumeration value.
+
+    Args:
+        x:       The value.
+        labels:  The (first value, last value, level) of each alarm.
+        default: The level when none holds ``x``.
+
+    Returns:
+        The level of the first in ``labels`` holding ``x``, else
+        ``default``.
+    """
     for lo, hi, level in labels:
         if lo <= x <= hi:
             return level
@@ -1949,8 +2891,16 @@ def enum_alarm(x: int, labels: tuple, default: int) -> int:
 
 
 def dfa_match(dfa: tuple, data: bytes) -> bool:
-    """Whether the automaton ``(starts, trans, accept)`` (see the generator's
-    ``model.Dfa``) accepts ``data``."""
+    """Runs an automaton over bytes.
+
+    Args:
+        dfa:  ``(starts, trans, accept)``, as the generator's
+              ``model.Dfa`` gives it.
+        data: The bytes.
+
+    Returns:
+        Whether the automaton accepts ``data``.
+    """
     starts, trans, accept = dfa
     q = 0
     for b in data:
@@ -1965,8 +2915,17 @@ def dfa_match(dfa: tuple, data: bytes) -> bool:
 
 
 def pattern_alarm(s: str, patterns: tuple, default: int) -> int:
-    """The level of string ``s``: that of the first (automaton, level) in
-    ``patterns`` it matches, else ``default``."""
+    """Gives the alarm level of a string.
+
+    Args:
+        s:        The string; its UTF-8 bytes are matched.
+        patterns: The (automaton, level) of each alarm.
+        default:  The level when it matches none.
+
+    Returns:
+        The level of the first in ``patterns`` it matches, else
+        ``default``.
+    """
     data = s.encode("utf-8")
     for dfa, level in patterns:
         if dfa_match(dfa, data):
@@ -1975,9 +2934,14 @@ def pattern_alarm(s: str, patterns: tuple, default: int) -> int:
 
 
 class AlarmState:
-    """What an alarm monitor keeps for one parameter: whether it is in
-    alarm, its runs of samples in and out of alarm, and its last
-    ``history`` values and their times, for change ranges."""
+    """What an alarm monitor keeps for one parameter.
+
+    Whether it is in alarm, its runs of samples in and out of alarm, and
+    its last ``history`` values and their times, for change ranges.
+
+    Args:
+        history: How many samples to remember.
+    """
 
     __slots__ = ("violations", "conformances", "level", "values", "times",
                  "history")
@@ -1992,10 +2956,20 @@ class AlarmState:
 
     def update(self, level: int, min_violations: int,
                min_conformance: int) -> int:
-        """The level to report for a sample whose own level is ``level``:
-        an alarm is raised after ``min_violations`` samples in a row are in
+        """Gives the level to report for a sample.
+
+        An alarm is raised after ``min_violations`` samples in a row are in
         alarm, and cleared after ``min_conformance`` in a row are not; in
-        between, the last level raised stands."""
+        between, the last level raised stands.
+
+        Args:
+            level:           The sample's own level, 0 for none.
+            min_violations:  The samples in alarm in a row that raise it.
+            min_conformance: The samples out of alarm in a row that clear it.
+
+        Returns:
+            The level to report.
+        """
         if level > 0:
             self.violations += 1
             self.conformances = 0
@@ -2010,11 +2984,20 @@ class AlarmState:
 
     def change(self, x: float, t: float, k: int, per_second: bool,
                percent: bool) -> Optional[float]:
-        """How much ``x`` (at time ``t``) changed since the value ``k``
-        samples before it: as a percentage of that value when ``percent``,
-        then per second when ``per_second``.  None when there is no such
-        sample, or no change can be worked out (no time between them, or a
-        percentage of 0)."""
+        """Works out how much a sample changed, for a change range.
+
+        Args:
+            x:          The sample's value.
+            t:          Its time, in seconds.
+            k:          How many samples before it to compare with.
+            per_second: Whether to give the change per second.
+            percent:    Whether to give it as a percentage of the earlier
+                        value.
+
+        Returns:
+            The change, or None when there is no such sample, or no change can
+            be worked out (no time between them, or a percentage of 0).
+        """
         if len(self.values) < k:
             return None
         then, t_then = self.values[-k], self.times[-k]
@@ -2031,7 +3014,13 @@ class AlarmState:
         return d
 
     def push(self, x: float, t: float) -> None:
-        """Remembers a sample, for change ranges."""
+        """Remembers a sample, for change ranges, forgetting the oldest beyond
+        ``history``.
+
+        Args:
+            x: The sample's value.
+            t: Its time, in seconds.
+        """
         self.values.append(x)
         self.times.append(t)
         if len(self.values) > self.history:
@@ -2040,14 +3029,31 @@ class AlarmState:
 
 
 def _line_decoder(pcm: str, inverted: bool):
-    """A function turning the levels of a PCM stream (``pcm`` NRZL, NRZM,
-    NRZS, BiPhaseL, BiPhaseM or BiPhaseS, inverted when ``inverted``) into
-    data bits: the bit each level completes, or None for the first half of
-    a bi-phase bit, the stream starting on one."""
+    """Makes a decoder from the levels of a PCM stream to data bits.
+
+    Args:
+        pcm:      The PCM type: NRZL, NRZM, NRZS, BiPhaseL, BiPhaseM or
+                  BiPhaseS.
+        inverted: Whether the levels are inverted.
+
+    Returns:
+        A function taking each level and giving the bit it completes, or
+        None for the first half of a bi-phase bit, the stream starting on
+        one.
+    """
     prev = [0]
     half = [None]
 
     def decode(raw: int):
+        """Decodes one level.
+
+        Args:
+            raw: The level, 0 or 1.
+
+        Returns:
+            The bit it completes, or None for the first half of a bi-phase
+            bit.
+        """
         level = raw ^ inverted
         if pcm.startswith("BiPhase"):
             first = half[0]
@@ -2073,7 +3079,14 @@ def _line_decoder(pcm: str, inverted: bool):
 
 
 def _pack(bits) -> bytes:
-    """Bits, most significant first, as bytes padded with zeros."""
+    """Packs bits into bytes.
+
+    Args:
+        bits: The bits, most significant first.
+
+    Returns:
+        The bytes, the last padded with zeros.
+    """
     out = bytearray((len(bits) + 7) // 8)
     for i, b in enumerate(bits):
         out[i >> 3] |= b << (7 - (i & 7))
@@ -2081,15 +3094,33 @@ def _pack(bits) -> bytes:
 
 
 class FrameSync:
-    """Finds the frames of a FixedFrameStream in a stream of bytes, by the
-    state machine XTCE describes: in Search, it looks for the sync pattern
-    at every bit; in Verify, it needs ``verify`` frames in a row whose
-    patterns are where the frame length (give or take ``aperture`` bits)
-    says, then it locks; in Lock, it gives each frame whose pattern it
-    found, and a missed pattern sends it to Check, where ``check`` good
-    patterns in a row lock it again and a missed one sends it back to
-    Search.  Searching ``invert_after`` bits (when not 0) without finding a
-    pattern inverts the bits.  See the generator's ``model.Stream``."""
+    """Finds the frames of a FixedFrameStream in a stream of bytes.
+
+    It uses the state machine XTCE describes: in Search, it looks for the
+    sync pattern at every bit; in Verify, it needs ``verify`` frames in a
+    row whose patterns are where the frame length (give or take
+    ``aperture`` bits) says, then it locks; in Lock, it gives each frame
+    whose pattern it found, and a missed pattern sends it to Check, where
+    ``check`` good patterns in a row lock it again and a missed one sends
+    it back to Search.  Searching ``invert_after`` bits (when not 0)
+    without finding a pattern inverts the bits.  See the generator's
+    ``model.Stream``.
+
+    Args:
+        frame_bits:   The frame's length in bits.
+        pattern:      The sync pattern.
+        mask:         The pattern's bits that must match, as set bits.
+        pattern_bits: The pattern's length in bits.
+        location:     Where the pattern is, in bits from the frame's start.
+        max_errors:   The most bits of the pattern that may be wrong.
+        aperture:     How many bits a pattern may be from where it should.
+        verify:       The patterns in a row that lock from Search.
+        check:        The patterns in a row that lock again from Check.
+        invert_after: The bits searched without a pattern that invert the
+                      stream, or 0 never to invert it.
+        pcm:          The stream's PCM type, as for ``_line_decoder``.
+        inverted:     Whether its levels are inverted.
+    """
 
     SEARCH, VERIFY, LOCK, CHECK = range(4)
 
@@ -2125,8 +3156,14 @@ class FrameSync:
         self.invert = None
 
     def push(self, data) -> list:
-        """The frames that ``data``, the next bytes of the stream, completes,
-        each as bytes (its bits padded with zeros)."""
+        """Finds the frames that the next bytes of the stream complete.
+
+        Args:
+            data: The bytes.
+
+        Returns:
+            The frames, each as bytes (its bits padded with zeros).
+        """
         frames: list = []
         for byte in data:
             for k in range(7, -1, -1):
@@ -2137,12 +3174,31 @@ class FrameSync:
         return frames
 
     def _bit(self, i: int) -> int:
+        """Gives a bit of the stream, inverted if the stream has been.
+
+        An inverted stream's bits go through :attr:`invert` when there is
+        one, in place of their complement.
+
+        Args:
+            i: The bit's position in the stream.
+
+        Returns:
+            The bit.
+        """
         b = self.bits[i - self.base]
         if self.flip and self.invert is not None:
             return self.invert(b)
         return b ^ self.flip
 
     def _matches(self, s: int) -> bool:
+        """Checks for the sync pattern in the frame at a position.
+
+        Args:
+            s: Where the frame starts, in bits in the stream.
+
+        Returns:
+            Whether the pattern is there, with at most ``max_errors`` wrong.
+        """
         errors = 0
         at = s + self.location
         for j, (p, m) in enumerate(zip(self.pat, self.mask)):
@@ -2156,6 +3212,13 @@ class FrameSync:
         return _pack([self._bit(s + i) for i in range(self.frame_bits)])
 
     def _run(self, frames: list) -> None:
+        """Runs the state machine over the bits held, as far as they go.
+
+        Drops the bits it no longer needs.
+
+        Args:
+            frames: Gets each frame found.
+        """
         span = self.location + len(self.pat)
         while True:
             end = self.base + len(self.bits)
@@ -2216,13 +3279,22 @@ class FrameSync:
 
 
 class FlagSync:
-    """Finds the frames of a VariableFrameStream in a stream of bytes:
-    frames lie between flags, each ``flag_bits`` ones (or zeros, unless
+    """Finds the frames of a VariableFrameStream in a stream of bytes.
+
+    Frames lie between flags, each ``flag_bits`` ones (or zeros, unless
     ``flag_ones``) with a bit of the other kind on either side, and a bit
     of the other kind is stuffed into a frame after ``flag_bits - 1`` in a
     row, which this removes.  More than ``flag_bits`` in a row abort the
     frame, as does a frame of more than ``max_bits``; frames are found
-    again from the next flag.  See the generator's ``model.Stream``."""
+    again from the next flag.  See the generator's ``model.Stream``.
+
+    Args:
+        flag_bits: The flag's run of bits.
+        flag_ones: Whether the run is of ones, else zeros.
+        max_bits:  The most bits a frame may have.
+        pcm:       The stream's PCM type, as for ``_line_decoder``.
+        inverted:  Whether its levels are inverted.
+    """
 
     def __init__(self, flag_bits: int, flag_ones: bool, max_bits: int,
                  pcm: str = "NRZL", inverted: bool = False) -> None:
@@ -2235,8 +3307,14 @@ class FlagSync:
         self.hunting = True
 
     def push(self, data) -> list:
-        """The frames that ``data``, the next bytes of the stream, completes,
-        each as bytes (its bits padded with zeros)."""
+        """Finds the frames that the next bytes of the stream complete.
+
+        Args:
+            data: The bytes.
+
+        Returns:
+            The frames, each as bytes (its bits padded with zeros).
+        """
         frames: list = []
         for byte in data:
             for k in range(7, -1, -1):
@@ -2246,6 +3324,13 @@ class FlagSync:
         return frames
 
     def _bit(self, b: int, frames: list) -> None:
+        """Takes one data bit: ends a frame at a flag, drops stuffed bits, and
+        aborts a frame too long or with too long a run.
+
+        Args:
+            b:      The bit.
+            frames: Gets the frame a flag ends.
+        """
         f = self.flag_bits
         if b == self.flag:
             self.run += 1
@@ -2355,6 +3440,15 @@ def describe_enum(v, labels) -> str:
 
 
 def find_label(v: int, labels) -> Optional[str]:
+    """Finds an enumeration value's label.
+
+    Args:
+        v:      The value.
+        labels: The (label, first value, last value) of each label.
+
+    Returns:
+        The first label whose range holds ``v``, or None.
+    """
     for label, lo, hi in labels:
         if lo <= v <= hi:
             return label

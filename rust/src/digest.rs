@@ -68,8 +68,21 @@ pub const UNORDERED: &[&str] = &[
 
 const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
 
-/// The MD5 digest of the XTCE document `data`, as 16 bytes: what programs
-/// send each other to compare.
+/// Computes the MD5 digest of the XTCE document `data`, as 16 bytes: what
+/// programs send each other to compare.
+///
+/// # Arguments
+///
+/// * `data` - The document's bytes, UTF-8.
+///
+/// # Returns
+///
+/// The digest.
+///
+/// # Errors
+///
+/// Fails, as [`encoding`] does, if the document is malformed or isn't
+/// one this module reads (see the module documentation).
 pub fn digest_bytes(data: &[u8]) -> Result<[u8; 16]> {
     Ok(md5(&encoding(data)?))
 }
@@ -85,7 +98,21 @@ pub fn digest_string(text: &str) -> Result<String> {
     digest(text.as_bytes())
 }
 
-/// The digest of the XTCE document in the file `path`, as 16 bytes.
+/// Computes the digest of the XTCE document in the file `path`, as 16
+/// bytes.
+///
+/// # Arguments
+///
+/// * `path` - The file holding the document.
+///
+/// # Returns
+///
+/// The digest.
+///
+/// # Errors
+///
+/// Fails with an error naming `path` if the file can't be read, and
+/// as [`digest_bytes`] does on its contents.
 pub fn digest_file_bytes(path: impl AsRef<Path>) -> Result<[u8; 16]> {
     let path = path.as_ref();
     let data = std::fs::read(path)
@@ -98,8 +125,20 @@ pub fn digest_file(path: impl AsRef<Path>) -> Result<String> {
     Ok(hex(&digest_file_bytes(path)?))
 }
 
-/// The MD5 digest of the set of XTCE documents `documents` (each UTF-8
-/// bytes), as 16 bytes.
+/// Computes the MD5 digest of the set of XTCE documents `documents` (each
+/// UTF-8 bytes), as 16 bytes.
+///
+/// # Arguments
+///
+/// * `documents` - The documents' bytes, in any order.
+///
+/// # Returns
+///
+/// The digest of the set.
+///
+/// # Errors
+///
+/// Fails, as [`encoding`] does, on the first document it can't read.
 pub fn digest_set_bytes<D: AsRef<[u8]>>(documents: &[D]) -> Result<[u8; 16]> {
     let mut codes = documents
         .iter()
@@ -114,8 +153,21 @@ pub fn digest_set<D: AsRef<[u8]>>(documents: &[D]) -> Result<String> {
     Ok(hex(&digest_set_bytes(documents)?))
 }
 
-/// The digest of the set of XTCE documents in the files `paths`, as 16
-/// bytes.
+/// Computes the digest of the set of XTCE documents in the files `paths`,
+/// as 16 bytes.
+///
+/// # Arguments
+///
+/// * `paths` - The files holding the documents, in any order.
+///
+/// # Returns
+///
+/// The digest of the set.
+///
+/// # Errors
+///
+/// Fails with an error naming the first file that can't be read, and
+/// as [`digest_set_bytes`] does on their contents.
 pub fn digest_files_bytes<P: AsRef<Path>>(paths: &[P]) -> Result<[u8; 16]> {
     let documents = paths
         .iter()
@@ -139,8 +191,23 @@ pub fn hex(d: &[u8; 16]) -> String {
     d.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The canonical encoding of the XTCE document `data`, whose MD5 digest is
-/// its digest.
+/// Computes the canonical encoding of the XTCE document `data`, whose MD5
+/// digest is its digest.
+///
+/// # Arguments
+///
+/// * `data` - The document's bytes, UTF-8 with or without a byte order
+///            mark.
+///
+/// # Returns
+///
+/// The encoding.
+///
+/// # Errors
+///
+/// Fails if the document isn't UTF-8, holds a character XML forbids, is
+/// malformed, declares another encoding, has a DOCTYPE or has a root
+/// element other than `SpaceSystem`.
 pub fn encoding(data: &[u8]) -> Result<Vec<u8>> {
     let data = data.strip_prefix(b"\xef\xbb\xbf").unwrap_or(data);
     let text = std::str::from_utf8(data)
@@ -195,6 +262,15 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Makes an error at the current position.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - What is wrong.
+    ///
+    /// # Returns
+    ///
+    /// The error, with the 1-based line and column of the position.
     fn error(&self, message: &str) -> Error {
         let before = &self.s[..self.pos.min(self.s.len())];
         let line = before.iter().filter(|&&c| c == b'\n').count() + 1;
@@ -218,6 +294,19 @@ impl<'a> Parser<'a> {
     }
 
     /// Skips past `end`, failing with `what` if it never comes.
+    ///
+    /// # Arguments
+    ///
+    /// * `end`  - The bytes that end what is skipped.
+    /// * `what` - The error message if `end` doesn't appear.
+    ///
+    /// # Returns
+    ///
+    /// The bytes skipped, `end` excluded.
+    ///
+    /// # Errors
+    ///
+    /// Fails with `what` if `end` doesn't appear.
     fn skip_past(&mut self, end: &[u8], what: &str) -> Result<&'a [u8]> {
         let rest = self.rest();
         match rest.windows(end.len()).position(|w| w == end) {
@@ -229,8 +318,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// The XML declaration, and the comments, processing instructions and
-    /// whitespace before the root element.
+    /// Skips the XML declaration, and the comments, processing instructions
+    /// and whitespace before the root element.
+    ///
+    /// # Errors
+    ///
+    /// Fails if one is unclosed, the declaration names an encoding other
+    /// than UTF-8, or a DOCTYPE follows.
     fn prolog(&mut self) -> Result<()> {
         if self.rest().starts_with(b"<?xml")
             && self.rest().get(5).is_some_and(|&c| is_space(c))
@@ -256,7 +350,11 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    /// Comments, processing instructions and whitespace.
+    /// Skips comments, processing instructions and whitespace.
+    ///
+    /// # Errors
+    ///
+    /// Fails if a comment or processing instruction is unclosed.
     fn misc(&mut self) -> Result<()> {
         loop {
             self.skip_space();
@@ -272,6 +370,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Reads a name: element, attribute or end tag.
+    ///
+    /// # Returns
+    ///
+    /// The name.
+    ///
+    /// # Errors
+    ///
+    /// Fails if no name is at the current position.
     fn name(&mut self) -> Result<&'a str> {
         let start = self.pos;
         while self.pos < self.s.len()
@@ -287,6 +394,15 @@ impl<'a> Parser<'a> {
         Ok(std::str::from_utf8(&self.s[start..self.pos]).unwrap_or(""))
     }
 
+    /// Finds the namespace a prefix is bound to in the open elements.
+    ///
+    /// # Arguments
+    ///
+    /// * `prefix` - The prefix, "" for the default namespace.
+    ///
+    /// # Returns
+    ///
+    /// The URI ("" when undeclared), or `None` if `prefix` is not bound.
     fn lookup(&self, prefix: &str) -> Option<&str> {
         if prefix == "xml" {
             return Some(XML_NS);
@@ -300,6 +416,19 @@ impl<'a> Parser<'a> {
 
     /// A name in Clark notation, `{namespace}local` or `local`.  An
     /// unprefixed attribute is in no namespace.
+    ///
+    /// # Arguments
+    ///
+    /// * `qname` - The name as written, perhaps with a prefix.
+    /// * `attr`  - Whether it is an attribute's name.
+    ///
+    /// # Returns
+    ///
+    /// The expanded name.
+    ///
+    /// # Errors
+    ///
+    /// Fails if its prefix is unbound.
     fn expand(&self, qname: &str, attr: bool) -> Result<String> {
         let (prefix, local) = match qname.split_once(':') {
             Some((p, l)) => (p, l),
@@ -317,6 +446,20 @@ impl<'a> Parser<'a> {
 
     /// Expands the references in `raw`; in an attribute value, whitespace
     /// characters become spaces.
+    ///
+    /// # Arguments
+    ///
+    /// * `raw`  - The text as written.
+    /// * `attr` - Whether it is an attribute value.
+    ///
+    /// # Returns
+    ///
+    /// The text.
+    ///
+    /// # Errors
+    ///
+    /// Fails on an unterminated or undefined reference or, in an attribute
+    /// value, a `<`.
     fn unescape(&self, raw: &[u8], attr: bool) -> Result<String> {
         let mut out = String::new();
         let text = std::str::from_utf8(raw).unwrap_or("");
@@ -360,7 +503,22 @@ impl<'a> Parser<'a> {
         Ok(out)
     }
 
-    /// An element, from its `<`, as its encoding.
+    /// Reads an element, from its `<`, as its encoding.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` - Whether it is the root element, which must be
+    ///            `SpaceSystem`.
+    ///
+    /// # Returns
+    ///
+    /// The encoding.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the element or its content is malformed, uses an unbound
+    /// prefix or repeats an attribute, or if `root` is set and the element
+    /// is not `SpaceSystem`.
     fn element(&mut self, root: bool) -> Result<Vec<u8>> {
         self.pos += 1;
         let qname = self.name()?;
@@ -439,7 +597,17 @@ impl<'a> Parser<'a> {
         Ok(out)
     }
 
-    /// An element's content, up to and including its end tag.
+    /// Reads an element's content, up to and including its end tag.
+    ///
+    /// # Arguments
+    ///
+    /// * `qname` - The element's name as written in its start tag.
+    /// * `items` - Receives the encoding of each child element and run of
+    ///             text.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the content is malformed or the end tag doesn't match.
     fn content(&mut self, qname: &str, items: &mut Vec<Vec<u8>>) -> Result<()> {
         let mut text = String::new();
         loop {
@@ -487,6 +655,12 @@ impl<'a> Parser<'a> {
 
 /// Appends `s` to `out`; in an attribute value, tabs and line feeds become
 /// spaces.
+///
+/// # Arguments
+///
+/// * `out`  - The string appended to.
+/// * `s`    - The text to append.
+/// * `attr` - Whether the text is in an attribute value.
 fn push_text(out: &mut String, s: &str, attr: bool) {
     if attr {
         out.extend(s.chars().map(|c| if is_space_char(c) { ' ' } else { c }));
@@ -501,6 +675,11 @@ fn is_space_char(c: char) -> bool {
 
 /// Ends a run of text: its encoding, if anything is left once whitespace
 /// is trimmed from both ends.
+///
+/// # Arguments
+///
+/// * `text`  - The run of text, which is cleared.
+/// * `items` - Receives the run's encoding.
 fn flush(text: &mut String, items: &mut Vec<Vec<u8>>) {
     let t = text.trim_matches(is_space_char);
     if !t.is_empty() {
@@ -511,7 +690,16 @@ fn flush(text: &mut String, items: &mut Vec<Vec<u8>>) {
     text.clear();
 }
 
-/// The value of `name="..."` in an XML declaration.
+/// Finds the value of `name="..."` in an XML declaration.
+///
+/// # Arguments
+///
+/// * `decl` - The declaration's text, between `<?xml` and `?>`.
+/// * `name` - The pseudo-attribute's name.
+///
+/// # Returns
+///
+/// The value, without its quotes, or `None` if it isn't there.
 fn pseudo_attr<'s>(decl: &'s str, name: &str) -> Option<&'s str> {
     let i = decl.find(name)?;
     let rest = decl[i + name.len()..].trim_start();
@@ -526,7 +714,15 @@ fn pseudo_attr<'s>(decl: &'s str, name: &str) -> Option<&'s str> {
 
 // --- MD5 (RFC 1321) ----------------------------------------------------------
 
-/// The MD5 digest of `data`.
+/// Computes the MD5 digest of `data`.
+///
+/// # Arguments
+///
+/// * `data` - The bytes to digest.
+///
+/// # Returns
+///
+/// The digest, 16 bytes.
 pub fn md5(data: &[u8]) -> [u8; 16] {
     const S: [u32; 64] = [
         7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14,

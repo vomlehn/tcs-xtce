@@ -27,11 +27,32 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+/// Computes the digest of a set of documents, exiting with status 1 if one
+/// can't be read.
+///
+/// # Arguments
+///
+/// * `paths` - The documents' paths.
+///
+/// # Returns
+///
+/// The digest of the set, which doesn't depend on their order.
 fn digest(paths: &[&str]) -> [u8; 16] {
     digest_files_bytes(paths).unwrap_or_else(|e| fail(e.to_string()))
 }
 
-/// A housekeeping packet: PUS service 3, subservice 25.
+/// Builds a housekeeping packet: PUS service 3, subservice 25.
+///
+/// # Arguments
+///
+/// * `count`      - Its CCSDS sequence count and PUS message counter.
+/// * `battery`    - The battery voltage, in volts.
+/// * `motor_temp` - The motor temperature, in degrees Celsius.
+/// * `turns`      - The left and right wheels' turns since the last report.
+///
+/// # Returns
+///
+/// The packet.
 fn hk(count: u16, battery: f64, motor_temp: f64, turns: (u16, u16)) -> Hk {
     Hk {
         ccsds_apid: 100,
@@ -47,6 +68,8 @@ fn hk(count: u16, battery: f64, motor_temp: f64, turns: (u16, u16)) -> Hk {
     }
 }
 
+/// Checks the set digest, records the packets in a stream after it,
+/// decodes them from it, and shows that encoding rejects a bad value.
 fn main() {
     // The digest of the set is the same in any order.
     let set = digest(&DOCUMENTS);

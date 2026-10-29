@@ -34,7 +34,17 @@ class ManagedBuffer:
         self._len = 0
 
     def reserve(self, additional: int) -> None:
-        """Ensure room for at least ``additional`` more bytes."""
+        """Ensures room for at least ``additional`` more bytes.
+
+        Grows the allocation to the larger of what is needed and twice its
+        current size.
+
+        Args:
+            additional: How many bytes past the current length must fit.
+
+        Raises:
+            BufferError: The buffer must grow while a view of it is held.
+        """
         need = self._len + additional
         if need > len(self._data):
             grow = max(need, 2 * len(self._data)) - len(self._data)
@@ -46,14 +56,22 @@ class ManagedBuffer:
                                   "view() first") from e
 
     def resize(self, n: int) -> None:
-        """Set the length to ``n`` bytes, zero filling any new bytes."""
+        """Sets the length to ``n`` bytes, zero filling any new bytes.
+
+        Args:
+            n: The new length in bytes.
+        """
         if n > self._len:
             self.reserve(n - self._len)
             self._data[self._len : n] = bytes(n - self._len)
         self._len = n
 
     def write(self, data) -> None:
-        """Append bytes-like ``data``."""
+        """Appends bytes-like ``data``.
+
+        Args:
+            data: The bytes to append.
+        """
         n = len(data)
         self.reserve(n)
         end = self._len + n
@@ -66,7 +84,16 @@ class ManagedBuffer:
         self.write(data)
 
     def load_from(self, stream, chunk: int = 64 * 1024) -> int:
-        """Replace the contents with everything read from a binary stream."""
+        """Replaces the contents with everything read from a binary stream.
+
+        Args:
+            stream: A binary stream; its ``readinto`` is used if it has one,
+                    else its ``read``.
+            chunk:  How many bytes to grow the buffer by when it is full.
+
+        Returns:
+            The number of bytes read, the buffer's new length.
+        """
         self._len = 0
         while True:
             # Fill the existing allocation first; grow only when it is full.

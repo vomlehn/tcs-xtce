@@ -25,6 +25,11 @@ static const char* hex(const uint8_t* b, size_t n, char* buf, size_t cap) {
         return buf + 2; /* drop the "0x" */
 }
 
+/** Serializes and deserializes strings of several lengths, printing each
+ * result.
+ *
+ * @return  0, or 1 if a packet doesn't deserialize to what was
+ *          serialized. */
 int main(void) {
         static const char* const texts[] = {"ABCDEFGH", "Hi", "",
                                             "h\xc3\xa9llo", "ABCDEFGHI"};

@@ -32,6 +32,11 @@ pub struct FixedVec<T, const N: usize> {
 pub type FixedBytes<const N: usize> = FixedVec<u8, N>;
 
 impl<T: Default, const N: usize> FixedVec<T, N> {
+    /// Makes an empty vector, filling its storage with `T::default()`.
+    ///
+    /// # Returns
+    ///
+    /// The empty vector.
     pub fn new() -> Self {
         Self {
             len: 0,
@@ -44,6 +49,14 @@ impl<T, const N: usize> FixedVec<T, N> {
     pub const CAPACITY: usize = N;
 
     /// Appends `v`, or gives it back if the vector is full.
+    ///
+    /// # Arguments
+    ///
+    /// * `v` - The value to append.
+    ///
+    /// # Errors
+    ///
+    /// Gives back `v` as the error if the vector already holds `N` values.
     pub fn push(&mut self, v: T) -> Result<(), T> {
         if self.len == N {
             return Err(v);
@@ -84,6 +97,14 @@ impl<T, const N: usize> FixedVec<T, N> {
 
 impl<T: Clone, const N: usize> FixedVec<T, N> {
     /// Appends a copy of each of `values`; on failure the vector is unchanged.
+    ///
+    /// # Arguments
+    ///
+    /// * `values` - The values to append.
+    ///
+    /// # Errors
+    ///
+    /// `CapacityError` if they don't all fit.
     pub fn extend_from_slice(
         &mut self,
         values: &[T],

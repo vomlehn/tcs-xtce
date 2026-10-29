@@ -102,6 +102,14 @@ class Integer {
         const Bytes& as_bytes() const { return b_; }
         Bytes& as_bytes_mut() { return b_; }
 
+        /** Reads an integer from bytes least significant first, as bnum's
+         * from_le_slice does; a signed integer takes the slice's top bit as its
+         * sign.
+         *
+         * @param s    The bytes, least significant first.
+         * @param len  How many there are; none is zero.
+         * @return     The integer, or none if the slice's value doesn't fit it.
+         */
         static std::optional<Integer> from_le_slice(const std::uint8_t* s,
                                                     std::size_t len) {
                 Integer r;
@@ -109,6 +117,14 @@ class Integer {
                         return std::nullopt;
                 return r;
         }
+        /** Reads an integer from bytes most significant first, as bnum's
+         * from_be_slice does; a signed integer takes the slice's top bit as its
+         * sign.
+         *
+         * @param s    The bytes, most significant first.
+         * @param len  How many there are; none is zero.
+         * @return     The integer, or none if the slice's value doesn't fit it.
+         */
         static std::optional<Integer> from_be_slice(const std::uint8_t* s,
                                                     std::size_t len) {
                 Integer r;
@@ -119,7 +135,11 @@ class Integer {
 
         // --- casts
 
-        // This integer as another, as Rust's `as` converts.
+        /** Converts this integer to another type, as Rust's `as` converts: T is
+         * a double (to the nearest), a primitive integer or an Integer
+         * (truncated, or extended with the sign if this is signed).
+         *
+         * @return  The converted value. */
         template <class T>
         T as() const {
                 if constexpr (std::is_same_v<T, double>) {
@@ -296,6 +316,10 @@ class Integer {
                 (void)q;
                 return {r, v};
         }
+        /** Raises this integer to a power, by squaring, wrapping on overflow.
+         *
+         * @param e  The exponent; 0 gives one.
+         * @return   The wrapped power, and whether any step overflowed. */
         std::pair<Integer, bool> overflowing_pow(std::uint32_t e) const {
                 Integer r = one(), base = *this;
                 bool v = false;
@@ -442,7 +466,10 @@ class Integer {
         }
         Integer pow(std::uint32_t e) const { return wrapping_pow(e); }
 
-        // The integer square root (rounded down); panics if negative.
+        /** Takes the integer square root, rounded down, by Newton's method.
+         * Panics (XTCE_BNUM_PANIC) if this is negative.
+         *
+         * @return  The largest integer whose square is at most this one. */
         Integer isqrt() const {
                 if (is_negative()) XTCE_BNUM_PANIC("isqrt of a negative");
                 // Newton's method from a power of two at least the root.
@@ -459,6 +486,11 @@ class Integer {
                 if (!is_positive()) return std::nullopt;
                 return bit_width() - 1;
         }
+        /** Takes the logarithm of this integer in a base, rounded down.
+         *
+         * @param base  The base, at least 2.
+         * @return      The logarithm, or none unless this is positive and
+         *              `base` at least 2. */
         std::optional<std::uint32_t> checked_ilog(const Integer& base) const {
                 if (!is_positive() || base <= Integer(1)) return std::nullopt;
                 std::uint32_t n = 0;
@@ -531,7 +563,11 @@ class Integer {
 
         // --- text
 
-        // The digits in `radix` (2 to 36), lowercase, after '-' if negative.
+        /** Writes this integer in a radix, with lowercase digits after '-' if
+         * negative.
+         *
+         * @param radix  The radix, 2 to 36.
+         * @return       The digits. */
         std::string to_str_radix(unsigned radix) const {
                 std::uint8_t scratch[N];
                 // Binary takes the most digits: one a bit, and a sign.
@@ -543,7 +579,14 @@ class Integer {
         }
         std::string to_string() const { return to_str_radix(10); }
 
-        // The value of `s` in `radix`, or, in *err if given, why not.
+        /** Parses an integer: an optional '+' (or, if signed, '-'), then digits
+         * in a radix of either case, as bnum's from_str_radix does.
+         *
+         * @param s      The text.
+         * @param radix  The radix, 2 to 36.
+         * @param err    If not null, set to why the parse failed when it does.
+         * @return       The integer, or none if the text isn't one of this
+         *               type. */
         static std::optional<Integer> from_str_radix(
                 std::string_view s, unsigned radix,
                 IntErrorKind* err = nullptr) {
@@ -567,6 +610,14 @@ class Integer {
                 Integer q, r;
                 bool overflow;
         };
+        /** Divides this integer by another, giving quotient and remainder at
+         * once.  Panics (XTCE_BNUM_PANIC) if `o` is zero.
+         *
+         * @param o       The divisor.
+         * @param euclid  Whether to divide Euclidean style, with a remainder
+         *                never negative, rather than rounding toward zero.
+         * @return        The quotient, the remainder, and whether the quotient
+         *                overflowed (MIN / -1). */
         DivRem div_rem_(const Integer& o, bool euclid) const {
                 DivRem d{*this, Integer(), false};
                 bool ok = euclid ? xtce_bn_div_rem_euclid_(

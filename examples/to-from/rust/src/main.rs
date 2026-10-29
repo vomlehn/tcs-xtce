@@ -68,8 +68,19 @@ fn write() {
     out.flush().unwrap_or_else(|e| fail(&format!("write: {e}")));
 }
 
-/// Reads into all of `buf`. Returns false if the input ended before the
-/// first byte, and fails if it ended part way through `what`.
+/// Reads into all of a buffer, exiting with status 1 if the input ends
+/// part way through it or can't be read.
+///
+/// # Arguments
+///
+/// * `input` - The input to read.
+/// * `buf`   - The buffer to fill.
+/// * `what`  - What the buffer is to hold, for the error message.
+///
+/// # Returns
+///
+/// True if it filled `buf`; false if the input ended before the first
+/// byte.
 fn read_all(input: &mut impl Read, buf: &mut [u8], what: &str) -> bool {
     let mut got = 0;
     while got < buf.len() {
@@ -157,6 +168,8 @@ fn read() {
     println!();
 }
 
+/// Writes or reads the words, as the command line's one argument says;
+/// exits with status 2 for a usage error.
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     match args.as_slice() {

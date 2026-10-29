@@ -49,7 +49,14 @@ typedef struct ccsds_cuc {
         ccsds_epoch epoch;
 } ccsds_cuc;
 
-/* A layout into *c; false unless `coarse` is 1 to 7 and `fine` 0 to 10. */
+/** Makes a CUC layout.
+ *
+ * @param c       Filled in with the layout; untouched on failure.
+ * @param coarse  The octets of whole seconds, 1 to 7.
+ * @param fine    The octets of fractions of a second, 0 to 10.
+ * @param epoch   The epoch the time counts from.
+ * @return        True, or false unless `coarse` is 1 to 7 and `fine` 0 to
+ *                10. */
 static inline bool ccsds_cuc_init(ccsds_cuc* c, unsigned coarse,
                                   unsigned fine, ccsds_epoch epoch) {
         if (coarse < 1 || coarse > 7 || fine > 10) return false;
@@ -64,8 +71,12 @@ static inline size_t ccsds_cuc_t_len(const ccsds_cuc* c) {
         return (size_t)c->coarse + c->fine;
 }
 
-/* Its P-field into p, and its length: one octet, or two when it has more
- * than 4 coarse or 3 fine octets. */
+/** Writes a CUC layout's P-field.
+ *
+ * @param c  The layout.
+ * @param p  Filled in with the P-field; the second octet is 0 when unused.
+ * @return   The P-field's length: one octet, or two when the layout has
+ *           more than 4 coarse or 3 fine octets. */
 static inline size_t ccsds_cuc_pfield(const ccsds_cuc* c, uint8_t p[2]) {
         unsigned id = c->epoch == CCSDS_EPOCH_CCSDS ? 1u : 2u;
         unsigned co = c->coarse < 4 ? c->coarse : 4u;
@@ -79,8 +90,13 @@ static inline size_t ccsds_cuc_pfield(const ccsds_cuc* c, uint8_t p[2]) {
         return 2;
 }
 
-/* The layout that the P-field at the start of the `n` octets at `data`
- * gives, into *c, and the P-field's length; 0 if it isn't a CUC P-field. */
+/** Reads the CUC layout that a P-field gives.
+ *
+ * @param data  The octets, starting with the P-field.
+ * @param n     How many octets there are at `data`.
+ * @param c     Filled in with the layout.
+ * @return      The P-field's length, 1 or 2; 0 if it isn't a CUC P-field
+ *              or `data` ends inside it. */
 static inline size_t ccsds_cuc_from_pfield(const uint8_t* data, size_t n,
                                            ccsds_cuc* c) {
         unsigned first, second, coarse, fine;
@@ -110,8 +126,14 @@ static inline size_t ccsds_cuc_from_pfield(const uint8_t* data, size_t n,
         return ccsds_cuc_init(c, coarse, fine, epoch) ? 2 : 0;
 }
 
-/* Decodes a T-field in layout `c` at the start of the `n` octets at `data`:
- * the octets read into *k and the seconds since the epoch into *s. */
+/** Decodes a CUC T-field.
+ *
+ * @param c     The layout of the T-field.
+ * @param data  The octets, starting with the T-field.
+ * @param n     How many octets there are at `data`.
+ * @param k     Filled in with how many octets were read.
+ * @param s     Filled in with the seconds since the epoch.
+ * @return      True, or false if the T-field is longer than `n` octets. */
 static inline bool ccsds_cuc_decode_t(const ccsds_cuc* c, const uint8_t* data,
                                       size_t n, size_t* k, double* s) {
         uint64_t whole = 0;
@@ -126,8 +148,14 @@ static inline bool ccsds_cuc_decode_t(const ccsds_cuc* c, const uint8_t* data,
         return true;
 }
 
-/* Encodes `s` as a T-field in layout `c` into the `cap` octets at `out`;
- * see the top of this file for what it returns. */
+/** Encodes a time as a CUC T-field.
+ *
+ * @param c    The layout of the T-field.
+ * @param s    The seconds since the epoch.
+ * @param out  Where the T-field goes.
+ * @param cap  How many octets `out` holds.
+ * @return     The octets written; more than `cap`, writing nothing, if
+ *             they don't fit; CCSDS_NONE if the layout can't hold `s`. */
 static inline size_t ccsds_cuc_encode_t(const ccsds_cuc* c, double s,
                                         uint8_t* out, size_t cap) {
         double limit = (double)((uint64_t)1 << (8 * c->coarse));
@@ -166,7 +194,14 @@ static inline size_t ccsds_cuc_encode_t(const ccsds_cuc* c, double s,
         return len;
 }
 
-/* Encodes `s` with layout `c`'s P-field first. */
+/** Encodes a time as a CUC time code, its P-field first.
+ *
+ * @param c    The layout of the time code.
+ * @param s    The seconds since the epoch.
+ * @param out  Where the time code goes.
+ * @param cap  How many octets `out` holds.
+ * @return     The octets written; more than `cap`, writing nothing, if
+ *             they don't fit; CCSDS_NONE if the layout can't hold `s`. */
 static inline size_t ccsds_cuc_encode(const ccsds_cuc* c, double s,
                                       uint8_t* out, size_t cap) {
         uint8_t p[2];
@@ -178,9 +213,15 @@ static inline size_t ccsds_cuc_encode(const ccsds_cuc* c, double s,
         return n + ccsds_cuc_encode_t(c, s, out + n, cap - n);
 }
 
-/* Decodes a CUC time that starts with its P-field, at the start of the `n`
- * octets at `data`: the octets read into *k and the seconds since its
- * epoch, which the P-field names, into *s. */
+/** Decodes a CUC time code that starts with its P-field.
+ *
+ * @param data  The octets, starting with the P-field.
+ * @param n     How many octets there are at `data`.
+ * @param k     Filled in with how many octets were read, P-field included.
+ * @param s     Filled in with the seconds since the epoch the P-field
+ *              names.
+ * @return      True, or false if the P-field isn't a CUC one or the time
+ *              code is longer than `n` octets. */
 static inline bool ccsds_decode_cuc(const uint8_t* data, size_t n, size_t* k,
                                     double* s) {
         ccsds_cuc c;
@@ -208,7 +249,10 @@ typedef struct ccsds_cds {
         ccsds_epoch epoch;
 } ccsds_cds;
 
-/* The octets of its T-field. */
+/** Gives the length of a CDS layout's T-field.
+ *
+ * @param c  The layout.
+ * @return   The octets of its T-field. */
 static inline size_t ccsds_cds_t_len(const ccsds_cds* c) {
         return (size_t)(c->day24 ? 3 : 2) + 4 +
                (c->sub == CCSDS_SUB_MICRO  ? 2
@@ -223,8 +267,13 @@ static inline uint8_t ccsds_cds_pfield(const ccsds_cds* c) {
                          ((unsigned)c->day24 << 2) | (unsigned)c->sub);
 }
 
-/* The layout that the P-field at the start of the `n` octets at `data`
- * gives, into *c; false if it isn't a CDS P-field. */
+/** Reads the CDS layout that a P-field gives.
+ *
+ * @param data  The octets, starting with the P-field.
+ * @param n     How many octets there are at `data`.
+ * @param c     Filled in with the layout.
+ * @return      True, or false if there are no octets or the first isn't a
+ *              CDS P-field. */
 static inline bool ccsds_cds_from_pfield(const uint8_t* data, size_t n,
                                          ccsds_cds* c) {
         unsigned p;
@@ -238,6 +287,11 @@ static inline bool ccsds_cds_from_pfield(const uint8_t* data, size_t n,
         return true;
 }
 
+/** Reads a big-endian unsigned integer.
+ *
+ * @param b  Its octets, most significant first.
+ * @param n  How many octets it has, 0 to 8.
+ * @return   Its value. */
 static inline uint64_t ccsds_be_(const uint8_t* b, size_t n) {
         uint64_t v = 0;
         size_t i;
@@ -250,10 +304,16 @@ static inline void ccsds_put_be_(uint8_t* b, size_t n, uint64_t v) {
         for (i = 0; i < n; ++i) b[i] = (uint8_t)(v >> (8 * (n - 1 - i)));
 }
 
-/* Decodes a T-field in layout `c` at the start of the `n` octets at `data`:
- * the octets read into *k and the seconds since the epoch into *s; false
- * if a field is beyond its range (milliseconds of a day count a leap
- * second's too). */
+/** Decodes a CDS T-field.
+ *
+ * @param c     The layout of the T-field.
+ * @param data  The octets, starting with the T-field.
+ * @param n     How many octets there are at `data`.
+ * @param k     Filled in with how many octets were read.
+ * @param s     Filled in with the seconds since the epoch.
+ * @return      True, or false if the T-field is longer than `n` octets or
+ *              a field is beyond its range (milliseconds of a day count a
+ *              leap second's too). */
 static inline bool ccsds_cds_decode_t(const ccsds_cds* c, const uint8_t* data,
                                       size_t n, size_t* k, double* s) {
         size_t d = c->day24 ? 3 : 2, len = ccsds_cds_t_len(c);
@@ -278,8 +338,14 @@ static inline bool ccsds_cds_decode_t(const ccsds_cds* c, const uint8_t* data,
         return true;
 }
 
-/* Encodes `s` as a T-field in layout `c` into the `cap` octets at `out`;
- * see the top of this file for what it returns. */
+/** Encodes a time as a CDS T-field.
+ *
+ * @param c    The layout of the T-field.
+ * @param s    The seconds since the epoch.
+ * @param out  Where the T-field goes.
+ * @param cap  How many octets `out` holds.
+ * @return     The octets written; more than `cap`, writing nothing, if
+ *             they don't fit; CCSDS_NONE if the layout can't hold `s`. */
 static inline size_t ccsds_cds_encode_t(const ccsds_cds* c, double s,
                                         uint8_t* out, size_t cap) {
         uint64_t days = (uint64_t)1 << (c->day24 ? 24 : 16);
@@ -309,7 +375,14 @@ static inline size_t ccsds_cds_encode_t(const ccsds_cds* c, double s,
         return len;
 }
 
-/* Encodes `s` with layout `c`'s P-field first. */
+/** Encodes a time as a CDS time code, its P-field first.
+ *
+ * @param c    The layout of the time code.
+ * @param s    The seconds since the epoch.
+ * @param out  Where the time code goes.
+ * @param cap  How many octets `out` holds.
+ * @return     The octets written; more than `cap`, writing nothing, if
+ *             they don't fit; CCSDS_NONE if the layout can't hold `s`. */
 static inline size_t ccsds_cds_encode(const ccsds_cds* c, double s,
                                       uint8_t* out, size_t cap) {
         size_t t = ccsds_cds_encode_t(c, s, out, 0);
@@ -319,9 +392,15 @@ static inline size_t ccsds_cds_encode(const ccsds_cds* c, double s,
         return 1 + ccsds_cds_encode_t(c, s, out + 1, cap - 1);
 }
 
-/* Decodes a CDS time that starts with its P-field, at the start of the `n`
- * octets at `data`: the octets read into *k and the seconds since its
- * epoch, which the P-field names, into *s. */
+/** Decodes a CDS time code that starts with its P-field.
+ *
+ * @param data  The octets, starting with the P-field.
+ * @param n     How many octets there are at `data`.
+ * @param k     Filled in with how many octets were read, P-field included.
+ * @param s     Filled in with the seconds since the epoch the P-field
+ *              names.
+ * @return      True, or false if the P-field isn't a CDS one, the time
+ *              code is longer than `n` octets or a field is out of range. */
 static inline bool ccsds_decode_cds(const uint8_t* data, size_t n, size_t* k,
                                     double* s) {
         ccsds_cds c;

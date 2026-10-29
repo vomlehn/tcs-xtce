@@ -14,6 +14,15 @@ use tcs_xtce::packet::{
     MathOperator,
 };
 
+/// Looks up a float encoding by its XTCE name.
+///
+/// # Arguments
+///
+/// * `name` - The encoding's XTCE name, such as `IEEE754`.
+///
+/// # Returns
+///
+/// The format; any name not otherwise known is TI's.
 fn format(name: &str) -> FloatFormat {
     match name {
         "IEEE754" => FloatFormat::Ieee,
@@ -24,6 +33,19 @@ fn format(name: &str) -> FloatFormat {
     }
 }
 
+/// Looks up a MathOperationCalibrator operator by its XTCE symbol.
+///
+/// # Arguments
+///
+/// * `name` - The operator's XTCE symbol, such as `y^x`.
+///
+/// # Returns
+///
+/// The operator.
+///
+/// # Panics
+///
+/// If `name` isn't known.
 fn operator(name: &str) -> MathOperator {
     match name {
         "/" => MathOperator::Div,
@@ -72,7 +94,16 @@ fn operator(name: &str) -> MathOperator {
     }
 }
 
-/// The bits of `x`; every runtime prints the same NaN.
+/// Gives the bits of a double, with one NaN for every NaN.
+///
+/// # Arguments
+///
+/// * `x` - The double.
+///
+/// # Returns
+///
+/// Its bits, or `0x7ff8_0000_0000_0000` for any NaN, so that every runtime
+/// prints the same NaN.
 fn bits(x: f64) -> u64 {
     if x.is_nan() {
         0x7ff8_0000_0000_0000
@@ -81,6 +112,11 @@ fn bits(x: f64) -> u64 {
     }
 }
 
+/// Reads cases from standard input and prints each one's result.
+///
+/// # Panics
+///
+/// If the input fails or a case is malformed.
 fn main() {
     for line in std::io::stdin().lock().lines() {
         let line = line.unwrap();

@@ -28,6 +28,9 @@ def invert(bit: int) -> int:
 
 
 def main() -> None:
+    """Pushes each line of the file named on the command line into its
+    stream and prints the frames those bytes complete.
+    """
     streams = {"downlink": demo.DownlinkStream(), "uplink": demo.UplinkStream(),
                "deep": demo.DeepStream(), "beacon": demo.BeaconStream(),
                "relay": demo.RelayStream(),

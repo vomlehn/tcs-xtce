@@ -69,7 +69,11 @@ static inline uint32_t xtce_md5_rotl(uint32_t x, unsigned n) {
         return (x << n) | (x >> (32 - n));
 }
 
-/* The MD5 digest of the `len` bytes at `data`. */
+/** Computes the MD5 digest of a run of bytes.
+ *
+ * @param data  The bytes.
+ * @param len   How many there are.
+ * @param out   Filled in with the 16-byte digest. */
 static inline void xtce_md5(const uint8_t* data, size_t len, uint8_t out[16]) {
         static const uint32_t K[64] = {
                 0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf,
@@ -143,7 +147,10 @@ static inline void xtce_md5(const uint8_t* data, size_t len, uint8_t out[16]) {
         for (i = 0; i < 16; ++i) out[i] = (uint8_t)(h[i / 4] >> (8 * (i % 4)));
 }
 
-/* `d` as 32 lowercase hex digits and a NUL. */
+/** Formats a digest as hex.
+ *
+ * @param d    The 16-byte digest.
+ * @param hex  Filled in with 32 lowercase hex digits and a NUL. */
 static inline void xtce_digest_hex(const uint8_t d[16], char hex[33]) {
         static const char digits[] = "0123456789abcdef";
         int i;
@@ -162,6 +169,13 @@ typedef struct xtce_dbuf {
         int failed; /* an allocation failed */
 } xtce_dbuf;
 
+/** Appends bytes to a buffer, growing it as needed.  If an allocation
+ * fails, the buffer is marked failed and this and later appends do
+ * nothing.
+ *
+ * @param b     The buffer.
+ * @param data  The bytes.
+ * @param n     How many there are. */
 static inline void xtce_dbuf_put(xtce_dbuf* b, const void* data, size_t n) {
         if (b->failed) return;
         if (b->n + n > b->cap) {
@@ -184,7 +198,11 @@ static inline void xtce_dbuf_byte(xtce_dbuf* b, uint8_t c) {
         xtce_dbuf_put(b, &c, 1);
 }
 
-/* A field: the length of `data` in decimal, a colon, and `data`. */
+/** Appends a field: the length of `data` in decimal, a colon, and `data`.
+ *
+ * @param b     The buffer.
+ * @param data  The field's bytes.
+ * @param n     How many there are. */
 static inline void xtce_dbuf_field(xtce_dbuf* b, const uint8_t* data,
                                    size_t n) {
         char len[24];
@@ -199,8 +217,13 @@ static inline void xtce_dbuf_free(xtce_dbuf* b) {
         b->n = b->cap = 0;
 }
 
-/* Bytes compared as Python and Rust compare them: the shorter is first when
- * one starts the other. */
+/** Compares two buffers' bytes as Python and Rust compare them: the
+ * shorter is first when one starts the other.  A qsort comparator.
+ *
+ * @param x  The first, an xtce_dbuf.
+ * @param y  The second, an xtce_dbuf.
+ * @return   Negative, 0 or positive as `x` sorts before, with or after
+ *           `y`. */
 static inline int xtce_dbuf_cmp(const void* x, const void* y) {
         const xtce_dbuf* a = (const xtce_dbuf*)x;
         const xtce_dbuf* b = (const xtce_dbuf*)y;
@@ -228,6 +251,13 @@ typedef struct xtce_dparser {
         int failed;
 } xtce_dparser;
 
+/** Records a parse error at the current position, unless one already has
+ * been, and marks the parser failed.
+ *
+ * @param p        The parser; its err, if not NULL, is filled in with the
+ *                 message and the current line.
+ * @param message  What is wrong.
+ * @return         -1. */
 static inline int xtce_dp_fail(xtce_dparser* p, const char* message) {
         if (!p->failed && p->err) {
                 size_t i, line = 1;
@@ -254,7 +284,14 @@ static inline void xtce_dp_skip_space(xtce_dparser* p) {
         while (p->pos < p->n && xtce_dp_space(p->s[p->pos])) ++p->pos;
 }
 
-/* Skips past `end`; sets *start and *len to what came before it. */
+/** Skips past the next occurrence of a string.
+ *
+ * @param p      The parser.
+ * @param end    The string to skip past.
+ * @param what   The error message if it doesn't occur.
+ * @param start  If not NULL, set to the offset of what came before `end`.
+ * @param len    If not NULL, set to the length of what came before it.
+ * @return       0, or -1 if `end` doesn't occur. */
 static inline int xtce_dp_past(xtce_dparser* p, const char* end,
                                const char* what, size_t* start, size_t* len) {
         size_t k = strlen(end), i;
@@ -269,7 +306,10 @@ static inline int xtce_dp_past(xtce_dparser* p, const char* end,
         return xtce_dp_fail(p, what);
 }
 
-/* Comments, processing instructions and whitespace. */
+/** Skips comments, processing instructions and whitespace.
+ *
+ * @param p  The parser.
+ * @return   0, or -1 if one is unclosed. */
 static inline int xtce_dp_misc(xtce_dparser* p) {
         for (;;) {
                 xtce_dp_skip_space(p);
@@ -290,6 +330,12 @@ static inline int xtce_dp_misc(xtce_dparser* p) {
         }
 }
 
+/** Reads a name: everything up to whitespace or one of / > = < " ' &.
+ *
+ * @param p      The parser.
+ * @param start  Set to the name's offset.
+ * @param len    Set to its length.
+ * @return       0, or -1 if the name is empty. */
 static inline int xtce_dp_name(xtce_dparser* p, size_t* start, size_t* len) {
         *start = p->pos;
         while (p->pos < p->n && !xtce_dp_space(p->s[p->pos]) &&
@@ -299,7 +345,10 @@ static inline int xtce_dp_name(xtce_dparser* p, size_t* start, size_t* len) {
         return *len ? 0 : xtce_dp_fail(p, "expected a name");
 }
 
-/* Appends code point `c` as UTF-8. */
+/** Appends a code point as UTF-8.
+ *
+ * @param b  The buffer.
+ * @param c  The code point, at most U+10FFFF. */
 static inline void xtce_dp_utf8(xtce_dbuf* b, uint32_t c) {
         uint8_t u[4];
         size_t k;
@@ -331,8 +380,16 @@ static inline int xtce_dp_xml_char(uint32_t c) {
                (c >= 0xE000 && c <= 0xFFFD) || (c >= 0x10000 && c <= 0x10FFFF);
 }
 
-/* Appends the `n` bytes at `raw` with their references expanded; in an
- * attribute value, whitespace characters become spaces. */
+/** Appends text with its references expanded; in an attribute value,
+ * whitespace characters become spaces.
+ *
+ * @param p     The parser, for errors.
+ * @param out   The buffer to append to.
+ * @param raw   The text as it appears in the document.
+ * @param n     Its length in bytes.
+ * @param attr  Nonzero if it is an attribute value.
+ * @return      0, or -1 on an undefined or unterminated reference or a
+ *              '<' in an attribute value. */
 static inline int xtce_dp_unescape(xtce_dparser* p, xtce_dbuf* out,
                                    const uint8_t* raw, size_t n, int attr) {
         size_t i = 0;
@@ -397,6 +454,13 @@ static inline int xtce_dp_unescape(xtce_dparser* p, xtce_dbuf* out,
         return 0;
 }
 
+/** Finds the innermost declaration of a namespace prefix in scope.
+ *
+ * @param p       The parser.
+ * @param prefix  The prefix; empty for the default namespace.
+ * @param n       Its length.
+ * @return        The namespace's URI (empty where the declaration undoes
+ *                the default namespace), or NULL if it isn't declared. */
 static inline const xtce_dbuf* xtce_dp_lookup(const xtce_dparser* p,
                                               const uint8_t* prefix, size_t n) {
         size_t i = p->n_ns;
@@ -407,8 +471,15 @@ static inline const xtce_dbuf* xtce_dp_lookup(const xtce_dparser* p,
         return NULL;
 }
 
-/* Appends a name in Clark notation, {namespace}local or local.  An
- * unprefixed attribute is in no namespace. */
+/** Appends a name in Clark notation, {namespace}local or local.  An
+ * unprefixed attribute is in no namespace.
+ *
+ * @param p     The parser, whose namespace declarations are used.
+ * @param out   The buffer to append to.
+ * @param q     The qualified name, prefix:local or local.
+ * @param n     Its length.
+ * @param attr  Nonzero if it is an attribute's name.
+ * @return      0, or -1 if its prefix is unbound. */
 static inline int xtce_dp_expand(xtce_dparser* p, xtce_dbuf* out,
                                  const uint8_t* q, size_t n, int attr) {
         static const char xml_ns[] = "http://www.w3.org/XML/1998/namespace";
@@ -453,8 +524,14 @@ static inline int xtce_dattr_cmp(const void* x, const void* y) {
                              &((const xtce_dattr*)y)->name);
 }
 
-/* A run of text ends: its encoding, if anything is left once whitespace is
- * trimmed from both ends. */
+/** Ends a run of text: appends its encoding to the items, if anything is
+ * left once whitespace is trimmed from both ends, and empties it.  If an
+ * allocation fails, `text` is marked failed.
+ *
+ * @param text     The run of text.
+ * @param items    The element's items so far, grown as needed.
+ * @param n_items  How many there are, updated.
+ * @param cap      How many `items` has room for, updated. */
 static inline void xtce_dp_flush(xtce_dbuf* text, xtce_dbuf** items,
                                  size_t* n_items, size_t* cap) {
         size_t a = 0, b = text->n;
@@ -481,6 +558,13 @@ static inline void xtce_dp_flush(xtce_dbuf* text, xtce_dbuf** items,
         text->n = 0;
 }
 
+/** Appends an item to an element's items, growing them as needed.
+ *
+ * @param items    The items, grown as needed.
+ * @param n_items  How many there are, updated.
+ * @param cap      How many `items` has room for, updated.
+ * @param item     The item, owned by the items once added.
+ * @return         0, or -1 if an allocation fails. */
 static inline int xtce_dp_push_item(xtce_dbuf** items, size_t* n_items,
                                     size_t* cap, xtce_dbuf item) {
         if (*n_items == *cap) {
@@ -495,6 +579,11 @@ static inline int xtce_dp_push_item(xtce_dbuf** items, size_t* n_items,
         return 0;
 }
 
+/** Tells whether an element's children may come in any order.
+ *
+ * @param local  The element's local name.
+ * @param n      Its length.
+ * @return       1 if it is in xtce_digest_unordered, else 0. */
 static inline int xtce_dp_unordered(const uint8_t* local, size_t n) {
         int i;
         for (i = 0; xtce_digest_unordered[i]; ++i)
@@ -504,7 +593,13 @@ static inline int xtce_dp_unordered(const uint8_t* local, size_t n) {
         return 0;
 }
 
-/* An element, from its '<', appended to `out` as its encoding. */
+/** Parses an element, from its '<', and appends its encoding.
+ *
+ * @param p     The parser, at the element's '<'.
+ * @param out   The buffer to append to.
+ * @param root  Nonzero if it is the root element, which must be a
+ *              SpaceSystem.
+ * @return      0, or -1 on malformed XML or a failed allocation. */
 static inline int xtce_dp_element(xtce_dparser* p, xtce_dbuf* out, int root) {
         size_t qs, qn, i, n_attrs = 0, cap_attrs = 0, n_items = 0;
         size_t cap_items = 0, ns_mark = p->n_ns, local_at;
@@ -710,7 +805,12 @@ done:
         return rc;
 }
 
-/* Checks that `s` is UTF-8 holding only characters XML allows. */
+/** Checks that a document is UTF-8 holding only characters XML allows.
+ *
+ * @param s    The document.
+ * @param n    Its length in bytes.
+ * @param err  Filled in on failure; may be NULL.
+ * @return     0, or -1 if it is not. */
 static inline int xtce_dp_check_utf8(const uint8_t* s, size_t n,
                                      xtce_digest_error* err) {
         size_t i = 0;
@@ -760,7 +860,13 @@ bad:
         return -1;
 }
 
-/* The value of name="..." in the XML declaration `d` (`n` bytes), or NULL. */
+/** Finds a pseudo-attribute's value in an XML declaration.
+ *
+ * @param d     The declaration's contents.
+ * @param n     Their length.
+ * @param name  The pseudo-attribute, such as "encoding".
+ * @param len   Set to the value's length when it is found.
+ * @return      The value, unquoted, or NULL if it isn't there. */
 static inline const uint8_t* xtce_dp_pseudo(const uint8_t* d, size_t n,
                                             const char* name, size_t* len) {
         size_t k = strlen(name), i, j;
@@ -784,8 +890,15 @@ static inline const uint8_t* xtce_dp_pseudo(const uint8_t* d, size_t n,
         return NULL;
 }
 
-/* The canonical encoding of the XTCE document at `data`, whose MD5 digest is
- * its digest, in *out (which the caller frees with xtce_dbuf_free). */
+/** Computes the canonical encoding of an XTCE document, whose MD5 digest
+ * is its digest.
+ *
+ * @param data  The document.
+ * @param len   Its length in bytes.
+ * @param out   Filled in with the encoding, which the caller frees with
+ *              xtce_dbuf_free; freed on failure.
+ * @param err   Filled in on failure; may be NULL.
+ * @return      0 on success, or -1 after filling in *err. */
 static inline int xtce_digest_encoding(const uint8_t* data, size_t len,
                                        xtce_dbuf* out, xtce_digest_error* err) {
         xtce_dbuf text = {NULL, 0, 0, 0};
@@ -864,8 +977,14 @@ done:
         return rc;
 }
 
-/* The MD5 digest of the XTCE document at `data`, as 16 bytes: what programs
- * send each other to compare. */
+/** Computes the MD5 digest of an XTCE document, as 16 bytes: what
+ * programs send each other to compare.
+ *
+ * @param data  The document.
+ * @param len   Its length in bytes.
+ * @param out   Filled in with the digest.
+ * @param err   Filled in on failure; may be NULL.
+ * @return      0 on success, or -1 after filling in *err. */
 static inline int xtce_digest_bytes(const uint8_t* data, size_t len,
                                     uint8_t out[16], xtce_digest_error* err) {
         xtce_dbuf enc = {NULL, 0, 0, 0};
@@ -875,7 +994,13 @@ static inline int xtce_digest_bytes(const uint8_t* data, size_t len,
         return 0;
 }
 
-/* The digest of the XTCE document at `data`, as lowercase hex. */
+/** Computes the digest of an XTCE document, as lowercase hex.
+ *
+ * @param data  The document.
+ * @param len   Its length in bytes.
+ * @param hex   Filled in with 32 hex digits and a NUL.
+ * @param err   Filled in on failure; may be NULL.
+ * @return      0 on success, or -1 after filling in *err. */
 static inline int xtce_digest(const uint8_t* data, size_t len, char hex[33],
                               xtce_digest_error* err) {
         uint8_t d[16];
@@ -891,8 +1016,13 @@ static inline int xtce_digest_string(const char* text, char hex[33],
         return xtce_digest((const uint8_t*)text, strlen(text), hex, err);
 }
 
-/* The contents of the file `path`, in *data (which the caller frees with
- * xtce_dbuf_free). */
+/** Reads a whole file.
+ *
+ * @param path  The file's name.
+ * @param data  An empty buffer, filled in with the contents, which the
+ *              caller frees with xtce_dbuf_free; freed on failure.
+ * @param err   Filled in on failure; may be NULL.
+ * @return      0 on success, or -1 after filling in *err. */
 static inline int xtce_digest_read(const char* path, xtce_dbuf* data,
                                    xtce_digest_error* err) {
         FILE* f = fopen(path, "rb");
@@ -922,7 +1052,12 @@ static inline int xtce_digest_read(const char* path, xtce_dbuf* data,
         return rc;
 }
 
-/* The digest of the XTCE document in the file `path`, as 16 bytes. */
+/** Computes the MD5 digest of the XTCE document in a file, as 16 bytes.
+ *
+ * @param path  The file's name.
+ * @param out   Filled in with the digest.
+ * @param err   Filled in on failure; may be NULL.
+ * @return      0 on success, or -1 after filling in *err. */
 static inline int xtce_digest_file_bytes(const char* path, uint8_t out[16],
                                          xtce_digest_error* err) {
         xtce_dbuf data = {NULL, 0, 0, 0};
@@ -934,7 +1069,12 @@ static inline int xtce_digest_file_bytes(const char* path, uint8_t out[16],
         return rc;
 }
 
-/* The digest of the XTCE document in the file `path`, as lowercase hex. */
+/** Computes the digest of the XTCE document in a file, as lowercase hex.
+ *
+ * @param path  The file's name.
+ * @param hex   Filled in with 32 hex digits and a NUL.
+ * @param err   Filled in on failure; may be NULL.
+ * @return      0 on success, or -1 after filling in *err. */
 static inline int xtce_digest_file(const char* path, char hex[33],
                                    xtce_digest_error* err) {
         uint8_t d[16];
@@ -943,8 +1083,14 @@ static inline int xtce_digest_file(const char* path, char hex[33],
         return 0;
 }
 
-/* The MD5 digest of the set of `n` XTCE documents, the ith at docs[i] with
- * lens[i] bytes, as 16 bytes. */
+/** Computes the MD5 digest of a set of XTCE documents, as 16 bytes.
+ *
+ * @param docs  The documents, in any order.
+ * @param lens  Their lengths in bytes: lens[i] is that of docs[i].
+ * @param n     How many documents there are.
+ * @param out   Filled in with the digest.
+ * @param err   Filled in on failure; may be NULL.
+ * @return      0 on success, or -1 after filling in *err. */
 static inline int xtce_digest_set_bytes(const uint8_t* const* docs,
                                         const size_t* lens, size_t n,
                                         uint8_t out[16],
@@ -984,7 +1130,14 @@ static inline int xtce_digest_set_bytes(const uint8_t* const* docs,
         return rc;
 }
 
-/* The digest of the set of `n` XTCE documents, as lowercase hex. */
+/** Computes the digest of a set of XTCE documents, as lowercase hex.
+ *
+ * @param docs  The documents, in any order.
+ * @param lens  Their lengths in bytes: lens[i] is that of docs[i].
+ * @param n     How many documents there are.
+ * @param hex   Filled in with 32 hex digits and a NUL.
+ * @param err   Filled in on failure; may be NULL.
+ * @return      0 on success, or -1 after filling in *err. */
 static inline int xtce_digest_set(const uint8_t* const* docs,
                                   const size_t* lens, size_t n, char hex[33],
                                   xtce_digest_error* err) {
@@ -994,8 +1147,14 @@ static inline int xtce_digest_set(const uint8_t* const* docs,
         return 0;
 }
 
-/* The digest of the set of XTCE documents in the `n` files `paths`, as 16
- * bytes. */
+/** Computes the MD5 digest of the set of XTCE documents in some files, as
+ * 16 bytes.
+ *
+ * @param paths  The files' names, in any order.
+ * @param n      How many there are.
+ * @param out    Filled in with the digest.
+ * @param err    Filled in on failure; may be NULL.
+ * @return       0 on success, or -1 after filling in *err. */
 static inline int xtce_digest_files_bytes(const char* const* paths, size_t n,
                                           uint8_t out[16],
                                           xtce_digest_error* err) {
@@ -1027,8 +1186,14 @@ static inline int xtce_digest_files_bytes(const char* const* paths, size_t n,
         return rc;
 }
 
-/* The digest of the set of XTCE documents in the `n` files `paths`, as
- * lowercase hex. */
+/** Computes the digest of the set of XTCE documents in some files, as
+ * lowercase hex.
+ *
+ * @param paths  The files' names, in any order.
+ * @param n      How many there are.
+ * @param hex    Filled in with 32 hex digits and a NUL.
+ * @param err    Filled in on failure; may be NULL.
+ * @return       0 on success, or -1 after filling in *err. */
 static inline int xtce_digest_files(const char* const* paths, size_t n,
                                     char hex[33], xtce_digest_error* err) {
         uint8_t d[16];
@@ -1040,8 +1205,11 @@ static inline int xtce_digest_files(const char* const* paths, size_t n,
 #ifdef __cplusplus
 namespace xtce {
 
-/* The digest of the XTCE document `text`, as lowercase hex; throws
- * std::runtime_error if it can't be read. */
+/** Computes the digest of an XTCE document.
+ *
+ * @param text  The document.
+ * @return      The digest as lowercase hex.  Throws std::runtime_error
+ *              if the document can't be read. */
 inline std::string digest(std::string_view text) {
         char hex[33];
         xtce_digest_error err;
@@ -1050,8 +1218,11 @@ inline std::string digest(std::string_view text) {
         return hex;
 }
 
-/* The digest of the XTCE document in the file `path`, as lowercase hex;
- * throws std::runtime_error if it can't be read. */
+/** Computes the digest of the XTCE document in a file.
+ *
+ * @param path  The file's name.
+ * @return      The digest as lowercase hex.  Throws std::runtime_error
+ *              if the file or document can't be read. */
 inline std::string digest_file(const std::string& path) {
         char hex[33];
         xtce_digest_error err;
@@ -1060,8 +1231,11 @@ inline std::string digest_file(const std::string& path) {
         return hex;
 }
 
-/* The digest of the set of XTCE documents `texts`, as lowercase hex; throws
- * std::runtime_error if one can't be read. */
+/** Computes the digest of a set of XTCE documents.
+ *
+ * @param texts  The documents, in any order.
+ * @return       The digest as lowercase hex.  Throws std::runtime_error
+ *               if a document can't be read. */
 inline std::string digest_set(const std::vector<std::string>& texts) {
         std::vector<const uint8_t*> docs;
         std::vector<size_t> lens;
@@ -1077,8 +1251,11 @@ inline std::string digest_set(const std::vector<std::string>& texts) {
         return hex;
 }
 
-/* The digest of the set of XTCE documents in the files `paths`, as lowercase
- * hex; throws std::runtime_error if one can't be read. */
+/** Computes the digest of the set of XTCE documents in some files.
+ *
+ * @param paths  The files' names, in any order.
+ * @return       The digest as lowercase hex.  Throws std::runtime_error
+ *               if a file or document can't be read. */
 inline std::string digest_files(const std::vector<std::string>& paths) {
         std::vector<const char*> names;
         for (const std::string& p : paths) names.push_back(p.c_str());

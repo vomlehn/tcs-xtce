@@ -26,6 +26,15 @@ GENERATED = ["rust/src/generated.rs", "cpp/include/xtce/generated.hpp",
 
 
 def is_script(path: Path) -> bool:
+    """Tells whether a file is a script.
+
+    Args:
+        path: The file.
+
+    Returns:
+        True if the file starts with ``#!``; False if not or it can't be
+        read.
+    """
     try:
         with path.open("rb") as f:
             return f.read(2) == b"#!"
@@ -34,6 +43,12 @@ def is_script(path: Path) -> bool:
 
 
 def files() -> list[Path]:
+    """The files to check: source files, Makefiles and scripts in git, and
+    the generated code that exists.
+
+    Returns:
+        Their paths, sorted.
+    """
     tracked = subprocess.run(["git", "ls-files"], capture_output=True,
                              text=True, check=True).stdout.split()
     out = set()
@@ -47,6 +62,11 @@ def files() -> list[Path]:
 
 
 def main() -> int:
+    """Checks every file and prints each line that is too wide.
+
+    Returns:
+        The exit status: 0 if no line is too wide, else 1.
+    """
     bad = 0
     checked = files()
     for p in checked:

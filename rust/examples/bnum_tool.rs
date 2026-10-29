@@ -39,7 +39,21 @@ fn err(e: ParseIntError) -> String {
     format!("{:?}", e.kind())
 }
 
-/// Operations that every integer type has.
+/// Computes an operation that every integer type has.
+///
+/// # Arguments
+///
+/// * `op`   - The operation's name, as bnum names the method.
+/// * `args` - Its operands in decimal; a shift, power or radix is the
+///            second, and a slice or float is hexadecimal.
+///
+/// # Returns
+///
+/// The result as the tool prints it.
+///
+/// # Panics
+///
+/// If `op` isn't known or an operand is missing or malformed.
 fn common<const S: bool, const N: usize>(op: &str, args: &[&str]) -> String {
     let p = |s: &str| I::<S, N>::from_str_radix(s, 10).unwrap();
     let a = || p(args[0]);
@@ -127,6 +141,20 @@ fn k_at(args: &[&str], i: usize) -> u32 {
     args[i].parse().unwrap()
 }
 
+/// Computes an operation on an unsigned integer of `N` bytes.
+///
+/// # Arguments
+///
+/// * `op`   - The operation's name, as bnum names the method.
+/// * `args` - Its operands, in decimal.
+///
+/// # Returns
+///
+/// The result as the tool prints it.
+///
+/// # Panics
+///
+/// If `op` isn't known or an operand is missing or malformed.
 fn unsigned<const N: usize>(op: &str, args: &[&str]) -> String {
     let a = || bnum::Uint::<N>::from_str_radix(args[0], 10).unwrap();
     match op {
@@ -136,6 +164,20 @@ fn unsigned<const N: usize>(op: &str, args: &[&str]) -> String {
     }
 }
 
+/// Computes an operation on a signed integer of `N` bytes.
+///
+/// # Arguments
+///
+/// * `op`   - The operation's name, as bnum names the method.
+/// * `args` - Its operands, in decimal.
+///
+/// # Returns
+///
+/// The result as the tool prints it.
+///
+/// # Panics
+///
+/// If `op` isn't known or an operand is missing or malformed.
 fn signed<const N: usize>(op: &str, args: &[&str]) -> String {
     let a = || bnum::Int::<N>::from_str_radix(args[0], 10).unwrap();
     match op {
@@ -150,7 +192,20 @@ fn signed<const N: usize>(op: &str, args: &[&str]) -> String {
     }
 }
 
-/// `x` as the integer type `to` names, as Rust's `as` converts.
+/// Converts an integer to another integer type, as Rust's `as` does.
+///
+/// # Arguments
+///
+/// * `x`  - The integer.
+/// * `to` - The type to convert it to, such as `u17` or `i3`.
+///
+/// # Returns
+///
+/// The converted value in decimal.
+///
+/// # Panics
+///
+/// If `to` isn't one of the types the tool knows.
 fn cast<const S: bool, const N: usize>(x: I<S, N>, to: &str) -> String {
     macro_rules! to {
         ($($n:literal)*) => {
@@ -168,6 +223,22 @@ fn cast<const S: bool, const N: usize>(x: I<S, N>, to: &str) -> String {
     to!(1 2 3 8 16 17 24 32)
 }
 
+/// Computes one case.
+///
+/// # Arguments
+///
+/// * `op`   - The operation's name, as bnum names the method.
+/// * `ty`   - The integer type, `u` or `i` and a size in bytes.
+/// * `args` - The operation's operands.
+///
+/// # Returns
+///
+/// The result as the tool prints it.
+///
+/// # Panics
+///
+/// If `ty` or `op` isn't known or an operand is missing or
+/// malformed.
 fn run(op: &str, ty: &str, args: &[&str]) -> String {
     macro_rules! sizes {
         ($($n:literal)*) => {
@@ -183,6 +254,11 @@ fn run(op: &str, ty: &str, args: &[&str]) -> String {
     sizes!(1 2 3 8 16 17 24 32)
 }
 
+/// Reads cases from standard input and prints each one's result.
+///
+/// # Panics
+///
+/// If the input or output fails or a case is malformed.
 fn main() {
     let stdin = io::stdin();
     let mut out = io::BufWriter::new(io::stdout().lock());

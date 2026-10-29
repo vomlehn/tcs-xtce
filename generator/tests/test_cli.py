@@ -15,6 +15,17 @@ DEMO = str(Path(__file__).resolve().parents[2] / "tests" / "mission"
 
 
 def generate(*args: str) -> str:
+    """Runs tcs-xtce on the demo mission and reads what it wrote.
+
+    Args:
+        *args: More command-line arguments, after the input and output.
+
+    Returns:
+        The generated code.
+
+    Raises:
+        AssertionError: If tcs-xtce exits with a non-zero status.
+    """
     with tempfile.TemporaryDirectory() as d:
         out = Path(d) / "out"
         if main([DEMO, str(out), *args]) != 0:
@@ -61,6 +72,14 @@ class InputTests(unittest.TestCase):
     """Several input documents, and where the output goes."""
 
     def run_main(self, *args: str):
+        """Runs tcs-xtce's main, capturing its standard output and error.
+
+        Args:
+            *args: The command-line arguments.
+
+        Returns:
+            The exit status, the standard output and the standard error.
+        """
         out, err = io.StringIO(), io.StringIO()
         with (contextlib.redirect_stdout(out), contextlib.redirect_stderr(err)):
             status = main(list(args))

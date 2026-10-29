@@ -24,6 +24,14 @@ def with_length(data, length: int) -> bytes:
 
 
 def housekeeping(**kw) -> demo.Housekeeping:
+    """Makes a valid Housekeeping packet.
+
+    Args:
+        **kw: Fields whose values replace the defaults.
+
+    Returns:
+        The packet.
+    """
     args = dict(sec_hdr_flag=True, seq_flags=demo.SeqFlagsType.UNSEGMENTED,
                 seq_count=42, mode=demo.ModeType.NOMINAL, temperature=25.0,
                 battery_voltage=12.0, charging=True, bus_current=1.5,

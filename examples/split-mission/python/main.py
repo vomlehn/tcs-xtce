@@ -25,7 +25,17 @@ def fail(msg: str) -> None:
 
 
 def hk(count: int, battery: float, motor_temp: float, turns: tuple) -> rover.Hk:
-    """A housekeeping packet: PUS service 3, subservice 25."""
+    """Makes a housekeeping packet: PUS service 3, subservice 25.
+
+    Args:
+        count:      Its CCSDS sequence count and PUS message counter.
+        battery:    The battery voltage, in volts.
+        motor_temp: The motor temperature, in degrees Celsius.
+        turns:      The left and right wheels' turns since the last report.
+
+    Returns:
+        The packet.
+    """
     return rover.Hk(ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=count,
                     pus_version=2, pus_counter=count, battery=battery,
                     motor_temp=motor_temp, left_turns=turns[0],
@@ -33,6 +43,10 @@ def hk(count: int, battery: float, motor_temp: float, turns: tuple) -> rover.Hk:
 
 
 def main() -> None:
+    """Checks the set digest, writes the stream and reads it back.
+
+    Exits with an error if any result isn't what it must be.
+    """
     # The digest of the set is the same in any order.
     digest = digest_files_bytes(DOCUMENTS)
     print(f"set digest: {digest.hex()} ({', '.join(DOCUMENTS)})")

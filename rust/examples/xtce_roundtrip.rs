@@ -8,6 +8,12 @@ use std::process::ExitCode;
 
 use tcs_xtce::Document;
 
+/// Reads, deserializes and serializes again the document on the command line.
+///
+/// # Returns
+///
+/// Success; failure if the document can't be read or written; or 2 for a
+/// usage error.
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() || args.len() > 2 {

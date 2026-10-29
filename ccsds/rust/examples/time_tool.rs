@@ -24,6 +24,15 @@ fn unhex(s: &str) -> Vec<u8> {
         .collect()
 }
 
+/// Formats octets in hex.
+///
+/// # Arguments
+///
+/// * `b` - The octets.
+///
+/// # Returns
+///
+/// Two hex digits per octet, or `x` for none.
 fn hex(b: &[u8]) -> String {
     if b.is_empty() {
         return "x".into();
@@ -35,6 +44,18 @@ fn decoded(r: Option<(usize, f64)>) -> String {
     r.map_or("none".into(), |(k, s)| format!("{k} {:016x}", s.to_bits()))
 }
 
+/// Formats the result of an encoding.
+///
+/// # Arguments
+///
+/// * `r`   - What the encoding gave: the octets written or needed, or
+///           `None` for a time the layout can't hold.
+/// * `out` - The octets it wrote.
+/// * `cap` - The octets there was room for.
+///
+/// # Returns
+///
+/// The octets in hex, `needs N`, or `none`.
 fn encoded(r: Option<usize>, out: &[u8], cap: usize) -> String {
     match r {
         None => "none".into(),
@@ -43,6 +64,15 @@ fn encoded(r: Option<usize>, out: &[u8], cap: usize) -> String {
     }
 }
 
+/// Parses an EPOCH argument.
+///
+/// # Arguments
+///
+/// * `s` - `1` for the agency's epoch; anything else is CCSDS's.
+///
+/// # Returns
+///
+/// The epoch.
 fn epoch(s: &str) -> Epoch {
     if s == "1" {
         Epoch::Agency
@@ -51,6 +81,16 @@ fn epoch(s: &str) -> Epoch {
     }
 }
 
+/// Parses a SUB argument.
+///
+/// # Arguments
+///
+/// * `s` - `1` for microseconds, `2` for picoseconds; anything else is
+///         none.
+///
+/// # Returns
+///
+/// The resolution below a millisecond.
 fn sub(s: &str) -> SubMs {
     match s {
         "1" => SubMs::Micro,
@@ -59,6 +99,20 @@ fn sub(s: &str) -> SubMs {
     }
 }
 
+/// Computes one case.
+///
+/// # Arguments
+///
+/// * `w` - The case's words: the operation, then its arguments.
+///
+/// # Returns
+///
+/// The line the tool prints for the case.
+///
+/// # Panics
+///
+/// If the operation isn't known or an argument is missing or
+/// malformed.
 fn run(w: &[&str]) -> String {
     let n = |i: usize| w[i].parse::<u8>().unwrap();
     let secs =
@@ -99,6 +153,11 @@ fn run(w: &[&str]) -> String {
     }
 }
 
+/// Reads cases from standard input and prints each one's result.
+///
+/// # Panics
+///
+/// If the input or output fails or a case is malformed.
 fn main() {
     let stdin = io::stdin();
     let mut out = io::BufWriter::new(io::stdout().lock());

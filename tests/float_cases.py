@@ -35,6 +35,9 @@ def bits_of(x: float) -> str:
 
 
 def main() -> None:
+    """Prints the decoding and encoding cases for every format and size, the
+    calibrator operator cases and COUNT checksum cases, seeded with SEED.
+    """
     rng = random.Random(int(sys.argv[1]))
     count = int(sys.argv[2])
     for fmt, sizes in SIZES.items():
@@ -68,7 +71,15 @@ CHECKSUMS = {"crc": None, "sum": (8, 16, 24, 32), "unix_sum": (16,),
 
 
 def checksum_case(rng) -> str:
-    """A checksum of random data, between random bits of it."""
+    """A checksum case: a random checksum of random data, between random bits
+    of it.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The case as a ``k`` line of the float tools' input.
+    """
     kind = rng.choice(list(CHECKSUMS))
     n = rng.randrange(1, 40)
     if kind in ("luhn", "verhoeff", "damm"):

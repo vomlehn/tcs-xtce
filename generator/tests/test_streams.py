@@ -6,7 +6,14 @@ from tests.test_compile import compile_xml, mission
 
 
 def stream_mission(stream: str) -> str:
-    """Telemetry with a container F and a StreamSet holding ``stream``."""
+    """Builds telemetry with a container F and a StreamSet.
+
+    Args:
+        stream: The XML inside the StreamSet.
+
+    Returns:
+        The XTCE document.
+    """
     return mission(tm=f"""
         <ParameterTypeSet>
           <IntegerParameterType name="U8" signed="false">
@@ -22,6 +29,17 @@ def stream_mission(stream: str) -> str:
 
 def fixed(pattern: str, extra: str = "", attrs: str = "",
           frame_bits: int = 64) -> str:
+    """Builds a FixedFrameStream S carrying container F.
+
+    Args:
+        pattern:    The SyncPattern element's attributes.
+        extra:      XML to put in the SyncStrategy before the SyncPattern.
+        attrs:      More attributes of the FixedFrameStream.
+        frame_bits: The frame length in bits.
+
+    Returns:
+        The FixedFrameStream's XML.
+    """
     return f"""<FixedFrameStream name="S" frameLengthInBits="{frame_bits}"
         {attrs}>
         <ContainerRef containerRef="F"/>

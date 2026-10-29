@@ -113,6 +113,14 @@ def clark(name: str) -> str:
 
 
 class _Element:
+    """An element being encoded: its name, attributes and content so far.
+
+    Args:
+        name:  The element's name as expat reports it,
+               ``namespace}local`` when it has a namespace.
+        attrs: Its attributes by name, named the same way.
+    """
+
     def __init__(self, name: str, attrs: dict) -> None:
         self.name = name
         self.attrs = attrs
@@ -120,12 +128,22 @@ class _Element:
         self.text: list[str] = []
 
     def flush(self) -> None:
+        """Adds the text gathered since the last child as a ``T`` item.
+
+        The text is trimmed; nothing is added if nothing is left.
+        """
         t = "".join(self.text).strip(SPACE)
         if t:
             self.items.append(b"T" + field(t.encode()))
         self.text = []
 
     def encode(self) -> bytes:
+        """Encodes the finished element.
+
+        Returns:
+            ``E`` followed by the name, attributes and content fields, the
+            content sorted if the element is in ``UNORDERED``.
+        """
         self.flush()
         attrs = sorted((clark(k).encode(), v.encode())
                        for k, v in self.attrs.items())
@@ -138,7 +156,19 @@ class _Element:
 
 
 def encoding(data: bytes) -> bytes:
-    """The canonical encoding of the XTCE document ``data``."""
+    """Computes the canonical encoding of an XTCE document.
+
+    Args:
+        data: The document's XML, in UTF-8.
+
+    Returns:
+        The encoding of its root element, as the module description
+        gives it.
+
+    Raises:
+        XtceError: The XML is malformed, declares another encoding, has a
+                   DOCTYPE, or its root isn't ``SpaceSystem``.
+    """
     p = xml.parsers.expat.ParserCreate("UTF-8", namespace_separator="}")
     p.buffer_text = True
     stack: list[_Element] = []
@@ -152,6 +182,15 @@ def encoding(data: bytes) -> bytes:
         raise XtceError("documents with a DOCTYPE are not supported")
 
     def start(name, attrs) -> None:
+        """Opens an element, ending the parent's current text.
+
+        Args:
+            name:  The element's name as expat reports it.
+            attrs: Its attributes by name.
+
+        Raises:
+            XtceError: It is the root and isn't ``SpaceSystem``.
+        """
         if not stack and name.rsplit("}", 1)[-1] != "SpaceSystem":
             raise XtceError("the root element is not SpaceSystem")
         if stack:
@@ -159,6 +198,11 @@ def encoding(data: bytes) -> bytes:
         stack.append(_Element(name, attrs))
 
     def end(name) -> None:
+        """Closes an element and adds its encoding to its parent or the output.
+
+        Args:
+            name: The element's name, unused.
+        """
         e = stack.pop()
         if stack:
             stack[-1].items.append(e.encode())

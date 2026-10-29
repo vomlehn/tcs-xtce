@@ -35,7 +35,17 @@ pub struct Cuc {
 }
 
 impl Cuc {
-    /// A layout; `None` unless `coarse` is 1 to 7 and `fine` 0 to 10.
+    /// Makes a layout.
+    ///
+    /// # Arguments
+    ///
+    /// * `coarse` - The octets of whole seconds, 1 to 7.
+    /// * `fine`   - The octets of fractions of a second, 0 to 10.
+    /// * `epoch`  - The epoch the time counts from.
+    ///
+    /// # Returns
+    ///
+    /// The layout; `None` unless `coarse` and `fine` are in range.
     pub const fn new(coarse: u8, fine: u8, epoch: Epoch) -> Option<Self> {
         if coarse < 1 || coarse > 7 || fine > 10 {
             return None;
@@ -52,8 +62,12 @@ impl Cuc {
         (self.coarse + self.fine) as usize
     }
 
-    /// Its P-field and its length: one octet, or two when it has more than
-    /// 4 coarse or 3 fine octets.
+    /// Gives the layout's P-field.
+    ///
+    /// # Returns
+    ///
+    /// The P-field and its length: one octet, or two when the layout has
+    /// more than 4 coarse or 3 fine octets.  An unused second octet is 0.
     pub fn pfield(&self) -> ([u8; 2], usize) {
         let id = match self.epoch {
             Epoch::Ccsds => 0b001,
@@ -71,8 +85,16 @@ impl Cuc {
         )
     }
 
-    /// The layout that the P-field at the start of `data` gives, and the
-    /// P-field's length; `None` if it isn't a CUC P-field.
+    /// Reads a CUC P-field.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Octets that start with the P-field.
+    ///
+    /// # Returns
+    ///
+    /// The layout the P-field gives, and the P-field's length; `None` if
+    /// it isn't a CUC P-field or `data` ends within it.
     pub fn from_pfield(data: &[u8]) -> Option<(Self, usize)> {
         let first = *data.first()?;
         let epoch = match (first >> 4) & 0b111 {
@@ -94,8 +116,16 @@ impl Cuc {
         Some((Self::new(coarse, fine, epoch)?, 2))
     }
 
-    /// Decodes a T-field in this layout at the start of `data`: the octets
-    /// read and the seconds since the epoch.
+    /// Decodes a T-field in this layout.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Octets that start with the T-field.
+    ///
+    /// # Returns
+    ///
+    /// The octets read and the seconds since the epoch; `None` if `data`
+    /// is shorter than the T-field.
     pub fn decode_t(&self, data: &[u8]) -> Option<(usize, f64)> {
         let t = data.get(..self.t_len())?;
         let (c, f) = t.split_at(self.coarse as usize);
@@ -106,8 +136,19 @@ impl Cuc {
         Some((self.t_len(), whole as f64 + frac))
     }
 
-    /// Encodes `seconds` as a T-field in this layout into `out`; see the
-    /// module for what it gives.
+    /// Encodes a time as a T-field in this layout, rounding to the nearest
+    /// 2^-8 to the power of the fine octets.
+    ///
+    /// # Arguments
+    ///
+    /// * `seconds` - The time, in seconds since the epoch.
+    /// * `out`     - Where to write the T-field; nothing is written if it
+    ///               is too small.
+    ///
+    /// # Returns
+    ///
+    /// The octets written, or needed if `out` is too small; `None` if the
+    /// layout can't hold the time.
     pub fn encode_t(&self, seconds: f64, out: &mut [u8]) -> Option<usize> {
         let limit = (1u64 << (8 * u32::from(self.coarse))) as f64;
         if !(seconds >= 0.0 && seconds < limit) {
@@ -151,7 +192,18 @@ impl Cuc {
         Some(self.t_len())
     }
 
-    /// Encodes `seconds` with this layout's P-field first.
+    /// Encodes a time with this layout's P-field first.
+    ///
+    /// # Arguments
+    ///
+    /// * `seconds` - The time, in seconds since the epoch.
+    /// * `out`     - Where to write the P-field and T-field; nothing is
+    ///               written if it is too small.
+    ///
+    /// # Returns
+    ///
+    /// The octets written, or needed if `out` is too small; `None` if the
+    /// layout can't hold the time.
     pub fn encode(&self, seconds: f64, out: &mut [u8]) -> Option<usize> {
         let (p, n) = self.pfield();
         let total = n + self.t_len();
@@ -196,7 +248,11 @@ impl Cds {
         Self { day24, sub, epoch }
     }
 
-    /// The octets of its T-field.
+    /// Gives the length of the layout's T-field.
+    ///
+    /// # Returns
+    ///
+    /// The octets of its T-field: 6, 7, 8, 9, 10 or 11.
     pub const fn t_len(&self) -> usize {
         (if self.day24 { 3 } else { 2 })
             + 4
@@ -207,6 +263,10 @@ impl Cds {
             }
     }
 
+    /// Gives the layout's P-field.
+    ///
+    /// # Returns
+    ///
     /// Its one-octet P-field.
     pub fn pfield(&self) -> u8 {
         let sub = match self.sub {
@@ -220,8 +280,16 @@ impl Cds {
             | sub
     }
 
-    /// The layout that the P-field at the start of `data` gives; `None` if
-    /// it isn't a CDS P-field.
+    /// Reads a CDS P-field.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Octets that start with the P-field.
+    ///
+    /// # Returns
+    ///
+    /// The layout the P-field gives; `None` if `data` is empty or it isn't
+    /// a CDS P-field.
     pub fn from_pfield(data: &[u8]) -> Option<Self> {
         let p = *data.first()?;
         if p & 0x80 != 0 || (p >> 4) & 0b111 != 0b100 {
@@ -241,9 +309,17 @@ impl Cds {
         Some(Self::new(p & 0b100 != 0, sub, epoch))
     }
 
-    /// Decodes a T-field in this layout at the start of `data`: the octets
-    /// read and the seconds since the epoch.  `None` if a field is beyond
-    /// its range (milliseconds of a day count a leap second's too).
+    /// Decodes a T-field in this layout.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Octets that start with the T-field.
+    ///
+    /// # Returns
+    ///
+    /// The octets read and the seconds since the epoch; `None` if `data`
+    /// is shorter than the T-field or a field is beyond its range
+    /// (milliseconds of a day count a leap second's too).
     pub fn decode_t(&self, data: &[u8]) -> Option<(usize, f64)> {
         let t = data.get(..self.t_len())?;
         let be =
@@ -274,8 +350,19 @@ impl Cds {
         Some((self.t_len(), s))
     }
 
-    /// Encodes `seconds` as a T-field in this layout into `out`; see the
-    /// module for what it gives.
+    /// Encodes a time as a T-field in this layout, rounding to the nearest
+    /// unit of the layout.
+    ///
+    /// # Arguments
+    ///
+    /// * `seconds` - The time, in seconds since the epoch.
+    /// * `out`     - Where to write the T-field; nothing is written if it
+    ///               is too small.
+    ///
+    /// # Returns
+    ///
+    /// The octets written, or needed if `out` is too small; `None` if the
+    /// layout can't hold the time.
     pub fn encode_t(&self, seconds: f64, out: &mut [u8]) -> Option<usize> {
         let days: u64 = if self.day24 { 1 << 24 } else { 1 << 16 };
         if !(seconds >= 0.0 && seconds < days as f64 * 86400.0) {
@@ -319,7 +406,18 @@ impl Cds {
         Some(self.t_len())
     }
 
-    /// Encodes `seconds` with this layout's P-field first.
+    /// Encodes a time with this layout's P-field first.
+    ///
+    /// # Arguments
+    ///
+    /// * `seconds` - The time, in seconds since the epoch.
+    /// * `out`     - Where to write the P-field and T-field; nothing is
+    ///               written if it is too small.
+    ///
+    /// # Returns
+    ///
+    /// The octets written, or needed if `out` is too small; `None` if the
+    /// layout can't hold the time.
     pub fn encode(&self, seconds: f64, out: &mut [u8]) -> Option<usize> {
         let t = self.encode_t(seconds, &mut [])?;
         if out.len() < 1 + t {

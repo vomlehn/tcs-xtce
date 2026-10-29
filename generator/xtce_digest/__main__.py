@@ -19,6 +19,17 @@ from xtce_digest import Document, XtceError, checked_digest, digest_set
 
 
 def main(argv=None) -> int:
+    """Runs the command (see the module docstring).
+
+    Args:
+        argv: The arguments, without the program name, or None for
+              ``sys.argv``'s.
+
+    Returns:
+        The exit status: 0 on success, 1 if a document can't be read or
+        isn't valid XTCE.
+    """
+
     ap = argparse.ArgumentParser(
         prog="xtce-digest", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)

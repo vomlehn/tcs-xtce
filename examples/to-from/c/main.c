@@ -43,6 +43,10 @@ static const char LOREM_IPSUM[] =
  * to_from.xml gives it. */
 #define TAG_BYTES 4
 
+/** Prints an error message to standard error and exits with status 1.
+ *
+ * @param fmt  The message's printf format.
+ * @param ...  The values it formats. */
 static void fail(const char* fmt, ...) {
         va_list ap;
         va_start(ap, fmt);
@@ -53,9 +57,12 @@ static void fail(const char* fmt, ...) {
         exit(1);
 }
 
-/* Finds the word that starts at or after `*pos` in LOREM_IPSUM, stores its
- * start and length, and moves `*pos` past it.  Returns 0 after the last
- * word. */
+/** Finds the next word of LOREM_IPSUM.
+ *
+ * @param pos   Where to start looking; moved past the word found.
+ * @param word  Filled in with where the word starts.
+ * @param len   Filled in with its length in bytes.
+ * @return      1, or 0 after the last word. */
 static int next_word(size_t* pos, const char** word, size_t* len) {
         size_t i = *pos, start;
         while (LOREM_IPSUM[i] == ' ') ++i;
@@ -68,7 +75,8 @@ static int next_word(size_t* pos, const char** word, size_t* len) {
         return 1;
 }
 
-/* Writes every word to standard output, one Word packet each. */
+/** Writes the XTCE file's digest, then every word, one Word packet each,
+ * to standard output; exits on an error. */
 static void write_words(void) {
         /* The output buffer is preallocated to to_from_Word_MAX_BYTES (36) and
          * reused for every packet. */
@@ -106,9 +114,12 @@ static void write_words(void) {
         if (fflush(stdout) != 0) fail("write failed");
 }
 
-/* Reads `len` bytes from standard input into `buf`.  Returns 0 if the input
- * ended before the first byte, and fails if it ended part way through
- * `what`. */
+/** Reads bytes from standard input, exiting if it ends part way through.
+ *
+ * @param buf   Filled in with the bytes.
+ * @param len   How many to read.
+ * @param what  What they are, for the error message.
+ * @return      1, or 0 if the input ended before the first byte. */
 static int read_all(uint8_t* buf, size_t len, const char* what) {
         size_t got = fread(buf, 1, len, stdin);
         if (ferror(stdin)) fail("read failed");
@@ -118,8 +129,9 @@ static int read_all(uint8_t* buf, size_t len, const char* what) {
         return 0;
 }
 
-/* Reads words from standard input until it ends, printing each one and
- * checking it against the next expected word. */
+/** Reads the writer's digest and words from standard input until it ends,
+ * printing each word and checking it against the next expected one;
+ * exits on a mismatch or error. */
 static void read_words(void) {
         /* The input buffer is preallocated to to_from_Word_MAX_BYTES and reused
          * for every packet. */
@@ -182,6 +194,11 @@ static void read_words(void) {
         putchar('\n');
 }
 
+/** Writes or reads the words.
+ *
+ * @param argc  The number of arguments, 2.
+ * @param argv  The arguments: "write" or "read".
+ * @return      0, or 2 for a usage error; an error exits with status 1. */
 int main(int argc, char** argv) {
         if (argc == 2 && strcmp(argv[1], "read") == 0) {
                 read_words();

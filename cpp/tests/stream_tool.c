@@ -23,7 +23,13 @@ static demo_ScrambledStream scrambled;
 static demo_ClearStream clear;
 static demo_NestedStream nested;
 
-/* The demo's Descramble: each byte XOR 0x55. */
+/** The demo's Descramble: XORs each byte with 0x55.
+ *
+ * @param ctx      Unused.
+ * @param data     The bytes to descramble.
+ * @param len      How many there are.
+ * @param out      Called with each run of descrambled bytes, in order.
+ * @param out_ctx  What `out` is given as its first argument. */
 static void descramble(void* ctx, const uint8_t* data, size_t len,
                        void (*out)(void*, const uint8_t*, size_t),
                        void* out_ctx) {
@@ -43,6 +49,11 @@ static uint8_t invert(uint8_t bit) { return (uint8_t)(bit ^ 1); }
 static uint8_t input[65536];
 static int frames;
 
+/** Prints a frame a stream found, in hex after a space, and counts it.
+ *
+ * @param ctx    Unused.
+ * @param frame  The frame's bytes.
+ * @param len    How many there are. */
 static void take(void* ctx, const uint8_t* frame, size_t len) {
         size_t i;
         (void)ctx;
@@ -51,6 +62,13 @@ static void take(void* ctx, const uint8_t* frame, size_t len) {
         ++frames;
 }
 
+/** Pushes the bytes of each line of a file into the stream it names,
+ * printing the frames they complete.
+ *
+ * @param argc  The number of arguments, 2.
+ * @param argv  The arguments: the streams file's path.
+ * @return      0; 1 if the file can't be opened or names an unknown
+ *              stream; 2 for a usage error. */
 int main(int argc, char** argv) {
         static char line[1 << 18];
         FILE* in;

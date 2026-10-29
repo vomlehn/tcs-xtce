@@ -37,8 +37,20 @@ def nbytes(n: int) -> str:
 
 
 def bits_for(lo: int, hi: int, encoding: str) -> Optional[int]:
-    """Bits that hold every value in ``lo..hi`` in an integer encoding, or
-    None if the encoding cannot hold ``lo`` (an unsigned one, below 0)."""
+    """Finds the bits that hold every value in a range in an integer
+    encoding.
+
+    Args:
+        lo:       The smallest value.
+        hi:       The largest value.
+        encoding: The XTCE integer encoding: ``unsigned``, ``BCD``,
+                  ``packedBCD``, ``twosComplement``, or a sign-magnitude
+                  or ones' complement one.
+
+    Returns:
+        The bits, at least 2 for a signed encoding, or None if the
+        encoding cannot hold ``lo`` (an unsigned or BCD one, below 0).
+    """
     if encoding == "unsigned":
         return max(hi.bit_length(), 1) if lo >= 0 else None
     if encoding in ("BCD", "packedBCD"):  # a decimal digit in 8 or 4 bits
@@ -68,7 +80,16 @@ class Row:
 
 
 def need(vt: VType) -> tuple[Optional[int], str]:
-    """(bits the field needs, or None if the document doesn't say; why)."""
+    """Works out the bits a field needs from what the document says about
+    its values (see the module docstring).
+
+    Args:
+        vt: The field's value type.
+
+    Returns:
+        The bits it needs, or None if the document doesn't say, and why,
+        for the report's note (possibly empty).
+    """
     e = vt.enc
     if isinstance(e, AggregateEnc):
         needs = [need(m.vtype)[0] for m in e.members]
@@ -131,6 +152,15 @@ def need(vt: VType) -> tuple[Optional[int], str]:
 
 
 def rows(n: Node) -> list[Row]:
+    """Makes the report's rows for a packet's fields.
+
+    Args:
+        n: The packet.
+
+    Returns:
+        A row for each value and each FixedValueEntry, nested ones
+        included, in the packet's order.
+    """
     out = []
     for it in walk(n.all_items()):
         if isinstance(it, Value):
@@ -151,8 +181,15 @@ def rows(n: Node) -> list[Row]:
 
 
 def gap_bits(n: Node) -> int:
-    """Bits inside the packet that no entry covers (left by location offsets
-    and container padding)."""
+    """Counts the bits inside a packet that no entry covers (left by
+    location offsets and container padding).
+
+    Args:
+        n: The packet.
+
+    Returns:
+        The uncovered bits, at the packet's largest size.
+    """
     pos, marks, spans = 0, {0: 0}, []
     for it in walk(n.all_items(), inner=False):
         if isinstance(it, Seek):
@@ -179,6 +216,14 @@ def gap_bits(n: Node) -> int:
 
 
 def table(rs: list[Row]) -> list[str]:
+    """Lays out rows as an aligned text table with a heading line.
+
+    Args:
+        rs: The rows.
+
+    Returns:
+        The table's lines, each indented two spaces.
+    """
     head = ("field", "type", "bits", "needs", "saves", "")
     body = [(r.name + (" =" if r.fixed else ""), r.vtype, str(r.bits),
              str(r.need) if r.need is not None else "-",
@@ -194,6 +239,15 @@ def table(rs: list[Row]) -> list[str]:
 
 
 def node_report(n: Node) -> list[str]:
+    """Writes the report on one packet: its size, its fields' table, what
+    right-sizing would save, and its skipped bits.
+
+    Args:
+        n: The packet (a container or a meta-command).
+
+    Returns:
+        The report's lines.
+    """
     what = "container" if n.kind == "tm" else "meta-command"
     total = max_bits(n.all_items())
     rs = rows(n)
@@ -218,6 +272,16 @@ def node_report(n: Node) -> list[str]:
 
 
 def summary(mission: Mission) -> list[str]:
+    """Writes the report's summary: the packets right-sized fields would
+    make whole bytes smaller, and the integer types without a
+    ValidRange.
+
+    Args:
+        mission: The compiled mission.
+
+    Returns:
+        The summary's lines.
+    """
     out = ["Summary"]
     shrink, unchecked = [], set()
     for n in mission.nodes:
@@ -242,6 +306,15 @@ def summary(mission: Mission) -> list[str]:
 
 
 def report(mission: Mission) -> str:
+    """Writes the size report for a mission.
+
+    Args:
+        mission: The compiled mission.
+
+    Returns:
+        The report's text, ending in a newline.
+    """
+
     plural = "s" if len(mission.spaces) > 1 else ""
     spaces = ", ".join(repr(s) for s in mission.spaces)
     out = [f"Size report for SpaceSystem{plural} {spaces}", "",
