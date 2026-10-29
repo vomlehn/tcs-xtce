@@ -119,7 +119,14 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 .PHONY: test
 test: test-generator test-rust test-cpp test-python cross-check packet-check \
       stream-check digest-check float-check bnum-check ccsds-check examples \
-      line-width
+      line-width doc-headers
+
+# Every non-trivial function, hand-written or generated, has a header that
+# describes it, its parameters and what it returns.  Last, with line-width,
+# for the same reason.
+.PHONY: doc-headers
+doc-headers:
+	$(PYTHON) -I tests/doc_headers.py
 
 # Every line of code, hand-written or generated, fits in 80 columns.  It comes
 # last in `test` so that the code the examples generate exists by then.

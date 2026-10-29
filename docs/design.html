@@ -1648,6 +1648,33 @@ the generated code, and fails naming each line that is too wide.
 Prose and data (reStructuredText, Markdown, XML, TOML) aren't
 checked.</p>
 </dd>
+<dt><strong>Function headers</strong></dt>
+<dd><p class="first">Every function whose body is more than three lines, hand-written or
+generated, starts with a header: what it does, its parameters with
+what each means, and what it returns, left out for a function that
+returns nothing. Each parameter's description, continuation lines
+included, starts in one column. The headers follow each language's
+conventions:</p>
+<ul class="simple">
+<li>Rust: rustdoc, as RFC 1574 and the standard library write it: a
+third-person summary, <tt class="docutils literal"># Arguments</tt> (<tt class="docutils literal">* `name` - Meaning</tt>) and
+<tt class="docutils literal"># Returns</tt> sections, and <tt class="docutils literal"># Errors</tt>, <tt class="docutils literal"># Panics</tt> and
+<tt class="docutils literal"># Safety</tt> where they apply. Receivers aren't listed.</li>
+<li>C and C++: Doxygen's <tt class="docutils literal">/** ... */</tt> comments with <tt class="docutils literal">&#64;param</tt> and
+<tt class="docutils literal">&#64;return</tt>. A C++ member function is documented where its class
+declares it.</li>
+<li>Python: PEP 257 docstrings in Google's style, with <tt class="docutils literal">Args:</tt>,
+<tt class="docutils literal">Returns:</tt> (<tt class="docutils literal">Yields:</tt> for a generator) and <tt class="docutils literal">Raises:</tt>.</li>
+</ul>
+<p class="last">Tests, Rust trait implementations, C++ overrides and Python special
+methods other than <tt class="docutils literal">__init__</tt> are exempt, since their names, the
+trait, the base class or the language document them. The emitters
+build each generated function's header from the model, naming the
+XTCE item it handles. <tt class="docutils literal">tests/doc_headers.py</tt>, run by <tt class="docutils literal">make test</tt>
+beside <tt class="docutils literal">tests/line_width.py</tt>, checks the code in git and the
+generated code, and names each function whose header is missing or
+wrong.</p>
+</dd>
 </dl>
 </div>
 <div class="section" id="limitations-and-future-work">
