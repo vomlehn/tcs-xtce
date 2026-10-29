@@ -1256,6 +1256,7 @@ def checksum(spec: tuple, data, start: int, end: int, field: str) -> int:
         PacketError: ``InvalidValue`` for a non-digit under a decimal
                      algorithm, ``NoAlgorithm`` for a custom one with no
                      function.
+        ValueError:  ``spec`` names no kind of checksum this runtime has.
     """
     kind = spec[0]
     if kind == "crc":
@@ -1328,8 +1329,12 @@ def checksum(spec: tuple, data, start: int, end: int, field: str) -> int:
         if spec[1] is None:
             raise PacketError("NoAlgorithm", field)
         return int(spec[1](bytes(data), start, end))
-    ones = sum(bin(w).count("1") for w in _words(data, start, end, 8))
-    return (ones + spec[1]) & 1  # parity: odd adds one
+    if kind == "parity":
+        ones = sum(bin(w).count("1") for w in _words(data, start, end, 8))
+        return (ones + spec[1]) & 1  # odd adds one
+    # Not from the generator, which writes only the kinds above: a spec
+    # built or damaged by hand.
+    raise ValueError(f"{kind!r} is not a checksum kind")
 
 
 # -- integers

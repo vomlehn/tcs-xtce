@@ -810,6 +810,26 @@ int main(void) {
                 CHECK(len == n && memcmp(copy, buf, n) == 0);
         }
 
+        /* Parity is a kind of its own, and a kind the generator never
+         * writes is refused rather than taken for it. */
+        {
+                static const uint8_t seven = 0x07;
+                xtce_pk_checksum_spec spec;
+                uint64_t sum = 2;
+                memset(&spec, 0, sizeof spec);
+                spec.kind = XTCE_PK_PARITY;
+                CHECK(xtce_pk_checksum(&spec, &seven, 0, 8, "f", &err,
+                                       &sum) == 0 &&
+                      sum == 1);
+                spec.odd = true;
+                CHECK(xtce_pk_checksum(&spec, &seven, 0, 8, "f", &err,
+                                       &sum) == 0 &&
+                      sum == 0);
+                spec.kind = -1;
+                CHECK(xtce_pk_checksum(&spec, &seven, 0, 8, "f", &err,
+                                       &sum) == XTCE_PK_NO_ALGORITHM);
+        }
+
         if (failures) return EXIT_FAILURE;
         printf("packet_test: all checks passed\n");
         return EXIT_SUCCESS;

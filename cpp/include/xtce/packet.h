@@ -1382,7 +1382,8 @@ static inline uint64_t xtce_pk_reflect(uint64_t v, unsigned bits) {
  * @param out    Filled in with the checksum.
  * @return       0; XTCE_PK_INVALID_VALUE if a Luhn, Verhoeff or Damm
  *               digit is not a decimal digit; or XTCE_PK_NO_ALGORITHM if
- *               XTCE_PK_CUSTOM has no function. */
+ *               XTCE_PK_CUSTOM has no function or `s->kind` is no kind
+ *               this runtime has. */
 static inline int xtce_pk_checksum(const xtce_pk_checksum_spec* s,
                                    const uint8_t* data, size_t start,
                                    size_t end, const char* f,
@@ -1499,7 +1500,7 @@ static inline int xtce_pk_checksum(const xtce_pk_checksum_spec* s,
                                                      &got);
                         *out = c;
                         return 0;
-                default:
+                case XTCE_PK_PARITY:
                         c = s->odd;
                         for (q = start; q < end; q += got) {
                                 w = xtce_pk_word_at(data, q, end, 8, &got);
@@ -1507,6 +1508,11 @@ static inline int xtce_pk_checksum(const xtce_pk_checksum_spec* s,
                         }
                         *out = c & 1;
                         return 0;
+                default:
+                        /* Not from the generator, which writes only the
+                         * kinds above: a spec built or damaged by hand. */
+                        return xtce_pk_fail(err, XTCE_PK_NO_ALGORITHM, f,
+                                            "unknown checksum kind");
         }
 }
 

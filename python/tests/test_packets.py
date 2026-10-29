@@ -602,6 +602,13 @@ class ChecksumTests(unittest.TestCase):
             checksum(("luhn",), b"\x7a", 0, 8, "f")
         self.assertEqual(cm.exception.kind, "InvalidValue")
 
+    def test_parity_and_no_other(self):
+        self.assertEqual(checksum(("parity", False), b"\x07", 0, 8, "f"), 1)
+        self.assertEqual(checksum(("parity", True), b"\x07", 0, 8, "f"), 0)
+        # A kind the generator never writes is refused, not taken for parity.
+        with self.assertRaises(ValueError):
+            checksum(("md5",), b"\x07", 0, 8, "f")
+
     def test_checked_packet(self):
         p = demo.Checked(sec_hdr_flag=True,
                          seq_flags=demo.SeqFlagsType.UNSEGMENTED, seq_count=42,
