@@ -836,6 +836,43 @@
           <Enumeration value="2" label="DwellVolt"/>
         </EnumerationList>
       </EnumeratedParameterType>
+      <!-- Least significant bit first, and not on byte boundaries: each
+           byte of LsbName, LsbTagged (and its 4-bit size tag) and LsbBlob
+           is a group of 8 bits read least significant first, as the
+           4-bit LsbNibType fields around them are. -->
+      <IntegerParameterType name="LsbNibType" signed="false">
+        <IntegerDataEncoding sizeInBits="4"
+          bitOrder="leastSignificantBitFirst"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="LsbLenType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"
+          bitOrder="leastSignificantBitFirst"/>
+        <ValidRange minInclusive="0" maxInclusive="4"/>
+      </IntegerParameterType>
+      <StringParameterType name="LsbNameType">
+        <StringDataEncoding bitOrder="leastSignificantBitFirst">
+          <SizeInBits>
+            <Fixed><FixedValue>16</FixedValue></Fixed>
+          </SizeInBits>
+        </StringDataEncoding>
+      </StringParameterType>
+      <StringParameterType name="LsbTaggedType">
+        <StringDataEncoding bitOrder="leastSignificantBitFirst">
+          <Variable maxSizeInBits="68">
+            <LeadingSize sizeInBitsOfSizeTag="4"/>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
+      <BinaryParameterType name="LsbBlobType">
+        <BinaryDataEncoding bitOrder="leastSignificantBitFirst">
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="LsbLen"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
       <!-- A parameter's name, short or its full path. -->
       <StringParameterType name="DwellNameType">
         <StringDataEncoding encoding="UTF-8">
@@ -1432,6 +1469,12 @@
       <Parameter name="RepWord" parameterTypeRef="U32"/>
       <Parameter name="RepTail" parameterTypeRef="U16"/>
       <Parameter name="RepAfter" parameterTypeRef="U8"/>
+      <Parameter name="LsbHead" parameterTypeRef="LsbNibType"/>
+      <Parameter name="LsbName" parameterTypeRef="LsbNameType"/>
+      <Parameter name="LsbTagged" parameterTypeRef="LsbTaggedType"/>
+      <Parameter name="LsbLen" parameterTypeRef="LsbLenType"/>
+      <Parameter name="LsbBlob" parameterTypeRef="LsbBlobType"/>
+      <Parameter name="LsbTail" parameterTypeRef="LsbNibType"/>
       <Parameter name="EndLead" parameterTypeRef="U8"/>
       <Parameter name="EndPair" parameterTypeRef="U8"/>
       <Parameter name="EndWord" parameterTypeRef="U16"/>
@@ -2378,6 +2421,23 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="560"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Strings and binary data least significant bit first, starting 4
+           bits into a byte. -->
+      <SequenceContainer name="LsbBytes">
+        <EntryList>
+          <ParameterRefEntry parameterRef="LsbHead"/>
+          <ParameterRefEntry parameterRef="LsbName"/>
+          <ParameterRefEntry parameterRef="LsbLen"/>
+          <ParameterRefEntry parameterRef="LsbBlob"/>
+          <ParameterRefEntry parameterRef="LsbTagged"/>
+          <ParameterRefEntry parameterRef="LsbTail"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="567"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

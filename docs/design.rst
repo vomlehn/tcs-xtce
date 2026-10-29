@@ -909,10 +909,17 @@ fields, since the rest is in other packets.
 
 ``check_aligned`` walks a packet's items tracking the position modulo 8
 (unknown after a size or location that another value gives, or after a
-conditional block whose size isn't a whole number of bytes). A string or
-binary value with ``bitOrder="leastSignificantBitFirst"`` must start at
-0: its bytes then read as they do in the usual order, so the emitters and
-runtimes ignore its bit order.
+conditional block whose size isn't a whole number of bytes). Transformed
+data must start at 0, as a transform works on whole bytes.
+
+A string or binary value with ``bitOrder="leastSignificantBitFirst"``
+may start anywhere. The emitters wrap its read and write in the reader's
+and writer's ``set_lsb`` (``xtce_pk_read_set_lsb`` and
+``xtce_pk_write_set_lsb`` in C), which make the one place each runtime
+reads or writes the bytes of strings and binary data, and a string's size
+tag, take them as groups of 8 in ``uint_bits``' least significant bit
+first order. On a byte boundary the bytes are copied as they are, which is
+what that order gives there, so only unaligned values pay for it.
 
 A ``Message`` becomes a node whose base is its container and whose
 criteria are its ``MatchCriteria``, with no items: in the generated code

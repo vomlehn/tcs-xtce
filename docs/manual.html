@@ -2029,11 +2029,14 @@ word. Fields that share a byte should use the same bit order, as the
 two orders number its bits differently. String and binary encodings are
 bytes, which have no byte order: <tt class="docutils literal">leastSignificantByteFirst</tt> on a
 <tt class="docutils literal"><span class="pre">UTF-16</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32</span></tt> string makes it <tt class="docutils literal"><span class="pre">UTF-16LE</span></tt> or <tt class="docutils literal"><span class="pre">UTF-32LE</span></tt>.
-A byte that starts on a byte boundary reads the same in either bit
-order, so <tt class="docutils literal">leastSignificantBitFirst</tt> strings and binary data must
-start on one (and a string's size tag must be whole bytes). The
-generator works out where each value starts, modulo 8, and reports
-one it can't show to be aligned as not supported.</dd>
+A <tt class="docutils literal">leastSignificantBitFirst</tt> string or binary value is read by the
+same rule: each of its bytes is a group of 8 bits, numbered from the
+least significant bit of each byte of the packet, its first bit the
+least significant, and a string's size tag is an integer in that bit
+order. On a byte boundary that is the bytes as they are; anywhere else
+it is what an 8-bit <tt class="docutils literal">leastSignificantBitFirst</tt> integer there would
+read. The demo's <tt class="docutils literal">LsbBytes</tt> starts <tt class="docutils literal">LsbName</tt>, <tt class="docutils literal">LsbBlob</tt> and the
+4-bit size tag of <tt class="docutils literal">LsbTagged</tt> 4 bits into a byte.</dd>
 <dt>Calibrators</dt>
 <dd><p class="first"><tt class="docutils literal">PolynomialCalibrator</tt>, <tt class="docutils literal">SplineCalibrator</tt> and
 <tt class="docutils literal">MathOperationCalibrator</tt>, as the <tt class="docutils literal">DefaultCalibrator</tt> of an integer
@@ -2839,9 +2842,8 @@ located from the end of their container with a count or <tt class="docutils lite
 that varies, transformed containers included in a repeated container
 or holding a length field, a checksum or an entry located from the
 end,
-<tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE deprecates), least-significant-bit-first strings
-and binary data that may not start on a byte boundary, integers of
-more than 64 bits used other than as values (see &quot;Integer encoding&quot;),
+<tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE deprecates),
+integers of more than 64 bits used other than as values (see &quot;Integer encoding&quot;),
 and a location from the end of an included container whose size
 varies.</dd>
 </dl>

@@ -2889,12 +2889,12 @@ class LsbFirstTests(unittest.TestCase):
         self.assertTrue(n.fields[2][1].vtype.enc.lsb)
 
     def test_misaligned(self):
+        # Each byte is a group of 8 bits read least significant first,
+        # wherever it starts.
         for entries in (refs("N", "S"), refs("B", "N", "L")):
             with self.subTest(entries=entries):
-                with self.assertRaises(Unsupported) as cm:
-                    compile_xml(lsb_mission(entries))
-                self.assertIn("has bitOrder leastSignificantBitFirst but may "
-                              "not start on a byte boundary", str(cm.exception))
+                n = compile_xml(lsb_mission(entries)).nodes[0]
+                self.assertTrue(n.fields[-1][1].vtype.enc.lsb)
 
 
 class InstanceTests(unittest.TestCase):

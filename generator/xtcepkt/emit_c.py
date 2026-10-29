@@ -135,6 +135,12 @@ def access(x: str, path) -> str:
     return x
 
 
+
+def lsb_bytes(vt: VType) -> bool:
+    """Whether ``vt`` is a string or binary value whose bytes are least
+    significant bit first."""
+    return isinstance(vt.enc, (StringEnc, BinaryEnc)) and vt.enc.lsb
+
 class Acc:
     """How generated code reaches a value: an expression, plus the expression
     telling whether it is present when it is optional."""
@@ -486,6 +492,15 @@ class CEmitter:
     def read_value(self, vt: VType, dst: str, f: str, depth: int, ref) -> None:
         """Reads into ``dst``; ``ref`` gives the expression for a value that
         gives a size or count."""
+        if lsb_bytes(vt):
+            self.line("xtce_pk_read_set_lsb(r, true);", depth)
+            self.read_bytes(vt, dst, f, depth, ref)
+            self.line("xtce_pk_read_set_lsb(r, false);", depth)
+        else:
+            self.read_bytes(vt, dst, f, depth, ref)
+
+    def read_bytes(self, vt: VType, dst: str, f: str, depth: int, ref) -> None:
+        """read_value, in the reader's usual bit order."""
         e = vt.enc
         if isinstance(e, AggregateEnc) and e.transform is not None:
             # Read the members from what the transform makes of its bytes.
@@ -740,6 +755,16 @@ class CEmitter:
                     fixed=None) -> None:
         """Writes `x`: a field access, or the literal of the value `fixed`;
         ``ref`` gives the expression for a value that gives a size or count."""
+        if lsb_bytes(vt):
+            self.line("xtce_pk_write_set_lsb(w, true);", depth)
+            self.write_bytes(vt, x, f, depth, ref, fixed)
+            self.line("xtce_pk_write_set_lsb(w, false);", depth)
+        else:
+            self.write_bytes(vt, x, f, depth, ref, fixed)
+
+    def write_bytes(self, vt: VType, x: str, f: str, depth: int, ref,
+                    fixed=None) -> None:
+        """write_value, in the writer's usual bit order."""
         is_lit = fixed is not None
         e = vt.enc
         bad = f"return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, {f}, NULL);"

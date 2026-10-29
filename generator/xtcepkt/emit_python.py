@@ -13,7 +13,7 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
                     Require, Fill, Segment, Verify, Custom, TailPad, TailSeek,
-                    LengthEnd, Transform, XformEnc)
+                    LengthEnd, Transform, XformEnc, StringEnc)
 
 
 def pstr(s: str) -> str:
@@ -212,6 +212,21 @@ def int_encoding(e: IntEnc) -> str:
 def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
     """Expression reading one value with BitReader ``r``; ``ref`` gives the
     expression for a value that gives a size or count."""
+    x = read_value_expr(vt, f, ref, depth)
+    if lsb_bytes(vt):
+        # A tuple's items are evaluated in order.
+        return f"(r.set_lsb(True), {x}, r.set_lsb(False))[1]"
+    return x
+
+
+def lsb_bytes(vt: VType) -> bool:
+    """Whether ``vt`` is a string or binary value whose bytes are least
+    significant bit first."""
+    return isinstance(vt.enc, (StringEnc, BinaryEnc)) and vt.enc.lsb
+
+
+def read_value_expr(vt: VType, f: str, ref, depth: int) -> str:
+    """read_expr's expression, in the reader's usual bit order."""
     e = vt.enc
     if isinstance(e, AggregateEnc):
         # Arguments and tuple items are evaluated in order.
@@ -812,6 +827,15 @@ class PythonEmitter:
                                  self.write_ref(n, names), depth)
 
     def write_value(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
+        if lsb_bytes(vt):
+            self.line("w.set_lsb(True)", depth)
+            self.write_bytes(vt, x, f, ref, depth)
+            self.line("w.set_lsb(False)", depth)
+        else:
+            self.write_bytes(vt, x, f, ref, depth)
+
+    def write_bytes(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
+        """write_value, in the writer's usual bit order."""
         e = vt.enc
         if isinstance(e, AggregateEnc):
             inner = Ref(lambda d: f"{x}.{d.member}" if d.member else ref(d),

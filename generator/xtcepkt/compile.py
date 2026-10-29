@@ -1165,8 +1165,8 @@ class Compiler:
         if (isinstance(enc, (StringEnc, BinaryEnc))
                 and getattr(e, "bit_order", None)
                 and e.bit_order.value == "leastSignificantBitFirst"):
-            # Its bytes read the same either way when they start on a byte
-            # boundary, which check_aligned makes sure of.
+            # Each byte is a group of 8 bits read in that order, as an
+            # integer's are: on a byte boundary, the bytes as they are.
             enc.lsb = True
         return enc, cal
 
@@ -3920,9 +3920,8 @@ def instance_of(scope: list, key: str, instance: int,
 
 
 def check_aligned(items: list[Item], where: str) -> None:
-    """Strings and binary data with bitOrder leastSignificantBitFirst must
-    start on a byte boundary, where their bytes read the same as with the
-    usual bit order."""
+    """Transformed data must start on a byte boundary, as the transform
+    works on whole bytes."""
     marks = {0: 0}
 
     def walk_items(items: list, pos: Optional[int]) -> Optional[int]:
@@ -3969,12 +3968,6 @@ def check_aligned(items: list[Item], where: str) -> None:
         """Checks ``vt`` at ``pos`` (in bits after a byte boundary, None
         when unknown) and returns the position after it."""
         e = vt.enc
-        if isinstance(e, (StringEnc, BinaryEnc)) and e.lsb:
-            tag = getattr(e, "size_tag_bits", None) or 0
-            if pos != 0 or tag % 8:
-                raise Unsupported(f"{where}: {name} has bitOrder "
-                                  "leastSignificantBitFirst but may not start "
-                                  "on a byte boundary")
         if isinstance(e, AggregateEnc) and e.transform is not None:
             if pos != 0:
                 raise Unsupported(f"{where}: transformed data {name} may not "
@@ -4002,7 +3995,9 @@ def check_aligned(items: list[Item], where: str) -> None:
             if step == 0:
                 return pos
             for t in e.elem.tree():
-                if isinstance(t.enc, (StringEnc, BinaryEnc)) and t.enc.lsb:
+                if (isinstance(t.enc, XformEnc)
+                        or isinstance(t.enc, AggregateEnc)
+                        and t.enc.transform is not None):
                     advance(t, None, name)
             return None
         if isinstance(e, XformEnc):

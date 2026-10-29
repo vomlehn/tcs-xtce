@@ -198,13 +198,15 @@ static inline uint64_t xtce_pk_swap_bytes(uint64_t v, unsigned bits) {
  */
 
 /* Reads big-endian bit fields from `len` bytes at `data`; `pos` is in bits,
- * and `end` is the furthest bit read. */
+ * and `end` is the furthest bit read.  `lsb` reads strings and binary data
+ * least significant bit first (see xtce_pk_read_set_lsb). */
 typedef struct xtce_pk_reader {
         const uint8_t* data;
         size_t len;
         size_t pos;
         size_t end;
         xtce_pk_error* err;
+        bool lsb;
 } xtce_pk_reader;
 
 static inline xtce_pk_reader xtce_pk_reader_init(const uint8_t* data,
@@ -216,6 +218,7 @@ static inline xtce_pk_reader xtce_pk_reader_init(const uint8_t* data,
         r.pos = 0;
         r.end = 0;
         r.err = err;
+        r.lsb = false;
         return r;
 }
 
@@ -566,6 +569,23 @@ static inline int xtce_pk_read_embedded(const xtce_pk_reader* r, size_t max,
         return 0;
 }
 
+/* Reads the bytes of strings and binary data, and their size tags, least
+ * significant bit first when `lsb`: each byte is a group of 8 bits read as
+ * xtce_pk_read_ordered reads one.  On a byte boundary that is the bytes as
+ * they are. */
+static inline void xtce_pk_read_set_lsb(xtce_pk_reader* r, bool lsb) {
+        r->lsb = lsb;
+}
+
+/* A string's size tag of `bits` bits, in its bit order. */
+static inline int xtce_pk_read_tag(xtce_pk_reader* r, unsigned bits,
+                                   const char* f, uint64_t* out) {
+        if (r->lsb)
+                return xtce_pk_read_ordered64(r, bits, true, XTCE_PK_BIG,
+                                              NULL, f, out);
+        return xtce_pk_read_bits(r, bits, f, out);
+}
+
 static inline int xtce_pk_read_bytes(xtce_pk_reader* r, size_t n, const char* f,
                                      uint8_t* out) {
         size_t i;
@@ -578,7 +598,7 @@ static inline int xtce_pk_read_bytes(xtce_pk_reader* r, size_t n, const char* f,
         }
         for (i = 0; i < n; ++i) {
                 uint64_t b;
-                XTCE_PK_TRY(xtce_pk_read_bits(r, 8, f, &b));
+                XTCE_PK_TRY(xtce_pk_read_tag(r, 8, f, &b));
                 out[i] = (uint8_t)b;
         }
         return 0;
@@ -608,13 +628,15 @@ static inline uint64_t xtce_pk_segment_bits(const uint8_t* b, unsigned total) {
  * ------------------------------------------------------------------- */
 
 /* Writes big-endian bit fields into `cap` bytes at `buf`.  `len` grows (zero
- * filled) to cover the furthest bit written. */
+ * filled) to cover the furthest bit written.  `lsb` writes strings and
+ * binary data least significant bit first (see xtce_pk_write_set_lsb). */
 typedef struct xtce_pk_writer {
         uint8_t* buf;
         size_t cap;
         size_t len;
         size_t pos;
         xtce_pk_error* err;
+        bool lsb;
 } xtce_pk_writer;
 
 static inline xtce_pk_writer xtce_pk_writer_init(uint8_t* buf, size_t cap,
@@ -625,6 +647,7 @@ static inline xtce_pk_writer xtce_pk_writer_init(uint8_t* buf, size_t cap,
         w.len = 0;
         w.pos = 0;
         w.err = err;
+        w.lsb = false;
         return w;
 }
 
@@ -732,6 +755,21 @@ static inline uint8_t* xtce_pk_write_span(xtce_pk_writer* w, size_t start,
         return w->buf + start;
 }
 
+/* Writes the bytes of strings and binary data, and their size tags, least
+ * significant bit first when `lsb`, as xtce_pk_read_set_lsb reads them. */
+static inline void xtce_pk_write_set_lsb(xtce_pk_writer* w, bool lsb) {
+        w->lsb = lsb;
+}
+
+/* A string's size tag of `bits` bits, in its bit order. */
+static inline int xtce_pk_write_tag(xtce_pk_writer* w, unsigned bits,
+                                    uint64_t v) {
+        if (w->lsb)
+                return xtce_pk_write_ordered(w, bits, true, XTCE_PK_BIG, NULL,
+                                             0, v);
+        return xtce_pk_write_bits(w, bits, v);
+}
+
 /* Writes whole bytes (which need not be byte aligned). */
 static inline int xtce_pk_write_bytes(xtce_pk_writer* w, const uint8_t* data,
                                       size_t n) {
@@ -739,7 +777,7 @@ static inline int xtce_pk_write_bytes(xtce_pk_writer* w, const uint8_t* data,
         uint8_t* out;
         if (w->pos % 8) {
                 for (i = 0; i < n; ++i)
-                        XTCE_PK_TRY(xtce_pk_write_bits(w, 8, data[i]));
+                        XTCE_PK_TRY(xtce_pk_write_tag(w, 8, data[i]));
                 return 0;
         }
         if (n == 0) return 0;
@@ -2539,7 +2577,7 @@ static inline int xtce_pk_read_wire(xtce_pk_reader* r,
                 *n = xtce_pk_find_unit(b, len, spec->terminator,
                                        spec->term_len, unit);
         } else if (spec->has_fixed) {
-                XTCE_PK_TRY(xtce_pk_read_bits(r, spec->size_tag_bits, f, &v));
+                XTCE_PK_TRY(xtce_pk_read_tag(r, spec->size_tag_bits, f, &v));
                 if (v > cap || v * 8 + spec->size_tag_bits > spec->fixed_bits) {
                         return xtce_pk_fail(r->err, XTCE_PK_TOO_LONG, f, NULL);
                 }
@@ -2581,7 +2619,7 @@ static inline int xtce_pk_read_wire(xtce_pk_reader* r,
                 memcpy(b + *n, win, wn);
                 *n += wn;
         } else {
-                XTCE_PK_TRY(xtce_pk_read_bits(r, spec->size_tag_bits, f, &v));
+                XTCE_PK_TRY(xtce_pk_read_tag(r, spec->size_tag_bits, f, &v));
                 if (v > cap || v * 8 + spec->size_tag_bits > spec->max_bits) {
                         return xtce_pk_fail(r->err, XTCE_PK_TOO_LONG, f, NULL);
                 }
@@ -2824,7 +2862,7 @@ static inline int xtce_pk_wire_bytes(int cs, const uint8_t* s, size_t n,
                             (*len - t) % unit == 0 &&
                             !memcmp(window + 16 - t, spec->terminator, t))
                                 *has_term = true;
-                        if (w) XTCE_PK_TRY(xtce_pk_write_bits(w, 8, bytes[k]));
+                        if (w) XTCE_PK_TRY(xtce_pk_write_tag(w, 8, bytes[k]));
                 }
         }
         return 0;
@@ -2873,7 +2911,7 @@ static inline int xtce_pk_write_string(xtce_pk_writer* w,
                     len > xtce_pk_mask(spec->size_tag_bits)) {
                         return xtce_pk_fail(w->err, XTCE_PK_TOO_LONG, f, NULL);
                 }
-                XTCE_PK_TRY(xtce_pk_write_bits(w, spec->size_tag_bits, len));
+                XTCE_PK_TRY(xtce_pk_write_tag(w, spec->size_tag_bits, len));
                 if (cs == XTCE_PK_UTF8)
                         XTCE_PK_TRY(xtce_pk_write_bytes(w, b, n));
                 else

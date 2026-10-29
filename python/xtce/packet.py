@@ -323,13 +323,27 @@ def _position(base: int, offset: int, field: str) -> int:
 class BitReader:
     """Reads big-endian bit fields from a bytes-like object."""
 
-    __slots__ = ("data", "pos", "nbits", "end")
+    __slots__ = ("data", "pos", "nbits", "end", "lsb")
 
     def __init__(self, data) -> None:
         self.data = data
         self.pos = 0
         self.nbits = len(data) * 8
         self.end = 0  # the furthest bit read
+        self.lsb = False  # strings and binary data least significant first
+
+    def set_lsb(self, lsb: bool) -> None:
+        """Reads the bytes of strings and binary data, and their size
+        tags, least significant bit first when ``lsb``: each byte is a
+        group of 8 bits read as :meth:`uint_bits` reads one.  On a byte
+        boundary that is the bytes as they are."""
+        self.lsb = lsb
+
+    def tag(self, bits: int, field: str) -> int:
+        """A string's size tag of ``bits`` bits, in its bit order."""
+        if self.lsb:
+            return self.uint_bits(bits, True, "be", field)
+        return self.uint(bits, field)
 
     def position(self) -> int:
         return self.pos
@@ -534,6 +548,8 @@ class BitReader:
             self.pos += n * 8
             self.end = max(self.end, self.pos)
             return bytes(self.data[start : start + n])
+        if self.lsb:
+            return bytes(self.uint_bits(8, True, "be", field) for _ in range(n))
         return self.uint(n * 8, field).to_bytes(n, "big") if n else b""
 
 
@@ -544,12 +560,26 @@ class BitWriter:
     to cover the furthest bit written; its allocation is reused.
     """
 
-    __slots__ = ("buf", "pos")
+    __slots__ = ("buf", "pos", "lsb")
 
     def __init__(self, buf: ManagedBuffer) -> None:
         buf.clear()
         self.buf = buf
         self.pos = 0
+        self.lsb = False  # strings and binary data least significant first
+
+    def set_lsb(self, lsb: bool) -> None:
+        """Writes the bytes of strings and binary data, and their size
+        tags, least significant bit first when ``lsb``, as
+        :meth:`BitReader.set_lsb` reads them."""
+        self.lsb = lsb
+
+    def tag(self, bits: int, v: int) -> None:
+        """A string's size tag of ``bits`` bits, in its bit order."""
+        if self.lsb:
+            self.uint_bits(bits, True, "be", v)
+        else:
+            self.uint(bits, v)
 
     def position(self) -> int:
         return self.pos
@@ -694,7 +724,10 @@ class BitWriter:
         self.pos = pos
 
     def bytes(self, data) -> None:
-        if data:
+        if data and self.lsb and self.pos % 8:
+            for b in data:
+                self.uint_bits(8, True, "be", b)
+        elif data:
             self.uint(len(data) * 8, int.from_bytes(data, "big"))
 
 
@@ -1658,7 +1691,7 @@ def read_string(r: BitReader, spec: tuple, field: str) -> str:
         if i >= 0:
             b = b[:i]
     elif fixed is not None:
-        n = r.uint(tag, field)
+        n = r.tag(tag, field)
         if n * 8 + tag > fixed:
             raise PacketError("TooLong", field)
         b = r.bytes(n, field)
@@ -1675,7 +1708,7 @@ def read_string(r: BitReader, spec: tuple, field: str) -> str:
                 break
         b = bytes(out)
     else:
-        n = r.uint(tag, field)
+        n = r.tag(tag, field)
         if n * 8 + tag > max_bits:
             raise PacketError("TooLong", field)
         b = r.bytes(n, field)
@@ -1705,7 +1738,7 @@ def write_string(w: BitWriter, spec: tuple, s: str, field: str) -> None:
         room = fixed if fixed is not None else max_bits
         if len(b) * 8 + tag > room or len(b) >= 1 << tag:
             raise PacketError("TooLong", field)
-        w.uint(tag, len(b))
+        w.tag(tag, len(b))
         w.bytes(b)
         if fixed is not None and fixed - tag - len(b) * 8:
             w.uint(fixed - tag - len(b) * 8, 0)

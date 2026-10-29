@@ -426,6 +426,7 @@ pub struct BitReader<'a> {
     data: &'a [u8],
     pos: usize,
     end: usize, // the furthest bit read
+    lsb: bool,  // strings and binary data are least significant bit first
 }
 
 impl<'a> BitReader<'a> {
@@ -434,6 +435,7 @@ impl<'a> BitReader<'a> {
             data,
             pos: 0,
             end: 0,
+            lsb: false,
         }
     }
 
@@ -792,6 +794,32 @@ impl<'a> BitReader<'a> {
         Ok(out)
     }
 
+    /// Reads the bytes of strings and binary data, and their size tags,
+    /// least significant bit first when `lsb`: each byte is a group of 8
+    /// bits read as [`BitReader::uint_bits`] reads one.  On a byte
+    /// boundary that is the bytes as they are.
+    pub fn set_lsb(&mut self, lsb: bool) {
+        self.lsb = lsb;
+    }
+
+    /// One byte of a string or binary value, in its bit order.
+    fn byte(&mut self, field: &'static str) -> Result<u8> {
+        Ok(if self.lsb {
+            self.uint_bits(8, true, ByteOrder::Big, field)? as u8
+        } else {
+            self.uint(8, field)? as u8
+        })
+    }
+
+    /// A string's size tag of `bits` bits, in its bit order.
+    fn tag(&mut self, bits: u32, field: &'static str) -> Result<u64> {
+        if self.lsb {
+            Ok(self.uint_bits(bits, true, ByteOrder::Big, field)? as u64)
+        } else {
+            self.uint(bits, field)
+        }
+    }
+
     /// Appends `n` whole bytes to `out`.
     fn bytes_into<S: ByteSink>(
         &mut self,
@@ -808,7 +836,7 @@ impl<'a> BitReader<'a> {
             return Ok(());
         }
         for _ in 0..n {
-            let b = self.uint(8, field)? as u8;
+            let b = self.byte(field)?;
             out.append(&[b], field)?;
         }
         Ok(())
@@ -886,12 +914,42 @@ pub fn segment_reader(
 pub struct BitWriter<'a> {
     buf: &'a mut Buffer,
     pos: usize,
+    lsb: bool, // strings and binary data are least significant bit first
 }
 
 impl<'a> BitWriter<'a> {
     pub fn new(buf: &'a mut Buffer) -> Self {
         buf.clear();
-        Self { buf, pos: 0 }
+        Self {
+            buf,
+            pos: 0,
+            lsb: false,
+        }
+    }
+
+    /// Writes the bytes of strings and binary data, and their size tags,
+    /// least significant bit first when `lsb`, as [`BitReader::set_lsb`]
+    /// reads them.
+    pub fn set_lsb(&mut self, lsb: bool) {
+        self.lsb = lsb;
+    }
+
+    /// One byte of a string or binary value, in its bit order.
+    fn byte(&mut self, b: u8) {
+        if self.lsb {
+            self.uint_bits(8, true, ByteOrder::Big, u128::from(b));
+        } else {
+            self.uint(8, u64::from(b));
+        }
+    }
+
+    /// A string's size tag of `bits` bits, in its bit order.
+    fn tag(&mut self, bits: u32, v: u64) {
+        if self.lsb {
+            self.uint_bits(bits, true, ByteOrder::Big, u128::from(v));
+        } else {
+            self.uint(bits, v);
+        }
     }
 
     pub fn position(&self) -> usize {
@@ -1018,7 +1076,7 @@ impl<'a> BitWriter<'a> {
         }
         if self.pos % 8 != 0 {
             for &b in data {
-                self.uint(8, b as u64);
+                self.byte(b);
             }
             return;
         }
@@ -2870,7 +2928,7 @@ fn read_wire<S: ByteSink>(
             }
         }
         (Some(bits), None) => {
-            let n = r.uint(spec.size_tag_bits, field)?;
+            let n = r.tag(spec.size_tag_bits, field)?;
             if !fits(n, spec.size_tag_bits, bits) {
                 return Err(PacketError::TooLong { field });
             }
@@ -2890,7 +2948,7 @@ fn read_wire<S: ByteSink>(
             }
         },
         (None, None) => {
-            let n = r.uint(spec.size_tag_bits, field)?;
+            let n = r.tag(spec.size_tag_bits, field)?;
             if !fits(n, spec.size_tag_bits, spec.max_bits) {
                 return Err(PacketError::TooLong { field });
             }
@@ -3132,7 +3190,7 @@ pub fn write_string(
             if len * 8 + tag > room || len as u64 > mask(spec.size_tag_bits) {
                 return Err(PacketError::TooLong { field });
             }
-            w.uint(spec.size_tag_bits, len as u64);
+            w.tag(spec.size_tag_bits, len as u64);
             write_wire(w, cs, s);
             if let Some(bits) = spec.fixed_bits {
                 w.zeros(bits - tag - len * 8);
@@ -3147,7 +3205,7 @@ fn write_wire(w: &mut BitWriter<'_>, cs: Charset, s: &str) {
     if cs == Charset::Utf8 {
         w.bytes(s.as_bytes());
     } else {
-        let _ = wire_bytes(cs, s, |b| w.uint(8, b as u64), "");
+        let _ = wire_bytes(cs, s, |b| w.byte(b), "");
     }
 }
 

@@ -202,6 +202,11 @@ tm 0a30c02a000a0600000000000000000000  # repeated: a tail segment count beyond i
 tm 0a35c02a000511a53c123400  # segments from the end: EndPair 5 and c from the block's last 12 bits, EndWord 1234 a byte before the end
 tm 0a35c02a000711a53cffff123400  # segments from the end: two bytes skipped before EndWord
 tm 0a35c02a000311a53c12  # segments from the end: EndWord would start before the block's end
+tm 0a37c02a00098594262041336162630a  # lsb bytes: LsbName Hi, LsbBlob 1234 and LsbTagged abc, each starting 4 bits into a byte, least significant bit first
+tm 0a37c02a00041026060000  # lsb bytes: no blob, and an empty tagged string
+tm 0a37c02a00101fa445f00f10e8877463732d7874636503  # lsb bytes: the longest blob and tagged string
+tm 0a37c02a000911265610203040500000  # lsb bytes: LsbLen 5, beyond its range, which fails
+tm 0a37c02a000d1126069031323334353637383900  # lsb bytes: a tagged string of 9 bytes, longer than its 64-bit most, which fails
 tc 112ec0010006120007fffb012c  # set limits: Limits' container, its LimitKind fixed at 7
 tc 112ec002000b120107ffff000107fffe0002  # set limits: both copies of Limits' container
 tc 112ec002000b120107ffff000108fffe0002  # set limits: the second copy's LimitKind isn't 7

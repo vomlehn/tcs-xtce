@@ -1583,11 +1583,14 @@ Bit and byte order
    two orders number its bits differently. String and binary encodings are
    bytes, which have no byte order: ``leastSignificantByteFirst`` on a
    ``UTF-16`` or ``UTF-32`` string makes it ``UTF-16LE`` or ``UTF-32LE``.
-   A byte that starts on a byte boundary reads the same in either bit
-   order, so ``leastSignificantBitFirst`` strings and binary data must
-   start on one (and a string's size tag must be whole bytes). The
-   generator works out where each value starts, modulo 8, and reports
-   one it can't show to be aligned as not supported.
+   A ``leastSignificantBitFirst`` string or binary value is read by the
+   same rule: each of its bytes is a group of 8 bits, numbered from the
+   least significant bit of each byte of the packet, its first bit the
+   least significant, and a string's size tag is an integer in that bit
+   order. On a byte boundary that is the bytes as they are; anywhere else
+   it is what an 8-bit ``leastSignificantBitFirst`` integer there would
+   read. The demo's ``LsbBytes`` starts ``LsbName``, ``LsbBlob`` and the
+   4-bit size tag of ``LsbTagged`` 4 bits into a byte.
 
 Calibrators
    ``PolynomialCalibrator``, ``SplineCalibrator`` and
@@ -2424,9 +2427,8 @@ Not supported
    that varies, transformed containers included in a repeated container
    or holding a length field, a checksum or an entry located from the
    end,
-   ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates), least-significant-bit-first strings
-   and binary data that may not start on a byte boundary, integers of
-   more than 64 bits used other than as values (see "Integer encoding"),
+   ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates),
+   integers of more than 64 bits used other than as values (see "Integer encoding"),
    and a location from the end of an included container whose size
    varies.
 

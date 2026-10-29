@@ -311,6 +311,20 @@ def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
     expression for the value that gives a size or count (a DynSize).
     ``alloc`` is whether it may allocate.  ``depth`` numbers the locals of
     nested aggregates."""
+    x = read_value_expr(vt, f, ref, alloc, depth)
+    if lsb_bytes(vt):
+        return f"{{ r.set_lsb(true); let v = {x}; r.set_lsb(false); v }}"
+    return x
+
+
+def lsb_bytes(vt: VType) -> bool:
+    """Whether ``vt`` is a string or binary value whose bytes are least
+    significant bit first."""
+    return isinstance(vt.enc, (StringEnc, BinaryEnc)) and vt.enc.lsb
+
+
+def read_value_expr(vt: VType, f: str, ref, alloc: bool, depth: int) -> str:
+    """read_expr's expression, in the reader's usual bit order."""
     e = vt.enc
     if isinstance(e, AggregateEnc):
         a = f"a{depth}_"
@@ -502,6 +516,14 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
 
 def write_value_stmt(vt: VType, x: str, f: str, ref) -> str:
     """write_stmt's statement, without the check of the valid ranges."""
+    s = write_bytes_stmt(vt, x, f, ref)
+    if lsb_bytes(vt):
+        return f"{{ w.set_lsb(true); {s} w.set_lsb(false); }}"
+    return s
+
+
+def write_bytes_stmt(vt: VType, x: str, f: str, ref) -> str:
+    """write_value_stmt's statement, in the writer's usual bit order."""
     e = vt.enc
     bad = f"return Err(PacketError::BadSize {{ field: {f} }});"
     if isinstance(e, AggregateEnc):
