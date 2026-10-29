@@ -157,8 +157,10 @@ def source(d: DynSize, place) -> str:
 
 def offset(s: Seek, ref, f: str) -> str:
     """Expression for the offset of a Seek."""
-    return (str(s.offset) if isinstance(s.offset, int)
-            else size(s.offset, ref(s.offset), f))
+    if isinstance(s.offset, int):
+        return str(s.offset - s.back)
+    x = size(s.offset, ref(s.offset), f)
+    return f"{x} - {s.back}" if s.back else x
 
 
 def size(d: DynSize, x: str, f: str) -> str:
@@ -688,7 +690,8 @@ class PythonEmitter:
                 if it.from_start is None:
                     self.line(f"r.skip({off}, {pstr(where)})", depth)
                 else:
-                    self.line(f"r.seek({self.mark(it.from_start)}, {off}, "
+                    seek = "seek_ahead" if it.ahead else "seek"
+                    self.line(f"r.{seek}({self.mark(it.from_start)}, {off}, "
                               f"{pstr(where)})", depth)
             elif isinstance(it, Mark):
                 self.line(f"m{it.id} = r.pos", depth)
@@ -763,7 +766,8 @@ class PythonEmitter:
                 if it.from_start is None:
                     self.line(f"w.skip({off}, {pstr(where)})", depth)
                 else:
-                    self.line(f"w.seek({self.mark(it.from_start)}, {off}, "
+                    seek = "seek_ahead" if it.ahead else "seek"
+                    self.line(f"w.{seek}({self.mark(it.from_start)}, {off}, "
                               f"{pstr(where)})", depth)
             elif isinstance(it, Mark):
                 self.line(f"m{it.id} = w.pos", depth)

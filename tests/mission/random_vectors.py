@@ -475,7 +475,7 @@ def main() -> None:
                                510, 520, 530, 550, 550, 560, 560, 565, 567, 567,
                                570, 570, 580, 590, 600, 600, 610, 610, 620, 620,
                                630, 630, 640, 640, 650, 650, 655, 655, 661, 661,
-                               662, 662, rng.randrange(1 << 11)])
+                               663, 662, 662, rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool

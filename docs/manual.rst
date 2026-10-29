@@ -1885,9 +1885,18 @@ Locations
    the bits after it as the packet's; encoding writes it after the
    previous entry, moved on by the fewest zero bits that end the packet
    on a byte boundary, then the offset's bits as zeros. Bits that the
-   decoded packet had before it are left out, as gaps are. The end of an
-   included container whose size varies would depend on where its entries
-   are, so an entry there can't be located from it.
+   decoded packet had before it are left out, as gaps are.
+
+   In an included container whose ``SizeInBits`` another value gives, that
+   value, decoded before the container, says where it ends, and an entry
+   located from its end is that place from its start: decoding and
+   encoding fail with ``BadPosition`` if it is before the previous entry's
+   end, so a size too small for the entries before it is an error rather
+   than a read of their bits again. The demo's ``BoxedEnd`` puts
+   ``BoxLast`` in the last byte of ``SizedBox``, which is ``BoxLen``
+   bytes. The end of an included container without a ``SizeInBits``,
+   whose entries' sizes vary, would depend on where those entries are,
+   so an entry there can't be located from it.
 
    A ``nextEntry`` location puts the end of the entry that many bits
    before the start of the entry after it in the same entry list. When
@@ -2442,8 +2451,8 @@ Not supported
    check from outside one whose field is inside it,
    ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates),
    integers of more than 64 bits used other than as values (see "Integer encoding"),
-   and a location from the end of an included container whose size
-   varies.
+   and a location from the end of an included container without a
+   ``SizeInBits`` whose entries' sizes vary.
 
 Known limitations
 -----------------

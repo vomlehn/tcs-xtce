@@ -744,10 +744,15 @@ class Local:
 @dataclass
 class Seek:
     """Move the bit position before the next entry: ``offset`` bits, or the
-    bits a bound DynSize gives (at most its ``max_total``)."""
+    bits a bound DynSize gives (at most its ``max_total``), less ``back``.
+    With ``ahead``, a position before the current one fails with
+    BadPosition: an entry located from the end of a container whose size
+    another value gives."""
 
     from_start: Optional[int]  # start-marker id, or None for previousEntry
     offset: Union[int, DynSize]
+    back: int = 0
+    ahead: bool = False
 
     @property
     def max_offset(self) -> int:

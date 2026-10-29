@@ -1812,7 +1812,7 @@ class Compiler:
                 if out and isinstance(out[-1], EndSeek):
                     out[-1], after = self.end_seek(
                         out[-1], sc, None, where,
-                        self.segment_bits(ch.name, e, path, where))
+                        self.segment_bits(ch.name, e, path, where), scope, path)
                 out += self.segment(ch.name, e, path, where, segs,
                                     cond is not None, scope)
                 out += after
@@ -1825,7 +1825,8 @@ class Compiler:
                                   where)
                 after = []
                 if out and isinstance(out[-1], EndSeek):
-                    out[-1], after = self.end_seek(out[-1], sc, local, where)
+                    out[-1], after = self.end_seek(out[-1], sc, local, where,
+                                                   scope=scope, path=path)
                 out.append(Value(local))
                 out += after
                 scope.append(local)
@@ -2188,13 +2189,16 @@ class Compiler:
                                self.containers, "container")
 
     def end_seek(self, es: EndSeek, sc, local: Optional[Local], where: str,
-                 bits: int = 0) -> tuple:
+                 bits: int = 0, scope: Optional[list] = None, path: Key = (),
+                 arg_key: Optional[Callable] = None) -> tuple:
         """The Seek that ends ``local`` (or a segment of ``bits``)
         ``es.offset`` bits before the end of container ``sc``, and the items
         to follow it.  In a container with a fixed size, that is a place
-        from its start.  Otherwise the container must be the packet itself,
-        whose end decoding knows (a TailSeek, and a TailPad after): an
-        included container's end would depend on where its entries are."""
+        from its start; with a size that a value in ``scope`` gives, one
+        from its start that must not be before the entries before it.
+        Otherwise the container must be the packet itself, whose end
+        decoding knows (a TailSeek, and a TailPad after): an included
+        container's end would depend on where its entries are."""
         if local is not None:
             vt = local.vtype
             if vt.dyn is not None or is_rest(vt) or fixed_bits(vt) is None:
@@ -2207,14 +2211,17 @@ class Compiler:
             # decoding knows as a packet's: its SizeInBits is on the wire.
             return TailSeek(es.offset + bits), [TailPad(es.offset)]
         size = (
-            self.int_value(be.size_in_bits, (), "container SizeInBits", where)
+            self.int_value(be.size_in_bits, path, "container SizeInBits", where)
             if be is not None and be.size_in_bits is not None else None)
         if isinstance(size, int):
             return Seek(es.start, size - es.offset - bits), []
+        if isinstance(size, DynSize) and scope is not None:
+            off, rng = self.bind_dyn(size, scope, where, arg_key)
+            off.max = dyn_units(off, rng, self.max_field_bits)
+            return Seek(es.start, off, es.offset + bits, True), []
         if es.start != 0 or size is not None:
             raise Unsupported(f"{where}: a location from the end of an "
-                              "included container, or one whose size another "
-                              "value gives")
+                              "included container whose size varies")
         return TailSeek(es.offset + bits), [TailPad(es.offset)]
 
     @staticmethod
@@ -3022,7 +3029,8 @@ class Compiler:
                 if out and isinstance(out[-1], EndSeek):
                     out[-1], after = self.end_seek(
                         out[-1], cc, None, where,
-                        self.segment_bits(ch.name, e, path, where))
+                        self.segment_bits(ch.name, e, path, where), values,
+                        path, arg_key)
                 out += self.segment(ch.name, e, path, where, segs,
                                     cond is not None, values, arg_key)
                 out += after
@@ -3069,7 +3077,9 @@ class Compiler:
                                   where, arg_key)
                 after = []
                 if out and isinstance(out[-1], EndSeek):
-                    out[-1], after = self.end_seek(out[-1], cc, local, where)
+                    out[-1], after = self.end_seek(out[-1], cc, local, where,
+                                                   scope=values, path=path,
+                                                   arg_key=arg_key)
                 out.append(Value(local))
                 out += after
                 values.append(local)

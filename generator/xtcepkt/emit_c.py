@@ -1240,17 +1240,18 @@ class CEmitter:
         """A Seek, by the reader (``side`` "read") or writer ("write")."""
         obj = "r" if side == "read" else "w"
         f = cstr(where)
-        off = str(it.offset)
+        off = str(it.offset - it.back) if isinstance(it.offset, int) else ""
         if isinstance(it.offset, DynSize):
             self.line("{", depth)
             depth += 1
             self.size(it.offset, f"{obj}->err", f, ref, depth)
-            off = "(int64_t)n"
+            off = f"(int64_t)n - {it.back}" if it.back else "(int64_t)n"
+        seek = "seek_ahead" if it.ahead else "seek"
         if it.from_start is None:
             self.line(f"XTCE_PK_TRY(xtce_pk_{side}_skip({obj}, {off}, {f}));",
                       depth)
         else:
-            self.line(f"XTCE_PK_TRY(xtce_pk_{side}_seek({obj}, "
+            self.line(f"XTCE_PK_TRY(xtce_pk_{side}_{seek}({obj}, "
                       f"{self.mark(it.from_start)}, {off}, {f}));", depth)
         if isinstance(it.offset, DynSize):
             self.line("}", depth - 1)

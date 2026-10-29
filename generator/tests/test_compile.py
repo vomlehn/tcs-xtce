@@ -868,8 +868,22 @@ class ContainerTests(unittest.TestCase):
         self.assertEqual(fill.size, 64)
         self.assertEqual(m.nodes[0].max_bytes, 9)  # N, then the 64 bits
 
+    def test_end_of_a_container_whose_size_a_value_gives(self):
+        # Record is N bits, and B ends at its end: a Seek from Record's
+        # start of N bits less B's 8, which must not go back.
+        record = (f"<BinaryEncoding><SizeInBits>{dynamic('N')}</SizeInBits>"
+                  "</BinaryEncoding>"
+                  + entries(ref("A"), ref("B", "containerEnd:0")))
+        items = compile_xml(container_mission(record, "")).nodes[0].items
+        seek = next(it for it in items if isinstance(it, Seek))
+        self.assertEqual((seek.back, seek.ahead), (8, True))
+        self.assertEqual(seek.offset.local.name, "N")
+
     def test_rejected(self):
         for record, entry, why in (
+                (entries(ref("Text"), ref("B", "containerEnd:0")), "",
+                 "a location from the end of an included container whose size "
+                 "varies"),
                 (size(8) + entries(ref("A"), ref("B")), "",
                  "entries take 12 bits, more than the container size 8"),
                 (size(64) + entries(ref("Text")), REPEAT,

@@ -838,6 +838,12 @@ decoding knows before it reads anything; a <tt class="docutils literal">TailSeek
 encoding, which makes the end, places the entry so that the packet ends
 on a byte boundary the offset after it, as decoding will find it. That
 only works for the packet's last entry, so <tt class="docutils literal">check_tail</tt> insists on it.</p>
+<p>In a container whose <tt class="docutils literal">SizeInBits</tt> another value gives, <tt class="docutils literal">end_seek</tt>
+binds that value and makes the entry a <tt class="docutils literal">Seek</tt> from the container's
+start of that size less <tt class="docutils literal">back</tt>, the entry's own bits and its offset.
+It is <tt class="docutils literal">ahead</tt>: the runtimes' <tt class="docutils literal">seek_ahead</tt> fails with <tt class="docutils literal">BadPosition</tt>
+rather than move back over the entries before it, which a plain
+<tt class="docutils literal">Seek</tt> would do for a size too small to hold them.</p>
 <p>A <tt class="docutils literal">nextEntry</tt> location is an <tt class="docutils literal">EndSeek</tt> in the other direction: the
 compiler holds a <tt class="docutils literal">NextSeek</tt> until the next entry's location is known,
 then makes it a place back from that entry's container-start location, or

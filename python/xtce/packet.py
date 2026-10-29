@@ -359,6 +359,17 @@ class BitReader:
         self.pos = _position(start, offset, field)
         self.end = max(self.end, self.pos)
 
+    def seek_ahead(self, start: int, offset: int, field: str) -> None:
+        """As :meth:`seek`, but raises ``BadPosition`` before the current
+        position: an entry located from the end of a container whose size
+        another value gives, which must not overlap the entries before
+        it."""
+        p = _position(start, offset, field)
+        if p < self.pos:
+            raise PacketError("BadPosition", field)
+        self.pos = p
+        self.end = max(self.end, p)
+
     def skip(self, offset: int, field: str) -> None:
         self.seek(self.pos, offset, field)
 
@@ -586,6 +597,14 @@ class BitWriter:
 
     def seek(self, start: int, offset: int, field: str) -> None:
         self.pos = _position(start, offset, field)
+
+    def seek_ahead(self, start: int, offset: int, field: str) -> None:
+        """As :meth:`seek`, but raises ``BadPosition`` before the current
+        position, as :meth:`BitReader.seek_ahead` does."""
+        p = _position(start, offset, field)
+        if p < self.pos:
+            raise PacketError("BadPosition", field)
+        self.pos = p
 
     def skip(self, offset: int, field: str) -> None:
         self.pos = _position(self.pos, offset, field)

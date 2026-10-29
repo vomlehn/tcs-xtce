@@ -219,9 +219,10 @@ def source(d: DynSize, place) -> str:
 def offset(s: Seek, ref, f: str) -> str:
     """Expression for the offset of a Seek."""
     if isinstance(s.offset, int):
-        return str(s.offset)
+        return str(s.offset - s.back)
     n = size(s.offset, ref(s.offset), f)
-    return f"({n}) as i64" if s.offset.factor != 1 else f"{n} as i64"
+    x = f"({n}) as i64" if s.offset.factor != 1 else f"{n} as i64"
+    return f"{x} - {s.back}" if s.back else x
 
 
 def size(d: DynSize, x: str, f: str) -> str:
@@ -999,7 +1000,8 @@ class RustEmitter:
                 if it.from_start is None:
                     self.line(f"r.skip({off}, {rstr(where)})?;", depth)
                 else:
-                    self.line(f"r.seek({self.mark(it.from_start)}, {off}, "
+                    seek = "seek_ahead" if it.ahead else "seek"
+                    self.line(f"r.{seek}({self.mark(it.from_start)}, {off}, "
                               f"{rstr(where)})?;", depth)
             elif isinstance(it, Mark):
                 self.line(f"let m{it.id} = r.position();", depth)
@@ -1084,7 +1086,8 @@ class RustEmitter:
                 if it.from_start is None:
                     self.line(f"w.skip({off}, {rstr(where)})?;", depth)
                 else:
-                    self.line(f"w.seek({self.mark(it.from_start)}, {off}, "
+                    seek = "seek_ahead" if it.ahead else "seek"
+                    self.line(f"w.{seek}({self.mark(it.from_start)}, {off}, "
                               f"{rstr(where)})?;", depth)
             elif isinstance(it, Mark):
                 self.line(f"let m{it.id} = w.position();", depth)

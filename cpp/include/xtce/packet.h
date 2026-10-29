@@ -240,6 +240,20 @@ static inline int xtce_pk_read_skip(xtce_pk_reader* r, int64_t offset,
         return xtce_pk_read_seek(r, r->pos, offset, f);
 }
 
+/* As xtce_pk_read_seek, but fails with BAD_POSITION before the current
+ * position: an entry located from the end of a container whose size
+ * another value gives, which must not overlap the entries before it. */
+static inline int xtce_pk_read_seek_ahead(xtce_pk_reader* r, size_t start,
+                                          int64_t offset, const char* f) {
+        size_t p;
+        XTCE_PK_TRY(xtce_pk_position(start, offset, f, r->err, &p));
+        if (p < r->pos)
+                return xtce_pk_fail(r->err, XTCE_PK_BAD_POSITION, f, NULL);
+        r->pos = p;
+        xtce_pk_read_moved(r);
+        return 0;
+}
+
 /* Moves to `back` bits before the end of the packet, which must not be
  * before the current position. */
 static inline int xtce_pk_read_seek_end(xtce_pk_reader* r, size_t back,
@@ -659,6 +673,18 @@ static inline int xtce_pk_write_seek(xtce_pk_writer* w, size_t start,
 static inline int xtce_pk_write_skip(xtce_pk_writer* w, int64_t offset,
                                      const char* f) {
         return xtce_pk_position(w->pos, offset, f, w->err, &w->pos);
+}
+
+/* As xtce_pk_write_seek, but fails with BAD_POSITION before the current
+ * position, as xtce_pk_read_seek_ahead does. */
+static inline int xtce_pk_write_seek_ahead(xtce_pk_writer* w, size_t start,
+                                           int64_t offset, const char* f) {
+        size_t p;
+        XTCE_PK_TRY(xtce_pk_position(start, offset, f, w->err, &p));
+        if (p < w->pos)
+                return xtce_pk_fail(w->err, XTCE_PK_BAD_POSITION, f, NULL);
+        w->pos = p;
+        return 0;
 }
 
 /* Moves forward the fewest bits (zeros) that put the end of the packet,

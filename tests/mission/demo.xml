@@ -1458,6 +1458,10 @@
       <Parameter name="ZipCount" parameterTypeRef="RecCountType"/>
       <Parameter name="ZipTag" parameterTypeRef="U8"/>
       <Parameter name="ZipSum" parameterTypeRef="U8"/>
+      <Parameter name="BoxLen" parameterTypeRef="U8"/>
+      <Parameter name="BoxFirst" parameterTypeRef="U8"/>
+      <Parameter name="BoxLast" parameterTypeRef="U8"/>
+      <Parameter name="BoxAfter" parameterTypeRef="U8"/>
       <Parameter name="ZipLast" parameterTypeRef="U8"/>
       <Parameter name="TwoRowCols" parameterTypeRef="RepCountType"/>
       <Parameter name="TwoRows" parameterTypeRef="TwoRowType"/>
@@ -2639,6 +2643,39 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="662"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- An included container BoxLen bytes long, with BoxLast in its
+           last byte: located from the end of a container whose size
+           another value gives. -->
+      <SequenceContainer name="SizedBox" abstract="true">
+        <BinaryEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="BoxLen"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="BoxFirst"/>
+          <ParameterRefEntry parameterRef="BoxLast">
+            <LocationInContainerInBits referenceLocation="containerEnd">
+              <FixedValue>0</FixedValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="BoxedEnd">
+        <EntryList>
+          <ParameterRefEntry parameterRef="BoxLen"/>
+          <ContainerRefEntry containerRef="SizedBox"/>
+          <ParameterRefEntry parameterRef="BoxAfter"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="663"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

@@ -462,6 +462,25 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
+    /// As [`BitReader::seek`], but fails with `BadPosition` before the
+    /// current position: an entry located from the end of a container whose
+    /// size another value gives, which must not overlap the entries before
+    /// it.
+    pub fn seek_ahead(
+        &mut self,
+        start: usize,
+        offset: i64,
+        field: &'static str,
+    ) -> Result<()> {
+        let p = position(start, offset, field)?;
+        if p < self.pos {
+            return Err(PacketError::BadPosition { field });
+        }
+        self.pos = p;
+        self.end = self.end.max(p);
+        Ok(())
+    }
+
     /// Moves `offset` bits from the current position.
     /// Moves to `back` bits before the end of the packet, which must not be
     /// before the current position.
@@ -963,6 +982,22 @@ impl<'a> BitWriter<'a> {
         field: &'static str,
     ) -> Result<()> {
         self.pos = position(start, offset, field)?;
+        Ok(())
+    }
+
+    /// As [`BitWriter::seek`], but fails with `BadPosition` before the
+    /// current position, as [`BitReader::seek_ahead`] does.
+    pub fn seek_ahead(
+        &mut self,
+        start: usize,
+        offset: i64,
+        field: &'static str,
+    ) -> Result<()> {
+        let p = position(start, offset, field)?;
+        if p < self.pos {
+            return Err(PacketError::BadPosition { field });
+        }
+        self.pos = p;
         Ok(())
     }
 

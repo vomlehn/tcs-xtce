@@ -463,6 +463,13 @@ encoding, which makes the end, places the entry so that the packet ends
 on a byte boundary the offset after it, as decoding will find it. That
 only works for the packet's last entry, so ``check_tail`` insists on it.
 
+In a container whose ``SizeInBits`` another value gives, ``end_seek``
+binds that value and makes the entry a ``Seek`` from the container's
+start of that size less ``back``, the entry's own bits and its offset.
+It is ``ahead``: the runtimes' ``seek_ahead`` fails with ``BadPosition``
+rather than move back over the entries before it, which a plain
+``Seek`` would do for a size too small to hold them.
+
 A ``nextEntry`` location is an ``EndSeek`` in the other direction: the
 compiler holds a ``NextSeek`` until the next entry's location is known,
 then makes it a place back from that entry's container-start location, or
