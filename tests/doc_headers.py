@@ -5,7 +5,10 @@ its parameters with what each means, and what it returns.  Every
 parameter's description, continuation lines included, starts in the same
 column, at least one space after the longest name.  A function that
 returns nothing has no return section.  The header follows the
-conventions of its language:
+conventions of its language, as below: in Rust, RFC 1574 and the standard
+library (a third-person summary; ``# Errors``, ``# Panics`` and
+``# Safety`` sections where they apply); in C and C++, Doxygen; in
+Python, PEP 257 and Google's style guide.
 
 Rust (rustdoc)::
 
@@ -13,13 +16,17 @@ Rust (rustdoc)::
     ///
     /// # Arguments
     ///
-    /// * `raw`  -- the raw field, continued
-    ///             in this column.
-    /// * `bits` -- its size in bits.
+    /// * `raw`  - The raw field, continued
+    ///            in this column.
+    /// * `bits` - Its size in bits.
     ///
     /// # Returns
     ///
     /// What it returns.
+    ///
+    /// # Errors
+    ///
+    /// When and why it fails, for a function that returns a `Result`.
 
 C and C++ (Doxygen)::
 
@@ -49,11 +56,15 @@ methods and unittest's set-up and tear-down methods) need none; their
 names say what they test.  Nor do methods that implement a Rust trait,
 C++ overrides, or Python special methods other than ``__init__``: their
 documentation is the trait's, base class's or language's.  A Python
-``__init__``'s parameters may be in its class's docstring instead.
+``__init__``'s parameters may be in its class's docstring instead.  A
+Rust function returning ``Result<()>`` (or ``fmt::Result``, or a
+``Result`` alias such as ``io::Result<()>``) needs ``# Errors`` but, as
+in the standard library, no ``# Returns``.  A C or C++ function defined
+in a source file may be documented where a header declares it instead.
 
-Checks every Rust, C, C++ and Python file in git (except under
-``vendor/`` and ``fuzz/`` corpora) and the code the generators write,
-when it exists.
+Checks every Rust, C, C++ and Python file in git (Python scripts without
+a suffix too, by their ``#!`` line), except under ``vendor/`` and in fuzz
+corpora, and the code the generators write, when it exists.
 
 usage: python3 -I tests/doc_headers.py [FILE...]
                                           (from the top of the repository)
@@ -75,8 +86,7 @@ GENERATED = ["rust/src/generated.rs", "cpp/include/xtce/generated.hpp",
              "cpp/src/generated.cpp", "python/xtce/generated.py",
              "rust/tests/mission/demo*.rs", "cpp/tests/mission/demo*.h",
              "python/tests/mission/demo*.py", "examples/*/rust/src/*.rs",
-             "examples/*/c/*.h", "examples/*/cxx/*.h",
-             "examples/*/python/*.py"]
+             "examples/*/c/*.h", "examples/*/cxx/*.h", "examples/*/python/*.py"]
 SKIP = ("vendor/", "target/")
 
 
@@ -118,15 +128,14 @@ def check_list(probs: Problems, line: int, name: str,
     """
     names = [e[0] for e in entries]
     if names != params:
-        probs.add(line, name, f"documents parameters {names}, "
-                              f"not {params}")
+        probs.add(line, name, f"documents parameters {names}, not {params}")
         return
     cols = {e[1] for e in entries}
     for e in entries:
         cols.update(e[2])
     if len(cols) > 1:
-        probs.add(line, name, "parameter descriptions don't all start "
-                              "in one column")
+        probs.add(line, name,
+                  "parameter descriptions don't all start in one column")
 
 
 # ---------------------------------------------------------------- Rust ---
@@ -167,8 +176,9 @@ def strip_rust(text: str) -> str:
                     j += 1
             out.append(blank(text[i:j]))
             i = j
-        elif (m := re.compile(r'b?r(#*)"').match(text, i)) and (
-                i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")):
+        elif ((m := re.compile(r'b?r(#*)"').match(text, i))
+              and (i == 0
+                   or not (text[i - 1].isalnum() or text[i - 1] == "_"))):
             end = '"' + m.group(1)
             j = text.find(end, m.end())
             j = n if j < 0 else j + len(end)
@@ -181,8 +191,8 @@ def strip_rust(text: str) -> str:
             out.append(blank(text[i:j + 1]))
             i = j + 1
         elif c == "'":
-            m = re.compile(r"'(\\u\{[0-9a-fA-F]+\}|\\x..|\\.|[^\\'\n])'"
-                           ).match(text, i)
+            m = re.compile(r"'(\\u\{[0-9a-fA-F]+\}|\\x..|\\.|"
+                           r"[^\\'\n])'").match(text, i)
             if m:
                 out.append(blank(m.group(0)))
                 i = m.end()
@@ -291,8 +301,8 @@ def rust_doc(lines: list[str], start: int) -> tuple[list[str], list[str]]:
             doc.insert(0, s[3:])
         elif s.startswith("#[") or s.startswith("#!["):
             attrs.insert(0, s)
-        elif s.endswith("]") and not in_attr and j > 0 and (
-                "#[" in "".join(lines[max(0, j - 8):j])):
+        elif (s.endswith("]") and not in_attr and j > 0
+              and ("#[" in "".join(lines[max(0, j - 8):j]))):
             # The end of an attribute spread over several lines.
             attrs.insert(0, s)
             in_attr = True
@@ -368,14 +378,13 @@ def check_rust(probs: Problems, text: str) -> None:
         if j < 0 or (0 <= semi < j):
             continue
         head = code[m.end():j]
-        if re.search(r"\bfor\b", re.sub(r"<[^<>]*>", "", head)) or \
-                re.search(r"\bfor\b", head):
+        if (re.search(r"\bfor\b", re.sub(r"<[^<>]*>", "", head))
+                or re.search(r"\bfor\b", head)):
             trait_spans.append((j, match_close(code, j)))
 
     # Spans of #[cfg(test)] modules.
     test_spans = []
-    for m in re.finditer(r"#\[cfg\(test\)\]\s*(pub\s+)?mod\s+\w+\s*\{",
-                         code):
+    for m in re.finditer(r"#\[cfg\(test\)\]\s*(pub\s+)?mod\s+\w+\s*\{", code):
         j = m.end() - 1
         test_spans.append((j, match_close(code, j)))
 
@@ -385,11 +394,27 @@ def check_rust(probs: Problems, text: str) -> None:
         if any(a < pos < b for a, b in trait_spans):
             continue
         # Skip `fn` in types such as `fn(u8) -> u8` and in macros.
-        open_p = code.find("(", m.end())
+        # Skip the generic parameters, whose bounds may hold parentheses,
+        # as in `fn with<F: FnOnce(u8)>(f: F)`.
+        after = m.end()
+        while after < len(code) and code[after].isspace():
+            after += 1
+        if code.startswith("<", after):
+            depth, j = 0, after
+            while j < len(code):
+                if code[j] == "<":
+                    depth += 1
+                elif code[j] == ">" and code[j - 1] != "-":
+                    depth -= 1
+                    if not depth:
+                        break
+                j += 1
+            after = j + 1
+        open_p = code.find("(", after)
         if open_p < 0:
             continue
-        between = code[m.end():open_p]
-        if between.strip() and not between.strip().startswith("<"):
+        between = code[after:open_p]
+        if between.strip():
             continue
         close_p = match_close(code, open_p)
         rest = code[close_p + 1:]
@@ -402,14 +427,16 @@ def check_rust(probs: Problems, text: str) -> None:
         if rm:
             ret = rm.group(1).strip()
         returns = ret not in ("", "()", "!")
+        # A `Result<()>` gives nothing back but success, which its
+        # `# Errors` section implies; std leaves out `# Returns` for it.
+        unit_ok = (re.match(r"([\w:]*::)?\w*Result\s*<\s*\(\s*\)", ret)
+                   or re.fullmatch(r"(std::)?fmt::Result", ret))
         line = line_of(pos)
         # The item starts at its line's first non-blank character.
         doc, attrs = rust_doc(lines, line)
-        if any(a.startswith("#[test") or "tokio::test" in a
-               for a in attrs):
+        if any(a.startswith("#[test") or "tokio::test" in a for a in attrs):
             continue
-        if any(a < pos < b for a, b in test_spans) and name.startswith(
-                "test"):
+        if any(a < pos < b for a, b in test_spans) and name.startswith("test"):
             continue
         if has_body:
             ob = close_p + 1 + brace
@@ -431,28 +458,34 @@ def check_rust(probs: Problems, text: str) -> None:
             else:
                 entries = []
                 for d in secs["Arguments"]:
-                    em = re.match(r"(\s*\*\s+`([^`]+)`\s+--\s+)\S", d)
+                    em = re.match(r"(\s*\*\s+`([^`]+)`\s+-\s+)\S", d)
                     if em:
                         entries.append((em.group(2), len(em.group(1)), []))
                     elif d.strip() and entries:
                         ind = len(d) - len(d.lstrip())
                         entries[-1][2].append(ind)
                     elif d.strip():
-                        probs.add(lineno, name, "malformed # Arguments "
-                                                f"line: {d.strip()}")
+                        probs.add(lineno, name,
+                                  f"malformed # Arguments line: {d.strip()}")
                 check_list(probs, lineno, name, entries, params)
         elif "Arguments" in secs:
             probs.add(lineno, name, "# Arguments but no parameters")
-        if returns and "Returns" not in secs:
+        if returns and not unit_ok and "Returns" not in secs:
             probs.add(lineno, name, "no # Returns section")
         if not returns and "Returns" in secs:
             probs.add(lineno, name, "# Returns but returns nothing")
+        if re.match(r"([\w:]*::)?\w*Result\b", ret) and "Errors" not in secs:
+            probs.add(lineno, name,
+                      "returns a Result but has no # Errors section")
+        if (re.search(r"\bunsafe\s+(extern\s+\S+\s+)?fn\s*$",
+                      code[max(0, pos - 40):pos + 2]) and "Safety" not in secs):
+            probs.add(lineno, name, "unsafe but no # Safety section")
 
 
 # --------------------------------------------------------- C and C++ ---
 
-C_KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof", "do",
-              "else", "case", "defined", "catch", "alignof", "decltype",
+C_KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof", "do", "else",
+              "case", "defined", "catch", "alignof", "decltype",
               "static_assert", "noexcept", "typeof", "__attribute__"}
 
 
@@ -537,14 +570,43 @@ def c_param_name(p: str) -> str:
     fm = re.search(r"\(\s*[*&]+\s*(\w+)\s*\)\s*\(", p)
     if fm:
         return fm.group(1)
-    p = re.sub(r"\[[^\]]*\]\s*$", "", p).strip()
+    p = re.sub(r"(\s*\[[^\]]*\])+\s*$", "", p).strip()
     m = re.search(r"(\w+)\s*$", p)
     if not m:
         return ""
-    words = re.findall(r"\w+", p)
+    words = re.findall(r"[\w:]+", p)
     if len(words) < 2 and not re.search(r"[*&]", p):
         return ""
     return m.group(1)
+
+
+C_TYPES = {"void", "char", "short", "int", "long", "float", "double", "bool",
+           "signed", "unsigned", "auto"}
+
+
+def is_expression(p: str) -> bool:
+    """Says whether a parenthesized item is a value rather than a type.
+
+    Used to tell a variable's initializer, as in ``T x(y);``, from an
+    unnamed parameter, as in ``T f(Y);``.
+
+    Args:
+        p: The item, with comments and literals blanked.
+
+    Returns:
+        True for a number, a lower-case name that isn't a built-in type
+        or a ``_t`` type, or anything with an operator or call in it.
+    """
+    p = p.strip()
+    if not p:
+        return True
+    if re.search(r"[-+/%^|!?(]|\.(?=\w)", p) or re.match(r"\d", p):
+        return True
+    m = re.fullmatch(r"(?:\w+::)*(\w+)", p)
+    if not m:
+        return False
+    last = m.group(1)
+    return not (last in C_TYPES or last.endswith("_t") or last[0].isupper())
 
 
 def c_doc(lines: list[str], line: int) -> list[str] | None:
@@ -618,8 +680,8 @@ def check_c_doc(probs: Problems, lineno: int, name: str, doc: list[str],
             entries[-1][2].append(len(d) - len(d.lstrip()))
     check_list(probs, lineno, name, entries, params)
     if entries and ret_col is not None and ret_col != entries[0][1]:
-        probs.add(lineno, name, "@return's description isn't in the "
-                                "parameters' column")
+        probs.add(lineno, name,
+                  "@return's description isn't in the parameters' column")
     if returns and not has_ret:
         probs.add(lineno, name, "no @return")
     if not returns and has_ret:
@@ -638,8 +700,8 @@ def c_function(head: str) -> tuple[str, str, str, str] | None:
         specifiers), the text between its parentheses, and what follows
         them; or None if the declaration isn't a function's.
     """
-    h = re.sub(r"__attribute__\s*\(\(.*?\)\)", lambda m: " " * len(
-        m.group(0)), head, flags=re.S)
+    h = re.sub(r"__attribute__\s*\(\(.*?\)\)", lambda m: " " * len(m.group(0)),
+               head, flags=re.S)
     h = re.sub(r"^\s*(public|private|protected)\s*:", "", h)
     depth = 0
     for i, c in enumerate(h):
@@ -665,26 +727,30 @@ def c_function(head: str) -> tuple[str, str, str, str] | None:
         return None
     pre = " ".join(h[:m.start()].split())
     post = h[close + 1:]
-    if not re.fullmatch(r"\s*((const|noexcept(\s*\([^)]*\))?|override|"
-                        r"final|volatile|&&|&|throw\s*\(\s*\)|"
-                        r"->\s*[\w:<>*&, ]+|=\s*(default|delete|0))"
-                        r"\s*)*(:.*)?", post, re.S):
+    if (not re.fullmatch(r"\s*((const|noexcept(\s*\([^)]*\))?|override|"
+                         r"final|volatile|&&|&|throw\s*\(\s*\)|"
+                         r"->\s*[\w:<>*&, ]+|=\s*(default|delete|0))"
+                         r"\s*)*(:.*)?", post, re.S)):
         return None
     return name, pre, h[i + 1:close], post
 
 
-def check_c(probs: Problems, text: str, header: bool) -> None:
+def check_c(probs: Problems, text: str, header: bool,
+            documented: set[str]) -> None:
     """Checks the headers of the functions in one C or C++ file.
 
     A function is documented where it is defined or, if it has one, at
-    its declaration in the same file.  A member function defined outside
-    its class, in a source file, is documented where the class declares
-    it.
+    its declaration in the same file.  A function or member function
+    defined in a source file may instead be documented where a header
+    declares it; headers are checked first.
 
     Args:
-        probs:  Where to record problems.
-        text:   The file's contents.
-        header: Whether the file is a header (``.h`` or ``.hpp``).
+        probs:      Where to record problems.
+        text:       The file's contents.
+        header:     Whether the file is a header (``.h`` or ``.hpp``).
+        documented: The functions documented in the headers checked so
+                    far, which a source file needn't document again;
+                    a header adds the ones it documents.
     """
     code = strip_c(text)
     lines = text.split("\n")
@@ -727,12 +793,15 @@ def check_c(probs: Problems, text: str, header: bool) -> None:
             return
         name, pre, params_s, post = f
         base = name.split("::")[-1]
+        if body is None and re.search(r"=\s*(default|delete)\s*$", post):
+            return  # Nothing to document: the compiler writes it.
         spec = re.sub(r"\b(static|inline|extern|virtual|explicit|"
-                      r"constexpr|friend|typename|class|struct|"
-                      r"\[\[[^\]]*\]\])\b", " ", pre)
+                      r"constexpr|friend|typename|class|struct)\b|"
+                      r"\[\[[^\]]*\]\]", " ", pre)
         spec = re.sub(r"\btemplate\s*<.*>", " ", spec).strip()
-        ctor = base.startswith("~") or (not spec and (
-            base == cls or base == name.split("::")[-2:][0]))
+        ctor = (base.startswith("~")
+                or (not spec
+                    and (base == cls or base == name.split("::")[-2:][0])))
         if not spec and not ctor:
             return  # A macro, at file scope.
         if "->" in post:
@@ -741,11 +810,16 @@ def check_c(probs: Problems, text: str, header: bool) -> None:
             returns = not ctor and spec not in ("void", "const void")
         plist = split_top(params_s)
         params = [x for x in (c_param_name(x) for x in plist) if x]
-        first = line_of(at + len(head) - len(head.lstrip()))
-        found.setdefault(name, []).append(dict(
-            line=first, params=params, returns=returns, body=body,
-            override=bool(re.search(r"\b(override|final)\b", post)),
-            doc=c_doc(lines, first)))
+        if (body is None and plist and not params
+                and any(is_expression(x) for x in plist)):
+            return  # A variable with an initializer, as in `T x(y);`.
+        lead = re.match(r"\s*((public|private|protected)\s*:)?\s*", head).end()
+        first = line_of(at + lead)
+        key = f"{cls}::{name}" if cls else name
+        found.setdefault(key, []).append(
+            dict(line=first, params=params, returns=returns, body=body,
+                 override=bool(re.search(r"\b(override|final)\b", post)),
+                 doc=c_doc(lines, first)))
 
     def scan(i: int, end: int, cls: str) -> None:
         """Finds the declarations in a scope, entering nested scopes.
@@ -766,11 +840,11 @@ def check_c(probs: Problems, text: str, header: bool) -> None:
                 head = code[start:i]
                 close = match_close(code, i)
                 hs = " ".join(head.split())
-                if re.match(r"(.*\s)?(namespace(\s+[\w:]+)?|extern)$",
-                            hs) or hs.startswith("extern "):
+                if (re.match(r"(.*\s)?(namespace(\s+[\w:]+)?|extern)$", hs)
+                        or hs.startswith("extern ")):
                     scan(i + 1, close, "")
-                elif m := re.match(r"(template\s*<.*>\s*)?(class|struct|"
-                                   r"union)\s+(\w+)?[^()]*$", hs):
+                elif (m := re.match(r"(template\s*<.*>\s*)?(class|struct|"
+                                    r"union)\s+(\w+)?[^()]*$", hs)):
                     scan(i + 1, close, m.group(3) or "")
                 elif "(" in head and "=" not in head.split("(")[0]:
                     body = len([b for b in code[i + 1:close].split("\n")
@@ -785,23 +859,43 @@ def check_c(probs: Problems, text: str, header: bool) -> None:
                 i += 1
 
     scan(0, len(code), "")
-    for name, recs in found.items():
-        if "::" in name and not header:
-            continue  # Documented where its class declares it.
+    for key, recs in found.items():
+        decls = [r for r in recs if r["body"] is None]
         defs = [r for r in recs if r["body"] is not None]
-        doc = next((x["doc"] for x in recs if x["doc"]), None)
-        for r in defs or recs[:1]:
+        if not header and "::" in key and not decls:
+            continue  # A member, documented where its class declares it.
+
+        def partner(r: dict) -> dict | None:
+            """Finds the declaration that goes with a definition.
+
+            Args:
+                r: The definition.
+
+            Returns:
+                The declaration with as many parameters, or None if
+                there is none.
+            """
+            return next((d for d in decls
+                         if len(d["params"]) == len(r["params"])), None)
+
+        paired = [partner(r) for r in defs]
+        todo = defs + [d for d in decls if not any(d is x for x in paired)]
+        for r in todo:
             if r["override"]:
                 continue
-            if r["body"] is not None and r["body"] <= TRIVIAL and \
-                    doc is None:
+            mate = partner(r) if r["body"] is not None else None
+            doc = r["doc"] or (mate["doc"] if mate else None)
+            if (doc is None
+                    and (key in documented
+                         or (r["body"] is not None and r["body"] <= TRIVIAL))):
                 continue
             lineno = r["line"] + 1
             if doc is None:
-                probs.add(lineno, name, "no /** header")
+                probs.add(lineno, key, "no /** header")
                 continue
-            check_c_doc(probs, lineno, name, doc, r["params"],
-                        r["returns"])
+            if header:
+                documented.add(key)
+            check_c_doc(probs, lineno, key, doc, r["params"], r["returns"])
 
 
 # -------------------------------------------------------------- Python ---
@@ -830,8 +924,9 @@ def py_returns(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     for n in own_nodes(fn):
         if isinstance(n, (ast.Yield, ast.YieldFrom)):
             gen = True
-        elif isinstance(n, ast.Return) and n.value is not None and not (
-                isinstance(n.value, ast.Constant) and n.value.value is None):
+        elif (isinstance(n, ast.Return) and n.value is not None
+              and not (isinstance(n.value, ast.Constant)
+                       and n.value.value is None)):
             val = True
     if gen:
         return "Yields"
@@ -852,8 +947,9 @@ def own_nodes(fn: ast.AST):
     while todo:
         n = todo.pop()
         yield n
-        if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef,
-                              ast.Lambda, ast.ClassDef)):
+        if (not isinstance(n,
+                           (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda,
+                            ast.ClassDef))):
             todo.extend(ast.iter_child_nodes(n))
 
 
@@ -881,8 +977,8 @@ def py_sections(doc: str) -> dict[str, list[str]]:
                 cur = "Args"
             head_ind = len(m.group(1))
             secs[cur] = []
-        elif cur and ln.strip() and head_ind is not None and \
-                len(ln) - len(ln.lstrip()) <= head_ind:
+        elif (cur and ln.strip() and head_ind is not None
+              and len(ln) - len(ln.lstrip()) <= head_ind):
             cur = ""
             secs[""].append(ln)
         else:
@@ -910,10 +1006,9 @@ def py_args(sec: list[str]) -> list[tuple[str, int, list[int]]]:
         m = re.match(r"(\s*(\*{0,2}\w+)(?:\s*\([^)]*\))?:\s+)\S", s)
         if here == ind and m:
             entries.append((m.group(2), len(m.group(1)), []))
-        elif here == ind and re.match(r"\s*\*{0,2}\w+(\s*\([^)]*\))?:\s*$",
-                                      s):
-            entries.append((s.strip().split(":")[0].split("(")[0].strip(),
-                            -1, []))
+        elif here == ind and re.match(r"\s*\*{0,2}\w+(\s*\([^)]*\))?:\s*$", s):
+            entries.append((s.strip().split(":")[0].split("(")[0].strip(), -1,
+                            []))
         elif entries:
             entries[-1][2].append(here)
     return entries
@@ -942,12 +1037,11 @@ def check_python(probs: Problems, text: str, in_tests: bool) -> None:
         name = fn.name
         parent = parents.get(fn)
         method = isinstance(parent, ast.ClassDef)
-        if name.startswith("test") or name in (
-                "setUp", "tearDown", "setUpClass", "tearDownClass",
-                "setUpModule", "tearDownModule"):
+        if (name.startswith("test")
+                or name in ("setUp", "tearDown", "setUpClass", "tearDownClass",
+                            "setUpModule", "tearDownModule")):
             continue
-        if name.startswith("__") and name.endswith("__") and \
-                name != "__init__":
+        if name.startswith("__") and name.endswith("__") and name != "__init__":
             continue
         decos = [ast.unparse(d) for d in fn.decorator_list]
         if any(d.endswith(("override", "overload")) for d in decos):
@@ -963,11 +1057,10 @@ def check_python(probs: Problems, text: str, in_tests: bool) -> None:
             continue
         a = fn.args
         params = [x.arg for x in a.posonlyargs + a.args]
-        if method and params and params[0] in ("self", "cls") and \
-                not any(d == "staticmethod" for d in decos):
+        if (method and params and params[0] in ("self", "cls")
+                and not any(d == "staticmethod" for d in decos)):
             params = params[1:]
-        elif method and params and not any(d == "staticmethod"
-                                           for d in decos):
+        elif method and params and not any(d == "staticmethod" for d in decos):
             params = params[1:]
         if a.vararg:
             params.append("*" + a.vararg.arg)
@@ -998,19 +1091,19 @@ def check_python(probs: Problems, text: str, in_tests: bool) -> None:
             else:
                 entries = py_args(secs["Args"])
                 if any(e[1] < 0 for e in entries):
-                    probs.add(lineno, name, "a parameter has no "
-                                            "description on its line")
+                    probs.add(lineno, name,
+                              "a parameter has no description on its line")
                     entries = [e for e in entries if e[1] >= 0]
                 strip = [e[0] for e in entries]
                 want = params
-                if [s.lstrip("*") for s in strip] == \
-                        [p.lstrip("*") for p in params]:
+                if ([s.lstrip("*") for s in strip] == [p.lstrip("*")
+                                                       for p in params]):
                     want = strip
                 check_list(probs, lineno, name, entries, want)
         elif "Args" in secs:
             probs.add(lineno, name, "Args but no parameters")
-        if gives and gives not in secs and not (
-                gives == "Yields" and "Returns" in secs):
+        if (gives and gives not in secs
+                and not (gives == "Yields" and "Returns" in secs)):
             probs.add(lineno, name, f"no {gives} section")
         if not gives and ("Returns" in secs or "Yields" in secs):
             probs.add(lineno, name, "Returns but returns nothing")
@@ -1037,9 +1130,26 @@ def files(args: list[str]) -> list[Path]:
         out.update(Path(p) for p in glob.glob(pattern))
     keep = {".rs", ".c", ".h", ".cpp", ".hpp", ".py"}
     return sorted(p for p in out
-                  if p.suffix in keep and p.is_file()
-                  and not str(p).startswith(SKIP)
+                  if (p.suffix in keep or (not p.suffix and python_script(p)))
+                  and p.is_file() and not str(p).startswith(SKIP)
                   and "/corpus/" not in str(p))
+
+
+def python_script(p: Path) -> bool:
+    """Says whether a file is a Python script, by its ``#!`` line.
+
+    Args:
+        p: The file.
+
+    Returns:
+        True if its first line runs Python.
+    """
+    try:
+        with p.open("rb") as f:
+            first = f.readline(200)
+    except OSError:
+        return False
+    return first.startswith(b"#!") and b"python" in first
 
 
 def main() -> int:
@@ -1049,16 +1159,20 @@ def main() -> int:
         The exit status: 0 if every header is right, else 1.
     """
     bad = 0
-    for p in files(sys.argv[1:]):
+    documented: set[str] = set()
+    # Headers first, so that a source file needn't repeat their headers.
+    order = sorted(files(sys.argv[1:]),
+                   key=lambda p: (p.suffix not in (".h", ".hpp"), str(p)))
+    for p in order:
         text = p.read_text(encoding="utf-8", errors="replace")
         probs = Problems(p)
         if p.suffix == ".rs":
             check_rust(probs, text)
-        elif p.suffix == ".py":
+        elif p.suffix == ".py" or not p.suffix:
             in_tests = "test" in str(p)
             check_python(probs, text, in_tests)
         else:
-            check_c(probs, text, p.suffix in (".h", ".hpp"))
+            check_c(probs, text, p.suffix in (".h", ".hpp"), documented)
         for f in probs.found:
             print(f, file=sys.stderr)
         bad += len(probs.found)

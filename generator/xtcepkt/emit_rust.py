@@ -7,9 +7,9 @@ import math
 import textwrap
 from typing import Optional
 
-from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
-                     notes, stream_capacity, stream_doc, MATH_OPS, Ref,
-                     fast_order, field_range, flt, header_lines, inputs,
+from .common import (HOOK_DOCS, doc_header, written, checks_hooks, items_hooks,
+                     terms_hooks, notes, stream_capacity, stream_doc, MATH_OPS,
+                     Ref, fast_order, field_range, flt, header_lines, inputs,
                      int_enc, invertible, math_value, size_args, str_cap,
                      binary_cap, stream_fn, string_spec, wire_region)
 from .model import (
@@ -21,6 +21,15 @@ from .model import (
 
 
 def rstr(s: str) -> str:
+    """Quotes text as a Rust string literal.
+
+    Args:
+        s: The text.
+
+    Returns:
+        The literal, with quotes and backslashes escaped and control
+        characters written as Rust Unicode escapes.
+    """
     out = []
     for c in s:
         if c in '"\\':
@@ -33,8 +42,19 @@ def rstr(s: str) -> str:
 
 
 def field_type(vt: VType, alloc: bool, optional: bool = False) -> str:
-    """The Rust type of a value; without ``alloc``, arrays, strings and
-    binary values have fixed capacities, so they need no heap."""
+    """Names the Rust type of a value's generated field.
+
+    Args:
+        vt:       The value's type.
+        alloc:    Whether the code may allocate; without it, arrays, strings
+                  and binary values have fixed capacities, so they need no
+                  heap.
+        optional: Whether the field is present only when its include
+                  condition holds, which makes it an ``Option``.
+
+    Returns:
+        The Rust type.
+    """
     if optional:
         return f"Option<{field_type(vt, alloc)}>"
     k = vt.kind
@@ -68,6 +88,12 @@ def rflt(x: float) -> str:
     return flt(x) + "_f64"
 
 
+# The parameters of the generated monitor methods.
+MONITOR_PARAMS = [
+    ("m",
+     "The state of the alarms that depend on earlier samples, which the method "
+     "reads and updates."), ("t", "This sample's time, in seconds.")]
+
 # The Rust type of each kind of hook.
 HOOK_TYPES = {"criterion": "fn(&[f64]) -> bool",
               "algorithm": "fn(&[f64], &mut [f64]) -> bool",
@@ -86,6 +112,16 @@ def wide_type(vt: VType) -> str:
 
 
 def wide_literal(vt: VType, v: int) -> str:
+    """Writes a Rust literal of an integer of more than 64 bits.
+
+    Args:
+        vt: The integer's type.
+        v:  The value, which the type holds.
+
+    Returns:
+        A ``u128`` or ``i128`` literal for 128 bits, else a bnum value built
+        from its little-endian bytes.
+    """
     if vt.width == 128:
         return f"{v}{'i' if vt.signed else 'u'}128"
     b = v.to_bytes(vt.width // 8, "little", signed=vt.signed)
@@ -94,6 +130,16 @@ def wide_literal(vt: VType, v: int) -> str:
 
 
 def literal(vt: VType, v) -> str:
+    """Writes a Rust literal of a value of a type.
+
+    Args:
+        vt: The type.
+        v:  The value: an int, float, bool, str or bytes, as the type's kind
+            needs; for an enumeration, its raw value.
+
+    Returns:
+        The literal; for a binary value, a byte slice.
+    """
     k = vt.kind
     if k == "int" and vt.wide:
         return wide_literal(vt, v)
@@ -116,8 +162,20 @@ def points(cal: Spline) -> str:
 
 
 def math_expr(e: tuple, x: str, place, f: str) -> str:
-    """Rust expression for a MathOperationCalibrator tree; ``x`` is the
-    value being calibrated."""
+    """Writes the Rust expression of a MathOperationCalibrator
+    or MathAlgorithm tree.
+
+    Args:
+        e:     The tree: ("const", x), ("raw",), ("value", ref) or an
+               operator and its operands.
+        x:     The expression for the value being calibrated, which
+               ("raw",) stands for.
+        place: Gives the expression for a Local whose value the tree uses.
+        f:     The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        An f64 expression.
+    """
     if e[0] == "const":
         return f"({flt(e[1])})"
     if e[0] == "raw":
@@ -135,8 +193,18 @@ def math_expr(e: tuple, x: str, place, f: str) -> str:
 
 
 def apply_cal(cal, x: str, f: str, place) -> str:
-    """Expression calibrating ``x`` with ``cal``; ``place`` gives the
-    expression for a Local that the calibrator uses."""
+    """Writes the expression calibrating a raw value.
+
+    Args:
+        cal:   The calibrator, or None for none.
+        x:     The f64 expression for the raw value.
+        f:     The field's name, as a Rust string literal, for errors.
+        place: Gives the expression for a Local that the calibrator uses.
+
+    Returns:
+        The f64 expression for the engineering value; a spline's fails with
+        Calibration when the value is outside it.
+    """
     if cal is None:
         return x
     if isinstance(cal, Polynomial):
@@ -156,8 +224,18 @@ def apply_cal(cal, x: str, f: str, place) -> str:
 
 
 def invert_cal(cal, y: str, f: str, place) -> str:
-    """Expression inverting ``cal`` for the engineering value ``y``; one
-    that can't be inverted returns NotInvertible."""
+    """Writes the expression inverting a calibrator.
+
+    Args:
+        cal:   The calibrator, or None for none.
+        y:     The f64 expression for the engineering value.
+        f:     The field's name, as a Rust string literal, for errors.
+        place: Gives the expression for a Local that the calibrator uses.
+
+    Returns:
+        The f64 expression for the raw value, or for a calibrator that
+        can't be inverted a statement returning NotInvertible.
+    """
     if cal is None:
         return y
     if not cal.invertible:
@@ -173,8 +251,17 @@ def invert_cal(cal, y: str, f: str, place) -> str:
 
 
 def choose(cal: ContextCal, body, place) -> str:
-    """An if-else chain over a context calibrator's cases: ``body(c)``
-    for the calibrator of the first case that holds, or the default."""
+    """Writes an if-else chain over a context calibrator's cases.
+
+    Args:
+        cal:   The context calibrator.
+        body:  Gives the expression for one of its calibrators.
+        place: Gives the expression for a Local that the criteria use.
+
+    Returns:
+        The chain: ``body(c)`` for the calibrator of the first case whose
+        criteria hold, else for the default.
+    """
     out = ""
     for terms, c in cal.cases:
         out += f"if {conjunction([term(t, place) for t in terms])} {{ "
@@ -191,8 +278,17 @@ def uncalibrate(vt: VType, y: str, f: str, place) -> str:
 
 
 def spec(vt: VType, ref, f: str) -> str:
-    """Expression for the StringSpec of a string type; ``ref`` gives the
-    expression for the value that gives a dynamic size."""
+    """Writes the StringSpec of a string type.
+
+    Args:
+        vt:  The type, whose encoding is a StringEnc.
+        ref: Gives the expression for the value that gives a dynamic size.
+        f:   The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        A reference to the spec, sized by its dynamic size when it has
+        one.
+    """
     fixed, mx, term, tag = string_spec(vt)
     fixed = f"Some({fixed})" if fixed is not None else "None"
     term = (f"Some(&[{', '.join(f'0x{b:02x}' for b in term)}])"
@@ -205,9 +301,17 @@ def spec(vt: VType, ref, f: str) -> str:
 
 
 def source(d: DynSize, place) -> str:
-    """Expression for the value a bound DynSize adjusts: a field, or the
-    first matching value of a DiscreteLookupList.  ``place`` gives the
-    expression for a Local."""
+    """Writes the expression for the value a bound DynSize
+    adjusts.
+
+    Args:
+        d:     The DynSize.
+        place: Gives the expression for a Local.
+
+    Returns:
+        A field (or its member or element), or for a DiscreteLookupList an
+        i64 expression giving the first matching value, or the default.
+    """
     if d.lookup is None:
         return reach(place(d.local), d.path, rstr(d.local.name))
     x = f"{d.default}i64"
@@ -218,7 +322,17 @@ def source(d: DynSize, place) -> str:
 
 
 def offset(s: Seek, ref, f: str) -> str:
-    """Expression for the offset of a Seek."""
+    """Writes the expression for the offset of a Seek.
+
+    Args:
+        s:   The Seek.
+        ref: Gives the value that a dynamic offset uses.
+        f:   The name to give errors, as a Rust string literal.
+
+    Returns:
+        An i64 expression: the offset in bits, less the bits the Seek
+        backs up.
+    """
     if isinstance(s.offset, int):
         return str(s.offset - s.back)
     n = size(s.offset, ref(s.offset), f)
@@ -227,7 +341,18 @@ def offset(s: Seek, ref, f: str) -> str:
 
 
 def size(d: DynSize, x: str, f: str) -> str:
-    """Expression for a size or count that the value ``x`` gives."""
+    """Writes the expression for a size or count that a value
+    gives.
+
+    Args:
+        d: The DynSize.
+        x: The expression for the value.
+        f: The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        A usize expression, scaled by the DynSize's factor; it fails with
+        BadSize when the result isn't a size the DynSize allows.
+    """
     v = f"pk::wide_f64({x})" if d.wide_type is not None else f"{x} as f64"
     n = (f"pk::dynamic_size({v}, {flt(d.slope)}, {flt(d.intercept)}, {d.unit}, "
          f"{d.max}, {f})?")
@@ -260,7 +385,18 @@ FLOATS = {"IEEE754": "Ieee", "MILSTD_1750A": "Mil1750a", "DEC": "Dec",
 
 
 def checksum_spec(spec: tuple) -> str:
-    """The runtime's Checksum for an ErrorDetectCorrect algorithm."""
+    """Writes the runtime's Checksum for an
+    ErrorDetectCorrect algorithm.
+
+    Args:
+        spec: The algorithm, as the model gives it: its kind, then its
+              parameters (a CRC's width, polynomial, initial and final
+              values and reflections; a custom one's hook).
+
+    Returns:
+        The ``pk::Checksum`` expression; a custom one's fails with
+        NoAlgorithm while its hook isn't set.
+    """
     kind = spec[0]
     if kind == "crc":
         width, poly, init, final, ref_in, ref_out = spec[1:]
@@ -283,6 +419,14 @@ def checksum_spec(spec: tuple) -> str:
 
 
 def byte_order(e) -> str:
+    """Writes the runtime's ByteOrder of an encoding.
+
+    Args:
+        e: The integer or float encoding.
+
+    Returns:
+        ``pk::ByteOrder::Big``, ``Little``, or a list of the bytes' order.
+    """
     if e.order == "be":
         return "pk::ByteOrder::Big"
     if e.order == "le":
@@ -291,8 +435,16 @@ def byte_order(e) -> str:
 
 
 def raw_read(e, f: str) -> str:
-    """Expression reading the raw value of an integer or float encoding: a
-    u64, or a u128 for more than 64 bits."""
+    """Writes the expression reading the raw value of an integer
+    or float encoding with BitReader ``r``.
+
+    Args:
+        e: The encoding.
+        f: The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        A u64 expression, or a u128 one for more than 64 bits.
+    """
     if fast_order(e):
         return f"r.uint_order({e.bits}, {str(e.little_endian).lower()}, {f})?"
     x = (f"r.uint_bits({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, {f})?")
@@ -300,8 +452,17 @@ def raw_read(e, f: str) -> str:
 
 
 def raw_write(e, raw: str) -> str:
-    """Statement writing the raw value ``raw`` (u64, or u128 for more than
-    64 bits) of an integer or float encoding."""
+    """Writes the statement writing the raw value of an integer
+    or float encoding with BitWriter ``w``.
+
+    Args:
+        e:   The encoding.
+        raw: The expression for the raw value: a u64, or a u128 for more
+             than 64 bits.
+
+    Returns:
+        The statement.
+    """
     if fast_order(e):
         return f"w.uint_order({e.bits}, {str(e.little_endian).lower()}, {raw});"
     wide = raw if e.bits > 64 else f"{raw} as u128"
@@ -310,10 +471,21 @@ def raw_write(e, raw: str) -> str:
 
 
 def read_expr(vt: VType, f: str, ref, alloc: bool, depth: int = 0) -> str:
-    """Expression reading one value with BitReader ``r``; ``ref`` gives the
-    expression for the value that gives a size or count (a DynSize).
-    ``alloc`` is whether it may allocate.  ``depth`` numbers the locals of
-    nested aggregates."""
+    """Writes the expression reading one value with BitReader
+    ``r``.
+
+    Args:
+        vt:    The value's type.
+        f:     The field's name, as a Rust string literal, for errors.
+        ref:   Gives the expression for the value that gives a size or count
+               (a DynSize).
+        alloc: Whether the code may allocate.
+        depth: Numbers the locals of nested aggregates.
+
+    Returns:
+        The expression, which returns the decoding error from the function
+        it is in.
+    """
     x = read_value_expr(vt, f, ref, alloc, depth)
     if lsb_bytes(vt):
         return f"{{ r.set_lsb(true); let v = {x}; r.set_lsb(false); v }}"
@@ -327,7 +499,19 @@ def lsb_bytes(vt: VType) -> bool:
 
 
 def read_value_expr(vt: VType, f: str, ref, alloc: bool, depth: int) -> str:
-    """read_expr's expression, in the reader's usual bit order."""
+    """Writes read_expr's expression, in the reader's usual
+    bit order.
+
+    Args:
+        vt:    The value's type.
+        f:     The field's name, as a Rust string literal, for errors.
+        ref:   Gives the expression for the value that gives a size or count.
+        alloc: Whether the code may allocate.
+        depth: Numbers the locals of nested aggregates.
+
+    Returns:
+        The expression.
+    """
     e = vt.enc
     if isinstance(e, AggregateEnc):
         a = f"a{depth}_"
@@ -585,7 +769,17 @@ def write_wide_choice(vt: VType, x: str, f: str) -> str:
 
 
 def read_wide(vt: VType, f: str) -> str:
-    """Expression reading an integer of more than 64 bits."""
+    """Writes the expression reading an integer of more than 64
+    bits.
+
+    Args:
+        vt: The integer's type, whose encoding is an IntEnc.
+        f:  The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        The expression: a ``u128`` or ``i128`` for 128 bits, else the bnum
+        integer.
+    """
     e = vt.enc
     n = vt.width // 8
     x = (f"r.wide::<{n}>({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, "
@@ -601,7 +795,18 @@ def read_wide(vt: VType, f: str) -> str:
 
 
 def write_wide(vt: VType, x: str, f: str) -> str:
-    """Statement writing ``x``, an integer of more than 64 bits."""
+    """Writes the statement writing an integer of more than 64
+    bits.
+
+    Args:
+        vt: The integer's type, whose encoding is an IntEnc.
+        x:  The expression for the value.
+        f:  The field's name, as a Rust string literal, for errors.
+
+    Returns:
+        The statement, which fails with OutOfRange when the encoding can't
+        hold the value.
+    """
     e = vt.enc
     t = wide_type(vt).replace("<", "::<")
     v = f"{t}::from_le_bytes(({x}).to_le_bytes())"
@@ -618,8 +823,17 @@ def write_wide(vt: VType, x: str, f: str) -> str:
 
 
 def checks(e: AggregateEnc, x: str) -> str:
-    """Statements failing with Mismatch unless aggregate ``x`` meets the
-    criteria of the repeated container it is a copy of."""
+    """Writes the checks of a repeated container's criteria on one
+    copy of it.
+
+    Args:
+        e: The aggregate encoding of the copy, which holds the criteria.
+        x: The expression for the copy.
+
+    Returns:
+        Statements failing with Mismatch unless the copy meets each
+        criterion.
+    """
     out = []
     for r in e.checks:
         cond = conjunction([term(t, lambda lc: x) for t in r.criteria])
@@ -630,9 +844,19 @@ def checks(e: AggregateEnc, x: str) -> str:
 
 
 def write_stmt(vt: VType, x: str, f: str, ref) -> str:
-    """Statement writing value ``x`` (a place or literal) with BitWriter ``w``;
-    ``ref`` gives the expression for a value that gives a size or count.  A
-    value outside its type's valid ranges fails with OutOfRange."""
+    """Writes the statement writing a value with BitWriter
+    ``w``.
+
+    Args:
+        vt:  The value's type.
+        x:   The expression for the value: a place or a literal.
+        f:   The field's name, as a Rust string literal, for errors.
+        ref: Gives the expression for a value that gives a size or count.
+
+    Returns:
+        The statement; a value outside its type's valid ranges fails with
+        OutOfRange.
+    """
     stmt = write_value_stmt(vt, x, f, ref)
     if not (vt.valid and vt.kind in ("int", "float")):
         return stmt
@@ -660,7 +884,19 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
 
 
 def write_value_stmt(vt: VType, x: str, f: str, ref) -> str:
-    """write_stmt's statement, without the check of the valid ranges."""
+    """Writes write_stmt's statement, without the check of
+    the valid ranges.
+
+    Args:
+        vt:  The value's type.
+        x:   The expression for the value.
+        f:   The field's name, as a Rust string literal, for errors.
+        ref: Gives the expression for a value that gives a size or count.
+
+    Returns:
+        The statement, with the writer least significant bit first around
+        it for such a string or binary value.
+    """
     s = write_bytes_stmt(vt, x, f, ref)
     if lsb_bytes(vt):
         return f"{{ w.set_lsb(true); {s} w.set_lsb(false); }}"
@@ -668,7 +904,20 @@ def write_value_stmt(vt: VType, x: str, f: str, ref) -> str:
 
 
 def write_bytes_stmt(vt: VType, x: str, f: str, ref) -> str:
-    """write_value_stmt's statement, in the writer's usual bit order."""
+    """Writes write_value_stmt's statement, in the
+    writer's usual bit order.
+
+    Args:
+        vt:  The value's type.
+        x:   The expression for the value.
+        f:   The field's name, as a Rust string literal, for errors.
+        ref: Gives the expression for a value that gives a size or count.
+
+    Returns:
+        The statement; it fails with BadSize when an array or binary value
+        doesn't have the size its DynSize gives, and with NotInvertible
+        when its calibrator can't be inverted.
+    """
     e = vt.enc
     bad = f"return Err(PacketError::BadSize {{ field: {f} }});"
     if isinstance(e, AggregateEnc):
@@ -766,8 +1015,17 @@ def elem_pattern(vt: VType) -> str:
 
 
 def describe(vt: VType, x: str) -> str:
-    """Expression writing the canonical text of ``x`` to the formatter
-    ``f``, without allocating."""
+    """Writes the expression writing a value's canonical text to
+    the formatter ``f``, without allocating.
+
+    Args:
+        vt: The value's type.
+        x:  The expression for the value.
+
+    Returns:
+        The expression, which returns a formatting error from the function
+        it is in.
+    """
     k = vt.kind
     if k == "aggregate":
         parts = []
@@ -795,15 +1053,32 @@ def describe(vt: VType, x: str) -> str:
 
 
 def conjunction(conds: list) -> str:
+    """Joins conditions with ``&&``.
+
+    Args:
+        conds: The Rust boolean expressions.
+
+    Returns:
+        ``true`` for none, the one for one, else each in parentheses joined
+        with ``&&``.
+    """
     if not conds:
         return "true"
     return conds[0] if len(conds) == 1 else " && ".join(f"({c})" for c in conds)
 
 
 def reach(x: str, path, f: str) -> str:
-    """The expression for the member or element ``path`` of ``x``.  An
-    element of an array whose count varies may be missing, which fails with
-    ``BadSize`` naming ``f``."""
+    """Writes the expression for a member or element of a value.
+
+    Args:
+        x:    The expression for the value.
+        path: The member names and Indexes leading to it.
+        f:    The name to give BadSize, as a Rust string literal.
+
+    Returns:
+        The expression; an element of an array whose count varies may be
+        missing, which fails with BadSize.
+    """
     for p in path:
         if not isinstance(p, Index):
             x += "." + p
@@ -818,8 +1093,16 @@ def reach(x: str, path, f: str) -> str:
 
 
 def term(t, place) -> str:
-    """Expression for a criterion or a tree of them; ``place`` gives the
-    expression for a Local."""
+    """Writes the expression for a criterion or a tree of them.
+
+    Args:
+        t:     The Criterion, AllOf, AnyOf or Custom.
+        place: Gives the expression for a Local.
+
+    Returns:
+        A boolean expression.  An absent value compares as C++'s
+        std::optional does: less than any value.
+    """
     if isinstance(t, (AllOf, AnyOf)):
         return (" && " if isinstance(t, AllOf)
                 else " || ").join(f"({term(x, place)})" for x in t.terms)
@@ -844,7 +1127,17 @@ def opt_size(n) -> str:
 
 
 def hook_args(inputs: list, place) -> str:
-    """A slice's items: a custom algorithm's inputs, as f64s."""
+    """Writes the items of a slice of a custom algorithm's
+    inputs.
+
+    Args:
+        inputs: Each input: ("const", x), or a Local, its member path and
+                its type.
+        place:  Gives the expression for a Local.
+
+    Returns:
+        The f64 expressions, separated by commas.
+    """
     return ", ".join(rflt(x[1]) if x[0] == "const"
                      else math_value(x[3],
                                      reach(place(x[1]), x[2], rstr(x[1].name)),
@@ -857,8 +1150,18 @@ EMPTY = {"==": "false", "!=": "true", "<": "true", "<=": "true", ">": "false",
 
 
 def condition(c: Criterion, x: str, y=None) -> str:
-    """``x`` is the expression for the criterion's local, and ``y`` for
-    the value it compares with, if any."""
+    """Writes the comparison of one criterion.
+
+    Args:
+        c: The criterion.
+        x: The expression for the criterion's Local.
+        y: The expression for the Local it compares with, or None to
+           compare with its constant.
+
+    Returns:
+        A boolean expression; one that every value of the field gives the
+        same answer to is ``true`` or ``false``.
+    """
     vt = c.vtype
     x = reach(x, c.path, rstr(c.local.name))
     if y is not None:
@@ -892,6 +1195,13 @@ def condition(c: Criterion, x: str, y=None) -> str:
 
 class RustEmitter:
     def __init__(self, mission: Mission, source: str, alloc: bool):
+        """Starts a Rust module.
+
+        Args:
+            mission: The compiled mission.
+            source:  The name of the XTCE documents, for the notice at the top.
+            alloc:   Whether the code may allocate.
+        """
         self.m = mission
         self.source = source
         self.alloc = alloc
@@ -901,7 +1211,28 @@ class RustEmitter:
     def line(self, s: str = "", depth: int = 0) -> None:
         self.out.append("    " * depth + s if s else "")
 
+    def doc(self, depth: int, summary: str, params: list[tuple[str, str]] = (),
+            returns: str | None = None, errors: str | None = None) -> None:
+        """Writes the rustdoc header of a generated function.
+
+        Args:
+            depth:   The function's indentation level.
+            summary: What the function does.
+            params:  Each parameter but the receiver, with what it means.
+            returns: What it returns, or None if it returns nothing.
+            errors:  When it returns an error, for one returning a
+                     Result.
+        """
+        for text in doc_header("rust", summary, params, returns, errors,
+                               indent=4 * depth):
+            self.line(text, depth)
+
     def emit(self) -> str:
+        """Writes the whole module.
+
+        Returns:
+            The module's source, before rustfmt.
+        """
         m = self.m
         for h in header_lines(m, self.source):
             self.line("// " + h)
@@ -946,6 +1277,12 @@ class RustEmitter:
         return "\n".join(self.out) + "\n"
 
     def stream(self, st) -> None:
+        """Writes a stream's type: its frame
+        synchronizer, ``new`` and ``push``.
+
+        Args:
+            st: The stream.
+        """
         sync = "FrameSync" if st.fixed else "FlagSync"
         pcm = {"NRZL": "Nrzl", "NRZM": "Nrzm", "NRZS": "Nrzs",
                "BiPhaseL": "BiphaseL", "BiPhaseM": "BiphaseM",
@@ -1010,6 +1347,15 @@ class RustEmitter:
             self.line("};", 1)
             self.line()
         params = ", ".join(f"{n}: {types[k]}" for k, n in fns)
+        what = {"decode": "The DecodingAlgorithm `{}` of stream `{}`, which "
+                          "gives the bytes it decodes from those it is given.",
+                "invert": "The InvertAlgorithm `{}` of stream `{}`: what a bit "
+                          "is once AutoInvert has inverted the stream."}
+        self.doc(1, f"Makes a stream `{st.key}` with nothing pushed to it yet.",
+                 [(stream_fn(k, x),
+                   what[k].format(x.decoder if k == "decode" else x.inverter,
+                                  x.key)) for k, x in st.functions()],
+                 "The stream, ready for `push`.")
         self.line(f"pub fn new({params}) -> Self {{", 1)
         self.line("Self {", 2)
         if st.custom:
@@ -1027,8 +1373,15 @@ class RustEmitter:
         self.line()
         what = ("the bytes it decodes" if st.custom
                 else "each frame they complete (its bits padded with zeros)")
-        self.line("/// Takes the next bytes of the stream, and gives `f` "
-                  f"{what}.", 1)
+        self.doc(
+            1,
+            f"Takes the next bytes of stream `{st.key}`, and gives `f` {what}.",
+            [("data", "The stream's next bytes, in the order they arrive."),
+             ("f",
+              f"Called with each piece of the bytes that `{st.decoder}` "
+              "decodes." if st.custom
+              else f"Called with the bytes of each frame, a `{st.container}` "
+                   "packet.")])
         self.line("pub fn push(&mut self, data: &[u8], mut f: impl "
                   "FnMut(&[u8])) {", 1)
         if st.custom and st.feeder is None:
@@ -1045,14 +1398,27 @@ class RustEmitter:
         self.line("}")
 
     def transform_buffers(self, nodes: list, depth: int) -> None:
-        """The buffers of the transformed data that decoding ``nodes``
-        reads, declared before the reader so that it can read them."""
+        """Declares the buffers of the
+        transformed data that decoding some containers reads, before the reader,
+        so that it can read them.
+
+        Args:
+            nodes: The containers.
+            depth: The indentation of the declarations.
+        """
         for node in nodes:
             for it in walk(node.items):
                 if isinstance(it, Transform):
                     self.line(f"let mut t{it.start} = [0u8; {it.cap}];", depth)
 
     def need_hooks(self, hooks: list, depth: int) -> None:
+        """Writes statements failing with NoAlgorithm
+        unless each of some hooks is set.
+
+        Args:
+            hooks: The hooks.
+            depth: The indentation of the statements.
+        """
         for h in hooks:
             self.line(f"if hooks::{h.ident.upper()}.get().is_none() {{", depth)
             self.line("return Err(PacketError::NoAlgorithm { name: "
@@ -1060,6 +1426,10 @@ class RustEmitter:
             self.line("}", depth)
 
     def hooks(self) -> None:
+        """Writes the ``hooks`` module: a static for each
+        function the application supplies for the document's custom
+        algorithms.
+        """
         self.line()
         self.line("/// The functions the application supplies for the "
                   "document's custom")
@@ -1078,6 +1448,9 @@ class RustEmitter:
         self.line("}")
 
     def alarm_monitor(self) -> None:
+        """Writes ``AlarmMonitor``: the state of each
+        parameter whose alarms depend on earlier samples.
+        """
         self.line()
         self.line("/// The alarm state of each parameter whose alarms depend "
                   "on earlier")
@@ -1091,6 +1464,12 @@ class RustEmitter:
         self.line("}")
 
     def enum_type(self, vt: VType) -> None:
+        """Writes an enumeration's type, its constants,
+        ``label`` and its Display.
+
+        Args:
+            vt: The enumerated type.
+        """
         self.line()
         self.line(f"/// Enumeration `{vt.key}`; holds the raw value so "
                   "unlisted values survive decoding.")
@@ -1101,8 +1480,9 @@ class RustEmitter:
         for lab in vt.labels:
             self.line(f"pub const {lab.ident}: Self = Self({lab.value});", 1)
         self.line()
-        self.line("/// The label of this value, if the enumeration lists it.",
-                  1)
+        self.doc(1, f"Names this value of enumeration `{vt.key}`.",
+                 returns="The value's label, or `None` if the enumeration "
+                         "doesn't list it.")
         self.line("pub fn label(self) -> Option<&'static str> {", 1)
         self.line("match self.0 {", 2)
         for lab in vt.labels:
@@ -1125,6 +1505,11 @@ class RustEmitter:
         self.line("}")
 
     def aggregate_type(self, vt: VType) -> None:
+        """Writes an aggregate's struct.
+
+        Args:
+            vt: The aggregate type.
+        """
         self.line()
         self.line(f"/// Aggregate `{vt.key}`; its members are encoded in this "
                   "order.")
@@ -1139,6 +1524,17 @@ class RustEmitter:
 
     def read_items(self, items, depth: int, where: str,
                    assign: bool = False) -> None:
+        """Writes the statements decoding a container's
+        entries with BitReader ``r``, into locals ``v<id>``.
+
+        Args:
+            items:  The entries.
+            depth:  The indentation of the statements.
+            where:  The container's name, for errors.
+            assign: Whether the values are inside an include condition, so that
+                    their ``Option`` locals are declared already and are
+                    assigned.
+        """
         for it in items:
             if isinstance(it, Seek):
                 off = offset(it, self.read_ref, rstr(where))
@@ -1226,6 +1622,16 @@ class RustEmitter:
 
     def write_items(self, n: Node, items, depth: int, where: str,
                     names: dict) -> None:
+        """Writes the statements encoding a
+        container's entries with BitWriter ``w``.
+
+        Args:
+            n:     The packet being encoded.
+            items: The entries.
+            depth: The indentation of the statements.
+            where: The container's name, for errors.
+            names: The field name of each of the packet's Locals.
+        """
         for it in items:
             if isinstance(it, Seek):
                 off = offset(it, self.write_ref(n, names), rstr(where))
@@ -1314,8 +1720,17 @@ class RustEmitter:
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:
-        """Expression for a value when encoding: a field, a computed size or
-        count, or a fixed constant."""
+        """Writes the expression for a value when encoding.
+
+        Args:
+            n:     The packet being encoded.
+            lc:    The value.
+            names: The field name of each of the packet's Locals.
+
+        Returns:
+            The field, the local of a computed size or count, or the literal of
+            a value its inheritance fixes.
+        """
         if lc in names:
             return f"self.{names[lc]}"
         if lc in n.derived:
@@ -1324,8 +1739,15 @@ class RustEmitter:
         return f"({x})" if lc.vtype.kind == "binary" else x
 
     def fill(self, it: Fill, rw: str, ref, depth: int) -> None:
-        """Pads to the end of a container with a size; fails with BadSize if
-        its entries go past it."""
+        """Writes statements padding to the end of a
+        container with a size; they fail with BadSize if its entries go past it.
+
+        Args:
+            it:    The Fill.
+            rw:    ``r`` when decoding, ``w`` when encoding.
+            ref:   Gives the value that a dynamic size uses.
+            depth: The indentation of the statements.
+        """
         f = rstr(it.container)
         n = (size(it.size, ref(it.size), f) if isinstance(it.size, DynSize)
              else str(it.size))
@@ -1341,8 +1763,14 @@ class RustEmitter:
         self.line("}", depth)
 
     def require(self, it: Require, place, depth: int) -> None:
-        """Fails with Mismatch unless an included container's criteria
-        hold."""
+        """Writes a statement failing with Mismatch unless
+        an included container's criteria hold.
+
+        Args:
+            it:    The Require.
+            place: Gives the expression for a Local.
+            depth: The indentation of the statement.
+        """
         self.line(f"if !({conjunction([term(t, place) for t in it.criteria])}) "
                   "{", depth)
         self.line("return Err(PacketError::Mismatch { container: "
@@ -1355,8 +1783,13 @@ class RustEmitter:
         return "0" if i == 0 else f"m{i}"
 
     def finish(self, n: Node, depth: int) -> None:
-        """Checks the packet length field and the checksums when decoding
-        ends."""
+        """Writes the checks of the packet length field and
+        the checksums when decoding ends.
+
+        Args:
+            n:     The packet.
+            depth: The indentation of the statements.
+        """
         lc = n.length_field()
         if lc is not None:
             self.line(f"r.finish({rstr(lc.name)})?;", depth)
@@ -1364,8 +1797,14 @@ class RustEmitter:
             self.verify(c, f"v{c.local.id}", depth)
 
     def verify(self, c, value: str, depth: int) -> None:
-        """Fails with BadChecksum unless check ``c`` holds; ``value`` is the
-        expression for its field's value."""
+        """Writes a statement failing with BadChecksum
+        unless a check holds.
+
+        Args:
+            c:     The check.
+            value: The expression for its field's value.
+            depth: The indentation of the statement.
+        """
         f = rstr(c.local.name)
         start, end = self.region(c, "r")
         bits = c.local.vtype.enc.bits
@@ -1381,7 +1820,13 @@ class RustEmitter:
         self.line("}", depth)
 
     def patch(self, c, depth: int) -> None:
-        """Writes the value of check ``c`` into its field."""
+        """Writes the statement putting a check's value into
+        its field once the packet is encoded.
+
+        Args:
+            c:     The check.
+            depth: The indentation of the statement.
+        """
         enc = c.local.vtype.enc
         start, end = self.region(c, "w")
         self.line(f"w.patch_checksum(&{checksum_spec(c.spec)}, {start}, {end}, "
@@ -1390,9 +1835,17 @@ class RustEmitter:
                   depth)
 
     def region(self, c, rw: str) -> tuple:
-        """The start and end of the bits a check covers, with reader or
-        writer ``rw``: on decoding ``p`` and on encoding ``l`` hold the
-        position of its field."""
+        """Writes the start and end of the bits a check
+        covers.
+
+        Args:
+            c:  The check.
+            rw: ``r`` when decoding, ``w`` when encoding: on decoding ``p<id>``
+                and on encoding ``l<id>`` hold the position of its field.
+
+        Returns:
+            The start and end expressions, each in parentheses.
+        """
         pos = f"{'p' if rw == 'r' else 'l'}{c.local.id}"
         base = self.mark(c.start)
         start = f"{base} + {c.skip}" if c.skip and not c.from_end else base
@@ -1410,6 +1863,12 @@ class RustEmitter:
         return f"{n.ident} {{ {fields} }}"
 
     def node(self, n: Node) -> None:
+        """Writes a packet's struct, its alarms and
+        algorithms, and its Packet and Display implementations.
+
+        Args:
+            n: The packet.
+        """
         what = "Sequence container" if n.kind == "tm" else "Meta-command"
         self.line()
         self.line(f"/// {what} `{n.key}`.")
@@ -1542,8 +2001,13 @@ class RustEmitter:
     # -- dispatch --
 
     def alarms(self, n: Node) -> None:
-        """``alarms()`` and ``monitor()``, which give each alarmed field's
-        level, and a method computing each one."""
+        """Writes ``alarms()`` and ``monitor()``, which give
+        each alarmed field's level, and a method computing each one, then
+        ``algorithms()``.
+
+        Args:
+            n: The packet.
+        """
         names = dict((lc, name) for name, lc in n.fields)
         place = lambda lc: self.place(n, lc, names)  # noqa: E731
         monitored = {k: ident for k, ident, _ in self.m.monitored}
@@ -1552,11 +2016,12 @@ class RustEmitter:
         self.line("/// The number of fields with an alarm.", 1)
         self.line(f"pub const ALARMS: usize = {count};", 1)
         self.line()
-        self.line("/// The alarm level of each field with an alarm (`None` "
-                  "when the", 1)
-        self.line("/// field is absent).  Alarms that depend on earlier "
-                  "samples count only", 1)
-        self.line("/// this one (see `monitor`).", 1)
+        self.doc(1,
+                 f"Evaluates the alarms of this `{n.key}` packet's fields.  "
+                 "Alarms that depend on earlier samples count only this one "
+                 "(see `monitor`).",
+                 returns="The alarm level of each field with an alarm, `None` "
+                         "when the field is absent.")
         self.line(f"pub fn alarms(&self) -> pk::Alarms<{count}> {{", 1)
         self.line("let mut a = pk::Alarms::new();", 2)
         for name, _, _ in n.alarms:
@@ -1564,11 +2029,12 @@ class RustEmitter:
         self.line("a", 2)
         self.line("}", 1)
         self.line()
-        self.line("/// Like `alarms()`, counting the earlier samples whose "
-                  "state `m` keeps,", 1)
-        self.line("/// for change ranges, minViolations and minConformance; "
-                  "`t` is this", 1)
-        self.line("/// sample's time in seconds.", 1)
+        self.doc(1,
+                 f"Evaluates the alarms of this `{n.key}` packet's fields like "
+                 "`alarms()`, counting the earlier samples for change ranges, "
+                 "minViolations and minConformance.", MONITOR_PARAMS,
+                 returns="The alarm level of each field with an alarm, `None` "
+                         "when the field is absent.")
         self.line("pub fn monitor(&self, m: &mut AlarmMonitor, t: f64) -> "
                   f"pk::Alarms<{count}> {{", 1)
         self.line("let mut a = pk::Alarms::new();", 2)
@@ -1580,27 +2046,47 @@ class RustEmitter:
         self.line("}", 1)
         self.algorithms(n, place)
         for name, lc, a in n.alarms:
+            level = (f"The level of `{name}`'s alarm, the worst of its "
+                     "elements'" if lc.vtype.kind == "array"
+                     else f"The level of `{name}`'s alarm")
+            level += (", or `None` when the field is absent." if lc.optional
+                      else ".")
             self.line()
+            self.doc(1,
+                     f"Evaluates the alarm of field `{name}` (`{lc.key}`) on "
+                     "this sample alone.", returns=level)
             self.line(f"fn alarm_{name}(&self) -> Option<pk::AlarmLevel> {{", 1)
             self.alarm_body(name, lc, a, place, None)
             if a.stateful:
                 self.line()
+                self.doc(1,
+                         f"Evaluates the alarm of field `{name}` (`{lc.key}`), "
+                         "counting the earlier samples whose state `m` keeps "
+                         "and recording this one there.", MONITOR_PARAMS,
+                         returns=level)
                 self.line(f"fn monitor_{name}(&self, m: &mut AlarmMonitor, t: "
                           "f64) -> Option<pk::AlarmLevel> {", 1)
                 self.alarm_body(name, lc, a, place, monitored[a.key])
         self.line("}")
 
     def algorithms(self, n: Node, place) -> None:
-        """``algorithms()``: the output of each MathAlgorithm the packet
-        triggers."""
+        """Writes ``algorithms()``: the output of each
+        MathAlgorithm the packet triggers.
+
+        Args:
+            n:     The packet.
+            place: Gives the expression for a Local.
+        """
         count = len(n.algorithms)
         self.line()
         self.line("/// The number of MathAlgorithms this packet triggers.", 1)
         self.line(f"pub const ALGORITHMS: usize = {count};", 1)
         self.line()
-        self.line("/// The output of each MathAlgorithm this packet triggers "
-                  "(`None` when", 1)
-        self.line("/// an input is absent).", 1)
+        self.doc(1,
+                 f"Evaluates the MathAlgorithms that a `{n.key}` packet "
+                 "triggers, from this one's values.",
+                 returns="The output of each, `None` when an input is absent "
+                         "or a custom algorithm's function isn't set or fails.")
         self.line(f"pub fn algorithms(&self) -> pk::Outputs<{count}> {{", 1)
         self.line("let mut o = pk::Outputs::new();", 2)
         for alg in n.algorithms:
@@ -1630,9 +2116,17 @@ class RustEmitter:
         self.line("}", 1)
 
     def alarm_body(self, name: str, lc, a, place, state) -> None:
-        """The body of a method giving a field's alarm level; with
-        ``state``, the AlarmMonitor field that keeps its parameter's
-        earlier samples."""
+        """Writes the body of a method giving a field's
+        alarm level.
+
+        Args:
+            name:  The field's name.
+            lc:    The field's Local.
+            a:     Its alarm, bound to the packet's values.
+            place: Gives the expression for a Local.
+            state: The AlarmMonitor field that keeps its parameter's earlier
+                   samples, or None to count only this one.
+        """
         vt = lc.vtype
         kind = vt.elem.kind if vt.kind == "array" else vt.kind
         x = place(lc)
@@ -1682,20 +2176,17 @@ class RustEmitter:
 
     def alarm_def(self, ad, vt: VType, place, depth: int,
                   live: bool = False) -> None:
-        """Statements raising ``lv`` to the level that an alarm definition
-        gives the value ``x``.
+        """Writes statements raising ``lv`` to the level
+        that an alarm definition gives the value ``x``.
 
         Args:
             ad:    The alarm definition.
             vt:    The value's type (an array's element's).
-            place: Where the packet's fields are, for context criteria.
+            place: Gives the expression for a Local, for context criteria.
             depth: The indentation of the statements.
-            live:  Whether to check its change ranges, on AlarmState ``s``
-                   at time ``t``, and set ``mv`` and ``mc`` to its
-                   minViolations and minConformance.
-
-        Returns:
-            Nothing; it writes the statements.
+            live:  Whether to check its change ranges, on AlarmState ``s`` at
+                   time ``t``, and set ``mv`` and ``mc`` to its minViolations
+                   and minConformance.
         """
         kind = vt.kind
         if live and ad.change is not None:
@@ -1733,16 +2224,14 @@ class RustEmitter:
             self.line("}", depth)
 
     def band(self, b, x: str, vt: Optional[VType], depth: int) -> None:
-        """Raises ``lv`` to a band's level if a value violates it.
+        """Writes statements raising ``lv`` to a band's level
+        if a value violates it.
 
         Args:
             b:     The band.
             x:     The expression for the value.
             vt:    Its type, or None for a double.
             depth: The indentation of the statements.
-
-        Returns:
-            Nothing; it writes the statements.
         """
         kind = vt.kind if vt is not None else "float"
         if kind == "int" and vt.wide:
@@ -1766,7 +2255,15 @@ class RustEmitter:
         self.line("}", depth)
 
     def dfa(self, dfa) -> str:
-        """The name of the static holding a pattern's automaton."""
+        """Names the static holding a pattern's automaton,
+        adding it to those the module ends with.
+
+        Args:
+            dfa: The automaton.
+
+        Returns:
+            The static's name.
+        """
         for name, d in self.dfas:
             if d is dfa:
                 return name
@@ -1775,14 +2272,26 @@ class RustEmitter:
         return name
 
     def size_check(self, key: str, n: int) -> None:
-        """Refuse to build where a packet of ``n`` bytes doesn't count its
-        bits in a usize."""
+        """Writes an assertion that refuses to build
+        where a packet's size in bits doesn't fit in a usize, if it may not.
+
+        Args:
+            key: The packet's qualified name.
+            n:   Its most bytes.
+        """
         if n > NARROW_MAX_BYTES:
             self.line(f"const _: () = assert!({n}u64 <= usize::MAX as u64 / 8, "
                       f"{rstr(key + ' is too large for this usize')});")
             self.line()
 
     def kind(self, k: Kind) -> None:
+        """Writes a kind's enum of the concrete packets
+        derived from its root, and its Packet, Display, alarms, algorithms and
+        From implementations.
+
+        Args:
+            k: The kind.
+        """
         self.line()
         self.line(f"/// Every concrete packet derived from `{k.root.key}`.")
         self.line("#[derive(Debug, Clone, PartialEq)]")
@@ -1831,9 +2340,11 @@ class RustEmitter:
         self.line("/// The most fields with an alarm that a member has.", 1)
         self.line(f"pub const ALARMS: usize = {most};", 1)
         self.line()
-        self.line("/// The alarm level of each field with an alarm (`None` "
-                  "when the", 1)
-        self.line("/// field is absent).", 1)
+        self.doc(1,
+                 "Evaluates the alarms of the fields of this packet derived "
+                 f"from `{k.root.key}`, as its own `alarms()` does.",
+                 returns="The alarm level of each field with an alarm, `None` "
+                         "when the field is absent.")
         self.line(f"pub fn alarms(&self) -> pk::Alarms<{most}> {{", 1)
         self.line("let mut out = pk::Alarms::new();", 2)
         self.line("match self {", 2)
@@ -1851,8 +2362,11 @@ class RustEmitter:
         self.line("/// The most MathAlgorithms that a member triggers.", 1)
         self.line(f"pub const ALGORITHMS: usize = {algs};", 1)
         self.line()
-        self.line("/// The output of each MathAlgorithm the packet triggers.",
-                  1)
+        self.doc(1,
+                 "Evaluates the MathAlgorithms that this packet derived from "
+                 f"`{k.root.key}` triggers, as its own `algorithms()` does.",
+                 returns="The output of each, `None` when it can't be "
+                         "computed.")
         self.line(f"pub fn algorithms(&self) -> pk::Outputs<{algs}> {{", 1)
         self.line("let mut out = pk::Outputs::new();", 2)
         self.line("match self {", 2)
@@ -1866,8 +2380,12 @@ class RustEmitter:
         self.line("out", 2)
         self.line("}", 1)
         self.line()
-        self.line("/// Like `alarms()`, counting the earlier samples whose "
-                  "state `m` keeps.", 1)
+        self.doc(1,
+                 "Evaluates the alarms of the fields of this packet derived "
+                 f"from `{k.root.key}`, as its own `monitor()` does.",
+                 MONITOR_PARAMS,
+                 returns="The alarm level of each field with an alarm, `None` "
+                         "when the field is absent.")
         self.line("pub fn monitor(&self, m: &mut AlarmMonitor, t: f64) -> "
                   f"pk::Alarms<{most}> {{", 1)
         self.line("let mut out = pk::Alarms::new();", 2)
@@ -1891,6 +2409,14 @@ class RustEmitter:
             self.line("}")
 
     def dispatch(self, k: Kind, n: Node, depth: int) -> None:
+        """Writes the statements that decode a container's
+        children, picking the first whose criteria match, recursively.
+
+        Args:
+            k:     The kind being decoded.
+            n:     The container whose children to try.
+            depth: The indentation of the statements.
+        """
         for c in n.children:
             if c.error:
                 continue
@@ -1913,5 +2439,14 @@ class RustEmitter:
 
 
 def emit(mission: Mission, source: str, alloc: bool = True) -> str:
-    """The Rust module; without ``alloc`` its code never allocates."""
+    """Writes the Rust module of a mission's packet codecs.
+
+    Args:
+        mission: The compiled mission.
+        source:  The name of the XTCE documents, for the notice at the top.
+        alloc:   Whether the code may allocate; without it, it never does.
+
+    Returns:
+        The module's source, before rustfmt.
+    """
     return RustEmitter(mission, source, alloc).emit()

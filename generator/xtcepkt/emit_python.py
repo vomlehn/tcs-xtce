@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import textwrap
 
-from .common import (HOOK_DOCS, written, checks_hooks, items_hooks, terms_hooks,
-                     notes, stream_doc, stream_fn, Ref, fast_order, field_range,
-                     flt, header_lines, inputs, invertible, math_value,
-                     size_args, string_spec)
+from .common import (doc_header, HOOK_DOCS, written, checks_hooks, items_hooks,
+                     terms_hooks, notes, stream_doc, stream_fn, Ref, fast_order,
+                     field_range, flt, header_lines, inputs, invertible,
+                     math_value, size_args, string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
@@ -17,6 +17,15 @@ from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
 
 
 def pstr(s: str) -> str:
+    """Quotes a string as a Python string literal.
+
+    Args:
+        s: The string.
+
+    Returns:
+        A double-quoted literal, with quotes, backslashes and control
+        characters escaped.
+    """
     out = []
     for c in s:
         if c in '"\\':
@@ -29,6 +38,15 @@ def pstr(s: str) -> str:
 
 
 def field_type(vt: VType) -> str:
+    """Gives the Python type annotation of a value's generated field.
+
+    Args:
+        vt: The value's type.
+
+    Returns:
+        ``list[...]`` for an array, the class name for an aggregate or an
+        enumeration, else the builtin type.
+    """
     if vt.kind == "array":
         return f"list[{field_type(vt.elem)}]"
     if vt.kind == "aggregate":
@@ -39,6 +57,15 @@ def field_type(vt: VType) -> str:
 
 
 def default(vt: VType) -> str:
+    """Gives the default value of a value's generated field.
+
+    Args:
+        vt: The value's type.
+
+    Returns:
+        The expression: zero, empty or the enumeration's value 0, and a
+        ``dataclasses.field`` factory for an array or an aggregate.
+    """
     if vt.kind == "array":
         return "dataclasses.field(default_factory=list)"
     if vt.kind == "aggregate":
@@ -49,6 +76,16 @@ def default(vt: VType) -> str:
 
 
 def literal(vt: VType, v) -> str:
+    """Gives the Python literal of a constant engineering value.
+
+    Args:
+        vt: The value's type.
+        v:  The value: a number, a bool, a string or bytes.
+
+    Returns:
+        The literal; an enumeration's value is wrapped in
+        ``pk.enum_value``.
+    """
     k = vt.kind
     if k == "float":
         return flt(v)
@@ -69,8 +106,18 @@ def points(cal: Spline) -> str:
 
 
 def math_expr(e: tuple, x: str, place) -> str:
-    """Python expression for a MathOperationCalibrator tree; ``x`` is the
-    value being calibrated."""
+    """Gives the expression for a MathOperation tree.
+
+    Args:
+        e:     The tree: ``("const", v)``, ``("raw",)`` for the value being
+               calibrated, ``("value", ref)`` for another value, or an
+               operator and its operands' trees.
+        x:     The expression for the value being calibrated.
+        place: Gives the expression for a Local the tree uses.
+
+    Returns:
+        The expression, a float.
+    """
     if e[0] == "const":
         return f"({flt(e[1])})"
     if e[0] == "raw":
@@ -88,8 +135,19 @@ def math_expr(e: tuple, x: str, place) -> str:
 
 
 def apply_cal(cal, x: str, f: str, place) -> str:
-    """Expression calibrating ``x`` with ``cal``; ``place`` gives the
-    expression for a Local that the calibrator uses."""
+    """Gives the expression calibrating a raw value.
+
+    Args:
+        cal:   The calibrator, or None.
+        x:     The expression for the raw value, a float.
+        f:     The name of the field, as a Python string literal, that errors
+               name.
+        place: Gives the expression for a Local that the calibrator uses.
+
+    Returns:
+        The expression for the engineering value; ``x`` itself without a
+        calibrator.
+    """
     if cal is None:
         return x
     if isinstance(cal, Polynomial):
@@ -108,8 +166,20 @@ def apply_cal(cal, x: str, f: str, place) -> str:
 
 
 def invert_cal(cal, y: str, f: str, place) -> str:
-    """Expression inverting ``cal`` for the engineering value ``y``; one
-    that can't be inverted raises NotInvertible."""
+    """Gives the expression inverting a calibrator.
+
+    Args:
+        cal:   The calibrator, or None.
+        y:     The expression for the engineering value.
+        f:     The name of the field, as a Python string literal, that errors
+               name.
+        place: Gives the expression for a Local that the calibrator uses.
+
+    Returns:
+        The expression for the raw value; ``y`` itself without a
+        calibrator.  For a calibrator that can't be inverted, the
+        expression raises NotInvertible when it is evaluated.
+    """
     if cal is None:
         return y
     if not cal.invertible:
@@ -124,9 +194,18 @@ def invert_cal(cal, y: str, f: str, place) -> str:
 
 
 def choose(cal: ContextCal, body, place) -> str:
-    """A conditional expression over a context calibrator's cases:
-    ``body(c)`` for the calibrator of the first case that holds, or the
-    default."""
+    """Gives a conditional expression over a context calibrator's cases.
+
+    Args:
+        cal:   The context calibrator.
+        body:  Gives the expression for one of its calibrators.
+        place: Gives the expression for a Local that the cases' criteria
+               use.
+
+    Returns:
+        The expression: ``body`` of the calibrator of the first case
+        whose criteria hold, else of the default.
+    """
     out = ""
     for terms, c in cal.cases:
         test = " and ".join(f"({term(t, place)})" for t in terms) or "True"
@@ -143,9 +222,16 @@ def uncalibrate(vt: VType, y: str, f: str, place) -> str:
 
 
 def source(d: DynSize, place) -> str:
-    """Expression for the value a bound DynSize adjusts: a field, or the
-    first matching value of a DiscreteLookupList.  ``place`` gives the
-    expression for a Local."""
+    """Gives the expression for the value a bound DynSize adjusts.
+
+    Args:
+        d:     The DynSize.
+        place: Gives the expression for a Local.
+
+    Returns:
+        The expression: a field (or a member or element of one), or the
+        first matching value of a DiscreteLookupList, else its default.
+    """
     if d.lookup is None:
         return reach(place(d.local), d.path, pstr(d.local.name))
     x = str(d.default)
@@ -156,7 +242,19 @@ def source(d: DynSize, place) -> str:
 
 
 def offset(s: Seek, ref, f: str) -> str:
-    """Expression for the offset of a Seek."""
+    """Gives the expression for the offset of a Seek.
+
+    Args:
+        s:   The Seek.
+        ref: Gives the expression for the value that a size, count or offset
+             uses (a DynSize), and through ``place`` for a Local.
+        f:   The name of the field, as a Python string literal, that errors
+             name.
+
+    Returns:
+        The expression for the offset in bits, less the bits the Seek
+        steps back.
+    """
     if isinstance(s.offset, int):
         return str(s.offset - s.back)
     x = size(s.offset, ref(s.offset), f)
@@ -212,8 +310,21 @@ def int_encoding(e: IntEnc) -> str:
 
 
 def read_expr(vt: VType, f: str, ref, depth: int = 0) -> str:
-    """Expression reading one value with BitReader ``r``; ``ref`` gives the
-    expression for a value that gives a size or count."""
+    """Gives the expression reading one value with BitReader ``r``.
+
+    Args:
+        vt:    The value's type.
+        f:     The name of the field, as a Python string literal, that errors
+               name.
+        ref:   Gives the expression for the value that a size, count or offset
+               uses (a DynSize), and through ``place`` for a Local.
+        depth: How deeply aggregates nest here, which names the locals
+               that keep the members giving a later member's size.
+
+    Returns:
+        The expression, which reads the value and gives it; one least
+        significant bit first switches the reader's bit order around it.
+    """
     x = read_value_expr(vt, f, ref, depth)
     if lsb_bytes(vt):
         # A tuple's items are evaluated in order.
@@ -228,7 +339,20 @@ def lsb_bytes(vt: VType) -> bool:
 
 
 def read_value_expr(vt: VType, f: str, ref, depth: int) -> str:
-    """read_expr's expression, in the reader's usual bit order."""
+    """Gives ``read_expr``'s expression, in the reader's usual bit order.
+
+    Args:
+        vt:    The value's type.
+        f:     The name of the field, as a Python string literal, that errors
+               name.
+        ref:   Gives the expression for the value that a size, count or offset
+               uses (a DynSize), and through ``place`` for a Local.
+        depth: How deeply aggregates nest here, which names the locals
+               that keep the members giving a later member's size.
+
+    Returns:
+        The expression, which reads the value and gives it.
+    """
     e = vt.enc
     if isinstance(e, AggregateEnc):
         # Arguments and tuple items are evaluated in order.
@@ -314,8 +438,23 @@ def read_value_expr(vt: VType, f: str, ref, depth: int) -> str:
 
 
 def write_stmt(vt: VType, x: str, f: str, ref) -> str:
-    """Statement writing ``x``; not for arrays or dynamic binary values,
-    which ``PythonEmitter.write_value`` writes."""
+    """Gives the statement writing one value with BitWriter ``w``.
+
+    Not for arrays, aggregates or binary values whose size another value
+    gives, which ``PythonEmitter.write_bytes`` writes.
+
+    Args:
+        vt:  The value's type.
+        x:   The expression for the value.
+        f:   The name of the field, as a Python string literal, that errors
+             name.
+        ref: Gives the expression for the value that a size, count or offset
+             uses (a DynSize), and through ``place`` for a Local.
+
+    Returns:
+        The statement; for a calibrator that can't be inverted, one that
+        raises NotInvertible.
+    """
     e = vt.enc
     if isinstance(e, IntEnc):
         bits, enc = e.bits, int_encoding(e)
@@ -366,9 +505,18 @@ def write_stmt(vt: VType, x: str, f: str, ref) -> str:
 
 
 def reach(x: str, path, f: str) -> str:
-    """The expression for the member or element ``path`` of ``x``.  An
-    element of an array whose count varies may be missing, which raises
-    ``BadSize`` naming ``f``."""
+    """Gives the expression for a member or element of a value.
+
+    Args:
+        x:    The expression for the value.
+        path: Member names and Index items, outermost first.
+        f:    The name of the field, as a Python string literal, that a
+              missing element's ``BadSize`` names.
+
+    Returns:
+        The expression.  An element of an array whose count varies may be
+        missing, and then the expression raises ``BadSize``.
+    """
     for p in path:
         if not isinstance(p, Index):
             x += "." + p
@@ -383,8 +531,16 @@ def reach(x: str, path, f: str) -> str:
 
 
 def term(t, place) -> str:
-    """Expression for a criterion or a tree of them; ``place`` gives the
-    expression for a Local."""
+    """Gives the expression for a criterion or a tree of them.
+
+    Args:
+        t:     A criterion, an AllOf or AnyOf, or a Custom criterion.
+        place: Gives the expression for a Local.
+
+    Returns:
+        The expression, a bool.  An absent optional value compares as
+        ``std::optional`` does in C++: less than any value.
+    """
     if isinstance(t, (AllOf, AnyOf)):
         return (" and " if isinstance(t, AllOf)
                 else " or ").join(f"({term(x, place)})" for x in t.terms)
@@ -400,7 +556,15 @@ def term(t, place) -> str:
 
 
 def valid_test(vt: VType, x: str) -> str:
-    """Whether value ``x`` lies in one of its type's valid ranges."""
+    """Gives the test that a value lies in one of its type's valid ranges.
+
+    Args:
+        vt: The value's type, an integer or float with valid ranges.
+        x:  The expression for the value.
+
+    Returns:
+        The expression, a bool.
+    """
     tests = []
     for b in vt.valid:
         if vt.kind == "int":
@@ -427,7 +591,17 @@ def transform_hook(h) -> str:
 
 
 def hook_args(inputs: list, place) -> str:
-    """A tuple's items: a custom algorithm's inputs, as floats."""
+    """Gives the inputs of a custom algorithm, as tuple items.
+
+    Args:
+        inputs: Each input: ``("const", v)``, or a Local with the path to
+                its member or element and its type.
+        place:  Gives the expression for a Local.
+
+    Returns:
+        The inputs' expressions as floats, each followed by a comma, so
+        that they make a tuple even when there is one.
+    """
     out = [flt(x[1]) if x[0] == "const"
            else math_value(x[3], reach(place(x[1]), x[2], pstr(x[1].name)),
                            "python") for x in inputs]
@@ -440,8 +614,17 @@ EMPTY = {"==": False, "!=": True, "<": True, "<=": True, ">": False,
 
 
 def condition(c: Criterion, x: str, y=None) -> str:
-    """``x`` is the expression for the criterion's local, and ``y`` for
-    the value it compares with, if any."""
+    """Gives the comparison of a criterion.
+
+    Args:
+        c: The criterion.
+        x: The expression for the criterion's Local.
+        y: The expression for the Local it compares with, or None if it
+           compares with a constant.
+
+    Returns:
+        The expression, a bool.
+    """
     vt = c.vtype
     x = reach(x, c.path, pstr(c.local.name))
     if y is not None:
@@ -452,7 +635,15 @@ def condition(c: Criterion, x: str, y=None) -> str:
 
 
 def describer(vt: VType) -> str:
-    """Expression for a function giving the canonical text of a value."""
+    """Gives a function that makes the canonical text of a value.
+
+    Args:
+        vt: The value's type.
+
+    Returns:
+        The expression for the function: a runtime or module function, or
+        a lambda for an array or an aggregate.
+    """
     k = vt.kind
     if k == "array":
         return f"lambda v: pk.describe_list(v, {describer(vt.elem)})"
@@ -476,6 +667,12 @@ def describer(vt: VType) -> str:
 
 class PythonEmitter:
     def __init__(self, mission: Mission, source: str):
+        """Starts a module of packet codecs.
+
+        Args:
+            mission: The compiled mission.
+            source:  The name of the XTCE documents, for the header comment.
+        """
         self.m = mission
         self.source = source
         self.out: list[str] = []
@@ -485,7 +682,29 @@ class PythonEmitter:
     def line(self, s: str = "", depth: int = 0) -> None:
         self.out.append("    " * depth + s if s else "")
 
+    def doc(self, depth: int, summary: str, params: list[tuple[str, str]] = (),
+            returns: str | None = None,
+            raises: list[tuple[str, str]] = ()) -> None:
+        """Writes the docstring of a generated function.
+
+        Args:
+            depth:   The indentation level of the function's body.
+            summary: What the function does.
+            params:  Each parameter but ``self`` and ``cls``, with what it
+                     means.
+            returns: What it returns, or None if it returns nothing.
+            raises:  Each exception it raises, with when.
+        """
+        for text in doc_header("python", summary, params, returns,
+                               raises=raises, indent=4 * depth):
+            self.line(text, depth)
+
     def emit(self) -> str:
+        """Writes the module.
+
+        Returns:
+            The module's source text.
+        """
         m = self.m
         for h in header_lines(m, self.source):
             self.line("# " + h)
@@ -533,6 +752,11 @@ class PythonEmitter:
         return "\n".join(self.out) + "\n"
 
     def stream(self, st) -> None:
+        """Writes the class of a stream, which finds its frames or decodes it.
+
+        Args:
+            st: The stream.
+        """
         self.line()
         self.line()
         params = [stream_fn(k, x) for k, x in st.functions()]
@@ -559,6 +783,19 @@ class PythonEmitter:
             self.line()
         self.line(f"def __init__(self{''.join(', ' + p for p in params)}) -> "
                   "None:", 1)
+        if params:
+            what = {
+                "decode": "The DecodingAlgorithm ``{}`` of stream ``{}``, "
+                          "which gives the bytes it decodes from those it is "
+                          "given.",
+                "invert": "The InvertAlgorithm ``{}`` of stream ``{}``: what a "
+                          "bit is once AutoInvert has inverted the stream."}
+            self.doc(
+                2,
+                f"Makes a stream ``{st.key}`` with nothing pushed to it yet.",
+                [(stream_fn(k, x),
+                  what[k].format(x.decoder if k == "decode" else x.inverter,
+                                 x.key)) for k, x in st.functions()])
         if st.custom:
             self.line(f"self._decode = {stream_fn('decode', st)}", 2)
         elif st.fixed:
@@ -582,8 +819,13 @@ class PythonEmitter:
         self.line()
         self.line("def push(self, data) -> list:", 1)
         what = "decoded bytes" if st.custom else "frames"
-        self.line(f'"""The {what} that ``data``, the next bytes of the stream, '
-                  'gives."""', 2)
+        self.doc(2, f"Takes the next bytes of stream ``{st.key}``.",
+                 [("data",
+                   "The stream's next bytes, in the order they arrive.")],
+                 f"The pieces of the bytes that ``{st.decoder}`` decodes from "
+                 "them." if st.custom
+                 else "The bytes of each frame they complete, each a "
+                      f"``{st.container}`` packet.")
         ins = "self._feeder.push(data)" if st.feeder is not None else "[data]"
         if st.custom:
             self.line(f"return [y for y in (self._decode(x) for x in {ins}) if "
@@ -592,7 +834,12 @@ class PythonEmitter:
             self.line(f"return [f for x in {ins} for f in super().push(x)]", 2)
 
     def wrapped(self, items: list, depth: int) -> None:
-        """A tuple of ``items``, wrapped to fit 80 columns."""
+        """Writes a tuple of items, wrapped to fit 80 columns.
+
+        Args:
+            items: The items, written with ``repr``.
+            depth: The indentation level of the tuple's brackets.
+        """
         self.line("(", depth)
         line = ""
         for x in items:
@@ -611,6 +858,9 @@ class PythonEmitter:
             self.line(f"pk.need_hooks(HOOKS, ({names}))", depth)
 
     def hooks(self) -> None:
+        """Writes ``HOOKS``, the dictionary of the application's functions for
+        the document's custom algorithms, with a comment naming each.
+        """
         self.line()
         self.line()
         self.line("# The functions the application supplies for the document's "
@@ -625,6 +875,9 @@ class PythonEmitter:
         self.line("HOOKS: dict = {}")
 
     def alarm_monitor(self) -> None:
+        """Writes the AlarmMonitor class, the state of each parameter whose
+        alarms depend on earlier samples.
+        """
         self.line()
         self.line()
         self.line("class AlarmMonitor:")
@@ -640,6 +893,11 @@ class PythonEmitter:
             self.line("pass", 2)
 
     def enum_type(self, vt: VType) -> None:
+        """Writes the class of an enumeration, its labels and its describer.
+
+        Args:
+            vt: The enumeration's type.
+        """
         self.line()
         self.line()
         self.line(f"class {vt.ident}(enum.IntEnum):")
@@ -659,10 +917,12 @@ class PythonEmitter:
         self.line()
         self.line("@staticmethod", 1)
         self.line("def label_of(value: int) -> Optional[str]:", 1)
-        self.line('"""The label of ``value``, which needn\'t be a member: a '
-                  'value in a', 2)
-        self.line("label's range, or one the enumeration doesn't list (which "
-                  'has none)."""', 2)
+        self.doc(2, f"Names a value of enumeration ``{vt.key}``.",
+                 [("value",
+                   "The value, which needn't be a member: a value in a label's "
+                   "range, or one the enumeration doesn't list.")],
+                 "The value's label, or None if the enumeration doesn't list "
+                 "it.")
         self.line(f"return pk.find_label(int(value), _LABELS_{vt.ident})", 2)
         self.line()
         self.line()
@@ -675,6 +935,11 @@ class PythonEmitter:
         self.line(f"return pk.describe_enum(v, _LABELS_{vt.ident})", 1)
 
     def aggregate_type(self, vt: VType) -> None:
+        """Writes the dataclass of an aggregate type.
+
+        Args:
+            vt: The aggregate's type.
+        """
         self.line()
         self.line()
         self.line("@dataclass(slots=True)")
@@ -689,6 +954,17 @@ class PythonEmitter:
 
     def read_items(self, items, depth: int, where: str,
                    nested: bool = False) -> None:
+        """Writes the statements decoding entries with BitReader ``r``.
+
+        Each value is read into ``v<id>``.
+
+        Args:
+            items:  The entries.
+            depth:  The statements' indentation level.
+            where:  The qualified name of the container, which errors name.
+            nested: Whether the entries are inside a conditional include,
+                    whose values were already set to None.
+        """
         for it in items:
             if isinstance(it, Seek):
                 off = offset(it, self.read_ref, pstr(where))
@@ -769,6 +1045,15 @@ class PythonEmitter:
 
     def write_items(self, n: Node, items, depth: int, where: str,
                     names: dict) -> None:
+        """Writes the statements encoding entries with BitWriter ``w``.
+
+        Args:
+            n:     The packet being encoded.
+            items: The entries.
+            depth: The statements' indentation level.
+            where: The qualified name of the container, which errors name.
+            names: The name of each Local's field in the packet.
+        """
         for it in items:
             if isinstance(it, Seek):
                 off = offset(it, self.write_ref(n, names), pstr(where))
@@ -840,6 +1125,17 @@ class PythonEmitter:
                                  self.write_ref(n, names), depth)
 
     def write_value(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
+        """Writes the statements encoding one value.
+
+        Args:
+            vt:    The value's type.
+            x:     The expression for the value.
+            f:     The name of the field, as a Python string literal, that
+                   errors name.
+            ref:   Gives the expression for the value that a size, count or
+                   offset uses (a DynSize), and through ``place`` for a Local.
+            depth: The statements' indentation level.
+        """
         if lsb_bytes(vt):
             self.line("w.set_lsb(True)", depth)
             self.write_bytes(vt, x, f, ref, depth)
@@ -848,7 +1144,17 @@ class PythonEmitter:
             self.write_bytes(vt, x, f, ref, depth)
 
     def write_bytes(self, vt: VType, x: str, f: str, ref, depth: int) -> None:
-        """write_value, in the writer's usual bit order."""
+        """Writes ``write_value``'s statements, in the writer's usual bit order.
+
+        Args:
+            vt:    The value's type.
+            x:     The expression for the value.
+            f:     The name of the field, as a Python string literal, that
+                   errors name.
+            ref:   Gives the expression for the value that a size, count or
+                   offset uses (a DynSize), and through ``place`` for a Local.
+            depth: The statements' indentation level.
+        """
         e = vt.enc
         if isinstance(e, AggregateEnc):
             inner = Ref(lambda d: f"{x}.{d.member}" if d.member else ref(d),
@@ -904,8 +1210,17 @@ class PythonEmitter:
 
     @staticmethod
     def place(n: Node, lc, names: dict) -> str:
-        """Expression for a value when encoding: a field, a computed size or
-        count, or a fixed constant."""
+        """Gives the expression for a value when encoding.
+
+        Args:
+            n:     The packet being encoded.
+            lc:    The value's Local.
+            names: The name of each Local's field in the packet.
+
+        Returns:
+            The expression: a field, a computed size or count, or a fixed
+            constant.
+        """
         if lc in names:
             return f"self.{names[lc]}"
         if lc in n.derived:
@@ -913,8 +1228,17 @@ class PythonEmitter:
         return literal(lc.vtype, n.fixed[lc])
 
     def fill(self, it: Fill, rw: str, ref, depth: int) -> None:
-        """Pads to the end of a container with a size; raises BadSize if its
-        entries go past it."""
+        """Writes the statements padding to the end of a container with a size.
+
+        The statements raise BadSize if the container's entries go past it.
+
+        Args:
+            it:    The Fill.
+            rw:    ``"r"`` when decoding, ``"w"`` when encoding.
+            ref:   Gives the expression for the value that a size, count or
+                   offset uses (a DynSize), and through ``place`` for a Local.
+            depth: The statements' indentation level.
+        """
         f = pstr(it.container)
         n = (size(it.size, ref(it.size), f) if isinstance(it.size, DynSize)
              else str(it.size))
@@ -927,7 +1251,14 @@ class PythonEmitter:
             self.line("w.zeros(e - w.pos)", depth)
 
     def require(self, it: Require, place, depth: int) -> None:
-        """Raises Mismatch unless an included container's criteria hold."""
+        """Writes the statement raising Mismatch unless an included
+        container's criteria hold.
+
+        Args:
+            it:    The Require.
+            place: Gives the expression for a Local.
+            depth: The statement's indentation level.
+        """
         cond = " and ".join(f"({term(t, place)})" for t in it.criteria)
         self.line(f"if not ({cond}):", depth)
         self.line(f'raise pk.PacketError("Mismatch", {pstr(it.container)}, '
@@ -938,8 +1269,13 @@ class PythonEmitter:
         return "0" if i == 0 else f"m{i}"
 
     def finish(self, n: Node, depth: int) -> None:
-        """Checks the packet length field and the checksums when decoding
-        ends."""
+        """Writes the statements checking the packet length field and the
+        checksums when decoding ends.
+
+        Args:
+            n:     The packet.
+            depth: The statements' indentation level.
+        """
         lc = n.length_field()
         if lc is not None:
             self.line(f"r.finish({pstr(lc.name)})", depth)
@@ -947,7 +1283,12 @@ class PythonEmitter:
             self.verify(c, depth)
 
     def verify(self, c, depth: int) -> None:
-        """Fails with BadChecksum unless check ``c`` holds."""
+        """Writes the statement raising BadChecksum unless a check holds.
+
+        Args:
+            c:     The check.
+            depth: The statement's indentation level.
+        """
         f = pstr(c.local.name)
         start, end = self.region(c, "r")
         mask = hex((1 << c.local.vtype.enc.bits) - 1)
@@ -956,7 +1297,12 @@ class PythonEmitter:
         self.line(f'raise pk.PacketError("BadChecksum", {f})', depth + 1)
 
     def patch(self, c, depth: int) -> None:
-        """Writes the value of check ``c`` into its field."""
+        """Writes the statement writing a check's value into its field.
+
+        Args:
+            c:     The check.
+            depth: The statement's indentation level.
+        """
         enc = c.local.vtype.enc
         start, end = self.region(c, "w")
         self.line(f"w.patch_checksum({pspec(c.spec)}, {start}, {end}, "
@@ -964,9 +1310,17 @@ class PythonEmitter:
                   f"{pstr(c.local.name)})", depth)
 
     def region(self, c, rw: str) -> tuple:
-        """The start and end of the bits a check covers, with reader or
-        writer ``rw``: on decoding ``p`` and on encoding ``l`` hold the
-        position of its field."""
+        """Gives the start and end of the bits a check covers.
+
+        Args:
+            c:  The check.
+            rw: ``"r"`` when decoding, where ``p<id>`` holds the position of
+                the check's field, or ``"w"`` when encoding, where ``l<id>``
+                does.
+
+        Returns:
+            The expressions for the start and the end, in bits.
+        """
         pos = f"{'p' if rw == 'r' else 'l'}{c.local.id}"
         base = self.mark(c.start)
         start = f"{base} + {c.skip}" if c.skip and not c.from_end else base
@@ -985,6 +1339,12 @@ class PythonEmitter:
                 + ", ".join(f"{name}=v{lc.id}" for name, lc in n.fields) + ")")
 
     def node(self, n: Node) -> None:
+        """Writes the dataclass of a packet, with its codec and its alarm,
+        algorithm and describe methods.
+
+        Args:
+            n: The packet's container or meta-command.
+        """
         what = "Sequence container" if n.kind == "tm" else "Meta-command"
         self.line()
         self.line()
@@ -1028,9 +1388,14 @@ class PythonEmitter:
         self.line()
         self.line("@classmethod", 1)
         self.line(f"def decode_prefix(cls, data) -> tuple[{n.ident}, int]:", 1)
-        self.line('"""Decode a packet that starts at the first byte of '
-                  '``data``; return', 2)
-        self.line('it and the number of bytes it takes."""', 2)
+        self.doc(2,
+                 f"Decodes a ``{n.key}`` packet that starts at the first byte "
+                 "of ``data``.",
+                 [("data", "The packet's bytes, and any after it.")],
+                 "The packet and the number of bytes it takes.",
+                 [("pk.PacketError",
+                   "The bytes aren't such a packet, or it can't be decoded; "
+                   "its ``kind`` says why.")])
         self.need_hooks(n.hooks, 2)
         self.line("r = pk.BitReader(data)", 2)
         for node in n.chain():
@@ -1043,6 +1408,12 @@ class PythonEmitter:
         self.line(f"return {self.construct(n)}, r.used()", 2)
         self.line()
         self.line("def encode_into(self, w: pk.BitWriter) -> None:", 1)
+        self.doc(2,
+                 f"Encodes this ``{n.key}`` packet with a writer, after what "
+                 "it has written.", [("w", "The writer.")],
+                 raises=[("pk.PacketError",
+                          "A field's value can't be encoded; its ``kind`` says "
+                          "why.")])
         body = len(self.out)
         self.need_hooks(n.hooks, 2)
         names = {lc: name for name, lc in n.fields}
@@ -1088,8 +1459,9 @@ class PythonEmitter:
         self.alarms(n)
         self.algorithms(n)
         self.line("def describe(self) -> str:", 1)
-        self.line('"""Canonical text form, identical in every generated '
-                  'language."""', 2)
+        self.doc(2, f"Describes this ``{n.key}`` packet.",
+                 returns="Its canonical text form, identical in every "
+                         "generated language.")
         parts = []
         for name, lc in n.fields:
             fn = describer(lc.vtype)
@@ -1108,17 +1480,22 @@ class PythonEmitter:
         self.line(')) + "}"', 2)
 
     def alarms(self, n: Node) -> None:
-        """``alarms()`` and ``monitor()``, which give each alarmed field's
-        level, and a method computing each one."""
+        """Writes ``alarms()`` and ``monitor()``, which give each alarmed
+        field's level, and a method computing each one.
+
+        Args:
+            n: The packet.
+        """
         names = dict((lc, name) for name, lc in n.fields)
         place = lambda lc: self.place(n, lc, names)  # noqa: E731
         monitored = {k: ident for k, ident, _ in self.m.monitored}
         self.line("def alarms(self) -> list:", 1)
-        self.line('"""(field, alarm level) for each field with an alarm; the '
-                  'level is None', 2)
-        self.line("when the field is absent.  Alarms that depend on earlier "
-                  "samples count", 2)
-        self.line('only this one (see ``monitor``)."""', 2)
+        self.doc(2,
+                 f"Evaluates the alarms of this ``{n.key}`` packet's fields.  "
+                 "Alarms that depend on earlier samples count only this one "
+                 "(see ``monitor``).",
+                 returns="(field, alarm level) for each field with an alarm; "
+                         "the level is None when the field is absent.")
         self.line("return [", 2)
         for name, _, _ in n.alarms:
             self.line(f"({pstr(name)}, self._alarm_{name}()),", 3)
@@ -1126,11 +1503,12 @@ class PythonEmitter:
         self.line()
         self.line("def monitor(self, m: AlarmMonitor, t: float = 0.0) -> list:",
                   1)
-        self.line('"""Like ``alarms()``, counting the earlier samples whose '
-                  'state ``m`` keeps,', 2)
-        self.line("for change ranges, minViolations and minConformance; ``t`` "
-                  "is this", 2)
-        self.line('sample\'s time in seconds."""', 2)
+        self.doc(2,
+                 f"Evaluates the alarms of this ``{n.key}`` packet's fields "
+                 "like ``alarms()``, counting the earlier samples for change "
+                 "ranges, minViolations and minConformance.", MONITOR_PARAMS,
+                 returns="(field, alarm level) for each field with an alarm; "
+                         "the level is None when the field is absent.")
         self.line("return [", 2)
         for name, _, a in n.alarms:
             call = (f"self._monitor_{name}(m, t)" if a.stateful
@@ -1139,22 +1517,42 @@ class PythonEmitter:
         self.line("]", 2)
         self.line()
         for name, lc, a in n.alarms:
+            level = (f"The level of ``{name}``'s alarm, the worst of its "
+                     "elements'" if lc.vtype.kind == "array"
+                     else f"The level of ``{name}``'s alarm")
+            level += (", or None when the field is absent." if lc.optional
+                      else ".")
             self.line(f"def _alarm_{name}(self) -> Optional[pk.AlarmLevel]:", 1)
+            self.doc(2,
+                     f"Evaluates the alarm of field ``{name}`` (``{lc.key}``) "
+                     "on this sample alone.", returns=level)
             self.alarm_body(name, lc, a, place, None)
             if a.stateful:
                 self.line(f"def _monitor_{name}(self, m: AlarmMonitor, t: "
                           "float) -> Optional[pk.AlarmLevel]:", 1)
+                self.doc(2,
+                         f"Evaluates the alarm of field ``{name}`` "
+                         f"(``{lc.key}``), counting the earlier samples whose "
+                         "state ``m`` keeps and recording this one there.",
+                         MONITOR_PARAMS, returns=level)
                 self.alarm_body(name, lc, a, place, monitored[a.key])
 
     def algorithms(self, n: Node) -> None:
-        """``algorithms()``: the output of each MathAlgorithm the packet
-        triggers."""
+        """Writes ``algorithms()``, the output of each MathAlgorithm the packet
+        triggers.
+
+        Args:
+            n: The packet.
+        """
         names = dict((lc, name) for name, lc in n.fields)
         place = lambda lc: self.place(n, lc, names)  # noqa: E731
         self.line("def algorithms(self) -> list:", 1)
-        self.line('"""(output, value) for each MathAlgorithm this packet '
-                  'triggers; the value', 2)
-        self.line('is None when an input is absent."""', 2)
+        self.doc(2,
+                 f"Evaluates the MathAlgorithms that a ``{n.key}`` packet "
+                 "triggers, from this one's values.",
+                 returns="(output, value) for each; the value is None when an "
+                         "input is absent or a custom algorithm's function "
+                         "isn't set or fails.")
         self.line("return [", 2)
         for alg in n.algorithms:
             if alg.hook is not None:
@@ -1173,9 +1571,16 @@ class PythonEmitter:
         self.line()
 
     def alarm_body(self, name: str, lc, a, place, state) -> None:
-        """The body of a method giving a field's alarm level; with
-        ``state``, the AlarmMonitor field that keeps its parameter's
-        earlier samples."""
+        """Writes the body of a method giving a field's alarm level.
+
+        Args:
+            name:  The field's name.
+            lc:    The field's Local.
+            a:     The field's alarm.
+            place: Gives the expression for a Local.
+            state: The AlarmMonitor attribute that keeps the parameter's
+                   earlier samples, or None to count this sample alone.
+        """
         self.line(f"x = {place(lc)}", 2)
         if lc.optional:
             self.line("if x is None:", 2)
@@ -1215,10 +1620,18 @@ class PythonEmitter:
 
     def alarm_def(self, ad, kind: str, place, depth: int,
                   live: bool = False) -> None:
-        """Statements raising ``lv`` to the level that alarm definition
-        ``ad`` gives value ``x`` (of kind ``kind``); when ``live``, with
-        its change ranges (on AlarmState ``s``, at time ``t``) and setting
-        ``mv`` and ``mc`` to its minViolations and minConformance."""
+        """Writes the statements raising ``lv`` to the level that an alarm
+        definition gives value ``x``.
+
+        Args:
+            ad:    The alarm definition.
+            kind:  The kind of value ``x`` is.
+            place: Gives the expression for a Local.
+            depth: The statements' indentation level.
+            live:  Whether to apply its change ranges (on AlarmState ``s``, at
+                   time ``t``) and set ``mv`` and ``mc`` to its minViolations
+                   and minConformance.
+        """
         start = len(self.out)
         if live and ad.change is not None:
             c = ad.change
@@ -1263,7 +1676,15 @@ class PythonEmitter:
             self.line("pass", depth)
 
     def dfa(self, dfa) -> str:
-        """The name of the module constant holding a pattern's automaton."""
+        """Names the module constant holding a pattern's automaton, which
+        ``emit`` writes at the end.
+
+        Args:
+            dfa: The automaton.
+
+        Returns:
+            The constant's name.
+        """
         for name, d in self.dfas:
             if d is dfa:
                 return name
@@ -1272,6 +1693,12 @@ class PythonEmitter:
         return name
 
     def kind(self, k: Kind) -> None:
+        """Writes the class that decodes any concrete packet derived from a
+        root container.
+
+        Args:
+            k: The kind.
+        """
         self.line()
         self.line()
         self.line(f"class {k.ident}(pk.PacketKind):")
@@ -1286,17 +1713,33 @@ class PythonEmitter:
         self.line("@staticmethod", 1)
         self.line(f"def decode_prefix(data) -> tuple[Union[{members}], int]:",
                   1)
-        self.line('"""Decode the root\'s entries, then pick the first child '
-                  '(in', 2)
-        self.line("document order) whose criteria match, recursively; return "
-                  "it and", 2)
-        self.line('the number of bytes it takes."""', 2)
+        self.doc(2,
+                 f"Decodes a packet derived from ``{k.root.key}`` that starts "
+                 "at the first byte of ``data``: reads the root's entries, "
+                 "then picks the first child (in document order) whose "
+                 "criteria match, recursively.",
+                 [("data", "The packet's bytes, and any after it.")],
+                 "The packet, an instance of the member that matched, and the "
+                 "number of bytes it takes.",
+                 [("pk.PacketError",
+                   "``NoMatch`` if no member matches, or another ``kind`` if "
+                   "the packet can't be decoded.")])
         self.need_hooks(items_hooks(k.root.items), 2)
         self.line("r = pk.BitReader(data)", 2)
         self.read_items(k.root.items, 2, k.root.key)
         self.dispatch(k.root, 2)
 
     def dispatch(self, n: Node, depth: int) -> None:
+        """Writes the statements that pick the packet a kind decodes.
+
+        Each child whose criteria hold has its entries read, recursively; a
+        concrete container's packet is returned, and an abstract one raises
+        NoMatch.
+
+        Args:
+            n:     The container whose children are tried.
+            depth: The statements' indentation level.
+        """
         for c in n.children:
             if c.error:
                 continue
@@ -1313,6 +1756,13 @@ class PythonEmitter:
             self.need_hooks(checks_hooks(n.checks), depth)
             self.finish(n, depth)
             self.line(f"return {self.construct(n)}, r.used()", depth)
+
+
+# The parameters of the generated monitor methods.
+MONITOR_PARAMS = [
+    ("m",
+     "The state of the alarms that depend on earlier samples, which the method "
+     "reads and updates."), ("t", "This sample's time, in seconds.")]
 
 
 def emit(mission: Mission, source: str) -> str:
