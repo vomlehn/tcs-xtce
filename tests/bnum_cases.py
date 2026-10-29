@@ -155,17 +155,16 @@ def double_bits(rng: random.Random, bits: int) -> str:
     return struct.pack(">d", x).hex()
 
 
-def radix_text(rng: random.Random, signed: bool, n: int, radix: int) -> str:
+def radix_text(rng: random.Random, n: int, radix: int) -> str:
     """Text for from_str_radix to parse.
 
     It is mostly digits of ``radix``, of either case, sometimes signed,
     and now and then empty, a bad sign or ending in a bad character.
 
     Args:
-        rng:    The random number generator.
-        signed: Whether the type is signed (unused).
-        n:      The type's size in bytes, which bounds the digit count.
-        radix:  The radix, 2 to 36.
+        rng:   The random number generator.
+        n:     The type's size in bytes, which bounds the digit count.
+        radix: The radix, 2 to 36.
 
     Returns:
         The text.
@@ -232,7 +231,7 @@ def main() -> None:
                 elif op == "from_str_radix":
                     radix = rng.randint(2, 36)
                     out.append(f"{op} {t} {radix} "
-                               f"{radix_text(rng, signed, n, radix)}".rstrip())
+                               f"{radix_text(rng, n, radix)}".rstrip())
                 elif op == "cast":
                     to = (f"{rng.choice('ui')}{rng.choice(SIZES)}")
                     out.append(f"{op} {t} {pick()} {to}")
