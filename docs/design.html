@@ -924,7 +924,11 @@ first, so each field measures the container nearest it.</p>
 entry list. A <tt class="docutils literal">RepeatEntry</tt> with a fixed count and no <tt class="docutils literal">Offset</tt> is
 expanded into that many segments, which can still assemble the value;
 any other repeat makes the segments a raw array through <tt class="docutils literal">repeat</tt>, the
-same path a repeated parameter takes.</p>
+same path a repeated parameter takes. A repeated segment located from
+the end gives <tt class="docutils literal">end_seek</tt> its whole extent, from <tt class="docutils literal">segment_bits</tt>: the
+repeats and the gaps between them, which must be fixed. The <tt class="docutils literal">TailSeek</tt>
+of such an entry may be followed by several items before its <tt class="docutils literal">TailPad</tt>,
+so <tt class="docutils literal">check_tail</tt> looks for the <tt class="docutils literal">TailPad</tt> rather than counting items.</p>
 </div>
 <div class="section" id="alarms">
 <h2><a class="toc-backref" href="#toc-entry-16">Alarms</a></h2>

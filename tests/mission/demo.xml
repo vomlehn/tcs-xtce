@@ -1432,6 +1432,9 @@
       <Parameter name="RepWord" parameterTypeRef="U32"/>
       <Parameter name="RepTail" parameterTypeRef="U16"/>
       <Parameter name="RepAfter" parameterTypeRef="U8"/>
+      <Parameter name="EndLead" parameterTypeRef="U8"/>
+      <Parameter name="EndPair" parameterTypeRef="U8"/>
+      <Parameter name="EndWord" parameterTypeRef="U16"/>
       <Parameter name="WideTiny" parameterTypeRef="S16"/>
       <Parameter name="WideA" parameterTypeRef="WideU72"/>
       <Parameter name="WideB" parameterTypeRef="WideLe80"/>
@@ -2375,6 +2378,51 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="560"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Repeated segments located from the end: in a 16-bit block, two
+           4-bit segments of EndPair 4 bits apart end it; and EndWord's two
+           8-bit segments end a byte before the end of the packet, whose
+           size varies. -->
+      <SequenceContainer name="EndSegBlock">
+        <BinaryEncoding>
+          <SizeInBits><FixedValue>16</FixedValue></SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterSegmentRefEntry parameterRef="EndPair" sizeInBits="4">
+            <LocationInContainerInBits referenceLocation="containerEnd">
+              <FixedValue>0</FixedValue>
+            </LocationInContainerInBits>
+            <RepeatEntry>
+              <Count>
+                <FixedValue>2</FixedValue>
+              </Count>
+              <Offset>
+                <FixedValue>4</FixedValue>
+              </Offset>
+            </RepeatEntry>
+          </ParameterSegmentRefEntry>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="EndSegs">
+        <EntryList>
+          <ParameterRefEntry parameterRef="EndLead"/>
+          <ContainerRefEntry containerRef="EndSegBlock"/>
+          <ParameterSegmentRefEntry parameterRef="EndWord" sizeInBits="8">
+            <LocationInContainerInBits referenceLocation="containerEnd">
+              <FixedValue>8</FixedValue>
+            </LocationInContainerInBits>
+            <RepeatEntry>
+              <Count>
+                <FixedValue>2</FixedValue>
+              </Count>
+            </RepeatEntry>
+          </ParameterSegmentRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="565"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

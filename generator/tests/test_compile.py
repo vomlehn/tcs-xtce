@@ -2448,10 +2448,17 @@ def segment_mission(entries: str) -> str:
         </ContainerSet>""")
 
 
-def seg(name: str, bits: int, order: str = "", repeat: str = "") -> str:
+def seg(name: str, bits: int, order: str = "", repeat: str = "",
+        end: str = "") -> str:
+    """A segment entry, located ``end`` bits from the container's end if
+    that is given."""
     order = f' order="{order}"' if order else ""
+    loc = ('<LocationInContainerInBits '
+           f'referenceLocation="containerEnd">{fixed(end)}'
+           '</LocationInContainerInBits>' if end else "")
     return (f'<ParameterSegmentRefEntry parameterRef="{name}" '
-            f'sizeInBits="{bits}"{order}>{repeat}</ParameterSegmentRefEntry>')
+            f'sizeInBits="{bits}"{order}>{loc}{repeat}'
+            '</ParameterSegmentRefEntry>')
 
 
 def repeat(count: str, offset: str = "") -> str:
@@ -2501,8 +2508,23 @@ class SegmentTests(unittest.TestCase):
                 vt = n.fields[-1][1].vtype
                 self.assertEqual((vt.kind, vt.elem.enc.bits), ("array", 8))
 
+    def test_repeated_from_end(self):
+        # Four 4-bit segments a byte before the end, and two 8-bit ones
+        # 4 bits apart at the end: their bits and the gaps between them.
+        seek, *segs, v, pad = self.items(seg("W", 4, repeat=repeat(fixed(4)),
+                                             end="8"))
+        self.assertEqual((seek.back, len(segs), v.assembled, pad.bits),
+                         (24, 4, 16, 8))
+        seek, v, pad = self.items(seg("W", 8, repeat=repeat(fixed(2), fixed(4)),
+                                      end="0"))
+        self.assertEqual((seek.back, pad.bits), (20, 0))
+
     def test_rejected(self):
         for entries, why in (
+                ('<ParameterRefEntry parameterRef="W"/>'
+                 + seg("W", 8, repeat=repeat(dynamic("W")), end="0"),
+                 "a repeated ParameterSegmentRefEntry located from the "
+                 "container's end, whose size varies"),
                 (seg("W", 8, "1", repeat(fixed(2))),
                  "a repeated ParameterSegmentRefEntry with an order"),
                 (seg("W", 8, repeat=repeat(fixed(0))),

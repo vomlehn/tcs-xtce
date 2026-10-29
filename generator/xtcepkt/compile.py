@@ -1796,11 +1796,9 @@ class Compiler:
             if ch.name in SEGMENTS:
                 after = []
                 if out and isinstance(out[-1], EndSeek):
-                    if e.repeat_entry is not None:
-                        raise Unsupported(f"{where}: a repeated {ch.name} "
-                                          "located from the container's end")
-                    out[-1], after = self.end_seek(out[-1], sc, None, where,
-                                                   e.size_in_bits)
+                    out[-1], after = self.end_seek(
+                        out[-1], sc, None, where,
+                        self.segment_bits(ch.name, e, path, where))
                 out += self.segment(ch.name, e, path, where, segs,
                                     cond is not None, scope)
                 out += after
@@ -1913,6 +1911,23 @@ class Compiler:
         lc = self.bind(self.repeat(lc, e, path, where), scope, where, arg_key)
         scope.append(lc)
         return [Value(lc)]
+
+    def segment_bits(self, name: str, e, path: Key, where: str) -> int:
+        """The bits that segment entry ``e`` takes, its repeats and the
+        gaps between them too, for a location from the container's end."""
+        rp = e.repeat_entry
+        if rp is None:
+            return e.size_in_bits
+        count = self.int_value(rp.count, path, "RepeatEntry Count", where)
+        gap = (self.int_value(rp.offset, path, "RepeatEntry Offset", where)
+               if rp.offset is not None else 0)
+        if not isinstance(count, int) or not isinstance(gap, int):
+            raise Unsupported(f"{where}: a repeated {name} located from the "
+                              "container's end, whose size varies")
+        if count < 1 or gap < 0:
+            raise Unsupported(f"{where}: RepeatEntry Count {count} or Offset "
+                              f"{gap} is out of range")
+        return count * e.size_in_bits + (count - 1) * gap
 
     def segment_ref(self, name: str, e, path: Key) -> str:
         """What a segment entry is a segment of."""
@@ -2197,7 +2212,9 @@ class Compiler:
         at = [i for i, it in enumerate(items) if isinstance(it, TailSeek)]
         if not at:
             return
-        rest = items[at[0] + 3:]
+        # The entry is everything up to its TailPad.
+        rest = items[next(i for i in range(at[0], len(items))
+                          if isinstance(items[i], TailPad)) + 1:]
         if (len(at) > 1
                 or any(not isinstance(it, (Require, Mark)) for it in rest)):
             raise Unsupported(f"{where}: an entry located from the end of a "
@@ -2952,11 +2969,9 @@ class Compiler:
             if ch.name in SEGMENTS:
                 after = []
                 if out and isinstance(out[-1], EndSeek):
-                    if e.repeat_entry is not None:
-                        raise Unsupported(f"{where}: a repeated {ch.name} "
-                                          "located from the container's end")
-                    out[-1], after = self.end_seek(out[-1], cc, None, where,
-                                                   e.size_in_bits)
+                    out[-1], after = self.end_seek(
+                        out[-1], cc, None, where,
+                        self.segment_bits(ch.name, e, path, where))
                 out += self.segment(ch.name, e, path, where, segs,
                                     cond is not None, values, arg_key)
                 out += after

@@ -2363,10 +2363,16 @@ parameter's bytes the same way.</p>
 another, is that many segments, so they can still make up a value. One
 whose <tt class="docutils literal">RepeatEntry</tt> count another value gives, or with an <tt class="docutils literal">Offset</tt>
 between the repeats, is a list of raw segments, like an array. A
-repeated segment can't have an <tt class="docutils literal">order</tt>, or be located from the end of
-its container. The demo's <tt class="docutils literal">Repeated</tt> packet assembles <tt class="docutils literal">RepWord</tt>
-from four repeated 8-bit segments, sends <tt class="docutils literal">RepCount</tt> 4-bit segments of
-<tt class="docutils literal">RepTail</tt>, and two segments of <tt class="docutils literal">Section</tt> 4 bits apart.</p>
+repeated segment located from the end of its container takes its
+repeats' bits and the gaps between them, so its count and <tt class="docutils literal">Offset</tt>
+must be fixed. XTCE doesn't say which parts of a value the repeats of
+an entry with an <tt class="docutils literal">order</tt> are, so a repeated segment can't have one.
+The demo's <tt class="docutils literal">Repeated</tt> packet assembles <tt class="docutils literal">RepWord</tt> from four repeated
+8-bit segments, sends <tt class="docutils literal">RepCount</tt> 4-bit segments of <tt class="docutils literal">RepTail</tt>, and
+two segments of <tt class="docutils literal">Section</tt> 4 bits apart. In <tt class="docutils literal">EndSegs</tt>, two 4-bit
+segments of <tt class="docutils literal">EndPair</tt>, 4 bits apart, end the 16-bit <tt class="docutils literal">EndSegBlock</tt>,
+and <tt class="docutils literal">EndWord</tt>'s two 8-bit segments end a byte before the end of the
+packet.</p>
 </dd>
 <dt>Indirect entries</dt>
 <dd><p class="first"><tt class="docutils literal">IndirectParameterRefEntry</tt>, which dwell telemetry uses: the entry
@@ -2782,8 +2788,9 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 <dd><tt class="docutils literal">IndirectParameterRefEntry</tt> chosen by an integer without an
 <tt class="docutils literal">aliasNameSpace</tt> when no parameter's name is a number, instances of
 values in other packets, repeated
-segment entries with an <tt class="docutils literal">order</tt> or located from the end of their
-container, transformed containers included in a repeated container
+segment entries with an <tt class="docutils literal">order</tt> (which XTCE leaves undefined) or
+located from the end of their container with a count or <tt class="docutils literal">Offset</tt>
+that varies, transformed containers included in a repeated container
 or holding a length field, a checksum or an entry located from the
 end,
 <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE deprecates), least-significant-bit-first strings

@@ -560,7 +560,11 @@ Segments are kept in step with their parameter by counting them per
 entry list. A ``RepeatEntry`` with a fixed count and no ``Offset`` is
 expanded into that many segments, which can still assemble the value;
 any other repeat makes the segments a raw array through ``repeat``, the
-same path a repeated parameter takes.
+same path a repeated parameter takes. A repeated segment located from
+the end gives ``end_seek`` its whole extent, from ``segment_bits``: the
+repeats and the gaps between them, which must be fixed. The ``TailSeek``
+of such an entry may be followed by several items before its ``TailPad``,
+so ``check_tail`` looks for the ``TailPad`` rather than counting items.
 
 Alarms
 ------

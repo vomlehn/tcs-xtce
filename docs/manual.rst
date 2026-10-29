@@ -1937,10 +1937,16 @@ Segments
    another, is that many segments, so they can still make up a value. One
    whose ``RepeatEntry`` count another value gives, or with an ``Offset``
    between the repeats, is a list of raw segments, like an array. A
-   repeated segment can't have an ``order``, or be located from the end of
-   its container. The demo's ``Repeated`` packet assembles ``RepWord``
-   from four repeated 8-bit segments, sends ``RepCount`` 4-bit segments of
-   ``RepTail``, and two segments of ``Section`` 4 bits apart.
+   repeated segment located from the end of its container takes its
+   repeats' bits and the gaps between them, so its count and ``Offset``
+   must be fixed. XTCE doesn't say which parts of a value the repeats of
+   an entry with an ``order`` are, so a repeated segment can't have one.
+   The demo's ``Repeated`` packet assembles ``RepWord`` from four repeated
+   8-bit segments, sends ``RepCount`` 4-bit segments of ``RepTail``, and
+   two segments of ``Section`` 4 bits apart. In ``EndSegs``, two 4-bit
+   segments of ``EndPair``, 4 bits apart, end the 16-bit ``EndSegBlock``,
+   and ``EndWord``'s two 8-bit segments end a byte before the end of the
+   packet.
 
 Indirect entries
    ``IndirectParameterRefEntry``, which dwell telemetry uses: the entry
@@ -2363,8 +2369,9 @@ Not supported
    ``IndirectParameterRefEntry`` chosen by an integer without an
    ``aliasNameSpace`` when no parameter's name is a number, instances of
    values in other packets, repeated
-   segment entries with an ``order`` or located from the end of their
-   container, transformed containers included in a repeated container
+   segment entries with an ``order`` (which XTCE leaves undefined) or
+   located from the end of their container with a count or ``Offset``
+   that varies, transformed containers included in a repeated container
    or holding a length field, a checksum or an entry located from the
    end,
    ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates), least-significant-bit-first strings
