@@ -1894,6 +1894,54 @@ pub fn wide_from_signed<const N: usize>(
     }
 }
 
+/// [`int_to_f64`] for fields of more than 64 bits: rounded to the nearest
+/// double, ties to even, as bnum converts.
+pub fn wide_int_to_f64<const N: usize>(
+    raw: Uint<N>,
+    bits: u32,
+    enc: IntEncoding,
+) -> f64 {
+    use bnum::cast::As;
+    match enc {
+        IntEncoding::Unsigned => raw.as_::<f64>(),
+        _ => wide_to_signed(raw, bits, enc).as_::<f64>(),
+    }
+}
+
+/// [`f64_to_int`] for fields of more than 64 bits: rounds (half away from
+/// zero) an engineering value to a raw field, and fails with `OutOfRange`
+/// unless the field holds it.
+pub fn f64_to_wide<const N: usize>(
+    x: f64,
+    bits: u32,
+    enc: IntEncoding,
+    field: &'static str,
+) -> Result<Uint<N>> {
+    use bnum::cast::CastFrom;
+    let r = x.round();
+    // 2 to the power of the bits in N bytes, past any double from 1024.
+    let lim = if 8 * N < 1024 {
+        2f64.powi(8 * N as i32)
+    } else {
+        f64::INFINITY
+    };
+    let out = Err(PacketError::OutOfRange { field });
+    if !r.is_finite() {
+        return out;
+    }
+    if enc == IntEncoding::Unsigned {
+        if r < 0.0 || r >= lim {
+            return out;
+        }
+        wide_from_unsigned(Uint::<N>::cast_from(r), bits, field)
+    } else {
+        if r < -lim / 2.0 || r >= lim / 2.0 {
+            return out;
+        }
+        wide_from_signed(Int::<N>::cast_from(r), bits, enc, field)
+    }
+}
+
 /// Checks that an unsigned value fits in `bits` bits.
 pub fn wide_from_unsigned<const N: usize>(
     v: Uint<N>,

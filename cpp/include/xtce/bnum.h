@@ -991,6 +991,110 @@ static inline int xtce_bn_from_str_radix(uint8_t* out, size_t n, bool s,
         return XTCE_BN_OK;
 }
 
+/* --- floats -------------------------------------------------------------- */
+
+/* `a` as a double, as bnum's `as` converts: to the nearest, ties to even,
+ * and infinite past the largest double; a negative value is its magnitude's
+ * negated.  `scratch` is n bytes. */
+static inline double xtce_bn_to_f64(const uint8_t* a, size_t n, bool s,
+                                    uint8_t* scratch) {
+        bool neg = xtce_bn_is_negative(a, n, s);
+        const uint8_t* m = a;
+        unsigned w, shift, i;
+        uint64_t mant = 0, bits;
+        double d;
+        if (neg) {
+                xtce_bn_unsigned_abs(scratch, a, n, true);
+                m = scratch;
+        }
+        w = xtce_bn_bit_width(m, n);
+        if (w == 0) return 0.0;
+        shift = w > 53 ? w - 53 : 0;
+        for (i = w; i-- > shift;) mant = (mant << 1) | xtce_bn_bit(m, n, i);
+        if (w - 1 < 1024 && shift && xtce_bn_bit(m, n, shift - 1) &&
+            ((mant & 1) || xtce_bn_trailing_zeros(m, n) != shift - 1)) {
+                /* At least a half, and not a tie with an even mantissa. */
+                if (++mant >> 53) {
+                        mant >>= 1;
+                        ++w;
+                }
+        }
+        if (w - 1 >= 1024) {
+                bits = UINT64_C(0x7ff0000000000000);
+        } else {
+                mant <<= 53 - (w < 53 ? w : 53);
+                bits = ((uint64_t)(w - 1 + 1023) << 52) |
+                       (mant & ((UINT64_C(1) << 52) - 1));
+        }
+        if (neg) bits |= UINT64_C(1) << 63;
+        memcpy(&d, &bits, sizeof d);
+        return d;
+}
+
+/* The double `x` as an unsigned integer of `n` bytes, as bnum casts it:
+ * toward zero, but [1/2, 1) other than 1/2 is 1; a negative value is 0, a
+ * NaN 0 and anything too large MAX. */
+static inline void xtce_bn_uint_from_f64_(uint8_t* out, size_t n, double x) {
+        uint64_t bits, mant;
+        int exp;
+        unsigned i;
+        memcpy(&bits, &x, sizeof bits);
+        exp = (int)((bits >> 52) & 0x7ff);
+        mant = bits & ((UINT64_C(1) << 52) - 1);
+        memset(out, 0, n);
+        if (exp == 0x7ff && mant) return; /* NaN */
+        if (exp == 0 && !mant) return;    /* zero */
+        if (bits >> 63) return;           /* negative */
+        if (exp == 0x7ff) {               /* infinite */
+                xtce_bn_max(out, n, false);
+                return;
+        }
+        if (exp == 0) return; /* subnormal: less than a half */
+        mant |= UINT64_C(1) << 52;
+        exp -= 1023;
+        if (exp < -1) return;
+        if (exp == -1) {
+                /* In [1/2, 1): exactly a half is 0 (ties to even). */
+                if (mant != UINT64_C(1) << 52) out[0] = 1;
+                return;
+        }
+        if ((unsigned)exp >= 8 * n) {
+                xtce_bn_max(out, n, false);
+                return;
+        }
+        if (exp <= 52) {
+                mant >>= 52 - exp;
+                exp = 0;
+        } else {
+                exp -= 52;
+        }
+        for (i = 0; i < 64 && (unsigned)exp + i < 8 * n; ++i)
+                if ((mant >> i) & 1) xtce_bn_set_bit(out, n, exp + i, true);
+}
+
+/* The double `x` as an integer of `n` bytes, as bnum's `as` converts:
+ * toward zero (see xtce_bn_uint_from_f64_), saturating at MIN and MAX, and
+ * a NaN as 0. */
+static inline void xtce_bn_from_f64(uint8_t* out, size_t n, bool s,
+                                    double x) {
+        uint64_t bits;
+        memcpy(&bits, &x, sizeof bits);
+        if (!s) {
+                xtce_bn_uint_from_f64_(out, n, x);
+        } else if (bits >> 63) {
+                xtce_bn_uint_from_f64_(out, n, -x);
+                /* MIN's magnitude or more is MIN. */
+                if (xtce_bn_bit(out, n, (unsigned)(8 * n - 1)))
+                        xtce_bn_min(out, n, true);
+                else
+                        xtce_bn_wrapping_neg(out, out, n);
+        } else {
+                xtce_bn_uint_from_f64_(out, n, x);
+                if (xtce_bn_bit(out, n, (unsigned)(8 * n - 1)))
+                        xtce_bn_max(out, n, true);
+        }
+}
+
 #ifdef __cplusplus
 }
 #endif

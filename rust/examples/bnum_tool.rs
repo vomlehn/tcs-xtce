@@ -8,7 +8,7 @@
 //! overflowing operation's result and `true` or `false`, or a parse error's
 //! kind.  tests/bnum_cases.py lists the operations.
 
-use bnum::cast::As;
+use bnum::cast::{As, CastFrom};
 use bnum::errors::ParseIntError;
 use bnum::Integer;
 use std::fmt::Display;
@@ -114,6 +114,11 @@ fn common<const S: bool, const N: usize>(op: &str, args: &[&str]) -> String {
         "from_le_slice" => opt(I::<S, N>::from_le_slice(&unhex(args[0]))),
         "from_be_slice" => opt(I::<S, N>::from_be_slice(&unhex(args[0]))),
         "cast" => cast(a(), args[1]),
+        "to_f64" => format!("{:016x}", a().as_::<f64>().to_bits()),
+        "from_f64" => {
+            let bits = u64::from_str_radix(args[0], 16).unwrap();
+            I::<S, N>::cast_from(f64::from_bits(bits)).to_string()
+        }
         _ => panic!("unknown operation {op}"),
     }
 }

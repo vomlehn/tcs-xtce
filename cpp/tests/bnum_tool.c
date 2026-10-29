@@ -87,6 +87,14 @@ static void run(const char* op, char** arg) {
                         value(&r);
                 return;
         }
+        if (IS("from_f64")) {
+                uint64_t bits = strtoull(arg[0], NULL, 16);
+                double d;
+                memcpy(&d, &bits, sizeof d);
+                xtce_bn_from_f64(r.b, n, s, d);
+                value(&r);
+                return;
+        }
         if (IS("from_le_slice") || IS("from_be_slice")) {
                 uint8_t bytes[4 * MAXN];
                 size_t len = unhex(arg[0], bytes);
@@ -272,6 +280,11 @@ static void run(const char* op, char** arg) {
                 char buf[8 * MAXN + 2];
                 xtce_bn_to_str_radix(a.b, n, s, k, t.b, buf, sizeof buf);
                 puts(buf);
+        } else if (IS("to_f64")) {
+                double d = xtce_bn_to_f64(a.b, n, s, t.b);
+                uint64_t bits;
+                memcpy(&bits, &d, sizeof bits);
+                printf("%016llx\n", (unsigned long long)bits);
         } else if (IS("cast")) {
                 size_t n2;
                 bool s2;

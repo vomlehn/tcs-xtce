@@ -8,6 +8,7 @@ Usage: python3 tests/bnum_cases.py SEED COUNT [--c]
 """
 
 import random
+import struct
 import sys
 
 SIZES = (1, 2, 3, 8, 16, 17, 24, 32)
@@ -91,6 +92,26 @@ def bnum_slice_bug(h: str, signed: bool, n: int, le: bool) -> bool:
             and not b[n - 1] & 0x80)
 
 
+def double_bits(rng: random.Random, bits: int) -> str:
+    """A double's bits in hex for from_f64: whole numbers near every power
+    of two up to past the type's size, either sign, halves and other
+    fractions, and the special values."""
+    kind = rng.random()
+    if kind < 0.1:
+        x = rng.choice([0.0, -0.0, 0.5, -0.5, 0.75, 1.5, 2.5, -2.5, 1e-310,
+                        float("inf"), -float("inf"), float("nan"),
+                        -float("nan"), 1.7976931348623157e308])
+    elif kind < 0.8:
+        k = rng.randint(0, bits + 2)
+        x = float(rng.choice([1 << k, (1 << k) - 1, (1 << k) + 1,
+                              rng.getrandbits(k + 1)]))
+    else:
+        x = rng.uniform(-4, 4) * 2.0 ** rng.randint(-3, bits + 2)
+    if rng.random() < 0.5:
+        x = -x
+    return struct.pack(">d", x).hex()
+
+
 def radix_text(rng: random.Random, signed: bool, n: int, radix: int) -> str:
     digits = "0123456789abcdefghijklmnopqrstuvwxyz"[:radix]
     kind = rng.random()
@@ -126,7 +147,7 @@ def main() -> None:
             if not c_only:
                 ops += POW + CXX_UNARY
             ops += ["to_str_radix", "from_str_radix", "cast", "from_le_slice",
-                    "from_be_slice"]
+                    "from_be_slice", "to_f64", "from_f64"]
             for _ in range(count):
                 op = rng.choice(ops)
                 if op in BINARY:
@@ -155,6 +176,8 @@ def main() -> None:
                 elif op == "cast":
                     to = (f"{rng.choice('ui')}{rng.choice(SIZES)}")
                     out.append(f"{op} {t} {pick()} {to}")
+                elif op == "from_f64":
+                    out.append(f"{op} {t} {double_bits(rng, bits)}")
                 elif op in ("from_le_slice", "from_be_slice"):
                     h = slice_hex(rng, signed, n)
                     if bnum_slice_bug(h, signed, n, op == "from_le_slice"):

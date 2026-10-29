@@ -3,6 +3,7 @@
 // rust/examples/bnum_tool.rs describes the cases and what it prints, and
 // does the same with bnum.
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -75,6 +76,21 @@ std::string run(const std::string& op, const std::vector<std::string>& a) {
                 auto r = T::from_str_radix(a.size() > 1 ? a[1] : "",
                                            std::stoul(a[0]), &e);
                 return r ? r->to_string() : kind(e);
+        }
+        if (op == "from_f64") {
+                std::uint64_t bits = std::stoull(a[0], nullptr, 16);
+                double d;
+                std::memcpy(&d, &bits, sizeof d);
+                return T::from_f64(d).to_string();
+        }
+        if (op == "to_f64") {
+                double d = x().template as<double>();
+                std::uint64_t bits;
+                std::memcpy(&bits, &d, sizeof bits);
+                char buf[17];
+                std::snprintf(buf, sizeof buf, "%016llx",
+                              static_cast<unsigned long long>(bits));
+                return buf;
         }
         if (op == "from_le_slice" || op == "from_be_slice") {
                 auto b = unhex(a[0]);

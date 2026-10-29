@@ -122,7 +122,10 @@ class Integer {
         // This integer as another, as Rust's `as` converts.
         template <class T>
         T as() const {
-                if constexpr (std::is_integral_v<T>) {
+                if constexpr (std::is_same_v<T, double>) {
+                        std::uint8_t scratch[N];
+                        return xtce_bn_to_f64(p(), N, S, scratch);
+                } else if constexpr (std::is_integral_v<T>) {
                         std::uint8_t out[sizeof(T)];
                         xtce_bn_cast(out, sizeof(T), p(), N, S);
                         std::uint64_t u = 0;
@@ -135,6 +138,13 @@ class Integer {
                                      N, S);
                         return r;
                 }
+        }
+        // A double as this type, as bnum's `cast_from` converts: toward
+        // zero, saturating, and a NaN as 0.
+        static Integer from_f64(double x) {
+                Integer r;
+                xtce_bn_from_f64(r.p(), N, S, x);
+                return r;
         }
         Integer<true, N> cast_signed() const {
                 return Integer<true, N>::from_le_bytes(b_);

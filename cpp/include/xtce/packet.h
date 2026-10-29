@@ -1523,6 +1523,43 @@ static inline int xtce_pk_wide_from_signed(uint8_t* v, size_t n,
         return 0;
 }
 
+/* xtce_pk_int_to_double for the raw field of `bits` bits in the `n` bytes
+ * at `raw`: rounded to the nearest double, ties to even, as bnum converts.
+ * `scratch` is `n` bytes. */
+static inline double xtce_pk_wide_to_double(const uint8_t* raw, size_t n,
+                                            unsigned bits, int enc,
+                                            uint8_t* scratch) {
+        if (enc == XTCE_PK_UNSIGNED)
+                return xtce_bn_to_f64(raw, n, false, scratch);
+        memcpy(scratch, raw, n);
+        xtce_pk_wide_to_signed(scratch, n, bits, enc);
+        return xtce_bn_to_f64(scratch, n, true, scratch);
+}
+
+/* xtce_pk_double_to_int for a raw field of `bits` bits in the `n` bytes at
+ * `out`: rounds (half away from zero) an engineering value, and fails with
+ * XTCE_PK_OUT_OF_RANGE unless the field holds it. */
+static inline int xtce_pk_double_to_wide(double x, unsigned bits, int enc,
+                                         const char* f, xtce_pk_error* err,
+                                         uint8_t* out, size_t n) {
+        double r = round(x);
+        /* 2 to the power of the bits in `n` bytes, past any double from
+         * 1024. */
+        double lim = 8 * n < 1024 ? ldexp(1.0, (int)(8 * n)) : INFINITY;
+        if (!isfinite(r))
+                return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+        if (enc == XTCE_PK_UNSIGNED) {
+                if (r < 0 || r >= lim)
+                        return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+                xtce_bn_from_f64(out, n, false, r);
+                return xtce_pk_wide_from_unsigned(out, n, bits, f, err);
+        }
+        if (r < -lim / 2 || r >= lim / 2)
+                return xtce_pk_fail(err, XTCE_PK_OUT_OF_RANGE, f, NULL);
+        xtce_bn_from_f64(out, n, true, r);
+        return xtce_pk_wide_from_signed(out, n, bits, enc, f, err);
+}
+
 /* xtce_pk_bcd_decode for the raw field of `bits` bits in the `n` bytes at
  * `v`, in place; `scratch` is `n` bytes. */
 static inline int xtce_pk_wide_bcd_decode(uint8_t* v, size_t n,

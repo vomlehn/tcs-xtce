@@ -974,7 +974,13 @@ def from_unsigned(v: int, bits: int, field: str) -> int:
 
 
 def int_to_float(raw: int, bits: int, enc: str) -> float:
-    return float(to_signed(raw, bits, enc))
+    """A raw field as a float: rounded to the nearest, ties to even, and
+    infinite past the largest float, as the Rust runtime converts."""
+    v = to_signed(raw, bits, enc)
+    try:
+        return float(v)
+    except OverflowError:
+        return math.copysign(math.inf, v)
 
 
 def bcd_decode(raw: int, bits: int, packed: bool, field: str) -> int:
@@ -1028,6 +1034,13 @@ def float_to_int(x: float, bits: int, enc: str, field: str) -> int:
             or (enc != "unsigned" and not -(1 << 63) <= r < 1 << 63)):
         raise PacketError("OutOfRange", field)
     return from_signed(r, bits, enc, field)
+
+
+def float_to_wide(x: float, bits: int, enc: str, field: str) -> int:
+    """:func:`float_to_int` for fields of more than 64 bits."""
+    if not math.isfinite(x):
+        raise PacketError("OutOfRange", field)
+    return from_signed(_round(x), bits, enc, field)
 
 
 def round_to_int(y: float, lo: float, lim: float, field: str) -> int:
