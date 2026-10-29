@@ -73,3 +73,6 @@ __pycache__/
 # Downloaded by make references
 /references/*
 !/references/Makefile
+
+# Claude Code agents' scratch checkouts.
+.claude/worktrees/
