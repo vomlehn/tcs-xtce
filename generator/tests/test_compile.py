@@ -1118,6 +1118,25 @@ class TransformTests(unittest.TestCase):
                          (2, 1, "Unzip", "Zip"))
         self.assertEqual([m.name for m in copy.enc.members], ["A"])
 
+    def test_included_in_a_repeated_container(self):
+        # R, repeated, holds B and then Q: each copy has Q as a member,
+        # transformed as a repeated Q would be.
+        text = self.with_q(
+            transform_mission(entries=self.REPEAT.replace(
+                                  '"Q"', '"R"'))).replace(
+            '<SequenceContainer name="P">',
+            '<SequenceContainer name="R"><EntryList><ParameterRefEntry '
+            'parameterRef="B"/><ContainerRefEntry containerRef="Q"/>'
+            '</EntryList></SequenceContainer><SequenceContainer name="P">')
+        p = next(n for n in compile_xml(text).nodes if n.name == "P")
+        copy = p.items[-1].local.vtype.enc.elem
+        self.assertEqual([m.name for m in copy.enc.members], ["B", "Q"])
+        q = copy.enc.members[1].vtype
+        x = q.enc.transform
+        self.assertEqual((x.raw, x.cap, x.decode.name, x.encode.name),
+                         (2, 1, "Unzip", "Zip"))
+        self.assertEqual([m.name for m in q.enc.members], ["A"])
+
     def test_repeated_container_needs_a_size(self):
         text = self.with_q(transform_mission(entries=self.REPEAT), size="")
         with self.assertRaises(Unsupported) as cm:

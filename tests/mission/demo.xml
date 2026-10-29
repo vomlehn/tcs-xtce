@@ -1456,6 +1456,7 @@
       <Parameter name="OptEnd" parameterTypeRef="U8"/>
       <Parameter name="ZipC" parameterTypeRef="U16"/>
       <Parameter name="ZipCount" parameterTypeRef="RecCountType"/>
+      <Parameter name="ZipTag" parameterTypeRef="U8"/>
       <Parameter name="TwoRowCols" parameterTypeRef="RepCountType"/>
       <Parameter name="TwoRows" parameterTypeRef="TwoRowType"/>
       <Parameter name="TwoRowNote" parameterTypeRef="U8"/>
@@ -2566,6 +2567,34 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="650"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- A repeated container that includes a transformed one: each copy
+           is ZipTag, then ZipC doubled as in ZipCopy. -->
+      <SequenceContainer name="ZipLabeled">
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipTag"/>
+          <ContainerRefEntry containerRef="ZipCopy"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="ZipNested">
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipCount"/>
+          <ContainerRefEntry containerRef="ZipLabeled">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="ZipCount"/>
+                </DynamicValue>
+              </Count>
+            </RepeatEntry>
+          </ContainerRefEntry>
+          <ParameterRefEntry parameterRef="OptEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="655"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

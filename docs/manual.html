@@ -2567,9 +2567,11 @@ container needs one, while a packet's own container without one
 takes the rest of the packet. A transformed container may have an
 <tt class="docutils literal">IncludeCondition</tt>, as the demo's <tt class="docutils literal">OptZip</tt> does, and may be
 repeated, as in its <tt class="docutils literal">ZipRepeat</tt>: each copy is then transformed on
-its own, and is its <tt class="docutils literal">SizeInBits</tt> on the wire. It can't hold a length
-field, a checksum or an entry located from the container's end, or be
-included in a repeated container.</p>
+its own, and is its <tt class="docutils literal">SizeInBits</tt> on the wire. It may also be included
+in a repeated container, as <tt class="docutils literal">ZipCopy</tt> is in each copy of the demo's
+<tt class="docutils literal">ZipLabeled</tt>: the copy's field for it (<tt class="docutils literal">zip_copy</tt>) holds its
+entries, and it is transformed in each copy. It can't hold a length
+field, a checksum or an entry located from the container's end.</p>
 <p>Either way the transformed data starts on a byte boundary, and a
 transform that makes more than fits fails with <tt class="docutils literal">TooLong</tt>, one that
 can't (a function giving nothing) with <tt class="docutils literal">InvalidValue</tt>, and one that
@@ -2839,9 +2841,8 @@ documents (see <a class="reference internal" href="#missions-in-several-document
 values in other packets, repeated
 segment entries with an <tt class="docutils literal">order</tt> (which XTCE leaves undefined) or
 located from the end of their container with a count or <tt class="docutils literal">Offset</tt>
-that varies, transformed containers included in a repeated container
-or holding a length field, a checksum or an entry located from the
-end,
+that varies, transformed containers holding a length field, a
+checksum or an entry located from the end,
 <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE deprecates),
 integers of more than 64 bits used other than as values (see &quot;Integer encoding&quot;),
 and a location from the end of an included container whose size

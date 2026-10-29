@@ -2152,9 +2152,11 @@ Transform algorithms
    takes the rest of the packet. A transformed container may have an
    ``IncludeCondition``, as the demo's ``OptZip`` does, and may be
    repeated, as in its ``ZipRepeat``: each copy is then transformed on
-   its own, and is its ``SizeInBits`` on the wire. It can't hold a length
-   field, a checksum or an entry located from the container's end, or be
-   included in a repeated container.
+   its own, and is its ``SizeInBits`` on the wire. It may also be included
+   in a repeated container, as ``ZipCopy`` is in each copy of the demo's
+   ``ZipLabeled``: the copy's field for it (``zip_copy``) holds its
+   entries, and it is transformed in each copy. It can't hold a length
+   field, a checksum or an entry located from the container's end.
 
    Either way the transformed data starts on a byte boundary, and a
    transform that makes more than fits fails with ``TooLong``, one that
@@ -2424,9 +2426,8 @@ Not supported
    values in other packets, repeated
    segment entries with an ``order`` (which XTCE leaves undefined) or
    located from the end of their container with a count or ``Offset``
-   that varies, transformed containers included in a repeated container
-   or holding a length field, a checksum or an entry located from the
-   end,
+   that varies, transformed containers holding a length field, a
+   checksum or an entry located from the end,
    ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates),
    integers of more than 64 bits used other than as values (see "Integer encoding"),
    and a location from the end of an included container whose size

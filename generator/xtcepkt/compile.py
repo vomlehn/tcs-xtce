@@ -2352,7 +2352,21 @@ class Compiler:
                 raise Unsupported(f"{what} includes a container whose size "
                                   "varies")
             if isinstance(it, Transform):
-                raise Unsupported(f"{what} has transformed data")
+                # An included container whose entries are transformed: a
+                # member holding them, transformed as a repeated one is.
+                if it.raw is None:
+                    raise Unsupported(f"{what} has transformed data whose size "
+                                      "varies")
+                inner = self.aggregate_of(it.items, it.start, what, it.name,
+                                          it.name.rsplit("/", 1)[-1])
+                inner.enc.transform = XformEnc(it.raw, it.decode, it.encode,
+                                               it.cap)
+                inner.doc = "an included container, transformed on the wire"
+                members.append(Member(inner.name, names.take(snake(inner.name)),
+                                      inner, skip))
+                skip = 0
+                pos = pos + 8 * it.raw if pos is not None else None
+                continue
             if isinstance(it, Seek):
                 if isinstance(it.offset, DynSize):
                     raise Unsupported(f"{what} has a location that other "

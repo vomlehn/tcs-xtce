@@ -517,7 +517,11 @@ and the most bytes its members take. The emitters wrap the aggregate's
 code as they do a Transform's: decoding reads the members with a reader
 over what the transform makes of each copy, and encoding writes them,
 then transforms them in place; ``work_bytes`` counts the room that
-takes.
+takes. A transformed container included in a repeated one is a
+``Transform`` among the copy's items, which ``aggregate_of`` makes a member
+of its own: an aggregate of the Transform's items with the Transform's
+size, hooks and room as its ``XformEnc``, so it is read and written as a
+repeated transformed container's copy is.
 
 A transformed binary or time value is instead an ordinary ``Value``
 whose encoding is an ``XformEnc``, so it can be optional, repeated or
