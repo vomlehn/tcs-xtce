@@ -235,6 +235,10 @@ tm 0a8ac02a00010477  # repeated zip: more copies than ZipCount allows
 tm 0a8fc02a000b020711112222083333444477  # nested zip: two copies, each a tag and a doubled ZipC
 tm 0a8fc02a00010077  # nested zip: no copies
 tm 0a8fc02a000601071112222277  # nested zip: a copy not doubled
+tm 0a95c02a0005111122223333  # summed zip: ZipSum 33 is the sum of ZipA's bytes 11 and 22, before they are doubled
+tm 0a95c02a0005111122223434  # summed zip: a ZipSum that is not the sum, which fails
+tm 0a96c02a000911112222999944440000  # tailed zip: ZipLast 44 a byte before the end of the bytes before the transform, after a gap
+tm 0a96c02a000311112222  # tailed zip: ZipLast would start before ZipA's end, which fails
 tm 0a62c02a0004f0e1968777  # xor: XorBlob aabbccdd, masked on the wire
 tm 0a62c02a0002010203  # xor: three bytes, not XorBlob's four
 tm 0a6cc02a000b03aabbcc11000004d2ac0222  # stuffed: aabbcc framed by its length, then 1.234 s and a 300 ms varint

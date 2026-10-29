@@ -1282,22 +1282,36 @@ class Compiler:
         """A container's items (from mark ``start``, which must be first)
         in a Transform, if its BinaryEncoding has transform algorithms;
         its SizeInBits is then its size on the wire, which only the packet
-        itself may leave out, to take the rest of it."""
+        itself may leave out, to take the rest of it.
+
+        Its checks, and those of the containers it includes, cover its
+        bytes before the transform, so they are Verify items at its end:
+        checked once its items are read, and computed before the transform
+        when encoding.  A length field can't be in it: what it counts on
+        the wire would depend on the transform of its own value."""
         be = sc.binary_encoding
         names = self.transform_names(be, where) if be is not None else None
         if names is None:
             return items
-        if edc_items(sc):
-            raise Unsupported(f"{where}: ErrorDetectCorrect in a container "
-                              "with transform algorithms")
         for it in walk(items):
-            if isinstance(it, Value) and it.local.computed:
-                raise Unsupported(f"{where}: packet length or checksum field "
+            if isinstance(it, Value) and it.local.length is not None:
+                raise Unsupported(f"{where}: packet length field "
                                   f"{it.local.name} in a container with "
                                   "transform algorithms")
-            if isinstance(it, TailSeek):
-                raise Unsupported(f"{where}: a transformed container with an "
-                                  "entry located from its end")
+        marks = {it.id for it in walk(items) if isinstance(it, Mark)}
+        inside = [c for c in self.included_checks if c[2] in marks]
+        self.included_checks = [c for c in self.included_checks
+                                if c not in inside]
+        checks = [Verify(self.check(name, v, cpath, scope, m, end, ckey, where))
+                  for inc, cpath, m, end, scope, ckey in inside
+                  for name, v in edc_items(inc)]
+        if edc_items(sc):
+            end = self._id()
+            scope = [it.local for it in walk(items) if isinstance(it, Value)]
+            checks = ([Mark(end)] + checks
+                      + [Verify(self.check(n, v, path, scope, start, end, name,
+                                           where)) for n, v in edc_items(sc)])
+        items = items + checks
         raw = None
         if be.size_in_bits is not None:
             size = self.int_value(be.size_in_bits, path, "container SizeInBits",
@@ -1851,7 +1865,7 @@ class Compiler:
                     out += self.measure(
                         self.wrap_transform(inc, inner, m, where, cpath,
                                             qname(ckey), False), where)
-                    if edc_items(inc):
+                    if edc_items(inc) and not self.has_transform(inc, where):
                         end = self._id()
                         out.append(Mark(end))
                         if conditional or cond is not None:
@@ -2188,6 +2202,10 @@ class Compiler:
                                   f"end for {local.name}, whose size varies")
             bits = item_bits(vt)
         be = sc.binary_encoding
+        if self.has_transform(sc, where):
+            # Its end is that of its bytes before the transform, which
+            # decoding knows as a packet's: its SizeInBits is on the wire.
+            return TailSeek(es.offset + bits), [TailPad(es.offset)]
         size = (
             self.int_value(be.size_in_bits, (), "container SizeInBits", where)
             if be is not None and be.size_in_bits is not None else None)
@@ -2201,24 +2219,31 @@ class Compiler:
 
     @staticmethod
     def check_tail(node: Node, where: str) -> None:
-        """An entry located from the end of a packet whose size varies is
-        its last, and is always there."""
-        items = node.all_items()
-        for it in items:
-            if (isinstance(it, Cond)
-                    and any(isinstance(x, TailSeek) for x in walk(it.items))):
-                raise Unsupported(f"{where}: an entry located from the "
-                                  "packet's end has an IncludeCondition")
-        at = [i for i, it in enumerate(items) if isinstance(it, TailSeek)]
-        if not at:
-            return
-        # The entry is everything up to its TailPad.
-        rest = items[next(i for i in range(at[0], len(items))
-                          if isinstance(items[i], TailPad)) + 1:]
-        if (len(at) > 1
-                or any(not isinstance(it, (Require, Mark)) for it in rest)):
-            raise Unsupported(f"{where}: an entry located from the end of a "
-                              "packet whose size varies is not its last")
+        """An entry located from the end of a packet whose size varies, or
+        of a transformed container's bytes, is its last, and is always
+        there."""
+        def last(items: list, what: str) -> None:
+            for it in items:
+                if (isinstance(it, Cond)
+                        and any(isinstance(x, TailSeek)
+                                for x in walk(it.items, False))):
+                    raise Unsupported(f"{where}: an entry located from the "
+                                      f"{what}'s end has an IncludeCondition")
+            at = [i for i, it in enumerate(items) if isinstance(it, TailSeek)]
+            if at:
+                # The entry is everything up to its TailPad.
+                rest = items[next(i for i in range(at[0], len(items))
+                                  if isinstance(items[i], TailPad)) + 1:]
+                if (len(at) > 1
+                        or any(not isinstance(it, (Require, Mark, Verify))
+                               for it in rest)):
+                    raise Unsupported(f"{where}: an entry located from the end "
+                                      f"of a {what} is not its last")
+            for it in walk(items, False):
+                if isinstance(it, Transform):
+                    last(it.items, "transformed container")
+
+        last(node.all_items(), "packet whose size varies")
 
     def size_pad(self, sc, items: list, start: int, where: str,
                  scope: Optional[list] = None, path: Key = ()) -> list[Item]:
@@ -2351,6 +2376,8 @@ class Compiler:
             if isinstance(it, Fill):
                 raise Unsupported(f"{what} includes a container whose size "
                                   "varies")
+            if isinstance(it, Verify):
+                raise Unsupported(f"{what} has a checksum")
             if isinstance(it, Transform):
                 # An included container whose entries are transformed: a
                 # member holding them, transformed as a repeated one is.
@@ -2475,6 +2502,7 @@ class Compiler:
             self.included_checks = []
             where = f"container {node.key}"
             if self.has_transform(sc, where):
+                node._edc = (None, None)  # its checks are in its Transform
                 # Its own entries are transformed: they start at the start
                 # of what the transform gives.
                 m = self._id()
@@ -2524,6 +2552,14 @@ class Compiler:
                 for name, v in edc_items(inc):
                     out.append(self.check(name, v, path, scope, m, end, ckey,
                                           where))
+        transformed = {id(x.local) for it in walk(node.all_items())
+                       if isinstance(it, Transform) for x in walk(it.items)
+                       if isinstance(x, Value)}
+        for c in out:
+            if id(c.local) in transformed:
+                raise Unsupported(f"{where}: checksum field {c.local.name} is "
+                                  "in transformed data, but its check covers "
+                                  "bytes outside it")
         criteria = (node.all_criteria()
                     + [c for it in node.all_items() for c in conds(it)])
         verified = [it.check for it in walk(node.all_items())
@@ -2917,6 +2953,7 @@ class Compiler:
                 # A CommandContainer without a BaseContainer still extends
                 # the container of its BaseMetaCommand, as Yamcs reads it.
                 if self.has_transform(cc, where):
+                    node._edc = (None, None)  # its checks are in it
                     m = self._id()
                     node.items = prefix + self.wrap_transform(
                         cc,

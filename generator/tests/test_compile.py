@@ -15,7 +15,7 @@ from xtcepkt.compile import (  # noqa: E402
 from xtcepkt.model import (  # noqa: E402
     MAX_FIELD_BITS, AnyOf, Cond, ContextCal, Fill, Fixed, Index, MathOp, Pad,
     Require, Seek, Segment, Spline, Unsupported, Value, walk, LengthEnd,
-    Transform, XformEnc)
+    Transform, Verify, XformEnc)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -1136,6 +1136,37 @@ class TransformTests(unittest.TestCase):
         self.assertEqual((x.raw, x.cap, x.decode.name, x.encode.name),
                          (2, 1, "Unzip", "Zip"))
         self.assertEqual([m.name for m in q.enc.members], ["A"])
+
+    SUM = ('<ErrorDetectCorrect><Checksum name="sum8" parameterRef="A"/>'
+           '</ErrorDetectCorrect>')
+
+    def test_check_covers_the_bytes_before_the_transform(self):
+        # The check is verified at the end of the transformed items, which
+        # are the bytes before the transform, not with the packet's.
+        n = compile_xml(transform_mission(f"<BinaryEncoding>{self.SUM}"
+                                          f"{TRANSFORMS}</BinaryEncoding>",
+                                          '<ParameterRefEntry '
+                                          'parameterRef="A"/>')).nodes[0]
+        self.assertIsInstance(n.items[0], Transform)
+        self.assertIsInstance(n.items[0].items[-1], Verify)
+        self.assertEqual(n.checks, [])
+
+    def test_entry_from_the_end_of_its_bytes(self):
+        n = compile_xml(transform_mission(f"<BinaryEncoding>{TRANSFORMS}"
+                                          "</BinaryEncoding>",
+                                          ref("A", "containerEnd:8"))).nodes[0]
+        kinds = [type(it).__name__ for it in n.items[0].items]
+        self.assertEqual(kinds, ["Mark", "TailSeek", "Value", "TailPad"])
+
+    def test_outside_check_of_a_field_inside(self):
+        # P's check covers its bytes on the wire, which hold A transformed.
+        text = self.with_q(
+            transform_mission(f"<BinaryEncoding>{self.SUM}</BinaryEncoding>",
+                              '<ContainerRefEntry containerRef="Q"/>'))
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("checksum field A is in transformed data, but its check "
+                      "covers bytes outside it", str(cm.exception))
 
     def test_repeated_container_needs_a_size(self):
         text = self.with_q(transform_mission(entries=self.REPEAT), size="")

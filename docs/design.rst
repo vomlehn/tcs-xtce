@@ -523,6 +523,18 @@ of its own: an aggregate of the Transform's items with the Transform's
 size, hooks and room as its ``XformEnc``, so it is read and written as a
 repeated transformed container's copy is.
 
+``wrap_transform`` also places a transformed container's checks: its own
+``ErrorDetectCorrect``, from its start mark to a mark at the end of its
+items, and those of the containers it includes, which it takes from
+``included_checks``, all become ``Verify`` items at the end of the
+Transform's items. Decoding verifies them with the reader over what the
+transform made, and encoding computes them before the transform replaces
+the bytes. ``node_checks`` refuses a check from outside whose field is
+inside a Transform. ``end_seek`` makes an entry located from a
+transformed container's end a ``TailSeek``, since the end of its bytes is
+known as a packet's is, and ``check_tail`` requires it to be the last of
+the Transform's items.
+
 A transformed binary or time value is instead an ordinary ``Value``
 whose encoding is an ``XformEnc``, so it can be optional, repeated or
 inside an array or aggregate like any value. The runtimes' readers

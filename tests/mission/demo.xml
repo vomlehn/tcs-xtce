@@ -1457,6 +1457,8 @@
       <Parameter name="ZipC" parameterTypeRef="U16"/>
       <Parameter name="ZipCount" parameterTypeRef="RecCountType"/>
       <Parameter name="ZipTag" parameterTypeRef="U8"/>
+      <Parameter name="ZipSum" parameterTypeRef="U8"/>
+      <Parameter name="ZipLast" parameterTypeRef="U8"/>
       <Parameter name="TwoRowCols" parameterTypeRef="RepCountType"/>
       <Parameter name="TwoRows" parameterTypeRef="TwoRowType"/>
       <Parameter name="TwoRowNote" parameterTypeRef="U8"/>
@@ -2595,6 +2597,48 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="655"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- A transformed packet whose check covers its bytes before the
+           transform: ZipSum is the sum of ZipA's two bytes, and the three
+           are doubled on the wire. -->
+      <SequenceContainer name="ZipSummed">
+        <BinaryEncoding>
+          <ErrorDetectCorrect>
+            <Checksum name="sum8" parameterRef="ZipSum"/>
+          </ErrorDetectCorrect>
+          <FromBinaryTransformAlgorithm name="Shrink"/>
+          <ToBinaryTransformAlgorithm name="Expand"/>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipA"/>
+          <ParameterRefEntry parameterRef="ZipSum"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="661"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- A transformed packet with ZipLast a byte before the end of its
+           bytes before the transform. -->
+      <SequenceContainer name="ZipTailed">
+        <BinaryEncoding>
+          <FromBinaryTransformAlgorithm name="Shrink"/>
+          <ToBinaryTransformAlgorithm name="Expand"/>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipA"/>
+          <ParameterRefEntry parameterRef="ZipLast">
+            <LocationInContainerInBits referenceLocation="containerEnd">
+              <FixedValue>8</FixedValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="662"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

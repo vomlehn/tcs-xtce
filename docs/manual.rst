@@ -2155,8 +2155,20 @@ Transform algorithms
    its own, and is its ``SizeInBits`` on the wire. It may also be included
    in a repeated container, as ``ZipCopy`` is in each copy of the demo's
    ``ZipLabeled``: the copy's field for it (``zip_copy``) holds its
-   entries, and it is transformed in each copy. It can't hold a length
-   field, a checksum or an entry located from the container's end.
+   entries, and it is transformed in each copy.
+
+   A transformed container's entries are its bytes before the transform,
+   and what refers to the container refers to those. Its own
+   ``ErrorDetectCorrect`` checks, and those of the containers it includes,
+   cover them: decoding checks them once its entries are read, and
+   encoding computes them before the transform, as in the demo's
+   ``ZipSummed``. An entry located from its end is located from their end,
+   which decoding knows from what the transform gives, as for an entry at
+   the end of a packet; it must be the container's last, as in
+   ``ZipTailed``. A check from outside the container whose field is
+   inside it can't be computed, since what it covers holds the field
+   transformed; and a packet length field can't be inside it, since its
+   value would change the transformed size it counts.
 
    Either way the transformed data starts on a byte boundary, and a
    transform that makes more than fits fails with ``TooLong``, one that
@@ -2426,8 +2438,8 @@ Not supported
    values in other packets, repeated
    segment entries with an ``order`` (which XTCE leaves undefined) or
    located from the end of their container with a count or ``Offset``
-   that varies, transformed containers holding a length field, a
-   checksum or an entry located from the end,
+   that varies, a packet length field in a transformed container, or a
+   check from outside one whose field is inside it,
    ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates),
    integers of more than 64 bits used other than as values (see "Integer encoding"),
    and a location from the end of an included container whose size

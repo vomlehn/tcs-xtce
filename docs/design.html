@@ -892,6 +892,17 @@ takes. A transformed container included in a repeated one is a
 of its own: an aggregate of the Transform's items with the Transform's
 size, hooks and room as its <tt class="docutils literal">XformEnc</tt>, so it is read and written as a
 repeated transformed container's copy is.</p>
+<p><tt class="docutils literal">wrap_transform</tt> also places a transformed container's checks: its own
+<tt class="docutils literal">ErrorDetectCorrect</tt>, from its start mark to a mark at the end of its
+items, and those of the containers it includes, which it takes from
+<tt class="docutils literal">included_checks</tt>, all become <tt class="docutils literal">Verify</tt> items at the end of the
+Transform's items. Decoding verifies them with the reader over what the
+transform made, and encoding computes them before the transform replaces
+the bytes. <tt class="docutils literal">node_checks</tt> refuses a check from outside whose field is
+inside a Transform. <tt class="docutils literal">end_seek</tt> makes an entry located from a
+transformed container's end a <tt class="docutils literal">TailSeek</tt>, since the end of its bytes is
+known as a packet's is, and <tt class="docutils literal">check_tail</tt> requires it to be the last of
+the Transform's items.</p>
 <p>A transformed binary or time value is instead an ordinary <tt class="docutils literal">Value</tt>
 whose encoding is an <tt class="docutils literal">XformEnc</tt>, so it can be optional, repeated or
 inside an array or aggregate like any value. The runtimes' readers
