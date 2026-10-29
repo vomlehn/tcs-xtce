@@ -2145,6 +2145,12 @@ class EncodingRuleTests(unittest.TestCase):
                         'encoding="packedBCD"/></IntegerParameterType>')
         self.assertTrue(vt.enc.bcd)
         self.assertFalse(vt.signed)
+        # Three digits, so 0 to 999, and not what 12 signed bits hold.
+        self.assertEqual(value_range(vt), (0, 999))
+        vt = self.vtype('<IntegerParameterType name="T" signed="false">'
+                        '<IntegerDataEncoding sizeInBits="16" encoding="BCD"/>'
+                        '</IntegerParameterType>')
+        self.assertEqual(value_range(vt), (0, 99))
         for size, kind, why in (("12", "BCD", "not whole bytes"),
                                 ("10", "packedBCD", "not whole digits")):
             with self.subTest(kind=kind):

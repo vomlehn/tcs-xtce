@@ -5328,13 +5328,17 @@ def int_range(e: IntEnc) -> tuple[int, int]:
         e: The encoding.
 
     Returns:
-        (smallest, largest).  Any encoding but unsigned and two's
-        complement is taken as sign-magnitude or ones' complement, which
-        has no most negative value.
+        (smallest, largest).  BCD holds a decimal digit in each byte and
+        packed BCD one in each 4 bits, from 0 up.  Sign-magnitude and
+        ones' complement have no most negative value.
     """
     b = e.bits
     if e.encoding == "unsigned":
         return 0, (1 << b) - 1
+    if e.encoding == "BCD":
+        return 0, 10 ** (b // 8) - 1
+    if e.encoding == "packedBCD":
+        return 0, 10 ** (b // 4) - 1
     if e.encoding == "twosComplement":
         return -(1 << (b - 1)), (1 << (b - 1)) - 1
     return -((1 << (b - 1)) - 1), (1 << (b - 1)) - 1
