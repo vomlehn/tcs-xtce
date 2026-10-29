@@ -343,6 +343,14 @@ def check_rust(probs: Problems, text: str) -> None:
         line_starts.append(line_starts[-1] + len(ln) + 1)
 
     def line_of(pos: int) -> int:
+        """Finds the line a position is on.
+
+        Args:
+            pos: A position in the file.
+
+        Returns:
+            The index of the line holding it.
+        """
         lo, hi = 0, len(line_starts) - 1
         while lo < hi:
             mid = (lo + hi + 1) // 2
@@ -685,6 +693,14 @@ def check_c(probs: Problems, text: str, header: bool) -> None:
         line_starts.append(line_starts[-1] + len(ln) + 1)
 
     def line_of(pos: int) -> int:
+        """Finds the line a position is on.
+
+        Args:
+            pos: A position in the file.
+
+        Returns:
+            The index of the line holding it.
+        """
         lo, hi = 0, len(line_starts) - 1
         while lo < hi:
             mid = (lo + hi + 1) // 2
@@ -697,6 +713,15 @@ def check_c(probs: Problems, text: str, header: bool) -> None:
     found: dict[str, list] = {}
 
     def declare(head: str, at: int, body: int | None, cls: str) -> None:
+        """Records a declaration if it is a function's.
+
+        Args:
+            head: The declaration up to its body's brace or semicolon.
+            at:   Where the declaration starts in the file.
+            body: How many non-blank lines its body has, or None for a
+                  declaration without a body.
+            cls:  The name of the class it is in, or ``""``.
+        """
         f = c_function(head)
         if f is None:
             return
@@ -723,6 +748,13 @@ def check_c(probs: Problems, text: str, header: bool) -> None:
             doc=c_doc(lines, first)))
 
     def scan(i: int, end: int, cls: str) -> None:
+        """Finds the declarations in a scope, entering nested scopes.
+
+        Args:
+            i:   Where the scope's contents start.
+            end: Where they end.
+            cls: The name of the class the scope is, or ``""``.
+        """
         start = i
         while i < end:
             c = code[i]
