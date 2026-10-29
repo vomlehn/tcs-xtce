@@ -1591,6 +1591,15 @@
       <Parameter name="WideBlob" parameterTypeRef="WideBlobType"/>
       <Parameter name="WideAfter" parameterTypeRef="U8"/>
       <Parameter name="WideEnum" parameterTypeRef="WideEnumType"/>
+      <Parameter name="WideBoxLen" parameterTypeRef="WideLenType">
+        <!-- The bytes after it to the end of WideBox. -->
+        <AncillaryDataSet>
+          <AncillaryData name="tcs-xtce.length">0</AncillaryData>
+        </AncillaryDataSet>
+      </Parameter>
+      <Parameter name="WideBoxData" parameterTypeRef="U16"/>
+      <Parameter name="WideBoxSum" parameterTypeRef="WideLenType"/>
+      <Parameter name="WideTail" parameterTypeRef="U8"/>
       <Parameter name="WideFlag" parameterTypeRef="WideFlagType"/>
       <Parameter name="WideRealScaled" parameterTypeRef="WideRealScaledType"/>
       <Parameter name="WideRealHalf" parameterTypeRef="DrDoubleType"/>
@@ -2933,6 +2942,31 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="573"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- A 72-bit length field and a 72-bit checksum field, each holding
+           its value with zeros above it. -->
+      <SequenceContainer name="WideBox" abstract="true">
+        <BinaryEncoding>
+          <ErrorDetectCorrect>
+            <Checksum name="sum8" parameterRef="WideBoxSum"/>
+          </ErrorDetectCorrect>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="WideBoxLen"/>
+          <ParameterRefEntry parameterRef="WideBoxData"/>
+          <ParameterRefEntry parameterRef="WideBoxSum"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="WideFramed">
+        <EntryList>
+          <ContainerRefEntry containerRef="WideBox"/>
+          <ParameterRefEntry parameterRef="WideTail"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="575"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

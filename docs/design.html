@@ -1457,13 +1457,28 @@ they need no temporary of a size known only at run time; C++ has no
 variable-length arrays, so the header uses none.</p>
 <p><tt class="docutils literal">tests/bnum_check.sh</tt> holds the claim to account: the Rust tool runs
 the cases on bnum itself, and every C and C++ result must match it
-exactly.</p>
-<p>Packets use these integers only as values: they are read and written a
-bit at a time into bytes (<tt class="docutils literal"><span class="pre">BitReader::wide</span></tt>, <tt class="docutils literal">xtce_pk_read_wide</tt>),
-in the same bit and byte orders as narrower ones, converted between raw
-fields and values with bnum's operations, compared and described. The
-compiler rejects every use that would compute with one, so sizes,
-offsets, calibrators and algorithms stay in 64-bit integers and doubles.
+exactly. That includes bnum's conversions to and from doubles
+(<tt class="docutils literal">xtce_bn_to_f64</tt>, <tt class="docutils literal">xtce_bn_from_f64</tt>): to the nearest, ties to even,
+and back toward zero, saturating.</p>
+<p>What computes with a wide integer does it through those conversions or
+exactly. A float, a time or a calibrated integer with a wide integer
+encoding, and a wide operand of a calibrator or input of an algorithm,
+go through a double (<tt class="docutils literal">wide_int_to_f64</tt>, <tt class="docutils literal">f64_to_wide</tt>,
+<tt class="docutils literal">wide_f64</tt>); so do a size, count or location, whose bound is far below
+where a double loses precision, so a value past it fails exactly as an
+exact one would. An alarm's ranges become whole bounds (<tt class="docutils literal">int_band</tt>)
+compared with literals of the field's type. An enumeration holds an i64,
+and a raw value outside one fails rather than wraps; a packet length or
+checksum field holds its value with zeros above it, written by the
+writers' <tt class="docutils literal">uint_order</tt> past 64 bits and read back through
+<tt class="docutils literal">fits_u64</tt>. A size field of more than 64 bits is never computed when
+encoding, which keeps <tt class="docutils literal">size_source</tt> and its kin to 64 bits.</p>
+<p>As values, packets read and write these integers a bit at a time into
+bytes (<tt class="docutils literal"><span class="pre">BitReader::wide</span></tt>, <tt class="docutils literal">xtce_pk_read_wide</tt>), in the same bit and
+byte orders as narrower ones, convert them between raw fields and values
+with bnum's operations, compare and describe them; the uses that compute
+with them go through the conversions above, so sizes, offsets,
+calibrators and algorithms stay in 64-bit integers and doubles.
 Fields of 65 to 128 bits are <tt class="docutils literal">u128</tt> and <tt class="docutils literal">i128</tt> in Rust, which hold
 them natively, and 16-byte integers in C; comparisons between integers of
 different sizes widen both to one more byte than the larger, so that

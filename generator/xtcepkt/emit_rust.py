@@ -510,6 +510,23 @@ def f64_int_write(vt: VType, y: str, f: str) -> str:
             f"&{raw}.to_le_bytes());")
 
 
+def length_u64(lc, x: str) -> str:
+    """Expression for a packet length field's value as a u64.
+
+    Args:
+        lc: The field.
+        x:  The expression for its value.
+
+    Returns:
+        The expression; for a field of more than 64 bits, one that fails
+        with BadLength when a u64 can't hold the value.
+    """
+    if not lc.vtype.wide:
+        return f"{x} as u64"
+    return (f"pk::fits_u64({x}).ok_or(PacketError::BadLength {{ field: "
+            f"{rstr(lc.name)} }})?")
+
+
 def read_wide_choice(vt: VType, f: str) -> str:
     """Expression reading an enumeration or a boolean whose integer
     encoding has more than 64 bits.
@@ -1187,12 +1204,13 @@ class RustEmitter:
                     self.line(f"v{lc.id} = Some({expr});", depth)
                 else:
                     self.line(f"let v{lc.id} = {expr};", depth)
+                n = length_u64(lc, f"v{lc.id}")
                 if lc.length is not None and lc.measures:
-                    self.line(f"let e{lc.id} = r.span_end(v{lc.id} as u64, "
-                              f"{lc.length}, {rstr(lc.name)})?;", depth)
-                elif lc.length is not None:
-                    self.line(f"r.limit(v{lc.id} as u64, {lc.length}, "
+                    self.line(f"let e{lc.id} = r.span_end({n}, {lc.length}, "
                               f"{rstr(lc.name)})?;", depth)
+                elif lc.length is not None:
+                    self.line(f"r.limit({n}, {lc.length}, {rstr(lc.name)})?;",
+                              depth)
             elif isinstance(it, Cond):
                 if not assign:
                     for v in walk(it.items):
@@ -1267,7 +1285,7 @@ class RustEmitter:
             elif it.local.computed:
                 lc = it.local
                 self.line(f"let l{lc.id} = w.position();", depth)
-                self.line(f"w.uint({lc.vtype.enc.bits}, 0);", depth)
+                self.line(f"w.zeros({lc.vtype.enc.bits});", depth)
             else:
                 lc = it.local
                 f = rstr(lc.name)
@@ -1350,9 +1368,14 @@ class RustEmitter:
         expression for its field's value."""
         f = rstr(c.local.name)
         start, end = self.region(c, "r")
-        self.line(f"if r.checksum(&{checksum_spec(c.spec)}, {start}, {end}, "
-                  f"{f})? & {hex((1 << c.local.vtype.enc.bits) - 1)} != "
-                  f"{value} as u64 {{", depth)
+        bits = c.local.vtype.enc.bits
+        x = f"r.checksum(&{checksum_spec(c.spec)}, {start}, {end}, {f})?"
+        if c.local.vtype.wide:
+            # A wider field holds the value with zeros above it.
+            test = f"Some({x}) != pk::fits_u64({value})"
+        else:
+            test = f"{x} & {hex((1 << bits) - 1)} != {value} as u64"
+        self.line(f"if {test} {{", depth)
         self.line(f"return Err(PacketError::BadChecksum {{ field: {f} }});",
                   depth + 1)
         self.line("}", depth)

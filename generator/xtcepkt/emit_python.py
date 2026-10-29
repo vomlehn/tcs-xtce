@@ -743,12 +743,16 @@ class PythonEmitter:
                     f"v{lc.id} = "
                     f"{read_expr(lc.vtype, pstr(lc.name), self.read_ref)}",
                     depth)
+                n = f"v{lc.id}"
+                if lc.length is not None and lc.vtype.wide:
+                    # A 64-bit value, as in the other runtimes.
+                    n = f"pk.length_u64(v{lc.id}, {pstr(lc.name)})"
                 if lc.length is not None and lc.measures:
-                    self.line(f"e{lc.id} = r.span_end(v{lc.id}, {lc.length}, "
+                    self.line(f"e{lc.id} = r.span_end({n}, {lc.length}, "
                               f"{pstr(lc.name)})", depth)
                 elif lc.length is not None:
-                    self.line(f"r.limit(v{lc.id}, {lc.length}, "
-                              f"{pstr(lc.name)})", depth)
+                    self.line(f"r.limit({n}, {lc.length}, {pstr(lc.name)})",
+                              depth)
                 if it.assembled:
                     self.line(f"r = r{lc.id}", depth)
             elif isinstance(it, Cond):

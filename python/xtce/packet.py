@@ -988,6 +988,22 @@ def int_float(v: int) -> float:
         return math.copysign(math.inf, v)
 
 
+def length_u64(v: int, field: str) -> int:
+    """A packet length field's value, from a field of more than 64 bits.
+
+    Args:
+        v:     The field's value.
+        field: The field's name, for errors.
+
+    Returns:
+        ``v``; raises ``BadLength`` unless an unsigned 64-bit integer holds
+        it, as the other runtimes do.
+    """
+    if v >= 1 << 64:
+        raise PacketError("BadLength", field)
+    return v
+
+
 def fits_i64(v: int, field: str) -> int:
     """An enumeration's value from a field of more than 64 bits.
 

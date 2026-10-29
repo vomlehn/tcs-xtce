@@ -268,22 +268,17 @@ class WideIntegerTests(unittest.TestCase):
         opt = next(lc for _, lc in m.nodes[0].fields if lc.name == "Opt")
         self.assertTrue(opt.optional)
 
-    def test_rejected(self):
-        for why, types, entries, params in (
-                ("a 72-bit packet length field", "", "",
-                 '<Parameter name="L" parameterTypeRef="W72"><AncillaryDataSet>'
-                 '<AncillaryData name="tcs-xtce.length">0</AncillaryData>'
-                 '</AncillaryDataSet></Parameter>'),):
-            with self.subTest(why):
-                if types:
-                    params = ((params or "")
-                              + ('<Parameter name="X" parameterTypeRef="T"/>'))
-                    entries = '<ParameterRefEntry parameterRef="X"/>'
-                if "length" in why:
-                    entries = '<ParameterRefEntry parameterRef="L"/>'
-                with self.assertRaises(Unsupported) as cm:
-                    compile_xml(wide_mission(types, entries, params))
-                self.assertIn(why, str(cm.exception))
+    def test_length_field(self):
+        # A packet length field may have more than 64 bits: it holds the
+        # length with zeros above it.
+        params = ('<Parameter name="L" parameterTypeRef="W72">'
+                  '<AncillaryDataSet><AncillaryData name="tcs-xtce.length">0'
+                  '</AncillaryData></AncillaryDataSet></Parameter>')
+        n = compile_xml(wide_mission("",
+                                     '<ParameterRefEntry parameterRef="L"/>',
+                                     params)).nodes[0]
+        lc = n.length_field()
+        self.assertEqual((lc.vtype.enc.bits, lc.vtype.wide), (72, True))
 
     def test_computed_through_doubles(self):
         # A float, a calibrated integer and a time may have an integer

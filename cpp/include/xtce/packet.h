@@ -720,10 +720,30 @@ static inline int xtce_pk_write_bits(xtce_pk_writer* w, unsigned bits,
         return 0;
 }
 
+/* Writes the low `bits` bits of `v`, big endian, or little endian (whole
+ * bytes only) when `le`.
+ *
+ * @param w     The writer.
+ * @param bits  The bits of the field: past 64, `v` with zeros above it, for
+ *              a packet length or checksum field of more than 64 bits.
+ * @param le    Whether the field is little endian.
+ * @param v     The value.
+ * @return      0, or XTCE_PK_NO_SPACE when the buffer can't hold it. */
 static inline int xtce_pk_write_uint(xtce_pk_writer* w, unsigned bits, bool le,
                                      uint64_t v) {
-        return xtce_pk_write_bits(w, bits,
-                                  le ? xtce_pk_swap_bytes(v, bits) : v);
+        unsigned k, n;
+        if (bits <= 64)
+                return xtce_pk_write_bits(w, bits,
+                                          le ? xtce_pk_swap_bytes(v, bits) : v);
+        if (le)
+                XTCE_PK_TRY(
+                        xtce_pk_write_bits(w, 64, xtce_pk_swap_bytes(v, 64)));
+        for (k = bits - 64; k > 0; k -= n) {
+                n = k < 64 ? k : 64;
+                XTCE_PK_TRY(xtce_pk_write_bits(w, n, 0));
+        }
+        if (!le) XTCE_PK_TRY(xtce_pk_write_bits(w, 64, v));
+        return 0;
 }
 
 /* Writes the low `bits` bits of (hi, lo) in the bit and byte order that

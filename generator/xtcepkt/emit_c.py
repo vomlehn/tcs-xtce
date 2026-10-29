@@ -1492,13 +1492,23 @@ class CEmitter:
                     continue
                 self.read_value(lc.vtype, f"v{lc.id}", cstr(lc.name), depth,
                                 self.read_ref)
+                n = f"v{lc.id}"
+                if lc.length is not None and lc.vtype.wide:
+                    # Its value, which a uint64_t must hold.
+                    n = f"n{lc.id}"
+                    self.line(f"uint64_t {n} = 0;", depth)
+                    self.line(f"if (!xtce_bn_to_u64(v{lc.id}.bytes, "
+                              f"{lc.vtype.width // 8}, false, &{n}))", depth)
+                    self.line("return xtce_pk_fail(r->err, "
+                              f"XTCE_PK_BAD_LENGTH, {cstr(lc.name)}, NULL);",
+                              depth + 1)
                 if lc.length is not None and lc.measures:
                     self.line(f"int64_t e{lc.id};", depth)
-                    self.line(f"XTCE_PK_TRY(xtce_pk_read_span_end(r, v{lc.id}, "
+                    self.line(f"XTCE_PK_TRY(xtce_pk_read_span_end(r, {n}, "
                               f"INT64_C({lc.length}), {cstr(lc.name)}, "
                               f"&e{lc.id}));", depth)
                 elif lc.length is not None:
-                    self.line(f"XTCE_PK_TRY(xtce_pk_read_limit(r, v{lc.id}, "
+                    self.line(f"XTCE_PK_TRY(xtce_pk_read_limit(r, {n}, "
                               f"INT64_C({lc.length}), {cstr(lc.name)}));",
                               depth)
                 if nested:
@@ -1608,8 +1618,8 @@ class CEmitter:
             elif it.local.computed:
                 lc = it.local
                 self.line(f"size_t l{lc.id} = w->pos;", depth)
-                self.line("XTCE_PK_TRY(xtce_pk_write_bits(w, "
-                          f"{lc.vtype.enc.bits}, 0));", depth)
+                self.line("XTCE_PK_TRY(xtce_pk_write_zeros(w, "
+                          f"{lc.vtype.enc.bits}));", depth)
             else:
                 self.write_place(n, it.local, names, depth)
 
@@ -1709,8 +1719,15 @@ class CEmitter:
         self.line("uint64_t c;", d)
         self.line(f"XTCE_PK_TRY(xtce_pk_read_checksum(r, &k, {start}, {end}, "
                   f"{f}, &c));", d)
-        mask = f"UINT64_C(0x{(1 << c.local.vtype.enc.bits) - 1:x})"
-        self.line(f"if ((c & {mask}) != (uint64_t)v{c.local.id})", d)
+        vt = c.local.vtype
+        if vt.wide:
+            # A wider field holds the value with zeros above it.
+            self.line("uint64_t got = 0;", d)
+            self.line(f"if (!xtce_bn_to_u64(v{c.local.id}.bytes, "
+                      f"{vt.width // 8}, false, &got) || c != got)", d)
+        else:
+            mask = f"UINT64_C(0x{(1 << vt.enc.bits) - 1:x})"
+            self.line(f"if ((c & {mask}) != (uint64_t)v{c.local.id})", d)
         self.line(f"return xtce_pk_fail(r->err, XTCE_PK_BAD_CHECKSUM, {f}, "
                   "NULL);", d + 1)
         self.line("}", depth)

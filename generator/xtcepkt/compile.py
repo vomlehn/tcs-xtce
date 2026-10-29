@@ -458,13 +458,26 @@ def length_adjust(item, vt: VType, where: str) -> Optional[int]:
             or vt.enc.bcd or vt.calibrator is not None):
         raise Unsupported(f"{where}: a packet length field must be an "
                           "uncalibrated unsigned binary integer")
-    if vt.wide:
-        raise Unsupported(f"{where}: a {vt.enc.bits}-bit packet length field")
-    if not fast_order(vt.enc):
+    if not plain_order(vt.enc):
         raise Unsupported(f"{where}: a packet length field must be big or "
                           "little endian in whole bytes, most significant bit "
                           "first")
     return adjust
+
+
+def plain_order(e: IntEnc) -> bool:
+    """Whether an integer encoding is most significant bit first, and big
+    endian, or little endian in whole bytes: what a packet length or
+    checksum field may be.
+
+    Args:
+        e: The encoding, of any size.
+
+    Returns:
+        Whether it is.
+    """
+    return (not e.lsb
+            and (e.order == "be" or (e.order == "le" and e.bits % 8 == 0)))
 
 
 # --- the compiler
@@ -2582,8 +2595,8 @@ class Compiler:
                               f"container {container}")
         vt = local.vtype
         if (vt.kind != "int" or not isinstance(vt.enc, IntEnc) or vt.enc.signed
-                or vt.enc.bcd or vt.calibrator is not None or vt.wide
-                or not fast_order(vt.enc)):
+                or vt.enc.bcd or vt.calibrator is not None
+                or not plain_order(vt.enc)):
             raise Unsupported(f"{where}: checksum field {local.name} must be "
                               "an uncalibrated unsigned binary integer, big "
                               "or little endian in whole bytes, most "

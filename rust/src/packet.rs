@@ -1033,7 +1033,30 @@ impl<'a> BitWriter<'a> {
         }
     }
 
+    /// Writes the low `bits` bits of `v`, big endian, or little endian
+    /// (whole bytes only) when `le`.
+    ///
+    /// # Arguments
+    ///
+    /// * `bits` -- the bits of the field: past 64, `v` with zeros above
+    ///   it, for a packet length or checksum field of more than 64 bits.
+    /// * `le`   -- whether the field is little endian.
+    /// * `v`    -- the value.
+    ///
+    /// # Returns
+    ///
+    /// Nothing.
     pub fn uint_order(&mut self, bits: u32, le: bool, v: u64) {
+        if bits > 64 {
+            if le {
+                self.uint(64, swap_bytes(v, 64));
+                self.zeros(bits as usize - 64);
+            } else {
+                self.zeros(bits as usize - 64);
+                self.uint(64, v);
+            }
+            return;
+        }
         self.uint(bits, if le { swap_bytes(v, bits) } else { v });
     }
 
@@ -1910,6 +1933,30 @@ where
     f64: bnum::cast::CastFrom<T>,
 {
     <f64 as bnum::cast::CastFrom<T>>::cast_from(x)
+}
+
+/// An integer of more than 64 bits as a u64, for a packet length or
+/// checksum field.
+///
+/// # Arguments
+///
+/// * `x` -- the field's value: a u128 or one of bnum's integers.
+///
+/// # Returns
+///
+/// The value, if a u64 holds it, or None.
+pub fn fits_u64<T>(x: T) -> Option<u64>
+where
+    T: Copy + PartialEq + bnum::cast::CastFrom<u64>,
+    u64: bnum::cast::CastFrom<T>,
+{
+    use bnum::cast::CastFrom;
+    let small = u64::cast_from(x);
+    if T::cast_from(small) == x {
+        Some(small)
+    } else {
+        None
+    }
 }
 
 /// An integer of more than 64 bits as the i64 an enumeration holds.

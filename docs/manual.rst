@@ -1565,8 +1565,13 @@ Integer encoding
    encoding of more than 64 bits: an enumeration holds a signed 64-bit
    value, and decoding fails with ``OutOfRange`` for a raw value it can't
    hold; a boolean is true for any raw value but 0, and encodes true as 1.
-   The demo's ``WideChoice`` has both. An integer of more than 64 bits
-   still can't be a packet length or checksum field. The demo's ``Wide`` packet has integers of 65 to 200 bits in
+   The demo's ``WideChoice`` has both.
+
+   A packet length or checksum field may have more than 64 bits: it holds
+   its value with zeros above it. Decoding fails with ``BadLength`` or
+   ``BadChecksum`` if any of those bits is set. The demo's ``WideFramed``
+   includes ``WideBox``, whose 72-bit ``WideBoxLen`` measures it and whose
+   72-bit ``WideBoxSum`` is its ``sum8``. The demo's ``Wide`` packet has integers of 65 to 200 bits in
    every encoding and order, and ``SetWide`` command arguments of 96 and
    136 bits.
 
@@ -2475,7 +2480,6 @@ Not supported
    that varies, a packet length field in a transformed container, or a
    check from outside one whose field is inside it,
    ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates),
-   integers of more than 64 bits used other than as values (see "Integer encoding"),
    and a location from the end of an included container without a
    ``SizeInBits`` whose entries' sizes vary.
 

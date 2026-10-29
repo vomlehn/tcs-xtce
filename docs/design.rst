@@ -1144,14 +1144,30 @@ variable-length arrays, so the header uses none.
 
 ``tests/bnum_check.sh`` holds the claim to account: the Rust tool runs
 the cases on bnum itself, and every C and C++ result must match it
-exactly.
+exactly. That includes bnum's conversions to and from doubles
+(``xtce_bn_to_f64``, ``xtce_bn_from_f64``): to the nearest, ties to even,
+and back toward zero, saturating.
 
-Packets use these integers only as values: they are read and written a
-bit at a time into bytes (``BitReader::wide``, ``xtce_pk_read_wide``),
-in the same bit and byte orders as narrower ones, converted between raw
-fields and values with bnum's operations, compared and described. The
-compiler rejects every use that would compute with one, so sizes,
-offsets, calibrators and algorithms stay in 64-bit integers and doubles.
+What computes with a wide integer does it through those conversions or
+exactly. A float, a time or a calibrated integer with a wide integer
+encoding, and a wide operand of a calibrator or input of an algorithm,
+go through a double (``wide_int_to_f64``, ``f64_to_wide``,
+``wide_f64``); so do a size, count or location, whose bound is far below
+where a double loses precision, so a value past it fails exactly as an
+exact one would. An alarm's ranges become whole bounds (``int_band``)
+compared with literals of the field's type. An enumeration holds an i64,
+and a raw value outside one fails rather than wraps; a packet length or
+checksum field holds its value with zeros above it, written by the
+writers' ``uint_order`` past 64 bits and read back through
+``fits_u64``. A size field of more than 64 bits is never computed when
+encoding, which keeps ``size_source`` and its kin to 64 bits.
+
+As values, packets read and write these integers a bit at a time into
+bytes (``BitReader::wide``, ``xtce_pk_read_wide``), in the same bit and
+byte orders as narrower ones, convert them between raw fields and values
+with bnum's operations, compare and describe them; the uses that compute
+with them go through the conversions above, so sizes, offsets,
+calibrators and algorithms stay in 64-bit integers and doubles.
 Fields of 65 to 128 bits are ``u128`` and ``i128`` in Rust, which hold
 them natively, and 16-byte integers in C; comparisons between integers of
 different sizes widen both to one more byte than the larger, so that
