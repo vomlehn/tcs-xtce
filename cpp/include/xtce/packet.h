@@ -4909,6 +4909,33 @@ static inline int xtce_pk_batch_received(xtce_pk_batch* b, size_t n,
         return 0;
 }
 
+/** Replaces the batch with a copy of a whole batch received elsewhere (a
+ * datagram, say).  Decoding starts again at the first packet.
+ *
+ * @param b     The batch.
+ * @param data  The batch, length first.
+ * @param n     How many bytes there are at `data`.
+ * @param err   The error to fill in, or NULL.
+ * @return      0, or XTCE_PK_BAD_LENGTH, leaving the batch as it was,
+ *              unless its length is the number of bytes after it and they
+ *              fit in the buffer. */
+static inline int xtce_pk_batch_load(xtce_pk_batch* b, const void* data,
+                                     size_t n, xtce_pk_error* err) {
+        const uint8_t* p = (const uint8_t*)data;
+        uint32_t v = 0;
+        int i;
+        if (n < XTCE_PK_BATCH_LENGTH_BYTES || n > b->cap)
+                return xtce_pk_fail(err, XTCE_PK_BAD_LENGTH, "batch", NULL);
+        for (i = 0; i < XTCE_PK_BATCH_LENGTH_BYTES; ++i)
+                v = (v << 8) | p[i];
+        if ((uint64_t)v != (uint64_t)(n - XTCE_PK_BATCH_LENGTH_BYTES))
+                return xtce_pk_fail(err, XTCE_PK_BAD_LENGTH, "batch", NULL);
+        memmove(b->buf, p, n);
+        b->len = n;
+        b->pos = XTCE_PK_BATCH_LENGTH_BYTES;
+        return 0;
+}
+
 /* Checks that every packet has been decoded: fails with
  * XTCE_PK_BAD_LENGTH if bytes are left over. */
 static inline int xtce_pk_batch_finish(const xtce_pk_batch* b,

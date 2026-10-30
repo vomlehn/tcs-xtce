@@ -923,6 +923,25 @@ int main(void) {
                 CHECK(xtce_pk_batch_received(&in, 2, &err) ==
                       XTCE_PK_BAD_LENGTH);
 
+                CHECK(xtce_pk_batch_load(&in, sent, out.len, &err) == 0);
+                CHECK(demo_Housekeeping_batch_next(&got, &in, &err) == 0 &&
+                      got.seq_count == 42);
+                CHECK(xtce_pk_batch_load(&in, sent, out.len - 1, &err) ==
+                      XTCE_PK_BAD_LENGTH);
+                CHECK(xtce_pk_batch_load(&in, sent, 2, &err) ==
+                      XTCE_PK_BAD_LENGTH);
+                CHECK(in.len == out.len &&
+                      in.pos == out.len - demo_Housekeeping_MAX_BYTES);
+                CHECK(demo_Housekeeping_batch_next(&got, &in, &err) == 0 &&
+                      got.seq_count == 43);
+                CHECK(xtce_pk_batch_finish(&in, &err) == 0);
+                CHECK(xtce_pk_batch_init(&in, space, out.len - 1, &err) ==
+                      0);
+                CHECK(xtce_pk_batch_load(&in, sent, out.len, &err) ==
+                      XTCE_PK_BAD_LENGTH);
+                CHECK(xtce_pk_batch_init(&in, space, sizeof space, &err) ==
+                      0);
+
                 src.at = sent;
                 src.left = out.len;
                 CHECK(xtce_pk_batch_read(&in, source_read, &src, &err) ==
