@@ -1,0 +1,65 @@
+# The Python package: the runtime that generated Python code imports, and
+# the compiler that generates code in every language, installable with pip.
+#
+# It is at the repository's root because its packages are in two
+# directories: the runtime in python/ and the compiler in generator/.
+# python/xtce/generated.py is not in git -- `make generate` writes it from
+# the XTCE schema -- so build the package with `make python-dist`, which
+# writes it first and checks that the wheel holds it.
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tcs-xtce"
+# The same as the Rust crate's, in rust/Cargo.toml.
+version = "0.3.0"
+description = """\
+    Flight software: serialization and deserialization of OMG XTCE documents \
+    into managed, preallocated buffers, being integrated with NASA's cFS and \
+    JPL's F Prime\
+"""
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-APACHE", "LICENSE-MIT"]
+authors = [{ name = "David VomLehn" }]
+keywords = ["xtce", "ccsds", "telemetry", "omg", "spacecraft"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Repository = "https://github.com/vomlehn/tcs-xtce"
+Documentation = "https://vomlehn.github.io/tcs-xtce/docs/manual.html"
+"Rust crate" = "https://crates.io/crates/tcs-xtce"
+
+[project.scripts]
+tcs-xtce = "tcs_xtce.__main__:main"
+xtce-digest = "xtce_digest.__main__:main"
+
+[tool.setuptools]
+# xtce is the runtime. tcs_xtce is the compiler's command line, built from
+# xtcepkt (the packet codecs) and xtcegen (the XML binding's generator,
+# whose line wrapping and rustfmt the compiler uses); xtce_digest is the
+# digest's command line.
+packages = ["xtce", "tcs_xtce", "xtcepkt", "xtcegen", "xtce_digest"]
+
+[tool.setuptools.package-dir]
+xtce = "python/xtce"
+tcs_xtce = "generator/tcs_xtce"
+xtcepkt = "generator/xtcepkt"
+xtcegen = "generator/xtcegen"
+xtce_digest = "generator/xtce_digest"
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]

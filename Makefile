@@ -181,6 +181,21 @@ bnum-check: rust cpp
 		cpp/build/bnum_tool cpp/build/bnum_tool_cxx \
 		cpp/build/bnum_tool_hpp
 
+# The Python package -- the runtime and the compiler, with the tcs-xtce and
+# xtce-digest commands -- as a wheel and an sdist in dist/, then installed in a
+# fresh virtual environment and tried: see pyproject.toml and
+# tests/python_dist_check.sh. Built by setuptools in place, without pip's
+# isolated build environment, so nothing is downloaded; setuptools 77 or later
+# has to be installed. Not part of `make test`. Publishing them is not done
+# here.
+.PHONY: python-dist
+python-dist: $(PY_GEN)
+	rm -rf dist build tcs_xtce.egg-info
+	$(PYTHON) -c 'from setuptools import build_meta as b; \
+		b.build_wheel("dist"); b.build_sdist("dist")'
+	rm -rf build tcs_xtce.egg-info
+	sh tests/python_dist_check.sh dist
+
 # Public XTCE documents, pinned to commits in tests/external/sources.txt and
 # downloaded on demand; not part of `make test`, which needs no network.
 EXTERNAL := tests/external/files
@@ -273,6 +288,7 @@ clean:
 	for d in $(EXAMPLES); do $(MAKE) -C $$d clean; done
 	$(MAKE) -C references clean
 	find python generator -name __pycache__ -type d -prune -exec rm -rf {} +
+	rm -rf dist build tcs_xtce.egg-info
 
 .PHONY: distclean
 distclean: clean

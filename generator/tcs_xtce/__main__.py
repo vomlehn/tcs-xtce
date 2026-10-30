@@ -29,8 +29,11 @@ import argparse
 import sys
 from pathlib import Path
 
-# The compiler reads XTCE documents with the generated `xtce` Python package.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
+# The compiler reads XTCE documents with the generated `xtce` Python package:
+# installed beside it, or, run from the repository, in python/.
+_RUNTIME = Path(__file__).resolve().parents[2] / "python"
+if (_RUNTIME / "xtce").is_dir():
+    sys.path.insert(0, str(_RUNTIME))
 
 import xtce  # noqa: E402
 

@@ -227,10 +227,36 @@ toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
    make rust | cpp | python
    make test            # every language's tests and both cross-language checks
    make samples-check   # check against public XTCE documents (downloads them)
+   make python-dist     # build the Python package into dist/ and try it
    make fmt             # format Rust and Python code
    make fmt-check       # verify it (Rust is also checked by every `make rust`)
    make clean           # remove build products
    make distclean       # also remove the downloaded references
+
+Installing the Python package
+-----------------------------
+
+The Python runtime and the compiler are one package, ``tcs-xtce``, with
+the ``tcs-xtce`` and ``xtce-digest`` commands. It is not on PyPI; build it
+from the repository and install the wheel:
+
+.. code-block:: sh
+
+   make python-dist
+   pip install dist/tcs_xtce-*.whl
+
+``make python-dist`` writes the wheel and an sdist to ``dist/``. It
+generates ``python/xtce/generated.py`` first, which is not in git, and
+then installs the wheel in a fresh virtual environment and checks that the
+installed commands generate the demo mission's code and that the Python
+generated decodes a packet. It builds with the installed setuptools, 77 or
+later, and downloads nothing. The package needs nothing but Python 3.10 or
+later; ``--lang rust`` also needs ``rustfmt``.
+
+The packages it installs are ``xtce`` (the runtime, which generated Python
+imports), ``tcs_xtce`` (the compiler's command line), ``xtcepkt`` and
+``xtcegen`` (the compiler itself) and ``xtce_digest``. Its version is the
+Rust crate's.
 
 ``references/Makefile`` reads the OMG specification page
 (https://www.omg.org/spec/XTCE/) to find the latest version instead of
@@ -588,6 +614,10 @@ Running the compiler
    python3 -m tcs_xtce dt.xml pus.xml pus17.xml pus.rs --lang rust
 
 Each run writes one language. Run it once per language you need.
+
+With the Python package installed (see `Installing the Python package`_),
+the compiler is the ``tcs-xtce`` command, run from anywhere:
+``tcs-xtce demo.xml demo.rs --lang rust``. It takes the same arguments.
 
 .. list-table::
    :widths: auto
@@ -2779,6 +2809,9 @@ digest, they agree on every packet's fields, types and order (see
    python3 -m xtce_digest --set FILE...
 
    python3 -m xtce_digest ../tests/mission/demo.xml ../examples/simple-string/simple_string.xml
+
+With the Python package installed, it is the ``xtce-digest`` command:
+``xtce-digest FILE...``.
 
 It reads the files in the order given. For each one it prints the file
 name as given, a colon, a space and the digest, in hex:

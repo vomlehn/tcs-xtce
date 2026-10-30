@@ -12,8 +12,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# The digest and the schema check come from the `xtce` Python package.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
+# The digest and the schema check come from the `xtce` Python package:
+# installed beside it, or, run from the repository, in python/.
+_RUNTIME = Path(__file__).resolve().parents[2] / "python"
+if (_RUNTIME / "xtce").is_dir():
+    sys.path.insert(0, str(_RUNTIME))
 
 from xtce import Document, XtceError  # noqa: E402,F401
 from xtce.digest import (  # noqa: E402,F401

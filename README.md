@@ -188,6 +188,15 @@ python3 -m tcs_xtce mission.xml mission.h  --lang c        # or --lang c++: same
 python3 -m tcs_xtce mission.xml mission.py --lang python
 ```
 
+Or install the Python package, runtime and compiler, and use the
+`tcs-xtce` command from anywhere. It is not on PyPI yet:
+
+```sh
+make python-dist
+pip install dist/tcs_xtce-*.whl
+tcs-xtce mission.xml mission.rs --lang rust
+```
+
 `--lang c` and `--lang c++` write the same header, which compiles both as C11
 and as C++. It is self-contained (it includes only `xtce/packet.h`), allocates
 nothing, and reports errors as return codes.

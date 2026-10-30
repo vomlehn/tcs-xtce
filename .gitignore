@@ -76,3 +76,8 @@ __pycache__/
 
 # Claude Code agents' scratch checkouts.
 .claude/worktrees/
+
+# The Python package, which make python-dist builds.
+/dist/
+/build/
+/tcs_xtce.egg-info/
