@@ -1234,6 +1234,104 @@ Python (``xtce.packet.Codec``):
 and the properties ``input``, ``output``, ``input_capacity`` and
 ``output_capacity``.
 
+Batches
+-------
+
+A batch sends several packets in one buffer: the number of bytes that
+follow, as a 32-bit big-endian integer, then the packets one after
+another. Because the length is always sent, a receiver needs only two
+reads, one for the length and one for the rest, however many packets
+there are and however their sizes vary.
+
+The packets carry no tags, so the receiver must decode them in the order
+the sender added them. A packet whose last value takes the rest of the
+packet, and that has no packet length field, takes the rest of the
+batch, so it must come last.
+
+Rust has ``tcs_xtce::packet::Batch`` and Python ``xtce.packet.Batch``.
+In C/C++ (``xtce/packet.h``) an ``xtce_pk_batch`` is kept in a buffer the
+caller gives; each packet type ``T`` has ``T_batch_add`` and
+``T_batch_next``. The C/C++ functions return ``0`` or an ``XTCE_PK_*``
+error code, filling in ``err``, the last argument, which may be ``NULL``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Rust
+     - C/C++
+     - Python
+     - Meaning
+   * - ``Batch::with_capacity(n)``
+     - ``xtce_pk_batch_init(b, buf, cap, err)``
+     - ``Batch(capacity)``
+     - An empty batch. Rust and Python allocate room for ``n`` bytes of
+       packets and refuse more than 4294967295. C uses the ``cap`` bytes at
+       ``buf``, length included, and fails with ``XTCE_PK_NO_SPACE`` if
+       they can't hold the length.
+   * - ``clear()``
+     - ``xtce_pk_batch_clear(b)``
+     - ``clear()``
+     - Remove every packet
+   * - ``capacity()``
+     - ``b.cap``
+     - ``capacity``
+     - The most bytes the batch holds: of packets in Rust and Python,
+       of the whole batch in C
+   * - ``push(&P)``
+     - ``T_batch_add(p, b, err)``
+     - ``push(packet)``
+     - Encode a packet after those already in the batch. One that doesn't
+       fit fails (``TooLong``, or ``XTCE_PK_NO_SPACE`` in C), leaving the
+       batch as it was
+   * - ``len()``, ``is_empty()``
+     - ``b.len``
+     - ``len(batch)``
+     - The bytes of packets; in C, of the whole batch
+   * - ``as_bytes()``, ``packets()``
+     - ``b.buf``
+     - ``view()``, ``getvalue()``
+     - The whole batch, length first, as it is sent (``packets()``:
+       without the length; ``getvalue()``: a copy)
+   * - ``write_to(impl Write)``
+     - —
+     - ``write_to(stream)``
+     - Send the batch with one write
+   * - ``read_from(impl Read)``
+     - ``xtce_pk_batch_read(b, fn, ctx, err)``
+     - ``read_from(stream)``
+     - Replace the batch with one read from a stream: its length, then
+       that many bytes. C calls ``fn(ctx, buf, n)`` twice; it returns
+       nonzero if it can't read ``n`` bytes. A length above the capacity
+       fails before the second read, and a stream that ends early fails
+       and leaves the batch empty
+   * - ``load(&[u8])``
+     - ``xtce_pk_batch_load(b, data, n, err)``
+     - ``load(data)``
+     - Replace the batch with a copy of a whole batch received at once (a
+       datagram, say). It fails, leaving the batch as it was, unless the
+       length is the number of bytes after it and they fit
+   * - —
+     - ``xtce_pk_batch_received(b, n, err)``
+     - —
+     - Take the ``n`` bytes already received into ``b.buf`` as a whole
+       batch, without a copy; a wrong length fails and empties the batch
+   * - ``next::<P>()``
+     - ``T_batch_next(out, b, err)``
+     - ``next(cls)``
+     - Decode the next packet, which must be of that type
+   * - ``remaining()``
+     - ``xtce_pk_batch_remaining(b)``
+     - ``remaining``
+     - The bytes of packets not yet decoded
+   * - ``finish()``
+     - ``xtce_pk_batch_finish(b, err)``
+     - ``finish()``
+     - Check that every packet has been decoded; fails with ``BadLength``
+       if bytes are left over
+
+Reading or loading a batch starts decoding again at its first packet.
+
 Errors
 ------
 
