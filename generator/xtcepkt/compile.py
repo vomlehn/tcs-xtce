@@ -3605,6 +3605,93 @@ class Compiler:
         self.order.append(node)
         return node
 
+    def early_check(self, node: Node, c: Check, checks: list,
+                    where: str) -> None:
+        """Lets a check of a packet cover bytes outside the transformed
+        data its field is in, when they end before the outermost
+        transformed container holding the field starts on the wire, so
+        that encoding can compute it before the transform: the check
+        covers up to that container, or, from the end, the container ends
+        the bits it is located from and it is no more than their ``skip``.
+        Marks the check, puts a Mark before the container, and has the
+        innermost one holding the field compute the check.
+
+        Args:
+            node:   The packet.
+            c:      The check; left alone unless its field is in
+                    transformed data.
+            checks: The packet's checks, whose fields are filled in after
+                    the transforms.
+            where:  What the packet is, for error messages.
+
+        Raises:
+            Unsupported: The container is conditional or follows the
+                         check's start, the check's bits run into it, or
+                         they hold a field that encoding fills in after
+                         the transform.
+        """
+        holders = [t for t in walk(node.all_items()) if isinstance(t, Transform)
+                   and any(isinstance(x, Value) and x.local is c.local
+                           for x in walk(t.items))]
+        if not holders:
+            return
+        outer = holders[0]
+        why = (f"{where}: checksum field {c.local.name} is in transformed "
+               "data, but its check covers bytes outside it")
+        owner = next((n for n in node.chain()
+                      if any(it is outer for it in n.items)), None)
+        if owner is None:
+            raise Unsupported(f"{why} in a conditional container")
+        flat = walk(node.all_items(), inner=False)
+        at = next(i for i, it in enumerate(flat) if it is outer)
+
+        def mark_at(mid: int) -> Optional[int]:
+            return next((i for i, it in enumerate(flat) if isinstance(it, Mark)
+                         and it.id == mid), None)
+        first = 0 if c.start == 0 else mark_at(c.start)
+        if first is None or first > at:
+            raise Unsupported(f"{why}, after it")
+        back = 0
+        if c.from_end:
+            end = len(flat) if c.end is None else mark_at(c.end)
+            if (end is None or outer.raw is None or max_bits(flat[at + 1:end])
+                    or c.skip < 8 * outer.raw):
+                raise Unsupported(f"{why}, which run into it")
+            back = c.skip - 8 * outer.raw
+        elif c.skip:
+            # The bits start past the field, and so run into the
+            # container, unless what comes before it is surely as long.
+            bits = 0
+            for it in flat[first:at]:
+                if isinstance(it, (Mark, Require, Verify, LengthEnd)):
+                    b = 0
+                elif isinstance(it, (Pad, Fixed, Segment)):
+                    b = it.bits
+                elif isinstance(it, Value) and not it.local.optional:
+                    b = fixed_bits(it.local.vtype)
+                elif isinstance(it, Transform) and it.raw is not None:
+                    b = 8 * it.raw
+                else:
+                    b = None
+                if not isinstance(b, int):
+                    raise Unsupported(f"{why}, which may run into it")
+                bits += b
+            if bits < c.skip:
+                raise Unsupported(f"{why}, which run into it")
+        later = {id(k.local) for k in checks if k is not c}
+        ended = {id(it.local) for it in flat[:at] if isinstance(it, LengthEnd)}
+        for it in flat[first:at]:
+            if isinstance(it, Value) and (id(it.local) in later
+                                          or (it.local.length is not None
+                                              and id(it.local) not in ended)):
+                raise Unsupported(f"{why}, among them {it.local.name}, which "
+                                  "encoding fills in after the transform")
+        c.stop = self._id()
+        c.stop_back = back
+        owner.items.insert(next(i for i, it in enumerate(owner.items)
+                                if it is outer), Mark(c.stop))
+        holders[-1].patches.append(c)
+
     def node_checks(self, node: Node, where: str) -> list:
         """Compiles the ErrorDetectCorrect checks of a concrete packet:
         those of the containers in its inheritance chain, which cover the
@@ -3619,8 +3706,10 @@ class Compiler:
             is the order they are computed in.
 
         Raises:
-            Unsupported: A checksum field is in transformed data, or a
-                         criterion or assignment is on one.
+            Unsupported: A checksum field is in transformed data and its
+                         check covers bytes that early_check can't
+                         compute first, or a criterion or assignment is on
+                         one.
         """
         out = []
         chain = node.chain()
@@ -3638,14 +3727,8 @@ class Compiler:
                 for name, v in edc_items(inc):
                     out.append(self.check(name, v, path, scope, m, end, ckey,
                                           where))
-        transformed = {id(x.local) for it in walk(node.all_items())
-                       if isinstance(it, Transform) for x in walk(it.items)
-                       if isinstance(x, Value)}
         for c in out:
-            if id(c.local) in transformed:
-                raise Unsupported(f"{where}: checksum field {c.local.name} is "
-                                  "in transformed data, but its check covers "
-                                  "bytes outside it")
+            self.early_check(node, c, out, where)
         criteria = (node.all_criteria()
                     + [c for it in node.all_items() for c in conds(it)])
         verified = [it.check for it in walk(node.all_items())

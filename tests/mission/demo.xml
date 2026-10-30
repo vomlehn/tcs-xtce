@@ -1593,6 +1593,7 @@
           <AncillaryData name="tcs-xtce.length">0</AncillaryData>
         </AncillaryDataSet>
       </Parameter>
+      <Parameter name="ZipGuardSum" parameterTypeRef="U8"/>
       <Parameter name="ZipBoxLen" parameterTypeRef="U8">
         <!-- The bytes after it to the end of ZipLenBox's, before the
              transform. -->
@@ -2859,6 +2860,68 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="667"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- ZipGuardSum, doubled on the wire. -->
+      <SequenceContainer name="ZipSumBox">
+        <BinaryEncoding>
+          <SizeInBits>
+            <FixedValue>16</FixedValue>
+          </SizeInBits>
+          <FromBinaryTransformAlgorithm name="Shrink"/>
+          <ToBinaryTransformAlgorithm name="Expand"/>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipGuardSum"/>
+        </EntryList>
+      </SequenceContainer>
+      <!-- Checks whose fields are in transformed data and which cover the
+           bytes before it, ZipA's: the sum of its bytes, up to ZipSumBox,
+           in ZipGuarded, and all but the last 16 bits, which ZipSumBox
+           takes, in ZipTrailed. -->
+      <SequenceContainer name="ZipGuarded">
+        <BinaryEncoding>
+          <ErrorDetectCorrect>
+            <Checksum name="sum8" parameterRef="ZipGuardSum"/>
+          </ErrorDetectCorrect>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipA"/>
+          <ContainerRefEntry containerRef="ZipSumBox"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="ZipTrailed">
+        <BinaryEncoding>
+          <ErrorDetectCorrect>
+            <Checksum name="sum8" parameterRef="ZipGuardSum" reference="end"
+              bitsFromReference="16"/>
+          </ErrorDetectCorrect>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipA"/>
+          <ContainerRefEntry containerRef="ZipSumBox"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="ZipGuard">
+        <EntryList>
+          <ContainerRefEntry containerRef="ZipGuarded"/>
+          <ParameterRefEntry parameterRef="OptEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="668"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <SequenceContainer name="ZipTrailer">
+        <EntryList>
+          <ContainerRefEntry containerRef="ZipTrailed"/>
+          <ParameterRefEntry parameterRef="OptEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="669"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

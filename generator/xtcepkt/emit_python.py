@@ -1121,6 +1121,8 @@ class PythonEmitter:
                 self.write_items(n, it.items, depth, where, names)
                 if it.length is not None:
                     self.patch_length(it.length, depth)
+                for c in it.patches:
+                    self.patch(c, depth, early=True)
                 self.line(f"w.transform(_t{it.start}, "
                           f"{transform_hook(it.encode)}, {it.raw}, "
                           f"{it.out_cap}, {pstr(it.name)})", depth)
@@ -1348,13 +1350,18 @@ class PythonEmitter:
                   f"{mask} != v{c.local.id}:", depth)
         self.line(f'raise pk.PacketError("BadChecksum", {f})', depth + 1)
 
-    def patch(self, c, depth: int) -> None:
-        """Writes the statement writing a check's value into its field.
+    def patch(self, c, depth: int, early: bool = False) -> None:
+        """Writes the statement writing a check's value into its field,
+        unless it is computed elsewhere: before a transform when it has a
+        ``stop``, and otherwise where the packet or container ends.
 
         Args:
             c:     The check.
             depth: The statement's indentation level.
+            early: Whether this is before the transform of its field.
         """
+        if (c.stop is not None) != early:
+            return
         enc = c.local.vtype.enc
         start, end = self.region(c, "w")
         self.line(f"w.patch_checksum({pspec(c.spec)}, {start}, {end}, "
@@ -1377,7 +1384,9 @@ class PythonEmitter:
         base = self.mark(c.start)
         start = f"{base} + {c.skip}" if c.skip and not c.from_end else base
         end = f"m{c.end}" if c.end is not None else f"{rw}.packet_end()"
-        if c.from_end:
+        if c.stop is not None:
+            end = f"max(m{c.stop} - {c.stop_back}, 0)"
+        elif c.from_end:
             end = f"max({end} - {c.skip}, 0)"
         elif start == "0":
             end = pos  # the field always follows the packet's start

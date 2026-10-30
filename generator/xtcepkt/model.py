@@ -896,6 +896,9 @@ class Transform:
     name: str
     start: int
     length: Optional["Local"] = None
+    # Checks of bits outside it whose fields are in it, computed before
+    # the transform when encoding.
+    patches: list = field(default_factory=list)
 
     @property
     def bits(self) -> int:
@@ -992,7 +995,12 @@ class Check:
     from ``skip`` bits after mark ``start`` to ``local``, if that lies after
     them, or else to the container's end.  ``local`` holds the
     value: its low bits when the algorithm gives more.  ``spec`` is the
-    algorithm, as the Python runtime's ``checksum`` takes it."""
+    algorithm, as the Python runtime's ``checksum`` takes it.
+
+    When ``local`` is in transformed data and the bits end before it on
+    the wire, ``stop`` is the mark where the outermost transformed
+    container holding it starts, and the bits end ``stop_back`` bits
+    before that; encoding computes the value before the transform."""
 
     spec: tuple
     local: Local
@@ -1001,6 +1009,8 @@ class Check:
     skip: int
     from_end: bool
     container: str
+    stop: Optional[int] = None
+    stop_back: int = 0
 
 
 @dataclass

@@ -269,6 +269,10 @@ tm 0a9ac02a00070202121234345656  # zip lengthed: a ZipLen of 2 ends the bytes be
 tm 0a9ac02a00070404121234345656  # zip lengthed: a ZipLen of 4 is beyond the bytes before the transform, which fails
 tm 0a9bc02a0008030312123434565677  # zip measured: ZipBoxLen measures ZipLenBox before the transform
 tm 0a9bc02a0008020212123434565677  # zip measured: a ZipBoxLen that ends ZipLenBox early, which fails
+tm 0a9cc02a00041234464677  # zip guard: ZipGuardSum, transformed, sums ZipA's bytes before it
+tm 0a9cc02a00041234474777  # zip guard: a ZipGuardSum that isn't the sum, which fails
+tm 0a9dc02a00041234464677  # zip trailer: ZipGuardSum sums all but ZipTrailed's last 16 bits, which ZipSumBox takes
+tm 0a9dc02a00041234474777  # zip trailer: a ZipGuardSum that isn't the sum, which fails
 tm 0a62c02a0004f0e1968777  # xor: XorBlob aabbccdd, masked on the wire
 tm 0a62c02a0002010203  # xor: three bytes, not XorBlob's four
 tm 0a6cc02a000b03aabbcc11000004d2ac0222  # stuffed: aabbcc framed by its length, then 1.234 s and a 300 ms varint

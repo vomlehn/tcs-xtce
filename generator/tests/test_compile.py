@@ -1389,15 +1389,61 @@ class TransformTests(unittest.TestCase):
         self.assertIn("more than one packet length field in a container with "
                       "transform algorithms", str(cm.exception))
 
+    @staticmethod
+    def outside_check(edc: str, entries: str) -> str:
+        """Builds P with a check of its own on A, which is in Q,
+        transformed and 2 bytes on the wire, after ``entries``.
+
+        Args:
+            edc:     P's ErrorDetectCorrect element.
+            entries: The XML of P's entries before Q.
+
+        Returns:
+            The XTCE document, with U8 parameter C and length field L.
+        """
+        return TransformTests.with_length(
+            TransformTests.with_q(
+                transform_mission(
+                    f"<BinaryEncoding>{edc}</BinaryEncoding>",
+                    entries
+                    + '<ContainerRefEntry '
+                      'containerRef="Q"/>'))).replace(
+            '<Parameter name="L"',
+            '<Parameter name="C" parameterTypeRef="U8"/><Parameter name="L"')
+
+    C = '<ParameterRefEntry parameterRef="C"/>'
+
+    @staticmethod
+    def sum_end(bits: int) -> str:
+        return ('<ErrorDetectCorrect><Checksum name="sum8" parameterRef="A" '
+                f'reference="end" bitsFromReference="{bits}"/>'
+                '</ErrorDetectCorrect>')
+
     def test_outside_check_of_a_field_inside(self):
-        # P's check covers its bytes on the wire, which hold A transformed.
-        text = self.with_q(
-            transform_mission(f"<BinaryEncoding>{self.SUM}</BinaryEncoding>",
-                              '<ContainerRefEntry containerRef="Q"/>'))
-        with self.assertRaises(Unsupported) as cm:
-            compile_xml(text)
-        self.assertIn("checksum field A is in transformed data, but its check "
-                      "covers bytes outside it", str(cm.exception))
+        # P's check covers its bytes up to Q, which holds A: Q's transform
+        # computes it first, from a Mark where Q starts on the wire.
+        for edc in (self.SUM, self.sum_end(16), self.sum_end(24)):
+            with self.subTest(edc=edc):
+                p = next(n
+                         for n in compile_xml(self.outside_check(edc,
+                                                                 self.C)).nodes
+                         if n.name == "P")
+                (c,) = p.checks
+                mark, t = p.items[-2:]
+                self.assertEqual((mark.id, t.patches), (c.stop, [c]))
+                self.assertEqual(c.stop_back, 8 if "24" in edc else 0)
+
+    def test_outside_check_rejected(self):
+        for edc, entries, why in (
+                (self.sum_end(8), self.C, "which run into it"),
+                (self.SUM, '<ParameterRefEntry parameterRef="L"/>',
+                 "among them L, which encoding fills in after the transform")):
+            with self.subTest(why=why):
+                with self.assertRaises(Unsupported) as cm:
+                    compile_xml(self.outside_check(edc, entries))
+                self.assertIn("checksum field A is in transformed data, but "
+                              f"its check covers bytes outside it, {why}",
+                              str(cm.exception))
 
     def test_repeated_container_needs_a_size(self):
         text = self.with_q(transform_mission(entries=self.REPEAT), size="")

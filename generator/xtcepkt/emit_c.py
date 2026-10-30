@@ -2012,6 +2012,8 @@ class CEmitter:
                 self.write_items(n, it.items, depth, where, names)
                 if it.length is not None:
                     self.patch_length(it.length, depth)
+                for c in it.patches:
+                    self.patch(c, depth, early=True)
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_transform(w, t{t}, "
                           f"{self.transform_hook(it.encode)}, "
                           f"{bool_lit(it.raw is not None)}, {it.raw or 0}, "
@@ -2230,14 +2232,19 @@ class CEmitter:
                   "NULL);", d + 1)
         self.line("}", depth)
 
-    def patch(self, c, depth: int) -> None:
+    def patch(self, c, depth: int, early: bool = False) -> None:
         """Writes the statement that computes a check and writes its value
-        into its field, which was written as zeros.
+        into its field, which was written as zeros, unless it is computed
+        elsewhere: before a transform when it has a ``stop``, and
+        otherwise where the packet or its container ends.
 
         Args:
             c:     The check: its field's Local, spec and region.
             depth: The indentation level.
+            early: Whether this is before the transform of its field.
         """
+        if (c.stop is not None) != early:
+            return
         enc = c.local.vtype.enc
         self.line("{", depth)
         self.line(f"{spec_decl(c.spec)} xtce_pk_checksum_spec k = "
@@ -2267,7 +2274,10 @@ class CEmitter:
         end = (f"m{c.end}" if c.end is not None
                else f"xtce_pk_{'read' if rw == 'r' else 'write'}_packet_end("
                     f"{rw})")
-        if c.from_end:
+        if c.stop is not None:
+            end = (f"(m{c.stop} > {c.stop_back} ? m{c.stop} - {c.stop_back} : "
+                   "0)")
+        elif c.from_end:
             end = f"({end} > {c.skip} ? {end} - {c.skip} : 0)"
         elif start == "(size_t)0":
             end = pos  # the field always follows the packet's start
