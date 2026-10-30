@@ -1392,24 +1392,24 @@ class TransformTests(unittest.TestCase):
                       "transform algorithms", str(cm.exception))
 
     @staticmethod
-    def outside_check(edc: str, entries: str) -> str:
+    def outside_check(edc: str, entries: str, after: str = "") -> str:
         """Builds P with a check of its own on A, which is in Q,
         transformed and 2 bytes on the wire, after ``entries``.
 
         Args:
             edc:     P's ErrorDetectCorrect element.
             entries: The XML of P's entries before Q.
+            after:   The XML of P's entries after Q.
 
         Returns:
             The XTCE document, with U8 parameter C and length field L.
         """
         return TransformTests.with_length(
             TransformTests.with_q(
-                transform_mission(
-                    f"<BinaryEncoding>{edc}</BinaryEncoding>",
-                    entries
-                    + '<ContainerRefEntry '
-                      'containerRef="Q"/>'))).replace(
+                transform_mission(f"<BinaryEncoding>{edc}</BinaryEncoding>",
+                                  entries
+                                  + '<ContainerRefEntry containerRef="Q"/>'
+                                  + after))).replace(
             '<Parameter name="L"',
             '<Parameter name="C" parameterTypeRef="U8"/><Parameter name="L"')
 
@@ -1435,11 +1435,34 @@ class TransformTests(unittest.TestCase):
                 self.assertEqual((mark.id, t.patches), (c.stop, [c]))
                 self.assertEqual(c.stop_back, 8 if "24" in edc else 0)
 
+    @staticmethod
+    def sum_from(bits: int) -> str:
+        return ('<ErrorDetectCorrect><Checksum name="sum8" parameterRef="A" '
+                f'bitsFromReference="{bits}"/></ErrorDetectCorrect>')
+
+    def test_check_of_bits_after_transformed_data(self):
+        # P's check skips C and Q, which holds A, and covers the C after
+        # them: Q keeps its bytes before the transform, and the check puts
+        # A in them once P is written. Room for them, and for what the
+        # transform makes of them, comes after the packet.
+        p = next(n
+                 for n in compile_xml(self.outside_check(self.sum_from(24),
+                                                         self.C, self.C)).nodes
+                 if n.name == "P")
+        (c,) = p.checks
+        t = c.late
+        self.assertIsInstance(t, Transform)
+        self.assertTrue(t.keeps)
+        self.assertEqual((c.stop, t.patches), (None, []))
+        self.assertEqual(p.max_bytes, 4 + t.cap + t.out_cap)
+
     def test_outside_check_rejected(self):
         for edc, entries, why in (
                 (self.sum_end(8), self.C, "which run into it"),
                 (self.SUM, '<ParameterRefEntry parameterRef="L"/>',
-                 "among them L, which encoding fills in after the transform")):
+                 "among them L, which encoding fills in after the transform"),
+                # Past C and into Q.
+                (self.sum_from(16), self.C, "which run into it")):
             with self.subTest(why=why):
                 with self.assertRaises(Unsupported) as cm:
                     compile_xml(self.outside_check(edc, entries))

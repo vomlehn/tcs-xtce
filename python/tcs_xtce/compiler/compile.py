@@ -3616,6 +3616,14 @@ class Compiler:
         Marks the check, puts a Mark before the container, and has the
         innermost one holding the field compute the check.
 
+        Or when they start after that container, which then has to be the
+        only one holding the field and of a fixed size on the wire, so that
+        transforming it again moves nothing after it: its ``skip`` passes
+        what comes before the container, which has to be of a fixed size,
+        and the container.  The check is then ``late`` (see Check), and
+        stale_checks checks that nothing computed before it covers the
+        container.
+
         Args:
             node:   The packet.
             c:      The check; left alone unless its field is in
@@ -3628,7 +3636,7 @@ class Compiler:
             Unsupported: The container is conditional or follows the
                          check's start, the check's bits run into it, or
                          they hold a field that encoding fills in after
-                         the transform.
+                         the transform, or after the late check.
         """
         holders = [t for t in walk(node.all_items()) if isinstance(t, Transform)
                    and any(isinstance(x, Value) and x.local is c.local
@@ -3677,7 +3685,21 @@ class Compiler:
                     raise Unsupported(f"{why}, which may run into it")
                 bits += b
             if bits < c.skip:
-                raise Unsupported(f"{why}, which run into it")
+                if outer.raw is None or bits + 8 * outer.raw > c.skip:
+                    raise Unsupported(f"{why}, which run into it")
+                if len(holders) > 1:
+                    raise Unsupported(f"{why}, after it, in nested transformed "
+                                      "data")
+                end = len(flat) if c.end is None else mark_at(c.end)
+                later = {id(k.local) for k in checks if k is not c}
+                for it in flat[at + 1:end]:
+                    if isinstance(it, Value) and id(it.local) in later:
+                        raise Unsupported(f"{why}, after it, among them "
+                                          f"{it.local.name}, which encoding "
+                                          "fills in after it")
+                c.late = outer
+                outer.keeps = True
+                return
         later = {id(k.local) for k in checks if k is not c}
         ended = {id(it.local) for it in flat[:at] if isinstance(it, LengthEnd)}
         for it in flat[first:at]:
@@ -3691,6 +3713,46 @@ class Compiler:
         owner.items.insert(next(i for i, it in enumerate(owner.items)
                                 if it is outer), Mark(c.stop))
         holders[-1].patches.append(c)
+
+    @staticmethod
+    def stale_checks(node: Node, checks: list, where: str) -> None:
+        """Checks that no check computed before a late one (see Check)
+        covers the container it transforms again: a check of an included
+        container, computed where that ends, or one computed before a
+        transform.
+
+        Args:
+            node:   The packet.
+            checks: Every check of the packet, the included containers'
+                    own among them.
+            where:  What the packet is, for error messages.
+
+        Raises:
+            Unsupported: One does.
+        """
+        flat = walk(node.all_items(), inner=False)
+
+        def mark_at(mid: int, default: int) -> int:
+            return next((i for i, it in enumerate(flat) if isinstance(it, Mark)
+                         and it.id == mid), default)
+        for c in checks:
+            if c.late is None:
+                continue
+            at = next(i for i, it in enumerate(flat) if it is c.late)
+            for k in checks:
+                if k is c or (k.late is None and k.stop is None
+                              and not k.verified):
+                    continue
+                first = 0 if k.start == 0 else mark_at(k.start, len(flat))
+                end = (mark_at(k.stop, len(flat)) if k.stop is not None
+                       else len(flat) if k.end is None
+                       else mark_at(k.end, len(flat)))
+                if first <= at < end:
+                    raise Unsupported(f"{where}: checksum field "
+                                      f"{c.local.name}'s check is computed "
+                                      "once the packet is written, after "
+                                      f"{k.local.name}'s, which covers the "
+                                      f"transformed data {c.local.name} is in")
 
     def node_checks(self, node: Node, where: str) -> list:
         """Compiles the ErrorDetectCorrect checks of a concrete packet:
@@ -3733,6 +3795,9 @@ class Compiler:
                     + [c for it in node.all_items() for c in conds(it)])
         verified = [it.check for it in walk(node.all_items())
                     if isinstance(it, Verify)]
+        for k in verified:
+            k.verified = True
+        self.stale_checks(node, out + verified, where)
         for c in out + verified:
             if any(x is c.local for t in criteria for x in term_locals(t)):
                 raise Unsupported(f"{where}: a criterion or assignment on "
@@ -5348,7 +5413,11 @@ class Compiler:
         idents.update({id(lc): names.take(snake(lc.name)) for lc in values
                        if id(lc) in chosen})
         n.fields = [(idents[id(lc)], lc) for lc in values]
-        n.max_bytes = (max_bits(n.all_items()) + 7) // 8
+        # A late check (see Check) puts the container's bytes after the
+        # packet's, and what the transform makes of them after those.
+        late = [c.late for c in n.checks if c.late is not None]
+        n.max_bytes = ((max_bits(n.all_items()) + 7) // 8
+                       + max((t.cap + t.out_cap for t in late), default=0))
         n.hooks = self.node_hooks(n)
 
 

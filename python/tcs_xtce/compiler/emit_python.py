@@ -1123,6 +1123,9 @@ class PythonEmitter:
                     self.patch_length(it.length, depth)
                 for c in it.patches:
                     self.patch(c, depth, early=True)
+                if it.keeps:
+                    # For checks of what follows it (see late_patch).
+                    self.line(f"_p{it.start} = w.copy_out(_t{it.start})", depth)
                 self.line(f"w.transform(_t{it.start}, "
                           f"{transform_hook(it.encode)}, {it.raw}, "
                           f"{it.out_cap}, {pstr(it.name)})", depth)
@@ -1360,12 +1363,29 @@ class PythonEmitter:
             depth: The statement's indentation level.
             early: Whether this is before the transform of its field.
         """
-        if (c.stop is not None) != early:
+        if c.late is not None or (c.stop is not None) != early:
             return
         enc = c.local.vtype.enc
         start, end = self.region(c, "w")
         self.line(f"w.patch_checksum({pspec(c.spec)}, {start}, {end}, "
                   f"l{c.local.id}, {enc.bits}, {enc.little_endian}, "
+                  f"{pstr(c.local.name)})", depth)
+
+    def late_patch(self, c, depth: int) -> None:
+        """Writes the statement writing a late check's value (see
+        model.Check) into its transformed data, which it transforms again.
+
+        Args:
+            c:     The check.
+            depth: The statement's indentation level.
+        """
+        enc = c.local.vtype.enc
+        start, end = self.region(c, "w")
+        t = c.late
+        self.line(f"w.patch_transformed_checksum({pspec(c.spec)}, {start}, "
+                  f"{end}, _p{t.start}, l{c.local.id} - _t{t.start}, "
+                  f"{enc.bits}, {enc.little_endian}, _t{t.start}, "
+                  f"{transform_hook(t.encode)}, {t.raw}, {t.out_cap}, "
                   f"{pstr(c.local.name)})", depth)
 
     def region(self, c, rw: str) -> tuple:
@@ -1386,6 +1406,8 @@ class PythonEmitter:
         end = f"m{c.end}" if c.end is not None else f"{rw}.packet_end()"
         if c.stop is not None:
             end = f"max(m{c.stop} - {c.stop_back}, 0)"
+        elif c.late is not None:
+            pass  # the field is before the bits, which run to the end
         elif c.from_end:
             end = f"max({end} - {c.skip}, 0)"
         elif start == "0":
@@ -1507,6 +1529,11 @@ class PythonEmitter:
             self.write_items(n, node.items, 2, node.key, names)
         if length is not None:
             self.patch_length(length, 2)
+        # Late checks first: transforming their data again changes what
+        # the others cover.
+        for c in n.checks:
+            if c.late is not None:
+                self.late_patch(c, 2)
         for c in n.checks:
             self.patch(c, 2)
         if len(self.out) == body:

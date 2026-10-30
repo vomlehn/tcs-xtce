@@ -1557,6 +1557,89 @@ static inline int xtce_pk_patch_checksum(xtce_pk_writer* w,
         return 0;
 }
 
+/** Copies the bytes written from bit `start`, on a byte boundary, to the
+ * position: transformed data before its transform, for
+ * xtce_pk_patch_transformed_checksum.
+ *
+ * @param w      The writer.
+ * @param start  Where they start, in bits.
+ * @param out    Where they go.
+ * @param cap    The bytes at `out`.
+ * @param n      Filled in with how many there are.
+ * @param f      The transformed data, for the error.
+ * @return       0, or XTCE_PK_TOO_LONG if there are more than `cap`. */
+static inline int xtce_pk_write_copy_out(const xtce_pk_writer* w,
+                                         size_t start, uint8_t* out,
+                                         size_t cap, size_t* n,
+                                         const char* f) {
+        size_t a = start / 8, b = (w->pos + 7) / 8, have;
+        if (b - a > cap)
+                return xtce_pk_fail(w->err, XTCE_PK_TOO_LONG, f, NULL);
+        /* Bits passed over but not written are zeros, as the transform
+         * would read them. */
+        have = w->len >= b ? b - a : w->len > a ? w->len - a : 0;
+        memcpy(out, w->buf + a, have);
+        memset(out + have, 0, b - a - have);
+        *n = b - a;
+        return 0;
+}
+
+/** Fills in a checksum field in transformed data with the checksum of bits
+ * after that data: puts it in the data's bytes before the transform,
+ * transforms them again and writes what that makes in their place, which
+ * has to be the same size.  The position is kept.
+ *
+ * @param w      The writer.
+ * @param spec   The algorithm and its parameters.
+ * @param start  The first bit the checksum covers.
+ * @param end    The bit past the last it covers.
+ * @param plain  The data's bytes before the transform, as
+ *               xtce_pk_write_copy_out gave them.
+ * @param n      How many there are.
+ * @param at     The checksum field's position in `plain`, in bits.
+ * @param bits   The checksum field's size in bits.
+ * @param le     Whether the checksum field is little endian.
+ * @param t      Where the transformed data is, in bits.
+ * @param fn     The transform, or NULL if the document gives only the
+ *               other direction.
+ * @param raw    The data's size on the wire, in bytes.
+ * @param cap    The most bytes the transform may make.
+ * @param f      The checksum field, for the error.
+ * @return       0; an error from xtce_pk_checksum; XTCE_PK_NO_SPACE if the
+ *               buffer can't hold the bytes and what the transform makes
+ *               after the packet; or XTCE_PK_NOT_INVERTIBLE,
+ *               XTCE_PK_INVALID_VALUE, XTCE_PK_TOO_LONG or XTCE_PK_BAD_SIZE
+ *               as for xtce_pk_write_transform. */
+static inline int xtce_pk_patch_transformed_checksum(
+        xtce_pk_writer* w, const xtce_pk_checksum_spec* spec, size_t start,
+        size_t end, const uint8_t* plain, size_t n, size_t at, unsigned bits,
+        bool le, size_t t, xtce_pk_binary_to_fn fn, size_t raw, size_t cap,
+        const char* f) {
+        uint64_t v;
+        size_t len = w->len, pos = w->pos, m;
+        int rc;
+        XTCE_PK_TRY(xtce_pk_checksum(spec, w->buf, start, end, f, w->err, &v));
+        if (!fn) return xtce_pk_fail(w->err, XTCE_PK_NOT_INVERTIBLE, f, NULL);
+        if (len > w->cap || n > w->cap - len || cap > w->cap - len - n)
+                return xtce_pk_fail(w->err, XTCE_PK_NO_SPACE, "packet", NULL);
+        /* The bytes go after the packet, so the field is written in them as
+         * it was the first time, and what the transform makes after them. */
+        memcpy(w->buf + len, plain, n);
+        w->len = len + n;
+        w->pos = 8 * len + at;
+        rc = xtce_pk_write_uint(w, bits, le, v & xtce_pk_mask(bits));
+        m = rc ? 0 : fn(w->buf + len, n, w->buf + len + n, cap);
+        w->len = len;
+        w->pos = pos;
+        if (rc) return rc;
+        if (m == XTCE_PK_NO_TRANSFORM)
+                return xtce_pk_fail(w->err, XTCE_PK_INVALID_VALUE, f, NULL);
+        if (m > cap) return xtce_pk_fail(w->err, XTCE_PK_TOO_LONG, f, NULL);
+        if (m != raw) return xtce_pk_fail(w->err, XTCE_PK_BAD_SIZE, f, NULL);
+        memmove(w->buf + t / 8, w->buf + len + n, m);
+        return 0;
+}
+
 /* --- integers
  * ------------------------------------------------------------------- */
 

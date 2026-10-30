@@ -273,6 +273,8 @@ tm 0a9cc02a00041234464677  # zip guard: ZipGuardSum, transformed, sums ZipA's by
 tm 0a9cc02a00041234474777  # zip guard: a ZipGuardSum that isn't the sum, which fails
 tm 0a9dc02a00041234464677  # zip trailer: ZipGuardSum sums all but ZipTrailed's last 16 bits, which ZipSumBox takes
 tm 0a9dc02a00041234474777  # zip trailer: a ZipGuardSum that isn't the sum, which fails
+tm 0a9ec02a000346461234  # zip after: ZipGuardSum, transformed, sums the bytes of ZipA after it
+tm 0a9ec02a000347471234  # zip after: a ZipGuardSum that isn't the sum, which fails
 tm 0a62c02a0004f0e1968777  # xor: XorBlob aabbccdd, masked on the wire
 tm 0a62c02a0002010203  # xor: three bytes, not XorBlob's four
 tm 0a6cc02a000b03aabbcc11000004d2ac0222  # stuffed: aabbcc framed by its length, then 1.234 s and a 300 ms varint

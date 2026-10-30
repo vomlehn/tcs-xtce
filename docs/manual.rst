@@ -2469,14 +2469,23 @@ Transform algorithms
    container, when it is included, or of a container it includes,
    measures that container before the transform, as ``ZipBoxLen``
    measures ``ZipLenBox``. A check from outside the container whose
-   field is inside it may cover only bytes before the container on the
-   wire, which encoding can check before the transform: a check that
-   runs up to its field runs up to the container, as ``ZipGuardSum``'s
-   does in the demo's ``ZipGuarded``, and one located from the end must
-   leave out at least the container, which must be last and of a fixed
-   size, as in ``ZipTrailed``. Those bytes can't hold a length field or
-   another check's field, which encoding fills in later, and a check
-   whose bits may run into the container is refused.
+   field is inside it may cover bytes before the container on the wire,
+   which encoding checks before the transform: a check that runs up to
+   its field runs up to the container, as ``ZipGuardSum``'s does in the
+   demo's ``ZipGuarded``, and one located from the end must leave out at
+   least the container, which must be last and of a fixed size, as in
+   ``ZipTrailed``. Those bytes can't hold a length field or another
+   check's field, which encoding fills in later. Or it may cover bytes
+   after the container, when its ``bitsFromReference`` passes what comes
+   before the container, which must be of a fixed size, and the
+   container, which must have a fixed size on the wire and be the only
+   transformed data the field is in, as in ``ZipAfter``. Encoding keeps
+   the container's bytes before the transform, and once the packet is
+   written, puts the check's value in them and transforms them again in
+   place, before the packet's other checks; the bytes the check covers
+   can't hold another check's field, and no check computed before it may
+   cover the container. A check whose bits may run into the container is
+   refused.
 
    Either way the transformed data starts on a byte boundary, and a
    transform that makes more than fits fails with ``TooLong``, one that
@@ -2744,10 +2753,10 @@ Not supported
    Instances of values in other packets, an entry located from an end
    whose size only decoding it tells (a terminated string, say), a check
    from outside a transformed container whose field is inside it and
-   which covers the container's bytes, ``ErrorDetectCorrect`` in a data
-   encoding (which XTCE deprecates), and a location from the end of an
-   included container without a ``SizeInBits`` whose entries' sizes
-   vary.
+   which covers the container's bytes, or bytes after a container of a
+   size that varies, ``ErrorDetectCorrect`` in a data encoding (which
+   XTCE deprecates), and a location from the end of an included
+   container without a ``SizeInBits`` whose entries' sizes vary.
 
 Known limitations
 -----------------

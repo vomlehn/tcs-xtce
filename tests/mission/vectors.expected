@@ -273,6 +273,8 @@ ZipGuard{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, se
 error:BadChecksum | -
 ZipTrailer{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, zip_a=4660, opt_end=119} | 0a9dc02a00041234464677
 error:BadChecksum | -
+ZipAfter{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, zip_a=4660} | 0a9ec02a000346461234
+error:BadChecksum | -
 XorBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, xor_blob=0xaabbccdd, xor_tail=119} | 0a62c02a0004f0e1968777
 error:Truncated | -
 StuffBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, stuffed=0xaabbcc, stuff_tail=17, ms_stamp=1.234, var_delay=0.3, stuff_end=34} | 0a6cc02a000b03aabbcc11000004d2ac0222

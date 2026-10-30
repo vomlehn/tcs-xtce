@@ -2925,6 +2925,27 @@
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>
+      <!-- A check whose field is in transformed data and whose bits come
+           after it: ZipGuardSum, doubled in ZipSumBox, is the sum of the
+           bytes of ZipA, which follows; the check skips the 48-bit header
+           and ZipSumBox's 16 bits on the wire. -->
+      <SequenceContainer name="ZipAfter">
+        <BinaryEncoding>
+          <ErrorDetectCorrect>
+            <Checksum name="sum8" parameterRef="ZipGuardSum"
+              bitsFromReference="64"/>
+          </ErrorDetectCorrect>
+        </BinaryEncoding>
+        <EntryList>
+          <ContainerRefEntry containerRef="ZipSumBox"/>
+          <ParameterRefEntry parameterRef="ZipA"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="670"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
       <!-- An included container BoxLen bytes long, with BoxLast in its
            last byte: located from the end of a container whose size
            another value gives. -->

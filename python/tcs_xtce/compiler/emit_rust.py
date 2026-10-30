@@ -1700,6 +1700,11 @@ class RustEmitter:
                     self.patch_length(it.length, depth)
                 for c in it.patches:
                     self.patch(c, depth, early=True)
+                if it.keeps:
+                    # For checks of what follows it (see late_patch).
+                    self.line(f"let mut p{t} = [0u8; {it.cap}];", depth)
+                    self.line(f"let n{t} = w.copy_out(t{t}, &mut p{t}, "
+                              f"{rstr(it.name)})?;", depth)
                 self.line(f"w.transform(t{t}, {transform_hook(it.encode)}, "
                           f"{opt_size(it.raw)}, {it.out_cap}, "
                           f"{rstr(it.name)})?;", depth)
@@ -1883,7 +1888,7 @@ class RustEmitter:
             depth: The indentation of the statement.
             early: Whether this is before the transform of its field.
         """
-        if (c.stop is not None) != early:
+        if c.late is not None or (c.stop is not None) != early:
             return
         enc = c.local.vtype.enc
         start, end = self.region(c, "w")
@@ -1891,6 +1896,23 @@ class RustEmitter:
                   f"l{c.local.id}, {enc.bits}, "
                   f"{str(enc.little_endian).lower()}, {rstr(c.local.name)})?;",
                   depth)
+
+    def late_patch(self, c, depth: int) -> None:
+        """Writes the statement writing a late check's value (see
+        model.Check) into its transformed data, which it transforms again.
+
+        Args:
+            c:     The check.
+            depth: The indentation of the statement.
+        """
+        enc = c.local.vtype.enc
+        start, end = self.region(c, "w")
+        t = c.late.start
+        self.line(f"w.patch_transformed_checksum(&{checksum_spec(c.spec)}, "
+                  f"{start}, {end}, &p{t}[..n{t}], l{c.local.id} - t{t}, "
+                  f"{enc.bits}, {str(enc.little_endian).lower()}, t{t}, "
+                  f"{transform_hook(c.late.encode)}, {c.late.raw}, "
+                  f"{c.late.out_cap}, {rstr(c.local.name)})?;", depth)
 
     def region(self, c, rw: str) -> tuple:
         """Writes the start and end of the bits a check
@@ -1910,6 +1932,8 @@ class RustEmitter:
         end = f"m{c.end}" if c.end is not None else f"{rw}.packet_end()"
         if c.stop is not None:
             end = f"m{c.stop}.saturating_sub({c.stop_back})"
+        elif c.late is not None:
+            pass  # the field is before the bits, which run to the end
         elif c.from_end:
             end = f"{end}.saturating_sub({c.skip})"
         elif start == "0":
@@ -2029,6 +2053,11 @@ class RustEmitter:
             self.write_items(n, node.items, 2, node.key, names)
         if length is not None:
             self.patch_length(length, 2)
+        # Late checks first: transforming their data again changes what
+        # the others cover.
+        for c in n.checks:
+            if c.late is not None:
+                self.late_patch(c, 2)
         for c in n.checks:
             self.patch(c, 2)
         if empty:

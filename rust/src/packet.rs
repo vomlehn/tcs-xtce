@@ -1871,6 +1871,108 @@ impl<'a> BitWriter<'a> {
         Ok(())
     }
 
+    /// Copies the bytes written from bit `start`, on a byte boundary, to
+    /// the position: transformed data before its transform, for
+    /// [`BitWriter::patch_transformed_checksum`].
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Where they start, in bits.
+    /// * `out`   - Where they go.
+    /// * `field` - The transformed data's name, for errors.
+    ///
+    /// # Returns
+    ///
+    /// How many bytes were copied.
+    ///
+    /// # Errors
+    ///
+    /// `TooLong` if there are more than `out` holds.
+    pub fn copy_out(
+        &self,
+        start: usize,
+        out: &mut [u8],
+        field: &'static str,
+    ) -> Result<usize> {
+        let (a, b) = (start / 8, self.pos.div_ceil(8));
+        let n = b - a;
+        if n > out.len() {
+            return Err(PacketError::TooLong { field });
+        }
+        out[..n].copy_from_slice(&self.buf.as_bytes()[a..b]);
+        Ok(n)
+    }
+
+    /// Fills in a checksum field in transformed data with the checksum of
+    /// bits after that data: puts it in the data's bytes before the
+    /// transform, transforms them again and writes what that makes in
+    /// their place, which has to be the same size. The position is kept.
+    ///
+    /// # Arguments
+    ///
+    /// * `spec`  - The checksum algorithm.
+    /// * `start` - Where the checked data starts, in bits.
+    /// * `end`   - Where it ends, in bits.
+    /// * `plain` - The data's bytes before the transform, as
+    ///             [`BitWriter::copy_out`] gave them.
+    /// * `at`    - The checksum field's position in `plain`, in bits.
+    /// * `bits`  - The checksum field's size in bits.
+    /// * `le`    - Whether the field is little endian.
+    /// * `t`     - Where the transformed data is, in bits.
+    /// * `f`     - The transform, or `None` if the document gives only the
+    ///             other direction.
+    /// * `raw`   - The data's size on the wire, in bytes.
+    /// * `cap`   - The most bytes the transform may make.
+    /// * `field` - The checksum field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// The errors of computing the checksum (see [`checksum`]), and
+    /// `NotInvertible`, `InvalidValue`, `TooLong` and `BadSize` as for
+    /// [`BitWriter::transform`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn patch_transformed_checksum(
+        &mut self,
+        spec: &Checksum,
+        start: usize,
+        end: usize,
+        plain: &[u8],
+        at: usize,
+        bits: u32,
+        le: bool,
+        t: usize,
+        f: Option<BinaryToFn>,
+        raw: usize,
+        cap: usize,
+        field: &'static str,
+    ) -> Result<()> {
+        let v = checksum(spec, self.buf.as_bytes(), start, end, field)?;
+        let f = f.ok_or(PacketError::NotInvertible { field })?;
+        let (len, pos, n) = (self.buf.len(), self.pos, plain.len());
+        // The bytes go after the packet, so the field is written in them
+        // as it was the first time, and what the transform makes after
+        // them.
+        self.buf.resize(len + n + cap);
+        self.buf.as_mut_bytes()[len..len + n].copy_from_slice(plain);
+        self.pos = 8 * len + at;
+        self.uint_order(bits, le, v & mask(bits));
+        let (head, tail) = self.buf.as_mut_bytes().split_at_mut(len + n);
+        let made = match f(&head[len..], tail) {
+            None => Err(PacketError::InvalidValue { field }),
+            Some(m) if m > cap => Err(PacketError::TooLong { field }),
+            Some(m) if m != raw => Err(PacketError::BadSize { field }),
+            Some(m) => Ok(m),
+        };
+        if let Ok(m) = made {
+            self.buf
+                .as_mut_bytes()
+                .copy_within(len + n..len + n + m, t / 8);
+        }
+        self.buf.resize(len);
+        self.pos = pos;
+        made.map(|_| ())
+    }
+
     /// Prepares to encode a value that is split into segments: the writer
     /// moves to the byte boundary at or before its position, so the value
     /// is encoded as it would be at the start of a buffer, over bits that

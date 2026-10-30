@@ -899,6 +899,9 @@ class Transform:
     # Checks of bits outside it whose fields are in it, computed before
     # the transform when encoding.
     patches: list = field(default_factory=list)
+    # Whether encoding keeps its bytes before the transform, for checks of
+    # bits after it whose fields are in it (Check.late).
+    keeps: bool = False
 
     @property
     def bits(self) -> int:
@@ -1000,7 +1003,11 @@ class Check:
     When ``local`` is in transformed data and the bits end before it on
     the wire, ``stop`` is the mark where the outermost transformed
     container holding it starts, and the bits end ``stop_back`` bits
-    before that; encoding computes the value before the transform."""
+    before that; encoding computes the value before the transform.  When
+    they start after that container instead, which has a fixed size on the
+    wire, ``late`` is the container: encoding keeps its bytes before the
+    transform, computes the value once the packet is written, puts it in
+    them and transforms them again in place."""
 
     spec: tuple
     local: Local
@@ -1011,6 +1018,9 @@ class Check:
     container: str
     stop: Optional[int] = None
     stop_back: int = 0
+    late: Optional["Transform"] = None
+    # Whether it is a Verify's: computed where its container ends.
+    verified: bool = False
 
 
 @dataclass
