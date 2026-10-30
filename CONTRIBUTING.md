@@ -95,8 +95,21 @@ gives the exact formats and the exemptions, such as tests and trait
 implementations, and names each function whose header is missing or
 wrong. The generators write such a header for every function they emit.
 
+**The shared library's ABI version is raised only for a break.**
+`libxtce.so`'s soname is `libxtce.so.N`, N being the whole number in
+`cpp/abi-version`, which `cpp/Makefile` and the top-level Makefile both
+read. It is not the package's version. Raise it by one, in the same
+change, when a program already linked against the library would stop
+working: a function of `xtce.h` removed, or given other parameters or
+another meaning, or a C++ type of `xtce-*.hpp` changed in size or layout.
+Adding a function does not raise it.
+
+**C and C++ headers are named with their library's prefix**, `xtce-` or
+`ccsds-`, and live straight in `cpp/include/` or `ccsds/include/`, as they
+are installed straight in `/opt/tcs/include`.
+
 **The digest is the same in every runtime.** `python/tcs_xtce/digest.py`,
-`rust/src/digest.rs` and `cpp/include/xtce/digest.h` compute the same XTCE
+`rust/src/digest.rs` and `cpp/include/xtce-digest.h` compute the same XTCE
 digest, and `tests/digest_check.sh` (part of `make test`) checks that they
 agree with each other and with `tests/digest/expected.txt`. A change to what
 the digest covers, including the `UNORDERED` list, goes into all three, with

@@ -82,7 +82,7 @@ from pathlib import Path
 TRIVIAL = 3
 
 # Generated code, which git doesn't keep; see .gitignore.
-GENERATED = ["rust/src/generated.rs", "cpp/include/xtce/generated.hpp",
+GENERATED = ["rust/src/generated.rs", "cpp/include/xtce-generated.hpp",
              "cpp/src/generated.cpp", "python/tcs_xtce/generated.py",
              "rust/tests/mission/demo*.rs", "cpp/tests/mission/demo*.h",
              "python/tests/mission/demo*.py", "examples/*/rust/src/*.rs",

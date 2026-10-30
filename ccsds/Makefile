@@ -9,7 +9,7 @@ CFLAGS   ?= -O2 -g
 CXXFLAGS ?= -O2 -g
 WARN     := -Wall -Wextra
 BUILD    := build
-HEADERS  := $(wildcard include/ccsds/*.h)
+HEADERS  := $(wildcard include/*.h)
 
 .PHONY: all
 all: rust $(BUILD)/time_tool $(BUILD)/time_tool_cxx

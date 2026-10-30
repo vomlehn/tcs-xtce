@@ -4,7 +4,7 @@ Two programs that exchange packets were built from the same packet
 definitions if their XTCE documents have the same digest, so each can
 send the other its digest and compare, rather than describing the data in
 every message.  The Rust (``tcs_xtce::digest``) and C/C++
-(``xtce/digest.h``) runtimes compute the same digest.
+(``xtce-digest.h``) runtimes compute the same digest.
 
 The digest covers the document's elements, attributes and text, but not
 what leaves its meaning the same: comments and processing instructions,

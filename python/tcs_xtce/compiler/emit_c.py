@@ -1,6 +1,6 @@
 """Emit a header of packet codecs that compiles both as C11 and as C++.
 
-The header uses only ``xtce/packet.h``, which is itself plain C.  C has no
+The header uses only ``xtce-packet.h``, which is itself plain C.  C has no
 namespaces, so every name the header defines starts with a prefix (by default
 the root SpaceSystem name in snake_case followed by ``_``).  Fallible
 functions return 0 or an ``XTCE_PK_*`` error code instead of throwing, and
@@ -320,7 +320,7 @@ class CEmitter:
                         if vt.wide})
         if wides:
             self.line()
-            self.line("/** Integers of N bits, xtce/bnum.h's: whole bytes, "
+            self.line("/** Integers of N bits, xtce-bnum.h's: whole bytes, "
                       "least significant first. */")
             for bits, signed in wides:
                 self.line(f"XTCE_BN_TYPEDEF({self.p}{'' if signed else 'u'}int"
@@ -843,7 +843,7 @@ class CEmitter:
 
         Args:
             vt:    The integer's type.
-            dst:   What receives the value, an xtce/bnum.h integer.
+            dst:   What receives the value, an xtce-bnum.h integer.
             f:     The C string literal naming the field, for errors.
             depth: The indentation level.
         """
@@ -1007,7 +1007,7 @@ class CEmitter:
 
         Args:
             vt:    The integer's type.
-            x:     The expression for the value, an xtce/bnum.h integer.
+            x:     The expression for the value, an xtce-bnum.h integer.
             f:     The C string literal naming the field, for errors.
             depth: The indentation level.
         """
@@ -1032,7 +1032,7 @@ class CEmitter:
         self.line("}", depth)
 
     def int_bytes(self, vt: VType, x: str) -> str:
-        """Gives the bytes of an integer, to compare it with xtce/bnum.h.
+        """Gives the bytes of an integer, to compare it with xtce-bnum.h.
 
         Args:
             vt: The integer's type (or an enumeration's).
@@ -1444,7 +1444,7 @@ class CEmitter:
         for h in ("stdbool.h", "stddef.h", "stdint.h", "string.h"):
             self.line(f"#include <{h}>")
         self.line()
-        self.line('#include "xtce/packet.h"')
+        self.line('#include "xtce-packet.h"')
         self.line()
         self.line("#ifdef __cplusplus")
         self.line('extern "C" {')

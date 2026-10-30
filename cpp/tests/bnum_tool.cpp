@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <xtce/bnum.hpp>
+#include <xtce-bnum.hpp>
 
 using xtce::bnum::Integer;
 using xtce::bnum::IntErrorKind;

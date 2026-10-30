@@ -1,6 +1,6 @@
 [package]
 name = "tcs-xtce"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = """\
     Flight software: serialization and deserialization of OMG XTCE documents \
@@ -35,7 +35,7 @@ include = [
 bnum = { version = "0.14", default-features = false }
 
 [dev-dependencies]
-# The examples that check xtce/bnum.h against bnum print with bnum's own
+# The examples that check xtce-bnum.h against bnum print with bnum's own
 # formatting.
 bnum = { version = "0.14", features = ["alloc"] }
 

@@ -7,7 +7,7 @@
  * those and the integer, float, string and calibration helpers they call.
  * It mirrors tcs_xtce::packet in Rust and tcs_xtce.packet in Python.
  *
- * The header needs only xtce/bnum.h, beside it, and the C standard library
+ * The header needs only xtce-bnum.h, beside it, and the C standard library
  * (link with -lm), and compiles both as C11 and as C++.  Nothing is
  * allocated: callers preallocate buffers, typically of the generated
  * *_MAX_BYTES size, and reuse them for every packet.
@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "bnum.h"
+#include "xtce-bnum.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -1779,7 +1779,7 @@ static inline int xtce_pk_cmp_ui(uint64_t a, int64_t b) {
 
 /* --- integers of more than 64 bits -------------------------------------------
  *
- * They are xtce/bnum.h integers: generated structs of `bytes`, least
+ * They are xtce-bnum.h integers: generated structs of `bytes`, least
  * significant first and two's complement when signed, of 16 bytes up to
  * 128 bits and of whole bytes beyond.  A raw field of `bits` bits is held
  * the same way, unsigned. */

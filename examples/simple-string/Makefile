@@ -22,7 +22,7 @@ GEN     := rust/src/simple_string.rs c/simple_string.h cxx/simple_string.h \
 GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \
                      $(TOP)/python/tcs_xtce/__main__.py \
                      $(TOP)/python/tcs_xtce/binding/*.py)
-PKT_H   := $(TOP)/cpp/include/xtce/packet.h
+PKT_H   := $(TOP)/cpp/include/xtce-packet.h
 TCS_XTCE := cd $(TOP)/python && \
             $(PYTHON) -m tcs_xtce ../examples/simple-string/$(XML) \
            --source-name examples/simple-string/$(XML)

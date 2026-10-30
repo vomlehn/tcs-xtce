@@ -24,8 +24,8 @@ GEN     := rust/src/rover.rs c/rover.h cxx/rover.h \
 GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \
                      $(TOP)/python/tcs_xtce/__main__.py \
                      $(TOP)/python/tcs_xtce/binding/*.py)
-PKT_H   := $(TOP)/cpp/include/xtce/packet.h \
-           $(TOP)/cpp/include/xtce/digest.h
+PKT_H   := $(TOP)/cpp/include/xtce-packet.h \
+           $(TOP)/cpp/include/xtce-digest.h
 # The documents that others build on come first: the mission, and so the
 # generated files and the C prefix, are named for the last, Rover.
 TCS_XTCE := cd $(TOP)/python && \

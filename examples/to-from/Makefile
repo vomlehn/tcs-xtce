@@ -26,8 +26,8 @@ GEN     := rust/src/to_from.rs c/to_from.h cxx/to_from.h \
 GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \
                      $(TOP)/python/tcs_xtce/__main__.py \
                      $(TOP)/python/tcs_xtce/binding/*.py)
-PKT_H   := $(TOP)/cpp/include/xtce/packet.h \
-           $(TOP)/cpp/include/xtce/digest.h
+PKT_H   := $(TOP)/cpp/include/xtce-packet.h \
+           $(TOP)/cpp/include/xtce-digest.h
 TCS_XTCE := cd $(TOP)/python && \
             $(PYTHON) -m tcs_xtce ../examples/to-from/$(XML) \
            --source-name examples/to-from/$(XML)

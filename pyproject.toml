@@ -17,7 +17,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tcs-xtce"
 # The same as the Rust crate's, in rust/Cargo.toml.
-version = "0.3.0"
+version = "0.4.0"
 description = """\
     Flight software: serialization and deserialization of OMG XTCE documents \
     into managed, preallocated buffers, being integrated with NASA's cFS and \

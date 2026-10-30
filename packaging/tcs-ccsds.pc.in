@@ -1,0 +1,13 @@
+# The C/C++ CCSDS time codes, installed by `make install` with @PREFIX@ and
+# @VERSION@ replaced by the prefix it installed under and tcs-ccsds's own
+# version. The library is the one header, ccsds-time.h, so there is nothing
+# to link; the file is here so that a build finds that header as it finds
+# xtce's.
+prefix=@PREFIX@
+includedir=${prefix}/include
+
+Name: tcs-ccsds
+Description: CCSDS time codes for C and C++, header only (tcs-xtce)
+URL: https://github.com/vomlehn/tcs-xtce
+Version: @VERSION@
+Cflags: -I${includedir}

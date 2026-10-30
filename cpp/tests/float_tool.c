@@ -7,7 +7,7 @@
  * REFLECT_REMAINDER ODD DATA START END" computes an ErrorDetectCorrect
  * checksum (numbers in hex, flags 0 or 1) of the bits from START to END of
  * DATA.  Built as C and as C++. */
-#include <xtce/packet.h>
+#include <xtce-packet.h>
 
 /** Maps a FloatDataEncoding format name to its runtime code.
  *

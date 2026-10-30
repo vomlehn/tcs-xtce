@@ -3,7 +3,7 @@
  * This mirrors the Rust crate bnum (https://docs.rs/bnum), which the Rust
  * runtime uses for integers of more than 128 bits, so that C, C++ and Rust
  * hold and compute them alike.  An integer is N bytes, least significant
- * first, and two's complement when it is signed; xtce/bnum.hpp wraps these
+ * first, and two's complement when it is signed; xtce-bnum.hpp wraps these
  * functions in a C++ class template, xtce::bnum::Integer<S, N>, like bnum's
  * Integer<S, N>.
  *

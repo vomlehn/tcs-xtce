@@ -1,6 +1,6 @@
 #!/bin/sh
-# Checks that cpp/include/xtce/bnum.h and bnum.hpp compute as the bnum crate
-# does: the C functions (built as C and as C++) and the C++ class each run
+# Checks that cpp/include/xtce-bnum.h and xtce-bnum.hpp compute as the bnum
+# crate does: the C functions (built as C and as C++) and the C++ class each run
 # random cases of every operation on every size from tests/bnum_cases.py,
 # and must print what rust/examples/bnum_tool.rs, which uses bnum, prints.
 #
@@ -31,9 +31,9 @@ done
 "$2" <"$out/c.in" >"$out/c.c"
 "$3" <"$out/c.in" >"$out/c.c-as-cxx"
 "$4" <"$out/cxx.in" >"$out/cxx.cxx"
-compare c c.rust c.c "xtce/bnum.h built as C"
-compare c c.rust c.c-as-cxx "xtce/bnum.h built as C++"
-compare cxx cxx.rust cxx.cxx "xtce/bnum.hpp"
+compare c c.rust c.c "xtce-bnum.h built as C"
+compare c c.rust c.c-as-cxx "xtce-bnum.h built as C++"
+compare cxx cxx.rust cxx.cxx "xtce-bnum.hpp"
 
 [ $status -eq 0 ] &&
     echo "bnum_check: $(wc -l <"$out/c.in") cases of the C functions and" \

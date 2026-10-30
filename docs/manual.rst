@@ -231,8 +231,112 @@ toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
    make python-dist     # build the Python package into dist/ and try it
    make fmt             # format Rust and Python code
    make fmt-check       # verify it (Rust is also checked by every `make rust`)
+   make install         # install under PREFIX, /opt/tcs (see Installing)
+   make uninstall       # remove what install put there
+   make links | unlinks # link the installed programs into /usr/local/bin
+   make stage           # install into build/stage/tcs-xtce, as the package does
+   make deb | rpm       # build the tcs-xtce package into build/packages
+   make packages        # both; STRIP=0 keeps the libraries unstripped
    make clean           # remove build products
    make distclean       # also remove the downloaded references
+
+Installing
+----------
+
+Everything installs under ``/opt/tcs``, the tree the TCS packages share
+(FHS 3.0's ``/opt/<package>``):
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Under ``/opt/tcs``
+     - What
+   * - ``bin/tcs-xtce``, ``bin/xtce-digest``
+     - The compiler and the digest, run with ``/usr/bin/python3``; each
+       finds the package in ``lib/python3/site-packages`` by itself
+   * - ``sbin/tcs-xtce-links``
+     - Links those two into ``/usr/local/bin``, or removes the links
+   * - ``include/xtce.h``, ``include/xtce-*.h``, ``include/xtce-*.hpp``,
+       ``include/ccsds-time.h``
+     - The C and C++ headers
+   * - ``lib/libxtce.so.N``, ``lib/libxtce.so``, ``lib/libxtce.a``
+     - The C/C++ library, shared and static
+   * - ``lib/pkgconfig/xtce.pc``, ``lib/pkgconfig/tcs-ccsds.pc``
+     - For ``pkg-config``; tcs-ccsds is header only, so its file gives
+       only ``-I``
+   * - ``lib/python3/site-packages/``
+     - The Python packages ``tcs_xtce`` and ``tcs_ccsds``, for any
+       Python 3.10 or later
+   * - ``share/doc/tcs-xtce/``, ``share/examples/tcs-xtce/``
+     - This manual, the design, the README and licences; the examples'
+       sources
+
+``make deb`` and ``make rpm`` build one package, ``tcs-xtce``, holding
+all of it, into ``build/packages/``; ``make packages`` builds both, the RPM
+only where ``rpmbuild`` is installed. They are made from the tree ``make
+stage`` installs into ``build/stage/tcs-xtce/``. Besides ``/opt/tcs`` the package
+installs ``/etc/ld.so.conf.d/tcs-xtce.conf``, so the loader finds
+``libxtce.so``; ``/etc/profile.d/tcs-xtce.sh``, which puts ``/opt/tcs/bin``
+on ``PATH`` and ``/opt/tcs/lib/pkgconfig`` on ``PKG_CONFIG_PATH``; and a
+``tcs-xtce.pth`` in ``python3``'s own site-packages, which puts the Python
+packages on its path.
+
+``/etc/profile.d`` is read only by login shells, so ``sudo``, cron and
+other minimal environments do not see ``/opt/tcs/bin``. The package's
+``/opt/tcs/sbin/tcs-xtce-links`` links its programs, ``tcs-xtce`` and
+``xtce-digest`` and no others, into ``/usr/local/bin``, which they all
+search (``sudo``'s ``secure_path`` included):
+
+.. code-block:: sh
+
+   sudo /opt/tcs/sbin/tcs-xtce-links             # make the links
+   sudo /opt/tcs/sbin/tcs-xtce-links --remove    # take them away again
+   sudo /opt/tcs/sbin/tcs-xtce-links --dir /opt/bin
+
+A link already there is left as it is; anything else of the same name is
+left alone and named, and the script exits with 1 once it has linked the
+rest. A missing directory is not made. ``--remove`` removes only links to
+``/opt/tcs/bin``. Installing the package never makes the links; removing it
+removes them from ``/usr/local/bin`` and ``/opt/bin``. After ``make
+install``, ``make links`` and ``make unlinks`` run it, into ``LINKDIR``
+(``/usr/local/bin`` unless given).
+
+``make install`` installs the same files from the source tree, under
+``PREFIX`` (``/opt/tcs`` unless given) and ``DESTDIR``, but nothing outside
+``PREFIX`` unless ``HOOKS=1`` is given too, which needs
+``PREFIX=/opt/tcs``. ``make uninstall``, with the same variables, removes
+them. The Rust crates, ``tcs-xtce`` and ``tcs-ccsds``, come from crates.io
+and are not installed.
+
+Install, stage and so the packages strip the libraries: ``libxtce.so`` with
+``strip --strip-unneeded``, of all only a debugger needs, and
+``libxtce.a`` with ``strip --strip-debug``, of its debugging information,
+keeping the symbols a link needs. The stage is stripped, so the .deb and
+the .rpm hold the same files, and ``rpmbuild`` is kept from stripping
+again. ``STRIP=0``, as in ``make packages STRIP=0``, keeps everything as
+built. The .deb's version is ``<version>-1`` and the RPM's release 1;
+``DEB_REVISION`` gives another Debian revision.
+
+A C or C++ program compiles against the installed library with:
+
+.. code-block:: sh
+
+   cc  prog.c   $(pkg-config --cflags --libs xtce)
+   c++ prog.cpp $(pkg-config --cflags --libs xtce)
+   cc  prog.c   $(pkg-config --cflags --libs --static xtce)   # libxtce.a
+
+The shared library's soname is ``libxtce.so.N``. N is its ABI version,
+kept in ``cpp/abi-version``, not the package's version: it is raised by
+one only when a change breaks programs already linked against the library
+(a function of ``xtce.h`` removed or changed in its parameters or meaning,
+or a C++ type in ``xtce-*.hpp`` changed in size or layout), and not when
+functions are added.
+
+The headers are straight in the include directory, each named with its
+library's prefix. They used to be in ``xtce/`` and
+``ccsds/``: ``xtce/xtce.h`` is now ``xtce.h``, ``ccsds/time.h`` is
+``ccsds-time.h``, and each other ``xtce/NAME`` is ``xtce-NAME``.
 
 Installing the Python package
 -----------------------------
@@ -314,7 +418,7 @@ Rust: ``tcs_xtce::Buffer``
    * - ``len()``, ``is_empty()``, ``capacity()``
      - Sizes
 
-C++: ``xtce::Buffer`` (``xtce/buffer.hpp``)
+C++: ``xtce::Buffer`` (``xtce-buffer.hpp``)
 -------------------------------------------
 
 .. list-table::
@@ -405,7 +509,7 @@ a stand-alone element.
 Errors are ``tcs_xtce::Error { message, line, column }``. ``line`` is 1-based,
 or 0 when the error is not tied to a position in the input.
 
-C++ (``xtce::Document``, ``#include "xtce/document.hpp"``):
+C++ (``xtce::Document``, ``#include "xtce-document.hpp"``):
 
 .. list-table::
    :widths: auto
@@ -428,7 +532,7 @@ C++ (``xtce::Document``, ``#include "xtce/document.hpp"``):
 Errors are thrown as ``xtce::Error``, with ``message()``, ``line()`` and
 ``column()``.
 
-C (``#include "xtce/xtce.h"``, link with ``libxtce`` and the C++
+C (``#include "xtce.h"``, link with ``libxtce`` and the C++
 runtime):
 
 .. list-table::
@@ -600,7 +704,7 @@ across, and generates, for one language:
   use.
 
 The generated code uses a small runtime: ``tcs_xtce::packet`` in Rust,
-``xtce/packet.h`` in C and C++, and ``tcs_xtce.packet`` in Python.
+``xtce-packet.h`` in C and C++, and ``tcs_xtce.packet`` in Python.
 
 Running the compiler
 --------------------
@@ -790,7 +894,7 @@ Using the generated code:
 * **Rust**: add the file as a module (``mod demo;``) in a crate that
   depends on ``tcs-xtce``.
 * **C and C++**: include the header with ``cpp/include`` on the include
-  path. The header and its runtime ``xtce/packet.h`` are self-contained
+  path. The header and its runtime ``xtce-packet.h`` are self-contained
   and need no library. In C, link with ``-lm``.
 * **Python**: import the module with the ``tcs_xtce`` package on the path.
 
@@ -1281,7 +1385,7 @@ packet, and that has no packet length field, takes the rest of the
 batch, so it must come last.
 
 Rust has ``tcs_xtce::packet::Batch`` and Python ``tcs_xtce.packet.Batch``.
-In C/C++ (``xtce/packet.h``) an ``xtce_pk_batch`` is kept in a buffer the
+In C/C++ (``xtce-packet.h``) an ``xtce_pk_batch`` is kept in a buffer the
 caller gives; each packet type ``T`` has ``T_batch_add`` and
 ``T_batch_next``. The C/C++ functions return ``0`` or an ``XTCE_PK_*``
 error code, filling in ``err``, the last argument, which may be ``NULL``.
@@ -1450,7 +1554,7 @@ Runtime reference
 Generated code calls these, and they are also available for hand-written
 codecs. The names are the same in every language unless noted.
 
-In C/C++ (``xtce/packet.h``) every name has the prefix ``xtce_pk_``,
+In C/C++ (``xtce-packet.h``) every name has the prefix ``xtce_pk_``,
 types are structs operated on by functions, and fallible functions
 return an error code and their result through a pointer. Examples:
 ``xtce_pk_reader_init(data, len, err)`` and
@@ -2670,10 +2774,10 @@ crate, and the C and C++ runtime its own header-only library that
 mirrors bnum, so that all of them hold and compute such integers alike.
 Python's ``int`` has no size limit.
 
-The library is two headers in ``cpp/include/xtce``, which need only the
+The library is two headers in ``cpp/include``, which need only the
 standard library and allocate nothing:
 
-``xtce/bnum.h``
+``xtce-bnum.h``
    C11 functions, which also compile as C++, on integers of ``n`` bytes
    held least significant first, two's complement when signed. Each is
    named after the bnum method it mirrors (``xtce_bn_wrapping_add`` is
@@ -2682,7 +2786,7 @@ standard library and allocate nothing:
 
    .. code-block:: c
 
-      #include <xtce/bnum.h>
+      #include <xtce-bnum.h>
 
       XTCE_BN_TYPEDEF(u256, 32);  /* typedef struct { uint8_t bytes[32]; } */
 
@@ -2702,7 +2806,7 @@ standard library and allocate nothing:
    Functions that need room to work take a ``scratch`` buffer of ``n``
    bytes; the header says which may not be given the same integer twice.
 
-``xtce/bnum.hpp``
+``xtce-bnum.hpp``
    For C++20, ``xtce::bnum::Integer<S, N>``, like bnum's
    ``Integer<S, N>``: an integer of ``N`` bytes, signed if ``S``, with
    ``Uint<N>`` and ``Int<N>`` for short. It has bnum's methods under the
@@ -2714,7 +2818,7 @@ standard library and allocate nothing:
 
    .. code-block:: cpp
 
-      #include <xtce/bnum.hpp>
+      #include <xtce-bnum.hpp>
 
       using U256 = xtce::bnum::Uint<32>;
       U256 x = U256::one() << 160;
@@ -2772,7 +2876,7 @@ milliseconds may reach a leap second's.
      - crate ``tcs-ccsds``, ``tcs_ccsds::time``
      - ``decode_cuc(&data) -> Option<(usize, f64)>``
    * - C/C++
-     - ``ccsds/include/ccsds/time.h``, ``ccsds_`` names
+     - ``ccsds/include/ccsds-time.h``, ``ccsds_`` names
      - ``bool ccsds_decode_cuc(data, n, &k, &s)``
    * - Python
      - package ``tcs_ccsds``, ``tcs_ccsds.time``
@@ -2860,7 +2964,7 @@ hex digits (to print):
        ``digest_files_bytes(&[P])`` and ``digest_files(&[P])`` (each ``P``
        a path)
      - ``Err(tcs_xtce::Error)``
-   * - C and C++ (``xtce/digest.h``, which needs no library)
+   * - C and C++ (``xtce-digest.h``, which needs no library)
      - ``xtce_digest_bytes(data, len, out, &err)``,
        ``xtce_digest(data, len, hex, &err)``,
        ``xtce_digest_string(text, hex, &err)``,
@@ -3319,8 +3423,8 @@ Testing
 * ``tests/ccsds_check.sh``: tcs-ccsds's time codes give the known results
   and the same results in Rust, C, C++ and Python (see `CCSDS time codes
   (tcs-ccsds)`_).
-* ``tests/bnum_check.sh``: the C functions of ``xtce/bnum.h`` (built as
-  C and as C++) and the C++ class of ``xtce/bnum.hpp`` give the same
+* ``tests/bnum_check.sh``: the C functions of ``xtce-bnum.h`` (built as
+  C and as C++) and the C++ class of ``xtce-bnum.hpp`` give the same
   results as the bnum crate for random cases from
   ``tests/bnum_cases.py``: every operation they have, on signed and
   unsigned integers of 1 to 32 bytes, with each type's edge values.

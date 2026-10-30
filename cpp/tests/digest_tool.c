@@ -3,7 +3,7 @@
  * compares across languages.  With --set, prints the one digest of the set of
  * documents instead.  Built as C, with the C functions, and as C++, with the
  * C++ ones. */
-#include <xtce/digest.h>
+#include <xtce-digest.h>
 
 #ifdef __cplusplus
 #include <iostream>

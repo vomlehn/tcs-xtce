@@ -241,7 +241,7 @@ C and C++
 ~~~~~~~~~
 
 `c/main.c <c/main.c>`__ is built twice, once as C11 and once as C++20. It
-needs only the header ``../../cpp/include/xtce/packet.h`` and the
+needs only the header ``../../cpp/include/xtce-packet.h`` and the
 generated header; it links with no tcs-xtce library.
 
 .. code-block:: sh

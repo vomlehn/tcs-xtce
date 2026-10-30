@@ -1,8 +1,8 @@
 #include <new>
 #include <string>
 
-#include "xtce/document.hpp"
-#include "xtce/xtce.h"
+#include "xtce-document.hpp"
+#include "xtce.h"
 
 struct xtce_document {
         xtce::Document doc;

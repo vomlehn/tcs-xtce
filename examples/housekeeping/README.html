@@ -430,7 +430,7 @@ runtime computes it the same way:</p>
 </tr>
 <tr><td>C, C++</td>
 <td><tt class="docutils literal">xtce_digest_file_bytes(path, out, &amp;err)</tt>, from the header
-<tt class="docutils literal">xtce/digest.h</tt>, which needs no library</td>
+<tt class="docutils literal"><span class="pre">xtce-digest.h</span></tt>, which needs no library</td>
 </tr>
 <tr><td>Python</td>
 <td><tt class="docutils literal">tcs_xtce.digest.digest_file_bytes(path)</tt>, giving <tt class="docutils literal">bytes</tt></td>
@@ -631,8 +631,8 @@ packet.</p>
 <div class="section" id="c-and-c">
 <h2>C and C++</h2>
 <p><a class="reference external" href="c/main.c">c/main.c</a> is built twice, once as C11 and once as C++20. It
-needs only the headers <tt class="docutils literal"><span class="pre">../../cpp/include/xtce/packet.h</span></tt> and
-<tt class="docutils literal"><span class="pre">../../cpp/include/xtce/digest.h</span></tt> and the generated header; it links with
+needs only the headers <tt class="docutils literal"><span class="pre">../../cpp/include/xtce-packet.h</span></tt> and
+<tt class="docutils literal"><span class="pre">../../cpp/include/xtce-digest.h</span></tt> and the generated header; it links with
 no tcs-xtce library.</p>
 <pre class="code sh literal-block">
 make<span class="whitespace"> </span>c<span class="whitespace">

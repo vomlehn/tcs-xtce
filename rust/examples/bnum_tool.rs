@@ -1,6 +1,6 @@
 //! Computes integer operations with the bnum crate, one case per line of
 //! standard input, as tests/bnum_check.sh asks: the reference that
-//! cpp/include/xtce/bnum.h and bnum.hpp must agree with.
+//! cpp/include/xtce-bnum.h and xtce-bnum.hpp must agree with.
 //!
 //! A case is `OP TYPE ARGS...`, where TYPE is `u` or `i` and a size in bytes
 //! (u17 is bnum's Uint<17>), and integers are in decimal.  It prints the

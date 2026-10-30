@@ -1,4 +1,4 @@
-#include "xtce/xml.hpp"
+#include "xtce-xml.hpp"
 
 #include <charconv>
 #include <cmath>

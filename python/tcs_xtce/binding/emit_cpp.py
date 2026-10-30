@@ -135,7 +135,7 @@ class CppEmitter:
         """Writes the header and the source.
 
         Returns:
-            The text of ``generated.hpp`` and of ``generated.cpp``.
+            The text of ``xtce-generated.hpp`` and of ``generated.cpp``.
         """
         s = self.b.schema
         root_tag, root_type = next(iter(s.roots.items()))
@@ -145,7 +145,7 @@ class CppEmitter:
             f"// Data structures for XTCE {s.version} ({s.namespace}).",
             "#pragma once", "", "#include <cstdint>", "#include <optional>",
             "#include <string>", "#include <string_view>", "#include <variant>",
-            "#include <vector>", "", '#include "xtce/xml.hpp"', "",
+            "#include <vector>", "", '#include "xtce-xml.hpp"', "",
             "namespace xtce {", "",
             "// XML namespace of the XTCE schema these types were generated "
             "from.",
@@ -156,7 +156,7 @@ class CppEmitter:
             f"{lit(s.version)};", "// Name of the document root element.",
             "inline constexpr std::string_view kRootElement = "
             f"{lit(root_tag)};", ""]
-        self.c += header + ['#include "xtce/generated.hpp"', "",
+        self.c += header + ['#include "xtce-generated.hpp"', "",
                             "namespace xtce {", ""]
         for name in sorted(s.enums):
             self.enum(name)

@@ -1,10 +1,10 @@
-/* Computes integer operations with xtce/bnum.h, one case per line of
+/* Computes integer operations with xtce-bnum.h, one case per line of
  * standard input, as tests/bnum_check.sh asks; rust/examples/bnum_tool.rs
  * describes the cases and what it prints, and does the same with bnum.
  * Built as C and as C++. */
 #include <stdio.h>
 #include <stdlib.h>
-#include <xtce/bnum.h>
+#include <xtce-bnum.h>
 
 #define MAXN 32
 

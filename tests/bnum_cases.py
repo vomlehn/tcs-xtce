@@ -1,5 +1,5 @@
 """Prints the integer cases that tests/bnum_check.sh gives the bnum crate
-(the reference), xtce/bnum.h and xtce/bnum.hpp: every operation on every
+(the reference), xtce-bnum.h and xtce-bnum.hpp: every operation on every
 size, with each type's edge values and random ones, in the format
 rust/examples/bnum_tool.rs describes.  With --c, only the operations that
 the C functions have; the C++ class adds the rest.

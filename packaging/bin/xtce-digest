@@ -1,0 +1,18 @@
+#!/usr/bin/python3
+"""The xtce-digest command, as `make install` installs it in PREFIX/bin.
+
+The package is in PREFIX/lib/python3/site-packages, which Python does not
+search unless told to, so this puts that directory, found from where this
+file is, first on the path. It then works under any PREFIX, and from a
+staged tree, without PYTHONPATH or the .pth file the packages install.
+"""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                os.pardir, "lib", "python3", "site-packages"))
+
+from tcs_xtce.digest_cli.__main__ import main  # noqa: E402
+
+sys.exit(main())

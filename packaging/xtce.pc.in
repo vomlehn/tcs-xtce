@@ -1,0 +1,17 @@
+# The C/C++ XTCE library, installed by `make install` with @PREFIX@ and
+# @VERSION@ replaced by the prefix it installed under and the package's
+# version. The library is C++, so a program linking the static one, as
+# `pkg-config --static` asks, needs the C++ runtime too; the header-only
+# packet runtime, xtce-packet.h, needs the maths library either way.
+prefix=@PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: xtce
+Description: XTCE documents and packet codecs for C and C++ (tcs-xtce)
+URL: https://github.com/vomlehn/tcs-xtce
+Version: @VERSION@
+Libs: -L${libdir} -lxtce -lm
+Libs.private: -lstdc++ -lm
+Cflags: -I${includedir}

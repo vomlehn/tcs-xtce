@@ -53,7 +53,7 @@ Overview
                                         │  mission.xml (any XTCE 1.3 document)
    tcs-xtce (python/tcs_xtce/compiler)  ▼  (uses python/tcs_xtce to read it)
             <mission>.rs            <mission>.h (C and C++)         <mission>.py
-                    + hand-written runtimes: tcs_xtce::packet / xtce/packet.h / tcs_xtce.packet
+                    + hand-written runtimes: tcs_xtce::packet / xtce-packet.h / tcs_xtce.packet
 
 Each language has two parts:
 
@@ -1142,11 +1142,11 @@ formatting needs it, so the runtime formats bnum integers itself, with
 bnum's division.
 
 C and C++ have no such library that fits: GMP and mini-gmp allocate, and
-the runtime is a header with no library to link. ``xtce/bnum.h`` is one,
+the runtime is a header with no library to link. ``xtce-bnum.h`` is one,
 mirroring bnum so that the languages agree by construction: the same
 bytes (least significant first, two's complement), the same operation
 names, and the same results, including bnum's choices where Rust leaves
-room, such as which parse error wins. ``xtce/bnum.hpp`` wraps it in a
+room, such as which parse error wins. ``xtce-bnum.hpp`` wraps it in a
 class template like bnum's ``Integer``.
 
 The C functions work on byte pointers with a size and a signedness, so
@@ -1240,8 +1240,8 @@ differences, not deliberate collisions.
 
 Each runtime computes the digest itself, so a program in any language
 can send its digest and check the one it receives: ``tcs_xtce.digest`` in
-Python, ``tcs_xtce::digest`` in Rust, and ``xtce/digest.h`` for C and C++,
-header-only like ``xtce/packet.h`` so that C programs still link no
+Python, ``tcs_xtce::digest`` in Rust, and ``xtce-digest.h`` for C and C++,
+header-only like ``xtce-packet.h`` so that C programs still link no
 library. The encoding is specified in ``python/tcs_xtce/digest.py``, and each
 runtime has its own small XML reader for it: the readers the XML bindings
 use are driven by the schema and don't keep namespaces, and an

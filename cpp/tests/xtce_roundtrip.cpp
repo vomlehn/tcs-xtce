@@ -3,7 +3,7 @@
 #include <fstream>
 #include <iostream>
 
-#include "xtce/document.hpp"
+#include "xtce-document.hpp"
 
 /** Reads an XTCE document and writes it out again.
  *

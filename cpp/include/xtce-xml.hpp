@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-#include "xtce/buffer.hpp"
+#include "xtce-buffer.hpp"
 
 namespace xtce {
 

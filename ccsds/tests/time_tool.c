@@ -1,7 +1,7 @@
 /* Decodes and encodes CCSDS time codes as tests/ccsds_check.sh asks, one case
  * per line of standard input; ccsds/rust/examples/time_tool.rs describes the
  * cases.  Built as C and as C++. */
-#include <ccsds/time.h>
+#include <ccsds-time.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>

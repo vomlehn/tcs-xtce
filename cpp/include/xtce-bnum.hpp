@@ -3,7 +3,7 @@
 // xtce::bnum::Integer<S, N> is an integer of N bytes, signed if S, like
 // Integer<S, N> in the Rust crate bnum (https://docs.rs/bnum), whose methods
 // it has under the same names.  It is built on the C functions of
-// xtce/bnum.h and holds the same bytes: least significant first, two's
+// xtce-bnum.h and holds the same bytes: least significant first, two's
 // complement when signed.
 //
 // The operators wrap on overflow, as bnum's do in its Wrap overflow mode.
@@ -23,7 +23,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "bnum.h"
+#include "xtce-bnum.h"
 
 #ifndef XTCE_BNUM_PANIC
 #define XTCE_BNUM_PANIC(what) std::abort()

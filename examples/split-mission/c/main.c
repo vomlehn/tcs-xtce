@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <xtce/digest.h>
+#include <xtce-digest.h>
 
 #define N_PACKETS 3
 #define DIGEST_BYTES 16

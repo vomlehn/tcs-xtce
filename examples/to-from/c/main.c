@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <to_from.h>
-#include <xtce/digest.h>
+#include <xtce-digest.h>
 
 static const char LOREM_IPSUM[] =
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "

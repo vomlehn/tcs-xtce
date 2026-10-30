@@ -450,7 +450,7 @@ references/Makefile ── curl ──&gt; SpaceSystem.xsd, XTCE.pdf, xml.xsd, c
                                      │  mission.xml (any XTCE 1.3 document)
 tcs-xtce (python/tcs_xtce/compiler)  ▼  (uses python/tcs_xtce to read it)
          &lt;mission&gt;.rs            &lt;mission&gt;.h (C and C++)         &lt;mission&gt;.py
-                 + hand-written runtimes: tcs_xtce::packet / xtce/packet.h / tcs_xtce.packet
+                 + hand-written runtimes: tcs_xtce::packet / xtce-packet.h / tcs_xtce.packet
 </pre>
 <p>Each language has two parts:</p>
 <ul class="simple">
@@ -1456,11 +1456,11 @@ library, which promises codecs that allocate nothing, and bnum's
 formatting needs it, so the runtime formats bnum integers itself, with
 bnum's division.</p>
 <p>C and C++ have no such library that fits: GMP and mini-gmp allocate, and
-the runtime is a header with no library to link. <tt class="docutils literal">xtce/bnum.h</tt> is one,
+the runtime is a header with no library to link. <tt class="docutils literal"><span class="pre">xtce-bnum.h</span></tt> is one,
 mirroring bnum so that the languages agree by construction: the same
 bytes (least significant first, two's complement), the same operation
 names, and the same results, including bnum's choices where Rust leaves
-room, such as which parse error wins. <tt class="docutils literal">xtce/bnum.hpp</tt> wraps it in a
+room, such as which parse error wins. <tt class="docutils literal"><span class="pre">xtce-bnum.hpp</span></tt> wraps it in a
 class template like bnum's <tt class="docutils literal">Integer</tt>.</p>
 <p>The C functions work on byte pointers with a size and a signedness, so
 one function serves every width without macros or generated code; that
@@ -1542,8 +1542,8 @@ its speed and ubiquity, not for security: it detects accidental
 differences, not deliberate collisions.</p>
 <p>Each runtime computes the digest itself, so a program in any language
 can send its digest and check the one it receives: <tt class="docutils literal">tcs_xtce.digest</tt> in
-Python, <tt class="docutils literal"><span class="pre">tcs_xtce::digest</span></tt> in Rust, and <tt class="docutils literal">xtce/digest.h</tt> for C and C++,
-header-only like <tt class="docutils literal">xtce/packet.h</tt> so that C programs still link no
+Python, <tt class="docutils literal"><span class="pre">tcs_xtce::digest</span></tt> in Rust, and <tt class="docutils literal"><span class="pre">xtce-digest.h</span></tt> for C and C++,
+header-only like <tt class="docutils literal"><span class="pre">xtce-packet.h</span></tt> so that C programs still link no
 library. The encoding is specified in <tt class="docutils literal">python/tcs_xtce/digest.py</tt>, and each
 runtime has its own small XML reader for it: the readers the XML bindings
 use are driven by the schema and don't keep namespaces, and an

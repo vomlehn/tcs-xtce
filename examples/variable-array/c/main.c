@@ -31,7 +31,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <variable_array.h>
-#include <xtce/digest.h>
+#include <xtce-digest.h>
 
 /* The lorem ipsum paragraph in five lines, as two arrays: three lines, then
  * two.  Each array ends with NULL. */
