@@ -205,8 +205,9 @@ Strings and binary
    whole number of bytes.
 
 Batches
-   A Python ``Batch`` holds at most 4294967295 bytes, as its length
-   prefix is 32 bits.
+   A ``Batch`` holds at most 4294967295 bytes, as its length prefix is
+   32 bits. A larger capacity is refused: Rust's ``Batch::with_capacity``
+   panics, and Python's ``Batch`` raises ``ValueError``.
 
 Building and testing
 ====================

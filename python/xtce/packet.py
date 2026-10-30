@@ -192,9 +192,16 @@ class Batch:
         """Makes an empty batch, preallocated.
 
         Args:
-            capacity: The most bytes of packets it holds; at most 2**32 - 1.
+            capacity: The most bytes of packets it holds: at most 2**32 - 1,
+                      which the batch's length can say.
+
+        Raises:
+            ValueError: The capacity is negative or more than 2**32 - 1.
         """
-        self._capacity = min(capacity, 0xFFFFFFFF)
+        if not 0 <= capacity <= 0xFFFFFFFF:
+            raise ValueError("a batch's capacity is 0 to 4294967295 bytes, "
+                             f"not {capacity}")
+        self._capacity = capacity
         self._buf = ManagedBuffer(BATCH_LENGTH_BYTES + self._capacity)
         self._scratch = ManagedBuffer()
         self.clear()

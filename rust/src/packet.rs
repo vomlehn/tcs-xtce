@@ -303,14 +303,23 @@ impl Batch {
     ///
     /// # Arguments
     ///
-    /// * `capacity` - The most bytes of packets it holds; values above
-    ///                `u32::MAX` are taken as `u32::MAX`.
+    /// * `capacity` - The most bytes of packets it holds: at most
+    ///                `u32::MAX`, which the batch's length can say.
     ///
     /// # Returns
     ///
     /// The batch, holding only its zero length.
+    ///
+    /// # Panics
+    ///
+    /// If `capacity` is more than `u32::MAX`, as `Vec::with_capacity` panics
+    /// on a capacity it cannot hold.
     pub fn with_capacity(capacity: usize) -> Self {
-        let capacity = capacity.min(u32::MAX as usize);
+        assert!(
+            capacity <= u32::MAX as usize,
+            "a batch's capacity is at most {} bytes, not {capacity}",
+            u32::MAX
+        );
         let mut b = Self {
             buf: Buffer::with_capacity(BATCH_LENGTH_BYTES + capacity),
             scratch: Buffer::new(),
@@ -6016,6 +6025,21 @@ pub fn describe_bytes<W: fmt::Write + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A batch's 32-bit length bounds its capacity, and a larger one is
+    /// refused rather than lowered.
+    #[test]
+    fn a_batch_holds_what_its_length_can_say() {
+        assert_eq!(Batch::with_capacity(0).capacity(), 0);
+    }
+
+    /// See [`a_batch_holds_what_its_length_can_say`].
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    #[should_panic(expected = "a batch's capacity is at most")]
+    fn a_batch_larger_than_its_length_can_say_is_refused() {
+        Batch::with_capacity(u32::MAX as usize + 1);
+    }
 
     #[test]
     fn bit_fields_round_trip() {

@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
 import demo  # noqa: E402
 from xtce import ManagedBuffer  # noqa: E402
 from xtce.packet import (  # noqa: E402
-    AlarmLevel, BitReader, BitWriter, Codec, PacketError, bcd_decode,
+    AlarmLevel, Batch, BitReader, BitWriter, Codec, PacketError, bcd_decode,
     bcd_encode, checksum, decode_text, encode_text, enum_value, float_decode,
     float_encode, float_to_raw, math_op, spline_orders)
 
@@ -623,10 +623,6 @@ class ChecksumTests(unittest.TestCase):
                 demo.Checked.decode(bytes(bad))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class HookTests(unittest.TestCase):
     """The Hooked packet's custom algorithms, which the application
     supplies."""
@@ -659,3 +655,17 @@ class HookTests(unittest.TestCase):
         demo.HOOKS.update(bands=lambda v: 9, min_max=lambda v: None)
         self.assertEqual(p.alarms(), [("hk_a", AlarmLevel.SEVERE)])
         self.assertEqual(p.algorithms(), [("hk_min", None), ("hk_max", None)])
+
+
+class BatchTests(unittest.TestCase):
+    """A batch's capacity, which its 32-bit length bounds."""
+
+    def test_the_largest_capacity_and_no_larger(self):
+        self.assertEqual(Batch(0).capacity, 0)
+        for capacity in (-1, 2 ** 32):
+            with self.assertRaises(ValueError, msg=capacity):
+                Batch(capacity)
+
+
+if __name__ == "__main__":
+    unittest.main()

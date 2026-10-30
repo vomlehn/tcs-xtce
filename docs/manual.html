@@ -611,8 +611,9 @@ format.</dd>
 <dd>A string's size tag is 1 to 32 bits. The size of binary data is a
 whole number of bytes.</dd>
 <dt>Batches</dt>
-<dd>A Python <tt class="docutils literal">Batch</tt> holds at most 4294967295 bytes, as its length
-prefix is 32 bits.</dd>
+<dd>A <tt class="docutils literal">Batch</tt> holds at most 4294967295 bytes, as its length prefix is
+32 bits. A larger capacity is refused: Rust's <tt class="docutils literal"><span class="pre">Batch::with_capacity</span></tt>
+panics, and Python's <tt class="docutils literal">Batch</tt> raises <tt class="docutils literal">ValueError</tt>.</dd>
 </dl>
 </div>
 <div class="section" id="building-and-testing">
