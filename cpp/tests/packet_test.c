@@ -53,6 +53,27 @@ static void set_str(char* data, size_t* n, const char* s, size_t sn) {
 #define SET_STR(field, s) \
         set_str((field).data, &(field).len, (s), sizeof(s) - 1)
 
+/* Bytes a batch is read from, as a stream would give them. */
+typedef struct source {
+        const uint8_t* at;
+        size_t left;
+} source;
+
+/** Reads from a source, as an xtce_pk_read_fn.
+ *
+ * @param ctx  The source.
+ * @param out  Where the bytes go.
+ * @param n    How many bytes to read.
+ * @return     0, or 1 if the source has fewer than `n` bytes left. */
+static int source_read(void* ctx, uint8_t* out, size_t n) {
+        source* s = (source*)ctx;
+        if (n > s->left) return 1;
+        memcpy(out, s->at, n);
+        s->at += n;
+        s->left -= n;
+        return 0;
+}
+
 /** Makes the Housekeeping packet the tests encode.
  *
  * @return  The packet, with every field set to a known value. */
@@ -862,6 +883,62 @@ int main(void) {
                 CHECK(demo_Housekeeping_batch_next(&second, &b, &err) == 0 &&
                       second.seq_count == 43);
                 CHECK(xtce_pk_batch_remaining(&b) == 0);
+                CHECK(xtce_pk_batch_finish(&b, &err) == 0);
+        }
+
+        /* A batch received whole, or read length first, decodes the same
+         * as the one sent; one whose length doesn't match its bytes, or
+         * that ends early, is refused and left empty. */
+        {
+                static uint8_t sent[XTCE_PK_BATCH_LENGTH_BYTES +
+                                    2 * demo_Housekeeping_MAX_BYTES];
+                static uint8_t space[sizeof sent];
+                xtce_pk_batch out, in;
+                demo_Housekeeping got;
+                source src;
+                demo_Housekeeping_init(&got);
+                CHECK(xtce_pk_batch_init(&out, sent, sizeof sent, &err) ==
+                      0);
+                hk = housekeeping();
+                CHECK(demo_Housekeeping_batch_add(&hk, &out, &err) == 0);
+                hk.seq_count = 43;
+                CHECK(demo_Housekeeping_batch_add(&hk, &out, &err) == 0);
+                CHECK(xtce_pk_batch_init(&in, space, sizeof space, &err) ==
+                      0);
+
+                memcpy(space, sent, out.len);
+                CHECK(xtce_pk_batch_received(&in, out.len, &err) == 0);
+                CHECK(demo_Housekeeping_batch_next(&got, &in, &err) == 0 &&
+                      got.seq_count == 42);
+                CHECK(xtce_pk_batch_finish(&in, &err) ==
+                      XTCE_PK_BAD_LENGTH);
+                CHECK(demo_Housekeeping_batch_next(&got, &in, &err) == 0 &&
+                      got.seq_count == 43);
+                CHECK(xtce_pk_batch_finish(&in, &err) == 0);
+
+                memcpy(space, sent, out.len);
+                CHECK(xtce_pk_batch_received(&in, out.len - 1, &err) ==
+                      XTCE_PK_BAD_LENGTH);
+                CHECK(in.len == XTCE_PK_BATCH_LENGTH_BYTES);
+                CHECK(xtce_pk_batch_received(&in, 2, &err) ==
+                      XTCE_PK_BAD_LENGTH);
+
+                src.at = sent;
+                src.left = out.len;
+                CHECK(xtce_pk_batch_read(&in, source_read, &src, &err) ==
+                      0);
+                CHECK(in.len == out.len && src.left == 0);
+                CHECK(demo_Housekeeping_batch_next(&got, &in, &err) == 0 &&
+                      got.seq_count == 42);
+                CHECK(demo_Housekeeping_batch_next(&got, &in, &err) == 0 &&
+                      got.seq_count == 43);
+                CHECK(xtce_pk_batch_finish(&in, &err) == 0);
+
+                src.at = sent;
+                src.left = out.len - 1;
+                CHECK(xtce_pk_batch_read(&in, source_read, &src, &err) ==
+                      XTCE_PK_TRUNCATED);
+                CHECK(in.len == XTCE_PK_BATCH_LENGTH_BYTES);
         }
 
         if (failures) return EXIT_FAILURE;
