@@ -1586,6 +1586,20 @@
       <Parameter name="BoxLast" parameterTypeRef="U8"/>
       <Parameter name="BoxAfter" parameterTypeRef="U8"/>
       <Parameter name="ZipLast" parameterTypeRef="U8"/>
+      <Parameter name="ZipLen" parameterTypeRef="U8">
+        <!-- The bytes after it to the end of ZipLengthed's, before the
+             transform. -->
+        <AncillaryDataSet>
+          <AncillaryData name="tcs-xtce.length">0</AncillaryData>
+        </AncillaryDataSet>
+      </Parameter>
+      <Parameter name="ZipBoxLen" parameterTypeRef="U8">
+        <!-- The bytes after it to the end of ZipLenBox's, before the
+             transform. -->
+        <AncillaryDataSet>
+          <AncillaryData name="tcs-xtce.length">0</AncillaryData>
+        </AncillaryDataSet>
+      </Parameter>
       <Parameter name="TwoRowCols" parameterTypeRef="RepCountType"/>
       <Parameter name="TwoRows" parameterTypeRef="TwoRowType"/>
       <Parameter name="TwoRowNote" parameterTypeRef="U8"/>
@@ -2799,6 +2813,52 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="662"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- A transformed packet with a length field of its own, which
+           counts its bytes before the transform, where PacketLength counts
+           them on the wire. -->
+      <SequenceContainer name="ZipLengthed">
+        <BinaryEncoding>
+          <FromBinaryTransformAlgorithm name="Shrink"/>
+          <ToBinaryTransformAlgorithm name="Expand"/>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipLen"/>
+          <ParameterRefEntry parameterRef="ZipA"/>
+          <ParameterRefEntry parameterRef="ZipB"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="666"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- An included transformed container whose length field measures
+           it before the transform: 4 bytes, doubled on the wire. -->
+      <SequenceContainer name="ZipLenBox">
+        <BinaryEncoding>
+          <SizeInBits>
+            <FixedValue>64</FixedValue>
+          </SizeInBits>
+          <FromBinaryTransformAlgorithm name="Shrink"/>
+          <ToBinaryTransformAlgorithm name="Expand"/>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="ZipBoxLen"/>
+          <ParameterRefEntry parameterRef="ZipA"/>
+          <ParameterRefEntry parameterRef="ZipB"/>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="ZipMeasured">
+        <EntryList>
+          <ContainerRefEntry containerRef="ZipLenBox"/>
+          <ParameterRefEntry parameterRef="OptEnd"/>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="667"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

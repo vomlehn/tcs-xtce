@@ -1596,6 +1596,8 @@ class RustEmitter:
                 self.line(f"let r{t} = std::mem::replace(&mut r, "
                           f"BitReader::new(&t{t}[..n{t}]));", depth)
                 self.read_items(it.items, depth, where, assign)
+                if it.length is not None:
+                    self.line(f"r.finish({rstr(it.length.name)})?;", depth)
                 self.line(f"r = r{t};", depth)
             elif isinstance(it, TailPad):
                 # The packet's last bits, which encoding fills with zeros.
@@ -1694,6 +1696,8 @@ class RustEmitter:
                 t = it.start
                 self.line(f"let t{t} = w.position();", depth)
                 self.write_items(n, it.items, depth, where, names)
+                if it.length is not None:
+                    self.patch_length(it.length, depth)
                 self.line(f"w.transform(t{t}, {transform_hook(it.encode)}, "
                           f"{opt_size(it.raw)}, {it.out_cap}, "
                           f"{rstr(it.name)})?;", depth)
@@ -1815,6 +1819,19 @@ class RustEmitter:
     @staticmethod
     def mark(i: int) -> str:
         return "0" if i == 0 else f"m{i}"
+
+    def patch_length(self, lc: Local, depth: int) -> None:
+        """Writes the statement filling in a packet length field from what
+        has been written.
+
+        Args:
+            lc:    The field.
+            depth: The statement's indentation level.
+        """
+        enc = lc.vtype.enc
+        self.line(f"w.patch_length(l{lc.id}, {enc.bits}, "
+                  f"{str(enc.little_endian).lower()}, {lc.length}, "
+                  f"{rstr(lc.name)})?;", depth)
 
     def finish(self, n: Node, depth: int) -> None:
         """Writes the checks of the packet length field and
@@ -2002,10 +2019,7 @@ class RustEmitter:
         for node in n.chain():
             self.write_items(n, node.items, 2, node.key, names)
         if length is not None:
-            enc = length.vtype.enc
-            self.line(f"w.patch_length(l{length.id}, {enc.bits}, "
-                      f"{str(enc.little_endian).lower()}, {length.length}, "
-                      f"{rstr(length.name)})?;", 2)
+            self.patch_length(length, 2)
         for c in n.checks:
             self.patch(c, 2)
         if empty:

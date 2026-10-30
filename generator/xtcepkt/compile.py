@@ -1738,8 +1738,11 @@ class Compiler:
         Its checks, and those of the containers it includes, cover its
         bytes before the transform, so they are Verify items at its end:
         checked once its items are read, and computed before the transform
-        when encoding.  A length field can't be in it: what it counts on
-        the wire would depend on the transform of its own value.
+        when encoding.  So do its length fields: one that measures an
+        included container counts that container's bytes before the
+        transform, as do this container's own if it is included, and a
+        packet length field counts from itself to the end of this
+        container's bytes before the transform.
 
         Args:
             sc:     The XTCE container.
@@ -1756,19 +1759,22 @@ class Compiler:
             them and their checks.
 
         Raises:
-            Unsupported: It holds a packet length field, or its SizeInBits
-                         isn't a number of whole bytes, or an included
-                         container has none.
+            Unsupported: It holds more than one packet length field, or
+                         its SizeInBits isn't a number of whole bytes, or
+                         an included container has none.
         """
         be = sc.binary_encoding
         names = self.transform_names(be) if be is not None else None
         if names is None:
             return items
-        for it in walk(items):
-            if isinstance(it, Value) and it.local.length is not None:
-                raise Unsupported(f"{where}: packet length field "
-                                  f"{it.local.name} in a container with "
-                                  "transform algorithms")
+        if not packet:
+            items = self.measure(items, where)
+        lengths = [it.local for it in walk(items, inner=False)
+                   if isinstance(it, Value) and it.local.length is not None
+                   and not it.local.measures]
+        if len(lengths) > 1:
+            raise Unsupported(f"{where}: more than one packet length field in "
+                              "a container with transform algorithms")
         marks = {it.id for it in walk(items) if isinstance(it, Mark)}
         inside = [c for c in self.included_checks if c[2] in marks]
         self.included_checks = [c for c in self.included_checks
@@ -1799,7 +1805,8 @@ class Compiler:
         fa, ta = names
         return [Transform(items, self.hook("binary_from", fa) if fa else None,
                           self.hook("binary_to", ta) if ta else None, raw, cap,
-                          out_cap, name, start)]
+                          out_cap, name, start,
+                          lengths[0] if lengths else None)]
 
     def has_transform(self, sc, where: str) -> bool:
         be = sc.binary_encoding
@@ -2637,9 +2644,9 @@ class Compiler:
 
         A segment repeated a fixed number of times, one right after
         another, is that many segments; with an order N, they are parts N,
-        N + 1 and on of what they are segments of.  Repeated otherwise (a count that
-        another value gives, or an Offset between the repeats), its
-        segments are a list of raw fields.
+        N + 1 and on of what they are segments of.  Repeated otherwise (a
+        count that another value gives, or an Offset between the repeats),
+        its segments are a list of raw fields.
 
         Args:
             name:    The entry's element name, such as
@@ -3772,8 +3779,10 @@ class Compiler:
 
     @staticmethod
     def check_length(node: Node, where: str) -> None:
-        """Checks that a packet has at most one length field, which is
-        always present and which nothing compares or takes a size from.
+        """Checks that a packet has at most one length field outside
+        transformed data (wrap_transform allows one in each Transform), and
+        that each is always present and nothing compares or takes a size
+        from it.
 
         Args:
             node:  The packet.
@@ -3783,20 +3792,19 @@ class Compiler:
             Unsupported: It doesn't.
         """
         items = node.all_items()
-        lengths = [it.local for it in walk(items) if isinstance(it, Value)
-                   and it.local.length is not None and not it.local.measures]
-        if len(lengths) > 1:
+        is_length = (  # noqa: E731
+            lambda it: isinstance(it, Value) and it.local.length is not None
+            and not it.local.measures)
+        if sum(map(is_length, walk(items, inner=False))) > 1:
             raise Unsupported(f"{where}: more than one packet length field")
-        if not lengths:
-            return
-        lc = lengths[0]
-        if lc.optional:
-            raise Unsupported(f"{where}: packet length field {lc.name} has an "
-                              "IncludeCondition")
         criteria = node.all_criteria() + [c for it in items for c in conds(it)]
-        if any(x is lc for c in criteria for x in term_locals(c)):
-            raise Unsupported(f"{where}: a criterion or assignment on packet "
-                              f"length field {lc.name}")
+        for lc in [it.local for it in walk(items) if is_length(it)]:
+            if lc.optional:
+                raise Unsupported(f"{where}: packet length field {lc.name} has "
+                                  "an IncludeCondition")
+            if any(x is lc for c in criteria for x in term_locals(c)):
+                raise Unsupported(f"{where}: a criterion or assignment on "
+                                  f"packet length field {lc.name}")
 
     @staticmethod
     def scope_of(node: Node) -> list[Local]:

@@ -1332,6 +1332,63 @@ class TransformTests(unittest.TestCase):
         kinds = [type(it).__name__ for it in n.items[0].items]
         self.assertEqual(kinds, ["Mark", "TailSeek", "Value", "TailPad"])
 
+    @staticmethod
+    def with_length(text: str) -> str:
+        """Adds parameter L, a length field of the bytes after it.
+
+        Args:
+            text: The XTCE document, from transform_mission.
+
+        Returns:
+            ``text`` with L added.
+        """
+        return text.replace('<Parameter name="A" parameterTypeRef="U8"/>',
+                            '<Parameter name="A" parameterTypeRef="U8"/>'
+                            '<Parameter name="L" parameterTypeRef="U8">'
+                            '<AncillaryDataSet><AncillaryData '
+                            'name="tcs-xtce.length">0</AncillaryData>'
+                            '</AncillaryDataSet></Parameter>')
+
+    L_A = ('<ParameterRefEntry parameterRef="L"/><ParameterRefEntry '
+           'parameterRef="A"/>')
+
+    def test_length_field_counts_the_bytes_before_the_transform(self):
+        # L, in a transformed packet, is its Transform's, not the
+        # packet's.
+        n = compile_xml(self.with_length(transform_mission("<BinaryEncoding>"
+                                                           f"{TRANSFORMS}"
+                                                           "</BinaryEncoding>",
+                                                           self.L_A))).nodes[0]
+        (t,) = n.items
+        self.assertEqual(t.length.name, "L")
+        self.assertIsNone(n.length_field())
+
+    def test_included_length_field_measures_the_bytes_before(self):
+        # L, in included container Q, measures Q inside its Transform.
+        text = self.with_length(
+            self.with_q(
+                transform_mission(
+                    entries='<ContainerRefEntry '
+                            'containerRef="Q"/>'))).replace(
+            '<EntryList><ParameterRefEntry parameterRef="A"/>',
+            f"<EntryList>{self.L_A}", 1)
+        p = next(n for n in compile_xml(text).nodes if n.name == "P")
+        t = next(it for it in p.items if isinstance(it, Transform))
+        self.assertIsNone(t.length)
+        self.assertIsInstance(t.items[-1], LengthEnd)
+        self.assertEqual(t.items[-1].local.name, "L")
+        self.assertIsNone(p.length_field())
+
+    def test_two_length_fields_in_transformed_data(self):
+        text = self.with_length(
+            transform_mission(f"<BinaryEncoding>{TRANSFORMS}</BinaryEncoding>",
+                              self.L_A
+                              + '<ParameterRefEntry parameterRef="L"/>'))
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(text)
+        self.assertIn("more than one packet length field in a container with "
+                      "transform algorithms", str(cm.exception))
+
     def test_outside_check_of_a_field_inside(self):
         # P's check covers its bytes on the wire, which hold A transformed.
         text = self.with_q(

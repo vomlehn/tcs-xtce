@@ -2320,16 +2320,21 @@ Transform algorithms
 
    A transformed container's entries are its bytes before the transform,
    and what refers to the container refers to those. Its own
-   ``ErrorDetectCorrect`` checks, and those of the containers it includes,
-   cover them: decoding checks them once its entries are read, and
-   encoding computes them before the transform, as in the demo's
-   ``ZipSummed``. An entry located from its end is located from their end,
-   which decoding knows from what the transform gives, as for an entry at
-   the end of a packet; it must be the container's last, as in
-   ``ZipTailed``. A check from outside the container whose field is
-   inside it can't be computed, since what it covers holds the field
-   transformed; and a packet length field can't be inside it, since its
-   value would change the transformed size it counts.
+   ``ErrorDetectCorrect`` checks, and those of the containers it
+   includes, cover them: decoding checks them once its entries are read,
+   and encoding computes them before the transform, as in the demo's
+   ``ZipSummed``. An entry located from its end is located from their
+   end, which decoding knows from what the transform gives, as for an
+   entry at the end of a packet; it must be the container's last, as in
+   ``ZipTailed``. Its length fields count those bytes too: a packet
+   length field in it counts the bytes after it to their end, as
+   ``ZipLen`` does in the demo's ``ZipLengthed``, whose ``PacketLength``
+   counts the bytes on the wire; it may hold one. A length field of the
+   container, when it is included, or of a container it includes,
+   measures that container before the transform, as ``ZipBoxLen``
+   measures ``ZipLenBox``. A check from outside the container whose
+   field is inside it can't be computed, since what it covers holds the
+   field transformed.
 
    Either way the transformed data starts on a byte boundary, and a
    transform that makes more than fits fails with ``TooLong``, one that
@@ -2596,8 +2601,8 @@ Name references
 Not supported
    Instances of values in other packets, an
    entry located from an end whose size only decoding it tells (a
-   terminated string, say), a packet length field in a transformed
-   container, or a check from outside one whose field is inside it,
+   terminated string, say), a check from outside a transformed
+   container whose field is inside it,
    ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates),
    and a location from the end of an included container without a
    ``SizeInBits`` whose entries' sizes vary.

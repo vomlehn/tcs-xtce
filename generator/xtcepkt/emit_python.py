@@ -10,7 +10,7 @@ from .common import (doc_header, HOOK_DOCS, written, checks_hooks, items_hooks,
                      math_value, size_args, string_spec)
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
-                    DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
+                    DynSize, Fixed, FloatEnc, IntEnc, Kind, Local, Mark, MathOp,
                     Mission, Node, Pad, Polynomial, Seek, Span, Spline, Value,
                     VType, Require, Fill, Segment, Verify, Custom, TailPad,
                     TailSeek, LengthEnd, Transform, XformEnc, StringEnc)
@@ -1027,6 +1027,8 @@ class PythonEmitter:
                 self.line(f"r, _r{it.start} = pk.BitReader(_t{it.start}), r",
                           depth)
                 self.read_items(it.items, depth, where, nested)
+                if it.length is not None:
+                    self.line(f"r.finish({pstr(it.length.name)})", depth)
                 self.line(f"r = _r{it.start}", depth)
             elif isinstance(it, TailPad):
                 # The packet's last bits, which encoding fills with zeros.
@@ -1117,6 +1119,8 @@ class PythonEmitter:
                 # Write its items, then what the transform makes of them.
                 self.line(f"_t{it.start} = w.pos", depth)
                 self.write_items(n, it.items, depth, where, names)
+                if it.length is not None:
+                    self.patch_length(it.length, depth)
                 self.line(f"w.transform(_t{it.start}, "
                           f"{transform_hook(it.encode)}, {it.raw}, "
                           f"{it.out_cap}, {pstr(it.name)})", depth)
@@ -1304,6 +1308,18 @@ class PythonEmitter:
     def mark(i: int) -> str:
         return "0" if i == 0 else f"m{i}"
 
+    def patch_length(self, lc: Local, depth: int) -> None:
+        """Writes the statement filling in a packet length field from what
+        has been written.
+
+        Args:
+            lc:    The field.
+            depth: The statement's indentation level.
+        """
+        enc = lc.vtype.enc
+        self.line(f"w.patch_length(l{lc.id}, {enc.bits}, {enc.little_endian}, "
+                  f"{lc.length}, {pstr(lc.name)})", depth)
+
     def finish(self, n: Node, depth: int) -> None:
         """Writes the statements checking the packet length field and the
         checksums when decoding ends.
@@ -1481,10 +1497,7 @@ class PythonEmitter:
         for node in n.chain():
             self.write_items(n, node.items, 2, node.key, names)
         if length is not None:
-            enc = length.vtype.enc
-            self.line(f"w.patch_length(l{length.id}, {enc.bits}, "
-                      f"{enc.little_endian}, {length.length}, "
-                      f"{pstr(length.name)})", 2)
+            self.patch_length(length, 2)
         for c in n.checks:
             self.patch(c, 2)
         if len(self.out) == body:

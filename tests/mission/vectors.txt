@@ -264,6 +264,11 @@ tm 0a98c02a000f02ab000000000001020100cd03686900  # vary end: a 3-byte VaryText i
 tm 0a99c02a0004123402abcd  # ordered: OrdWord's parts 3 and 4, then part 1, its high byte; two raw OrdRaw segments
 tm 0a99c02a0002567800  # ordered: no OrdRaw segments
 tm 0a99c02a0008567806000000000000  # ordered: an OrdRaw segment count beyond its ValidRange
+tm 0a9ac02a00070303121234345656  # zip lengthed: ZipLen counts the 3 bytes after it before the transform, where PacketLength counts 8 on the wire
+tm 0a9ac02a00070202121234345656  # zip lengthed: a ZipLen of 2 ends the bytes before the transform inside ZipB, which fails
+tm 0a9ac02a00070404121234345656  # zip lengthed: a ZipLen of 4 is beyond the bytes before the transform, which fails
+tm 0a9bc02a0008030312123434565677  # zip measured: ZipBoxLen measures ZipLenBox before the transform
+tm 0a9bc02a0008020212123434565677  # zip measured: a ZipBoxLen that ends ZipLenBox early, which fails
 tm 0a62c02a0004f0e1968777  # xor: XorBlob aabbccdd, masked on the wire
 tm 0a62c02a0002010203  # xor: three bytes, not XorBlob's four
 tm 0a6cc02a000b03aabbcc11000004d2ac0222  # stuffed: aabbcc framed by its length, then 1.234 s and a 300 ms varint

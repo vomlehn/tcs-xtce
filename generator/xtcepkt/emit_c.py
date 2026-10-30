@@ -23,8 +23,8 @@ from .compile import snake
 from .model import (
     term_indexes, term_locals, term_paths, walk, Index, AggregateEnc, AllOf,
     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, DynSize, Criterion, Fixed,
-    FloatEnc, IntEnc, Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
-    Span, Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify,
+    FloatEnc, IntEnc, Kind, Local, Mark, MathOp, Mission, Node, Pad, Polynomial,
+    Seek, Span, Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify,
     Custom, NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform, XformEnc)
 
 # One level of indentation in the generated C.
@@ -1870,6 +1870,9 @@ class CEmitter:
                 self.line(f"xtce_pk_reader* rr{t} = r;", depth)
                 self.line(f"r = &s{t};", depth)
                 self.read_items(it.items, depth, where, nested)
+                if it.length is not None:
+                    self.line("XTCE_PK_TRY(xtce_pk_read_finish(r, "
+                              f"{cstr(it.length.name)}));", depth)
                 self.line(f"r = rr{t};", depth)
             elif isinstance(it, TailPad):
                 # The packet's last bits, which encoding fills with zeros.
@@ -2007,6 +2010,8 @@ class CEmitter:
                 t = it.start
                 self.line(f"size_t t{t} = w->pos;", depth)
                 self.write_items(n, it.items, depth, where, names)
+                if it.length is not None:
+                    self.patch_length(it.length, depth)
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_transform(w, t{t}, "
                           f"{self.transform_hook(it.encode)}, "
                           f"{bool_lit(it.raw is not None)}, {it.raw or 0}, "
@@ -2166,6 +2171,19 @@ class CEmitter:
     @staticmethod
     def mark(i: int) -> str:
         return "0" if i == 0 else f"m{i}"
+
+    def patch_length(self, lc: Local, depth: int) -> None:
+        """Writes the statement filling in a packet length field from what
+        has been written.
+
+        Args:
+            lc:    The field.
+            depth: The statement's indentation level.
+        """
+        enc = lc.vtype.enc
+        self.line(f"XTCE_PK_TRY(xtce_pk_patch_length(w, l{lc.id}, {enc.bits}, "
+                  f"{bool_lit(enc.little_endian)}, INT64_C({lc.length}), "
+                  f"{cstr(lc.name)}));", depth)
 
     def finish(self, n: Node, depth: int) -> None:
         """Writes the statements checking the packet length field and the
@@ -2366,11 +2384,7 @@ class CEmitter:
             self.write_items(n, node.items, 1, node.key, names)
         length = n.length_field()
         if length is not None:
-            enc = length.vtype.enc
-            le = "true" if enc.little_endian else "false"
-            self.line(f"XTCE_PK_TRY(xtce_pk_patch_length(w, l{length.id}, "
-                      f"{enc.bits}, {le}, INT64_C({length.length}), "
-                      f"{cstr(length.name)}));", 1)
+            self.patch_length(length, 1)
         for c in n.checks:
             self.patch(c, 1)
         self.line("return 0;", 1)

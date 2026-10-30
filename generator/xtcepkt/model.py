@@ -881,7 +881,9 @@ class Transform:
     at most ``cap`` bytes, from mark ``start``; encoding writes ``items``,
     then gives their bytes to ``encode``, which gives at most ``out_cap``
     bytes in their place, exactly ``raw`` when it is given.  It starts on
-    a byte boundary."""
+    a byte boundary.  ``length`` is a packet length field among ``items``,
+    which counts what the transform is given: decoding checks it once
+    ``items`` are read, and encoding fills it in before the transform."""
 
     items: list
     # None for a direction the document doesn't give, which fails with
@@ -893,6 +895,7 @@ class Transform:
     out_cap: int
     name: str
     start: int
+    length: Optional["Local"] = None
 
     @property
     def bits(self) -> int:
@@ -1284,8 +1287,9 @@ class Node:
         return [c for n in self.chain() for c in n.criteria]
 
     def length_field(self) -> Optional[Local]:
-        """The packet length field, if the packet has one."""
-        return next((it.local for it in walk(self.all_items())
+        """The packet length field, if the packet has one: not one in
+        transformed data, which counts what the transform is given."""
+        return next((it.local for it in walk(self.all_items(), inner=False)
                      if isinstance(it, Value) and it.local.length is not None
                      and not it.local.measures), None)
 

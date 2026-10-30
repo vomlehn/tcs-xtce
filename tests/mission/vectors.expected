@@ -264,6 +264,11 @@ error:BadPosition | -
 Ordered{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, ord_word=13330, ord_raw_segment2=[171, 205]} | 0a99c02a0004123402abcd
 Ordered{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, ord_word=30806, ord_raw_segment2=[]} | 0a99c02a0002567800
 error:BadSize | -
+ZipLengthed{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, zip_a=4660, zip_b=86} | 0a9ac02a00070303121234345656
+error:Truncated | -
+error:Truncated | -
+ZipMeasured{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, zip_a=4660, zip_b=86, opt_end=119} | 0a9bc02a0008030312123434565677
+error:BadLength | -
 XorBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, xor_blob=0xaabbccdd, xor_tail=119} | 0a62c02a0004f0e1968777
 error:Truncated | -
 StuffBlock{version=0, packet_type=TM, sec_hdr_flag=true, seq_flags=Unsegmented, seq_count=42, stuffed=0xaabbcc, stuff_tail=17, ms_stamp=1.234, var_delay=0.3, stuff_end=34} | 0a6cc02a000b03aabbcc11000004d2ac0222
