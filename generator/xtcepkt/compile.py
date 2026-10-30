@@ -2636,7 +2636,8 @@ class Compiler:
         own fields: the rest of the value is in other packets.
 
         A segment repeated a fixed number of times, one right after
-        another, is that many segments.  Repeated otherwise (a count that
+        another, is that many segments; with an order N, they are parts N,
+        N + 1 and on of what they are segments of.  Repeated otherwise (a count that
         another value gives, or an Offset between the repeats), its
         segments are a list of raw fields.
 
@@ -2658,14 +2659,13 @@ class Compiler:
             The items for the entry.
 
         Raises:
-            Unsupported: A repeated segment has an order or a Count that
-                         isn't positive, or a segment is invalid.
+            Unsupported: A repeated segment has a Count that isn't
+                         positive, or a segment is invalid.
         """
         rp = e.repeat_entry
         if rp is None:
-            return self.one_segment(name, e, path, where, segs, cond, scope)
-        if e.order is not None:
-            raise Unsupported(f"{where}: a repeated {name} with an order")
+            return self.one_segment(name, e, path, where, segs, cond, scope,
+                                    e.order)
         count = self.int_value(rp.count, path, "RepeatEntry Count", where)
         gap = (self.int_value(rp.offset, path, "RepeatEntry Offset", where)
                if rp.offset is not None else 0)
@@ -2674,13 +2674,17 @@ class Compiler:
                 raise Unsupported(f"{where}: RepeatEntry Count {count} is not "
                                   "positive")
             out: list[Item] = []
-            for _ in range(count):
-                out += self.one_segment(name, e, path, where, segs, cond, scope)
+            for i in range(count):
+                order = e.order + i if e.order is not None else None
+                out += self.one_segment(name, e, path, where, segs, cond, scope,
+                                        order)
             return out
         ref = self.segment_ref(name, e, path)
         counts = segs.setdefault("#counts", {})
         k = counts.get(ref, 0)
         counts[ref] = k + 1
+        if e.order is not None:
+            k = e.order
         lc = self.raw_segment(ref, k, e.size_in_bits, where)
         lc = self.bind(self.repeat(lc, e, path, where), scope, where, arg_key)
         scope.append(lc)
@@ -2739,7 +2743,8 @@ class Compiler:
         return e.stream_ref
 
     def one_segment(self, name: str, e, path: Key, where: str, segs: dict,
-                    cond: bool, scope: list) -> list[Item]:
+                    cond: bool, scope: list,
+                    order: Optional[int]) -> list[Item]:
         """Compiles one segment of an entry.  A parameter's segments are
         collected in ``segs`` until they make up its encoding, when the
         value is assembled; other segments are raw fields of their own.
@@ -2755,6 +2760,9 @@ class Compiler:
                    have been.
             cond:  Whether the entry has an IncludeCondition.
             scope: The values read so far; grows as values are added.
+            order: Which part of the thing it is a segment of this one is,
+                   from the entry's order attribute (plus its place among
+                   the entry's repeats), or None if it has none.
 
         Returns:
             The items: the Segment, followed by the parameter's Value once
@@ -2769,8 +2777,8 @@ class Compiler:
         counts = segs.setdefault("#counts", {})
         k = counts.get(ref, 0)
         counts[ref] = k + 1
-        if e.order is not None:
-            k = e.order
+        if order is not None:
+            k = order
         if name == "ParameterSegmentRefEntry" and not cond:
             group = segs.get(ref)
             if group is None:
@@ -2780,7 +2788,7 @@ class Compiler:
                 group = segs[ref] = (local, total, [])
             local, total, parts = group
             seg = Segment(local, bits, total or 0)
-            parts.append((seg, e.order, k))
+            parts.append((seg, order, k))
             got = sum(s.bits for s, _, _ in parts)
             if total is not None and total <= 64 and got >= total:
                 if got > total:

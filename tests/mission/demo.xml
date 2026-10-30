@@ -1599,6 +1599,9 @@
       <Parameter name="RepWord" parameterTypeRef="U32"/>
       <Parameter name="RepTail" parameterTypeRef="U16"/>
       <Parameter name="RepAfter" parameterTypeRef="U8"/>
+      <Parameter name="OrdWord" parameterTypeRef="U16"/>
+      <Parameter name="OrdCount" parameterTypeRef="RepCountType"/>
+      <Parameter name="OrdRaw" parameterTypeRef="U16"/>
       <Parameter name="LsbHead" parameterTypeRef="LsbNibType"/>
       <Parameter name="LsbName" parameterTypeRef="LsbNameType"/>
       <Parameter name="LsbTagged" parameterTypeRef="LsbTaggedType"/>
@@ -2896,6 +2899,40 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="664"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Repeated segments with an order: OrdWord's two 4-bit segments
+           are its parts 3 and 4, and the 8-bit one after them part 1, so
+           they are its low byte and it its high byte; OrdCount 8-bit
+           segments of OrdRaw, from part 2, stay raw. -->
+      <SequenceContainer name="Ordered">
+        <EntryList>
+          <ParameterSegmentRefEntry parameterRef="OrdWord" sizeInBits="4"
+                                    order="3">
+            <RepeatEntry>
+              <Count>
+                <FixedValue>2</FixedValue>
+              </Count>
+            </RepeatEntry>
+          </ParameterSegmentRefEntry>
+          <ParameterSegmentRefEntry parameterRef="OrdWord" sizeInBits="8"
+                                    order="1"/>
+          <ParameterRefEntry parameterRef="OrdCount"/>
+          <ParameterSegmentRefEntry parameterRef="OrdRaw" sizeInBits="8"
+                                    order="2">
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="OrdCount"/>
+                </DynamicValue>
+              </Count>
+            </RepeatEntry>
+          </ParameterSegmentRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="665"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

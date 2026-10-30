@@ -2852,6 +2852,14 @@ class SegmentTests(unittest.TestCase):
         self.assertEqual([s.shift for s in segs], [12, 8, 4, 0])
         self.assertEqual(v.assembled, 16)
 
+    def test_repeated_with_an_order(self):
+        # Two 4-bit segments with order 3 are W's parts 3 and 4, after the
+        # 8-bit part 1 that follows them.
+        *segs, v = self.items(seg("W", 4, "3", repeat(fixed(2)))
+                              + seg("W", 8, "1"))
+        self.assertEqual([s.shift for s in segs], [4, 0, 8])
+        self.assertEqual(v.assembled, 16)
+
     def test_repeated_raw(self):
         # A count from W, or an Offset, leaves a list of raw segments.
         for entries in ('<ParameterRefEntry parameterRef="W"/>'
@@ -2887,8 +2895,8 @@ class SegmentTests(unittest.TestCase):
 
     def test_rejected(self):
         for entries, why in (
-                (seg("W", 8, "1", repeat(fixed(2))),
-                 "a repeated ParameterSegmentRefEntry with an order"),
+                (seg("W", 4, "1", repeat(fixed(2))) + seg("W", 8, "2"),
+                 "segments of /Sat/W whose order is missing or repeated"),
                 (seg("W", 8, repeat=repeat(fixed(0))),
                  "RepeatEntry Count 0 is not positive"),
                 (seg("W", 8, "1") + seg("W", 8, "1"),

@@ -2141,19 +2141,23 @@ Segments
    parameter's bytes the same way.
 
    A segment entry repeated a fixed number of times, one right after
-   another, is that many segments, so they can still make up a value. One
-   whose ``RepeatEntry`` count another value gives, or with an ``Offset``
-   between the repeats, is a list of raw segments, like an array. A
-   repeated segment located from the end of its container takes its
-   repeats' bits and the gaps between them, which may be fixed or given
-   by values decoded before it. XTCE doesn't say which parts of a value the repeats of
-   an entry with an ``order`` are, so a repeated segment can't have one.
-   The demo's ``Repeated`` packet assembles ``RepWord`` from four repeated
-   8-bit segments, sends ``RepCount`` 4-bit segments of ``RepTail``, and
-   two segments of ``Section`` 4 bits apart. In ``EndSegs``, two 4-bit
-   segments of ``EndPair``, 4 bits apart, end the 16-bit ``EndSegBlock``,
-   and ``EndWord``'s two 8-bit segments end a byte before the end of the
-   packet.
+   another, is that many segments, so they can still make up a value.
+   One whose ``RepeatEntry`` count another value gives, or with an
+   ``Offset`` between the repeats, is a list of raw segments, like an
+   array. A repeated segment located from the end of its container takes
+   its repeats' bits and the gaps between them, which may be fixed or
+   given by values decoded before it. XTCE doesn't say which parts of a
+   value the repeats of an entry with an ``order`` are; here an
+   ``order`` of N numbers its first repeat, and the rest are N + 1 and
+   on, so no other entry of the value may have those orders. The demo's
+   ``Repeated`` packet assembles ``RepWord`` from four repeated 8-bit
+   segments, sends ``RepCount`` 4-bit segments of ``RepTail``, and two
+   segments of ``Section`` 4 bits apart. In ``EndSegs``, two 4-bit
+   segments of ``EndPair``, 4 bits apart, end the 16-bit
+   ``EndSegBlock``, and ``EndWord``'s two 8-bit segments end a byte
+   before the end of the packet. In ``Ordered``, ``OrdWord``'s two 4-bit
+   segments with ``order`` 3 are its parts 3 and 4, its low byte, and
+   the 8-bit one with ``order`` 1 after them its high byte.
 
 Indirect entries
    ``IndirectParameterRefEntry``, which dwell telemetry uses: the entry
@@ -2590,8 +2594,7 @@ Name references
    documents (see `Missions in several documents`_).
 
 Not supported
-   Instances of values in other packets, repeated
-   segment entries with an ``order`` (which XTCE leaves undefined), an
+   Instances of values in other packets, an
    entry located from an end whose size only decoding it tells (a
    terminated string, say), a packet length field in a transformed
    container, or a check from outside one whose field is inside it,
