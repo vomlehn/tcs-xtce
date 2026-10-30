@@ -207,7 +207,10 @@ Strings and binary
 Batches
    A ``Batch`` holds at most 4294967295 bytes, as its length prefix is
    32 bits. A larger capacity is refused: Rust's ``Batch::with_capacity``
-   panics, and Python's ``Batch`` raises ``ValueError``.
+   panics, and Python's ``Batch`` raises ``ValueError``. A C batch is kept
+   in a buffer the caller gives ``xtce_pk_batch_init``, which returns
+   ``XTCE_PK_NO_SPACE`` for one too small to hold the length, and uses no
+   more of a larger one than the length can count.
 
 Building and testing
 ====================

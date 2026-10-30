@@ -830,6 +830,40 @@ int main(void) {
                                        &sum) == XTCE_PK_NO_ALGORITHM);
         }
 
+        /* A batch refuses a buffer too small for its length; packets added
+         * to it are decoded back in order, and one that doesn't fit is
+         * refused, leaving the batch as it was. */
+        {
+                static uint8_t space[XTCE_PK_BATCH_LENGTH_BYTES +
+                                     2 * demo_Housekeeping_MAX_BYTES];
+                xtce_pk_batch b;
+                demo_Housekeeping first, second;
+                size_t n;
+                demo_Housekeeping_init(&first);
+                demo_Housekeeping_init(&second);
+                CHECK(xtce_pk_batch_init(&b, space,
+                                         XTCE_PK_BATCH_LENGTH_BYTES - 1,
+                                         &err) == XTCE_PK_NO_SPACE);
+                CHECK(xtce_pk_batch_init(&b, NULL, sizeof space, &err) ==
+                      XTCE_PK_NO_SPACE);
+                CHECK(xtce_pk_batch_init(&b, space, sizeof space, &err) ==
+                      0);
+                hk = housekeeping();
+                CHECK(demo_Housekeeping_batch_add(&hk, &b, &err) == 0);
+                hk.seq_count = 43;
+                CHECK(demo_Housekeeping_batch_add(&hk, &b, &err) == 0);
+                CHECK(demo_Housekeeping_batch_add(&hk, &b, &err) ==
+                      XTCE_PK_NO_SPACE);
+                CHECK(b.len == sizeof space);
+                CHECK(xtce_pk_batch_length(&b, &n, &err) == 0 &&
+                      n == 2 * demo_Housekeeping_MAX_BYTES);
+                CHECK(demo_Housekeeping_batch_next(&first, &b, &err) == 0 &&
+                      first.seq_count == 42);
+                CHECK(demo_Housekeeping_batch_next(&second, &b, &err) == 0 &&
+                      second.seq_count == 43);
+                CHECK(xtce_pk_batch_remaining(&b) == 0);
+        }
+
         if (failures) return EXIT_FAILURE;
         printf("packet_test: all checks passed\n");
         return EXIT_SUCCESS;

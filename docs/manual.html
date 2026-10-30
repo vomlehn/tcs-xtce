@@ -613,7 +613,10 @@ whole number of bytes.</dd>
 <dt>Batches</dt>
 <dd>A <tt class="docutils literal">Batch</tt> holds at most 4294967295 bytes, as its length prefix is
 32 bits. A larger capacity is refused: Rust's <tt class="docutils literal"><span class="pre">Batch::with_capacity</span></tt>
-panics, and Python's <tt class="docutils literal">Batch</tt> raises <tt class="docutils literal">ValueError</tt>.</dd>
+panics, and Python's <tt class="docutils literal">Batch</tt> raises <tt class="docutils literal">ValueError</tt>. A C batch is kept
+in a buffer the caller gives <tt class="docutils literal">xtce_pk_batch_init</tt>, which returns
+<tt class="docutils literal">XTCE_PK_NO_SPACE</tt> for one too small to hold the length, and uses no
+more of a larger one than the length can count.</dd>
 </dl>
 </div>
 <div class="section" id="building-and-testing">

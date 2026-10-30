@@ -4763,13 +4763,24 @@ static inline void xtce_pk_batch_clear(xtce_pk_batch* b) {
         b->pos = XTCE_PK_BATCH_LENGTH_BYTES;
 }
 
-/* Makes an empty batch in the `cap` bytes at `buf`, which must hold at
- * least the length. */
-static inline void xtce_pk_batch_init(xtce_pk_batch* b, uint8_t* buf,
-                                      size_t cap) {
+/** Makes an empty batch in the `cap` bytes at `buf`.
+ *
+ * @param b    The batch.
+ * @param buf  Where the batch is kept, length and packets.
+ * @param cap  The bytes at `buf`: at least XTCE_PK_BATCH_LENGTH_BYTES, for
+ *             the length.  Bytes past what the length can count are not
+ *             used.
+ * @param err  The error to fill in, or NULL.
+ * @return     0, or XTCE_PK_NO_SPACE, leaving `b` as it was, if `buf` is
+ *             NULL or `cap` is too small to hold the length. */
+static inline int xtce_pk_batch_init(xtce_pk_batch* b, uint8_t* buf,
+                                     size_t cap, xtce_pk_error* err) {
+        if (buf == NULL || cap < XTCE_PK_BATCH_LENGTH_BYTES)
+                return xtce_pk_fail(err, XTCE_PK_NO_SPACE, "batch", NULL);
         b->buf = buf;
         b->cap = cap;
         xtce_pk_batch_clear(b);
+        return 0;
 }
 
 /* Where the next packet goes. */

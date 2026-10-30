@@ -7,7 +7,7 @@
 mod demo;
 
 use demo::*;
-use tcs_xtce::packet::{Codec, Packet, PacketError};
+use tcs_xtce::packet::{Batch, Codec, Packet, PacketError};
 
 /// Builds the Housekeeping packet the tests encode.
 ///
@@ -719,4 +719,38 @@ fn array_subsets() {
     e.slots.push(0xcc);
     e.slots.push(0xdd); // Last's ValidRange allows 4, three slots
     assert_eq!(e.to_bytes(), Err(PacketError::BadSize { field: "Slots" }));
+}
+
+/// Packets added to a batch arrive in order after one write and one read,
+/// and one that would pass the capacity is refused, leaving the batch as it
+/// was.
+#[test]
+fn a_batch_carries_its_packets_in_order() {
+    let first = housekeeping();
+    let second = Housekeeping {
+        seq_count: 43,
+        ..housekeeping()
+    };
+    let size = first.to_bytes().unwrap().len();
+    let mut batch = Batch::with_capacity(2 * size);
+    batch.push(&first).unwrap();
+    batch.push(&second).unwrap();
+    assert_eq!(
+        batch.push(&first),
+        Err(PacketError::TooLong {
+            field: Housekeeping::NAME
+        })
+    );
+    assert_eq!(batch.len(), 2 * size);
+
+    let mut sent = Vec::new();
+    batch.write_to(&mut sent).unwrap();
+    let mut received = Batch::with_capacity(2 * size);
+    received.read_from(sent.as_slice()).unwrap();
+    // As each would decode alone: the temperature is quantized.
+    for sent in [first, second] {
+        let alone = Housekeeping::decode(&sent.to_bytes().unwrap()).unwrap();
+        assert_eq!(received.next::<Housekeeping>().unwrap(), alone);
+    }
+    received.finish().unwrap();
 }

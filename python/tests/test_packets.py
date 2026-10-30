@@ -1,6 +1,7 @@
 """Tests of the packet codecs generated from tests/mission/demo.xml."""
 
 import dataclasses
+import io
 import math
 import random
 import struct
@@ -665,6 +666,27 @@ class BatchTests(unittest.TestCase):
         for capacity in (-1, 2 ** 32):
             with self.assertRaises(ValueError, msg=capacity):
                 Batch(capacity)
+
+    def test_packets_arrive_in_order(self):
+        first, second = housekeeping(), housekeeping(seq_count=43)
+        size = len(first.to_bytes())
+        batch = Batch(2 * size)
+        batch.push(first)
+        batch.push(second)
+        with self.assertRaises(PacketError) as e:
+            batch.push(first)
+        self.assertEqual(e.exception.kind, "TooLong")
+        self.assertEqual(len(batch), 2 * size)
+
+        sent = io.BytesIO()
+        batch.write_to(sent)
+        sent.seek(0)
+        received = Batch(2 * size)
+        received.read_from(sent)
+        # As each would decode alone: the temperature is quantized.
+        for packet in (first, second):
+            alone = demo.Housekeeping.decode(packet.to_bytes())
+            self.assertEqual(received.next(demo.Housekeeping), alone)
 
 
 if __name__ == "__main__":
