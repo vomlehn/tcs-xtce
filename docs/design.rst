@@ -470,6 +470,21 @@ It is ``ahead``: the runtimes' ``seek_ahead`` fails with ``BadPosition``
 rather than move back over the entries before it, which a plain
 ``Seek`` would do for a size too small to hold them.
 
+An entry whose own size varies can be placed from an end too, when
+values decoded before it give that size: an array of fixed-size elements
+(a repeated segment is one) whose count or ``Offset`` another value
+gives, or a string or binary value whose size one does. ``span_of``
+describes it as a ``Span``, ``count`` pieces of ``each`` bits with
+``gap`` bits between, and the ``Seek`` or ``TailSeek`` goes back that
+many bits as well, computed by the runtimes' ``span_bits`` from the bound
+values. Such a ``Seek`` is ``ahead`` even in a container of fixed size,
+since a large count could otherwise move it back over earlier entries,
+and every pass that works out positions at compile time treats it, like
+a ``Seek`` whose offset varies, as placing nothing it can know
+(``Seek.varies``). An entry whose size only decoding it tells -- a
+terminated string, say -- still can't be placed from an end: its start
+would depend on itself.
+
 A ``nextEntry`` location is an ``EndSeek`` in the other direction: the
 compiler holds a ``NextSeek`` until the next entry's location is known,
 then makes it a place back from that entry's container-start location, or
@@ -585,7 +600,8 @@ expanded into that many segments, which can still assemble the value;
 any other repeat makes the segments a raw array through ``repeat``, the
 same path a repeated parameter takes. A repeated segment located from
 the end gives ``end_seek`` its whole extent, from ``segment_bits``: the
-repeats and the gaps between them, which must be fixed. The ``TailSeek``
+repeats and the gaps between them when both are fixed, and otherwise the
+raw array, whose ``Span`` its count and ``Offset`` give. The ``TailSeek``
 of such an entry may be followed by several items before its ``TailPad``,
 so ``check_tail`` looks for the ``TailPad`` rather than counting items.
 

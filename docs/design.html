@@ -844,6 +844,20 @@ start of that size less <tt class="docutils literal">back</tt>, the entry's own 
 It is <tt class="docutils literal">ahead</tt>: the runtimes' <tt class="docutils literal">seek_ahead</tt> fails with <tt class="docutils literal">BadPosition</tt>
 rather than move back over the entries before it, which a plain
 <tt class="docutils literal">Seek</tt> would do for a size too small to hold them.</p>
+<p>An entry whose own size varies can be placed from an end too, when
+values decoded before it give that size: an array of fixed-size elements
+(a repeated segment is one) whose count or <tt class="docutils literal">Offset</tt> another value
+gives, or a string or binary value whose size one does. <tt class="docutils literal">span_of</tt>
+describes it as a <tt class="docutils literal">Span</tt>, <tt class="docutils literal">count</tt> pieces of <tt class="docutils literal">each</tt> bits with
+<tt class="docutils literal">gap</tt> bits between, and the <tt class="docutils literal">Seek</tt> or <tt class="docutils literal">TailSeek</tt> goes back that
+many bits as well, computed by the runtimes' <tt class="docutils literal">span_bits</tt> from the bound
+values. Such a <tt class="docutils literal">Seek</tt> is <tt class="docutils literal">ahead</tt> even in a container of fixed size,
+since a large count could otherwise move it back over earlier entries,
+and every pass that works out positions at compile time treats it, like
+a <tt class="docutils literal">Seek</tt> whose offset varies, as placing nothing it can know
+(<tt class="docutils literal">Seek.varies</tt>). An entry whose size only decoding it tells -- a
+terminated string, say -- still can't be placed from an end: its start
+would depend on itself.</p>
 <p>A <tt class="docutils literal">nextEntry</tt> location is an <tt class="docutils literal">EndSeek</tt> in the other direction: the
 compiler holds a <tt class="docutils literal">NextSeek</tt> until the next entry's location is known,
 then makes it a place back from that entry's container-start location, or
@@ -948,7 +962,8 @@ expanded into that many segments, which can still assemble the value;
 any other repeat makes the segments a raw array through <tt class="docutils literal">repeat</tt>, the
 same path a repeated parameter takes. A repeated segment located from
 the end gives <tt class="docutils literal">end_seek</tt> its whole extent, from <tt class="docutils literal">segment_bits</tt>: the
-repeats and the gaps between them, which must be fixed. The <tt class="docutils literal">TailSeek</tt>
+repeats and the gaps between them when both are fixed, and otherwise the
+raw array, whose <tt class="docutils literal">Span</tt> its count and <tt class="docutils literal">Offset</tt> give. The <tt class="docutils literal">TailSeek</tt>
 of such an entry may be followed by several items before its <tt class="docutils literal">TailPad</tt>,
 so <tt class="docutils literal">check_tail</tt> looks for the <tt class="docutils literal">TailPad</tt> rather than counting items.</p>
 </div>

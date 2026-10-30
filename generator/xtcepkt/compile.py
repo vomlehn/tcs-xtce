@@ -27,7 +27,7 @@ from .model import (
     MAX_FIELD_BITS, MAX_FIELD_BYTES_LIMIT, AggregateEnc, AllOf, AnyOf, ArrayEnc,
     BinaryEnc, Cond, Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index,
     IntEnc, Item, Kind, Local, Mark, Member, Mission, Node, Pad, Polynomial,
-    Seek, Spline, StringEnc, Term, Unsupported, Value, VType, ref_text,
+    Seek, Span, Spline, StringEnc, Term, Unsupported, Value, VType, ref_text,
     term_locals, walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp, NextSeek,
     Require, TailPad, TailSeek, LengthEnd, Transform, ValueRef, needs_binding,
     Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change, Algorithm,
@@ -2541,13 +2541,17 @@ class Compiler:
                                                 start, path, scope, where),
                                   where)
             if ch.name in SEGMENTS:
+                es = out[-1] if out and isinstance(out[-1], EndSeek) else None
+                before = list(scope)
+                got = self.segment(ch.name, e, path, where, segs,
+                                   cond is not None, scope)
                 after = []
-                if out and isinstance(out[-1], EndSeek):
+                if es is not None:
+                    bits = self.segment_bits(ch.name, e, path, where)
                     out[-1], after = self.end_seek(
-                        out[-1], sc, None, where,
-                        self.segment_bits(ch.name, e, path, where), scope, path)
-                out += self.segment(ch.name, e, path, where, segs,
-                                    cond is not None, scope)
+                        es, sc, varying_segment(got, bits), where, bits or 0,
+                        before, path)
+                out += got
                 out += after
             elif ch.name == "IndirectParameterRefEntry":
                 out += self.indirect(e, path, scope, where)
@@ -2682,7 +2686,8 @@ class Compiler:
         scope.append(lc)
         return [Value(lc)]
 
-    def segment_bits(self, name: str, e, path: Key, where: str) -> int:
+    def segment_bits(self, name: str, e, path: Key,
+                     where: str) -> Optional[int]:
         """Measures the bits that a segment entry takes, its repeats and
         the gaps between them too, for a location from the container's end.
 
@@ -2693,10 +2698,11 @@ class Compiler:
             where: What it is in, for error messages.
 
         Returns:
-            The number of bits.
+            The number of bits, or None when its count or offset varies:
+            the bits of its values then give it.
 
         Raises:
-            Unsupported: Its count or offset varies or is out of range.
+            Unsupported: Its count or offset is out of range.
         """
         rp = e.repeat_entry
         if rp is None:
@@ -2705,8 +2711,7 @@ class Compiler:
         gap = (self.int_value(rp.offset, path, "RepeatEntry Offset", where)
                if rp.offset is not None else 0)
         if not isinstance(count, int) or not isinstance(gap, int):
-            raise Unsupported(f"{where}: a repeated {name} located from the "
-                              "container's end, whose size varies")
+            return None
         if count < 1 or gap < 0:
             raise Unsupported(f"{where}: RepeatEntry Count {count} or Offset "
                               f"{gap} is out of range")
@@ -3107,33 +3112,39 @@ class Compiler:
             The Seek or TailSeek, and the items to follow the entry.
 
         Raises:
-            Unsupported: The entry's size varies, or the container is an
+            Unsupported: The entry's size varies in a way values decoded
+                         before it don't give, or the container is an
                          included one whose size varies.
         """
+        span = None
         if local is not None:
             vt = local.vtype
-            if vt.dyn is not None or is_rest(vt) or fixed_bits(vt) is None:
+            bits = 0 if is_rest(vt) else fixed_bits(vt)
+            if bits is None:
+                span = span_of(vt)
+            if bits is None and span is None or is_rest(vt):
                 raise Unsupported(f"{where}: a location from the container's "
                                   f"end for {local.name}, whose size varies")
-            bits = item_bits(vt)
+            bits = bits or 0
         be = sc.binary_encoding
         if self.has_transform(sc, where):
             # Its end is that of its bytes before the transform, which
             # decoding knows as a packet's: its SizeInBits is on the wire.
-            return TailSeek(es.offset + bits), [TailPad(es.offset)]
+            return TailSeek(es.offset + bits, span), [TailPad(es.offset)]
         size = (
             self.int_value(be.size_in_bits, path, "container SizeInBits", where)
             if be is not None and be.size_in_bits is not None else None)
         if isinstance(size, int):
-            return Seek(es.start, size - es.offset - bits), []
+            return (Seek(es.start, size - es.offset - bits, 0, span is not None,
+                         span), [])
         if isinstance(size, DynSize) and scope is not None:
             off, rng = self.bind_dyn(size, scope, where, arg_key)
             off.max = dyn_units(off, rng, self.max_field_bits)
-            return Seek(es.start, off, es.offset + bits, True), []
+            return Seek(es.start, off, es.offset + bits, True, span), []
         if es.start != 0 or size is not None:
             raise Unsupported(f"{where}: a location from the end of an "
                               "included container whose size varies")
-        return TailSeek(es.offset + bits), [TailPad(es.offset)]
+        return TailSeek(es.offset + bits, span), [TailPad(es.offset)]
 
     @staticmethod
     def check_tail(node: Node, where: str) -> None:
@@ -3411,7 +3422,7 @@ class Compiler:
                 pos = pos + 8 * it.raw if pos is not None else None
                 continue
             if isinstance(it, Seek):
-                if isinstance(it.offset, DynSize):
+                if it.varies:
                     raise Unsupported(f"{what} has a location that other "
                                       "values give")
                 if it.from_start is not None:
@@ -4255,14 +4266,17 @@ class Compiler:
                 raise Unsupported(f"{where}: a {ch.name} located from the "
                                   "container's end")
             if ch.name in SEGMENTS:
+                es = out[-1] if out and isinstance(out[-1], EndSeek) else None
+                before = list(values)
+                got = self.segment(ch.name, e, path, where, segs,
+                                   cond is not None, values, arg_key)
                 after = []
-                if out and isinstance(out[-1], EndSeek):
+                if es is not None:
+                    bits = self.segment_bits(ch.name, e, path, where)
                     out[-1], after = self.end_seek(
-                        out[-1], cc, None, where,
-                        self.segment_bits(ch.name, e, path, where), values,
-                        path, arg_key)
-                out += self.segment(ch.name, e, path, where, segs,
-                                    cond is not None, values, arg_key)
+                        es, cc, varying_segment(got, bits), where, bits or 0,
+                        before, path, arg_key)
+                out += got
                 out += after
             elif ch.name == "IndirectParameterRefEntry":
                 out += self.indirect(e, path, values, where, arg_key)
@@ -5573,8 +5587,8 @@ def check_aligned(items: list[Item], where: str) -> None:
             elif isinstance(it, Seek):
                 base = (pos if it.from_start is None
                         else marks.get(it.from_start))
-                pos = (None if base is None or isinstance(it.offset, DynSize)
-                       else (base + it.offset) % 8)
+                pos = (None if base is None or it.varies
+                       else (base + it.offset - it.back) % 8)
             elif isinstance(it, Fill):
                 base = marks.get(it.start)
                 pos = (None if base is None or isinstance(it.size, DynSize)
@@ -5680,6 +5694,8 @@ def fixed_bits(vt: VType) -> Optional[int]:
         b = fixed_bits(e.elem)
         if not isinstance(e.count, int) or b is None:
             return None
+        if isinstance(e.gap, DynSize) and e.count > 1:
+            return None
         return e.count * b + max(e.count - 1, 0) * e.max_gap
     if isinstance(e, AggregateEnc) and e.transform is not None:
         return e.transform.bits
@@ -5720,7 +5736,7 @@ def static_end(items: list[Item], start: int) -> Optional[tuple[int, int]]:
                 return None
             pos = marks[it.start] + it.size
         elif isinstance(it, Seek):
-            if isinstance(it.offset, DynSize):
+            if it.varies:
                 return None
             if it.from_start is not None and it.from_start not in marks:
                 return None
@@ -5790,6 +5806,9 @@ def derived_sizes(n: Node) -> dict:
     for it in items:
         if isinstance(it, Seek) and isinstance(it.offset, DynSize):
             dyn_uses(it.offset, read=True)
+        if isinstance(it, (Seek, TailSeek)) and it.span is not None:
+            for d in it.span.dyns:
+                dyn_uses(d, read=True)
         elif isinstance(it, Value):
             vt = it.local.vtype
             for t in vt.tree():
@@ -5886,6 +5905,47 @@ def work_bytes(vt: VType) -> int:
     if isinstance(e, AggregateEnc) and e.transform is not None:
         return e.transform.cap + inner
     return inner
+
+
+def span_of(vt: VType) -> Optional[Span]:
+    """Measures a value whose size varies by the values that give it, for a
+    location from an end.
+
+    Args:
+        vt: The value's type, whose sizes are bound.
+
+    Returns:
+        The Span: an array's elements, of a fixed size, and the gaps
+        between them, or a string's or binary value's bytes, which other
+        values give; None for a size that only decoding the value tells.
+    """
+    e = vt.enc
+    if isinstance(e, ArrayEnc):
+        each = fixed_bits(e.elem)
+        return None if each is None else Span(e.count, each, e.gap)
+    if (isinstance(e, BinaryEnc) and e.dyn is not None and not e.rest
+            and not e.embedded):
+        return Span(e.dyn, 8)
+    if isinstance(e, StringEnc) and e.dyn is not None:
+        return Span(e.dyn, 8)
+    return None
+
+
+def varying_segment(items: list[Item], bits: Optional[int]) -> Optional[Local]:
+    """Finds the value of a repeated segment entry whose size varies, for a
+    location from an end.
+
+    Args:
+        items: The entry's items.
+        bits:  The bits the entry takes, None when they vary.
+
+    Returns:
+        The repeated segments' Local, which their Span is measured by, or
+        None when the entry's size is ``bits``.
+    """
+    if bits is not None:
+        return None
+    return next(it.local for it in items if isinstance(it, Value))
 
 
 def item_bits(vt: VType) -> int:

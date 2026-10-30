@@ -790,20 +790,51 @@ class Local:
 @dataclass
 class Seek:
     """Move the bit position before the next entry: ``offset`` bits, or the
-    bits a bound DynSize gives (at most its ``max_total``), less ``back``.
-    With ``ahead``, a position before the current one fails with
-    BadPosition: an entry located from the end of a container whose size
-    another value gives."""
+    bits a bound DynSize gives (at most its ``max_total``), less ``back``
+    and less the bits of ``span``.  With ``ahead``, a position before the
+    current one fails with BadPosition: an entry located from the end of a
+    container whose size another value gives, or whose own size does."""
 
     from_start: Optional[int]  # start-marker id, or None for previousEntry
     offset: Union[int, DynSize]
     back: int = 0
     ahead: bool = False
+    span: Optional[Span] = None
+
+    @property
+    def varies(self) -> bool:
+        """Says whether where it moves to depends on the data.
+
+        Returns:
+            True if its offset or its span is given by other values.
+        """
+        return isinstance(self.offset, DynSize) or self.span is not None
 
     @property
     def max_offset(self) -> int:
         return (self.offset.max_total if isinstance(self.offset, DynSize)
                 else self.offset)
+
+
+@dataclass
+class Span:
+    """The bits of an entry located from an end whose size values decoded
+    before it give: ``count`` pieces of ``each`` bits, ``gap`` bits between
+    each two, and no bits for no pieces.  ``count`` and ``gap`` are numbers,
+    or bound DynSizes."""
+
+    count: Union[int, DynSize]
+    each: int
+    gap: Union[int, DynSize] = 0
+
+    @property
+    def dyns(self) -> list:
+        """Gives the DynSizes it uses.
+
+        Returns:
+            The count's and the gap's, where they are DynSizes.
+        """
+        return [d for d in (self.count, self.gap) if isinstance(d, DynSize)]
 
 
 @dataclass
@@ -820,13 +851,17 @@ class EndSeek:
 @dataclass
 class TailSeek:
     """Where the last entry of a packet whose size varies goes, when it is
-    located from the packet's end: decoding moves to ``back`` bits before
-    the end of the packet (the end of the data, or where its length field
-    says), which must not be before the previous entry's end; encoding
-    writes it after the previous entry, then a TailPad."""
+    located from the packet's end: decoding moves to ``back`` bits, and the
+    bits of ``span``, before the end of the packet (the end of the data, or
+    where its length field says), which must not be before the previous
+    entry's end; encoding writes it after the previous entry, then a
+    TailPad."""
 
     back: int
     bits = 7  # at most: the zeros encoding puts before the entry
+    # The bits of an entry whose size values decoded before it give, which
+    # it also goes back.
+    span: Optional[Span] = None
 
 
 @dataclass

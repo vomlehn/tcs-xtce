@@ -2416,6 +2416,20 @@ def not_invertible(field: str):
 # ----------------------------------------------------------
 
 
+def span_bits(count: int, each: int, gap: int) -> int:
+    """Measures an entry of ``count`` pieces, for a location from an end.
+
+    Args:
+        count: How many pieces it has.
+        each:  The bits of each piece.
+        gap:   The bits between each two pieces.
+
+    Returns:
+        Its bits: none for no pieces.
+    """
+    return count * each + (count - 1) * gap if count else 0
+
+
 def dynamic_size(x, slope: float, intercept: float, unit: int, max_: int,
                  field: str) -> int:
     """Computes a size or count that another field gives (an XTCE

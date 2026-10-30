@@ -12,7 +12,7 @@ from xtcegen import CRATE, REPOSITORY
 from .model import (AggregateEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fill, FloatEnc, IntEnc, MathOp, Node, Polynomial,
                     Require, Seek, Spline, StringEnc, Value, Verify, VType,
-                    term_hooks, walk, Transform, XformEnc)
+                    term_hooks, walk, TailSeek, Transform, XformEnc)
 
 # The runtimes' integer encodings.  BCD values are decoded to unsigned ones.
 ENCODINGS = {"unsigned": "Unsigned", "twosComplement": "TwosComplement",
@@ -394,6 +394,8 @@ def items_hooks(items: list) -> list:
         dyns = []
         if isinstance(it, Seek) and isinstance(it.offset, DynSize):
             dyns.append(it.offset)
+        if isinstance(it, (Seek, TailSeek)) and it.span is not None:
+            dyns += it.span.dyns
         if isinstance(it, Fill) and isinstance(it.size, DynSize):
             dyns.append(it.size)
         if isinstance(it, Value):

@@ -1188,6 +1188,32 @@
         <IntegerDataEncoding sizeInBits="8"/>
         <ValidRange minInclusive="0" maxInclusive="5"/>
       </IntegerParameterType>
+      <!-- Sizes that values give, of entries located from an end. -->
+      <IntegerParameterType name="VarySizeType" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+        <ValidRange minInclusive="0" maxInclusive="4"/>
+      </IntegerParameterType>
+      <BinaryParameterType name="VaryBytesType">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="VaryBytesLen"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
+      <StringParameterType name="VaryTextType">
+        <StringDataEncoding>
+          <Variable maxSizeInBits="32">
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="VaryTextLen"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+            <TerminationChar>00</TerminationChar>
+          </Variable>
+        </StringDataEncoding>
+      </StringParameterType>
       <!-- Integers of more than 64 bits, in every encoding and order. -->
       <!-- Wide integer encodings of values that are computed with: a
            float, a calibrated integer and a time, through doubles. -->
@@ -1582,6 +1608,15 @@
       <Parameter name="EndLead" parameterTypeRef="U8"/>
       <Parameter name="EndPair" parameterTypeRef="U8"/>
       <Parameter name="EndWord" parameterTypeRef="U16"/>
+      <Parameter name="VaryCount" parameterTypeRef="VarySizeType"/>
+      <Parameter name="VaryHead" parameterTypeRef="U8"/>
+      <Parameter name="VarySeg" parameterTypeRef="U16"/>
+      <Parameter name="VaryBoxLen" parameterTypeRef="U8"/>
+      <Parameter name="VaryBytesLen" parameterTypeRef="VarySizeType"/>
+      <Parameter name="VaryBoxHead" parameterTypeRef="U8"/>
+      <Parameter name="VaryBytes" parameterTypeRef="VaryBytesType"/>
+      <Parameter name="VaryTextLen" parameterTypeRef="VarySizeType"/>
+      <Parameter name="VaryText" parameterTypeRef="VaryTextType"/>
       <Parameter name="WideRealFloat" parameterTypeRef="WideRealFloatType"/>
       <Parameter name="WideRealCal" parameterTypeRef="WideRealCalType"/>
       <Parameter name="WideRealTime" parameterTypeRef="WideRealTimeType"/>
@@ -2794,6 +2829,73 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="663"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- Entries located from an end whose sizes values decoded before
+           them give.  VaryBlock is 64 bits, and VaryCount 4-bit segments
+           of VarySeg, 4 bits apart, end it; VaryBox is VaryBoxLen bytes,
+           and VaryBytes, VaryBytesLen bytes, ends it; and VaryText,
+           VaryTextLen bytes, ends a byte before the end of the packet,
+           whose size varies. -->
+      <SequenceContainer name="VaryBlock" abstract="true">
+        <BinaryEncoding>
+          <SizeInBits><FixedValue>64</FixedValue></SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="VaryHead"/>
+          <ParameterSegmentRefEntry parameterRef="VarySeg" sizeInBits="4">
+            <LocationInContainerInBits referenceLocation="containerEnd">
+              <FixedValue>0</FixedValue>
+            </LocationInContainerInBits>
+            <RepeatEntry>
+              <Count>
+                <DynamicValue>
+                  <ParameterInstanceRef parameterRef="VaryCount"/>
+                </DynamicValue>
+              </Count>
+              <Offset>
+                <FixedValue>4</FixedValue>
+              </Offset>
+            </RepeatEntry>
+          </ParameterSegmentRefEntry>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="VaryBox" abstract="true">
+        <BinaryEncoding>
+          <SizeInBits>
+            <DynamicValue>
+              <ParameterInstanceRef parameterRef="VaryBoxLen"/>
+              <LinearAdjustment slope="8"/>
+            </DynamicValue>
+          </SizeInBits>
+        </BinaryEncoding>
+        <EntryList>
+          <ParameterRefEntry parameterRef="VaryBoxHead"/>
+          <ParameterRefEntry parameterRef="VaryBytes">
+            <LocationInContainerInBits referenceLocation="containerEnd">
+              <FixedValue>0</FixedValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+        </EntryList>
+      </SequenceContainer>
+      <SequenceContainer name="VaryEnd">
+        <EntryList>
+          <ParameterRefEntry parameterRef="VaryCount"/>
+          <ContainerRefEntry containerRef="VaryBlock"/>
+          <ParameterRefEntry parameterRef="VaryBoxLen"/>
+          <ParameterRefEntry parameterRef="VaryBytesLen"/>
+          <ContainerRefEntry containerRef="VaryBox"/>
+          <ParameterRefEntry parameterRef="VaryTextLen"/>
+          <ParameterRefEntry parameterRef="VaryText">
+            <LocationInContainerInBits referenceLocation="containerEnd">
+              <FixedValue>8</FixedValue>
+            </LocationInContainerInBits>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="664"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

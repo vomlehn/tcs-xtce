@@ -2332,7 +2332,11 @@ chosen by other criteria keep those fields, and encoding checks them.</p>
 <dd><p class="first"><tt class="docutils literal">LocationInContainerInBits</tt> relative to <tt class="docutils literal">previousEntry</tt> (the
 default), <tt class="docutils literal">containerStart</tt>, <tt class="docutils literal">containerEnd</tt> or <tt class="docutils literal">nextEntry</tt>. As
 XTCE says, the first two place the start of the entry and the last two
-its end, so an entry located from either end has a fixed size.</p>
+its end. An entry located from either end has a fixed size, or one that
+values decoded before it give, so that its start is known before it is
+read: an array of fixed-size elements whose count or <tt class="docutils literal">RepeatEntry</tt>
+<tt class="docutils literal">Offset</tt> another value gives, or a string or binary value whose size
+one gives. A <tt class="docutils literal">nextEntry</tt> location needs a fixed size.</p>
 <p>A <tt class="docutils literal">containerEnd</tt> location puts the end of the entry that many bits
 before the end of its container. In a container with a fixed
 <tt class="docutils literal">SizeInBits</tt> that is a place from its start. In a packet whose size
@@ -2354,6 +2358,15 @@ than a read of their bits again. The demo's <tt class="docutils literal">BoxedEn
 bytes. The end of an included container without a <tt class="docutils literal">SizeInBits</tt>,
 whose entries' sizes vary, would depend on where those entries are,
 so an entry there can't be located from it.</p>
+<p>An entry whose size other values give, located from an end, ends
+there all the same: decoding and encoding work out its size from those
+values first, and fail with <tt class="docutils literal">BadPosition</tt> if it would start before
+the previous entry's end, even in a container of fixed size. The
+demo's <tt class="docutils literal">VaryEnd</tt> packet ends the 64-bit <tt class="docutils literal">VaryBlock</tt> with
+<tt class="docutils literal">VaryCount</tt> 4-bit segments of <tt class="docutils literal">VarySeg</tt>, 4 bits apart; ends the
+<tt class="docutils literal">VaryBoxLen</tt>-byte <tt class="docutils literal">VaryBox</tt> with <tt class="docutils literal">VaryBytes</tt>, <tt class="docutils literal">VaryBytesLen</tt>
+bytes; and ends <tt class="docutils literal">VaryText</tt>, <tt class="docutils literal">VaryTextLen</tt> bytes, a byte before the
+end of the packet.</p>
 <p>A <tt class="docutils literal">nextEntry</tt> location puts the end of the entry that many bits
 before the start of the entry after it in the same entry list. When
 that entry is located from its container's start, this one goes back
@@ -2450,8 +2463,8 @@ another, is that many segments, so they can still make up a value. One
 whose <tt class="docutils literal">RepeatEntry</tt> count another value gives, or with an <tt class="docutils literal">Offset</tt>
 between the repeats, is a list of raw segments, like an array. A
 repeated segment located from the end of its container takes its
-repeats' bits and the gaps between them, so its count and <tt class="docutils literal">Offset</tt>
-must be fixed. XTCE doesn't say which parts of a value the repeats of
+repeats' bits and the gaps between them, which may be fixed or given
+by values decoded before it. XTCE doesn't say which parts of a value the repeats of
 an entry with an <tt class="docutils literal">order</tt> are, so a repeated segment can't have one.
 The demo's <tt class="docutils literal">Repeated</tt> packet assembles <tt class="docutils literal">RepWord</tt> from four repeated
 8-bit segments, sends <tt class="docutils literal">RepCount</tt> 4-bit segments of <tt class="docutils literal">RepTail</tt>, and
@@ -2888,10 +2901,10 @@ SpaceSystem, then from each enclosing one. References may cross
 documents (see <a class="reference internal" href="#missions-in-several-documents">Missions in several documents</a>).</dd>
 <dt>Not supported</dt>
 <dd>Instances of values in other packets, repeated
-segment entries with an <tt class="docutils literal">order</tt> (which XTCE leaves undefined) or
-located from the end of their container with a count or <tt class="docutils literal">Offset</tt>
-that varies, a packet length field in a transformed container, or a
-check from outside one whose field is inside it,
+segment entries with an <tt class="docutils literal">order</tt> (which XTCE leaves undefined), an
+entry located from an end whose size only decoding it tells (a
+terminated string, say), a packet length field in a transformed
+container, or a check from outside one whose field is inside it,
 <tt class="docutils literal">ErrorDetectCorrect</tt> in a data encoding (which XTCE deprecates),
 and a location from the end of an included container without a
 <tt class="docutils literal">SizeInBits</tt> whose entries' sizes vary.</dd>

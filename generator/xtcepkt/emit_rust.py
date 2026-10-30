@@ -16,8 +16,8 @@ from .model import (
     term_indexes, term_locals, walk, Index, AggregateEnc, AllOf, AnyOf,
     ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion, DynSize, Fixed, FloatEnc,
     IntEnc, Kind, Local, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
-    Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify, Custom,
-    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform, XformEnc)
+    Span, Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify,
+    Custom, NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform, XformEnc)
 
 
 def rstr(s: str) -> str:
@@ -334,10 +334,42 @@ def offset(s: Seek, ref, f: str) -> str:
         backs up.
     """
     if isinstance(s.offset, int):
-        return str(s.offset - s.back)
-    n = size(s.offset, ref(s.offset), f)
-    x = f"({n}) as i64" if s.offset.factor != 1 else f"{n} as i64"
-    return f"{x} - {s.back}" if s.back else x
+        x = str(s.offset - s.back)
+    else:
+        n = size(s.offset, ref(s.offset), f)
+        x = f"({n}) as i64" if s.offset.factor != 1 else f"{n} as i64"
+        x = f"{x} - {s.back}" if s.back else x
+    return f"{x} - {span(s.span, ref, f)} as i64" if s.span else x
+
+
+def span(sp: Span, ref, f: str) -> str:
+    """Writes the expression for the bits of a Span.
+
+    Args:
+        sp:  The Span.
+        ref: Gives the value that a count or gap uses.
+        f:   The name to give errors, as a Rust string literal.
+
+    Returns:
+        A usize expression.
+    """
+    count, gap = (str(d) if isinstance(d, int) else size(d, ref(d), f)
+                  for d in (sp.count, sp.gap))
+    return f"pk::span_bits({count}, {sp.each}, {gap})"
+
+
+def tail_back(t: TailSeek, ref, f: str) -> str:
+    """Writes the expression for the bits a TailSeek goes back from the end.
+
+    Args:
+        t:   The TailSeek.
+        ref: Gives the value that a span uses.
+        f:   The name to give errors, as a Rust string literal.
+
+    Returns:
+        A usize expression.
+    """
+    return f"{t.back} + {span(t.span, ref, f)}" if t.span else str(t.back)
 
 
 def size(d: DynSize, x: str, f: str) -> str:
@@ -1549,7 +1581,8 @@ class RustEmitter:
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {rstr(where)})?;", depth)
             elif isinstance(it, TailSeek):
-                self.line(f"r.seek_end({it.back}, {rstr(where)})?;", depth)
+                back = tail_back(it, self.read_ref, rstr(where))
+                self.line(f"r.seek_end({back}, {rstr(where)})?;", depth)
             elif isinstance(it, LengthEnd):
                 self.line(f"r.check_span(e{it.local.id}, "
                           f"{rstr(it.local.name)})?;", depth)
@@ -1648,7 +1681,8 @@ class RustEmitter:
             elif isinstance(it, (Pad, TailPad)):
                 self.line(f"w.zeros({it.bits});", depth)
             elif isinstance(it, TailSeek):
-                self.line(f"w.seek_tail({it.back});", depth)
+                back = tail_back(it, self.write_ref(n, names), rstr(where))
+                self.line(f"w.seek_tail({back});", depth)
             elif isinstance(it, LengthEnd):
                 lc = it.local
                 enc = lc.vtype.enc

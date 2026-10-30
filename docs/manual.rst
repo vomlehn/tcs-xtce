@@ -1906,7 +1906,11 @@ Locations
    ``LocationInContainerInBits`` relative to ``previousEntry`` (the
    default), ``containerStart``, ``containerEnd`` or ``nextEntry``. As
    XTCE says, the first two place the start of the entry and the last two
-   its end, so an entry located from either end has a fixed size.
+   its end. An entry located from either end has a fixed size, or one that
+   values decoded before it give, so that its start is known before it is
+   read: an array of fixed-size elements whose count or ``RepeatEntry``
+   ``Offset`` another value gives, or a string or binary value whose size
+   one gives. A ``nextEntry`` location needs a fixed size.
 
    A ``containerEnd`` location puts the end of the entry that many bits
    before the end of its container. In a container with a fixed
@@ -1930,6 +1934,16 @@ Locations
    bytes. The end of an included container without a ``SizeInBits``,
    whose entries' sizes vary, would depend on where those entries are,
    so an entry there can't be located from it.
+
+   An entry whose size other values give, located from an end, ends
+   there all the same: decoding and encoding work out its size from those
+   values first, and fail with ``BadPosition`` if it would start before
+   the previous entry's end, even in a container of fixed size. The
+   demo's ``VaryEnd`` packet ends the 64-bit ``VaryBlock`` with
+   ``VaryCount`` 4-bit segments of ``VarySeg``, 4 bits apart; ends the
+   ``VaryBoxLen``-byte ``VaryBox`` with ``VaryBytes``, ``VaryBytesLen``
+   bytes; and ends ``VaryText``, ``VaryTextLen`` bytes, a byte before the
+   end of the packet.
 
    A ``nextEntry`` location puts the end of the entry that many bits
    before the start of the entry after it in the same entry list. When
@@ -2033,8 +2047,8 @@ Segments
    whose ``RepeatEntry`` count another value gives, or with an ``Offset``
    between the repeats, is a list of raw segments, like an array. A
    repeated segment located from the end of its container takes its
-   repeats' bits and the gaps between them, so its count and ``Offset``
-   must be fixed. XTCE doesn't say which parts of a value the repeats of
+   repeats' bits and the gaps between them, which may be fixed or given
+   by values decoded before it. XTCE doesn't say which parts of a value the repeats of
    an entry with an ``order`` are, so a repeated segment can't have one.
    The demo's ``Repeated`` packet assembles ``RepWord`` from four repeated
    8-bit segments, sends ``RepCount`` 4-bit segments of ``RepTail``, and
@@ -2479,10 +2493,10 @@ Name references
 
 Not supported
    Instances of values in other packets, repeated
-   segment entries with an ``order`` (which XTCE leaves undefined) or
-   located from the end of their container with a count or ``Offset``
-   that varies, a packet length field in a transformed container, or a
-   check from outside one whose field is inside it,
+   segment entries with an ``order`` (which XTCE leaves undefined), an
+   entry located from an end whose size only decoding it tells (a
+   terminated string, say), a packet length field in a transformed
+   container, or a check from outside one whose field is inside it,
    ``ErrorDetectCorrect`` in a data encoding (which XTCE deprecates),
    and a location from the end of an included container without a
    ``SizeInBits`` whose entries' sizes vary.

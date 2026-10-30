@@ -11,9 +11,9 @@ from .common import (doc_header, HOOK_DOCS, written, checks_hooks, items_hooks,
 from .model import (term_indexes, term_locals, walk, Index, AggregateEnc, AllOf,
                     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fixed, FloatEnc, IntEnc, Kind, Mark, MathOp,
-                    Mission, Node, Pad, Polynomial, Seek, Spline, Value, VType,
-                    Require, Fill, Segment, Verify, Custom, TailPad, TailSeek,
-                    LengthEnd, Transform, XformEnc, StringEnc)
+                    Mission, Node, Pad, Polynomial, Seek, Span, Spline, Value,
+                    VType, Require, Fill, Segment, Verify, Custom, TailPad,
+                    TailSeek, LengthEnd, Transform, XformEnc, StringEnc)
 
 
 def pstr(s: str) -> str:
@@ -256,9 +256,43 @@ def offset(s: Seek, ref, f: str) -> str:
         steps back.
     """
     if isinstance(s.offset, int):
-        return str(s.offset - s.back)
-    x = size(s.offset, ref(s.offset), f)
-    return f"{x} - {s.back}" if s.back else x
+        x = str(s.offset - s.back)
+    else:
+        x = size(s.offset, ref(s.offset), f)
+        x = f"{x} - {s.back}" if s.back else x
+    return f"{x} - {span(s.span, ref, f)}" if s.span else x
+
+
+def span(sp: Span, ref, f: str) -> str:
+    """Gives the expression for the bits of a Span.
+
+    Args:
+        sp:  The Span.
+        ref: Gives the expression for the value that a count or gap uses.
+        f:   The name of the field, as a Python string literal, that errors
+             name.
+
+    Returns:
+        The expression, in bits.
+    """
+    count, gap = (str(d) if isinstance(d, int) else size(d, ref(d), f)
+                  for d in (sp.count, sp.gap))
+    return f"pk.span_bits({count}, {sp.each}, {gap})"
+
+
+def tail_back(t: TailSeek, ref, f: str) -> str:
+    """Gives the expression for the bits a TailSeek goes back from the end.
+
+    Args:
+        t:   The TailSeek.
+        ref: Gives the expression for the value that a span uses.
+        f:   The name of the field, as a Python string literal, that errors
+             name.
+
+    Returns:
+        The expression, in bits.
+    """
+    return f"{t.back} + {span(t.span, ref, f)}" if t.span else str(t.back)
 
 
 def size(d: DynSize, x: str, f: str) -> str:
@@ -979,7 +1013,8 @@ class PythonEmitter:
             elif isinstance(it, Pad):
                 self.line(f"r.pad({it.bits}, {pstr(where)})", depth)
             elif isinstance(it, TailSeek):
-                self.line(f"r.seek_end({it.back}, {pstr(where)})", depth)
+                back = tail_back(it, self.read_ref, pstr(where))
+                self.line(f"r.seek_end({back}, {pstr(where)})", depth)
             elif isinstance(it, LengthEnd):
                 self.line(f"r.check_span(e{it.local.id}, "
                           f"{pstr(it.local.name)})", depth)
@@ -1070,7 +1105,8 @@ class PythonEmitter:
             elif isinstance(it, (Pad, TailPad)):
                 self.line(f"w.zeros({it.bits})", depth)
             elif isinstance(it, TailSeek):
-                self.line(f"w.seek_tail({it.back})", depth)
+                back = tail_back(it, self.write_ref(n, names), pstr(where))
+                self.line(f"w.seek_tail({back})", depth)
             elif isinstance(it, LengthEnd):
                 lc = it.local
                 enc = lc.vtype.enc

@@ -3167,6 +3167,17 @@ static inline int xtce_pk_element_at(size_t len, size_t per, size_t need,
                                  : xtce_pk_fail(err, XTCE_PK_BAD_SIZE, f, NULL);
 }
 
+/** Measures an entry of `count` pieces, for a location from an end.
+ *
+ * @param count  How many pieces it has.
+ * @param each   The bits of each piece.
+ * @param gap    The bits between each two pieces.
+ * @return       Its bits: none for no pieces. */
+static inline size_t xtce_pk_span_bits(size_t count, size_t each,
+                                       size_t gap) {
+        return count ? count * each + (count - 1) * gap : 0;
+}
+
 /** Computes a size or count that another field gives (an XTCE
  * DynamicValue): (`slope` * `x` + `intercept`) / `unit`.
  *

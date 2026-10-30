@@ -684,6 +684,25 @@ def set_limits(rng) -> bytes:
     return out
 
 
+def vary_end(rng) -> bytes:
+    """Makes a VaryEnd body: its counts and sizes mostly in range, and
+    VaryBox mostly big enough for what ends it.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The body.
+    """
+    count = rng.choice([0, 1, 2, 3, 4] * 3 + [rng.randrange(8)])
+    blen = rng.choice([0, 1, 2, 3, 4] * 3 + [rng.randrange(8)])
+    box = rng.choice([blen + 1] * 6 + [blen + 2, blen + 3, rng.randrange(8)])
+    tlen = rng.choice([0, 1, 2, 3, 4] * 3 + [rng.randrange(8)])
+    text = bytes(rng.choice(b"abcxyz") for _ in range(tlen))
+    return (bytes([count]) + rng.randbytes(8) + bytes([box, blen])
+            + rng.randbytes(box) + bytes([tlen]) + text + rng.randbytes(1))
+
+
 def main() -> None:
     """Prints COUNT random packets, seeded with SEED, each as a line of
     ``tm`` or ``tc`` and its bytes in hex.
@@ -698,17 +717,25 @@ def main() -> None:
     for _ in range(int(sys.argv[2])):
         keep = False  # whether the packet length is right as it is
         if rng.random() < 0.6:
-            apid = rng.choice(
-                [100, 100, 150, 200, 200, 250, 250, 260, 260, 270, 280, 290,
-                 310, 320, 330, 340, 350, 360, 370, 380, 380, 390, 395, 395,
-                 400, 400, 410, 420, 420, 430, 430, 440, 450, 460, 470, 475,
-                 475, 480, 490, 500, 510, 520, 530, 550, 550, 560, 560, 565,
-                 567, 567, 568, 569, 570, 570, 573, 574, 575, 580, 590, 600,
-                 600, 610, 610, 620, 620, 630, 630, 640, 640, 650, 650, 655,
-                 655, 661, 661, 663, 662, 662, rng.randrange(1 << 11)])
+            apid = rng.choice([100, 100, 150, 200, 200, 250, 250, 260, 260, 270,
+                               280, 290, 310, 320, 330, 340, 350, 360, 370, 380,
+                               380, 390, 395, 395, 400, 400, 410, 420, 420, 430,
+                               430, 440, 450, 460, 470, 475, 475, 480, 490, 500,
+                               510, 520, 530, 550, 550, 560, 560, 565, 567, 567,
+                               568, 569, 570, 570, 573, 574, 575, 580, 590, 600,
+                               600, 610, 610, 620, 620, 630, 630, 640, 640, 650,
+                               650, 655, 655, 661, 661, 663, 662, 662, 664, 664,
+                               rng.randrange(1 << 11)])
             data = header(rng, 0, apid)
             if apid == 100 and rng.random() < 0.5:
                 data += bytes([2, rng.randrange(128)])  # science mode, cool
+            elif apid == 664 and rng.random() < 0.8:
+                # The text is placed from the packet's end: a length that
+                # ends with the body puts it where it was written.
+                data += vary_end(rng)
+                keep = rng.random() < 0.5
+                if keep:
+                    data = with_length(data, len(data))
             elif apid == 200 and rng.random() < 0.7:
                 data += (rng.randbytes(2)
                          + rng.choice([b"ORBIT\0\0\0", rng.randbytes(8)]))

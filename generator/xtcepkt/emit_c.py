@@ -24,8 +24,8 @@ from .model import (
     term_indexes, term_locals, term_paths, walk, Index, AggregateEnc, AllOf,
     AnyOf, ArrayEnc, BinaryEnc, Cond, ContextCal, DynSize, Criterion, Fixed,
     FloatEnc, IntEnc, Kind, Mark, MathOp, Mission, Node, Pad, Polynomial, Seek,
-    Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify, Custom,
-    NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform, XformEnc)
+    Span, Spline, StringEnc, Value, VType, Require, Fill, Segment, Verify,
+    Custom, NARROW_MAX_BYTES, TailPad, TailSeek, LengthEnd, Transform, XformEnc)
 
 # One level of indentation in the generated C.
 INDENT = " " * 8
@@ -1748,11 +1748,16 @@ class CEmitter:
         obj = "r" if side == "read" else "w"
         f = cstr(where)
         off = str(it.offset - it.back) if isinstance(it.offset, int) else ""
-        if isinstance(it.offset, DynSize):
+        if it.varies:
             self.line("{", depth)
             depth += 1
+        if it.span is not None:
+            self.span(it.span, f"{obj}->err", f, ref, depth)
+        if isinstance(it.offset, DynSize):
             self.size(it.offset, f"{obj}->err", f, ref, depth)
             off = f"(int64_t)n - {it.back}" if it.back else "(int64_t)n"
+        if it.span is not None:
+            off += " - (int64_t)span_bits"
         seek = "seek_ahead" if it.ahead else "seek"
         if it.from_start is None:
             self.line(f"XTCE_PK_TRY(xtce_pk_{side}_skip({obj}, {off}, {f}));",
@@ -1760,7 +1765,62 @@ class CEmitter:
         else:
             self.line(f"XTCE_PK_TRY(xtce_pk_{side}_{seek}({obj}, "
                       f"{self.mark(it.from_start)}, {off}, {f}));", depth)
-        if isinstance(it.offset, DynSize):
+        if it.varies:
+            self.line("}", depth - 1)
+
+    def span(self, sp: Span, err: str, f: str, ref, depth: int) -> None:
+        """Declares ``size_t span_bits``: the bits of a Span.
+
+        Args:
+            sp:    The Span.
+            err:   The C expression for the xtce_pk_error to fail with.
+            f:     The C string literal naming the field, for errors.
+            ref:   Gives the expression for the value of a count or gap,
+                   and (``ref.place``) the Acc of a Local.
+            depth: The indentation level.
+        """
+        parts = []
+        for name, d in (("span_count", sp.count), ("span_gap", sp.gap)):
+            if isinstance(d, int):
+                parts.append(str(d))
+                continue
+            self.line(f"size_t {name};", depth)
+            self.line("{", depth)
+            self.size(d, err, f, ref, depth + 1)
+            self.line(f"{name} = n;", depth + 1)
+            self.line("}", depth)
+            parts.append(name)
+        self.line(f"size_t span_bits = xtce_pk_span_bits({parts[0]}, "
+                  f"{sp.each}, {parts[1]});", depth)
+
+    def tail_seek(self, it: TailSeek, side: str, ref, where: str,
+                  depth: int) -> None:
+        """Writes the statements that move the reader, or pad the writer,
+        for a TailSeek.
+
+        Args:
+            it:    The TailSeek.
+            side:  "read" for the reader ``r``, "write" for the writer
+                   ``w``.
+            ref:   Gives the value of a count or gap that its span uses.
+            where: The qualified name of the container, for errors.
+            depth: The indentation level.
+        """
+        obj = "r" if side == "read" else "w"
+        f = cstr(where)
+        back = str(it.back)
+        if it.span is not None:
+            self.line("{", depth)
+            depth += 1
+            self.span(it.span, f"{obj}->err", f, ref, depth)
+            back = f"{it.back} + span_bits"
+        if side == "read":
+            self.line(f"XTCE_PK_TRY(xtce_pk_read_seek_end(r, {back}, {f}));",
+                      depth)
+        else:
+            self.line(f"XTCE_PK_TRY(xtce_pk_write_seek_tail(w, {back}));",
+                      depth)
+        if it.span is not None:
             self.line("}", depth - 1)
 
     def read_items(self, items, depth: int, where: str,
@@ -1792,8 +1852,7 @@ class CEmitter:
                 self.line(f"XTCE_PK_TRY(xtce_pk_read_pad(r, {it.bits}, "
                           f"{cstr(where)}));", depth)
             elif isinstance(it, TailSeek):
-                self.line(f"XTCE_PK_TRY(xtce_pk_read_seek_end(r, {it.back}, "
-                          f"{cstr(where)}));", depth)
+                self.tail_seek(it, "read", self.read_ref, where, depth)
             elif isinstance(it, LengthEnd):
                 self.line("XTCE_PK_TRY(xtce_pk_read_check_span(r, "
                           f"e{it.local.id}, {cstr(it.local.name)}));", depth)
@@ -1935,8 +1994,8 @@ class CEmitter:
                 self.line(f"XTCE_PK_TRY(xtce_pk_write_zeros(w, {it.bits}));",
                           depth)
             elif isinstance(it, TailSeek):
-                self.line("XTCE_PK_TRY(xtce_pk_write_seek_tail(w, "
-                          f"{it.back}));", depth)
+                self.tail_seek(it, "write", self.write_ref(n, names), where,
+                               depth)
             elif isinstance(it, LengthEnd):
                 lc = it.local
                 enc = lc.vtype.enc

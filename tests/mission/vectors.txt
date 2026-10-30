@@ -256,6 +256,11 @@ tm 0a96c02a000311112222  # tailed zip: ZipLast would start before ZipA's end, wh
 tm 0a97c02a0005041199994477  # boxed end: a 4-byte box with BoxLast in its last byte, after a gap, then BoxAfter
 tm 0a97c02a000302114477  # boxed end: a 2-byte box, BoxLast right after BoxFirst
 tm 0a97c02a0002011177  # boxed end: a 1-byte box, where BoxLast would overlap BoxFirst, which fails
+tm 0a98c02a001202ab000000000001020401cd00007702686900  # vary end: two 4-bit segments 4 bits apart end VaryBlock, a byte ends the 4-byte VaryBox, and "hi" ends a byte before the end
+tm 0a98c02a000d00ab000000000000000100cd0000  # vary end: no segments, no bytes and no text
+tm 0a98c02a001204ab000000123456780401cd00007702686900  # vary end: four segments, the most VaryBlock's 64 bits hold after VaryHead
+tm 0a98c02a000f02ab000000000001020101cd02686900  # vary end: a 1-byte VaryBox, where VaryBytes would overlap VaryBoxHead, which fails
+tm 0a98c02a000f02ab000000000001020100cd03686900  # vary end: a 3-byte VaryText in a packet too short for it, which fails
 tm 0a62c02a0004f0e1968777  # xor: XorBlob aabbccdd, masked on the wire
 tm 0a62c02a0002010203  # xor: three bytes, not XorBlob's four
 tm 0a6cc02a000b03aabbcc11000004d2ac0222  # stuffed: aabbcc framed by its length, then 1.234 s and a 300 ms varint

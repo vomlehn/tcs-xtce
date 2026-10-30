@@ -15,8 +15,8 @@ from xtcepkt.compile import (  # noqa: E402
     compile_document, compile_documents, item_bits, member_path, value_range)
 from xtcepkt.model import (  # noqa: E402
     MAX_FIELD_BITS, AnyOf, Cond, ContextCal, Fill, Fixed, Index, MathOp, Pad,
-    Require, Seek, Segment, Spline, Unsupported, Value, walk, LengthEnd,
-    Transform, Verify, XformEnc)
+    Require, Seek, Segment, Spline, TailSeek, Unsupported, Value, walk,
+    LengthEnd, Transform, Verify, XformEnc)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
 
@@ -989,8 +989,25 @@ class ContainerTests(unittest.TestCase):
         self.assertEqual((seek.back, seek.ahead), (8, True))
         self.assertEqual(seek.offset.local.name, "N")
 
+    def test_end_of_a_container_by_a_count(self):
+        # N copies of B end the 64-bit Record: a Seek 64 bits from its
+        # start, less N bytes, which must not go back.
+        end = ('<ParameterRefEntry parameterRef="B">'
+               '<LocationInContainerInBits referenceLocation="containerEnd">'
+               f'<FixedValue>0</FixedValue></LocationInContainerInBits>{REPEAT}'
+               '</ParameterRefEntry>')
+        items = compile_xml(container_mission(size(64) + entries(ref("A"), end),
+                                              "")).nodes[0].items
+        seek = next(it for it in items if isinstance(it, Seek))
+        self.assertEqual((seek.offset, seek.back, seek.ahead), (64, 0, True))
+        self.assertEqual((seek.span.count.local.name, seek.span.each), ("N", 8))
+
     def test_rejected(self):
         for record, entry, why in (
+                (size(64) + entries(ref("A"), ref("Text", "containerEnd:0")),
+                 "",
+                 "a location from the container's end for Text, whose size "
+                 "varies"),
                 (entries(ref("Text"), ref("B", "containerEnd:0")), "",
                  "a location from the end of an included container whose size "
                  "varies"),
@@ -2856,12 +2873,20 @@ class SegmentTests(unittest.TestCase):
                                       end="0"))
         self.assertEqual((seek.back, pad.bits), (20, 0))
 
+    def test_repeated_from_end_by_a_count(self):
+        # W 8-bit segments at the end: no bits are known, and W's value
+        # counts the rest.
+        *_, seek, v, pad = self.items('<ParameterRefEntry parameterRef="W"/>'
+                                      + seg("W", 8, repeat=repeat(dynamic("W")),
+                                            end="0"))
+        self.assertIsInstance(seek, TailSeek)
+        self.assertEqual((seek.back, seek.span.each, seek.span.gap, pad.bits),
+                         (0, 8, 0, 0))
+        self.assertEqual(seek.span.count.local.name, "W")
+        self.assertIs(v.local.vtype.enc.count, seek.span.count)
+
     def test_rejected(self):
         for entries, why in (
-                ('<ParameterRefEntry parameterRef="W"/>'
-                 + seg("W", 8, repeat=repeat(dynamic("W")), end="0"),
-                 "a repeated ParameterSegmentRefEntry located from the "
-                 "container's end, whose size varies"),
                 (seg("W", 8, "1", repeat(fixed(2))),
                  "a repeated ParameterSegmentRefEntry with an order"),
                 (seg("W", 8, repeat=repeat(fixed(0))),

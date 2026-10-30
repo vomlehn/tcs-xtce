@@ -4218,6 +4218,25 @@ pub fn dynamic_size(
     Ok((y / unit) as usize)
 }
 
+/// Measures an entry of `count` pieces, for a location from an end.
+///
+/// # Arguments
+///
+/// * `count` - How many pieces it has.
+/// * `each`  - The bits of each piece.
+/// * `gap`   - The bits between each two pieces.
+///
+/// # Returns
+///
+/// Its bits: none for no pieces.
+pub fn span_bits(count: usize, each: usize, gap: usize) -> usize {
+    if count == 0 {
+        0
+    } else {
+        count * each + (count - 1) * gap
+    }
+}
+
 /// Element `i` of `v`, an array whose count another field gives.  Fails with
 /// `BadSize`, naming `field`, if `v` has no element `i`.
 pub fn element<'a, T>(
