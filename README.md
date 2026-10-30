@@ -44,10 +44,9 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | Directory     | Contents |
 |---------------|----------|
 | `references/` | Downloaded XTCE documents: `SpaceSystem.xsd`, `XTCE.pdf`, `VERSION`, plus `xml.xsd` and `catalog.xml` for offline validation |
-| `generator/`  | `xtcegen` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `xtcepkt`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
 | `rust/`       | `tcs-xtce` Rust crate |
 | `cpp/`        | C++20 library (`libxtce.a`, `libxtce.so`) with a C API (`xtce/xtce.h`), and the header-only C/C++ packet runtime (`xtce/packet.h`) |
-| `python/`     | `xtce` Python package (3.10+, standard library only) |
+| `python/`     | `tcs_xtce` Python package (3.10+, standard library only): the Python runtime, `tcs_xtce.binding` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `tcs_xtce.compiler`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
 | `tests/`      | The demo mission, packet vectors and the cross-language checks; `make` generates the schema-coverage samples into `tests/samples/` |
 | `docs/`       | `manual.rst` and `design.rst` |
 | `examples/`   | Example XTCE files and a program per language that uses the code generated from them (start with `simple-string`) |
@@ -76,7 +75,7 @@ writing that is XTCE 1.3, schema namespace
 
 ## How it works
 
-1. **Parse.** `generator/xtcegen/xsd.py` reads `SpaceSystem.xsd` into a
+1. **Parse.** `python/tcs_xtce/binding/xsd.py` reads `SpaceSystem.xsd` into a
    language-neutral model and flattens type inheritance (`complexContent`
    extensions). XSD constructs it does not support raise an error, so schema
    changes cannot silently produce incomplete bindings.
@@ -119,7 +118,7 @@ and field names are the snake_case form of the XML names.
 ### Managed buffers
 
 Each library has a buffer type (`tcs_xtce::Buffer` in Rust, `xtce::Buffer` in C++,
-`xtce.ManagedBuffer` in Python) that is preallocated (64 KiB by default) and
+`tcs_xtce.ManagedBuffer` in Python) that is preallocated (64 KiB by default) and
 keeps its allocation between uses. A `Document` owns one input buffer and one
 output buffer alongside the root `SpaceSystemType`:
 
@@ -171,9 +170,9 @@ xtce_document_free(doc);
 Python:
 
 ```python
-import xtce
+import tcs_xtce
 
-doc = xtce.Document.from_file("sat.xml")
+doc = tcs_xtce.Document.from_file("sat.xml")
 doc.root.short_description = "updated"
 with doc.serialize() as view:             # memoryview of the managed buffer
     sys.stdout.buffer.write(view)
@@ -182,7 +181,7 @@ with doc.serialize() as view:             # memoryview of the managed buffer
 ## Packet codecs
 
 ```sh
-cd generator
+cd python
 python3 -m tcs_xtce mission.xml mission.rs --lang rust
 python3 -m tcs_xtce mission.xml mission.h  --lang c        # or --lang c++: same file
 python3 -m tcs_xtce mission.xml mission.py --lang python

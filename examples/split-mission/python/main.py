@@ -12,8 +12,8 @@ that holds the documents.
 import sys
 
 import rover
-from xtce.digest import digest_files_bytes
-from xtce.packet import PacketError
+from tcs_xtce.digest import digest_files_bytes
+from tcs_xtce.packet import PacketError
 
 # The mission's documents: those the others build on first.
 DOCUMENTS = ["dt.xml", "pus.xml", "rover.xml"]

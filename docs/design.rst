@@ -45,15 +45,15 @@ Overview
 
    references/Makefile ── curl ──> SpaceSystem.xsd, XTCE.pdf, xml.xsd, catalog.xml
                                         │
-                     generator/xtcegen  │  (XSD → model → binding → emitters)
+               python/tcs_xtce/binding  │  (XSD → model → binding → emitters)
                                         ▼
-            rust/src/generated.rs   cpp/{include,src}/generated.*   python/xtce/generated.py
+            rust/src/generated.rs   cpp/{include,src}/generated.*   python/tcs_xtce/generated.py
                     + hand-written runtimes: buffer, xml reader/writer, document
                                         │
                                         │  mission.xml (any XTCE 1.3 document)
-     tcs-xtce (generator/xtcepkt)  ▼  (uses python/xtce to read it)
+   tcs-xtce (python/tcs_xtce/compiler)  ▼  (uses python/tcs_xtce to read it)
             <mission>.rs            <mission>.h (C and C++)         <mission>.py
-                    + hand-written runtimes: tcs_xtce::packet / xtce/packet.h / xtce.packet
+                    + hand-written runtimes: tcs_xtce::packet / xtce/packet.h / tcs_xtce.packet
 
 Each language has two parts:
 
@@ -80,8 +80,8 @@ offline (``--nonet``).
 The top-level ``make references`` always checks for a newer release.
 Other targets download only when nothing has been downloaded yet.
 
-The XML binding (xtcegen)
-=========================
+The XML binding (tcs_xtce.binding)
+==================================
 
 Pipeline
 --------
@@ -181,7 +181,7 @@ Error handling
 --------------
 
 Malformed or schema-invalid input raises ``tcs_xtce::Error`` (Rust), ``xtce::Error`` (C++)
-or ``xtce.XtceError`` (Python), with a 1-based line number. The C API
+or ``tcs_xtce.XtceError`` (Python), with a 1-based line number. The C API
 turns exceptions into status codes and keeps the message in the
 document.
 
@@ -249,9 +249,9 @@ There were two ways to build a packet codec:
 The cost is that a database change requires regenerating the code, as
 for the XML binding.
 
-The command line, ``generator/tcs_xtce``, writes one language per run
+The command line, ``python/tcs_xtce/__main__.py``, writes one language per run
 (``tcs-xtce INPUT... OUTPUT --lang LANG``). The compiler and the emitters it
-calls live in ``generator/xtcepkt``.
+calls live in ``python/tcs_xtce/compiler``.
 
 One header for C and C++
 ------------------------
@@ -286,7 +286,7 @@ header means:
 Compiler pipeline
 -----------------
 
-``compile.py`` turns the mission's documents, loaded with ``python/xtce``,
+``compile.py`` turns the mission's documents, loaded with ``python/tcs_xtce``,
 into the model in ``model.py``:
 
 **Indexing and name resolution.**
@@ -1239,10 +1239,10 @@ its speed and ubiquity, not for security: it detects accidental
 differences, not deliberate collisions.
 
 Each runtime computes the digest itself, so a program in any language
-can send its digest and check the one it receives: ``xtce.digest`` in
+can send its digest and check the one it receives: ``tcs_xtce.digest`` in
 Python, ``tcs_xtce::digest`` in Rust, and ``xtce/digest.h`` for C and C++,
 header-only like ``xtce/packet.h`` so that C programs still link no
-library. The encoding is specified in ``python/xtce/digest.py``, and each
+library. The encoding is specified in ``python/tcs_xtce/digest.py``, and each
 runtime has its own small XML reader for it: the readers the XML bindings
 use are driven by the schema and don't keep namespaces, and an
 implementation per language keeps each runtime free of dependencies
@@ -1270,7 +1270,7 @@ that document's digest, so nothing changes for single-document missions.
 reproduce.
 
 The runtimes don't check documents against the schema; the
-``xtce-digest`` command, in ``generator/xtce_digest``, does, then digests
+``xtce-digest`` command, in ``python/tcs_xtce/digest_cli``, does, then digests
 each file with the Python runtime. Computing a digest allocates memory,
 so it belongs at start-up, not in code that must not allocate.
 
@@ -1354,14 +1354,14 @@ Testing strategy
      hand where ``rustfmt`` leaves a line long, such as string literals
      and macro bodies.
    * C and C++: 8-space indents and 80 columns, set by ``.clang-format``.
-   * Python: laid out by ``generator/xtcegen/pyalign.py``, with
+   * Python: laid out by ``python/tcs_xtce/binding/pyalign.py``, with
      continuation lines lined up under the bracket they continue, by
      ``make fmt`` and checked by ``make fmt-check``. Black and
      ``ruff format`` aren't used, since they would put every item on its
      own line.
    * Makefiles and scripts: wrapped by hand.
    * Generated code: wrapped by ``wrap.py`` after the emitters run, so
-     that it needs no formatting. ``generator/tests/test_wrap.py`` checks
+     that it needs no formatting. ``python/tests/compiler/test_wrap.py`` checks
      that wrapped code fits in 80 columns and keeps its meaning.
 
    ``tests/line_width.py``, the last step of ``make test``, enforces the

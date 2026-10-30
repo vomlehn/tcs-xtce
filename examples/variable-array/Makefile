@@ -20,12 +20,12 @@ RST2HTML ?= rst2html
 XML     := variable_array.xml
 GEN     := rust/src/variable_array.rs c/variable_array.h cxx/variable_array.h \
            python/variable_array.py
-GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py \
-                     $(TOP)/generator/tcs_xtce/*.py \
-                     $(TOP)/generator/xtcegen/*.py)
+GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \
+                     $(TOP)/python/tcs_xtce/__main__.py \
+                     $(TOP)/python/tcs_xtce/binding/*.py)
 PKT_H   := $(TOP)/cpp/include/xtce/packet.h \
            $(TOP)/cpp/include/xtce/digest.h
-TCS_XTCE := cd $(TOP)/generator && \
+TCS_XTCE := cd $(TOP)/python && \
             $(PYTHON) -m tcs_xtce ../examples/variable-array/$(XML) \
            --source-name examples/variable-array/$(XML)
 

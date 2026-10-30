@@ -3,7 +3,7 @@
 //! Two programs that exchange packets were built from the same packet
 //! definitions if their XTCE documents have the same digest, so each can
 //! send the other its digest and compare, rather than describing the data
-//! in every message.  The Python (`xtce.digest`) and C/C++
+//! in every message.  The Python (`tcs_xtce.digest`) and C/C++
 //! (`xtce/digest.h`) runtimes compute the same digest; the Python module
 //! describes exactly what it covers.  In short, it leaves out comments and
 //! processing instructions, whitespace between elements and around text,

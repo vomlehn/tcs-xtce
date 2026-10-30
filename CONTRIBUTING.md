@@ -41,7 +41,7 @@ request, from a clean checkout.
 **Rust, C/C++ and Python stay in step.** The three languages are generated
 from the same model and must give byte-identical results; the tests compare
 them on every build. A change to what the generated code does goes into all
-three emitters (`generator/xtcepkt/emit_rust.py`, `emit_c.py`,
+three emitters (`python/tcs_xtce/compiler/emit_rust.py`, `emit_c.py`,
 `emit_python.py`) and their runtimes, with tests. Every example in
 `examples/` has a Rust, C/C++ and Python version, a `README.rst`, and a
 `Makefile` that runs it and, with `make html`, makes `README.html`.
@@ -58,7 +58,7 @@ counting a tab as 8 columns, and names each line that is too wide.
   them with a backslash at the end of the line, which keeps their value),
   and code inside `macro_rules!` bodies and macros such as `matches!`.
 * Python indents 4 spaces. `make fmt` lays it out
-  (`generator/xtcegen/pyalign.py`, the same code that lays out the generated
+  (`python/tcs_xtce/binding/pyalign.py`, the same code that lays out the generated
   Python) and `make fmt-check` checks it: a long line breaks inside
   brackets, with the continuation lined up under the opening bracket, items
   packed, and the closing bracket at the end of the last line:
@@ -76,7 +76,7 @@ counting a tab as 8 columns, and names each line that is too wide.
   would rewrite this style. Keep `# noqa` and `# pragma` comments on the
   line they apply to.
 * The generators emit the same indentation and wrap their output at 80
-  columns (`generator/xtcegen/wrap.py`), so generated code needs no
+  columns (`python/tcs_xtce/binding/wrap.py`), so generated code needs no
   formatting.
 
 **Every function has a header.** Each function, hand-written or
@@ -95,7 +95,7 @@ gives the exact formats and the exemptions, such as tests and trait
 implementations, and names each function whose header is missing or
 wrong. The generators write such a header for every function they emit.
 
-**The digest is the same in every runtime.** `python/xtce/digest.py`,
+**The digest is the same in every runtime.** `python/tcs_xtce/digest.py`,
 `rust/src/digest.rs` and `cpp/include/xtce/digest.h` compute the same XTCE
 digest, and `tests/digest_check.sh` (part of `make test`) checks that they
 agree with each other and with `tests/digest/expected.txt`. A change to what
@@ -103,8 +103,8 @@ the digest covers, including the `UNORDERED` list, goes into all three, with
 the expected digests updated.
 
 **Don't edit generated files.** Files that start with `@generated` are
-rewritten by `make generate` (the XML binding, from `generator/xtcegen`) or
-`make packets` (the demo mission's codecs, from `generator/xtcepkt`).
+rewritten by `make generate` (the XML binding, from `python/tcs_xtce/binding`) or
+`make packets` (the demo mission's codecs, from `python/tcs_xtce/compiler`).
 Change the generator and regenerate instead.
 
 **Code generated with `--dynamic-allocations false` never allocates.**
@@ -113,7 +113,7 @@ while decoding, encoding or describing a packet. Keep heap use out of those
 code paths.
 
 **New XTCE support comes with tests and documentation.** Add tests in
-`generator/tests`, and where it affects packets, extend the demo mission
+`python/tests/compiler`, and where it affects packets, extend the demo mission
 (`tests/mission/demo.xml`) and its vectors (`tests/mission/vectors.txt` and
 `vectors.expected`). List the construct under Supported XTCE in
 `docs/manual.rst`.

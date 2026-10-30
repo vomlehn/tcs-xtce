@@ -41,14 +41,15 @@ from pathlib import Path
 
 TOP = Path(__file__).resolve().parents[1]
 EXTERNAL = TOP / "tests" / "external"
-sys.path[:0] = [str(TOP / "python"), str(TOP / "generator")]
+sys.path[:0] = [str(TOP / "python")]
 
-import xtce  # noqa: E402
-from xtcegen.__main__ import rustfmt  # noqa: E402
-from xtcepkt import emit_c, emit_python, emit_rust, report  # noqa: E402
-from xtcepkt.compile import compile_documents  # noqa: E402
-from xtcepkt.model import Unsupported  # noqa: E402
-from xtce.digest import digest_file, digest_files  # noqa: E402
+import tcs_xtce  # noqa: E402
+from tcs_xtce.binding.__main__ import rustfmt  # noqa: E402
+from tcs_xtce.compiler import (  # noqa: E402
+    emit_c, emit_python, emit_rust, report)
+from tcs_xtce.compiler.compile import compile_documents  # noqa: E402
+from tcs_xtce.compiler.model import Unsupported  # noqa: E402
+from tcs_xtce.digest import digest_file, digest_files  # noqa: E402
 
 XSD = TOP / "references" / "SpaceSystem.xsd"
 CATALOG = TOP / "references" / "catalog.xml"
@@ -213,7 +214,7 @@ def digests(paths: list[Path]) -> dict:
     for i, p in enumerate(paths):
         try:
             mine = digest_file(p)
-        except (OSError, xtce.XtceError):
+        except (OSError, tcs_xtce.XtceError):
             mine = "error"
         others = {r[i] for r in results}
         out[p] = (f"digest {mine}" if others == {mine}
@@ -238,7 +239,7 @@ def set_digest(paths: list[Path]) -> str:
     """
     try:
         mine = digest_files(paths)
-    except (OSError, xtce.XtceError):
+    except (OSError, tcs_xtce.XtceError):
         mine = "error"
     others = {subprocess.run([str(t), "--set"] + [str(p) for p in paths],
                              capture_output=True, text=True,
@@ -300,8 +301,8 @@ def check_mission(paths: list[Path], stem: str, out: Path) -> list[str]:
     roots = []
     for p in paths:
         try:
-            roots.append(xtce.Document.from_file(str(p)).root)
-        except xtce.XtceError:
+            roots.append(tcs_xtce.Document.from_file(str(p)).root)
+        except tcs_xtce.XtceError:
             return [f"not compiled: the binding rejects {p.name}"]
     return compiled(roots, stem, out, dialect(paths))
 
@@ -322,15 +323,15 @@ def check(path: Path, out: Path) -> list[str]:
     schema = {"valid": "schema valid", "invalid": "schema invalid",
               "facets": "schema invalid (facets only)"}[verdict]
     try:
-        doc = xtce.Document.from_file(str(path))
-    except xtce.XtceError:
+        doc = tcs_xtce.Document.from_file(str(path))
+    except tcs_xtce.XtceError:
         return ([f"{schema}; rejected by the binding"]
                 + (["DISAGREE: the schema accepts it"] if verdict == "valid"
                    else []))
     lines = [f"{schema}; loaded by the binding"]
     if verdict == "invalid":
         lines.append("DISAGREE: the schema rejects it")
-    if xtce.Document.from_bytes(doc.to_bytes()).root != doc.root:
+    if tcs_xtce.Document.from_bytes(doc.to_bytes()).root != doc.root:
         lines.append("ROUND TRIP DIFFERS")
     stem = re.sub(r"\W", "_", path.stem).lower()
     return lines + compiled([doc.root], stem, out, dialect([path]))

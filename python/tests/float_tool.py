@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from xtce.packet import (  # noqa: E402
+from tcs_xtce.packet import (  # noqa: E402
     PacketError, checksum, float_decode, float_encode, math_op)
 
 

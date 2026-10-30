@@ -1,8 +1,8 @@
 #!/bin/sh
 # Checks the Python package that `make python-dist` builds.
 #
-#   1. The wheel and the sdist hold python/xtce/generated.py, which is not in
-#      git, and the wheel each package's py.typed.
+#   1. The wheel and the sdist hold python/tcs_xtce/generated.py, which is
+#      not in git, and the wheel the package's py.typed.
 #   2. Installed in a fresh virtual environment, with nothing from the
 #      repository on the path, tcs-xtce generates the demo mission's Python,
 #      C and Rust, and the Python it generated decodes a packet with the
@@ -30,14 +30,12 @@ fail() {
 }
 
 python3 -m zipfile -l "$wheel" > "$work/wheel.txt"
-grep -q 'xtce/generated.py' "$work/wheel.txt" ||
-    fail "the wheel has no xtce/generated.py: run make generate first"
-for p in xtce tcs_xtce xtcepkt xtcegen xtce_digest; do
-    grep -q "$p/py.typed" "$work/wheel.txt" ||
-        fail "the wheel has no $p/py.typed"
-done
-tar tzf "$sdist" | grep -q 'python/xtce/generated.py$' ||
-    fail "the sdist has no python/xtce/generated.py"
+grep -q 'tcs_xtce/generated.py' "$work/wheel.txt" ||
+    fail "the wheel has no tcs_xtce/generated.py: run make generate first"
+grep -q 'tcs_xtce/py.typed' "$work/wheel.txt" ||
+    fail "the wheel has no tcs_xtce/py.typed"
+tar tzf "$sdist" | grep -q 'python/tcs_xtce/generated.py$' ||
+    fail "the sdist has no python/tcs_xtce/generated.py"
 
 python3 -m venv "$work/venv"
 "$work/venv/bin/pip" install -q --no-index --no-deps "$wheel"
@@ -58,7 +56,7 @@ assert packet.seq_count == 42, packet
 EOF
 
 installed=$("$bin/xtce-digest" "$demo")
-ours=$(cd "$top/generator" && python3 -m xtce_digest "$demo")
+ours=$(cd "$top/python" && python3 -m tcs_xtce.digest_cli "$demo")
 [ "$installed" = "$ours" ] ||
     fail "xtce-digest gives $installed installed and $ours in the repository"
 

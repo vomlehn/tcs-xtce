@@ -39,8 +39,8 @@ for f in "$@"; do
     "$rust_tool" "$f" "$out/$b.rust.xml"
     "$cpp_tool" "$f" "$out/$b.cpp.xml"
     PYTHONPATH="$top/python" python3 -c \
-        'import sys, xtce
-doc = xtce.Document.from_file(sys.argv[1])
+        'import sys, tcs_xtce
+doc = tcs_xtce.Document.from_file(sys.argv[1])
 doc.write_to(open(sys.argv[2], "wb"))' \
         "$f" "$out/$b.py.xml"
     for lang in cpp py; do

@@ -137,7 +137,7 @@ documents together:
 
 .. code-block:: sh
 
-   cd ../../generator
+   cd ../../python
    python3 -m tcs_xtce ../examples/split-mission/dt.xml \
        ../examples/split-mission/pus.xml ../examples/split-mission/rover.xml \
        ../examples/split-mission/rust/src/rover.rs --lang rust
@@ -192,7 +192,7 @@ and every runtime computes the digest of a set of documents the same way:
      - ``xtce_digest_files_bytes(paths, n, out, &err)``, from the header
        ``xtce/digest.h``, which needs no library
    * - Python
-     - ``xtce.digest.digest_files_bytes(paths)``, giving ``bytes``
+     - ``tcs_xtce.digest.digest_files_bytes(paths)``, giving ``bytes``
 
 ``xtce-digest --set dt.xml pus.xml rover.xml`` prints the same digest in
 hex. The digest of a set is the MD5 digest of its documents' canonical
@@ -266,7 +266,7 @@ Python
 ~~~~~~
 
 `python/main.py <python/main.py>`__ needs Python 3.10 or later and the
-``xtce`` package in ``../../python``:
+``tcs_xtce`` package in ``../../python``:
 
 .. code-block:: sh
 

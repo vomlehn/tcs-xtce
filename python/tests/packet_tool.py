@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
 
 import demo  # noqa: E402
-from xtce.packet import (  # noqa: E402
+from tcs_xtce.packet import (  # noqa: E402
     Codec, PacketError, describe_alarms, describe_outputs)
 
 DECODERS = {"tm": demo.CCSDSPacketKind, "tc": demo.CCSDSCommandKind,

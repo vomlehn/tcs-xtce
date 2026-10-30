@@ -28,7 +28,7 @@ Generating the code
 
 .. code-block:: sh
 
-   cd ../../generator
+   cd ../../python
    python3 -m tcs_xtce ../examples/simple-string/simple_string.xml \
        ../examples/simple-string/rust/src/simple_string.rs --lang rust
    python3 -m tcs_xtce ../examples/simple-string/simple_string.xml \
@@ -151,7 +151,7 @@ Python
 ~~~~~~
 
 `python/main.py <python/main.py>`__ needs Python 3.10 or later and the
-``xtce`` package in ``../../python``:
+``tcs_xtce`` package in ``../../python``:
 
 .. code-block:: sh
 

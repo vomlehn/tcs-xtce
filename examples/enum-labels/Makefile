@@ -20,12 +20,12 @@ RST2HTML ?= rst2html
 XML     := modes.xml
 GEN     := rust/src/probe.rs c/probe.h cxx/probe.h \
            python/probe.py
-GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py \
-                     $(TOP)/generator/tcs_xtce/*.py \
-                     $(TOP)/generator/xtcegen/*.py)
+GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \
+                     $(TOP)/python/tcs_xtce/__main__.py \
+                     $(TOP)/python/tcs_xtce/binding/*.py)
 PKT_H   := $(TOP)/cpp/include/xtce/packet.h \
            $(TOP)/cpp/include/xtce/digest.h
-TCS_XTCE := cd $(TOP)/generator && \
+TCS_XTCE := cd $(TOP)/python && \
             $(PYTHON) -m tcs_xtce ../examples/enum-labels/$(XML) \
            --source-name examples/enum-labels/$(XML)
 

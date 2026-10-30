@@ -128,7 +128,7 @@ runtime computes it the same way:
      - ``xtce_digest_file_bytes(path, out, &err)``, from the header
        ``xtce/digest.h``, which needs no library
    * - Python
-     - ``xtce.digest.digest_file_bytes(path)``, giving ``bytes``
+     - ``tcs_xtce.digest.digest_file_bytes(path)``, giving ``bytes``
 
 ``xtce-digest to_from.xml`` prints the same digest in hex. Each program reads
 ``to_from.xml`` from the current directory, so run it from this one.
@@ -140,7 +140,7 @@ Generating the code
 
 .. code-block:: sh
 
-   cd ../../generator
+   cd ../../python
    python3 -m tcs_xtce ../examples/to-from/to_from.xml \
        ../examples/to-from/rust/src/to_from.rs --lang rust
    python3 -m tcs_xtce ../examples/to-from/to_from.xml \
@@ -256,7 +256,7 @@ Python
 ~~~~~~
 
 `python/main.py <python/main.py>`__ needs Python 3.10 or later and the
-``xtce`` package in ``../../python``:
+``tcs_xtce`` package in ``../../python``:
 
 .. code-block:: sh
 

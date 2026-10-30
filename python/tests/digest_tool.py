@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from xtce import XtceError  # noqa: E402
-from xtce.digest import digest_file, digest_files  # noqa: E402
+from tcs_xtce import XtceError  # noqa: E402
+from tcs_xtce.digest import digest_file, digest_files  # noqa: E402
 
 if sys.argv[1:2] == ["--set"]:
     try:

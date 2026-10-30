@@ -138,18 +138,19 @@ reads each field from where the document says it is.
      - Contents
    * - ``references/``
      - Downloaded XTCE documents (``SpaceSystem.xsd``, ``XTCE.pdf``, ``VERSION``) plus ``xml.xsd`` and ``catalog.xml`` for offline validation
-   * - ``generator/xtcegen/``
+   * - ``python/tcs_xtce/binding/``
      - Generates the XML binding from the schema
-   * - ``generator/tcs_xtce/``, ``generator/xtcepkt/``
+   * - ``python/tcs_xtce/__main__.py``, ``python/tcs_xtce/compiler/``
      - The ``tcs-xtce`` command, and the compiler behind it that turns a mission's XTCE document into packet codecs
-   * - ``generator/xtce_digest/``
+   * - ``python/tcs_xtce/digest_cli/``
      - The ``xtce-digest`` command, which prints a digest of what an XTCE document means (see `xtce-digest`_); the digest itself is in each runtime
    * - ``rust/``
      - The ``tcs-xtce`` Rust crate (imported as ``tcs_xtce``)
    * - ``cpp/``
      - The C++20 library (``libxtce.a``, ``libxtce.so``) and its C API
-   * - ``python/``
-     - The ``xtce`` Python package (3.10+, standard library only)
+   * - ``python/tcs_xtce/``
+     - The ``tcs_xtce`` Python package (3.10+, standard library only): the
+       Python runtime, with the three above inside it
    * - ``tests/``
      - Schema-coverage samples, the demo mission, packet vectors, the cross-language checks, and the list of public XTCE documents for ``make samples-check``
    * - ``docs/``
@@ -246,17 +247,18 @@ from the repository and install the wheel:
    pip install dist/tcs_xtce-*.whl
 
 ``make python-dist`` writes the wheel and an sdist to ``dist/``. It
-generates ``python/xtce/generated.py`` first, which is not in git, and
+generates ``python/tcs_xtce/generated.py`` first, which is not in git, and
 then installs the wheel in a fresh virtual environment and checks that the
 installed commands generate the demo mission's code and that the Python
 generated decodes a packet. It builds with the installed setuptools, 77 or
 later, and downloads nothing. The package needs nothing but Python 3.10 or
 later; ``--lang rust`` also needs ``rustfmt``.
 
-The packages it installs are ``xtce`` (the runtime, which generated Python
-imports), ``tcs_xtce`` (the compiler's command line), ``xtcepkt`` and
-``xtcegen`` (the compiler itself) and ``xtce_digest``. Its version is the
-Rust crate's.
+It installs one Python package, ``tcs_xtce``: the runtime, which generated
+Python imports, at its top; the compiler in ``tcs_xtce.compiler``, run as
+``python3 -m tcs_xtce`` or ``tcs-xtce``; the XML binding's generator in
+``tcs_xtce.binding``; and ``xtce-digest`` in ``tcs_xtce.digest_cli``. Its
+version is the Rust crate's.
 
 ``references/Makefile`` reads the OMG specification page
 (https://www.omg.org/spec/XTCE/) to find the latest version instead of
@@ -337,8 +339,8 @@ C++: ``xtce::Buffer`` (``xtce/buffer.hpp``)
    * - ``size()``, ``empty()``, ``capacity()``
      - Sizes
 
-Python: ``xtce.ManagedBuffer``
-------------------------------
+Python: ``tcs_xtce.ManagedBuffer``
+----------------------------------
 
 .. list-table::
    :widths: auto
@@ -453,7 +455,7 @@ runtime):
    * - ``xtce::Document* xtce_document_cxx(doc)``
      - The C++ object, for typed access (C++ only)
 
-Python (``xtce.Document``):
+Python (``tcs_xtce.Document``):
 
 .. list-table::
    :widths: auto
@@ -476,7 +478,7 @@ Python (``xtce.Document``):
      - Release the buffers early
 
 ``xtce.to_xml`` and ``xtce.from_xml`` work like their Rust
-counterparts. Errors are raised as ``xtce.XtceError`` (a ``ValueError``)
+counterparts. Errors are raised as ``tcs_xtce.XtceError`` (a ``ValueError``)
 with ``message`` and ``line`` attributes.
 
 Generated data structures
@@ -598,14 +600,14 @@ across, and generates, for one language:
   use.
 
 The generated code uses a small runtime: ``tcs_xtce::packet`` in Rust,
-``xtce/packet.h`` in C and C++, and ``xtce.packet`` in Python.
+``xtce/packet.h`` in C and C++, and ``tcs_xtce.packet`` in Python.
 
 Running the compiler
 --------------------
 
 .. code-block:: sh
 
-   cd generator
+   cd python
    python3 -m tcs_xtce INPUT... OUTPUT --lang LANG
 
    python3 -m tcs_xtce demo.xml demo.rs --lang rust
@@ -623,7 +625,7 @@ the compiler is the ``tcs-xtce`` command, run from anywhere:
    :widths: auto
 
    * - ``INPUT...``
-     - The mission's XTCE documents, read with the ``xtce`` Python package:
+     - The mission's XTCE documents, read with the ``tcs_xtce`` Python package:
        usually one, or several when the mission is split across documents
        (see `Missions in several documents`_)
    * - ``OUTPUT``
@@ -786,11 +788,11 @@ is repacked.
 Using the generated code:
 
 * **Rust**: add the file as a module (``mod demo;``) in a crate that
-  depends on ``xtce``.
+  depends on ``tcs-xtce``.
 * **C and C++**: include the header with ``cpp/include`` on the include
   path. The header and its runtime ``xtce/packet.h`` are self-contained
   and need no library. In C, link with ``-lm``.
-* **Python**: import the module with the ``xtce`` package on the path.
+* **Python**: import the module with the ``tcs_xtce`` package on the path.
 
 ``make packets`` regenerates the demo mission
 (``tests/mission/demo.xml``) into ``rust/tests/mission/demo.rs``,
@@ -1091,7 +1093,7 @@ doesn't list survive decoding and re-encoding:
   (``demo_ModeType_NOMINAL``) and ``const char* demo_ModeType_label(demo_ModeType)``,
   which returns ``NULL`` for an unlisted value.
 * **Python**: ``class ModeType(enum.IntEnum)`` with a ``label``
-  property. ``xtce.packet.enum_value(ModeType, 20)`` builds a value
+  property. ``tcs_xtce.packet.enum_value(ModeType, 20)`` builds a value
   even when it isn't listed.
 
 A range entry (``maxValue``) gives one label to all values in the range.
@@ -1113,7 +1115,7 @@ Methods
 
 Every packet struct and kind has the members below. Rust implements the
 ``tcs_xtce::packet::Packet`` trait. Python classes derive from
-``xtce.packet.Packet`` (structs) or ``xtce.packet.PacketKind`` (kinds).
+``tcs_xtce.packet.Packet`` (structs) or ``tcs_xtce.packet.PacketKind`` (kinds).
 In C/C++ they are macros and ``static inline`` functions named after the
 type, shown here for ``T`` = ``demo_Housekeeping``.
 
@@ -1246,11 +1248,11 @@ and as C++:
            send(sock, out, len, 0);
    }
 
-Python (``xtce.packet.Codec``):
+Python (``tcs_xtce.packet.Codec``):
 
 .. code-block:: python
 
-   from xtce.packet import Codec
+   from tcs_xtce.packet import Codec
    import demo
 
    codec = Codec.for_packet(demo.CCSDSPacketKind)
@@ -1278,7 +1280,7 @@ the sender added them. A packet whose last value takes the rest of the
 packet, and that has no packet length field, takes the rest of the
 batch, so it must come last.
 
-Rust has ``tcs_xtce::packet::Batch`` and Python ``xtce.packet.Batch``.
+Rust has ``tcs_xtce::packet::Batch`` and Python ``tcs_xtce.packet.Batch``.
 In C/C++ (``xtce/packet.h``) an ``xtce_pk_batch`` is kept in a buffer the
 caller gives; each packet type ``T`` has ``T_batch_add`` and
 ``T_batch_next``. The C/C++ functions return ``0`` or an ``XTCE_PK_*``
@@ -1366,7 +1368,7 @@ Errors
 ------
 
 Errors are ``tcs_xtce::packet::PacketError`` (a Rust enum) and
-``xtce.packet.PacketError`` (a Python ``ValueError``). In C and C++
+``tcs_xtce.packet.PacketError`` (a Python ``ValueError``). In C and C++
 they are the code a function returns, plus the ``xtce_pk_error`` it
 fills in: ``code``, the ``field`` involved and, for ``Mismatch``, the
 criterion in ``detail``. Each error carries a *kind* that is the same in
@@ -2804,11 +2806,11 @@ digest, they agree on every packet's fields, types and order (see
 
 .. code-block:: sh
 
-   cd generator
-   python3 -m xtce_digest FILE...
-   python3 -m xtce_digest --set FILE...
+   cd python
+   python3 -m tcs_xtce.digest_cli FILE...
+   python3 -m tcs_xtce.digest_cli --set FILE...
 
-   python3 -m xtce_digest ../tests/mission/demo.xml ../examples/simple-string/simple_string.xml
+   python3 -m tcs_xtce.digest_cli ../tests/mission/demo.xml ../examples/simple-string/simple_string.xml
 
 With the Python package installed, it is the ``xtce-digest`` command:
 ``xtce-digest FILE...``.
@@ -2874,7 +2876,7 @@ hex digits (to print):
        ``xtce::digest_files(paths)`` (each a
        ``std::vector<std::string>``), returning ``std::string``
      - ``-1`` and ``err.message``; C++ throws ``std::runtime_error``
-   * - Python (``xtce.digest``)
+   * - Python (``tcs_xtce.digest``)
      - ``digest_bytes(data)``, ``digest(data)``, ``digest_string(text)``,
        ``digest_file_bytes(path)``, ``digest_file(path)``; for a set,
        ``digest_set_bytes(documents)``, ``digest_set(documents)``,
@@ -2883,7 +2885,7 @@ hex digits (to print):
 
 .. code-block:: python
 
-   from xtce.digest import digest_file, digest_file_bytes
+   from tcs_xtce.digest import digest_file, digest_file_bytes
 
    digest_file("tests/mission/demo.xml")        # '6d2d1d775d75a68089fddade8e95c585'
    digest_file_bytes("tests/mission/demo.xml")  # the same 16 bytes
@@ -2919,7 +2921,7 @@ meaning: the entries of an ``EntryList``, the members of a
 an ``ArgumentList``, spline points, and the cases of a
 ``DiscreteLookupList``, ``ContextCalibratorList`` or ``ContextAlarmList``,
 where the first match wins. The full list is ``UNORDERED`` in
-``generator/xtce_digest/__init__.py``.
+``python/tcs_xtce/digest_cli/__init__.py``.
 
 The digest errs on the side of changing: anything a document says is
 covered, including descriptions, aliases and ancillary data, even where
@@ -3274,7 +3276,7 @@ Testing
 
 * the unit tests of every language (``cargo test``, ``cpp/tests``,
   ``python -m unittest``);
-* the packet compiler's tests (``generator/tests``), which compile small
+* the packet compiler's tests (``python/tests/compiler``), which compile small
   XTCE documents and check the model and the size report, including that
   malformed documents are reported as unsupported rather than crashing
   the generator;

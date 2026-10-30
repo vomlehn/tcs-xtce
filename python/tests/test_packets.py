@@ -12,8 +12,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "mission"))
 
 import demo  # noqa: E402
-from xtce import ManagedBuffer  # noqa: E402
-from xtce.packet import (  # noqa: E402
+from tcs_xtce import ManagedBuffer  # noqa: E402
+from tcs_xtce.packet import (  # noqa: E402
     AlarmLevel, Batch, BitReader, BitWriter, Codec, PacketError, bcd_decode,
     bcd_encode, checksum, decode_text, encode_text, enum_value, float_decode,
     float_encode, float_to_raw, math_op, spline_orders)

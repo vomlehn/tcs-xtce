@@ -111,7 +111,7 @@ Generating the code
 
 .. code-block:: sh
 
-   cd ../../generator
+   cd ../../python
    python3 -m tcs_xtce ../examples/enum-labels/modes.xml \
        ../examples/enum-labels/rust/src/probe.rs --lang rust
    python3 -m tcs_xtce ../examples/enum-labels/modes.xml \
@@ -261,7 +261,7 @@ Python
 ~~~~~~
 
 `python/main.py <python/main.py>`__ needs Python 3.10 or later and the
-``xtce`` package in ``../../python``:
+``tcs_xtce`` package in ``../../python``:
 
 .. code-block:: sh
 

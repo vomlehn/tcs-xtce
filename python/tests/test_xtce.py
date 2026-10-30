@@ -8,9 +8,9 @@ import io
 import os
 import unittest
 
-import xtce
-from xtce import Document, ManagedBuffer, SpaceSystemType, XtceError
-from xtce import _xml as X
+import tcs_xtce
+from tcs_xtce import Document, ManagedBuffer, SpaceSystemType, XtceError
+from tcs_xtce import _xml as X
 
 SAMPLES = sorted(glob.glob(os.path.join(os.path.dirname(__file__), "..", "..",
                                         "tests", "samples", "*.xml")))
@@ -37,10 +37,10 @@ class RoundTrip(unittest.TestCase):
         self.assertEqual(back.root, ss)
 
     def test_choice_constructors(self):
-        names = [name for name in dir(xtce) if name.endswith("Choice")]
+        names = [name for name in dir(tcs_xtce) if name.endswith("Choice")]
         self.assertTrue(names)
         for name in names:
-            cls = getattr(xtce, name)
+            cls = getattr(tcs_xtce, name)
             self.assertIn(cls().name, cls.NAMES)
 
 
@@ -138,7 +138,7 @@ class Scalars(unittest.TestCase):
 
 
 def load_tests(loader, tests, ignore):
-    tests.addTests(doctest.DocTestSuite(xtce))
+    tests.addTests(doctest.DocTestSuite(tcs_xtce))
     return tests
 
 

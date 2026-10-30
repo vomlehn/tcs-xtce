@@ -385,7 +385,7 @@ and ends at a NUL byte (<tt class="docutils literal">TerminationChar 00</tt>);</
 <h1>Generating the code</h1>
 <p><tt class="docutils literal">make generate</tt> runs the generator once per language:</p>
 <pre class="code sh literal-block">
-<span class="name builtin">cd</span><span class="whitespace"> </span>../../generator<span class="whitespace">
+<span class="name builtin">cd</span><span class="whitespace"> </span>../../python<span class="whitespace">
 </span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/simple-string/rust/src/simple_string.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
 </span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
@@ -525,7 +525,7 @@ bytes.</p>
 <div class="section" id="python">
 <h2>Python</h2>
 <p><a class="reference external" href="python/main.py">python/main.py</a> needs Python 3.10 or later and the
-<tt class="docutils literal">xtce</tt> package in <tt class="docutils literal"><span class="pre">../../python</span></tt>:</p>
+<tt class="docutils literal">tcs_xtce</tt> package in <tt class="docutils literal"><span class="pre">../../python</span></tt>:</p>
 <pre class="code sh literal-block">
 <span class="name variable">PYTHONPATH</span><span class="operator">=</span>../../python:python<span class="whitespace"> </span>python3<span class="whitespace"> </span>python/main.py
 </pre>

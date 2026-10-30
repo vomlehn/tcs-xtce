@@ -1,11 +1,11 @@
 /* Runtime for packet codecs generated from a mission's XTCE document.
  *
- * tcs-xtce (in generator/) turns the containers and meta-commands of a mission
- * database into C structs and functions.  The generated code reads packets
- * with an xtce_pk_reader and writes them with an xtce_pk_writer into a buffer
- * the caller owns; this header provides those and the integer, float, string
- * and calibration helpers they call.  It mirrors xtce::packet in Rust and
- * xtce.packet in Python.
+ * tcs-xtce (python/tcs_xtce/compiler) turns the containers and
+ * meta-commands of a mission database into C structs and functions.  The
+ * generated code reads packets with an xtce_pk_reader and writes them with
+ * an xtce_pk_writer into a buffer the caller owns; this header provides
+ * those and the integer, float, string and calibration helpers they call.
+ * It mirrors tcs_xtce::packet in Rust and tcs_xtce.packet in Python.
  *
  * The header needs only xtce/bnum.h, beside it, and the C standard library
  * (link with -lm), and compiles both as C11 and as C++.  Nothing is

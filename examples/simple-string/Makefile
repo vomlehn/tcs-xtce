@@ -19,11 +19,11 @@ RST2HTML ?= rst2html
 XML     := simple_string.xml
 GEN     := rust/src/simple_string.rs c/simple_string.h cxx/simple_string.h \
            python/simple_string.py
-GEN_SRC := $(wildcard $(TOP)/generator/xtcepkt/*.py \
-                     $(TOP)/generator/tcs_xtce/*.py \
-                     $(TOP)/generator/xtcegen/*.py)
+GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \
+                     $(TOP)/python/tcs_xtce/__main__.py \
+                     $(TOP)/python/tcs_xtce/binding/*.py)
 PKT_H   := $(TOP)/cpp/include/xtce/packet.h
-TCS_XTCE := cd $(TOP)/generator && \
+TCS_XTCE := cd $(TOP)/python && \
             $(PYTHON) -m tcs_xtce ../examples/simple-string/$(XML) \
            --source-name examples/simple-string/$(XML)
 

@@ -1,11 +1,14 @@
 # The Python package: the runtime that generated Python code imports, and
 # the compiler that generates code in every language, installable with pip.
 #
-# It is at the repository's root because its packages are in two
-# directories: the runtime in python/ and the compiler in generator/.
-# python/xtce/generated.py is not in git -- `make generate` writes it from
-# the XTCE schema -- so build the package with `make python-dist`, which
-# writes it first and checks that the wheel holds it.
+# One package, tcs_xtce, in python/: the runtime at its top, the compiler
+# in tcs_xtce.compiler, the XML binding's generator in tcs_xtce.binding and
+# the digest's command line in tcs_xtce.digest_cli. This file is at the
+# repository's root so that the package can carry the README and the
+# license files. python/tcs_xtce/generated.py is not in git -- `make
+# generate` writes it from the XTCE schema -- so build the package with
+# `make python-dist`, which writes it first and checks that the wheel holds
+# it.
 
 [build-system]
 requires = ["setuptools>=77"]
@@ -45,21 +48,15 @@ Documentation = "https://vomlehn.github.io/tcs-xtce/docs/manual.html"
 
 [project.scripts]
 tcs-xtce = "tcs_xtce.__main__:main"
-xtce-digest = "xtce_digest.__main__:main"
+xtce-digest = "tcs_xtce.digest_cli.__main__:main"
 
 [tool.setuptools]
-# xtce is the runtime. tcs_xtce is the compiler's command line, built from
-# xtcepkt (the packet codecs) and xtcegen (the XML binding's generator,
-# whose line wrapping and rustfmt the compiler uses); xtce_digest is the
-# digest's command line.
-packages = ["xtce", "tcs_xtce", "xtcepkt", "xtcegen", "xtce_digest"]
+# The compiler uses tcs_xtce.binding's line wrapping and rustfmt.
+packages = ["tcs_xtce", "tcs_xtce.compiler", "tcs_xtce.binding",
+            "tcs_xtce.digest_cli"]
 
 [tool.setuptools.package-dir]
-xtce = "python/xtce"
-tcs_xtce = "generator/tcs_xtce"
-xtcepkt = "generator/xtcepkt"
-xtcegen = "generator/xtcegen"
-xtce_digest = "generator/xtce_digest"
+"" = "python"
 
 [tool.setuptools.package-data]
-"*" = ["py.typed"]
+tcs_xtce = ["py.typed"]

@@ -18,9 +18,9 @@ import socket
 import sys
 import threading
 
-from xtce import XtceError
-from xtce.digest import digest_file_bytes
-from xtce.packet import Codec, PacketError
+from tcs_xtce import XtceError
+from tcs_xtce.digest import digest_file_bytes
+from tcs_xtce.packet import Codec, PacketError
 
 from variable_array import Length, Line, Paragraph
 

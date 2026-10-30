@@ -25,12 +25,12 @@ CARGO   ?= cargo
 CURL    ?= curl -fsSL --retry 3 --retry-delay 2
 
 XSD     := references/SpaceSystem.xsd
-GEN     := $(PYTHON) -m xtcegen --xsd ../$(XSD)
-GEN_SRC := $(wildcard generator/xtcegen/*.py)
+GEN     := $(PYTHON) -m tcs_xtce.binding --xsd ../$(XSD)
+GEN_SRC := $(wildcard python/tcs_xtce/binding/*.py)
 
 RUST_GEN := rust/src/generated.rs
 CPP_GEN  := cpp/include/xtce/generated.hpp cpp/src/generated.cpp
-PY_GEN   := python/xtce/generated.py
+PY_GEN   := python/tcs_xtce/generated.py
 SAMPLES  := tests/samples/COVERAGE.txt
 
 RUST_TOOL := rust/target/release/examples/xtce_roundtrip
@@ -40,9 +40,11 @@ CPP_TOOL  := cpp/build/xtce_roundtrip
 # mission exercises them in every language.
 MISSION  := tests/mission/demo.xml
 PKT      := $(PYTHON) -m tcs_xtce ../$(MISSION) --source-name $(MISSION)
-# tcs-xtce also uses xtcegen, which formats and wraps what it writes.
-PKT_SRC  := $(wildcard generator/xtcepkt/*.py generator/tcs_xtce/*.py \
-                      generator/xtcegen/*.py)
+# tcs-xtce also uses tcs_xtce.binding, which formats and wraps what it
+# writes.
+PKT_SRC  := $(wildcard python/tcs_xtce/compiler/*.py \
+                      python/tcs_xtce/__main__.py \
+                      python/tcs_xtce/binding/*.py)
 PKT_RUST := rust/tests/mission/demo.rs rust/tests/mission/demo_fixed.rs
 PKT_CPP  := cpp/tests/mission/demo.h
 PKT_PY   := python/tests/mission/demo.py
@@ -68,20 +70,20 @@ $(XSD):
 generate: $(RUST_GEN) $(CPP_GEN) $(PY_GEN) $(SAMPLES) $(PKT_GEN)
 
 $(RUST_GEN): $(XSD) $(GEN_SRC)
-	cd generator && $(GEN) --rust ../$@
+	cd python && $(GEN) --rust ../$@
 	@touch $@
 
 $(CPP_GEN) &: $(XSD) $(GEN_SRC)
-	cd generator && $(GEN) --cpp-header ../cpp/include/xtce/generated.hpp \
+	cd python && $(GEN) --cpp-header ../cpp/include/xtce/generated.hpp \
 		--cpp-source ../cpp/src/generated.cpp
 	@touch $(CPP_GEN)
 
 $(PY_GEN): $(XSD) $(GEN_SRC)
-	cd generator && $(GEN) --python ../$@
+	cd python && $(GEN) --python ../$@
 	@touch $@
 
 $(SAMPLES): $(XSD) $(GEN_SRC)
-	cd generator && $(GEN) --sample ../tests/samples
+	cd python && $(GEN) --sample ../tests/samples
 	@touch $@
 
 .PHONY: samples
@@ -90,11 +92,11 @@ samples: $(SAMPLES)
 # tcs-xtce reads the mission with the generated Python binding and writes one
 # language per run.
 $(PKT_GEN) &: $(MISSION) $(PKT_SRC) $(PY_GEN)
-	cd generator && $(PKT) ../rust/tests/mission/demo.rs --lang rust
-	cd generator && $(PKT) ../rust/tests/mission/demo_fixed.rs --lang rust \
+	cd python && $(PKT) ../rust/tests/mission/demo.rs --lang rust
+	cd python && $(PKT) ../rust/tests/mission/demo_fixed.rs --lang rust \
 		--dynamic-allocations false
-	cd generator && $(PKT) ../$(PKT_CPP) --lang c
-	cd generator && $(PKT) ../$(PKT_PY) --lang python
+	cd python && $(PKT) ../$(PKT_CPP) --lang c
+	cd python && $(PKT) ../$(PKT_PY) --lang python
 	@touch $(PKT_GEN)
 
 .PHONY: packets
@@ -112,12 +114,12 @@ cpp: $(CPP_GEN) $(PKT_CPP)
 
 .PHONY: python
 python: $(PY_GEN) $(PKT_PY)
-	$(PYTHON) -m compileall -q python/xtce
+	$(PYTHON) -m compileall -q python/tcs_xtce
 
 EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
 .PHONY: test
-test: test-generator test-rust test-cpp test-python cross-check packet-check \
+test: test-rust test-cpp test-python cross-check packet-check \
       stream-check digest-check float-check bnum-check ccsds-check examples \
       line-width doc-headers
 
@@ -135,9 +137,10 @@ line-width:
 	$(PYTHON) -I tests/line_width.py
 
 # The packet compiler reads XTCE with the generated Python binding.
+# The compiler's tests alone; test-python runs them too.
 .PHONY: test-generator
 test-generator: $(PY_GEN)
-	cd generator && $(PYTHON) -m unittest discover -s tests -t .
+	cd python && $(PYTHON) -m unittest discover -s tests/compiler -t .
 
 .PHONY: test-rust
 test-rust: rust $(SAMPLES)
@@ -190,10 +193,10 @@ bnum-check: rust cpp
 # here.
 .PHONY: python-dist
 python-dist: $(PY_GEN)
-	rm -rf dist build tcs_xtce.egg-info
+	rm -rf dist build python/tcs_xtce.egg-info
 	$(PYTHON) -c 'from setuptools import build_meta as b; \
 		b.build_wheel("dist"); b.build_sdist("dist")'
-	rm -rf build tcs_xtce.egg-info
+	rm -rf build python/tcs_xtce.egg-info
 	sh tests/python_dist_check.sh dist
 
 # Public XTCE documents, pinned to commits in tests/external/sources.txt and
@@ -234,8 +237,8 @@ examples: cpp python
 	done
 	for d in $(EXAMPLES); do $(MAKE) -C $$d || exit 1; done
 
-# Hand-written Python in git, laid out by xtcegen.pyalign as the generated
-# Python is.
+# Hand-written Python in git, laid out by tcs_xtce.binding.pyalign as the
+# generated Python is.
 PY_FILES = $$(git -C .. ls-files '*.py' | sed 's|^|../|') \
            ../examples/to-from/to-from
 
@@ -260,7 +263,7 @@ fmt:
 	    $(MAKE) -C $$d generate && \
 	        (cd $$d/rust && $(CARGO) fmt) || exit 1; \
 	done
-	cd generator && $(PYTHON) -m xtcegen.pyalign $(PY_FILES)
+	cd python && $(PYTHON) -m tcs_xtce.binding.pyalign $(PY_FILES)
 
 .PHONY: fmt-check
 fmt-check:
@@ -270,7 +273,7 @@ fmt-check:
 	    $(MAKE) -C $$d generate && \
 	        (cd $$d/rust && $(CARGO) fmt --check) || exit 1; \
 	done
-	cd generator && $(PYTHON) -m xtcegen.pyalign --check $(PY_FILES)
+	cd python && $(PYTHON) -m tcs_xtce.binding.pyalign --check $(PY_FILES)
 
 # The documents as HTML: docs/ and the examples' READMEs. Committed beside
 # their sources and served by GitHub Pages, so remade before a commit that
@@ -287,8 +290,8 @@ clean:
 	$(MAKE) -C ccsds clean
 	for d in $(EXAMPLES); do $(MAKE) -C $$d clean; done
 	$(MAKE) -C references clean
-	find python generator -name __pycache__ -type d -prune -exec rm -rf {} +
-	rm -rf dist build tcs_xtce.egg-info
+	find python -name __pycache__ -type d -prune -exec rm -rf {} +
+	rm -rf dist build python/tcs_xtce.egg-info
 
 .PHONY: distclean
 distclean: clean

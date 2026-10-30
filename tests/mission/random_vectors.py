@@ -22,7 +22,7 @@ TOP = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(TOP / "python"), str(TOP / "python" / "tests" / "mission")]
 
 import demo  # noqa: E402
-from xtce.packet import PacketError  # noqa: E402
+from tcs_xtce.packet import PacketError  # noqa: E402
 
 # The custom algorithms the packet tools register.
 demo.HOOKS.update(is_even=lambda v: v[0] % 2.0 == 0.0,
