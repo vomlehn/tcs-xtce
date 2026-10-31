@@ -646,6 +646,7 @@ make<span class="whitespace">                 </span><span class="comment single
 </span>make<span class="whitespace"> </span>stage<span class="whitespace">           </span><span class="comment single"># install into build/stage/tcs-xtce, as the package does
 </span>make<span class="whitespace"> </span>deb<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>rpm<span class="whitespace">       </span><span class="comment single"># build the tcs-xtce package into build/packages
 </span>make<span class="whitespace"> </span>packages<span class="whitespace">        </span><span class="comment single"># both; STRIP=0 keeps the libraries unstripped
+</span>make<span class="whitespace"> </span>lint-packages<span class="whitespace">   </span><span class="comment single"># check them with lintian, rpmlint and shellcheck
 </span>make<span class="whitespace"> </span>clean<span class="whitespace">           </span><span class="comment single"># remove build products
 </span>make<span class="whitespace"> </span>distclean<span class="whitespace">       </span><span class="comment single"># also remove the downloaded references</span>
 </pre>
@@ -728,6 +729,23 @@ the .rpm hold the same files, and <tt class="docutils literal">rpmbuild</tt> is 
 again. <tt class="docutils literal">STRIP=0</tt>, as in <tt class="docutils literal">make packages STRIP=0</tt>, keeps everything as
 built. The .deb's version is <tt class="docutils literal"><span class="pre">&lt;version&gt;-1</span></tt> and the RPM's release 1;
 <tt class="docutils literal">DEB_REVISION</tt> gives another Debian revision.</p>
+<p>The .deb also carries what Debian expects of every package, outside
+<tt class="docutils literal">/opt/tcs</tt> as the hooks are: <tt class="docutils literal"><span class="pre">/usr/share/doc/tcs-xtce/copyright</span></tt>, in
+Debian's machine-readable format, and <tt class="docutils literal">changelog.Debian.gz</tt>, both made as
+the package is built, from <tt class="docutils literal"><span class="pre">LICENSE-MIT</span></tt> and the version; lintian's
+overrides, in <tt class="docutils literal"><span class="pre">/usr/share/lintian/overrides/tcs-xtce</span></tt>; and a trigger that
+has dpkg run <tt class="docutils literal">ldconfig</tt> once the library is installed or removed. The RPM
+says the same in its own <tt class="docutils literal">License</tt>, <tt class="docutils literal">%changelog</tt>, <tt class="docutils literal">%post</tt> and
+<tt class="docutils literal">%postun</tt>. An example that is a script, starting with <tt class="docutils literal">#!</tt>, is
+installed executable.</p>
+<p><tt class="docutils literal">make <span class="pre">lint-packages</span></tt> checks the packages <tt class="docutils literal">make packages</tt> built with
+lintian and rpmlint, and the shell scripts they run or install with
+shellcheck: the hook and <tt class="docutils literal"><span class="pre">tcs-xtce-links</span></tt> as the stage has them, the
+.deb's <tt class="docutils literal">prerm</tt> and the packaging scripts. It skips, in a line, any of the
+three that is not installed, and fails on any finding that is not
+overridden. What is overridden is intended, and says why: for lintian in
+<tt class="docutils literal"><span class="pre">packaging/deb/tcs-xtce/lintian-overrides</span></tt>, which the .deb carries, and
+for rpmlint in <tt class="docutils literal">packaging/rpm/rpmlint.toml</tt>, which is not shipped.</p>
 <p>A C or C++ program compiles against the installed library with:</p>
 <pre class="code sh literal-block">
 cc<span class="whitespace">  </span>prog.c<span class="whitespace">   </span><span class="keyword">$(</span>pkg-config<span class="whitespace"> </span>--cflags<span class="whitespace"> </span>--libs<span class="whitespace"> </span>xtce<span class="keyword">)</span><span class="whitespace">

@@ -2,12 +2,14 @@
 # Builds one .deb from the tree `make stage` installed that package into.
 #
 #   packaging/deb/build-deb.sh <package> <stage> <work> <out> <version> <arch>
+#                              <epoch>
 #
 # <package> is tcs-xtce, the one package here; <stage> the
 # directory `make stage` installed it into, by itself; <work> a directory
 # this may fill and empty; <out> where the .deb goes; <version> the Debian
 # version, upstream and revision; <arch> what `dpkg --print-architecture`
-# says. `make deb` runs it once per package.
+# says; <epoch> the release's time in seconds since 1970, which dates its
+# changelog entry. `make deb` runs it once per package.
 #
 # Without a debian/ tree, because the packages are cut from what `make
 # install` puts in place rather than built by debhelper: the stage is the one
@@ -21,6 +23,7 @@ work=$3
 out=$4
 version=$5
 arch=$6
+epoch=$7
 
 here=$(dirname "$0")
 template=$here/$package/DEBIAN
@@ -92,6 +95,11 @@ if [ -d "$root/etc" ]; then
 	(cd "$root" && find etc -type f | sed 's|^|/|' | sort) \
 		> "$root/DEBIAN/conffiles"
 fi
+
+# What Debian expects outside /opt/tcs and the RPM does not have: the
+# copyright file, the Debian changelog, the lintian overrides and the
+# trigger that runs ldconfig. See debian-files.sh.
+"$here/debian-files.sh" tcs-xtce "$package" "$root" "$version" "$epoch"
 
 dpkg-deb --root-owner-group --build "$root" \
 	"$out/${package}_${version}_${arch}.deb"

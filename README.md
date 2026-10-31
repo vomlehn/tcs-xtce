@@ -119,6 +119,20 @@ install: `libxtce.so` of all a debugger needs (`strip --strip-unneeded`),
 `libxtce.a` of its debugging information (`strip --strip-debug`). Give
 `STRIP=0`, as in `make packages STRIP=0`, to keep everything as built.
 
+The .deb also carries what Debian expects of every package, outside
+`/opt/tcs` as the hooks are: `/usr/share/doc/tcs-xtce/copyright`, in
+Debian's machine-readable format, and `changelog.Debian.gz`, both made as
+the package is built from `LICENSE-MIT` and the version; lintian's
+overrides in `/usr/share/lintian/overrides/tcs-xtce`; and a trigger that
+has dpkg run `ldconfig` once the library is installed or removed. The RPM
+says the same in its own `License`, `%changelog`, `%post` and `%postun`.
+`make lint-packages` checks the packages that `make packages` built with
+lintian and rpmlint, and their shell scripts with shellcheck. It skips,
+in a line, any of the three that is not installed, and fails on any
+finding that is not overridden; each override says why it is intended, in
+`packaging/deb/tcs-xtce/lintian-overrides` and
+`packaging/rpm/rpmlint.toml`.
+
 **Python.** `pip install .` from the top of the repository, or the wheel
 `make python-dist` builds in `dist/`, installs `tcs_xtce` and both
 commands.

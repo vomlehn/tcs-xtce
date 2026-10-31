@@ -237,6 +237,7 @@ toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
    make stage           # install into build/stage/tcs-xtce, as the package does
    make deb | rpm       # build the tcs-xtce package into build/packages
    make packages        # both; STRIP=0 keeps the libraries unstripped
+   make lint-packages   # check them with lintian, rpmlint and shellcheck
    make clean           # remove build products
    make distclean       # also remove the downloaded references
 
@@ -317,6 +318,25 @@ the .rpm hold the same files, and ``rpmbuild`` is kept from stripping
 again. ``STRIP=0``, as in ``make packages STRIP=0``, keeps everything as
 built. The .deb's version is ``<version>-1`` and the RPM's release 1;
 ``DEB_REVISION`` gives another Debian revision.
+
+The .deb also carries what Debian expects of every package, outside
+``/opt/tcs`` as the hooks are: ``/usr/share/doc/tcs-xtce/copyright``, in
+Debian's machine-readable format, and ``changelog.Debian.gz``, both made as
+the package is built, from ``LICENSE-MIT`` and the version; lintian's
+overrides, in ``/usr/share/lintian/overrides/tcs-xtce``; and a trigger that
+has dpkg run ``ldconfig`` once the library is installed or removed. The RPM
+says the same in its own ``License``, ``%changelog``, ``%post`` and
+``%postun``. An example that is a script, starting with ``#!``, is
+installed executable.
+
+``make lint-packages`` checks the packages ``make packages`` built with
+lintian and rpmlint, and the shell scripts they run or install with
+shellcheck: the hook and ``tcs-xtce-links`` as the stage has them, the
+.deb's ``prerm`` and the packaging scripts. It skips, in a line, any of the
+three that is not installed, and fails on any finding that is not
+overridden. What is overridden is intended, and says why: for lintian in
+``packaging/deb/tcs-xtce/lintian-overrides``, which the .deb carries, and
+for rpmlint in ``packaging/rpm/rpmlint.toml``, which is not shipped.
 
 A C or C++ program compiles against the installed library with:
 

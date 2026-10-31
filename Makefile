@@ -32,6 +32,8 @@
 #                        (says so and does nothing without rpmbuild)
 #   make packages        both; install, stage and the packages strip the
 #                        libraries unless STRIP=0 is given
+#   make lint-packages   check the packages and their shell scripts with
+#                        lintian, rpmlint and shellcheck
 #   make html            remake the HTML documents from their sources
 #   make help            print this list
 #   make clean           remove build products (keeps generated sources)
@@ -425,7 +427,9 @@ endef
 # tcs_ccsds; and the documents and examples. The Rust crates are not
 # installed, a Rust program taking them through cargo. The HTML is
 # installed as committed, not remade, so that installing needs no
-# rst2html; `make html` before a commit keeps it current.
+# rst2html; `make html` before a commit keeps it current. An example that
+# starts with "#!" is a script to run, so it is installed executable and
+# the rest are not.
 .PHONY: install
 install: $(PY_GEN) $(CPP_GEN)
 	@[ "$(VERSION)" = "$(RUST_VERSION)" ] || { \
@@ -466,7 +470,9 @@ install: $(PY_GEN) $(CPP_GEN)
 	    exit 1; \
 	}; \
 	for f in $$files; do \
-	    install -D -m 644 $$f $(EXDIR)/$${f#examples/} || exit 1; \
+	    mode=644; \
+	    [ "$$(head -c 2 $$f)" != '#!' ] || mode=755; \
+	    install -D -m $$mode $$f $(EXDIR)/$${f#examples/} || exit 1; \
 	done
 	if [ "$(HOOKS)" = 1 ]; then \
 	    install -D -m 644 packaging/hooks/tcs-xtce.conf $(LDCONF); \
@@ -548,6 +554,15 @@ stage:
 	chmod -R u+rwX,go=rX $(STAGE)
 	@echo "[OK] Staged in $(STAGE)"
 
+# The release's time, which dates the changelog entry each package carries:
+# that of the commit being built, so that building the same commit again
+# makes the same entry, or now outside a git clone. The name is the one
+# reproducible builds give it, so that a builder's own SOURCE_DATE_EPOCH is
+# taken. Worked out once, so that the .deb and the .rpm are dated alike.
+ifndef SOURCE_DATE_EPOCH
+SOURCE_DATE_EPOCH := $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
+endif
+
 # The Debian package, one per staged package: see packaging/deb.
 #
 # DEB_REVISION is the Debian revision, for a package rebuilt from the same
@@ -559,7 +574,7 @@ deb: stage
 	    packaging/deb/build-deb.sh $$package $(STAGE)/$$package \
 	        $(CURDIR)/build/deb $(PACKAGE_DIR) \
 	        $(VERSION)-$(DEB_REVISION) \
-	        $$(dpkg --print-architecture) || exit 1; \
+	        $$(dpkg --print-architecture) $(SOURCE_DATE_EPOCH) || exit 1; \
 	done
 	@echo "[OK] .debs in $(PACKAGE_DIR)"
 
@@ -591,6 +606,8 @@ rpm:
 	        --define "_topdir $(RPM_TOP)" \
 	        --define "_dbpath $(RPM_TOP)/db" \
 	        --define "tcs_version $(VERSION)" \
+	        --define "tcs_date $$(date -u -d @$(SOURCE_DATE_EPOCH) \
+	            '+%a %b %d %Y')" \
 	        --define "tcs_abi $(ABI)" \
 	        --define "tcs_ccsds_version $(CCSDS_VERSION)" \
 	        --define "tcs_stage $(STAGE)/$$package" \
@@ -605,6 +622,26 @@ rpm:
 # Both kinds of package.
 .PHONY: packages
 packages: deb rpm
+
+# Check the packages `make packages` built, and the shell scripts they run
+# or install, with lintian, rpmlint and shellcheck, any of which is skipped
+# in a line if it is not installed: see packaging/lint-packages.sh. rpmlint
+# is given packaging/rpm/rpmlint.toml, which says why each finding it
+# accepts is intended; each .deb carries its own lintian overrides. The
+# links scripts and the profile.d hooks are checked as the stage has them,
+# with their placeholders filled in.
+.PHONY: lint-packages
+lint-packages:
+	packaging/lint-packages.sh packaging/rpm/rpmlint.toml \
+	    $(wildcard $(foreach package,$(PACKAGES), \
+	        $(PACKAGE_DIR)/$(package)_$(VERSION)-$(DEB_REVISION)_*.deb \
+	        $(PACKAGE_DIR)/$(package)-$(VERSION)-*.rpm)) \
+	    -- $(wildcard $(STAGE)/*/opt/tcs/sbin/*-links \
+	        $(STAGE)/*/etc/profile.d/*.sh) \
+	    $(wildcard $(foreach script,preinst postinst prerm postrm, \
+	        packaging/deb/*/DEBIAN/$(script))) \
+	    packaging/deb/build-deb.sh packaging/deb/debian-files.sh \
+	    packaging/lint-packages.sh
 
 .PHONY: clean
 clean:

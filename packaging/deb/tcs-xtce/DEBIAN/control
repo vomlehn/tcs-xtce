@@ -4,7 +4,7 @@ Architecture: @ARCH@
 Maintainer: David VomLehn <dvomlehn@gmail.com>
 Installed-Size: @SIZE@
 Depends: python3 (>= 3.10), @SHLIBS@
-Suggests: rustfmt, pkg-config
+Suggests: rustfmt, pkgconf
 Section: libdevel
 Priority: optional
 Homepage: https://github.com/vomlehn/tcs-xtce

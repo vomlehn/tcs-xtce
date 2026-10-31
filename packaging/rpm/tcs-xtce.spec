@@ -3,12 +3,14 @@
 # that tree, so the RPM and the .deb hold the same files, built once.
 # The Makefile passes tcs_version, from pyproject.toml; tcs_abi, from
 # cpp/abi-version; tcs_ccsds_version, from ccsds/rust/Cargo.toml;
-# tcs_stage; and tcs_pysite and tcs_pyversion, the site-packages directory
+# tcs_stage; tcs_date, the date of the commit built, for the %changelog;
+# and tcs_pysite and tcs_pyversion, the site-packages directory
 # and version of the python3 it found, which on Fedora are what its
 # python3_sitelib and python3_version macros say.
 
 %{!?tcs_version: %{error: tcs_version is not defined: build with make rpm}}
 %{!?tcs_stage: %{error: tcs_stage is not defined: build with make rpm}}
+%{!?tcs_date: %{error: tcs_date is not defined: build with make rpm}}
 
 # The stage is already what is to be installed, stripped or not as `make
 # stage` was told with STRIP. RPM's own post-install steps would strip it
@@ -24,9 +26,11 @@ Name:		tcs-xtce
 Version:	%{tcs_version}
 Release:	1%{?dist}
 Summary:	XTCE serialization libraries and packet compiler
+Group:		Development/Libraries
 License:	MIT OR Apache-2.0
 URL:		https://github.com/vomlehn/tcs-xtce
-Packager:	David VomLehn <dvomlehn@gmail.com>
+%global tcs_maintainer David VomLehn <dvomlehn@gmail.com>
+Packager:	%{tcs_maintainer}
 # The compiler and xtce-digest are Python, so unlike tcslog's this is a
 # Requires. Any Python 3.10 or later will do: the package's directory has
 # no Python version in it.
@@ -109,3 +113,9 @@ fi
 %config(noreplace) /etc/ld.so.conf.d/tcs-xtce.conf
 %config(noreplace) /etc/profile.d/tcs-xtce.sh
 %{tcs_pysite}/tcs-xtce.pth
+
+# One entry, for the version being built, dated by the Makefile from the
+# commit it was built from, so that a new version needs no edit here.
+%changelog
+* %{tcs_date} %{tcs_maintainer} - %{version}-%{release}
+- tcs-xtce %{version}, as released upstream.
