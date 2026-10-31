@@ -89,9 +89,9 @@ loader about `/opt/tcs/lib`, and puts the Python packages on `python3`'s
 path.
 
 Installing and packaging use
-[tcs-helpers](https://github.com/vomlehn/tcs-helpers), the packaging
-scripts the TCS projects share, from a checkout of it beside this one, so
-clone it there first. It is used where it is, never installed;
+[tcs-helpers](https://github.com/vomlehn/tcs-helpers), the packaging scripts
+and make rules the TCS projects share, from a checkout of it beside this
+one, so clone it there first. It is used where it is, never installed;
 `TCS_HELPERS=<path>` names a checkout elsewhere, and `make tcs-helpers`
 checks that it is there and new enough, which installing and packaging do
 first.

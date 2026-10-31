@@ -354,7 +354,7 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.2.0
+TCS_HELPERS_REQUIRED := 0.3.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include
@@ -425,17 +425,6 @@ define pyinstall
 	rm -rf $(DESTDIR)$(PYDIR)/bin
 endef
 
-# Install everything under $(PREFIX): the two commands, and in sbin
-# tcs-xtce-links, which links them into /usr/local/bin; the headers,
-# straight into include; the shared library under its soname,
-# with its development name linked to it, and the static one; pkg-config
-# files naming the real prefix; the Python packages tcs_xtce and
-# tcs_ccsds; and the documents and examples. The Rust crates are not
-# installed, a Rust program taking them through cargo. The HTML is
-# installed as committed, not remade, so that installing needs no
-# rst2html; `make html` before a commit keeps it current. An example that
-# starts with "#!" is a script to run, so it is installed executable and
-# the rest are not.
 # Stop, saying what to do, unless the tcs-helpers checkout is there and
 # at least TCS_HELPERS_REQUIRED.
 .PHONY: tcs-helpers
@@ -448,6 +437,17 @@ tcs-helpers:
 	fi
 	@"$(TCS_HELPERS)/bin/tcs-helpers" --require $(TCS_HELPERS_REQUIRED)
 
+# Install everything under $(PREFIX): the two commands, and in sbin
+# tcs-xtce-links, which links them into /usr/local/bin; the headers,
+# straight into include; the shared library under its soname,
+# with its development name linked to it, and the static one; pkg-config
+# files naming the real prefix; the Python packages tcs_xtce and
+# tcs_ccsds; and the documents and examples. The Rust crates are not
+# installed, a Rust program taking them through cargo. The HTML is
+# installed as committed, not remade, so that installing needs no
+# rst2html; `make html` before a commit keeps it current. An example that
+# starts with "#!" is a script to run, so it is installed executable and
+# the rest are not.
 .PHONY: install
 install: $(PY_GEN) $(CPP_GEN) tcs-helpers
 	@[ "$(VERSION)" = "$(RUST_VERSION)" ] || { \
@@ -529,138 +529,32 @@ uninstall:
 	fi
 	@echo "[OK] Uninstalled from $(DESTDIR)$(PREFIX)"
 
-# Link the installed programs into LINKDIR, which every environment
-# searches, or take those links away, with the tcs-xtce-links install put
-# in sbin: see tcs-helpers' links.sh.in. Run as root for /usr/local/bin.
-# install never does this itself, the choice being the administrator's.
+# Where `make links` links the installed programs, and from where
+# uninstall removes them: see tcs-helpers' packaging.mk.
 LINKDIR ?= /usr/local/bin
-.PHONY: links
-links:
-	for package in $(PACKAGES); do \
-	    $(DESTDIR)$(PREFIX)/sbin/$$package-links --dir $(LINKDIR) \
-	        || exit 1; \
-	done
 
-.PHONY: unlinks
-unlinks:
-	for package in $(PACKAGES); do \
-	    $(DESTDIR)$(PREFIX)/sbin/$$package-links --remove \
-	        --dir $(LINKDIR) || exit 1; \
-	done
-
-# Where the packages are built: build/, which git ignores, as in the other
-# TCS repositories. setuptools also uses build/lib and build/bdist.* while
-# `make python-dist` runs, and that target removes only those.
-#
-# The stage is one directory per package, here only tcs-xtce, installed into
-# with the paths the package is for and the hooks on, so that the package
-# is exactly what install installs. Files are then made writable by their
-# owner alone, whatever the umask of whoever ran this, which is what both
-# package formats expect. The stage is stripped as STRIP says, so that the
-# .deb and the .rpm hold the same, already stripped, files.
+# The packaging targets -- stage, deb, rpm, packages, lint-packages, links
+# and unlinks -- are tcs-helpers' packaging.mk's, shared by the TCS
+# projects; see it for what each does. This repository has the one
+# package, built from packaging/deb/tcs-xtce and
+# packaging/rpm/tcs-xtce.spec, which is also given the library's ABI
+# version, tcs-ccsds's version and where the RPM's Python looks for
+# packages. Without a tcs-helpers checkout new enough to have
+# packaging.mk, the targets stop as the tcs-helpers target says.
 PACKAGES    := tcs-xtce
-STAGE       := $(CURDIR)/build/stage
-PACKAGE_DIR := $(CURDIR)/build/packages
-
-.PHONY: stage
-stage:
-	rm -rf $(STAGE)
-	for package in $(PACKAGES); do \
-	    $(MAKE) --no-print-directory install DESTDIR=$(STAGE)/$$package \
-	        PREFIX=/opt/tcs HOOKS=1 STRIP=$(STRIP) || exit 1; \
-	done
-	chmod -R u+rwX,go=rX $(STAGE)
-	@echo "[OK] Staged in $(STAGE)"
-
-# The release's time, which dates the changelog entry each package carries:
-# that of the commit being built, so that building the same commit again
-# makes the same entry, or now outside a git clone. The name is the one
-# reproducible builds give it, so that a builder's own SOURCE_DATE_EPOCH is
-# taken. Worked out once, so that the .deb and the .rpm are dated alike.
-ifndef SOURCE_DATE_EPOCH
-SOURCE_DATE_EPOCH := $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
+RPM_DEFINES  = --define "tcs_abi $(ABI)" \
+               --define "tcs_ccsds_version $(CCSDS_VERSION)" \
+               --define "tcs_pysite $$($(PYTHON) -c 'import sysconfig; \
+                   print(sysconfig.get_path("purelib", "posix_prefix", \
+                   vars={"base": "/usr"}))')" \
+               --define "tcs_pyversion $$($(PYTHON) -c 'import sysconfig; \
+                   print(sysconfig.get_python_version())')"
+ifneq ($(wildcard $(TCS_HELPERS)/packaging/packaging.mk),)
+include $(TCS_HELPERS)/packaging/packaging.mk
+else
+.PHONY: stage deb rpm packages lint-packages links unlinks
+stage deb rpm packages lint-packages links unlinks: tcs-helpers
 endif
-
-# The Debian package, one per staged package: see packaging/deb.
-#
-# DEB_REVISION is the Debian revision, for a package rebuilt from the same
-# source.
-DEB_REVISION ?= 1
-.PHONY: deb
-deb: stage
-	for package in $(PACKAGES); do \
-	    TCS_HELPERS=$(TCS_HELPERS) \
-	    packaging/deb/build-deb.sh $$package $(STAGE)/$$package \
-	        $(CURDIR)/build/deb $(PACKAGE_DIR) \
-	        $(VERSION)-$(DEB_REVISION) \
-	        $$(dpkg --print-architecture) $(SOURCE_DATE_EPOCH) || exit 1; \
-	done
-	@echo "[OK] .debs in $(PACKAGE_DIR)"
-
-# The RPM, one per staged package, with packaging/rpm/<package>.spec, whose
-# %install copies the stage rather than building anything. A machine
-# without rpmbuild says so and carries on, so that `make packages` still
-# makes the .deb; that is checked before staging, so as not to build for
-# nothing. rpmbuild is pointed at a database of its own under build/,
-# because a Debian host has no RPM database in /var/lib/rpm to read, and
-# rpmbuild complains at length when it finds none.
-RPM_TOP := $(CURDIR)/build/rpm
-.PHONY: rpm
-rpm:
-	@if ! command -v rpmbuild > /dev/null 2>&1; then \
-	    echo "rpmbuild is not installed, so no RPM was built: install" \
-	        "it (sudo apt install rpm, or sudo dnf install rpm-build)" \
-	        "and run make rpm again"; \
-	    exit 0; \
-	fi; \
-	set -e; \
-	$(MAKE) --no-print-directory stage; \
-	rm -rf $(RPM_TOP); \
-	mkdir -p $(PACKAGE_DIR) $(RPM_TOP)/db; \
-	pysite=$$($(PYTHON) -c 'import sysconfig; \
-	    print(sysconfig.get_path("purelib", "posix_prefix", \
-	    vars={"base": "/usr"}))'); \
-	for package in $(PACKAGES); do \
-	    rpmbuild -bb --quiet \
-	        --define "_topdir $(RPM_TOP)" \
-	        --define "_dbpath $(RPM_TOP)/db" \
-	        --define "tcs_version $(VERSION)" \
-	        --define "tcs_date $$(date -u -d @$(SOURCE_DATE_EPOCH) \
-	            '+%a %b %d %Y')" \
-	        --define "tcs_abi $(ABI)" \
-	        --define "tcs_ccsds_version $(CCSDS_VERSION)" \
-	        --define "tcs_stage $(STAGE)/$$package" \
-	        --define "tcs_pysite $$pysite" \
-	        --define "tcs_pyversion $$($(PYTHON) -c 'import sysconfig; \
-	            print(sysconfig.get_python_version())')" \
-	        packaging/rpm/$$package.spec; \
-	done; \
-	cp $(RPM_TOP)/RPMS/*/*.rpm $(PACKAGE_DIR); \
-	echo "[OK] RPMs in $(PACKAGE_DIR)"
-
-# Both kinds of package.
-.PHONY: packages
-packages: deb rpm
-
-# Check the packages `make packages` built, and the shell scripts they run
-# or install, with lintian, rpmlint and shellcheck, any of which is skipped
-# in a line if it is not installed: see tcs-helpers' lint-packages.sh,
-# whose own scripts tcs-helpers checks. rpmlint
-# is given packaging/rpm/rpmlint.toml, which says why each finding it
-# accepts is intended; each .deb carries its own lintian overrides. The
-# links scripts and the profile.d hooks are checked as the stage has them,
-# with their placeholders filled in.
-.PHONY: lint-packages
-lint-packages: tcs-helpers
-	$(TCS_HELPERS)/packaging/lint-packages.sh packaging/rpm/rpmlint.toml \
-	    $(wildcard $(foreach package,$(PACKAGES), \
-	        $(PACKAGE_DIR)/$(package)_$(VERSION)-$(DEB_REVISION)_*.deb \
-	        $(PACKAGE_DIR)/$(package)-$(VERSION)-*.rpm)) \
-	    -- $(wildcard $(STAGE)/*/opt/tcs/sbin/*-links \
-	        $(STAGE)/*/etc/profile.d/*.sh) \
-	    $(wildcard $(foreach script,preinst postinst prerm postrm, \
-	        packaging/deb/*/DEBIAN/$(script))) \
-	    packaging/deb/build-deb.sh
 
 .PHONY: clean
 clean:
