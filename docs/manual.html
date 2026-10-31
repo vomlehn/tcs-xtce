@@ -640,10 +640,13 @@ make<span class="whitespace">                 </span><span class="comment single
 </span>make<span class="whitespace"> </span>python-dist<span class="whitespace">     </span><span class="comment single"># build the Python package into dist/ and try it
 </span>make<span class="whitespace"> </span>fmt<span class="whitespace">             </span><span class="comment single"># format Rust and Python code
 </span>make<span class="whitespace"> </span>fmt-check<span class="whitespace">       </span><span class="comment single"># verify it (Rust is also checked by every `make rust`)
-</span>make<span class="whitespace"> </span>install<span class="whitespace">         </span><span class="comment single"># install under PREFIX, /opt/tcs (see Installing)
-</span>make<span class="whitespace"> </span>uninstall<span class="whitespace">       </span><span class="comment single"># remove what install put there
+</span>make<span class="whitespace"> </span>install<span class="whitespace">         </span><span class="comment single"># build the packages, install them (see Installing)
+</span>make<span class="whitespace"> </span>install<span class="whitespace"> </span><span class="name variable">SIMULATE</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">  </span><span class="comment single"># show what install would do; change nothing
+</span>make<span class="whitespace"> </span>uninstall<span class="whitespace">       </span><span class="comment single"># remove the package
+</span>make<span class="whitespace"> </span>install-files<span class="whitespace">   </span><span class="comment single"># copy the files under PREFIX, /opt/tcs, unpackaged
+</span>make<span class="whitespace"> </span>uninstall-files<span class="whitespace"> </span><span class="comment single"># remove what install-files put there
 </span>make<span class="whitespace"> </span>links<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>unlinks<span class="whitespace"> </span><span class="comment single"># link the installed programs into /usr/local/bin
-</span>make<span class="whitespace"> </span>stage<span class="whitespace">           </span><span class="comment single"># install into build/stage/tcs-xtce, as the package does
+</span>make<span class="whitespace"> </span>stage<span class="whitespace">           </span><span class="comment single"># install-files into build/stage/tcs-xtce
 </span>make<span class="whitespace"> </span>deb<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>rpm<span class="whitespace">       </span><span class="comment single"># build the tcs-xtce package into build/packages
 </span>make<span class="whitespace"> </span>packages<span class="whitespace">        </span><span class="comment single"># both; STRIP=0 keeps the libraries unstripped
 </span>make<span class="whitespace"> </span>lint-packages<span class="whitespace">   </span><span class="comment single"># check them with lintian, rpmlint and shellcheck
@@ -697,9 +700,37 @@ it there first, with <tt class="docutils literal">git clone <span class="pre">ht
 <tt class="docutils literal"><span class="pre">TCS_HELPERS=&lt;path&gt;</span></tt> names a checkout elsewhere. <tt class="docutils literal">make <span class="pre">tcs-helpers</span></tt>
 checks that it is there and new enough, which installing and packaging do
 first.</p>
+<p><tt class="docutils literal">make install</tt> builds both packages, described below, as you, and
+then installs the one this system takes with its own installer: the
+.deb with <tt class="docutils literal"><span class="pre">apt-get</span></tt> on Debian and Ubuntu, the RPM with <tt class="docutils literal">dnf</tt>, or
+<tt class="docutils literal">yum</tt> where there is no dnf, on Fedora and Red Hat's, and with
+<tt class="docutils literal">zypper</tt> on SUSE's, each of which installs what the package depends
+on too. Only the installer runs as root, under <tt class="docutils literal">sudo</tt>, which asks for
+your password then; <tt class="docutils literal"><span class="pre">SUDO=&lt;command&gt;</span></tt> names another, and nothing is
+used when make runs as root. <tt class="docutils literal">make uninstall</tt> removes the package with
+the same installer:</p>
+<pre class="code sh literal-block">
+make<span class="whitespace"> </span>install<span class="whitespace">                </span><span class="comment single"># build the packages, install this system's
+</span>make<span class="whitespace"> </span>install<span class="whitespace"> </span><span class="name variable">SIMULATE</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">     </span><span class="comment single"># show what install would do; change nothing
+</span>make<span class="whitespace"> </span>uninstall<span class="whitespace">              </span><span class="comment single"># remove the package
+</span>make<span class="whitespace"> </span>uninstall<span class="whitespace"> </span><span class="name variable">SIMULATE</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">   </span><span class="comment single"># show what uninstall would do</span>
+</pre>
+<p><tt class="docutils literal">SIMULATE=1</tt> runs the installer's own mode for showing what it would
+do -- <tt class="docutils literal"><span class="pre">apt-get</span> <span class="pre">-s</span></tt>, <tt class="docutils literal">dnf <span class="pre">--assumeno</span></tt>, <tt class="docutils literal">zypper <span class="pre">--dry-run</span></tt> -- without
+sudo, so that nothing is installed or removed. Which system this is
+comes from the <tt class="docutils literal">ID</tt> and <tt class="docutils literal">ID_LIKE</tt> of <tt class="docutils literal"><span class="pre">/etc/os-release</span></tt>, not from
+which tools are present, since a Debian system may have <tt class="docutils literal">rpm</tt> too. On
+a system it does not know, <tt class="docutils literal">make install</tt> stops and says so; there,
+or to install the other kind, <tt class="docutils literal">PACKAGE_FORMAT=deb</tt> or
+<tt class="docutils literal">PACKAGE_FORMAT=rpm</tt> chooses the kind and <tt class="docutils literal"><span class="pre">INSTALLER=&lt;command&gt;</span></tt> the
+installer, one of <tt class="docutils literal"><span class="pre">apt-get</span></tt>, <tt class="docutils literal">apt</tt>, <tt class="docutils literal">dpkg</tt>, <tt class="docutils literal">dnf</tt>, <tt class="docutils literal">yum</tt>,
+<tt class="docutils literal">zypper</tt> and <tt class="docutils literal">rpm</tt>. If the kind the system takes was not built,
+because <tt class="docutils literal"><span class="pre">dpkg-deb</span></tt> or <tt class="docutils literal">rpmbuild</tt> is missing, it stops, saying which
+to install.</p>
 <p><tt class="docutils literal">make deb</tt> and <tt class="docutils literal">make rpm</tt> build one package, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt>, holding
 all of it, into <tt class="docutils literal">build/packages/</tt>; <tt class="docutils literal">make packages</tt> builds both, the RPM
-only where <tt class="docutils literal">rpmbuild</tt> is installed. They are made from the tree <tt class="docutils literal">make
+only where <tt class="docutils literal">rpmbuild</tt> is installed and the .deb only where <tt class="docutils literal"><span class="pre">dpkg-deb</span></tt>
+is. They are made from the tree <tt class="docutils literal">make
 stage</tt> installs into <tt class="docutils literal"><span class="pre">build/stage/tcs-xtce/</span></tt>. Besides <tt class="docutils literal">/opt/tcs</tt> the package
 installs <tt class="docutils literal"><span class="pre">/etc/ld.so.conf.d/tcs-xtce.conf</span></tt>, so the loader finds
 <tt class="docutils literal">libxtce.so</tt>; <tt class="docutils literal"><span class="pre">/etc/profile.d/tcs-xtce.sh</span></tt>, which puts <tt class="docutils literal">/opt/tcs/bin</tt>
@@ -723,20 +754,23 @@ rest. A missing directory is not made. <tt class="docutils literal"><span class=
 removes them from <tt class="docutils literal">/usr/local/bin</tt> and <tt class="docutils literal">/opt/bin</tt>. After <tt class="docutils literal">make
 install</tt>, <tt class="docutils literal">make links</tt> and <tt class="docutils literal">make unlinks</tt> run it, into <tt class="docutils literal">LINKDIR</tt>
 (<tt class="docutils literal">/usr/local/bin</tt> unless given).</p>
-<p><tt class="docutils literal">make install</tt> installs the same files from the source tree, under
-<tt class="docutils literal">PREFIX</tt> (<tt class="docutils literal">/opt/tcs</tt> unless given) and <tt class="docutils literal">DESTDIR</tt>, but nothing outside
-<tt class="docutils literal">PREFIX</tt> unless <tt class="docutils literal">HOOKS=1</tt> is given too, which needs
-<tt class="docutils literal"><span class="pre">PREFIX=/opt/tcs</span></tt>. <tt class="docutils literal">make uninstall</tt>, with the same variables, removes
-them. The Rust crates, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> and <tt class="docutils literal"><span class="pre">tcs-ccsds</span></tt>, come from crates.io
-and are not installed.</p>
-<p>Install, stage and so the packages strip the libraries: <tt class="docutils literal">libxtce.so</tt> with
-<tt class="docutils literal">strip <span class="pre">--strip-unneeded</span></tt>, of all only a debugger needs, and
+<p><tt class="docutils literal">make <span class="pre">install-files</span></tt> copies the same files into place from the source
+tree, without a package, for development, which is what <tt class="docutils literal">make install</tt>
+once did: under <tt class="docutils literal">PREFIX</tt> (<tt class="docutils literal">/opt/tcs</tt> unless given) and <tt class="docutils literal">DESTDIR</tt>,
+but nothing outside <tt class="docutils literal">PREFIX</tt> unless <tt class="docutils literal">HOOKS=1</tt> is given too, which
+needs <tt class="docutils literal"><span class="pre">PREFIX=/opt/tcs</span></tt>. <tt class="docutils literal">make <span class="pre">uninstall-files</span></tt>, with the same
+variables, removes them. <tt class="docutils literal">make install</tt> takes neither <tt class="docutils literal">PREFIX</tt> nor
+<tt class="docutils literal">DESTDIR</tt>, and stops if given one. The Rust crates, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> and
+<tt class="docutils literal"><span class="pre">tcs-ccsds</span></tt>, come from crates.io and are not installed.</p>
+<p><tt class="docutils literal"><span class="pre">install-files</span></tt>, stage and so the packages strip the libraries:
+<tt class="docutils literal">libxtce.so</tt> with <tt class="docutils literal">strip <span class="pre">--strip-unneeded</span></tt>, of all only a debugger
+needs, and
 <tt class="docutils literal">libxtce.a</tt> with <tt class="docutils literal">strip <span class="pre">--strip-debug</span></tt>, of its debugging information,
 keeping the symbols a link needs. The stage is stripped, so the .deb and
 the .rpm hold the same files, and <tt class="docutils literal">rpmbuild</tt> is kept from stripping
 again. <tt class="docutils literal">STRIP=0</tt>, as in <tt class="docutils literal">make packages STRIP=0</tt>, keeps everything as
 built. The .deb's version is <tt class="docutils literal"><span class="pre">&lt;version&gt;-1</span></tt> and the RPM's release 1;
-<tt class="docutils literal">DEB_REVISION</tt> gives another Debian revision.</p>
+<tt class="docutils literal">DEB_REVISION</tt> gives another revision, to both.</p>
 <p>The .deb also carries what Debian expects of every package, outside
 <tt class="docutils literal">/opt/tcs</tt> as the hooks are: <tt class="docutils literal"><span class="pre">/usr/share/doc/tcs-xtce/copyright</span></tt>, in
 Debian's machine-readable format, and <tt class="docutils literal">changelog.Debian.gz</tt>, both made as

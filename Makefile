@@ -20,17 +20,23 @@
 #                        verify it
 #   make python-dist     build the Python package's wheel and sdist into
 #                        dist/ and try them
-#   make install         install under PREFIX (/opt/tcs); DESTDIR stages,
-#                        HOOKS=1 adds the files in /etc and /usr
-#   make uninstall       remove what install put there
+#   make install         build the packages and install them with apt-get,
+#                        dnf or zypper, under sudo; SIMULATE=1 shows what
+#                        it would do, PACKAGE_FORMAT=deb|rpm and
+#                        INSTALLER=<command> choose otherwise
+#   make uninstall       remove the packages with the same installer
+#   make install-files   copy the files under PREFIX (/opt/tcs); DESTDIR
+#                        stages, HOOKS=1 adds the files in /etc and /usr
+#   make uninstall-files remove what install-files put there
 #   make links           link the installed programs into LINKDIR
 #                        (/usr/local/bin); make unlinks removes the links
-#   make stage           install into build/stage/tcs-xtce, as the
-#                        package will
+#   make stage           install-files into build/stage/tcs-xtce, as the
+#                        package will install
 #   make deb             build build/packages/tcs-xtce_<version>-1_<arch>.deb
+#                        (says so and does nothing without dpkg-deb)
 #   make rpm             build build/packages/tcs-xtce-<version>-1.<arch>.rpm
 #                        (says so and does nothing without rpmbuild)
-#   make packages        both; install, stage and the packages strip the
+#   make packages        both; install-files, stage and the packages strip the
 #                        libraries unless STRIP=0 is given
 #   make lint-packages   check the packages and their shell scripts with
 #                        lintian, rpmlint and shellcheck
@@ -327,14 +333,14 @@ CCSDS_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' \
 ABI     := $(shell cat cpp/abi-version)
 SONAME  := libxtce.so.$(ABI)
 
-# Where `make install` puts everything: /opt/tcs, the tree the TCS
+# Where `make install-files` puts everything: /opt/tcs, the tree the TCS
 # packages share under FHS 3.0's /opt/<package>, so that one PATH entry
 # and one loader directory serve them all. DESTDIR stages the install
 # for packaging. A developer installing somewhere of their own sets
 # PREFIX, such as PREFIX=$HOME.
 PREFIX  ?= /opt/tcs
 DESTDIR ?=
-# Whether install also writes the hooks outside $(PREFIX) that make an
+# Whether install-files also writes the hooks outside $(PREFIX) that make an
 # installed /opt/tcs usable without being told where it is: the loader's
 # directory in /etc/ld.so.conf.d, PATH and PKG_CONFIG_PATH in
 # /etc/profile.d, and Python's path in a .pth file. Off unless asked
@@ -343,7 +349,7 @@ DESTDIR ?=
 # where these belong. Each is named after this package, so no two TCS
 # packages own the same file.
 HOOKS   ?= 0
-# Whether install strips what it installs: the shared library of what
+# Whether install-files strips what it installs: the shared library of what
 # only a debugger needs (--strip-unneeded) and the static one of its
 # debugging information (--strip-debug), which keeps the symbol table a
 # link needs. On unless STRIP=0 is given, for an installed tree or a
@@ -354,7 +360,7 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.3.0
+TCS_HELPERS_REQUIRED := 0.4.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include
@@ -401,9 +407,9 @@ PTH     := $(DESTDIR)/usr/lib/python3/dist-packages/tcs-xtce.pth
 # Installs one Python package with pip, so that it has the metadata pip
 # and importlib.metadata read, from a copy of its sources made for the
 # purpose: setuptools builds in the directory it is given, and a build left
-# in the source tree by `sudo make install` would be root's. --no-index
-# keeps it off the network, and --target puts it in $(PYDIR) whatever
-# Python the build machine has. pip --target writes the console scripts
+# in the source tree by `sudo make install-files` would be root's.
+# --no-index keeps it off the network, and --target puts it in $(PYDIR)
+# whatever Python the build machine has. pip --target writes the console scripts
 # into $(PYDIR)/bin, with the build machine's interpreter in them and no
 # way to find the package, so they are removed, bin/ having its own; so is
 # the direct_url.json naming the copy, which is gone by then. Called with
@@ -437,7 +443,10 @@ tcs-helpers:
 	fi
 	@"$(TCS_HELPERS)/bin/tcs-helpers" --require $(TCS_HELPERS_REQUIRED)
 
-# Install everything under $(PREFIX): the two commands, and in sbin
+# Copy everything into place under $(DESTDIR)$(PREFIX): what `make
+# install` once did, kept for development and for `make stage`, which
+# cuts the packages from it; `make install` installs the packages. What
+# is copied: the two commands, and in sbin
 # tcs-xtce-links, which links them into /usr/local/bin; the headers,
 # straight into include; the shared library under its soname,
 # with its development name linked to it, and the static one; pkg-config
@@ -448,8 +457,8 @@ tcs-helpers:
 # rst2html; `make html` before a commit keeps it current. An example that
 # starts with "#!" is a script to run, so it is installed executable and
 # the rest are not.
-.PHONY: install
-install: $(PY_GEN) $(CPP_GEN) tcs-helpers
+.PHONY: install-files
+install-files: $(PY_GEN) $(CPP_GEN) tcs-helpers
 	@[ "$(VERSION)" = "$(RUST_VERSION)" ] || { \
 	    echo "pyproject.toml is $(VERSION) and rust/Cargo.toml" \
 	        "$(RUST_VERSION); make them agree" >&2; \
@@ -505,13 +514,13 @@ install: $(PY_GEN) $(CPP_GEN) tcs-helpers
 	@echo "     Python 3, with $(PYDIR) on PYTHONPATH:"
 	@echo "       import tcs_xtce"
 
-# Removes what install put there, honouring the same variables, HOOKS
-# included. Nothing else in those directories is touched. The links `make
+# Removes what install-files put there, honouring the same variables,
+# HOOKS included. Nothing else in those directories is touched. The links `make
 # links` made in LINKDIR go first, while tcs-xtce-links is there to remove
 # them; that it cannot, because they or LINKDIR are not there, is no reason
 # not to uninstall.
-.PHONY: uninstall
-uninstall:
+.PHONY: uninstall-files
+uninstall-files:
 	@echo "Removing tcs-xtce from $(DESTDIR)$(PREFIX)..."
 	-$(SBINDIR)/tcs-xtce-links --remove --dir $(LINKDIR)
 	rm -f $(addprefix $(BINDIR)/,$(notdir $(COMMANDS))) \
@@ -530,17 +539,19 @@ uninstall:
 	@echo "[OK] Uninstalled from $(DESTDIR)$(PREFIX)"
 
 # Where `make links` links the installed programs, and from where
-# uninstall removes them: see tcs-helpers' packaging.mk.
+# uninstall-files removes them: see tcs-helpers' packaging.mk.
 LINKDIR ?= /usr/local/bin
 
-# The packaging targets -- stage, deb, rpm, packages, lint-packages, links
-# and unlinks -- are tcs-helpers' packaging.mk's, shared by the TCS
-# projects; see it for what each does. This repository has the one
-# package, built from packaging/deb/tcs-xtce and
+# The packaging targets -- install, uninstall, stage, deb, rpm, packages,
+# lint-packages, links and unlinks -- are tcs-helpers' packaging.mk's,
+# shared by the TCS projects; see it for what each does. This repository
+# has the one package, built from packaging/deb/tcs-xtce and
 # packaging/rpm/tcs-xtce.spec, which is also given the library's ABI
 # version, tcs-ccsds's version and where the RPM's Python looks for
 # packages. Without a tcs-helpers checkout new enough to have
-# packaging.mk, the targets stop as the tcs-helpers target says.
+# install-packages.sh, which came with the install target in 0.4.0, there
+# is nothing to include that has every target here, and the targets stop
+# as the tcs-helpers target says.
 PACKAGES    := tcs-xtce
 RPM_DEFINES  = --define "tcs_abi $(ABI)" \
                --define "tcs_ccsds_version $(CCSDS_VERSION)" \
@@ -549,9 +560,13 @@ RPM_DEFINES  = --define "tcs_abi $(ABI)" \
                    vars={"base": "/usr"}))')" \
                --define "tcs_pyversion $$($(PYTHON) -c 'import sysconfig; \
                    print(sysconfig.get_python_version())')"
-ifneq ($(wildcard $(TCS_HELPERS)/packaging/packaging.mk),)
+ifneq ($(wildcard $(TCS_HELPERS)/packaging/install-packages.sh),)
 include $(TCS_HELPERS)/packaging/packaging.mk
 else
+.PHONY: install
+install: tcs-helpers
+.PHONY: uninstall
+uninstall: tcs-helpers
 .PHONY: stage
 stage: tcs-helpers
 .PHONY: deb

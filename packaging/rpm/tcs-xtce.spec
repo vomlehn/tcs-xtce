@@ -1,7 +1,8 @@
 # The tcs-xtce RPM, built by `make rpm` from the tree `make stage`
 # installed under build/stage/tcs-xtce. Nothing is compiled here: %install copies
 # that tree, so the RPM and the .deb hold the same files, built once.
-# The Makefile passes tcs_version, from pyproject.toml; tcs_abi, from
+# The Makefile passes tcs_version, from pyproject.toml; tcs_release, the
+# Debian revision, so that the two are named alike; tcs_abi, from
 # cpp/abi-version; tcs_ccsds_version, from ccsds/rust/Cargo.toml;
 # tcs_stage; tcs_date, the date of the commit built, for the %changelog;
 # and tcs_pysite and tcs_pyversion, the site-packages directory
@@ -9,6 +10,7 @@
 # python3_sitelib and python3_version macros say.
 
 %{!?tcs_version: %{error: tcs_version is not defined: build with make rpm}}
+%{!?tcs_release: %{error: tcs_release is not defined: build with make rpm}}
 %{!?tcs_stage: %{error: tcs_stage is not defined: build with make rpm}}
 %{!?tcs_date: %{error: tcs_date is not defined: build with make rpm}}
 
@@ -24,7 +26,7 @@
 
 Name:		tcs-xtce
 Version:	%{tcs_version}
-Release:	1%{?dist}
+Release:	%{tcs_release}%{?dist}
 Summary:	XTCE serialization libraries and packet compiler
 Group:		Development/Libraries
 License:	MIT OR Apache-2.0

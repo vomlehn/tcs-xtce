@@ -98,9 +98,32 @@ first.
 
 ```sh
 git clone https://github.com/vomlehn/tcs-helpers.git ../tcs-helpers
-make deb && sudo apt install ./build/packages/tcs-xtce_*.deb
-make rpm && sudo dnf install ./build/packages/tcs-xtce-*.rpm
+make install              # build the packages, install this system's
+make install SIMULATE=1   # show what install would do; change nothing
+make uninstall            # remove the package
+make uninstall SIMULATE=1 # show what uninstall would do
 ```
+
+`make install` builds both packages as you, and then installs the one
+this system takes with its usual installer: the .deb with `apt-get` on
+Debian and Ubuntu, the RPM with `dnf` (or `yum`) on Fedora and Red
+Hat's, or with `zypper` on SUSE's, each of which installs what the
+package depends on too. Only that step runs as root, under `sudo`, which
+asks for your password then; `SUDO=<command>` names another, and none is
+used when make runs as root. `make uninstall` removes the package with
+the same installer. `SIMULATE=1` has the installer show what it would do
+-- `apt-get -s`, `dnf --assumeno`, `zypper --dry-run` -- without sudo,
+changing nothing.
+
+The system is known by the `ID` and `ID_LIKE` of `/etc/os-release`, not
+by which tools it has. On one it does not know, `make install` says so
+and stops; there, or to install the other kind, `PACKAGE_FORMAT=deb` or
+`PACKAGE_FORMAT=rpm` chooses the kind, and `INSTALLER=<command>` the
+installer (`apt-get`, `apt`, `dpkg`, `dnf`, `yum`, `zypper` or `rpm`).
+If the kind it needs was not built, because `dpkg-deb` or `rpmbuild` is
+missing, it says which to install; `make deb` and `make rpm` themselves
+say so and carry on without the tool, so that `make packages` builds
+what it can.
 
 `/etc/profile.d` is read only by login shells, so `sudo`, cron and other
 minimal environments do not see `/opt/tcs/bin`. To make `tcs-xtce` and
@@ -118,15 +141,19 @@ the links from `/usr/local/bin` and `/opt/bin`; installing it never makes
 them. After `make install`, `sudo make links` and `sudo make unlinks` do
 the same (`LINKDIR` gives the directory).
 
-**From the source tree.** `sudo make install` installs the same files but
-nothing outside `/opt/tcs`; `PREFIX=$HOME make install` installs under your
-home instead, and `make uninstall`, with the same `PREFIX`, removes them.
-`make stage` installs into `build/stage/tcs-xtce/`, as the packages do.
+**From the source tree.** `sudo make install-files` copies the same files
+into place without a package, for development, which is what `make
+install` once did, but nothing outside `/opt/tcs`; `make install-files
+PREFIX=$HOME` installs under your home instead, `DESTDIR` stages it, and
+`make uninstall-files`, with the same variables, removes them. `make
+install` takes neither variable, and stops if given one. `make stage`
+copies into `build/stage/tcs-xtce/`, from which the packages are made.
 
-`make install`, `make stage` and so the packages strip the libraries they
-install: `libxtce.so` of all a debugger needs (`strip --strip-unneeded`),
-`libxtce.a` of its debugging information (`strip --strip-debug`). Give
-`STRIP=0`, as in `make packages STRIP=0`, to keep everything as built.
+`make install-files`, `make stage` and so the packages strip the
+libraries they install: `libxtce.so` of all a debugger needs (`strip
+--strip-unneeded`), `libxtce.a` of its debugging information (`strip
+--strip-debug`). Give `STRIP=0`, as in `make packages STRIP=0`, to keep
+everything as built.
 
 The .deb also carries what Debian expects of every package, outside
 `/opt/tcs` as the hooks are: `/usr/share/doc/tcs-xtce/copyright`, in

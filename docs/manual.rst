@@ -231,10 +231,13 @@ toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
    make python-dist     # build the Python package into dist/ and try it
    make fmt             # format Rust and Python code
    make fmt-check       # verify it (Rust is also checked by every `make rust`)
-   make install         # install under PREFIX, /opt/tcs (see Installing)
-   make uninstall       # remove what install put there
+   make install         # build the packages, install them (see Installing)
+   make install SIMULATE=1  # show what install would do; change nothing
+   make uninstall       # remove the package
+   make install-files   # copy the files under PREFIX, /opt/tcs, unpackaged
+   make uninstall-files # remove what install-files put there
    make links | unlinks # link the installed programs into /usr/local/bin
-   make stage           # install into build/stage/tcs-xtce, as the package does
+   make stage           # install-files into build/stage/tcs-xtce
    make deb | rpm       # build the tcs-xtce package into build/packages
    make packages        # both; STRIP=0 keeps the libraries unstripped
    make lint-packages   # check them with lintian, rpmlint and shellcheck
@@ -282,9 +285,40 @@ it there first, with ``git clone https://github.com/vomlehn/tcs-helpers.git
 checks that it is there and new enough, which installing and packaging do
 first.
 
+``make install`` builds both packages, described below, as you, and
+then installs the one this system takes with its own installer: the
+.deb with ``apt-get`` on Debian and Ubuntu, the RPM with ``dnf``, or
+``yum`` where there is no dnf, on Fedora and Red Hat's, and with
+``zypper`` on SUSE's, each of which installs what the package depends
+on too. Only the installer runs as root, under ``sudo``, which asks for
+your password then; ``SUDO=<command>`` names another, and nothing is
+used when make runs as root. ``make uninstall`` removes the package with
+the same installer:
+
+.. code-block:: sh
+
+   make install                # build the packages, install this system's
+   make install SIMULATE=1     # show what install would do; change nothing
+   make uninstall              # remove the package
+   make uninstall SIMULATE=1   # show what uninstall would do
+
+``SIMULATE=1`` runs the installer's own mode for showing what it would
+do -- ``apt-get -s``, ``dnf --assumeno``, ``zypper --dry-run`` -- without
+sudo, so that nothing is installed or removed. Which system this is
+comes from the ``ID`` and ``ID_LIKE`` of ``/etc/os-release``, not from
+which tools are present, since a Debian system may have ``rpm`` too. On
+a system it does not know, ``make install`` stops and says so; there,
+or to install the other kind, ``PACKAGE_FORMAT=deb`` or
+``PACKAGE_FORMAT=rpm`` chooses the kind and ``INSTALLER=<command>`` the
+installer, one of ``apt-get``, ``apt``, ``dpkg``, ``dnf``, ``yum``,
+``zypper`` and ``rpm``. If the kind the system takes was not built,
+because ``dpkg-deb`` or ``rpmbuild`` is missing, it stops, saying which
+to install.
+
 ``make deb`` and ``make rpm`` build one package, ``tcs-xtce``, holding
 all of it, into ``build/packages/``; ``make packages`` builds both, the RPM
-only where ``rpmbuild`` is installed. They are made from the tree ``make
+only where ``rpmbuild`` is installed and the .deb only where ``dpkg-deb``
+is. They are made from the tree ``make
 stage`` installs into ``build/stage/tcs-xtce/``. Besides ``/opt/tcs`` the package
 installs ``/etc/ld.so.conf.d/tcs-xtce.conf``, so the loader finds
 ``libxtce.so``; ``/etc/profile.d/tcs-xtce.sh``, which puts ``/opt/tcs/bin``
@@ -312,21 +346,24 @@ removes them from ``/usr/local/bin`` and ``/opt/bin``. After ``make
 install``, ``make links`` and ``make unlinks`` run it, into ``LINKDIR``
 (``/usr/local/bin`` unless given).
 
-``make install`` installs the same files from the source tree, under
-``PREFIX`` (``/opt/tcs`` unless given) and ``DESTDIR``, but nothing outside
-``PREFIX`` unless ``HOOKS=1`` is given too, which needs
-``PREFIX=/opt/tcs``. ``make uninstall``, with the same variables, removes
-them. The Rust crates, ``tcs-xtce`` and ``tcs-ccsds``, come from crates.io
-and are not installed.
+``make install-files`` copies the same files into place from the source
+tree, without a package, for development, which is what ``make install``
+once did: under ``PREFIX`` (``/opt/tcs`` unless given) and ``DESTDIR``,
+but nothing outside ``PREFIX`` unless ``HOOKS=1`` is given too, which
+needs ``PREFIX=/opt/tcs``. ``make uninstall-files``, with the same
+variables, removes them. ``make install`` takes neither ``PREFIX`` nor
+``DESTDIR``, and stops if given one. The Rust crates, ``tcs-xtce`` and
+``tcs-ccsds``, come from crates.io and are not installed.
 
-Install, stage and so the packages strip the libraries: ``libxtce.so`` with
-``strip --strip-unneeded``, of all only a debugger needs, and
+``install-files``, stage and so the packages strip the libraries:
+``libxtce.so`` with ``strip --strip-unneeded``, of all only a debugger
+needs, and
 ``libxtce.a`` with ``strip --strip-debug``, of its debugging information,
 keeping the symbols a link needs. The stage is stripped, so the .deb and
 the .rpm hold the same files, and ``rpmbuild`` is kept from stripping
 again. ``STRIP=0``, as in ``make packages STRIP=0``, keeps everything as
 built. The .deb's version is ``<version>-1`` and the RPM's release 1;
-``DEB_REVISION`` gives another Debian revision.
+``DEB_REVISION`` gives another revision, to both.
 
 The .deb also carries what Debian expects of every package, outside
 ``/opt/tcs`` as the hooks are: ``/usr/share/doc/tcs-xtce/copyright``, in
