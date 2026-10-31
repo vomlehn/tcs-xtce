@@ -232,7 +232,7 @@ toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
    make fmt             # format Rust and Python code
    make fmt-check       # verify it (Rust is also checked by every `make rust`)
    make install         # build the packages, install them (see Installing)
-   make install SIMULATE=1  # show what install would do; change nothing
+   make install DRY_RUN=1   # show what install would do; change nothing
    make uninstall       # remove the package
    make install-files   # copy the files under PREFIX, /opt/tcs, unpackaged
    make uninstall-files # remove what install-files put there
@@ -298,11 +298,11 @@ the same installer:
 .. code-block:: sh
 
    make install                # build the packages, install this system's
-   make install SIMULATE=1     # show what install would do; change nothing
+   make install DRY_RUN=1      # show what install would do; change nothing
    make uninstall              # remove the package
-   make uninstall SIMULATE=1   # show what uninstall would do
+   make uninstall DRY_RUN=1    # show what uninstall would do
 
-``SIMULATE=1`` runs the installer's own mode for showing what it would
+``DRY_RUN=1`` runs the installer's own mode for showing what it would
 do -- ``apt-get -s``, ``dnf --assumeno``, ``zypper --dry-run`` -- without
 sudo, so that nothing is installed or removed. Which system this is
 comes from the ``ID`` and ``ID_LIKE`` of ``/etc/os-release``, not from

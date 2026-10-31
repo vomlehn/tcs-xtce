@@ -21,7 +21,7 @@
 #   make python-dist     build the Python package's wheel and sdist into
 #                        dist/ and try them
 #   make install         build the packages and install them with apt-get,
-#                        dnf or zypper, under sudo; SIMULATE=1 shows what
+#                        dnf or zypper, under sudo; DRY_RUN=1 shows what
 #                        it would do, PACKAGE_FORMAT=deb|rpm and
 #                        INSTALLER=<command> choose otherwise
 #   make uninstall       remove the packages with the same installer
@@ -360,7 +360,7 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.4.0
+TCS_HELPERS_REQUIRED := 0.5.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include

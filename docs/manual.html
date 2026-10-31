@@ -641,7 +641,7 @@ make<span class="whitespace">                 </span><span class="comment single
 </span>make<span class="whitespace"> </span>fmt<span class="whitespace">             </span><span class="comment single"># format Rust and Python code
 </span>make<span class="whitespace"> </span>fmt-check<span class="whitespace">       </span><span class="comment single"># verify it (Rust is also checked by every `make rust`)
 </span>make<span class="whitespace"> </span>install<span class="whitespace">         </span><span class="comment single"># build the packages, install them (see Installing)
-</span>make<span class="whitespace"> </span>install<span class="whitespace"> </span><span class="name variable">SIMULATE</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">  </span><span class="comment single"># show what install would do; change nothing
+</span>make<span class="whitespace"> </span>install<span class="whitespace"> </span><span class="name variable">DRY_RUN</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">   </span><span class="comment single"># show what install would do; change nothing
 </span>make<span class="whitespace"> </span>uninstall<span class="whitespace">       </span><span class="comment single"># remove the package
 </span>make<span class="whitespace"> </span>install-files<span class="whitespace">   </span><span class="comment single"># copy the files under PREFIX, /opt/tcs, unpackaged
 </span>make<span class="whitespace"> </span>uninstall-files<span class="whitespace"> </span><span class="comment single"># remove what install-files put there
@@ -711,11 +711,11 @@ used when make runs as root. <tt class="docutils literal">make uninstall</tt> re
 the same installer:</p>
 <pre class="code sh literal-block">
 make<span class="whitespace"> </span>install<span class="whitespace">                </span><span class="comment single"># build the packages, install this system's
-</span>make<span class="whitespace"> </span>install<span class="whitespace"> </span><span class="name variable">SIMULATE</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">     </span><span class="comment single"># show what install would do; change nothing
+</span>make<span class="whitespace"> </span>install<span class="whitespace"> </span><span class="name variable">DRY_RUN</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">      </span><span class="comment single"># show what install would do; change nothing
 </span>make<span class="whitespace"> </span>uninstall<span class="whitespace">              </span><span class="comment single"># remove the package
-</span>make<span class="whitespace"> </span>uninstall<span class="whitespace"> </span><span class="name variable">SIMULATE</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">   </span><span class="comment single"># show what uninstall would do</span>
+</span>make<span class="whitespace"> </span>uninstall<span class="whitespace"> </span><span class="name variable">DRY_RUN</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">    </span><span class="comment single"># show what uninstall would do</span>
 </pre>
-<p><tt class="docutils literal">SIMULATE=1</tt> runs the installer's own mode for showing what it would
+<p><tt class="docutils literal">DRY_RUN=1</tt> runs the installer's own mode for showing what it would
 do -- <tt class="docutils literal"><span class="pre">apt-get</span> <span class="pre">-s</span></tt>, <tt class="docutils literal">dnf <span class="pre">--assumeno</span></tt>, <tt class="docutils literal">zypper <span class="pre">--dry-run</span></tt> -- without
 sudo, so that nothing is installed or removed. Which system this is
 comes from the <tt class="docutils literal">ID</tt> and <tt class="docutils literal">ID_LIKE</tt> of <tt class="docutils literal"><span class="pre">/etc/os-release</span></tt>, not from
