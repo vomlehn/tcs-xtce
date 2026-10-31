@@ -9,7 +9,9 @@
 # this may fill and empty; <out> where the .deb goes; <version> the Debian
 # version, upstream and revision; <arch> what `dpkg --print-architecture`
 # says; <epoch> the release's time in seconds since 1970, which dates its
-# changelog entry. `make deb` runs it once per package.
+# changelog entry. `make deb` runs it once per package, with TCS_HELPERS in
+# its environment naming the tcs-helpers checkout whose debian-files.sh it
+# runs.
 #
 # Without a debian/ tree, because the packages are cut from what `make
 # install` puts in place rather than built by debhelper: the stage is the one
@@ -25,6 +27,7 @@ version=$5
 arch=$6
 epoch=$7
 
+: "${TCS_HELPERS:?set TCS_HELPERS to a tcs-helpers checkout}"
 here=$(dirname "$0")
 template=$here/$package/DEBIAN
 root=$work/$package
@@ -98,8 +101,10 @@ fi
 
 # What Debian expects outside /opt/tcs and the RPM does not have: the
 # copyright file, the Debian changelog, the lintian overrides and the
-# trigger that runs ldconfig. See debian-files.sh.
-"$here/debian-files.sh" tcs-xtce "$package" "$root" "$version" "$epoch"
+# trigger that runs ldconfig. See tcs-helpers' debian-files.sh, which takes
+# this directory for what differs between projects.
+"$TCS_HELPERS/packaging/debian-files.sh" "$here" tcs-xtce "$package" \
+	"$root" "$version" "$epoch"
 
 dpkg-deb --root-owner-group --build "$root" \
 	"$out/${package}_${version}_${arch}.deb"

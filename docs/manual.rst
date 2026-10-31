@@ -273,6 +273,15 @@ Everything installs under ``/opt/tcs``, the tree the TCS packages share
      - This manual, the design, the README and licences; the examples'
        sources
 
+Installing and packaging use tcs-helpers
+(https://github.com/vomlehn/tcs-helpers), the packaging scripts the TCS
+projects share, from a checkout of it beside this one: clone it there
+first, with ``git clone https://github.com/vomlehn/tcs-helpers.git
+../tcs-helpers``. It is used where it is, never installed, and
+``TCS_HELPERS=<path>`` names a checkout elsewhere. ``make tcs-helpers``
+checks that it is there and new enough, which installing and packaging
+do first.
+
 ``make deb`` and ``make rpm`` build one package, ``tcs-xtce``, holding
 all of it, into ``build/packages/``; ``make packages`` builds both, the RPM
 only where ``rpmbuild`` is installed. They are made from the tree ``make

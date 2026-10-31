@@ -349,6 +349,12 @@ HOOKS   ?= 0
 # link needs. On unless STRIP=0 is given, for an installed tree or a
 # package to debug; `make stage`, and so the packages, follow it too.
 STRIP   ?= 1
+# tcs-helpers, the packaging scripts the TCS projects share: a checkout
+# of https://github.com/vomlehn/tcs-helpers, beside this one unless
+# TCS_HELPERS names another, used where it is rather than installed.
+# Installing and packaging check it first: see the tcs-helpers target.
+TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
+TCS_HELPERS_REQUIRED := 0.2.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include
@@ -430,8 +436,20 @@ endef
 # rst2html; `make html` before a commit keeps it current. An example that
 # starts with "#!" is a script to run, so it is installed executable and
 # the rest are not.
+# Stop, saying what to do, unless the tcs-helpers checkout is there and
+# at least TCS_HELPERS_REQUIRED.
+.PHONY: tcs-helpers
+tcs-helpers:
+	@if [ ! -x "$(TCS_HELPERS)/bin/tcs-helpers" ]; then \
+	    echo "No tcs-helpers checkout at $(TCS_HELPERS): clone" \
+	        "https://github.com/vomlehn/tcs-helpers beside this" \
+	        "repository, or set TCS_HELPERS to where it is." >&2; \
+	    exit 1; \
+	fi
+	@"$(TCS_HELPERS)/bin/tcs-helpers" --require $(TCS_HELPERS_REQUIRED)
+
 .PHONY: install
-install: $(PY_GEN) $(CPP_GEN)
+install: $(PY_GEN) $(CPP_GEN) tcs-helpers
 	@[ "$(VERSION)" = "$(RUST_VERSION)" ] || { \
 	    echo "pyproject.toml is $(VERSION) and rust/Cargo.toml" \
 	        "$(RUST_VERSION); make them agree" >&2; \
@@ -443,7 +461,7 @@ install: $(PY_GEN) $(CPP_GEN)
 	install -d $(SBINDIR)
 	sed -e 's|@PACKAGE@|tcs-xtce|g' -e 's|@PREFIX@|$(PREFIX)|g' \
 		-e 's|@PROGRAMS@|$(notdir $(COMMANDS))|g' \
-		packaging/hooks/links.sh.in > $(SBINDIR)/tcs-xtce-links
+		$(TCS_HELPERS)/packaging/links.sh.in > $(SBINDIR)/tcs-xtce-links
 	chmod 755 $(SBINDIR)/tcs-xtce-links
 	install -D -m 644 -t $(INCDIR) $(HEADERS)
 	install -D -m 644 cpp/build/libxtce.so $(LIBDIR)/$(SONAME)
@@ -513,7 +531,7 @@ uninstall:
 
 # Link the installed programs into LINKDIR, which every environment
 # searches, or take those links away, with the tcs-xtce-links install put
-# in sbin: see packaging/hooks/links.sh.in. Run as root for /usr/local/bin.
+# in sbin: see tcs-helpers' links.sh.in. Run as root for /usr/local/bin.
 # install never does this itself, the choice being the administrator's.
 LINKDIR ?= /usr/local/bin
 .PHONY: links
@@ -571,6 +589,7 @@ DEB_REVISION ?= 1
 .PHONY: deb
 deb: stage
 	for package in $(PACKAGES); do \
+	    TCS_HELPERS=$(TCS_HELPERS) \
 	    packaging/deb/build-deb.sh $$package $(STAGE)/$$package \
 	        $(CURDIR)/build/deb $(PACKAGE_DIR) \
 	        $(VERSION)-$(DEB_REVISION) \
@@ -625,14 +644,15 @@ packages: deb rpm
 
 # Check the packages `make packages` built, and the shell scripts they run
 # or install, with lintian, rpmlint and shellcheck, any of which is skipped
-# in a line if it is not installed: see packaging/lint-packages.sh. rpmlint
+# in a line if it is not installed: see tcs-helpers' lint-packages.sh,
+# whose own scripts tcs-helpers checks. rpmlint
 # is given packaging/rpm/rpmlint.toml, which says why each finding it
 # accepts is intended; each .deb carries its own lintian overrides. The
 # links scripts and the profile.d hooks are checked as the stage has them,
 # with their placeholders filled in.
 .PHONY: lint-packages
-lint-packages:
-	packaging/lint-packages.sh packaging/rpm/rpmlint.toml \
+lint-packages: tcs-helpers
+	$(TCS_HELPERS)/packaging/lint-packages.sh packaging/rpm/rpmlint.toml \
 	    $(wildcard $(foreach package,$(PACKAGES), \
 	        $(PACKAGE_DIR)/$(package)_$(VERSION)-$(DEB_REVISION)_*.deb \
 	        $(PACKAGE_DIR)/$(package)-$(VERSION)-*.rpm)) \
@@ -640,8 +660,7 @@ lint-packages:
 	        $(STAGE)/*/etc/profile.d/*.sh) \
 	    $(wildcard $(foreach script,preinst postinst prerm postrm, \
 	        packaging/deb/*/DEBIAN/$(script))) \
-	    packaging/deb/build-deb.sh packaging/deb/debian-files.sh \
-	    packaging/lint-packages.sh
+	    packaging/deb/build-deb.sh
 
 .PHONY: clean
 clean:
