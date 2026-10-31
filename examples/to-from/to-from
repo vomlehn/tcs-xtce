@@ -54,7 +54,7 @@ def main() -> None:
         [os.path.join(TOP, "python"), os.path.join(HERE, "python")]
         + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
 
-    # The programs find to_from.xml, whose digest they exchange, in this
+    # The programs find to_from.xtce, whose digest they exchange, in this
     # directory.
     writer = subprocess.Popen(PROGRAMS[from_] + ["write"],
                               stdout=subprocess.PIPE, env=env, cwd=HERE)

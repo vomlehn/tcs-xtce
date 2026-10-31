@@ -16,19 +16,19 @@ The example shows three things:
   language's generator produces writes the same bytes, and reads the bytes
   any of the others wrote.
 * **Checking that both use the same definition.** The writer first sends
-  the digest of ``to_from.xml``, and the reader checks it against the digest
+  the digest of ``to_from.xtce``, and the reader checks it against the digest
   of its own copy (see `Checking the XTCE definition`_).
 
 Each language's program takes one argument:
 
 ``write``
-   Writes the 16-byte digest of ``to_from.xml`` to standard output, then
+   Writes the 16-byte digest of ``to_from.xtce`` to standard output, then
    serializes each word into a ``Word`` packet and writes the packets, one
    after another.
 
 ``read``
    Reads the digest from standard input and checks it against the digest of
-   its own ``to_from.xml``, printing it if they match. It then reads packets
+   its own ``to_from.xtce``, printing it if they match. It then reads packets
    and deserializes them. It prints each word as it arrives, with a space before every word except the first, and
    a newline when the input ends. It checks every word against the
    paragraph's next word, so that it catches any word that is damaged,
@@ -68,7 +68,7 @@ after a usage message, if its arguments are wrong. Build the programs with
 The XTCE description
 --------------------
 
-`to_from.xml <to_from.xml>`__ defines:
+`to_from.xtce <to_from.xtce>`__ defines:
 
 * a string type, ``WordType``, of varying length (``Variable``), with a
   32-bit size tag before the string
@@ -92,15 +92,15 @@ The file validates against the XTCE 1.3 schema:
 .. code-block:: sh
 
    XML_CATALOG_FILES=../../references/catalog.xml \
-       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd to_from.xml
+       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd to_from.xtce
 
 Checking the XTCE definition
 ----------------------------
 
 The packets carry no field names or types, so the reader can read them only
 if it was built from the same definition as the writer. To check, the writer sends
-the 16-byte MD5 digest of ``to_from.xml``, before any packet. The reader
-computes the digest of its own copy of ``to_from.xml`` and compares. If they
+the 16-byte MD5 digest of ``to_from.xtce``, before any packet. The reader
+computes the digest of its own copy of ``to_from.xtce`` and compares. If they
 match, it prints
 
 ::
@@ -130,8 +130,8 @@ runtime computes it the same way:
    * - Python
      - ``tcs_xtce.digest.digest_file_bytes(path)``, giving ``bytes``
 
-``xtce-digest to_from.xml`` prints the same digest in hex. Each program reads
-``to_from.xml`` from the current directory, so run it from this one.
+``xtce-digest to_from.xtce`` prints the same digest in hex. Each program reads
+``to_from.xtce`` from the current directory, so run it from this one.
 
 Generating the code
 -------------------
@@ -141,13 +141,13 @@ Generating the code
 .. code-block:: sh
 
    cd ../../python
-   python3 -m tcs_xtce ../examples/to-from/to_from.xml \
+   python3 -m tcs_xtce ../examples/to-from/to_from.xtce \
        ../examples/to-from/rust/src/to_from.rs --lang rust
-   python3 -m tcs_xtce ../examples/to-from/to_from.xml \
+   python3 -m tcs_xtce ../examples/to-from/to_from.xtce \
        ../examples/to-from/c/to_from.h --lang c
-   python3 -m tcs_xtce ../examples/to-from/to_from.xml \
+   python3 -m tcs_xtce ../examples/to-from/to_from.xtce \
        ../examples/to-from/cxx/to_from.h --lang c++
-   python3 -m tcs_xtce ../examples/to-from/to_from.xml \
+   python3 -m tcs_xtce ../examples/to-from/to_from.xtce \
        ../examples/to-from/python/to_from.py --lang python
 
 The generated files aren't kept in git; ``make`` runs ``make generate``
@@ -276,7 +276,7 @@ Makefile targets
    Generate the code if needed and build every program, without running
    them, so that ``./to-from`` can.
 ``make generate``
-   Run ``tcs-xtce`` on ``to_from.xml`` for every language, if the XTCE
+   Run ``tcs-xtce`` on ``to_from.xtce`` for every language, if the XTCE
    file or the generator changed since the code was last generated.
 ``make rust``
    Check the Rust program's formatting with ``cargo fmt --check`` and build
@@ -299,7 +299,7 @@ The generated files aren't kept in git; building generates them.
 .. list-table::
    :widths: auto
 
-   * - ``to_from.xml``
+   * - ``to_from.xtce``
      - The XTCE description
    * - ``to-from``
      - The script that pipes a writer to a reader

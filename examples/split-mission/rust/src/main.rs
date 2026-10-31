@@ -1,5 +1,5 @@
-//! Records a rover's PUS telemetry, described by dt.xml, pus.xml and
-//! rover.xml, in one stream, and decodes it again, using the code tcs-xtce
+//! Records a rover's PUS telemetry, described by dt.xtce, pus.xtce and
+//! rover.xtce, in one stream, and decodes it again, using the code tcs-xtce
 //! generated into rover.rs from the three documents together.
 //!
 //! The stream starts with the digest of the set of documents, which doesn't
@@ -16,7 +16,7 @@ use tcs_xtce::digest::{digest_files_bytes, hex as digest_hex};
 use tcs_xtce::packet::Packet;
 
 /// The mission's documents: those the others build on first.
-const DOCUMENTS: [&str; 3] = ["dt.xml", "pus.xml", "rover.xml"];
+const DOCUMENTS: [&str; 3] = ["dt.xtce", "pus.xtce", "rover.xtce"];
 
 fn fail(msg: String) -> ! {
     eprintln!("split-mission: {msg}");
@@ -78,7 +78,7 @@ fn main() {
         digest_hex(&set),
         DOCUMENTS.join(", ")
     );
-    let shuffled = ["rover.xml", "dt.xml", "pus.xml"];
+    let shuffled = ["rover.xtce", "dt.xtce", "pus.xtce"];
     if digest(&shuffled) != set {
         fail("the digest depends on the order of the documents".into());
     }

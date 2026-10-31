@@ -1,5 +1,5 @@
-/* Records a rover's PUS telemetry, described by dt.xml, pus.xml and
- * rover.xml, in one stream, and decodes it again, using the code tcs-xtce
+/* Records a rover's PUS telemetry, described by dt.xtce, pus.xtce and
+ * rover.xtce, in one stream, and decodes it again, using the code tcs-xtce
  * generated into rover.h from the three documents together.
  *
  * The stream starts with the digest of the set of documents, which doesn't
@@ -24,8 +24,8 @@
 #define DIGEST_BYTES 16
 
 /* The mission's documents: those the others build on first. */
-static const char* const DOCUMENTS[] = {"dt.xml", "pus.xml", "rover.xml"};
-static const char* const SHUFFLED[] = {"rover.xml", "dt.xml", "pus.xml"};
+static const char* const DOCUMENTS[] = {"dt.xtce", "pus.xtce", "rover.xtce"};
+static const char* const SHUFFLED[] = {"rover.xtce", "dt.xtce", "pus.xtce"};
 
 /** Prints an error message to standard error and exits with status 1.
  *

@@ -13,7 +13,7 @@ error message exactly. -->
 
 <!-- The XTCE document, or the smallest part of it that shows the problem,
 and the command line, e.g.
-`python3 -m tcs_xtce mission.xml mission.rs --lang rust`.
+`python3 -m tcs_xtce mission.xtce mission.rs --lang rust`.
 For a packet that encodes or decodes wrongly, give its bytes in hex. -->
 
 **Versions**

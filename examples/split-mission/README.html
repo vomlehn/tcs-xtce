@@ -373,10 +373,10 @@ third. tcs-xtce reads them together, as one mission, and the example
 shows what that takes:</p>
 <ul class="simple">
 <li><strong>References across documents.</strong> Each document's root SpaceSystem sits
-at the top of one tree, so <tt class="docutils literal">rover.xml</tt> names the base container
-<tt class="docutils literal"><span class="pre">/PUS/pus-tm</span></tt> in <tt class="docutils literal">pus.xml</tt>, the parameter <tt class="docutils literal"><span class="pre">/PUS/pus-service</span></tt> that
-picks its packets, and the type <tt class="docutils literal">/dt/uint16</tt> in <tt class="docutils literal">dt.xml</tt>.</li>
-<li><strong>Derived types.</strong> <tt class="docutils literal">rover.xml</tt>'s types build on <tt class="docutils literal">dt.xml</tt>'s with
+at the top of one tree, so <tt class="docutils literal">rover.xtce</tt> names the base container
+<tt class="docutils literal"><span class="pre">/PUS/pus-tm</span></tt> in <tt class="docutils literal">pus.xtce</tt>, the parameter <tt class="docutils literal"><span class="pre">/PUS/pus-service</span></tt> that
+picks its packets, and the type <tt class="docutils literal">/dt/uint16</tt> in <tt class="docutils literal">dt.xtce</tt>.</li>
+<li><strong>Derived types.</strong> <tt class="docutils literal">rover.xtce</tt>'s types build on <tt class="docutils literal">dt.xtce</tt>'s with
 <tt class="docutils literal">baseType</tt>, adding units and a valid range: a wheel's turn count is a
 <tt class="docutils literal">/dt/uint16</tt> that may not exceed 1000, which encoding enforces.</li>
 <li><strong>The digest of the set.</strong> The stream starts with one digest for the
@@ -411,17 +411,17 @@ schema:</p>
 </tr>
 </thead>
 <tbody valign="top">
-<tr><td><a class="reference external" href="dt.xml">dt.xml</a></td>
+<tr><td><a class="reference external" href="dt.xtce">dt.xtce</a></td>
 <td><tt class="docutils literal">dt</tt></td>
 <td>Parameter types: <tt class="docutils literal">bool1</tt>, <tt class="docutils literal">uint2</tt> to <tt class="docutils literal">uint16</tt> and <tt class="docutils literal">float32</tt></td>
 </tr>
-<tr><td><a class="reference external" href="pus.xml">pus.xml</a></td>
+<tr><td><a class="reference external" href="pus.xtce">pus.xtce</a></td>
 <td><tt class="docutils literal">PUS</tt></td>
 <td>The CCSDS primary header, in the abstract container <tt class="docutils literal">ccsds</tt>, and
 the PUS telemetry secondary header, in <tt class="docutils literal"><span class="pre">pus-tm</span></tt>, which derives
 from <tt class="docutils literal">ccsds</tt> for telemetry packets with a secondary header</td>
 </tr>
-<tr><td><a class="reference external" href="rover.xml">rover.xml</a></td>
+<tr><td><a class="reference external" href="rover.xtce">rover.xtce</a></td>
 <td><tt class="docutils literal">Rover</tt></td>
 <td>The rover's packets: <tt class="docutils literal">hk</tt>, housekeeping (service 3, subservice
 25), and <tt class="docutils literal">event</tt> (service 5, subservice 1), both derived from
@@ -429,12 +429,12 @@ from <tt class="docutils literal">ccsds</tt> for telemetry packets with a second
 </tr>
 </tbody>
 </table>
-<p><tt class="docutils literal">pus.xml</tt> uses <tt class="docutils literal">dt.xml</tt>'s types by absolute reference:</p>
+<p><tt class="docutils literal">pus.xtce</tt> uses <tt class="docutils literal">dt.xtce</tt>'s types by absolute reference:</p>
 <pre class="code xml literal-block">
 <span class="name tag">&lt;Parameter</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;pus-service&quot;</span><span class="whitespace"> </span><span class="name attribute">parameterTypeRef=</span><span class="literal string">&quot;/dt/uint8&quot;</span><span class="name tag">/&gt;</span>
 </pre>
-<p>and <tt class="docutils literal">rover.xml</tt> derives its packets from <tt class="docutils literal">pus.xml</tt>'s, picking them by
-the service and subservice <tt class="docutils literal">pus.xml</tt> defines:</p>
+<p>and <tt class="docutils literal">rover.xtce</tt> derives its packets from <tt class="docutils literal">pus.xtce</tt>'s, picking them by
+the service and subservice <tt class="docutils literal">pus.xtce</tt> defines:</p>
 <pre class="code xml literal-block">
 <span class="name tag">&lt;SequenceContainer</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;hk&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
   </span>...<span class="whitespace">
@@ -448,7 +448,7 @@ the service and subservice <tt class="docutils literal">pus.xml</tt> defines:</p
   </span><span class="name tag">&lt;/BaseContainer&gt;</span><span class="whitespace">
 </span><span class="name tag">&lt;/SequenceContainer&gt;</span>
 </pre>
-<p>Its types derive from <tt class="docutils literal">dt.xml</tt>'s: <tt class="docutils literal">baseType</tt> takes everything from
+<p>Its types derive from <tt class="docutils literal">dt.xtce</tt>'s: <tt class="docutils literal">baseType</tt> takes everything from
 the base type, here its encoding, and the derived type adds to it or
 replaces parts of it:</p>
 <pre class="code xml literal-block">
@@ -470,14 +470,14 @@ c001        sequence flags 3 (unsegmented), count 1
 42250000    motor temperature: 41.25
 0078 0076   turns: 120 left, 118 right
 </pre>
-<p>The CCSDS length is computed: <tt class="docutils literal">pus.xml</tt> marks it with the
+<p>The CCSDS length is computed: <tt class="docutils literal">pus.xtce</tt> marks it with the
 <tt class="docutils literal">AncillaryData</tt> <tt class="docutils literal"><span class="pre">tcs-xtce.length</span></tt> of -1, since it counts the bytes
 after the header minus one, so it isn't a field of the generated
 structures. Nor are the packet type, secondary header flag, service and
 subservice, which the restriction criteria fix.</p>
 <p>The documents validate against the XTCE 1.3 schema:</p>
 <pre class="code sh literal-block">
-<span class="keyword">for</span><span class="whitespace"> </span>f<span class="whitespace"> </span><span class="keyword">in</span><span class="whitespace"> </span>dt.xml<span class="whitespace"> </span>pus.xml<span class="whitespace"> </span>rover.xml<span class="punctuation">;</span><span class="whitespace"> </span><span class="keyword">do</span><span class="whitespace">
+<span class="keyword">for</span><span class="whitespace"> </span>f<span class="whitespace"> </span><span class="keyword">in</span><span class="whitespace"> </span>dt.xtce<span class="whitespace"> </span>pus.xtce<span class="whitespace"> </span>rover.xtce<span class="punctuation">;</span><span class="whitespace"> </span><span class="keyword">do</span><span class="whitespace">
     </span><span class="name variable">XML_CATALOG_FILES</span><span class="operator">=</span>../../references/catalog.xml<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">        </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span><span class="name variable">$f</span><span class="whitespace">
 </span><span class="keyword">done</span>
@@ -489,8 +489,8 @@ subservice, which the restriction criteria fix.</p>
 documents together:</p>
 <pre class="code sh literal-block">
 <span class="name builtin">cd</span><span class="whitespace"> </span>../../python<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/split-mission/dt.xml<span class="whitespace"> </span><span class="literal string escape">\
-</span><span class="whitespace">    </span>../examples/split-mission/pus.xml<span class="whitespace"> </span>../examples/split-mission/rover.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/split-mission/dt.xtce<span class="whitespace"> </span><span class="literal string escape">\
+</span><span class="whitespace">    </span>../examples/split-mission/pus.xtce<span class="whitespace"> </span>../examples/split-mission/rover.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/split-mission/rust/src/rover.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust
 </pre>
 <p>and the same with <tt class="docutils literal">c/rover.h <span class="pre">--lang</span> c</tt>, <tt class="docutils literal">cxx/rover.h <span class="pre">--lang</span> c++</tt> and
@@ -553,7 +553,7 @@ packets of every document.</p>
 </tr>
 </tbody>
 </table>
-<p><tt class="docutils literal"><span class="pre">xtce-digest</span> <span class="pre">--set</span> dt.xml pus.xml rover.xml</tt> prints the same digest in
+<p><tt class="docutils literal"><span class="pre">xtce-digest</span> <span class="pre">--set</span> dt.xtce pus.xtce rover.xtce</tt> prints the same digest in
 hex. The digest of a set is the MD5 digest of its documents' canonical
 encodings (the manual's &quot;xtce-digest&quot; describes them), sorted and joined,
 so the order doesn't matter; a set of one document has that document's
@@ -567,8 +567,8 @@ that they print the same thing:</p>
 <pre class="literal-block">
 $ make
 ...
-set digest: 65a49b2e175af6ee41498f1a0b8dd37b (dt.xml, pus.xml, rover.xml)
-set digest: the same for rover.xml, dt.xml, pus.xml
+set digest: 65a49b2e175af6ee41498f1a0b8dd37b (dt.xtce, pus.xtce, rover.xtce)
+set digest: the same for rover.xtce, dt.xtce, pus.xtce
 encode Hk{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=1, pus_version=2, pus_time_ref=0, pus_counter=1, battery=28.5, motor_temp=41.25, left_turns=120, right_turns=118} -&gt; 0864c0010010200319000141e400004225000000780076
 encode Event{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=2, pus_version=2, pus_time_ref=0, pus_counter=2, event=OVERHEAT, event_data=85} -&gt; 0864c00200072005010002020055
 encode Hk{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=3, pus_version=2, pus_time_ref=0, pus_counter=3, battery=27.75, motor_temp=38.5, left_turns=0, right_turns=3} -&gt; 0864c0030010200319000341de0000421a000000000003
@@ -647,7 +647,7 @@ document or the generator changed since the code was last generated.</dd>
 <p>The generated files aren't kept in git; building generates them.</p>
 <table border="1" class="docutils">
 <tbody valign="top">
-<tr><td><tt class="docutils literal">dt.xml</tt>, <tt class="docutils literal">pus.xml</tt>, <tt class="docutils literal">rover.xml</tt></td>
+<tr><td><tt class="docutils literal">dt.xtce</tt>, <tt class="docutils literal">pus.xtce</tt>, <tt class="docutils literal">rover.xtce</tt></td>
 <td>The XTCE documents</td>
 </tr>
 <tr><td><tt class="docutils literal">rust/Cargo.toml</tt>, <tt class="docutils literal">rust/src/main.rs</tt></td>

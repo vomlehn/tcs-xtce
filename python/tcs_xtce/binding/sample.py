@@ -267,7 +267,7 @@ def generate(b: Binding) -> list[tuple[str, str]]:
         covered |= g.covered
         text = ('<?xml version="1.0" encoding="UTF-8"?>\n' + "\n".join(g.out)
                 + "\n")
-        samples.append((f"sample_{len(samples):02d}.xml", text))
+        samples.append((f"sample_{len(samples):02d}.xtce", text))
         if covered >= targets:
             break
     missing = sorted(targets - covered)

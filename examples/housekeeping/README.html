@@ -383,12 +383,12 @@ heater on are two bytes longer.</li>
 </ul>
 <p>Each program does the same thing:</p>
 <ol class="arabic simple">
-<li>It starts a stream with the 16-byte digest of <tt class="docutils literal">housekeeping.xml</tt>, as
+<li>It starts a stream with the 16-byte digest of <tt class="docutils literal">housekeeping.xtce</tt>, as
 a recorder would start a file. It encodes four readings, two with the
 heater off and two with it on, and appends each packet to the stream:
 one after another, with nothing between them.</li>
 <li>It walks the stream. It checks the digest against the digest of its own
-<tt class="docutils literal">housekeeping.xml</tt> (see <a class="reference internal" href="#checking-the-xtce-definition">Checking the XTCE definition</a>), then reads
+<tt class="docutils literal">housekeeping.xtce</tt> (see <a class="reference internal" href="#checking-the-xtce-definition">Checking the XTCE definition</a>), then reads
 each packet's <tt class="docutils literal">PacketLength</tt> from its
 first two bytes, so it knows the packet is <tt class="docutils literal">2 + PacketLength</tt> bytes
 long, and decodes those bytes. It checks that each packet decodes to the
@@ -405,8 +405,8 @@ exits with status 1.</p>
 <h1>Checking the XTCE definition</h1>
 <p>The packets carry no field names or types, so the program that reads it can read them only
 if it was built from the same definition as the program that wrote the stream. To check, the stream starts with
-the 16-byte MD5 digest of <tt class="docutils literal">housekeeping.xml</tt>, before any packet. The program that reads it
-computes the digest of its own copy of <tt class="docutils literal">housekeeping.xml</tt> and compares. If they
+the 16-byte MD5 digest of <tt class="docutils literal">housekeeping.xtce</tt>, before any packet. The program that reads it
+computes the digest of its own copy of <tt class="docutils literal">housekeeping.xtce</tt> and compares. If they
 match, it prints</p>
 <pre class="literal-block">
 XTCE digest: &lt;32 hex digits&gt;, the same on both sides
@@ -437,12 +437,12 @@ runtime computes it the same way:</p>
 </tr>
 </tbody>
 </table>
-<p><tt class="docutils literal"><span class="pre">xtce-digest</span> housekeeping.xml</tt> prints the same digest in hex. Each program reads
-<tt class="docutils literal">housekeeping.xml</tt> from the current directory, so run it from this one.</p>
+<p><tt class="docutils literal"><span class="pre">xtce-digest</span> housekeeping.xtce</tt> prints the same digest in hex. Each program reads
+<tt class="docutils literal">housekeeping.xtce</tt> from the current directory, so run it from this one.</p>
 </div>
 <div class="section" id="the-xtce-description">
 <h1>The XTCE description</h1>
-<p><a class="reference external" href="housekeeping.xml">housekeeping.xml</a> defines one container, <tt class="docutils literal">Status</tt>:</p>
+<p><a class="reference external" href="housekeeping.xtce">housekeeping.xtce</a> defines one container, <tt class="docutils literal">Status</tt>:</p>
 <pre class="literal-block">
 PacketLength    16 bits   bytes after this field; computed when encoding
 HeaterOn         4 bits   0 for false, anything else for true
@@ -517,7 +517,7 @@ dc          BusVoltage: raw 220, 220 / 8 = 27.5
 <p>The file validates against the XTCE 1.3 schema:</p>
 <pre class="code sh literal-block">
 <span class="name variable">XML_CATALOG_FILES</span><span class="operator">=</span>../../references/catalog.xml<span class="whitespace"> </span><span class="literal string escape">\
-</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>housekeeping.xml
+</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>housekeeping.xtce
 </pre>
 </div>
 <div class="section" id="generating-the-code">
@@ -525,13 +525,13 @@ dc          BusVoltage: raw 220, 220 / 8 = 27.5
 <p><tt class="docutils literal">make generate</tt> runs the generator once per language:</p>
 <pre class="code sh literal-block">
 <span class="name builtin">cd</span><span class="whitespace"> </span>../../python<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/housekeeping/rust/src/housekeeping.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/housekeeping/c/housekeeping.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/housekeeping/cxx/housekeeping.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c++<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/housekeeping/housekeeping.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/housekeeping/python/housekeeping.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python
 </pre>
 <p>The generated files aren't kept in git; <tt class="docutils literal">make</tt> runs <tt class="docutils literal">make generate</tt>
@@ -616,7 +616,7 @@ values the packet holds: 21.53 °C became 21.5, 28.3 V became 28.25, and
 <p>To run one program on its own, generate the code first with
 <tt class="docutils literal">make generate</tt>, then run the commands below from this directory. Each
 prints the lines above, without the last, which <tt class="docutils literal">make</tt> prints. Run it
-from this directory, where it finds <tt class="docutils literal">housekeeping.xml</tt>.</p>
+from this directory, where it finds <tt class="docutils literal">housekeeping.xtce</tt>.</p>
 <div class="section" id="rust">
 <h2>Rust</h2>
 <p><a class="reference external" href="rust/src/main.rs">rust/src/main.rs</a> is a stand-alone Cargo crate that
@@ -665,7 +665,7 @@ for every packet.</p>
 <dd>Generate the code if needed, build every program, run it and check
 the output, as above.</dd>
 <dt><tt class="docutils literal">make generate</tt></dt>
-<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">housekeeping.xml</tt> for every language, if the XTCE
+<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">housekeeping.xtce</tt> for every language, if the XTCE
 file or the generator changed since the code was last generated.</dd>
 <dt><tt class="docutils literal">make rust</tt></dt>
 <dd>Check the Rust program's formatting with <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt> and build
@@ -687,7 +687,7 @@ file or the generator changed since the code was last generated.</dd>
 <p>The generated files aren't kept in git; building generates them.</p>
 <table border="1" class="docutils">
 <tbody valign="top">
-<tr><td><tt class="docutils literal">housekeeping.xml</tt></td>
+<tr><td><tt class="docutils literal">housekeeping.xtce</tt></td>
 <td>The XTCE description</td>
 </tr>
 <tr><td><tt class="docutils literal">rust/Cargo.toml</tt>, <tt class="docutils literal">rust/src/main.rs</tt></td>

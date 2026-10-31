@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- The packet headers: the CCSDS primary header, and the secondary header
      of a PUS telemetry packet, which names its service and subservice.
-     Its types come from dt.xml; rover.xml derives its packets from
+     Its types come from dt.xtce; rover.xtce derives its packets from
      /PUS/pus-tm. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="PUS">
   <TelemetryMetaData>

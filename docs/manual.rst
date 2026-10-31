@@ -731,7 +731,7 @@ Example (Rust):
 
    use tcs_xtce::{Document, SpaceSystemType};
 
-   let mut doc = Document::from_bytes(&std::fs::read("sat.xml")?)?;
+   let mut doc = Document::from_bytes(&std::fs::read("sat.xtce")?)?;
    println!("{}", doc.root.name);
    doc.root.short_description = Some("updated".into());
    let bytes: &[u8] = doc.serialize()?;   // view of the managed buffer
@@ -780,16 +780,16 @@ Running the compiler
    cd python
    python3 -m tcs_xtce INPUT... OUTPUT --lang LANG
 
-   python3 -m tcs_xtce demo.xml demo.rs --lang rust
-   python3 -m tcs_xtce demo.xml demo.h  --lang c
-   python3 -m tcs_xtce demo.xml demo.py --lang python
-   python3 -m tcs_xtce dt.xml pus.xml pus17.xml pus.rs --lang rust
+   python3 -m tcs_xtce demo.xtce demo.rs --lang rust
+   python3 -m tcs_xtce demo.xtce demo.h  --lang c
+   python3 -m tcs_xtce demo.xtce demo.py --lang python
+   python3 -m tcs_xtce dt.xtce pus.xtce pus17.xtce pus.rs --lang rust
 
 Each run writes one language. Run it once per language you need.
 
 With the Python package installed (see `Installing the Python package`_),
 the compiler is the ``tcs-xtce`` command, run from anywhere:
-``tcs-xtce demo.xml demo.rs --lang rust``. It takes the same arguments.
+``tcs-xtce demo.xtce demo.rs --lang rust``. It takes the same arguments.
 
 .. list-table::
    :widths: auto
@@ -801,8 +801,8 @@ the compiler is the ``tcs-xtce`` command, run from anywhere:
    * - ``OUTPUT``
      - The file to write, always the last name; ``-`` writes to standard
        output. It may be left out with ``--size-report`` and one
-       ``INPUT``. A name ending in ``.xml`` is refused, so that leaving
-       ``OUTPUT`` out can't overwrite the last document
+       ``INPUT``. A name ending in ``.xtce`` or ``.xml`` is refused, so
+       that leaving ``OUTPUT`` out can't overwrite the last document
    * - ``--lang LANG``
      - Required, except with ``--size-report``. ``rust`` writes a Rust module, formatted with ``rustfmt``
        (which must be installed). ``python`` writes a Python module.
@@ -844,13 +844,13 @@ is one such mission):
 
 .. code-block:: xml
 
-   <!-- dt.xml -->
+   <!-- dt.xtce -->
    <SpaceSystem name="dt"> ... <IntegerParameterType name="uint16"> ...
 
-   <!-- pus.xml -->
+   <!-- pus.xtce -->
    <SpaceSystem name="PUS"> ... <SequenceContainer name="pus-tm"> ...
 
-   <!-- pus17.xml -->
+   <!-- pus17.xtce -->
    <SpaceSystem name="PUS17"> ...
      <SequenceContainer name="are-you-alive-report">
        <BaseContainer containerRef="/PUS/pus-tm"> ...
@@ -965,7 +965,7 @@ Using the generated code:
 * **Python**: import the module with the ``tcs_xtce`` package on the path.
 
 ``make packets`` regenerates the demo mission
-(``tests/mission/demo.xml``) into ``rust/tests/mission/demo.rs``,
+(``tests/mission/demo.xtce``) into ``rust/tests/mission/demo.rs``,
 ``cpp/tests/mission/demo.h`` and ``python/tests/mission/demo.py``.
 
 Generated packet types
@@ -2989,7 +2989,7 @@ digest, they agree on every packet's fields, types and order (see
    python3 -m tcs_xtce.digest_cli FILE...
    python3 -m tcs_xtce.digest_cli --set FILE...
 
-   python3 -m tcs_xtce.digest_cli ../tests/mission/demo.xml ../examples/simple-string/simple_string.xml
+   python3 -m tcs_xtce.digest_cli ../tests/mission/demo.xtce ../examples/simple-string/simple_string.xtce
 
 With the Python package installed, it is the ``xtce-digest`` command:
 ``xtce-digest FILE...``.
@@ -2999,7 +2999,7 @@ name as given, a colon, a space and the digest, in hex:
 
 .. code-block:: text
 
-   ../tests/mission/demo.xml: 6d2d1d775d75a68089fddade8e95c585
+   ../tests/mission/demo.xtce: 6d2d1d775d75a68089fddade8e95c585
 
 Each file gets its own digest, computed afresh, so a file gives the same
 digest wherever it appears in the list. A file that can't be read, isn't
@@ -3066,8 +3066,8 @@ hex digits (to print):
 
    from tcs_xtce.digest import digest_file, digest_file_bytes
 
-   digest_file("tests/mission/demo.xml")        # '6d2d1d775d75a68089fddade8e95c585'
-   digest_file_bytes("tests/mission/demo.xml")  # the same 16 bytes
+   digest_file("tests/mission/demo.xtce")        # '6d2d1d775d75a68089fddade8e95c585'
+   digest_file_bytes("tests/mission/demo.xtce")  # the same 16 bytes
 
 The document must be well-formed XML 1.0 in UTF-8 whose root element is
 ``SpaceSystem``; a document that declares another encoding, or has a
@@ -3167,7 +3167,7 @@ Each is summarized below; its README has the details.
 ``housekeeping``
 ----------------
 
-``examples/housekeeping/housekeeping.xml`` describes a container,
+``examples/housekeeping/housekeeping.xtce`` describes a container,
 ``Status``:
 
 ::
@@ -3188,7 +3188,7 @@ watts while the packet holds raw counts. ``HeaterPower`` has an
 in Rust, ``has_heater_power`` and ``heater_power`` in C/C++, and
 ``Optional[float]`` in Python.
 
-Each program starts a stream with the digest of ``housekeeping.xml`` and
+Each program starts a stream with the digest of ``housekeeping.xtce`` and
 encodes four readings into it, one packet after another, then walks the
 stream: it checks the digest against that of its own copy, then reads each
 packet's ``PacketLength`` to
@@ -3210,7 +3210,7 @@ more.
 ``simple-string``
 -----------------
 
-``examples/simple-string/simple_string.xml`` describes a container,
+``examples/simple-string/simple_string.xtce`` describes a container,
 ``SimpleString``, holding one parameter, ``Text``. ``Text`` is a string
 that always occupies 64 bits and ends at a NUL byte, so it holds up to
 8 bytes:
@@ -3257,7 +3257,7 @@ for more.
 ``to-from``
 -----------
 
-``examples/to-from/to_from.xml`` describes a container, ``Word``,
+``examples/to-from/to_from.xtce`` describes a container, ``Word``,
 holding one parameter, ``Text``. ``Text`` is a string of varying length
 with a 32-bit size tag before it. The tag and the string together occupy
 at most 288 bits, so a word holds up to 32 bytes:
@@ -3274,10 +3274,10 @@ at most 288 bits, so a word holds up to 32 bytes:
 
 The example shows that code generated for one language reads what code
 generated for another wrote. Each language's program takes one argument.
-With ``write``, it writes the digest of ``to_from.xml``, then serializes
+With ``write``, it writes the digest of ``to_from.xtce``, then serializes
 each of the 69 words of the lorem ipsum paragraph into a ``Word`` packet
 and writes the packets, to standard output. With ``read``, it checks the
-digest against that of its own ``to_from.xml``, then reads packets from
+digest against that of its own ``to_from.xtce``, then reads packets from
 standard input, using each packet's
 size tag to find where it ends, and deserializes them. It prints each word
 as it arrives, with a space before every word but the first, and a newline
@@ -3304,7 +3304,7 @@ See the `to-from README <../examples/to-from/README.html>`__ for more.
 ``variable-array``
 ------------------
 
-``examples/variable-array/variable_array.xml`` describes a container,
+``examples/variable-array/variable_array.xtce`` describes a container,
 ``Paragraph``, holding a two-dimensional array whose dimensions both vary:
 an array of lines, each an array of words. A count before each array gives
 its number of elements, so every line can have its own number of words:
@@ -3350,7 +3350,7 @@ size of the C structures.
 Each program builds two ``Paragraph``\ s from the lorem ipsum paragraph
 in five lines, one word per element: the first three lines, then the last
 two. One thread opens a TCP connection on the loopback interface, writes
-the digest of ``variable_array.xml``, and, for each array, writes its
+the digest of ``variable_array.xtce``, and, for each array, writes its
 length, then the whole ``Paragraph`` in a single write. The length is a second container in the same XTCE file, ``Length``,
 holding a 32-bit ``ByteCount``, so it too is encoded and decoded with the
 generated code. Another thread checks the digest against that of its own
@@ -3376,7 +3376,7 @@ for more.
 ``enum-labels``
 ---------------
 
-``examples/enum-labels/modes.xml`` describes a probe's ``Status``, whose
+``examples/enum-labels/modes.xtce`` describes a probe's ``Status``, whose
 ``Mode`` is an enumeration (``SAFE``, ``IDLE``, ``SCIENCE``,
 ``DOWNLINK``, and ``TEST`` for the values 16 to 31). Everything that
 depends on the mode names a label: ``Target`` is there only in
@@ -3416,12 +3416,12 @@ more.
 -----------------
 
 ``examples/split-mission`` describes a rover's PUS telemetry in three
-documents, as Yamcs's PUS example lays them out: ``dt.xml`` holds data
-types, ``pus.xml`` the CCSDS primary header and PUS telemetry secondary
-header, and ``rover.xml`` the rover's housekeeping and event packets,
+documents, as Yamcs's PUS example lays them out: ``dt.xtce`` holds data
+types, ``pus.xtce`` the CCSDS primary header and PUS telemetry secondary
+header, and ``rover.xtce`` the rover's housekeeping and event packets,
 derived from ``/PUS/pus-tm`` and picked by ``/PUS/pus-service`` and
 ``/PUS/pus-subservice`` (see `Missions in several documents`_). Its types
-derive from ``dt.xml``'s with ``baseType``, adding units and a
+derive from ``dt.xtce``'s with ``baseType``, adding units and a
 ``ValidRange``:
 
 .. code-block:: xml
@@ -3438,8 +3438,8 @@ documents, records three packets after it, and decodes them again as a
 
 ::
 
-   set digest: 65a49b2e175af6ee41498f1a0b8dd37b (dt.xml, pus.xml, rover.xml)
-   set digest: the same for rover.xml, dt.xml, pus.xml
+   set digest: 65a49b2e175af6ee41498f1a0b8dd37b (dt.xtce, pus.xtce, rover.xtce)
+   set digest: the same for rover.xtce, dt.xtce, pus.xtce
    ...
    decode at 39: 14 bytes -> Event{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=2, pus_version=2, pus_time_ref=0, pus_counter=2, event=OVERHEAT, event_data=85}
    encode Hk{..., left_turns=1001, right_turns=0} -> error:OutOfRange (value of left-turns is outside its valid range or encoding)

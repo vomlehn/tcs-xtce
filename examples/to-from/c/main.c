@@ -1,14 +1,14 @@
 /* Writes or reads the words of the lorem ipsum paragraph as Word packets
- * described by to_from.xml, using the code tcs-xtce generated into
+ * described by to_from.xtce, using the code tcs-xtce generated into
  * to_from.h.
  *
- * `to_from_c write` writes the digest of to_from.xml, then one packet per
+ * `to_from_c write` writes the digest of to_from.xtce, then one packet per
  * word, to standard output.  `to_from_c read` reads the digest from standard
- * input and checks that it is the digest of its own to_from.xml, so that both
+ * input and checks that it is the digest of its own to_from.xtce, so that both
  * programs agree on what a Word is; it then reads packets and prints the
  * words as they arrive, separated by spaces, and a newline at the end of the
  * input.  It checks that every word arrives intact and in order.  Run it in
- * the directory that holds to_from.xml.
+ * the directory that holds to_from.xtce.
  *
  * The same file is built as C and as C++.  Both, and the Rust and Python
  * versions of this program, write the same bytes and print the same words,
@@ -36,11 +36,11 @@ static const char LOREM_IPSUM[] =
         "culpa qui officia deserunt mollit anim id est laborum.";
 
 /* The XTCE file that describes a Word, and the size of its digest. */
-#define XTCE "to_from.xml"
+#define XTCE "to_from.xtce"
 #define DIGEST_BYTES 16
 
 /* The size of a Word's size tag: 32 bits, most significant byte first, as
- * to_from.xml gives it. */
+ * to_from.xtce gives it. */
 #define TAG_BYTES 4
 
 /** Prints an error message to standard error and exits with status 1.

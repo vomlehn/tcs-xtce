@@ -1185,7 +1185,7 @@ Usually you don't call these directly.</p>
 <pre class="code rust literal-block">
 <span class="keyword">use</span><span class="whitespace"> </span><span class="name">tcs_xtce</span><span class="punctuation">::{</span><span class="name">Document</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">SpaceSystemType</span><span class="punctuation">};</span><span class="whitespace">
 
-</span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="keyword">mut</span><span class="whitespace"> </span><span class="name">doc</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">Document</span><span class="punctuation">::</span><span class="name">from_bytes</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">std</span><span class="punctuation">::</span><span class="name">fs</span><span class="punctuation">::</span><span class="name">read</span><span class="punctuation">(</span><span class="literal string">&quot;sat.xml&quot;</span><span class="punctuation">)</span><span class="operator">?</span><span class="punctuation">)</span><span class="operator">?</span><span class="punctuation">;</span><span class="whitespace">
+</span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="keyword">mut</span><span class="whitespace"> </span><span class="name">doc</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">Document</span><span class="punctuation">::</span><span class="name">from_bytes</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">std</span><span class="punctuation">::</span><span class="name">fs</span><span class="punctuation">::</span><span class="name">read</span><span class="punctuation">(</span><span class="literal string">&quot;sat.xtce&quot;</span><span class="punctuation">)</span><span class="operator">?</span><span class="punctuation">)</span><span class="operator">?</span><span class="punctuation">;</span><span class="whitespace">
 </span><span class="name function magic">println!</span><span class="punctuation">(</span><span class="literal string">&quot;{}&quot;</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">doc</span><span class="punctuation">.</span><span class="name">root</span><span class="punctuation">.</span><span class="name">name</span><span class="punctuation">);</span><span class="whitespace">
 </span><span class="name">doc</span><span class="punctuation">.</span><span class="name">root</span><span class="punctuation">.</span><span class="name">short_description</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name builtin">Some</span><span class="punctuation">(</span><span class="literal string">&quot;updated&quot;</span><span class="punctuation">.</span><span class="name">into</span><span class="punctuation">());</span><span class="whitespace">
 </span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="name">bytes</span><span class="punctuation">:</span><span class="whitespace"> </span><span class="keyword pseudo">&amp;</span><span class="punctuation">[</span><span class="keyword type">u8</span><span class="punctuation">]</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">doc</span><span class="punctuation">.</span><span class="name">serialize</span><span class="punctuation">()</span><span class="operator">?</span><span class="punctuation">;</span><span class="whitespace">   </span><span class="comment single">// view of the managed buffer</span>
@@ -1232,15 +1232,15 @@ use.</li>
 <span class="name builtin">cd</span><span class="whitespace"> </span>python<span class="whitespace">
 </span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>INPUT...<span class="whitespace"> </span>OUTPUT<span class="whitespace"> </span>--lang<span class="whitespace"> </span>LANG<span class="whitespace">
 
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.h<span class="whitespace">  </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>demo.xml<span class="whitespace"> </span>demo.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>dt.xml<span class="whitespace"> </span>pus.xml<span class="whitespace"> </span>pus17.xml<span class="whitespace"> </span>pus.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>demo.xtce<span class="whitespace"> </span>demo.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>demo.xtce<span class="whitespace"> </span>demo.h<span class="whitespace">  </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>demo.xtce<span class="whitespace"> </span>demo.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python<span class="whitespace">
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>dt.xtce<span class="whitespace"> </span>pus.xtce<span class="whitespace"> </span>pus17.xtce<span class="whitespace"> </span>pus.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust
 </pre>
 <p>Each run writes one language. Run it once per language you need.</p>
 <p>With the Python package installed (see <a class="reference internal" href="#installing-the-python-package">Installing the Python package</a>),
 the compiler is the <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> command, run from anywhere:
-<tt class="docutils literal"><span class="pre">tcs-xtce</span> demo.xml demo.rs <span class="pre">--lang</span> rust</tt>. It takes the same arguments.</p>
+<tt class="docutils literal"><span class="pre">tcs-xtce</span> demo.xtce demo.rs <span class="pre">--lang</span> rust</tt>. It takes the same arguments.</p>
 <table border="1" class="docutils">
 <tbody valign="top">
 <tr><td><tt class="docutils literal"><span class="pre">INPUT...</span></tt></td>
@@ -1251,8 +1251,8 @@ usually one, or several when the mission is split across documents
 <tr><td><tt class="docutils literal">OUTPUT</tt></td>
 <td>The file to write, always the last name; <tt class="docutils literal">-</tt> writes to standard
 output. It may be left out with <tt class="docutils literal"><span class="pre">--size-report</span></tt> and one
-<tt class="docutils literal">INPUT</tt>. A name ending in <tt class="docutils literal">.xml</tt> is refused, so that leaving
-<tt class="docutils literal">OUTPUT</tt> out can't overwrite the last document</td>
+<tt class="docutils literal">INPUT</tt>. A name ending in <tt class="docutils literal">.xtce</tt> or <tt class="docutils literal">.xml</tt> is refused, so
+that leaving <tt class="docutils literal">OUTPUT</tt> out can't overwrite the last document</td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">--lang</span> LANG</tt></td>
 <td>Required, except with <tt class="docutils literal"><span class="pre">--size-report</span></tt>. <tt class="docutils literal">rust</tt> writes a Rust module, formatted with <tt class="docutils literal">rustfmt</tt>
@@ -1300,13 +1300,13 @@ sits at the top of one tree, so a reference in one document can name a
 definition in another (the <tt class="docutils literal"><span class="pre">split-mission</span></tt> example, under <a class="reference internal" href="#examples">Examples</a>,
 is one such mission):</p>
 <pre class="code xml literal-block">
-<span class="comment multiline">&lt;!-- dt.xml --&gt;</span><span class="whitespace">
+<span class="comment multiline">&lt;!-- dt.xtce --&gt;</span><span class="whitespace">
 </span><span class="name tag">&lt;SpaceSystem</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;dt&quot;</span><span class="name tag">&gt;</span><span class="whitespace"> </span>...<span class="whitespace"> </span><span class="name tag">&lt;IntegerParameterType</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;uint16&quot;</span><span class="name tag">&gt;</span><span class="whitespace"> </span>...<span class="whitespace">
 
-</span><span class="comment multiline">&lt;!-- pus.xml --&gt;</span><span class="whitespace">
+</span><span class="comment multiline">&lt;!-- pus.xtce --&gt;</span><span class="whitespace">
 </span><span class="name tag">&lt;SpaceSystem</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;PUS&quot;</span><span class="name tag">&gt;</span><span class="whitespace"> </span>...<span class="whitespace"> </span><span class="name tag">&lt;SequenceContainer</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;pus-tm&quot;</span><span class="name tag">&gt;</span><span class="whitespace"> </span>...<span class="whitespace">
 
-</span><span class="comment multiline">&lt;!-- pus17.xml --&gt;</span><span class="whitespace">
+</span><span class="comment multiline">&lt;!-- pus17.xtce --&gt;</span><span class="whitespace">
 </span><span class="name tag">&lt;SpaceSystem</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;PUS17&quot;</span><span class="name tag">&gt;</span><span class="whitespace"> </span>...<span class="whitespace">
   </span><span class="name tag">&lt;SequenceContainer</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;are-you-alive-report&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
     </span><span class="name tag">&lt;BaseContainer</span><span class="whitespace"> </span><span class="name attribute">containerRef=</span><span class="literal string">&quot;/PUS/pus-tm&quot;</span><span class="name tag">&gt;</span><span class="whitespace"> </span>...<span class="whitespace">
@@ -1416,7 +1416,7 @@ and need no library. In C, link with <tt class="docutils literal"><span class="p
 <li><strong>Python</strong>: import the module with the <tt class="docutils literal">tcs_xtce</tt> package on the path.</li>
 </ul>
 <p><tt class="docutils literal">make packets</tt> regenerates the demo mission
-(<tt class="docutils literal">tests/mission/demo.xml</tt>) into <tt class="docutils literal">rust/tests/mission/demo.rs</tt>,
+(<tt class="docutils literal">tests/mission/demo.xtce</tt>) into <tt class="docutils literal">rust/tests/mission/demo.rs</tt>,
 <tt class="docutils literal">cpp/tests/mission/demo.h</tt> and <tt class="docutils literal">python/tests/mission/demo.py</tt>.</p>
 </div>
 <div class="section" id="generated-packet-types">
@@ -3392,14 +3392,14 @@ digest, they agree on every packet's fields, types and order (see
 </span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce.digest_cli<span class="whitespace"> </span>FILE...<span class="whitespace">
 </span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce.digest_cli<span class="whitespace"> </span>--set<span class="whitespace"> </span>FILE...<span class="whitespace">
 
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce.digest_cli<span class="whitespace"> </span>../tests/mission/demo.xml<span class="whitespace"> </span>../examples/simple-string/simple_string.xml
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce.digest_cli<span class="whitespace"> </span>../tests/mission/demo.xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xtce
 </pre>
 <p>With the Python package installed, it is the <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> command:
 <tt class="docutils literal"><span class="pre">xtce-digest</span> <span class="pre">FILE...</span></tt>.</p>
 <p>It reads the files in the order given. For each one it prints the file
 name as given, a colon, a space and the digest, in hex:</p>
 <pre class="code text literal-block">
-../tests/mission/demo.xml: 6d2d1d775d75a68089fddade8e95c585
+../tests/mission/demo.xtce: 6d2d1d775d75a68089fddade8e95c585
 </pre>
 <p>Each file gets its own digest, computed afresh, so a file gives the same
 digest wherever it appears in the list. A file that can't be read, isn't
@@ -3467,8 +3467,8 @@ a path)</td>
 <pre class="code python literal-block">
 <span class="keyword namespace">from</span><span class="whitespace"> </span><span class="name namespace">tcs_xtce.digest</span><span class="whitespace"> </span><span class="keyword namespace">import</span> <span class="name">digest_file</span><span class="punctuation">,</span> <span class="name">digest_file_bytes</span><span class="whitespace">
 
-</span><span class="name">digest_file</span><span class="punctuation">(</span><span class="literal string double">&quot;tests/mission/demo.xml&quot;</span><span class="punctuation">)</span>        <span class="comment single"># '6d2d1d775d75a68089fddade8e95c585'</span><span class="whitespace">
-</span><span class="name">digest_file_bytes</span><span class="punctuation">(</span><span class="literal string double">&quot;tests/mission/demo.xml&quot;</span><span class="punctuation">)</span>  <span class="comment single"># the same 16 bytes</span>
+</span><span class="name">digest_file</span><span class="punctuation">(</span><span class="literal string double">&quot;tests/mission/demo.xtce&quot;</span><span class="punctuation">)</span>        <span class="comment single"># '6d2d1d775d75a68089fddade8e95c585'</span><span class="whitespace">
+</span><span class="name">digest_file_bytes</span><span class="punctuation">(</span><span class="literal string double">&quot;tests/mission/demo.xtce&quot;</span><span class="punctuation">)</span>  <span class="comment single"># the same 16 bytes</span>
 </pre>
 <p>The document must be well-formed XML 1.0 in UTF-8 whose root element is
 <tt class="docutils literal">SpaceSystem</tt>; a document that declares another encoding, or has a
@@ -3559,7 +3559,7 @@ thread to another, each after its length.</li>
 <p>Each is summarized below; its README has the details.</p>
 <div class="section" id="housekeeping">
 <h2><a class="toc-backref" href="#toc-entry-35"><tt class="docutils literal">housekeeping</tt></a></h2>
-<p><tt class="docutils literal">examples/housekeeping/housekeeping.xml</tt> describes a container,
+<p><tt class="docutils literal">examples/housekeeping/housekeeping.xtce</tt> describes a container,
 <tt class="docutils literal">Status</tt>:</p>
 <pre class="literal-block">
 PacketLength    16 bits   bytes after this field; computed when encoding
@@ -3577,7 +3577,7 @@ watts while the packet holds raw counts. <tt class="docutils literal">HeaterPowe
 <tt class="docutils literal">IncludeCondition</tt> on the boolean <tt class="docutils literal">HeaterOn</tt>, so it is optional: <tt class="docutils literal">Option&lt;f64&gt;</tt>
 in Rust, <tt class="docutils literal">has_heater_power</tt> and <tt class="docutils literal">heater_power</tt> in C/C++, and
 <tt class="docutils literal">Optional[float]</tt> in Python.</p>
-<p>Each program starts a stream with the digest of <tt class="docutils literal">housekeeping.xml</tt> and
+<p>Each program starts a stream with the digest of <tt class="docutils literal">housekeeping.xtce</tt> and
 encodes four readings into it, one packet after another, then walks the
 stream: it checks the digest against that of its own copy, then reads each
 packet's <tt class="docutils literal">PacketLength</tt> to
@@ -3596,7 +3596,7 @@ more.</p>
 </div>
 <div class="section" id="simple-string">
 <h2><a class="toc-backref" href="#toc-entry-36"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
-<p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xml</span></tt> describes a container,
+<p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xtce</span></tt> describes a container,
 <tt class="docutils literal">SimpleString</tt>, holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string
 that always occupies 64 bits and ends at a NUL byte, so it holds up to
 8 bytes:</p>
@@ -3638,7 +3638,7 @@ for more.</p>
 </div>
 <div class="section" id="to-from">
 <h2><a class="toc-backref" href="#toc-entry-37"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
-<p><tt class="docutils literal"><span class="pre">examples/to-from/to_from.xml</span></tt> describes a container, <tt class="docutils literal">Word</tt>,
+<p><tt class="docutils literal"><span class="pre">examples/to-from/to_from.xtce</span></tt> describes a container, <tt class="docutils literal">Word</tt>,
 holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string of varying length
 with a 32-bit size tag before it. The tag and the string together occupy
 at most 288 bits, so a word holds up to 32 bytes:</p>
@@ -3653,10 +3653,10 @@ at most 288 bits, so a word holds up to 32 bytes:</p>
 </pre>
 <p>The example shows that code generated for one language reads what code
 generated for another wrote. Each language's program takes one argument.
-With <tt class="docutils literal">write</tt>, it writes the digest of <tt class="docutils literal">to_from.xml</tt>, then serializes
+With <tt class="docutils literal">write</tt>, it writes the digest of <tt class="docutils literal">to_from.xtce</tt>, then serializes
 each of the 69 words of the lorem ipsum paragraph into a <tt class="docutils literal">Word</tt> packet
 and writes the packets, to standard output. With <tt class="docutils literal">read</tt>, it checks the
-digest against that of its own <tt class="docutils literal">to_from.xml</tt>, then reads packets from
+digest against that of its own <tt class="docutils literal">to_from.xtce</tt>, then reads packets from
 standard input, using each packet's
 size tag to find where it ends, and deserializes them. It prints each word
 as it arrives, with a space before every word but the first, and a newline
@@ -3678,7 +3678,7 @@ same bytes, and runs all 16 pairs of reader and writer.</p>
 </div>
 <div class="section" id="variable-array">
 <h2><a class="toc-backref" href="#toc-entry-38"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
-<p><tt class="docutils literal"><span class="pre">examples/variable-array/variable_array.xml</span></tt> describes a container,
+<p><tt class="docutils literal"><span class="pre">examples/variable-array/variable_array.xtce</span></tt> describes a container,
 <tt class="docutils literal">Paragraph</tt>, holding a two-dimensional array whose dimensions both vary:
 an array of lines, each an array of words. A count before each array gives
 its number of elements, so every line can have its own number of words:</p>
@@ -3719,7 +3719,7 @@ size of the C structures.</p>
 <p>Each program builds two <tt class="docutils literal">Paragraph</tt>s from the lorem ipsum paragraph
 in five lines, one word per element: the first three lines, then the last
 two. One thread opens a TCP connection on the loopback interface, writes
-the digest of <tt class="docutils literal">variable_array.xml</tt>, and, for each array, writes its
+the digest of <tt class="docutils literal">variable_array.xtce</tt>, and, for each array, writes its
 length, then the whole <tt class="docutils literal">Paragraph</tt> in a single write. The length is a second container in the same XTCE file, <tt class="docutils literal">Length</tt>,
 holding a 32-bit <tt class="docutils literal">ByteCount</tt>, so it too is encoded and decoded with the
 generated code. Another thread checks the digest against that of its own
@@ -3742,7 +3742,7 @@ for more.</p>
 </div>
 <div class="section" id="enum-labels">
 <h2><a class="toc-backref" href="#toc-entry-39"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></h2>
-<p><tt class="docutils literal"><span class="pre">examples/enum-labels/modes.xml</span></tt> describes a probe's <tt class="docutils literal">Status</tt>, whose
+<p><tt class="docutils literal"><span class="pre">examples/enum-labels/modes.xtce</span></tt> describes a probe's <tt class="docutils literal">Status</tt>, whose
 <tt class="docutils literal">Mode</tt> is an enumeration (<tt class="docutils literal">SAFE</tt>, <tt class="docutils literal">IDLE</tt>, <tt class="docutils literal">SCIENCE</tt>,
 <tt class="docutils literal">DOWNLINK</tt>, and <tt class="docutils literal">TEST</tt> for the values 16 to 31). Everything that
 depends on the mode names a label: <tt class="docutils literal">Target</tt> is there only in
@@ -3777,12 +3777,12 @@ more.</p>
 <div class="section" id="split-mission">
 <h2><a class="toc-backref" href="#toc-entry-40"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/split-mission</span></tt> describes a rover's PUS telemetry in three
-documents, as Yamcs's PUS example lays them out: <tt class="docutils literal">dt.xml</tt> holds data
-types, <tt class="docutils literal">pus.xml</tt> the CCSDS primary header and PUS telemetry secondary
-header, and <tt class="docutils literal">rover.xml</tt> the rover's housekeeping and event packets,
+documents, as Yamcs's PUS example lays them out: <tt class="docutils literal">dt.xtce</tt> holds data
+types, <tt class="docutils literal">pus.xtce</tt> the CCSDS primary header and PUS telemetry secondary
+header, and <tt class="docutils literal">rover.xtce</tt> the rover's housekeeping and event packets,
 derived from <tt class="docutils literal"><span class="pre">/PUS/pus-tm</span></tt> and picked by <tt class="docutils literal"><span class="pre">/PUS/pus-service</span></tt> and
 <tt class="docutils literal"><span class="pre">/PUS/pus-subservice</span></tt> (see <a class="reference internal" href="#missions-in-several-documents">Missions in several documents</a>). Its types
-derive from <tt class="docutils literal">dt.xml</tt>'s with <tt class="docutils literal">baseType</tt>, adding units and a
+derive from <tt class="docutils literal">dt.xtce</tt>'s with <tt class="docutils literal">baseType</tt>, adding units and a
 <tt class="docutils literal">ValidRange</tt>:</p>
 <pre class="code xml literal-block">
 <span class="name tag">&lt;IntegerParameterType</span><span class="whitespace"> </span><span class="name attribute">name=</span><span class="literal string">&quot;turns&quot;</span><span class="whitespace"> </span><span class="name attribute">baseType=</span><span class="literal string">&quot;/dt/uint16&quot;</span><span class="name tag">&gt;</span><span class="whitespace">
@@ -3795,8 +3795,8 @@ that the digest of the set doesn't depend on the order of the
 documents, records three packets after it, and decodes them again as a
 <tt class="docutils literal">CcsdsKind</tt>; a wheel turned 1001 times can't be encoded:</p>
 <pre class="literal-block">
-set digest: 65a49b2e175af6ee41498f1a0b8dd37b (dt.xml, pus.xml, rover.xml)
-set digest: the same for rover.xml, dt.xml, pus.xml
+set digest: 65a49b2e175af6ee41498f1a0b8dd37b (dt.xtce, pus.xtce, rover.xtce)
+set digest: the same for rover.xtce, dt.xtce, pus.xtce
 ...
 decode at 39: 14 bytes -&gt; Event{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=2, pus_version=2, pus_time_ref=0, pus_counter=2, event=OVERHEAT, event_data=85}
 encode Hk{..., left_turns=1001, right_turns=0} -&gt; error:OutOfRange (value of left-turns is outside its valid range or encoding)

@@ -1,4 +1,4 @@
-/* Encodes housekeeping Status packets described by housekeeping.xml into one
+/* Encodes housekeeping Status packets described by housekeeping.xtce into one
  * stream, then walks the stream and decodes them again, using the code
  * tcs-xtce generated into housekeeping.h.
  *
@@ -11,11 +11,11 @@
  *   holds degrees, volts and watts, and the packet holds raw counts.
  * - HeaterPower is in the packet only when the heater is on.
  *
- * The stream starts with the digest of housekeeping.xml, so that whatever
+ * The stream starts with the digest of housekeeping.xtce, so that whatever
  * reads it can check that it uses the same definition of a Status.  The same
  * file is built as C and as C++; both, and the Rust and Python versions of
  * this program, print identical output.  Run it in the directory that holds
- * housekeeping.xml.
+ * housekeeping.xtce.
  *
  * The C build finds housekeeping.h in c/ (--lang c) and the C++ build in
  * cxx/ (--lang c++), so it is included with <> rather than "": a quoted
@@ -31,7 +31,7 @@
 #define N_READINGS 4
 
 /* The XTCE file that describes a Status, and the size of its digest. */
-#define XTCE "housekeeping.xml"
+#define XTCE "housekeeping.xtce"
 #define DIGEST_BYTES 16
 
 /* A Status to encode, and the values decoding it must give: the nearest the

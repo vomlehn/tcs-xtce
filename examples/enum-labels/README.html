@@ -380,7 +380,7 @@ in <tt class="docutils literal">TEST</tt> mode.</li>
 </ul>
 <p>The programs name labels too, through the constants the generated code
 gives each one. So the numbers are the document's business alone:
-renumbering the modes in <tt class="docutils literal">modes.xml</tt> changes the bytes on the wire, and
+renumbering the modes in <tt class="docutils literal">modes.xtce</tt> changes the bytes on the wire, and
 nothing else — not the conditions, not the alarm, not a line of the
 programs. The example also shows a label that names a range of values,
 and a value that no label names, which decoding keeps as it is.</p>
@@ -401,7 +401,7 @@ can't be encoded.</li>
 exits with status 1.</p>
 <div class="section" id="the-xtce-description">
 <h1>The XTCE description</h1>
-<p><a class="reference external" href="modes.xml">modes.xml</a> defines the enumeration <tt class="docutils literal">ModeType</tt>:</p>
+<p><a class="reference external" href="modes.xtce">modes.xtce</a> defines the enumeration <tt class="docutils literal">ModeType</tt>:</p>
 <pre class="literal-block">
 SAFE        0    alarm: warning
 IDLE        1
@@ -449,7 +449,7 @@ have it, but only the label survives renumbering. A <tt class="docutils literal"
 <p>The file validates against the XTCE 1.3 schema:</p>
 <pre class="code sh literal-block">
 <span class="name variable">XML_CATALOG_FILES</span><span class="operator">=</span>../../references/catalog.xml<span class="whitespace"> </span><span class="literal string escape">\
-</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>modes.xml
+</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>modes.xtce
 </pre>
 </div>
 <div class="section" id="generating-the-code">
@@ -457,13 +457,13 @@ have it, but only the label survives renumbering. A <tt class="docutils literal"
 <p><tt class="docutils literal">make generate</tt> runs the generator once per language:</p>
 <pre class="code sh literal-block">
 <span class="name builtin">cd</span><span class="whitespace"> </span>../../python<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/enum-labels/modes.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/enum-labels/modes.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/enum-labels/rust/src/probe.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/enum-labels/modes.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/enum-labels/modes.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/enum-labels/c/probe.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/enum-labels/modes.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/enum-labels/modes.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/enum-labels/cxx/probe.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c++<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/enum-labels/modes.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/enum-labels/modes.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/enum-labels/python/probe.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python
 </pre>
 <p>The mission, and so the module and the C prefix, are named for the root
@@ -613,7 +613,7 @@ cc<span class="whitespace">  </span>-std<span class="operator">=</span>c11<span 
 <dd>Generate the code if needed, build every program, run it and check
 the output, as above.</dd>
 <dt><tt class="docutils literal">make generate</tt></dt>
-<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">modes.xml</tt> for every language, if the XTCE file
+<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">modes.xtce</tt> for every language, if the XTCE file
 or the generator changed since the code was last generated.</dd>
 <dt><tt class="docutils literal">make rust</tt></dt>
 <dd>Check the Rust program's formatting with <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt> and build
@@ -635,7 +635,7 @@ or the generator changed since the code was last generated.</dd>
 <p>The generated files aren't kept in git; building generates them.</p>
 <table border="1" class="docutils">
 <tbody valign="top">
-<tr><td><tt class="docutils literal">modes.xml</tt></td>
+<tr><td><tt class="docutils literal">modes.xtce</tt></td>
 <td>The XTCE description</td>
 </tr>
 <tr><td><tt class="docutils literal">rust/Cargo.toml</tt>, <tt class="docutils literal">rust/src/main.rs</tt></td>

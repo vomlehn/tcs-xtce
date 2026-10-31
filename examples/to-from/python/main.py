@@ -1,13 +1,13 @@
 """Write or read the words of the lorem ipsum paragraph as Word packets
-described by to_from.xml, using the code tcs-xtce generated into to_from.py.
+described by to_from.xtce, using the code tcs-xtce generated into to_from.py.
 
-``main.py write`` writes the digest of to_from.xml, then one packet per word,
+``main.py write`` writes the digest of to_from.xtce, then one packet per word,
 to standard output.  ``main.py read`` reads the digest from standard input and
-checks that it is the digest of its own to_from.xml, so that both programs
+checks that it is the digest of its own to_from.xtce, so that both programs
 agree on what a Word is; it then reads packets and prints the words as they
 arrive, separated by spaces, and a newline at the end of the input. It checks
 that every word arrives intact and in order.  Run it in the directory that
-holds to_from.xml.
+holds to_from.xtce.
 
 The Rust and C/C++ versions of this program write the same bytes and print
 the same words, so any of them can read what any other wrote. The to-from
@@ -33,11 +33,11 @@ LOREM_IPSUM = ("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed "
 
 
 # The XTCE file that describes a Word, and the size of its digest.
-XTCE = "to_from.xml"
+XTCE = "to_from.xtce"
 DIGEST_BYTES = 16
 
 # The size of a Word's size tag: 32 bits, most significant byte first, as
-# to_from.xml gives it.
+# to_from.xtce gives it.
 TAG_BYTES = 4
 
 

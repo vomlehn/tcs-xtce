@@ -1,4 +1,4 @@
-//! Tests of the packet codecs generated from `tests/mission/demo.xml`.
+//! Tests of the packet codecs generated from `tests/mission/demo.xtce`.
 //!
 //! Decoding of hand-built packets is checked across languages by
 //! `tests/packet_check.sh`; these tests cover encoding from structs.

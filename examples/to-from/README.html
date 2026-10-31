@@ -377,18 +377,18 @@ four-byte size tag that XTCE describes.</li>
 language's generator produces writes the same bytes, and reads the bytes
 any of the others wrote.</li>
 <li><strong>Checking that both use the same definition.</strong> The writer first sends
-the digest of <tt class="docutils literal">to_from.xml</tt>, and the reader checks it against the digest
+the digest of <tt class="docutils literal">to_from.xtce</tt>, and the reader checks it against the digest
 of its own copy (see <a class="reference internal" href="#checking-the-xtce-definition">Checking the XTCE definition</a>).</li>
 </ul>
 <p>Each language's program takes one argument:</p>
 <dl class="docutils">
 <dt><tt class="docutils literal">write</tt></dt>
-<dd>Writes the 16-byte digest of <tt class="docutils literal">to_from.xml</tt> to standard output, then
+<dd>Writes the 16-byte digest of <tt class="docutils literal">to_from.xtce</tt> to standard output, then
 serializes each word into a <tt class="docutils literal">Word</tt> packet and writes the packets, one
 after another.</dd>
 <dt><tt class="docutils literal">read</tt></dt>
 <dd>Reads the digest from standard input and checks it against the digest of
-its own <tt class="docutils literal">to_from.xml</tt>, printing it if they match. It then reads packets
+its own <tt class="docutils literal">to_from.xtce</tt>, printing it if they match. It then reads packets
 and deserializes them. It prints each word as it arrives, with a space before every word except the first, and
 a newline when the input ends. It checks every word against the
 paragraph's next word, so that it catches any word that is damaged,
@@ -422,7 +422,7 @@ after a usage message, if its arguments are wrong. Build the programs with
 </div>
 <div class="section" id="the-xtce-description">
 <h1>The XTCE description</h1>
-<p><a class="reference external" href="to_from.xml">to_from.xml</a> defines:</p>
+<p><a class="reference external" href="to_from.xtce">to_from.xtce</a> defines:</p>
 <ul class="simple">
 <li>a string type, <tt class="docutils literal">WordType</tt>, of varying length (<tt class="docutils literal">Variable</tt>), with a
 32-bit size tag before the string
@@ -442,15 +442,15 @@ many more, and hands the whole packet to the generated decoder.</p>
 <p>The file validates against the XTCE 1.3 schema:</p>
 <pre class="code sh literal-block">
 <span class="name variable">XML_CATALOG_FILES</span><span class="operator">=</span>../../references/catalog.xml<span class="whitespace"> </span><span class="literal string escape">\
-</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>to_from.xml
+</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>to_from.xtce
 </pre>
 </div>
 <div class="section" id="checking-the-xtce-definition">
 <h1>Checking the XTCE definition</h1>
 <p>The packets carry no field names or types, so the reader can read them only
 if it was built from the same definition as the writer. To check, the writer sends
-the 16-byte MD5 digest of <tt class="docutils literal">to_from.xml</tt>, before any packet. The reader
-computes the digest of its own copy of <tt class="docutils literal">to_from.xml</tt> and compares. If they
+the 16-byte MD5 digest of <tt class="docutils literal">to_from.xtce</tt>, before any packet. The reader
+computes the digest of its own copy of <tt class="docutils literal">to_from.xtce</tt> and compares. If they
 match, it prints</p>
 <pre class="literal-block">
 XTCE digest: &lt;32 hex digits&gt;, the same on both sides
@@ -481,21 +481,21 @@ runtime computes it the same way:</p>
 </tr>
 </tbody>
 </table>
-<p><tt class="docutils literal"><span class="pre">xtce-digest</span> to_from.xml</tt> prints the same digest in hex. Each program reads
-<tt class="docutils literal">to_from.xml</tt> from the current directory, so run it from this one.</p>
+<p><tt class="docutils literal"><span class="pre">xtce-digest</span> to_from.xtce</tt> prints the same digest in hex. Each program reads
+<tt class="docutils literal">to_from.xtce</tt> from the current directory, so run it from this one.</p>
 </div>
 <div class="section" id="generating-the-code">
 <h1>Generating the code</h1>
 <p><tt class="docutils literal">make generate</tt> runs the generator once per language:</p>
 <pre class="code sh literal-block">
 <span class="name builtin">cd</span><span class="whitespace"> </span>../../python<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/to-from/to_from.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/to-from/to_from.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/to-from/rust/src/to_from.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/to-from/to_from.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/to-from/to_from.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/to-from/c/to_from.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/to-from/to_from.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/to-from/to_from.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/to-from/cxx/to_from.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c++<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/to-from/to_from.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/to-from/to_from.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/to-from/python/to_from.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python
 </pre>
 <p>The generated files aren't kept in git; <tt class="docutils literal">make</tt> runs <tt class="docutils literal">make generate</tt>
@@ -615,7 +615,7 @@ the output, as above.</dd>
 <dd>Generate the code if needed and build every program, without running
 them, so that <tt class="docutils literal"><span class="pre">./to-from</span></tt> can.</dd>
 <dt><tt class="docutils literal">make generate</tt></dt>
-<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">to_from.xml</tt> for every language, if the XTCE
+<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">to_from.xtce</tt> for every language, if the XTCE
 file or the generator changed since the code was last generated.</dd>
 <dt><tt class="docutils literal">make rust</tt></dt>
 <dd>Check the Rust program's formatting with <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt> and build
@@ -636,7 +636,7 @@ file or the generator changed since the code was last generated.</dd>
 <p>The generated files aren't kept in git; building generates them.</p>
 <table border="1" class="docutils">
 <tbody valign="top">
-<tr><td><tt class="docutils literal">to_from.xml</tt></td>
+<tr><td><tt class="docutils literal">to_from.xtce</tt></td>
 <td>The XTCE description</td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">to-from</span></tt></td>

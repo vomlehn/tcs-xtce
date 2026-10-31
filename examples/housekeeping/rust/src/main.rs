@@ -1,4 +1,4 @@
-//! Encodes housekeeping `Status` packets described by `housekeeping.xml`
+//! Encodes housekeeping `Status` packets described by `housekeeping.xtce`
 //! into one stream, then walks the stream and decodes them again, using the
 //! code `tcs-xtce` generated into `housekeeping.rs`.
 //!
@@ -12,10 +12,10 @@
 //!   counts.
 //! * `HeaterPower` is in the packet only when the heater is on.
 //!
-//! The stream starts with the digest of `housekeeping.xml`, so that whatever
+//! The stream starts with the digest of `housekeeping.xtce`, so that whatever
 //! reads it can check that it uses the same definition of a `Status`.  The
 //! C/C++ and Python versions of this program print identical output.  Run it
-//! in the directory that holds `housekeeping.xml`.
+//! in the directory that holds `housekeeping.xtce`.
 
 mod housekeeping;
 
@@ -26,7 +26,7 @@ use tcs_xtce::digest::{digest_file_bytes, hex as digest_hex};
 use tcs_xtce::packet::Codec;
 
 /// The XTCE file that describes a `Status`, and the size of its digest.
-const XTCE: &str = "housekeeping.xml";
+const XTCE: &str = "housekeeping.xtce";
 const DIGEST_BYTES: usize = 16;
 
 /// A `Status` to encode, and the values decoding it must give: the nearest

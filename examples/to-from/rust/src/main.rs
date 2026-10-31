@@ -1,14 +1,14 @@
 //! Writes or reads the words of the lorem ipsum paragraph as `Word`
-//! packets described by `to_from.xml`, using the code `tcs-xtce` generated
+//! packets described by `to_from.xtce`, using the code `tcs-xtce` generated
 //! into `to_from.rs`.
 //!
-//! `to-from write` writes the digest of `to_from.xml`, then one packet per
+//! `to-from write` writes the digest of `to_from.xtce`, then one packet per
 //! word, to standard output.  `to-from read` reads the digest from standard
-//! input and checks that it is the digest of its own `to_from.xml`, so that
+//! input and checks that it is the digest of its own `to_from.xtce`, so that
 //! both programs agree on what a `Word` is; it then reads packets and prints
 //! the words as they arrive, separated by spaces, and a newline at the end
 //! of the input.  It checks that every word arrives intact and in order.
-//! Run it in the directory that holds `to_from.xml`.
+//! Run it in the directory that holds `to_from.xtce`.
 //!
 //! The C/C++ and Python versions of this program write the same bytes and
 //! print the same words, so any of them can read what any other wrote. The
@@ -33,11 +33,11 @@ const LOREM_IPSUM: &str = "Lorem ipsum dolor sit amet, consectetur adipiscing \
     mollit anim id est laborum.";
 
 /// The XTCE file that describes a `Word`, and the size of its digest.
-const XTCE: &str = "to_from.xml";
+const XTCE: &str = "to_from.xtce";
 const DIGEST_BYTES: usize = 16;
 
 /// The size of a `Word`'s size tag: 32 bits, most significant byte first,
-/// as `to_from.xml` gives it.
+/// as `to_from.xtce` gives it.
 const TAG_BYTES: usize = 4;
 
 fn fail(msg: &str) -> ! {

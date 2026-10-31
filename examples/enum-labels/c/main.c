@@ -1,4 +1,4 @@
-/* Encodes and decodes a probe's status, described by modes.xml, using the
+/* Encodes and decodes a probe's status, described by modes.xtce, using the
  * code tcs-xtce generated into probe.h.
  *
  * The status's mode is an enumeration, and everything that depends on it

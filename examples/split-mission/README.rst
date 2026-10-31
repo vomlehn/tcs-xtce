@@ -11,10 +11,10 @@ third. tcs-xtce reads them together, as one mission, and the example
 shows what that takes:
 
 * **References across documents.** Each document's root SpaceSystem sits
-  at the top of one tree, so ``rover.xml`` names the base container
-  ``/PUS/pus-tm`` in ``pus.xml``, the parameter ``/PUS/pus-service`` that
-  picks its packets, and the type ``/dt/uint16`` in ``dt.xml``.
-* **Derived types.** ``rover.xml``'s types build on ``dt.xml``'s with
+  at the top of one tree, so ``rover.xtce`` names the base container
+  ``/PUS/pus-tm`` in ``pus.xtce``, the parameter ``/PUS/pus-service`` that
+  picks its packets, and the type ``/dt/uint16`` in ``dt.xtce``.
+* **Derived types.** ``rover.xtce``'s types build on ``dt.xtce``'s with
   ``baseType``, adding units and a valid range: a wheel's turn count is a
   ``/dt/uint16`` that may not exceed 1000, which encoding enforces.
 * **The digest of the set.** The stream starts with one digest for the
@@ -51,28 +51,28 @@ schema:
    * - Document
      - Root SpaceSystem
      - Holds
-   * - `dt.xml <dt.xml>`__
+   * - `dt.xtce <dt.xtce>`__
      - ``dt``
      - Parameter types: ``bool1``, ``uint2`` to ``uint16`` and ``float32``
-   * - `pus.xml <pus.xml>`__
+   * - `pus.xtce <pus.xtce>`__
      - ``PUS``
      - The CCSDS primary header, in the abstract container ``ccsds``, and
        the PUS telemetry secondary header, in ``pus-tm``, which derives
        from ``ccsds`` for telemetry packets with a secondary header
-   * - `rover.xml <rover.xml>`__
+   * - `rover.xtce <rover.xtce>`__
      - ``Rover``
      - The rover's packets: ``hk``, housekeeping (service 3, subservice
        25), and ``event`` (service 5, subservice 1), both derived from
        ``/PUS/pus-tm``
 
-``pus.xml`` uses ``dt.xml``'s types by absolute reference:
+``pus.xtce`` uses ``dt.xtce``'s types by absolute reference:
 
 .. code-block:: xml
 
    <Parameter name="pus-service" parameterTypeRef="/dt/uint8"/>
 
-and ``rover.xml`` derives its packets from ``pus.xml``'s, picking them by
-the service and subservice ``pus.xml`` defines:
+and ``rover.xtce`` derives its packets from ``pus.xtce``'s, picking them by
+the service and subservice ``pus.xtce`` defines:
 
 .. code-block:: xml
 
@@ -88,7 +88,7 @@ the service and subservice ``pus.xml`` defines:
      </BaseContainer>
    </SequenceContainer>
 
-Its types derive from ``dt.xml``'s: ``baseType`` takes everything from
+Its types derive from ``dt.xtce``'s: ``baseType`` takes everything from
 the base type, here its encoding, and the derived type adds to it or
 replaces parts of it:
 
@@ -114,7 +114,7 @@ left and right wheels' turns (16 bits each). The first one is:
    42250000    motor temperature: 41.25
    0078 0076   turns: 120 left, 118 right
 
-The CCSDS length is computed: ``pus.xml`` marks it with the
+The CCSDS length is computed: ``pus.xtce`` marks it with the
 ``AncillaryData`` ``tcs-xtce.length`` of -1, since it counts the bytes
 after the header minus one, so it isn't a field of the generated
 structures. Nor are the packet type, secondary header flag, service and
@@ -124,7 +124,7 @@ The documents validate against the XTCE 1.3 schema:
 
 .. code-block:: sh
 
-   for f in dt.xml pus.xml rover.xml; do
+   for f in dt.xtce pus.xtce rover.xtce; do
        XML_CATALOG_FILES=../../references/catalog.xml \
            xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd $f
    done
@@ -138,8 +138,8 @@ documents together:
 .. code-block:: sh
 
    cd ../../python
-   python3 -m tcs_xtce ../examples/split-mission/dt.xml \
-       ../examples/split-mission/pus.xml ../examples/split-mission/rover.xml \
+   python3 -m tcs_xtce ../examples/split-mission/dt.xtce \
+       ../examples/split-mission/pus.xtce ../examples/split-mission/rover.xtce \
        ../examples/split-mission/rust/src/rover.rs --lang rust
 
 and the same with ``c/rover.h --lang c``, ``cxx/rover.h --lang c++`` and
@@ -194,7 +194,7 @@ and every runtime computes the digest of a set of documents the same way:
    * - Python
      - ``tcs_xtce.digest.digest_files_bytes(paths)``, giving ``bytes``
 
-``xtce-digest --set dt.xml pus.xml rover.xml`` prints the same digest in
+``xtce-digest --set dt.xtce pus.xtce rover.xtce`` prints the same digest in
 hex. The digest of a set is the MD5 digest of its documents' canonical
 encodings (the manual's "xtce-digest" describes them), sorted and joined,
 so the order doesn't matter; a set of one document has that document's
@@ -211,8 +211,8 @@ that they print the same thing:
 
    $ make
    ...
-   set digest: 65a49b2e175af6ee41498f1a0b8dd37b (dt.xml, pus.xml, rover.xml)
-   set digest: the same for rover.xml, dt.xml, pus.xml
+   set digest: 65a49b2e175af6ee41498f1a0b8dd37b (dt.xtce, pus.xtce, rover.xtce)
+   set digest: the same for rover.xtce, dt.xtce, pus.xtce
    encode Hk{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=1, pus_version=2, pus_time_ref=0, pus_counter=1, battery=28.5, motor_temp=41.25, left_turns=120, right_turns=118} -> 0864c0010010200319000141e400004225000000780076
    encode Event{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=2, pus_version=2, pus_time_ref=0, pus_counter=2, event=OVERHEAT, event_data=85} -> 0864c00200072005010002020055
    encode Hk{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=3, pus_version=2, pus_time_ref=0, pus_counter=3, battery=27.75, motor_temp=38.5, left_turns=0, right_turns=3} -> 0864c0030010200319000341de0000421a000000000003
@@ -303,7 +303,7 @@ The generated files aren't kept in git; building generates them.
 .. list-table::
    :widths: auto
 
-   * - ``dt.xml``, ``pus.xml``, ``rover.xml``
+   * - ``dt.xtce``, ``pus.xtce``, ``rover.xtce``
      - The XTCE documents
    * - ``rust/Cargo.toml``, ``rust/src/main.rs``
      - The Rust program

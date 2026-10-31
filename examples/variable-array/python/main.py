@@ -1,17 +1,17 @@
 """Send two arrays of lorem ipsum lines from one thread to another over one
-TCP connection, each as a Paragraph packet described by variable_array.xml,
+TCP connection, each as a Paragraph packet described by variable_array.xtce,
 using the code tcs-xtce generated into variable_array.py.
 
 A Paragraph is a two-dimensional array whose dimensions both vary: an array
 of lines, each an array of words. The sender first writes the digest of
-variable_array.xml, which the receiver checks against the digest of its own
+variable_array.xtce, which the receiver checks against the digest of its own
 copy, so that both agree on the packets. Before each packet the sender writes a
-Length packet, also described by variable_array.xml, giving its size in
+Length packet, also described by variable_array.xtce, giving its size in
 bytes, so the receiver knows how many bytes to read; it then writes the
 whole Paragraph in a single write. The receiver checks that every line and
 word arrived intact and in order, then prints each line with its words
 separated by spaces. The Rust and C/C++ versions of this program print
-identical output. Run it in the directory that holds variable_array.xml.
+identical output. Run it in the directory that holds variable_array.xtce.
 """
 
 import socket
@@ -39,7 +39,7 @@ PARAGRAPHS = [["Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed "
 
 
 # The XTCE file that describes the packets, and the size of its digest.
-XTCE = "variable_array.xml"
+XTCE = "variable_array.xtce"
 DIGEST_BYTES = 16
 
 

@@ -19,7 +19,7 @@ top=$(cd "$(dirname "$0")/.." && pwd)
 dist=$(cd "$1" && pwd)
 wheel=$(ls "$dist"/tcs_xtce-*.whl)
 sdist=$(ls "$dist"/tcs_xtce-*.tar.gz)
-demo=$top/tests/mission/demo.xml
+demo=$top/tests/mission/demo.xtce
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 

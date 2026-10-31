@@ -1,5 +1,5 @@
 //! Serializes and deserializes the `SimpleString` structure described by
-//! `simple_string.xml`, using the code `tcs-xtce` generated into
+//! `simple_string.xtce`, using the code `tcs-xtce` generated into
 //! `simple_string.rs`.
 //!
 //! The C/C++ and Python versions of this program print identical output.

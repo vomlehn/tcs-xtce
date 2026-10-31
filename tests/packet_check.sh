@@ -32,8 +32,8 @@ py_tool() {
 
 XML_CATALOG_FILES="$top/references/catalog.xml" \
     xmllint --noout --nonet --schema "$top/references/SpaceSystem.xsd" \
-        "$mission/demo.xml" 2>/dev/null || {
-    echo "tests/mission/demo.xml does not validate against the XTCE schema" >&2
+        "$mission/demo.xtce" 2>/dev/null || {
+    echo "tests/mission/demo.xtce does not validate against the XTCE schema" >&2
     exit 1
 }
 

@@ -11,7 +11,7 @@ from tcs_xtce.__main__ import main
 from .test_compile import APP, HEADER, TYPES
 
 DEMO = str(Path(__file__).resolve().parents[3] / "tests" / "mission"
-           / "demo.xml")
+           / "demo.xtce")
 
 
 def generate(*args: str) -> str:
@@ -89,13 +89,13 @@ class InputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             names = []
             for name, text in (("dt", TYPES), ("hdr", HEADER), ("app", APP)):
-                names.append(str(Path(d) / f"{name}.xml"))
+                names.append(str(Path(d) / f"{name}.xtce"))
                 Path(names[-1]).write_text(text)
             status, out, err = self.run_main(*names, "-", "--lang", "rust")
             self.assertEqual((status, err), (0, ""))
             self.assertTrue(out.startswith("// @generated automatically by "
-                                           "tcs-xtce from dt.xml, hdr.xml, "
-                                           "app.xml\n// (SpaceSystems 'dt', "
+                                           "tcs-xtce from dt.xtce, hdr.xtce, "
+                                           "app.xtce\n// (SpaceSystems 'dt', "
                                            "'hdr', 'app').\n"), out)
             self.assertIn("change the XTCE documents instead", out)
             self.assertIn("pub struct Status", out)
@@ -110,6 +110,9 @@ class InputTests(unittest.TestCase):
         # Forgetting OUTPUT must not overwrite the last document.
         with self.assertRaises(SystemExit):
             self.run_main(DEMO, DEMO, "--lang", "rust")
+        # Nor one spelled the older way.
+        with self.assertRaises(SystemExit):
+            self.run_main(DEMO, "mission.xml", "--lang", "rust")
 
     def test_size_report_output(self):
         status, out, _ = self.run_main(DEMO, "--size-report")

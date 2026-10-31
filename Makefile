@@ -63,7 +63,7 @@ CPP_TOOL  := cpp/build/xtce_roundtrip
 
 # Packet codecs generated from a mission's XTCE document by tcs-xtce; the demo
 # mission exercises them in every language.
-MISSION  := tests/mission/demo.xml
+MISSION  := tests/mission/demo.xtce
 PKT      := $(PYTHON) -m tcs_xtce ../$(MISSION) --source-name $(MISSION)
 # tcs-xtce also uses tcs_xtce.binding, which formats and wraps what it
 # writes.

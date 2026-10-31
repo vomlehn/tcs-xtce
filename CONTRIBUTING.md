@@ -127,7 +127,7 @@ code paths.
 
 **New XTCE support comes with tests and documentation.** Add tests in
 `python/tests/compiler`, and where it affects packets, extend the demo mission
-(`tests/mission/demo.xml`) and its vectors (`tests/mission/vectors.txt` and
+(`tests/mission/demo.xtce`) and its vectors (`tests/mission/vectors.txt` and
 `vectors.expected`). List the construct under Supported XTCE in
 `docs/manual.rst`.
 

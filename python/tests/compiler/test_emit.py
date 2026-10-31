@@ -51,12 +51,12 @@ def mission(text: str):
 
 class EmptyPacketTests(unittest.TestCase):
     def test_python_compiles(self):
-        code = emit_python.emit(mission(NO_ENTRIES), "test.xml")
+        code = emit_python.emit(mission(NO_ENTRIES), "test.xtce")
         compile(code, "sat.py", "exec")
 
     @unittest.skipIf(shutil.which("cc") is None, "needs a C compiler")
     def test_c_compiles_without_warnings(self):
-        code = emit_c.emit(mission(NO_ENTRIES), "test.xml")
+        code = emit_c.emit(mission(NO_ENTRIES), "test.xtce")
         with tempfile.TemporaryDirectory() as d:
             header = Path(d) / "sat.h"
             header.write_text(code)
@@ -101,14 +101,14 @@ HUGE = f"""<SpaceSystem xmlns="{NS}" name="Sat">
 
 class HugePacketTests(unittest.TestCase):
     def test_c_refuses_a_narrow_size_t(self):
-        code = emit_c.emit(mission(HUGE), "test.xml")
+        code = emit_c.emit(mission(HUGE), "test.xtce")
         self.assertIn("#if SIZE_MAX / 8 < sat_Big_MAX_BYTES\n"
                       '#error "/Sat/Big is too large for this size_t"\n'
                       "#endif", code)
 
     @unittest.skipIf(shutil.which("cc") is None, "needs a C compiler")
     def test_c_compiles_with_a_wide_size_t(self):
-        code = emit_c.emit(mission(HUGE), "test.xml")
+        code = emit_c.emit(mission(HUGE), "test.xtce")
         with tempfile.TemporaryDirectory() as d:
             header = Path(d) / "sat.h"
             header.write_text(code)
@@ -119,15 +119,15 @@ class HugePacketTests(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_rust_refuses_a_narrow_usize(self):
-        code = emit_rust.emit(mission(HUGE), "test.xml")
+        code = emit_rust.emit(mission(HUGE), "test.xtce")
         self.assertIn("const _: () = assert!(536870915u64 <= usize::MAX as "
                       'u64 / 8, "/Sat/Big is too large for this usize");', code)
 
     def test_small_packets_have_no_check(self):
         self.assertNotIn("SIZE_MAX / 8",
-                         emit_c.emit(mission(NO_ENTRIES), "test.xml"))
+                         emit_c.emit(mission(NO_ENTRIES), "test.xtce"))
         self.assertNotIn("usize::MAX as u64 / 8",
-                         emit_rust.emit(mission(NO_ENTRIES), "test.xml"))
+                         emit_rust.emit(mission(NO_ENTRIES), "test.xtce"))
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- The rover's own packets, which are PUS telemetry packets
-     (/PUS/pus-tm, from pus.xml): housekeeping (service 3, subservice 25)
+     (/PUS/pus-tm, from pus.xtce): housekeeping (service 3, subservice 25)
      and events (service 5, subservice 1).  Its types derive from those of
-     dt.xml with baseType, adding units and valid ranges. -->
+     dt.xtce with baseType, adding units and valid ranges. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Rover">
   <TelemetryMetaData>
     <ParameterTypeSet>

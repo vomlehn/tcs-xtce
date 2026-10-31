@@ -1,4 +1,4 @@
-"""Encode housekeeping Status packets described by housekeeping.xml into one
+"""Encode housekeeping Status packets described by housekeeping.xtce into one
 stream, then walk the stream and decode them again, using the code tcs-xtce
 generated into housekeeping.py.
 
@@ -11,10 +11,10 @@ A Status packet shows three things the generated code does:
   holds degrees, volts and watts, and the packet holds raw counts.
 * HeaterPower is in the packet only when the heater is on.
 
-The stream starts with the digest of housekeeping.xml, so that whatever reads
+The stream starts with the digest of housekeeping.xtce, so that whatever reads
 it can check that it uses the same definition of a Status.  The Rust and
 C/C++ versions of this program print identical output.  Run it in the
-directory that holds housekeeping.xml.
+directory that holds housekeeping.xtce.
 """
 
 import sys
@@ -28,7 +28,7 @@ from housekeeping import Status
 
 
 # The XTCE file that describes a Status, and the size of its digest.
-XTCE = "housekeeping.xml"
+XTCE = "housekeeping.xtce"
 DIGEST_BYTES = 16
 
 

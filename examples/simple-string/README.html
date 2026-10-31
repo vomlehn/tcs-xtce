@@ -368,7 +368,7 @@ ul.auto-toc {
 and serialized and deserialized from Rust, C, C++ and Python.</p>
 <div class="section" id="the-xtce-description">
 <h1>The XTCE description</h1>
-<p><a class="reference external" href="simple_string.xml">simple_string.xml</a> defines:</p>
+<p><a class="reference external" href="simple_string.xtce">simple_string.xtce</a> defines:</p>
 <ul class="simple">
 <li>a string type, <tt class="docutils literal">String8Type</tt>, whose encoding always occupies 64 bits (8 bytes)
 and ends at a NUL byte (<tt class="docutils literal">TerminationChar 00</tt>);</li>
@@ -378,7 +378,7 @@ and ends at a NUL byte (<tt class="docutils literal">TerminationChar 00</tt>);</
 <p>The file validates against the XTCE 1.3 schema:</p>
 <pre class="code sh literal-block">
 <span class="name variable">XML_CATALOG_FILES</span><span class="operator">=</span>../../references/catalog.xml<span class="whitespace"> </span><span class="literal string escape">\
-</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>simple_string.xml
+</span><span class="whitespace">    </span>xmllint<span class="whitespace"> </span>--noout<span class="whitespace"> </span>--nonet<span class="whitespace"> </span>--schema<span class="whitespace"> </span>../../references/SpaceSystem.xsd<span class="whitespace"> </span>simple_string.xtce
 </pre>
 </div>
 <div class="section" id="generating-the-code">
@@ -386,13 +386,13 @@ and ends at a NUL byte (<tt class="docutils literal">TerminationChar 00</tt>);</
 <p><tt class="docutils literal">make generate</tt> runs the generator once per language:</p>
 <pre class="code sh literal-block">
 <span class="name builtin">cd</span><span class="whitespace"> </span>../../python<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/simple-string/rust/src/simple_string.rs<span class="whitespace"> </span>--lang<span class="whitespace"> </span>rust<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/simple-string/c/simple_string.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/simple-string/cxx/simple_string.h<span class="whitespace"> </span>--lang<span class="whitespace"> </span>c++<span class="whitespace">
-</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xml<span class="whitespace"> </span><span class="literal string escape">\
+</span>python3<span class="whitespace"> </span>-m<span class="whitespace"> </span>tcs_xtce<span class="whitespace"> </span>../examples/simple-string/simple_string.xtce<span class="whitespace"> </span><span class="literal string escape">\
 </span><span class="whitespace">    </span>../examples/simple-string/python/simple_string.py<span class="whitespace"> </span>--lang<span class="whitespace"> </span>python
 </pre>
 <p>The generated files aren't kept in git; <tt class="docutils literal">make</tt> runs <tt class="docutils literal">make generate</tt> first.</p>
@@ -539,7 +539,7 @@ bytes.</p>
 <dd>Generate the code if needed, build every program, run it and check
 the output, as above.</dd>
 <dt><tt class="docutils literal">make generate</tt></dt>
-<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">simple_string.xml</tt> for every language, if the XTCE
+<dd>Run <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> on <tt class="docutils literal">simple_string.xtce</tt> for every language, if the XTCE
 file or the generator changed since the code was last generated.</dd>
 <dt><tt class="docutils literal">make rust</tt></dt>
 <dd>Check the Rust program's formatting with <tt class="docutils literal">cargo fmt <span class="pre">--check</span></tt> and build
@@ -560,7 +560,7 @@ file or the generator changed since the code was last generated.</dd>
 <p>The generated files aren't kept in git; building generates them.</p>
 <table border="1" class="docutils">
 <tbody valign="top">
-<tr><td><tt class="docutils literal">simple_string.xml</tt></td>
+<tr><td><tt class="docutils literal">simple_string.xtce</tt></td>
 <td>The XTCE description</td>
 </tr>
 <tr><td><tt class="docutils literal">rust/Cargo.toml</tt>, <tt class="docutils literal">rust/src/main.rs</tt></td>

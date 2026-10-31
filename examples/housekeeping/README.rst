@@ -21,12 +21,12 @@ does for you:
 
 Each program does the same thing:
 
-1. It starts a stream with the 16-byte digest of ``housekeeping.xml``, as
+1. It starts a stream with the 16-byte digest of ``housekeeping.xtce``, as
    a recorder would start a file. It encodes four readings, two with the
    heater off and two with it on, and appends each packet to the stream:
    one after another, with nothing between them.
 2. It walks the stream. It checks the digest against the digest of its own
-   ``housekeeping.xml`` (see `Checking the XTCE definition`_), then reads
+   ``housekeeping.xtce`` (see `Checking the XTCE definition`_), then reads
    each packet's ``PacketLength`` from its
    first two bytes, so it knows the packet is ``2 + PacketLength`` bytes
    long, and decodes those bytes. It checks that each packet decodes to the
@@ -45,8 +45,8 @@ Checking the XTCE definition
 
 The packets carry no field names or types, so the program that reads it can read them only
 if it was built from the same definition as the program that wrote the stream. To check, the stream starts with
-the 16-byte MD5 digest of ``housekeeping.xml``, before any packet. The program that reads it
-computes the digest of its own copy of ``housekeeping.xml`` and compares. If they
+the 16-byte MD5 digest of ``housekeeping.xtce``, before any packet. The program that reads it
+computes the digest of its own copy of ``housekeeping.xtce`` and compares. If they
 match, it prints
 
 ::
@@ -76,13 +76,13 @@ runtime computes it the same way:
    * - Python
      - ``tcs_xtce.digest.digest_file_bytes(path)``, giving ``bytes``
 
-``xtce-digest housekeeping.xml`` prints the same digest in hex. Each program reads
-``housekeeping.xml`` from the current directory, so run it from this one.
+``xtce-digest housekeeping.xtce`` prints the same digest in hex. Each program reads
+``housekeeping.xtce`` from the current directory, so run it from this one.
 
 The XTCE description
 --------------------
 
-`housekeeping.xml <housekeeping.xml>`__ defines one container, ``Status``:
+`housekeeping.xtce <housekeeping.xtce>`__ defines one container, ``Status``:
 
 ::
 
@@ -171,7 +171,7 @@ The file validates against the XTCE 1.3 schema:
 .. code-block:: sh
 
    XML_CATALOG_FILES=../../references/catalog.xml \
-       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd housekeeping.xml
+       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd housekeeping.xtce
 
 Generating the code
 -------------------
@@ -181,13 +181,13 @@ Generating the code
 .. code-block:: sh
 
    cd ../../python
-   python3 -m tcs_xtce ../examples/housekeeping/housekeeping.xml \
+   python3 -m tcs_xtce ../examples/housekeeping/housekeeping.xtce \
        ../examples/housekeeping/rust/src/housekeeping.rs --lang rust
-   python3 -m tcs_xtce ../examples/housekeeping/housekeeping.xml \
+   python3 -m tcs_xtce ../examples/housekeeping/housekeeping.xtce \
        ../examples/housekeeping/c/housekeeping.h --lang c
-   python3 -m tcs_xtce ../examples/housekeeping/housekeeping.xml \
+   python3 -m tcs_xtce ../examples/housekeeping/housekeeping.xtce \
        ../examples/housekeeping/cxx/housekeeping.h --lang c++
-   python3 -m tcs_xtce ../examples/housekeeping/housekeeping.xml \
+   python3 -m tcs_xtce ../examples/housekeeping/housekeeping.xtce \
        ../examples/housekeeping/python/housekeeping.py --lang python
 
 The generated files aren't kept in git; ``make`` runs ``make generate``
@@ -274,7 +274,7 @@ values the packet holds: 21.53 °C became 21.5, 28.3 V became 28.25, and
 To run one program on its own, generate the code first with
 ``make generate``, then run the commands below from this directory. Each
 prints the lines above, without the last, which ``make`` prints. Run it
-from this directory, where it finds ``housekeeping.xml``.
+from this directory, where it finds ``housekeeping.xtce``.
 
 Rust
 ~~~~
@@ -334,7 +334,7 @@ Makefile targets
    Generate the code if needed, build every program, run it and check
    the output, as above.
 ``make generate``
-   Run ``tcs-xtce`` on ``housekeeping.xml`` for every language, if the XTCE
+   Run ``tcs-xtce`` on ``housekeeping.xtce`` for every language, if the XTCE
    file or the generator changed since the code was last generated.
 ``make rust``
    Check the Rust program's formatting with ``cargo fmt --check`` and build
@@ -358,7 +358,7 @@ The generated files aren't kept in git; building generates them.
 .. list-table::
    :widths: auto
 
-   * - ``housekeeping.xml``
+   * - ``housekeeping.xtce``
      - The XTCE description
    * - ``rust/Cargo.toml``, ``rust/src/main.rs``
      - The Rust program

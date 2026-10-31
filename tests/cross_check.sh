@@ -15,7 +15,7 @@ top=$(cd "$(dirname "$0")/.." && pwd)
 rust_tool=$1
 cpp_tool=$2
 shift 2
-[ $# -gt 0 ] || set -- "$top"/tests/samples/*.xml
+[ $# -gt 0 ] || set -- "$top"/tests/samples/*.xtce
 
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT INT TERM
@@ -35,24 +35,24 @@ fi
 
 status=0
 for f in "$@"; do
-    b=$(basename "$f" .xml)
-    "$rust_tool" "$f" "$out/$b.rust.xml"
-    "$cpp_tool" "$f" "$out/$b.cpp.xml"
+    b=$(basename "$f" .xtce)
+    "$rust_tool" "$f" "$out/$b.rust.xtce"
+    "$cpp_tool" "$f" "$out/$b.cpp.xtce"
     PYTHONPATH="$top/python" python3 -c \
         'import sys, tcs_xtce
 doc = tcs_xtce.Document.from_file(sys.argv[1])
 doc.write_to(open(sys.argv[2], "wb"))' \
-        "$f" "$out/$b.py.xml"
+        "$f" "$out/$b.py.xtce"
     for lang in cpp py; do
-        if ! cmp -s "$out/$b.rust.xml" "$out/$b.$lang.xml"; then
+        if ! cmp -s "$out/$b.rust.xtce" "$out/$b.$lang.xtce"; then
             echo "MISMATCH: $b: rust vs $lang" >&2
-            diff "$out/$b.rust.xml" "$out/$b.$lang.xml" | head -20 >&2
+            diff "$out/$b.rust.xtce" "$out/$b.$lang.xtce" | head -20 >&2
             status=1
         fi
     done
 done
 
-errors=$(validate "$out"/*.rust.xml)
+errors=$(validate "$out"/*.rust.xtce)
 if [ -n "$errors" ]; then
     printf 'serialized output does not validate:\n%s\n' "$errors" >&2
     status=1

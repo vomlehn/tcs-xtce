@@ -4,7 +4,7 @@
 #
 #   make            generate the code, build and run every program and check
 #                   that they print the same thing
-#   make generate   rerun tcs-xtce on modes.xml
+#   make generate   rerun tcs-xtce on modes.xtce
 #   make html       convert README.rst to README.html
 #   make clean      remove build products (keeps the generated code and
 #                   README.html)
@@ -17,7 +17,7 @@ CXX     ?= g++
 BUILD   := build
 RST2HTML ?= rst2html
 
-XML     := modes.xml
+XML     := modes.xtce
 GEN     := rust/src/probe.rs c/probe.h cxx/probe.h \
            python/probe.py
 GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \

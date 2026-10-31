@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Data types shared by the documents of a mission, as Yamcs's PUS
-     example keeps them in their own SpaceSystem: rover.xml and pus.xml
+     example keeps them in their own SpaceSystem: rover.xtce and pus.xtce
      name them as /dt/uint16 and so on. -->
 <SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="dt">
   <TelemetryMetaData>

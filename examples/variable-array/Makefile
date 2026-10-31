@@ -4,7 +4,7 @@
 #
 #   make            generate the code, build and run every program and check
 #                   that they print the same thing
-#   make generate   rerun tcs-xtce on variable_array.xml
+#   make generate   rerun tcs-xtce on variable_array.xtce
 #   make html       convert README.rst to README.html
 #   make clean      remove build products (keeps the generated code and
 #                   README.html)
@@ -17,7 +17,7 @@ CXX     ?= g++
 BUILD   := build
 RST2HTML ?= rst2html
 
-XML     := variable_array.xml
+XML     := variable_array.xtce
 GEN     := rust/src/variable_array.rs c/variable_array.h cxx/variable_array.h \
            python/variable_array.py
 GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \

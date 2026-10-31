@@ -13,7 +13,7 @@ from tcs_xtce import Document, ManagedBuffer, SpaceSystemType, XtceError
 from tcs_xtce import _xml as X
 
 SAMPLES = sorted(glob.glob(os.path.join(os.path.dirname(__file__), "..", "..",
-                                        "tests", "samples", "*.xml")))
+                                        "tests", "samples", "*.xtce")))
 
 
 class RoundTrip(unittest.TestCase):

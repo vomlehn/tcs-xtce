@@ -8,7 +8,7 @@ use tcs_xtce::{Buffer, Document, SpaceSystemType};
 ///
 /// # Returns
 ///
-/// The paths of the `.xml` files in `tests/samples`, sorted.
+/// The paths of the `.xtce` files in `tests/samples`, sorted.
 fn samples() -> Vec<PathBuf> {
     let dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/samples");
@@ -17,7 +17,7 @@ fn samples() -> Vec<PathBuf> {
             panic!("{}: {e} (run `make samples`)", dir.display())
         })
         .map(|e| e.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|x| x == "xml"))
+        .filter(|p| p.extension().is_some_and(|x| x == "xtce"))
         .collect();
     files.sort();
     assert!(!files.is_empty(), "no samples in {}", dir.display());

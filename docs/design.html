@@ -447,7 +447,7 @@ references/Makefile ── curl ──&gt; SpaceSystem.xsd, XTCE.pdf, xml.xsd, c
          rust/src/generated.rs   cpp/{include,src}/generated.*   python/tcs_xtce/generated.py
                  + hand-written runtimes: buffer, xml reader/writer, document
                                      │
-                                     │  mission.xml (any XTCE 1.3 document)
+                                     │  mission.xtce (any XTCE 1.3 document)
 tcs-xtce (python/tcs_xtce/compiler)  ▼  (uses python/tcs_xtce to read it)
          &lt;mission&gt;.rs            &lt;mission&gt;.h (C and C++)         &lt;mission&gt;.py
                  + hand-written runtimes: tcs_xtce::packet / xtce-packet.h / tcs_xtce.packet
@@ -1583,7 +1583,7 @@ round-trips each sample (deserialize, serialize, deserialize and
 compare). <tt class="docutils literal">tests/cross_check.sh</tt> requires the three outputs to be
 byte-identical, and to validate too.</dd>
 <dt><strong>Packet vectors</strong></dt>
-<dd><tt class="docutils literal">tests/mission/demo.xml</tt> uses every supported feature, and is
+<dd><tt class="docutils literal">tests/mission/demo.xtce</tt> uses every supported feature, and is
 checked with <tt class="docutils literal">xmllint</tt>. <tt class="docutils literal">vectors.txt</tt> holds packets built by an
 independent bit-string packer rather than by the generated code.
 <tt class="docutils literal">vectors.expected</tt> holds their decoded text and re-encodings, and

@@ -3,7 +3,7 @@
 #
 #   make            generate the code, build and run every program and check
 #                   that they print the same thing
-#   make generate   rerun tcs-xtce on simple_string.xml
+#   make generate   rerun tcs-xtce on simple_string.xtce
 #   make html       convert README.rst to README.html
 #   make clean      remove build products (keeps the generated code and
 #                   README.html)
@@ -16,7 +16,7 @@ CXX     ?= g++
 BUILD   := build
 RST2HTML ?= rst2html
 
-XML     := simple_string.xml
+XML     := simple_string.xtce
 GEN     := rust/src/simple_string.rs c/simple_string.h cxx/simple_string.h \
            python/simple_string.py
 GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \

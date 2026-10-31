@@ -105,7 +105,7 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(digest_string(text), md5(text))
         self.assertEqual(digest_string(text.encode()), md5(text))
         with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "sat.xml"
+            p = Path(d) / "sat.xtce"
             p.write_text(text)
             self.assertEqual(digest_file(p), md5(text))
             self.assertEqual(digest_file(str(p)), md5(text))
@@ -115,7 +115,7 @@ class LibraryTests(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(XtceError):
                 digest_string(text)
         with self.assertRaises(OSError):
-            digest_file("/nonexistent/x.xml")
+            digest_file("/nonexistent/x.xtce")
 
 
 class SetTests(unittest.TestCase):
@@ -135,7 +135,7 @@ class SetTests(unittest.TestCase):
         self.assertEqual(digest_set([a, b]), digest_set([b.encode(), a]))
         self.assertNotEqual(digest_set([a, b]), digest_set([a]))
         with tempfile.TemporaryDirectory() as d:
-            pa, pb = Path(d) / "a.xml", Path(d) / "b.xml"
+            pa, pb = Path(d) / "a.xtce", Path(d) / "b.xtce"
             pa.write_text(a)
             pb.write_text(b)
             self.assertEqual(digest_files([pb, str(pa)]), digest_set([a, b]))
@@ -144,7 +144,7 @@ class SetTests(unittest.TestCase):
         with self.assertRaises(XtceError):
             digest_set([doc(), "<other/>"])
         with self.assertRaises(OSError):
-            digest_files(["/nonexistent/x.xml"])
+            digest_files(["/nonexistent/x.xtce"])
 
 
 class CommandLineTests(unittest.TestCase):
@@ -167,7 +167,7 @@ class CommandLineTests(unittest.TestCase):
                 if isinstance(t, Path):
                     names.append(str(t))
                 else:
-                    p = Path(d) / f"f{i}.xml"
+                    p = Path(d) / f"f{i}.xtce"
                     p.write_text(t)
                     names.append(str(p))
             out, err = io.StringIO(), io.StringIO()
@@ -189,7 +189,7 @@ class CommandLineTests(unittest.TestCase):
         bad = [
             "<SpaceSystem",  # not well-formed
             "<other/>",  # not XTCE
-            Path("/nonexistent/x.xml")  # can't be read
+            Path("/nonexistent/x.xtce")  # can't be read
         ]
         for b in bad:
             status, out, err, names = self.run_main(doc(), b, doc())

@@ -6,7 +6,7 @@
 #                   language wrote, and check that they print the same thing
 #   make build      generate the code and build every program, so that
 #                   ./to-from TO FROM can run them
-#   make generate   rerun tcs-xtce on to_from.xml
+#   make generate   rerun tcs-xtce on to_from.xtce
 #   make html       convert README.rst to README.html
 #   make clean      remove build products (keeps the generated code and
 #                   README.html)
@@ -20,7 +20,7 @@ BUILD   := build
 LANGS   := c c++ rust python
 RST2HTML ?= rst2html
 
-XML     := to_from.xml
+XML     := to_from.xtce
 GEN     := rust/src/to_from.rs c/to_from.h cxx/to_from.h \
            python/to_from.py
 GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \

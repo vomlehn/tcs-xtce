@@ -1,4 +1,4 @@
-"""Print random packet vectors for tests/mission/demo.xml.
+"""Print random packet vectors for tests/mission/demo.xtce.
 
 Each packet has a valid CCSDS header for one of the demo's packet types (or
 an unknown one) followed by random bytes, so decoding exercises valid

@@ -13,8 +13,8 @@ out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 
 cd "$top"
-files="tests/mission/demo.xml $(ls examples/*/*.xml tests/samples/*.xml \
-    tests/digest/*.xml)"
+files="tests/mission/demo.xtce $(ls examples/*/*.xtce tests/samples/*.xtce \
+    tests/digest/*.xtce)"
 # shellcheck disable=SC2086
 "$1" $files >"$out/rust"
 # shellcheck disable=SC2086

@@ -776,7 +776,7 @@ class ArrayTests(unittest.TestCase):
         m = compile_xml(
             array_mission(dim(fixed(0), dynamic("N", intercept="-1")),
                           COUNT_THEN_ARRAY, "Small"))
-        header = emit_c.emit(m, "t.xml")
+        header = emit_c.emit(m, "t.xtce")
         self.assertIn("typedef struct sat_uint16_list5 {", header)
         self.assertIn("uint16_t data[5];", header)
 
@@ -2666,7 +2666,7 @@ class TimeTests(unittest.TestCase):
         self.assertIn("with units, scale or offset", str(cm.exception))
 
 
-DEMO = (Path(__file__).resolve().parents[3] / "tests" / "mission" / "demo.xml")
+DEMO = (Path(__file__).resolve().parents[3] / "tests" / "mission" / "demo.xtce")
 
 
 class ContainerFeatureTests(unittest.TestCase):

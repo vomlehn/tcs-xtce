@@ -1,5 +1,5 @@
-"""Record a rover's PUS telemetry, described by dt.xml, pus.xml and
-rover.xml, in one stream, and decode it again, using the code tcs-xtce
+"""Record a rover's PUS telemetry, described by dt.xtce, pus.xtce and
+rover.xtce, in one stream, and decode it again, using the code tcs-xtce
 generated into rover.py from the three documents together.
 
 The stream starts with the digest of the set of documents, which doesn't
@@ -16,7 +16,7 @@ from tcs_xtce.digest import digest_files_bytes
 from tcs_xtce.packet import PacketError
 
 # The mission's documents: those the others build on first.
-DOCUMENTS = ["dt.xml", "pus.xml", "rover.xml"]
+DOCUMENTS = ["dt.xtce", "pus.xtce", "rover.xtce"]
 
 
 def fail(msg: str) -> None:
@@ -50,7 +50,7 @@ def main() -> None:
     # The digest of the set is the same in any order.
     digest = digest_files_bytes(DOCUMENTS)
     print(f"set digest: {digest.hex()} ({', '.join(DOCUMENTS)})")
-    shuffled = ["rover.xml", "dt.xml", "pus.xml"]
+    shuffled = ["rover.xtce", "dt.xtce", "pus.xtce"]
     if digest_files_bytes(shuffled) != digest:
         fail("the digest depends on the order of the documents")
     print(f"set digest: the same for {', '.join(shuffled)}")

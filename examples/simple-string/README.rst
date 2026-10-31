@@ -7,7 +7,7 @@ and serialized and deserialized from Rust, C, C++ and Python.
 The XTCE description
 --------------------
 
-`simple_string.xml <simple_string.xml>`__ defines:
+`simple_string.xtce <simple_string.xtce>`__ defines:
 
 * a string type, ``String8Type``, whose encoding always occupies 64 bits (8 bytes)
   and ends at a NUL byte (``TerminationChar 00``);
@@ -19,7 +19,7 @@ The file validates against the XTCE 1.3 schema:
 .. code-block:: sh
 
    XML_CATALOG_FILES=../../references/catalog.xml \
-       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd simple_string.xml
+       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd simple_string.xtce
 
 Generating the code
 -------------------
@@ -29,13 +29,13 @@ Generating the code
 .. code-block:: sh
 
    cd ../../python
-   python3 -m tcs_xtce ../examples/simple-string/simple_string.xml \
+   python3 -m tcs_xtce ../examples/simple-string/simple_string.xtce \
        ../examples/simple-string/rust/src/simple_string.rs --lang rust
-   python3 -m tcs_xtce ../examples/simple-string/simple_string.xml \
+   python3 -m tcs_xtce ../examples/simple-string/simple_string.xtce \
        ../examples/simple-string/c/simple_string.h --lang c
-   python3 -m tcs_xtce ../examples/simple-string/simple_string.xml \
+   python3 -m tcs_xtce ../examples/simple-string/simple_string.xtce \
        ../examples/simple-string/cxx/simple_string.h --lang c++
-   python3 -m tcs_xtce ../examples/simple-string/simple_string.xml \
+   python3 -m tcs_xtce ../examples/simple-string/simple_string.xtce \
        ../examples/simple-string/python/simple_string.py --lang python
 
 The generated files aren't kept in git; ``make`` runs ``make generate`` first.
@@ -166,7 +166,7 @@ Makefile targets
    Generate the code if needed, build every program, run it and check
    the output, as above.
 ``make generate``
-   Run ``tcs-xtce`` on ``simple_string.xml`` for every language, if the XTCE
+   Run ``tcs-xtce`` on ``simple_string.xtce`` for every language, if the XTCE
    file or the generator changed since the code was last generated.
 ``make rust``
    Check the Rust program's formatting with ``cargo fmt --check`` and build
@@ -189,7 +189,7 @@ The generated files aren't kept in git; building generates them.
 .. list-table::
    :widths: auto
 
-   * - ``simple_string.xml``
+   * - ``simple_string.xtce``
      - The XTCE description
    * - ``rust/Cargo.toml``, ``rust/src/main.rs``
      - The Rust program

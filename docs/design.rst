@@ -50,7 +50,7 @@ Overview
             rust/src/generated.rs   cpp/{include,src}/generated.*   python/tcs_xtce/generated.py
                     + hand-written runtimes: buffer, xml reader/writer, document
                                         │
-                                        │  mission.xml (any XTCE 1.3 document)
+                                        │  mission.xtce (any XTCE 1.3 document)
    tcs-xtce (python/tcs_xtce/compiler)  ▼  (uses python/tcs_xtce to read it)
             <mission>.rs            <mission>.h (C and C++)         <mission>.py
                     + hand-written runtimes: tcs_xtce::packet / xtce-packet.h / tcs_xtce.packet
@@ -1285,7 +1285,7 @@ Testing strategy
    byte-identical, and to validate too.
 
 **Packet vectors**
-   ``tests/mission/demo.xml`` uses every supported feature, and is
+   ``tests/mission/demo.xtce`` uses every supported feature, and is
    checked with ``xmllint``. ``vectors.txt`` holds packets built by an
    independent bit-string packer rather than by the generated code.
    ``vectors.expected`` holds their decoded text and re-encodings, and

@@ -1,4 +1,4 @@
-"""Tests of the packet codecs generated from tests/mission/demo.xml."""
+"""Tests of the packet codecs generated from tests/mission/demo.xtce."""
 
 import dataclasses
 import io

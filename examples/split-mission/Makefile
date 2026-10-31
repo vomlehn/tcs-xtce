@@ -18,7 +18,7 @@ CXX     ?= g++
 BUILD   := build
 RST2HTML ?= rst2html
 
-XML     := dt.xml pus.xml rover.xml
+XML     := dt.xtce pus.xtce rover.xtce
 GEN     := rust/src/rover.rs c/rover.h cxx/rover.h \
            python/rover.py
 GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \

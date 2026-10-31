@@ -1,12 +1,12 @@
 /* Sends two arrays of lorem ipsum lines from one thread to another over one
- * TCP connection, each as a Paragraph packet described by variable_array.xml,
+ * TCP connection, each as a Paragraph packet described by variable_array.xtce,
  * using the code tcs-xtce generated into variable_array.h.
  *
  * A Paragraph is a two-dimensional array whose dimensions both vary: an
  * array of lines, each an array of words.  The sender first writes the digest
- * of variable_array.xml, which the receiver checks against the digest of its
+ * of variable_array.xtce, which the receiver checks against the digest of its
  * own copy, so that both agree on the packets.  Before each packet the sender
- * writes a Length packet, also described by variable_array.xml, giving its
+ * writes a Length packet, also described by variable_array.xtce, giving its
  * size in bytes, so the receiver knows how many bytes to read; it then
  * writes the whole Paragraph in a single write.  The receiver checks that every
  * line and word arrived intact and in order, then prints each line with its
@@ -14,7 +14,7 @@
  *
  * The same file is built as C and as C++; both, and the Rust and Python
  * versions of this program, print identical output.  It uses POSIX threads
- * and sockets.  Run it in the directory that holds variable_array.xml.
+ * and sockets.  Run it in the directory that holds variable_array.xtce.
  *
  * The C build finds variable_array.h in c/ (--lang c) and the C++ build in
  * cxx/ (--lang c++), so it is included with <> rather than "": a quoted
@@ -38,7 +38,7 @@
 #define N_PARAGRAPHS 2
 
 /* The XTCE file that describes the packets, and the size of its digest. */
-#define XTCE "variable_array.xml"
+#define XTCE "variable_array.xtce"
 #define DIGEST_BYTES 16
 static const char* const PARAGRAPH_1[] = {
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "

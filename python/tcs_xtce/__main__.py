@@ -111,7 +111,7 @@ def main(argv=None) -> int:
     if output == "-":
         output = None
     # Forgetting OUTPUT would otherwise overwrite the last document.
-    if output is not None and Path(output).suffix.lower() == ".xml":
+    if output is not None and Path(output).suffix.lower() in (".xtce", ".xml"):
         ap.error(f"OUTPUT {output} looks like an XTCE document; give the file "
                  "to write after the INPUT documents")
     if args.size_report:

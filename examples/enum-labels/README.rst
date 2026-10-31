@@ -18,7 +18,7 @@ number:
 
 The programs name labels too, through the constants the generated code
 gives each one. So the numbers are the document's business alone:
-renumbering the modes in ``modes.xml`` changes the bytes on the wire, and
+renumbering the modes in ``modes.xtce`` changes the bytes on the wire, and
 nothing else — not the conditions, not the alarm, not a line of the
 programs. The example also shows a label that names a range of values,
 and a value that no label names, which decoding keeps as it is.
@@ -42,7 +42,7 @@ exits with status 1.
 The XTCE description
 --------------------
 
-`modes.xml <modes.xml>`__ defines the enumeration ``ModeType``:
+`modes.xtce <modes.xtce>`__ defines the enumeration ``ModeType``:
 
 ::
 
@@ -102,7 +102,7 @@ The file validates against the XTCE 1.3 schema:
 .. code-block:: sh
 
    XML_CATALOG_FILES=../../references/catalog.xml \
-       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd modes.xml
+       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd modes.xtce
 
 Generating the code
 -------------------
@@ -112,13 +112,13 @@ Generating the code
 .. code-block:: sh
 
    cd ../../python
-   python3 -m tcs_xtce ../examples/enum-labels/modes.xml \
+   python3 -m tcs_xtce ../examples/enum-labels/modes.xtce \
        ../examples/enum-labels/rust/src/probe.rs --lang rust
-   python3 -m tcs_xtce ../examples/enum-labels/modes.xml \
+   python3 -m tcs_xtce ../examples/enum-labels/modes.xtce \
        ../examples/enum-labels/c/probe.h --lang c
-   python3 -m tcs_xtce ../examples/enum-labels/modes.xml \
+   python3 -m tcs_xtce ../examples/enum-labels/modes.xtce \
        ../examples/enum-labels/cxx/probe.h --lang c++
-   python3 -m tcs_xtce ../examples/enum-labels/modes.xml \
+   python3 -m tcs_xtce ../examples/enum-labels/modes.xtce \
        ../examples/enum-labels/python/probe.py --lang python
 
 The mission, and so the module and the C prefix, are named for the root
@@ -274,7 +274,7 @@ Makefile targets
    Generate the code if needed, build every program, run it and check
    the output, as above.
 ``make generate``
-   Run ``tcs-xtce`` on ``modes.xml`` for every language, if the XTCE file
+   Run ``tcs-xtce`` on ``modes.xtce`` for every language, if the XTCE file
    or the generator changed since the code was last generated.
 ``make rust``
    Check the Rust program's formatting with ``cargo fmt --check`` and build
@@ -298,7 +298,7 @@ The generated files aren't kept in git; building generates them.
 .. list-table::
    :widths: auto
 
-   * - ``modes.xml``
+   * - ``modes.xtce``
      - The XTCE description
    * - ``rust/Cargo.toml``, ``rust/src/main.rs``
      - The Rust program

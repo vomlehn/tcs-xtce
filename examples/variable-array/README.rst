@@ -16,14 +16,14 @@ punctuation stays with its word.
 Each program has two threads:
 
 * The **sender** connects to the receiver and sends the 16-byte digest of
-  ``variable_array.xml``. Then, for each array in turn, it
+  ``variable_array.xtce``. Then, for each array in turn, it
   serializes the whole array into one ``Paragraph`` packet, writes the
   packet's length as a ``Length`` packet, then writes the ``Paragraph``
   packet with a single write call and
   checks that the call took every byte. After the last array it closes the
   connection.
 * The **receiver** accepts the connection, reads the digest and checks it
-  against the digest of its own ``variable_array.xml`` (see `Checking the
+  against the digest of its own ``variable_array.xtce`` (see `Checking the
   XTCE definition`_). For each array in turn, it then reads
   and deserializes the ``Length`` packet, then reads that many bytes and
   deserializes the ``Paragraph`` packet. It compares
@@ -42,7 +42,7 @@ The length before each packet
 A TCP stream carries bytes, not messages: the two arrays can arrive
 together, or a packet can arrive in pieces. So before each ``Paragraph``
 the sender writes a ``Length`` packet giving the ``Paragraph``'s size in
-bytes. ``Length`` is described in ``variable_array.xml`` too, as a
+bytes. ``Length`` is described in ``variable_array.xtce`` too, as a
 container holding one 32-bit unsigned integer, ``ByteCount``, so it is
 encoded and decoded with generated code, like the array itself:
 
@@ -84,8 +84,8 @@ Checking the XTCE definition
 
 The packets carry no field names or types, so the receiver can read them only
 if it was built from the same definition as the sender. To check, the sender sends
-the 16-byte MD5 digest of ``variable_array.xml``, before any packet. The receiver
-computes the digest of its own copy of ``variable_array.xml`` and compares. If they
+the 16-byte MD5 digest of ``variable_array.xtce``, before any packet. The receiver
+computes the digest of its own copy of ``variable_array.xtce`` and compares. If they
 match, it prints
 
 ::
@@ -115,13 +115,13 @@ runtime computes it the same way:
    * - Python
      - ``tcs_xtce.digest.digest_file_bytes(path)``, giving ``bytes``
 
-``xtce-digest variable_array.xml`` prints the same digest in hex. Each program reads
-``variable_array.xml`` from the current directory, so run it from this one.
+``xtce-digest variable_array.xtce`` prints the same digest in hex. Each program reads
+``variable_array.xtce`` from the current directory, so run it from this one.
 
 The XTCE description
 --------------------
 
-`variable_array.xml <variable_array.xml>`__ defines two containers:
+`variable_array.xtce <variable_array.xtce>`__ defines two containers:
 ``Length``, described above, and ``Paragraph``, laid out like this:
 
 ::
@@ -175,7 +175,7 @@ The file validates against the XTCE 1.3 schema:
 .. code-block:: sh
 
    XML_CATALOG_FILES=../../references/catalog.xml \
-       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd variable_array.xml
+       xmllint --noout --nonet --schema ../../references/SpaceSystem.xsd variable_array.xtce
 
 Generating the code
 -------------------
@@ -185,13 +185,13 @@ Generating the code
 .. code-block:: sh
 
    cd ../../python
-   python3 -m tcs_xtce ../examples/variable-array/variable_array.xml \
+   python3 -m tcs_xtce ../examples/variable-array/variable_array.xtce \
        ../examples/variable-array/rust/src/variable_array.rs --lang rust
-   python3 -m tcs_xtce ../examples/variable-array/variable_array.xml \
+   python3 -m tcs_xtce ../examples/variable-array/variable_array.xtce \
        ../examples/variable-array/c/variable_array.h --lang c
-   python3 -m tcs_xtce ../examples/variable-array/variable_array.xml \
+   python3 -m tcs_xtce ../examples/variable-array/variable_array.xtce \
        ../examples/variable-array/cxx/variable_array.h --lang c++
-   python3 -m tcs_xtce ../examples/variable-array/variable_array.xml \
+   python3 -m tcs_xtce ../examples/variable-array/variable_array.xtce \
        ../examples/variable-array/python/variable_array.py --lang python
 
 The generated files aren't kept in git; ``make`` runs ``make generate`` first.
@@ -332,7 +332,7 @@ Makefile targets
    Generate the code if needed, build every program, run it and check
    the output, as above.
 ``make generate``
-   Run ``tcs-xtce`` on ``variable_array.xml`` for every language, if the XTCE
+   Run ``tcs-xtce`` on ``variable_array.xtce`` for every language, if the XTCE
    file or the generator changed since the code was last generated.
 ``make rust``
    Check the Rust program's formatting with ``cargo fmt --check`` and build
@@ -355,7 +355,7 @@ The generated files aren't kept in git; building generates them.
 .. list-table::
    :widths: auto
 
-   * - ``variable_array.xml``
+   * - ``variable_array.xtce``
      - The XTCE description
    * - ``rust/Cargo.toml``, ``rust/src/main.rs``
      - The Rust program

@@ -252,7 +252,7 @@ Rust:
 ```rust
 use tcs_xtce::{Document, SpaceSystemType};
 
-let mut doc = Document::from_bytes(&std::fs::read("sat.xml")?)?;
+let mut doc = Document::from_bytes(&std::fs::read("sat.xtce")?)?;
 println!("{}", doc.root.name);
 doc.root.short_description = Some("updated".into());
 let bytes: &[u8] = doc.serialize()?;      // view into the managed buffer
@@ -287,7 +287,7 @@ Python:
 ```python
 import tcs_xtce
 
-doc = tcs_xtce.Document.from_file("sat.xml")
+doc = tcs_xtce.Document.from_file("sat.xtce")
 doc.root.short_description = "updated"
 with doc.serialize() as view:             # memoryview of the managed buffer
     sys.stdout.buffer.write(view)
@@ -297,9 +297,9 @@ with doc.serialize() as view:             # memoryview of the managed buffer
 
 ```sh
 cd python
-python3 -m tcs_xtce mission.xml mission.rs --lang rust
-python3 -m tcs_xtce mission.xml mission.h  --lang c        # or --lang c++: same file
-python3 -m tcs_xtce mission.xml mission.py --lang python
+python3 -m tcs_xtce mission.xtce mission.rs --lang rust
+python3 -m tcs_xtce mission.xtce mission.h  --lang c        # or --lang c++: same file
+python3 -m tcs_xtce mission.xtce mission.py --lang python
 ```
 
 Or install the Python package, runtime and compiler (see
@@ -309,7 +309,7 @@ It is not on PyPI yet:
 ```sh
 make python-dist
 pip install dist/tcs_xtce-*.whl
-tcs-xtce mission.xml mission.rs --lang rust
+tcs-xtce mission.xtce mission.rs --lang rust
 ```
 
 `--lang c` and `--lang c++` write the same header, which compiles both as C11

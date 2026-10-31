@@ -1,19 +1,19 @@
 //! Sends two arrays of lorem ipsum lines from one thread to another over one
 //! TCP connection, each as a `Paragraph` packet described by
-//! `variable_array.xml`, using the code `tcs-xtce` generated into
+//! `variable_array.xtce`, using the code `tcs-xtce` generated into
 //! `variable_array.rs`.
 //!
 //! A `Paragraph` is a two-dimensional array whose dimensions both vary: an
 //! array of lines, each an array of words. The sender first writes the
-//! digest of `variable_array.xml`, which the receiver checks against the
+//! digest of `variable_array.xtce`, which the receiver checks against the
 //! digest of its own copy, so that both agree on the packets. Before each
 //! packet the sender writes a `Length` packet, also described by
-//! `variable_array.xml`, giving its size in bytes, so the receiver knows how
+//! `variable_array.xtce`, giving its size in bytes, so the receiver knows how
 //! many bytes to read; it then writes the whole `Paragraph` in a single
 //! write. The receiver checks that every line and word arrived intact and in
 //! order, then prints each line with its words separated by spaces. The
 //! C/C++ and Python versions of this program print identical output. Run it
-//! in the directory that holds `variable_array.xml`.
+//! in the directory that holds `variable_array.xtce`.
 
 mod variable_array;
 
@@ -46,7 +46,7 @@ const PARAGRAPHS: [&[&str]; 2] = [
 ];
 
 /// The XTCE file that describes the packets, and the size of its digest.
-const XTCE: &str = "variable_array.xml";
+const XTCE: &str = "variable_array.xtce";
 const DIGEST_BYTES: usize = 16;
 
 fn fail(msg: &str) -> ! {
