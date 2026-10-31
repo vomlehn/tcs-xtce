@@ -41,6 +41,11 @@ Requires:	python3 >= 3.10
 # directory of one Python version, the one this RPM was built for; the
 # commands find the package without it. A Recommends, as tcslog's is.
 Recommends:	python(abi) = %{tcs_pyversion}
+# What the .deb suggests: rustfmt, which the compiler runs the Rust it
+# generates through, and pkgconf, which finds the C and C++ libraries
+# through /opt/tcs/lib/pkgconfig. Neither is needed to install it.
+Suggests:	rustfmt
+Suggests:	pkgconf
 
 %description
 Tcs-xtce reads and writes OMG XTCE (XML Telemetric and Command Exchange)
