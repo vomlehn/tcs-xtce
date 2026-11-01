@@ -357,6 +357,39 @@ class WideIntegerTests(unittest.TestCase):
                                  'parameterTypeRef="T"/>')).nodes[0]
                 self.assertEqual(n.fields[-1][1].vtype.kind, kind)
 
+    def test_enumerations(self):
+        # An enumeration on a wide encoding holds its value as a wide
+        # integer of that encoding would; one on an unsigned encoding can't
+        # have a negative label.  (Labels are xs:long, which the reader
+        # checks.)
+        def enum(enc: str, value: str) -> str:
+            """Builds the mission with a 72-bit enumeration X.
+
+            Args:
+                enc:   Its integer encoding.
+                value: Its one label's value.
+
+            Returns:
+                The XTCE document.
+            """
+            return wide_mission('<EnumeratedParameterType name="T">'
+                                '<IntegerDataEncoding sizeInBits="72" '
+                                f'encoding="{enc}"/><EnumerationList>'
+                                f'<Enumeration value="{value}" label="A"/>'
+                                '</EnumerationList></EnumeratedParameterType>',
+                                '<ParameterRefEntry parameterRef="X"/>',
+                                '<Parameter name="X" parameterTypeRef="T"/>')
+        for enc, signed in (("unsigned", False), ("twosComplement", True)):
+            with self.subTest(enc=enc):
+                vt = compile_xml(enum(enc,
+                                      "-1" if signed
+                                      else "5")).nodes[0].fields[-1][1].vtype
+                self.assertEqual((vt.wide, vt.width, vt.signed),
+                                 (True, 128, signed))
+        with self.assertRaises(Unsupported) as cm:
+            compile_xml(enum("unsigned", "-1"))
+        self.assertIn("unsigned encoding can't hold", str(cm.exception))
+
     def test_alarm(self):
         # Its range's bounds are whole numbers, compared exactly.
         alarm = ('<IntegerParameterType name="A" signed="false">'

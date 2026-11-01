@@ -21,7 +21,7 @@ import re
 from typing import Callable, Optional
 
 from .common import (checks_hooks, code_unit, encode_text, fast_order,
-                     find_unit, items_hooks, terms_hooks, wire_cap)
+                     field_range, find_unit, items_hooks, terms_hooks, wire_cap)
 from .regex import compile_pattern
 from .model import (
     MAX_FIELD_BITS, MAX_FIELD_BYTES_LIMIT, AggregateEnc, AllOf, AnyOf, ArrayEnc,
@@ -1117,6 +1117,7 @@ class Compiler:
                 vt.labels.append(EnumLabel(ev.label,
                                            names.take(upper(ev.label)),
                                            ev.value, hi))
+            self.check_enum_values(vt, where)
         if vt.kind == "bool":
             vt.one_string = (t.one_string_value
                              if t.one_string_value is not None else "True")
@@ -1162,6 +1163,29 @@ class Compiler:
                if getattr(t, f.name) is not None}
         own["base_type"] = None
         return dataclasses.replace(base, **own)
+
+    @staticmethod
+    def check_enum_values(vt: VType, where: str) -> None:
+        """Checks that an enumeration on an integer encoding of more than 64
+        bits holds its labels' values in the type a wide integer of that
+        encoding has: for an unsigned encoding, that none is negative.
+        (XTCE gives the values as xs:long, which the reader checks.)
+
+        Args:
+            vt:    The enumeration's compiled type, with its labels.
+            where: What it is, for error messages.
+
+        Raises:
+            Unsupported: A label's value is negative and the encoding
+                         unsigned.
+        """
+        if not vt.wide or vt.signed:
+            return
+        for lab in vt.labels:
+            if lab.value < 0:
+                raise Unsupported(f"{where}: label {lab.label!r} has value "
+                                  f"{lab.value}, which its unsigned encoding "
+                                  "can't hold")
 
     @staticmethod
     def check_bool_strings(vt: VType, where: str) -> None:

@@ -509,9 +509,12 @@ class VType:
 
     @property
     def wide(self) -> bool:
-        """An integer of more than 64 bits.  It is decoded, encoded and
-        compared, but not used in arithmetic: sizes, calibrators,
-        algorithms and alarms."""
+        """An integer of more than 64 bits, or an enumeration whose integer
+        encoding has more than 64 bits, which holds its value in the same
+        type as such an integer.  It is decoded, encoded and compared
+        exactly; arithmetic takes it as the nearest double."""
+        if self.kind == "enum":
+            return isinstance(self.enc, IntEnc) and self.enc.bits > 64
         return self.kind == "int" and self.width > 64
 
     @property

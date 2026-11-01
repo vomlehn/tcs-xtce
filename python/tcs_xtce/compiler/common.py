@@ -115,7 +115,7 @@ def math_value(vt: VType, x: str, lang: str) -> str:
     k = vt.kind
     if vt.wide:
         if lang == "rust":
-            return f"pk::wide_f64({x})"
+            return f"pk::wide_f64({x}{'.0' if k == 'enum' else ''})"
         if lang == "c":
             return (f"xtce_bn_to_f64(({x}).bytes, {vt.width // 8}, "
                     f"{'true' if vt.signed else 'false'})")

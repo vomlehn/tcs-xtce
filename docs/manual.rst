@@ -190,7 +190,8 @@ Maximum field size
 Integers
    Integers of any width are decoded, encoded and compared, but sizes,
    counts, locations, calibrators, algorithms and alarms compute with at
-   most 64 bits. Enumeration values must fit in a signed 64-bit integer.
+   most 64 bits. Enumeration values are ``xs:long``, as XTCE gives them,
+   but an enumeration on a wider encoding holds any raw value.
    Rust holds integers of up to 128 bits natively, and C and C++ of up
    to 64; wider ones use the libraries under `Integers of any size`_.
 
@@ -1269,6 +1270,14 @@ doesn't list survive decoding and re-encoding:
 A range entry (``maxValue``) gives one label to all values in the range.
 The constant uses the range's first value.
 
+On an integer encoding of more than 64 bits, an enumeration holds the
+type a wide integer of that encoding would have instead of the 64-bit
+one: the demo's 136-bit ``WideHugeType`` is
+``pub struct WideHugeType(pub pk::Uint<17>)`` in Rust and a
+``typedef demo_uint136 demo_WideHugeType`` in C, whose label macros are
+``XTCE_BN_LIT`` constants; a 72-bit one holds a ``u128`` or ``i128`` in
+Rust. Python's ``IntEnum`` already holds any integer.
+
 **Kinds.** An inheritance tree whose root has descendants gets a dispatch
 type named ``<Root>Kind``. Its members are every concrete container (or
 command) in the tree, in document order:
@@ -1866,10 +1875,15 @@ Integer encoding
    field is never computed when encoding; the application sets it, and
    encoding checks it against what it sizes. The demo's ``WideSized`` has
    a 72-bit ``WideLen``. An enumeration or a boolean may have an integer
-   encoding of more than 64 bits: an enumeration holds a signed 64-bit
-   value, and decoding fails with ``OutOfRange`` for a raw value it can't
-   hold; a boolean is true for any raw value but 0, and encodes true as 1.
-   The demo's ``WideChoice`` has both.
+   encoding of more than 64 bits. The enumeration holds its value in the
+   type a wide integer of that encoding has (see **Enumeration types**
+   under `Generated packet types`_), so
+   raw values that no label lists survive decoding and re-encoding even
+   past 64 bits; on an unsigned encoding, a negative label is an error.
+   The boolean is true for any raw value but 0, and encodes true as 1.
+   The demo's ``WideChoice`` has both, and its ``WideLabels`` has
+   enumerations of 72 and 136 bits with labels at the ends of
+   ``xs:long``, an alarm, and a comparison that includes a field.
 
    A packet length or checksum field may have more than 64 bits: it holds
    its value with zeros above it. Decoding fails with ``BadLength`` or
@@ -2837,7 +2851,6 @@ Known limitations
 * A field that gives a size or count is computed when encoding only in
   the cases described under `Generated packet types`_; otherwise set the
   field and the data to agree.
-* Enumerated values must fit in a signed 64-bit integer.
 
 
 Integers of any size

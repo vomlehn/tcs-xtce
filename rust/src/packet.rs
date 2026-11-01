@@ -2854,33 +2854,6 @@ where
     }
 }
 
-/// An integer of more than 64 bits as the i64 an enumeration holds.
-///
-/// # Arguments
-///
-/// * `v`     - The field's value.
-/// * `field` - The field's name, for errors.
-///
-/// # Returns
-///
-/// The value.
-///
-/// # Errors
-///
-/// `OutOfRange` when an i64 can't hold it.
-pub fn wide_to_i64<const N: usize>(
-    v: Int<N>,
-    field: &'static str,
-) -> Result<i64> {
-    use bnum::cast::{As, CastFrom};
-    let small = v.as_::<i64>();
-    if Int::<N>::cast_from(small) == v {
-        Ok(small)
-    } else {
-        Err(PacketError::OutOfRange { field })
-    }
-}
-
 /// [`int_to_f64`] for fields of more than 64 bits: rounded to the nearest
 /// double, ties to even, as bnum converts.
 ///
@@ -6008,14 +5981,20 @@ pub fn in_band(
 ///
 /// # Arguments
 ///
-/// * `x`       - The value.
+/// * `x`       - The value: an `i64`, or the wider integer that an
+///               enumeration with an integer encoding of more than 64 bits
+///               holds.
 /// * `labels`  - (first value, last value, level) ranges, in order.
 /// * `default` - The level when no range holds `x`.
 ///
 /// # Returns
 ///
 /// The level of the first range holding `x`, else `default`.
-pub fn enum_alarm(x: i64, labels: &[(i64, i64, u8)], default: u8) -> u8 {
+pub fn enum_alarm<T: PartialOrd + Copy>(
+    x: T,
+    labels: &[(T, T, u8)],
+    default: u8,
+) -> u8 {
     labels
         .iter()
         .find(|&&(lo, hi, _)| lo <= x && x <= hi)

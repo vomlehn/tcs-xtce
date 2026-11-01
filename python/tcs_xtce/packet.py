@@ -1518,22 +1518,6 @@ def length_u64(v: int, field: str) -> int:
     return v
 
 
-def fits_i64(v: int, field: str) -> int:
-    """An enumeration's value from a field of more than 64 bits.
-
-    Args:
-        v:     The field's value.
-        field: The field's name, for errors.
-
-    Returns:
-        ``v``; raises ``OutOfRange`` unless a signed 64-bit integer holds
-        it, as the other runtimes' enumerations do.
-    """
-    if not -(1 << 63) <= v < 1 << 63:
-        raise PacketError("OutOfRange", field)
-    return v
-
-
 def int_to_float(raw: int, bits: int, enc: str) -> float:
     """A raw field as a float.
 

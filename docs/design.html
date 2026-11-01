@@ -1193,7 +1193,8 @@ comparison.</li>
 </ul>
 <p>Enumerations keep the raw value: a Rust newtype, a C <tt class="docutils literal">int64_t</tt>
 typedef with a macro per label, and a Python <tt class="docutils literal">IntEnum</tt> with
-pseudo-members.
+pseudo-members. On an integer encoding of more than 64 bits, the
+newtype and the typedef hold the wide integer of that encoding instead.
 Unlisted values therefore round-trip instead of failing. Telemetry from
 newer flight software decodes even when the database is out of date.</p>
 </div>
@@ -1482,8 +1483,9 @@ go through a double (<tt class="docutils literal">wide_int_to_f64</tt>, <tt clas
 <tt class="docutils literal">wide_f64</tt>); so do a size, count or location, whose bound is far below
 where a double loses precision, so a value past it fails exactly as an
 exact one would. An alarm's ranges become whole bounds (<tt class="docutils literal">int_band</tt>)
-compared with literals of the field's type. An enumeration holds an i64,
-and a raw value outside one fails rather than wraps; a packet length or
+compared with literals of the field's type. An enumeration holds the
+same wide integer, so every raw value survives, and its labels, alarms
+and comparisons use literals of that type; a packet length or
 checksum field holds its value with zeros above it, written by the
 writers' <tt class="docutils literal">uint_order</tt> past 64 bits and read back through
 <tt class="docutils literal">fits_u64</tt>. A size field of more than 64 bits is never computed when

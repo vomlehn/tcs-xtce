@@ -604,7 +604,8 @@ ones.</dd>
 <dt>Integers</dt>
 <dd>Integers of any width are decoded, encoded and compared, but sizes,
 counts, locations, calibrators, algorithms and alarms compute with at
-most 64 bits. Enumeration values must fit in a signed 64-bit integer.
+most 64 bits. Enumeration values are <tt class="docutils literal">xs:long</tt>, as XTCE gives them,
+but an enumeration on a wider encoding holds any raw value.
 Rust holds integers of up to 128 bits natively, and C and C++ of up
 to 64; wider ones use the libraries under <a class="reference internal" href="#integers-of-any-size">Integers of any size</a>.</dd>
 <dt>Floats</dt>
@@ -1707,6 +1708,13 @@ even when it isn't listed.</li>
 </ul>
 <p>A range entry (<tt class="docutils literal">maxValue</tt>) gives one label to all values in the range.
 The constant uses the range's first value.</p>
+<p>On an integer encoding of more than 64 bits, an enumeration holds the
+type a wide integer of that encoding would have instead of the 64-bit
+one: the demo's 136-bit <tt class="docutils literal">WideHugeType</tt> is
+<tt class="docutils literal">pub struct WideHugeType(pub <span class="pre">pk::Uint&lt;17&gt;)</span></tt> in Rust and a
+<tt class="docutils literal">typedef demo_uint136 demo_WideHugeType</tt> in C, whose label macros are
+<tt class="docutils literal">XTCE_BN_LIT</tt> constants; a 72-bit one holds a <tt class="docutils literal">u128</tt> or <tt class="docutils literal">i128</tt> in
+Rust. Python's <tt class="docutils literal">IntEnum</tt> already holds any integer.</p>
 <p><strong>Kinds.</strong> An inheritance tree whose root has descendants gets a dispatch
 type named <tt class="docutils literal">&lt;Root&gt;Kind</tt>. Its members are every concrete container (or
 command) in the tree, in document order:</p>
@@ -2313,10 +2321,15 @@ other sizes do: one past the size's bound fails with <tt class="docutils literal
 field is never computed when encoding; the application sets it, and
 encoding checks it against what it sizes. The demo's <tt class="docutils literal">WideSized</tt> has
 a 72-bit <tt class="docutils literal">WideLen</tt>. An enumeration or a boolean may have an integer
-encoding of more than 64 bits: an enumeration holds a signed 64-bit
-value, and decoding fails with <tt class="docutils literal">OutOfRange</tt> for a raw value it can't
-hold; a boolean is true for any raw value but 0, and encodes true as 1.
-The demo's <tt class="docutils literal">WideChoice</tt> has both.</p>
+encoding of more than 64 bits. The enumeration holds its value in the
+type a wide integer of that encoding has (see <strong>Enumeration types</strong>
+under <a class="reference internal" href="#generated-packet-types">Generated packet types</a>), so
+raw values that no label lists survive decoding and re-encoding even
+past 64 bits; on an unsigned encoding, a negative label is an error.
+The boolean is true for any raw value but 0, and encodes true as 1.
+The demo's <tt class="docutils literal">WideChoice</tt> has both, and its <tt class="docutils literal">WideLabels</tt> has
+enumerations of 72 and 136 bits with labels at the ends of
+<tt class="docutils literal">xs:long</tt>, an alarm, and a comparison that includes a field.</p>
 <p class="last">A packet length or checksum field may have more than 64 bits: it holds
 its value with zeros above it. Decoding fails with <tt class="docutils literal">BadLength</tt> or
 <tt class="docutils literal">BadChecksum</tt> if any of those bits is set. The demo's <tt class="docutils literal">WideFramed</tt>
@@ -3249,7 +3262,6 @@ elements their type gives, even when it is fixed.</li>
 <li>A field that gives a size or count is computed when encoding only in
 the cases described under <a class="reference internal" href="#generated-packet-types">Generated packet types</a>; otherwise set the
 field and the data to agree.</li>
-<li>Enumerated values must fit in a signed 64-bit integer.</li>
 </ul>
 </div>
 </div>

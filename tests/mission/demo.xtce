@@ -1299,8 +1299,8 @@
         </BinaryDataEncoding>
       </BinaryParameterType>
       <!-- An enumeration and a boolean on 72-bit integer encodings: the
-           enumeration holds a 64-bit value, and the boolean is true for
-           anything but 0. -->
+           enumeration holds its value as a 72-bit integer would, and the
+           boolean is true for anything but 0. -->
       <EnumeratedParameterType name="WideEnumType">
         <IntegerDataEncoding sizeInBits="72" encoding="twosComplement"/>
         <EnumerationList>
@@ -1312,6 +1312,35 @@
       <BooleanParameterType name="WideFlagType">
         <IntegerDataEncoding sizeInBits="72"/>
       </BooleanParameterType>
+      <!-- Enumerations on wide encodings with labels at the ends of the
+           xs:long that XTCE gives their values in, so that values past
+           those decode as unlisted: a signed 72-bit one with -2^63 and a
+           range to 2^63 - 1, and an unsigned 136-bit one with alarms. -->
+      <EnumeratedParameterType name="WideLabelType">
+        <IntegerDataEncoding sizeInBits="72" encoding="twosComplement"/>
+        <EnumerationList>
+          <Enumeration value="-9223372036854775808" label="FLOOR"/>
+          <Enumeration value="0" label="ZERO"/>
+          <Enumeration value="4611686018427387904"
+                       maxValue="9223372036854775807" label="UPPER"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+      <EnumeratedParameterType name="WideHugeType">
+        <IntegerDataEncoding sizeInBits="136"/>
+        <EnumerationList>
+          <Enumeration value="0" label="NONE"/>
+          <Enumeration value="4611686018427387904" label="HUGE"/>
+          <Enumeration value="9223372036854775000"
+                       maxValue="9223372036854775807" label="TOPMOST"/>
+        </EnumerationList>
+        <DefaultAlarm>
+          <EnumerationAlarmList>
+            <EnumerationAlarm alarmLevel="watch" enumerationLabel="HUGE"/>
+            <EnumerationAlarm alarmLevel="critical"
+                              enumerationLabel="TOPMOST"/>
+          </EnumerationAlarmList>
+        </DefaultAlarm>
+      </EnumeratedParameterType>
       <IntegerParameterType name="WideU72" signed="false">
         <IntegerDataEncoding sizeInBits="72"/>
       </IntegerParameterType>
@@ -1654,6 +1683,9 @@
       <Parameter name="WideBoxSum" parameterTypeRef="WideLenType"/>
       <Parameter name="WideTail" parameterTypeRef="U8"/>
       <Parameter name="WideFlag" parameterTypeRef="WideFlagType"/>
+      <Parameter name="WideLabel" parameterTypeRef="WideLabelType"/>
+      <Parameter name="WideHuge" parameterTypeRef="WideHugeType"/>
+      <Parameter name="WideHugeNote" parameterTypeRef="U8"/>
       <Parameter name="WideRealScaled" parameterTypeRef="WideRealScaledType"/>
       <Parameter name="WideRealHalf" parameterTypeRef="DrDoubleType"/>
       <Parameter name="WideTiny" parameterTypeRef="S16"/>
@@ -3261,6 +3293,23 @@
         <BaseContainer containerRef="CCSDSPacket">
           <RestrictionCriteria>
             <Comparison parameterRef="APID" value="574"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+      <!-- WideHugeNote is there only when WideHuge is HUGE. -->
+      <SequenceContainer name="WideLabels">
+        <EntryList>
+          <ParameterRefEntry parameterRef="WideLabel"/>
+          <ParameterRefEntry parameterRef="WideHuge"/>
+          <ParameterRefEntry parameterRef="WideHugeNote">
+            <IncludeCondition>
+              <Comparison parameterRef="WideHuge" value="HUGE"/>
+            </IncludeCondition>
+          </ParameterRefEntry>
+        </EntryList>
+        <BaseContainer containerRef="CCSDSPacket">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="671"/>
           </RestrictionCriteria>
         </BaseContainer>
       </SequenceContainer>

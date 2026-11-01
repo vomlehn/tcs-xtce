@@ -204,7 +204,7 @@ tm 0a3dc02a000900000000000000000077  # wide sized: no bytes
 tm 0a3dc02a000c01000000000000000311223377  # wide sized: a WideLen past 2^64, beyond any size, which fails
 tm 0a3ec02a0011004000000000000000400000000000000000  # wide choice: WideEnum HIGH, and WideFlag true from a raw value past 64 bits
 tm 0a3ec02a0011ffffffffffffffffff000000000000000000  # wide choice: WideEnum BELOW, -1 in 72 bits, and WideFlag false
-tm 0a3ec02a0011010000000000000000000000000000000001  # wide choice: a WideEnum of 2^64, which no 64-bit value holds, and fails
+tm 0a3ec02a0011010000000000000000000000000000000001  # wide choice: a WideEnum of 2^64, which no label lists, kept as it is
 tm 0a3fc02a001400000000000000000b123400000000000000005177  # wide framed: a 72-bit WideBoxLen of 11, and a 72-bit WideBoxSum of 51, the sum of the box before it
 tm 0a3fc02a001401000000000000000b123400000000000000005277  # wide framed: a WideBoxLen past 2^64, which fails
 tm 0a3fc02a001400000000000000000b123401000000000000005177  # wide framed: a WideBoxSum with a bit above the sum, which fails
@@ -291,3 +291,8 @@ tc 112ec005000615112cc0000009  # embed: a command whose length runs past the pac
 tc 112ec005000716abcdef3fc00000  # tailed: three bytes of data, then 1.5
 tc 112ec00500041640490fdb  # tailed: no data, then pi
 tc 112ec0050002160102  # tailed: too short for the float
+tm 0a9fc02a0019ff80000000000000000000000000000000000000000000000000  # wide labels: WideLabel FLOOR, -2^63, and WideHuge NONE
+tm 0a9fc02a001aff7fffffffffffffff000000000000000000400000000000000077  # wide labels: a WideLabel of -2^63 - 1, listed by none, and WideHuge HUGE, which brings WideHugeNote and warns
+tm 0a9fc02a0019007fffffffffffffff0000000000000000007fffffffffffffff  # wide labels: WideLabel UPPER and WideHuge TOPMOST at the ends of their ranges; TOPMOST is critical
+tm 0a9fc02a00194000000000000000000400000000000000000000000000000000  # wide labels: unlisted values past 64 bits: a WideLabel of 2^70 and a WideHuge of 2^130
+tm 0a9fc02a0019800000000000000000ffffffffffffffffffffffffffffffffff  # wide labels: the smallest WideLabel and the largest WideHuge, both unlisted

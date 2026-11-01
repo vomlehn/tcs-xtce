@@ -47,6 +47,12 @@ FLOATS = {"IEEE754": "XTCE_PK_IEEE", "MILSTD_1750A": "XTCE_PK_MIL1750A",
 I64_MIN, I64_MAX, U64_MAX = -(2**63), 2**63 - 1, 2**64 - 1
 
 
+def int_signed(vt: VType) -> bool:
+    """Whether the C value of an integer or an enumeration is signed: an
+    enumeration's int64_t is, and a wide one's type is as its encoding."""
+    return vt.signed if vt.kind == "int" or vt.wide else True
+
+
 def checksum_spec(spec: tuple, prefix: str = "") -> str:
     """Writes the initializer of an xtce_pk_checksum_spec.
 
@@ -278,7 +284,7 @@ class CEmitter:
             bytes, least significant first.
         """
         k = vt.kind
-        if k == "int" and vt.wide:
+        if k in ("int", "enum") and vt.wide:
             b = v.to_bytes(vt.width // 8, "little", signed=vt.signed)
             return (f"XTCE_BN_LIT({self.ctype(vt)}, {{{{"
                     + ", ".join(f"0x{x:02x}" for x in b) + "}})")
@@ -760,9 +766,8 @@ class CEmitter:
             self.line("}", depth)
         elif isinstance(e, IntEnc) and vt.wide:
             self.read_wide(vt, dst, f, depth)
-        elif (isinstance(e, IntEnc) and e.bits > 64
-              and vt.kind in ("enum", "bool")):
-            self.read_wide_choice(vt, dst, f, depth)
+        elif isinstance(e, IntEnc) and e.bits > 64 and vt.kind == "bool":
+            self.read_wide_flag(vt, dst, f, depth)
         elif isinstance(e, IntEnc) and e.bits > 64:
             self.read_wide_f64(vt, dst, f, depth, ref)
         elif isinstance(e, (IntEnc, FloatEnc)):
@@ -864,11 +869,9 @@ class CEmitter:
         self.line(f"memcpy({dst}.bytes, raw, {n});", d)
         self.line("}", depth)
 
-    def read_wide_choice(self, vt: VType, dst: str, f: str, depth: int) -> None:
-        """Writes the statements reading an enumeration or a boolean whose
-        integer encoding has more than 64 bits.  They fail with
-        XTCE_PK_OUT_OF_RANGE when an enumeration's int64_t can't hold the
-        value.
+    def read_wide_flag(self, vt: VType, dst: str, f: str, depth: int) -> None:
+        """Writes the statements reading a boolean whose integer encoding
+        has more than 64 bits: true for any raw value but 0.
 
         Args:
             vt:    The type, whose encoding is an IntEnc.
@@ -890,21 +893,12 @@ class CEmitter:
             self.line(f"XTCE_PK_TRY(xtce_pk_wide_bcd_decode(raw, {n}, "
                       f"{e.bits}, {bool_lit(e.encoding == 'packedBCD')}, {f}, "
                       "r->err, s));", d)
-        if vt.kind == "bool":
-            self.line(f"{dst} = !xtce_bn_is_zero(raw, {n});", d)
-        else:
-            self.line(f"xtce_pk_wide_to_signed(raw, {n}, {e.bits}, "
-                      f"{ENC[int_enc(vt)]});", d)
-            self.line(f"if (!xtce_bn_to_i64(raw, {n}, true, &{dst}))", d)
-            self.line(f"return xtce_pk_fail(r->err, XTCE_PK_OUT_OF_RANGE, {f}, "
-                      "NULL);", d + 1)
+        self.line(f"{dst} = !xtce_bn_is_zero(raw, {n});", d)
         self.line("}", depth)
 
-    def write_wide_choice(self, vt: VType, x: str, f: str, depth: int) -> None:
-        """Writes the statements writing an enumeration or a boolean whose
-        integer encoding has more than 64 bits.  They fail with
-        XTCE_PK_OUT_OF_RANGE when the encoding can't hold an
-        enumeration's value.
+    def write_wide_flag(self, vt: VType, x: str, f: str, depth: int) -> None:
+        """Writes the statements writing a boolean whose integer encoding
+        has more than 64 bits, as 1 or 0.
 
         Args:
             vt:    The type, whose encoding is an IntEnc.
@@ -915,19 +909,8 @@ class CEmitter:
         e, d = vt.enc, depth + 1
         n = e.bits // 8 + 1
         self.line("{", depth)
-        self.line(f"uint8_t raw[{n}], s[{n}];", d)
-        self.line("(void)s;", d)
-        if vt.kind == "bool":
-            self.line(f"xtce_bn_from_u64(raw, {n}, ({x}) ? 1u : 0u);", d)
-        else:
-            self.line(f"xtce_bn_from_i64(raw, {n}, {x});", d)
-            enc = "XTCE_PK_UNSIGNED" if e.bcd else ENC[int_enc(vt)]
-            self.line(f"XTCE_PK_TRY(xtce_pk_wide_from_signed(raw, {n}, "
-                      f"{e.bits}, {enc}, {f}, w->err));", d)
-            if e.bcd:
-                self.line(f"XTCE_PK_TRY(xtce_pk_wide_bcd_encode(raw, {n}, "
-                          f"{e.bits}, {bool_lit(e.encoding == 'packedBCD')}, "
-                          f"{f}, w->err, s));", d)
+        self.line(f"uint8_t raw[{n}];", d)
+        self.line(f"xtce_bn_from_u64(raw, {n}, ({x}) ? 1u : 0u);", d)
         args = self.order_args(e, d)
         self.line(f"XTCE_PK_TRY(xtce_pk_write_wide(w, {e.bits}, {args}, raw));",
                   d)
@@ -1044,7 +1027,7 @@ class CEmitter:
         """
         if vt.wide:
             return f"({x}).bytes, {vt.width // 8}"
-        if vt.kind == "enum" or vt.signed:
+        if int_signed(vt):
             return f"xtce_pk_le64_i((int64_t)({x})).bytes, 8"
         return f"xtce_pk_le64_u((uint64_t)({x})).bytes, 8"
 
@@ -1251,9 +1234,8 @@ class CEmitter:
             return
         if isinstance(e, IntEnc) and vt.wide:
             self.write_wide(vt, x, f, depth)
-        elif (isinstance(e, IntEnc) and e.bits > 64
-              and vt.kind in ("enum", "bool")):
-            self.write_wide_choice(vt, x, f, depth)
+        elif isinstance(e, IntEnc) and e.bits > 64 and vt.kind == "bool":
+            self.write_wide_flag(vt, x, f, depth)
         elif isinstance(e, IntEnc) and e.bits > 64:
             self.write_wide_f64(vt, x, f, depth, ref)
         elif isinstance(e, FloatEnc):
@@ -1376,10 +1358,11 @@ class CEmitter:
             # Both values are present: the compiler rejects optional ones.
             y = access(other.expr, c.other_path)
             ovt = c.other_target or c.other.vtype
-            if k == "int" and (vt.wide or ovt.wide):
+            if k in ("int", "enum") and (vt.wide or ovt.wide):
                 return (f"xtce_bn_cmp_mixed({self.int_bytes(vt, x)}, "
-                        f"{bool_lit(vt.signed)}, {self.int_bytes(ovt, y)}, "
-                        f"{bool_lit(ovt.signed)}) {op} 0")
+                        f"{bool_lit(int_signed(vt))}, "
+                        f"{self.int_bytes(ovt, y)}, "
+                        f"{bool_lit(int_signed(ovt))}) {op} 0")
             if k in ("int", "enum"):
                 a = "i" if k == "enum" or vt.signed else "u"
                 b = "i" if k == "enum" or ovt.signed else "u"
@@ -1390,7 +1373,7 @@ class CEmitter:
                         f"{y}.len) {op} 0")
             return f"{x} {op} {y}"
         if k in ("int", "enum"):
-            signed = k == "enum" or vt.signed
+            signed = int_signed(vt)
             lo, hi = (field_range(vt) if vt.wide else (I64_MIN, I64_MAX)
                       if signed else (0, U64_MAX))
             if v < lo or v > hi:
@@ -1449,9 +1432,10 @@ class CEmitter:
         self.line("#ifdef __cplusplus")
         self.line('extern "C" {')
         self.line("#endif")
+        # Wide enumerations hold the wide integers declared here.
+        self.declare_buffers()
         for vt in m.types:
             self.enum_type(vt)
-        self.declare_buffers()
         self.declare_composites()
         self.declare_consts()
         self.declare_hooks()
@@ -1487,22 +1471,38 @@ class CEmitter:
         self.line(f"/* Enumeration {vt.key}.  Holds the raw value, so values "
                   "the enumeration")
         self.line(" * does not list survive decoding. */")
-        self.line(f"typedef int64_t {t};")
+        if vt.wide:
+            # The wide integer of its encoding's width.
+            n = vt.width // 8
+            self.line("typedef "
+                      f"{self.p}{'' if vt.signed else 'u'}int{vt.width} {t};")
+        else:
+            self.line(f"typedef int64_t {t};")
         for lab in vt.labels:
-            self.line(f"#define {t}_{lab.ident} {slit(lab.value)}")
+            if vt.wide:
+                self.wide_define(f"{t}_{lab.ident}", vt, lab.value)
+            else:
+                self.line(f"#define {t}_{lab.ident} {slit(lab.value)}")
         self.line()
         self.doc(
             f"Names a value of enumeration {vt.key}.", [("x", "The value.")],
             "The value's label, or NULL if the enumeration doesn't list it.")
         self.line(f"static inline const char* {t}_label({t} x) {{")
         for lab in vt.labels:
-            if lab.value == lab.max_value:
-                self.line(f"if (x == {slit(lab.value)}) return "
-                          f"{cstr(lab.label)};", 1)
+            if vt.wide:
+                def cmp(lit):
+                    return (f"xtce_bn_cmp(x.bytes, ({lit}).bytes, {n}, "
+                            f"{bool_lit(vt.signed)})")
+                lo = cmp(f"{t}_{lab.ident}")
+                test = (f"{lo} == 0" if lab.value == lab.max_value
+                        else f"{lo} >= 0 && "
+                             f"{cmp(self.literal(vt, lab.max_value))} <= 0")
+            elif lab.value == lab.max_value:
+                test = f"x == {slit(lab.value)}"
             else:
-                self.line(f"if (x >= {slit(lab.value)} && x <= "
-                          f"{slit(lab.max_value)}) return {cstr(lab.label)};",
-                          1)
+                test = (f"x >= {slit(lab.value)} && x <= {slit(lab.max_value)}")
+            self.line(f"if ({test})", 1)
+            self.line(f"return {cstr(lab.label)};", 2)
         self.line("return NULL;", 1)
         self.line("}")
         self.line()
@@ -1515,7 +1515,10 @@ class CEmitter:
         self.line("if (l) {", 1)
         self.line("xtce_pk_text_puts(t, l);", 2)
         self.line("} else {", 1)
-        self.line("xtce_pk_text_int(t, x);", 2)
+        if vt.wide:
+            self.describe_wide(vt, "x", 2)
+        else:
+            self.line("xtce_pk_text_int(t, x);", 2)
         self.line("}", 1)
         self.line("}")
 
@@ -2642,7 +2645,21 @@ class CEmitter:
             self.line(f"mc = {ad.min_conformance};", depth)
         for b in ad.bands:
             self.band(b, "x", vt, depth)
-        if kind == "enum" and (ad.labels or ad.default):
+        if kind == "enum" and vt.wide and (ad.labels or ad.default):
+            # The first range holding the value gives its level.
+            n = vt.width // 8
+            def cmp(v):
+                return (f"xtce_bn_cmp(x.bytes, ({self.literal(vt, v)}).bytes, "
+                        f"{n}, {bool_lit(vt.signed)})")
+            self.line("{", depth)
+            self.line(f"int l = {ad.default};", depth + 1)
+            for i, (lo, hi, lv) in enumerate(ad.labels):
+                self.line(f"{'else ' if i else ''}if ({cmp(lo)} >= 0 && "
+                          f"{cmp(hi)} <= 0)", depth + 1)
+                self.line(f"l = {lv};", depth + 2)
+            self.line("if (l > lv) lv = l;", depth + 1)
+            self.line("}", depth)
+        elif kind == "enum" and (ad.labels or ad.default):
             self.line("{", depth)
             if ad.labels:
                 self.line("static const xtce_pk_label_alarm labels[] = {",
@@ -3153,19 +3170,48 @@ class CEmitter:
         elif k == "bool":
             self.line(f'xtce_pk_text_puts(t, {x} ? "true" : "false");', depth)
         elif vt.wide:
-            n = vt.width // 8
-            # A sign, and fewer than 2.41 digits a byte.
-            self.line("{", depth)
-            self.line(f"uint8_t s[{n}];", depth + 1)
-            self.line(f"char d[{3 * n + 2}];", depth + 1)
-            self.line(f"xtce_bn_to_str_radix(({x}).bytes, {n}, "
-                      f"{bool_lit(vt.signed)}, 10, s, d, sizeof d);", depth + 1)
-            self.line("xtce_pk_text_puts(t, d);", depth + 1)
-            self.line("}", depth)
+            self.describe_wide(vt, x, depth)
         elif vt.signed:
             self.line(f"xtce_pk_text_int(t, {x});", depth)
         else:
             self.line(f"xtce_pk_text_uint(t, {x});", depth)
+
+    def wide_define(self, name: str, vt: VType, v: int) -> None:
+        """Writes a macro for a constant of a wide enumeration, wrapped to
+        fit 80 columns, as the macro's lines are not reflowed.
+
+        Args:
+            name: The macro's name.
+            vt:   The enumeration's type.
+            v:    The constant's value.
+        """
+        b = [f"0x{x:02x}"
+             for x in v.to_bytes(vt.width // 8, "little", signed=vt.signed)]
+        rows = [", ".join(b[i:i + 8]) for i in range(0, len(b), 8)]
+        self.line(f"#define {name} \\")
+        self.line(f"XTCE_BN_LIT({self.ctype(vt)}, {{{{ \\", 1)
+        for i, row in enumerate(rows):
+            end = "}})" if i == len(rows) - 1 else ", \\"
+            self.line(f"{row}{end}", 2)
+
+    def describe_wide(self, vt: VType, x: str, depth: int) -> None:
+        """Writes the statements appending a wide integer, or a wide
+        enumeration's value, to the text ``t`` in decimal.
+
+        Args:
+            vt:    The value's type.
+            x:     The expression for the value, an xtce-bnum.h integer.
+            depth: The indentation level.
+        """
+        n = vt.width // 8
+        # A sign, and fewer than 2.41 digits a byte.
+        self.line("{", depth)
+        self.line(f"uint8_t s[{n}];", depth + 1)
+        self.line(f"char d[{3 * n + 2}];", depth + 1)
+        self.line(f"xtce_bn_to_str_radix(({x}).bytes, {n}, "
+                  f"{bool_lit(vt.signed)}, 10, s, d, sizeof d);", depth + 1)
+        self.line("xtce_pk_text_puts(t, d);", depth + 1)
+        self.line("}", depth)
 
     def define_kind(self, k: Kind) -> None:
         """Writes the definitions of a kind's functions, which decode the

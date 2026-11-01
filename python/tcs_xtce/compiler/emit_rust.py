@@ -111,6 +111,23 @@ def wide_type(vt: VType) -> str:
     return f"pk::{'Int' if vt.signed else 'Uint'}<{vt.width // 8}>"
 
 
+def enum_repr(vt: VType) -> str:
+    """Names the Rust type an enumeration holds its value in.
+
+    Args:
+        vt: The enumeration's type.
+
+    Returns:
+        ``i64``, or for an integer encoding of more than 64 bits, the type
+        a wide integer of that encoding has.
+    """
+    if not vt.wide:
+        return "i64"
+    if vt.width == 128:
+        return f"{'i' if vt.signed else 'u'}128"
+    return wide_type(vt)
+
+
 def wide_literal(vt: VType, v: int) -> str:
     """Writes a Rust literal of an integer of more than 64 bits.
 
@@ -148,7 +165,7 @@ def literal(vt: VType, v) -> str:
     if k == "float":
         return flt(v) + "_f64"
     if k == "enum":
-        return f"{vt.ident}({v})"
+        return f"{vt.ident}({wide_literal(vt, v) if vt.wide else v})"
     if k == "bool":
         return "true" if v else "false"
     if k == "string":
@@ -600,10 +617,12 @@ def read_value_expr(vt: VType, f: str, ref, alloc: bool, depth: int) -> str:
             return (f"pk::read_binary_from(&mut r, {h}, {raw}, {e.cap}, {f})?")
         return (f"pk::read_fixed_binary_from::<{e.cap}>(&mut r, {h}, {raw}, "
                 f"{f})?")
+    if isinstance(e, IntEnc) and vt.kind == "enum" and vt.wide:
+        return f"{vt.ident}({read_wide(vt, f)})"
     if isinstance(e, IntEnc) and vt.wide:
         return read_wide(vt, f)
-    if isinstance(e, IntEnc) and e.bits > 64 and vt.kind in ("enum", "bool"):
-        return read_wide_choice(vt, f)
+    if isinstance(e, IntEnc) and e.bits > 64 and vt.kind == "bool":
+        return read_wide_flag(vt, f)
     if isinstance(e, IntEnc):
         raw = raw_read(e, f)
         if e.bcd:
@@ -743,18 +762,16 @@ def length_u64(lc, x: str) -> str:
             f"{rstr(lc.name)} }})?")
 
 
-def read_wide_choice(vt: VType, f: str) -> str:
-    """Expression reading an enumeration or a boolean whose integer
-    encoding has more than 64 bits.
+def read_wide_flag(vt: VType, f: str) -> str:
+    """Expression reading a boolean whose integer encoding has more than
+    64 bits.
 
     Args:
         vt: The type, whose encoding is an IntEnc.
         f:  The field's name, as a Rust string literal, for errors.
 
     Returns:
-        The expression: a boolean that is true for any raw value but 0, or
-        an enumeration holding the value, which fails with OutOfRange when
-        an i64 can't hold it.
+        The expression: true for any raw value but 0.
     """
     e = vt.enc
     # A bit more than the field, so that an unsigned value stays positive.
@@ -764,15 +781,12 @@ def read_wide_choice(vt: VType, f: str) -> str:
     if e.bcd:
         raw = (f"pk::wide_bcd_decode({raw}, {e.bits}, "
                f"{str(e.encoding == 'packedBCD').lower()}, {f})?")
-    if vt.kind == "bool":
-        return f"!{raw}.is_zero()"
-    v = f"pk::wide_to_signed({raw}, {e.bits}, IntEncoding::{int_enc(vt)})"
-    return f"{vt.ident}(pk::wide_to_i64({v}, {f})?)"
+    return f"!{raw}.is_zero()"
 
 
-def write_wide_choice(vt: VType, x: str, f: str) -> str:
-    """Statement writing ``x``, an enumeration or a boolean whose integer
-    encoding has more than 64 bits.
+def write_wide_flag(vt: VType, x: str, f: str) -> str:
+    """Statement writing ``x``, a boolean whose integer encoding has more
+    than 64 bits, as 1 or 0.
 
     Args:
         vt: The type, whose encoding is an IntEnc.
@@ -780,22 +794,12 @@ def write_wide_choice(vt: VType, x: str, f: str) -> str:
         f:  The field's name, as a Rust string literal, for errors.
 
     Returns:
-        The statement, which fails with OutOfRange when the encoding can't
-        hold an enumeration's value.
+        The statement.
     """
     e = vt.enc
     n = (e.bits + 8) // 8
-    packed = str(e.encoding == "packedBCD").lower()
-    if vt.kind == "bool":
-        raw = (f"pk::wide_from_unsigned(pk::widen::<{n}, _>({x} as "
-               f"u8).cast_unsigned(), {e.bits}, {f})?")
-    elif e.bcd:
-        v = (f"pk::wide_from_signed(pk::widen::<{n}, _>({x}.0), {e.bits}, "
-             f"IntEncoding::Unsigned, {f})?")
-        raw = f"pk::wide_bcd_encode({v}, {e.bits}, {packed}, {f})?"
-    else:
-        raw = (f"pk::wide_from_signed(pk::widen::<{n}, _>({x}.0), {e.bits}, "
-               f"IntEncoding::{int_enc(vt)}, {f})?")
+    raw = (f"pk::wide_from_unsigned(pk::widen::<{n}, _>({x} as "
+           f"u8).cast_unsigned(), {e.bits}, {f})?")
     return (f"w.wide({e.bits}, {str(e.lsb).lower()}, {byte_order(e)}, "
             f"&{raw}.to_le_bytes());")
 
@@ -987,10 +991,12 @@ def write_bytes_stmt(vt: VType, x: str, f: str, ref) -> str:
         n = size(e.dyn, ref(e.dyn), f)
         return (f"{{ let n = {n}; if {x}.len() != n {{ {bad} }} "
                 f"w.bytes({data}); }}")
+    if isinstance(e, IntEnc) and vt.kind == "enum" and vt.wide:
+        return write_wide(vt, f"{x}.0", f)
     if isinstance(e, IntEnc) and vt.wide:
         return write_wide(vt, x, f)
-    if isinstance(e, IntEnc) and e.bits > 64 and vt.kind in ("enum", "bool"):
-        return write_wide_choice(vt, x, f)
+    if isinstance(e, IntEnc) and e.bits > 64 and vt.kind == "bool":
+        return write_wide_flag(vt, x, f)
     if isinstance(e, IntEnc):
         bits = e.bits
         enc = f"IntEncoding::{int_enc(vt)}"
@@ -1205,21 +1211,27 @@ def condition(c: Criterion, x: str, y=None) -> str:
             return (f"pk::widen::<{m}, _>({x}) {c.op} pk::widen::<{m}, _>({y})")
         if vt.kind == "int":
             return f"({x} as i128) {c.op} ({y} as i128)"
+        if vt.kind == "enum" and (vt.wide or ovt.wide):
+            m = (max(vt.width if vt.wide else 64, ovt.width if ovt.wide else 64)
+                 // 8 + 1)
+            return (f"pk::widen::<{m}, _>({x}.0) {c.op} pk::widen::<{m}, "
+                    f"_>({y}.0)")
         if vt.kind == "enum":
             return f"{x}.0 {c.op} {y}.0"
         return f"{x} {c.op} {y}"
-    if vt.kind == "int" and vt.wide:
-        lo, hi = field_range(vt)
+    if vt.kind in ("int", "enum") and (vt.wide or vt.kind == "enum"):
+        lo, hi = field_range(vt) if vt.wide else (-(1 << 63), (1 << 63) - 1)
         if not lo <= c.value <= hi:
             # Every value of the field compares the same way.
             below = c.value < lo
             return str({"==": False, "!=": True, "<": not below,
                         "<=": not below, ">": below, ">=": below}[c.op]).lower()
+        if vt.kind == "enum":
+            v = wide_literal(vt, c.value) if vt.wide else c.value
+            return f"{x}.0 {c.op} {v}"
         return f"{x} {c.op} {literal(vt, c.value)}"
     if vt.kind == "int":
         return f"({x} as i128) {c.op} {c.value}"
-    if vt.kind == "enum":
-        return f"{x}.0 {c.op} {c.value}"
     if vt.kind == "binary":
         return f"{x}[..] {c.op} *{literal(vt, c.value)}"
     return f"{x} {c.op} {literal(vt, c.value)}"
@@ -1506,23 +1518,39 @@ class RustEmitter:
         self.line(f"/// Enumeration `{vt.key}`; holds the raw value so "
                   "unlisted values survive decoding.")
         self.line("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]")
-        self.line(f"pub struct {vt.ident}(pub i64);")
+        self.line(f"pub struct {vt.ident}(pub {enum_repr(vt)});")
         self.line()
         self.line(f"impl {vt.ident} {{")
         for lab in vt.labels:
-            self.line(f"pub const {lab.ident}: Self = Self({lab.value});", 1)
+            v = wide_literal(vt, lab.value) if vt.wide else lab.value
+            self.line(f"pub const {lab.ident}: Self = Self({v});", 1)
         self.line()
         self.doc(1, f"Names this value of enumeration `{vt.key}`.",
                  returns="The value's label, or `None` if the enumeration "
                          "doesn't list it.")
         self.line("pub fn label(self) -> Option<&'static str> {", 1)
-        self.line("match self.0 {", 2)
-        for lab in vt.labels:
-            pat = (str(lab.value) if lab.value == lab.max_value
-                   else f"{lab.value}..={lab.max_value}")
-            self.line(f"{pat} => Some({rstr(lab.label)}),", 3)
-        self.line("_ => None,", 3)
-        self.line("}", 2)
+        if vt.wide and vt.width > 128:
+            # bnum's integers can't be matched against.
+            for lab in vt.labels:
+                lo = wide_literal(vt, lab.value)
+                test = (f"self.0 == {lo}" if lab.value == lab.max_value
+                        else f"self.0 >= {lo} && self.0 <= "
+                             f"{wide_literal(vt, lab.max_value)}")
+                self.line(f"if {test} {{", 2)
+                self.line(f"return Some({rstr(lab.label)});", 3)
+                self.line("}", 2)
+            self.line("None", 2)
+        else:
+            self.line("match self.0 {", 2)
+            for lab in vt.labels:
+                lo = wide_literal(vt, lab.value) if vt.wide else lab.value
+                hi = (wide_literal(vt, lab.max_value) if vt.wide
+                      else lab.max_value)
+                pat = (str(lo) if lab.value == lab.max_value
+                       else f"{lo}..={hi}")
+                self.line(f"{pat} => Some({rstr(lab.label)}),", 3)
+            self.line("_ => None,", 3)
+            self.line("}", 2)
         self.line("}", 1)
         self.line("}")
         self.line()
@@ -1531,7 +1559,12 @@ class RustEmitter:
                   1)
         self.line("match self.label() {", 2)
         self.line("Some(l) => f.write_str(l),", 3)
-        self.line("None => write!(f, \"{}\", self.0),", 3)
+        if vt.wide and vt.width > 128:
+            self.line("None => "
+                      f"pk::write_{'int' if vt.signed else 'uint'}(self.0, f),",
+                      3)
+        else:
+            self.line("None => write!(f, \"{}\", self.0),", 3)
         self.line("}", 2)
         self.line("}", 1)
         self.line("}")
@@ -2290,7 +2323,9 @@ class RustEmitter:
         for b in ad.bands:
             self.band(b, "x", vt, depth)
         if kind == "enum" and (ad.labels or ad.default):
-            labels = ", ".join(f"({lo}, {hi}, {lv})"
+            def lit(v):
+                return wide_literal(vt, v) if vt.wide else str(v)
+            labels = ", ".join(f"({lit(lo)}, {lit(hi)}, {lv})"
                                for lo, hi, lv in ad.labels)
             self.line(f"lv = lv.max(pk::enum_alarm(x.0, &[{labels}], "
                       f"{ad.default}));", depth)
