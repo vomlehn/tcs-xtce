@@ -8,6 +8,8 @@ description = """\
 """
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vomlehn/tcs-xtce"
+documentation = "https://docs.rs/tcs-ccsds"
+readme = "../README.md"
 keywords = ["ccsds", "cuc", "cds", "spacecraft", "telemetry"]
 categories = ["aerospace::space-protocols", "encoding", "no-std"]
 include = ["src/**/*.rs", "LICENSE-APACHE", "LICENSE-MIT"]
