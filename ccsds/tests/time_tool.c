@@ -76,6 +76,52 @@ static double secs(const char* s) {
         return d;
 }
 
+/** Prints the bits of a double in hexadecimal.
+ *
+ * @param d  The double. */
+static void bits(double d) {
+        uint64_t b;
+        memcpy(&b, &d, sizeof b);
+        printf("%016llx\n", (unsigned long long)b);
+}
+
+/** Reads a CUC time: its seconds in hexadecimal, then its fraction in 20
+ * hexadecimal digits.
+ *
+ * @param w  The two words.
+ * @return   The time. */
+static ccsds_cuc_time cuc_time(char** w) {
+        ccsds_cuc_time t;
+        t.seconds = strtoull(w[0], NULL, 16);
+        memset(t.fraction, 0, sizeof t.fraction);
+        unhex(w[1], t.fraction);
+        return t;
+}
+
+/** Reads a CDS time: its day, milliseconds and picoseconds in decimal.
+ *
+ * @param w  The three words.
+ * @return   The time. */
+static ccsds_cds_time cds_time(char** w) {
+        ccsds_cds_time t;
+        t.day = (uint32_t)strtoul(w[0], NULL, 10);
+        t.ms = (uint32_t)strtoul(w[1], NULL, 10);
+        t.picos = (uint32_t)strtoul(w[2], NULL, 10);
+        return t;
+}
+
+/** Fills in a CDS layout from its DAY24, SUB and EPOCH words.
+ *
+ * @param w  The three words.
+ * @return   The layout. */
+static ccsds_cds cds_layout(char** w) {
+        ccsds_cds cd;
+        cd.day24 = w[0][0] == '1';
+        cd.sub = (ccsds_sub_ms)atoi(w[1]);
+        cd.epoch = w[2][0] == '1' ? CCSDS_EPOCH_AGENCY : CCSDS_EPOCH_CCSDS;
+        return cd;
+}
+
 static ccsds_epoch epoch(const char* s) {
         return s[0] == '1' ? CCSDS_EPOCH_AGENCY : CCSDS_EPOCH_CCSDS;
 }
@@ -88,18 +134,67 @@ int main(void) {
         char line[1024];
         static uint8_t data[512], out[512];
         while (fgets(line, sizeof line, stdin)) {
-                char* w[8] = {0};
+                char* w[10] = {0};
                 int c = 0;
                 char* t = strtok(line, " \t\n");
                 size_t k = 0, n;
                 bool ok;
                 double s = 0.0;
-                while (t && c < 8) {
+                while (t && c < 10) {
                         w[c++] = t;
                         t = strtok(NULL, " \t\n");
                 }
                 if (!c) continue;
-                if (!strcmp(w[0], "cuc_decode")) {
+                if (!strcmp(w[0], "cuc_decode_x")) {
+                        ccsds_cuc_time ct;
+                        n = unhex(w[1], data);
+                        if (!ccsds_decode_cuc_exact(data, n, &k, &ct)) {
+                                puts("none");
+                                continue;
+                        }
+                        printf("%zu %016llx ", k,
+                               (unsigned long long)ct.seconds);
+                        hex(ct.fraction, sizeof ct.fraction);
+                } else if (!strcmp(w[0], "cds_decode_x")) {
+                        ccsds_cds_time dt;
+                        n = unhex(w[1], data);
+                        if (!ccsds_decode_cds_exact(data, n, &k, &dt)) {
+                                puts("none");
+                                continue;
+                        }
+                        printf("%zu %lu %lu %lu\n", k, (unsigned long)dt.day,
+                               (unsigned long)dt.ms, (unsigned long)dt.picos);
+                } else if (!strcmp(w[0], "cuc_seconds")) {
+                        ccsds_cuc_time ct = cuc_time(w + 1);
+                        bits(ccsds_cuc_time_seconds(&ct));
+                } else if (!strcmp(w[0], "cds_seconds")) {
+                        ccsds_cds_time dt = cds_time(w + 1);
+                        bits(ccsds_cds_time_seconds(&dt));
+                } else if (!strcmp(w[0], "cuc_encode_x")) {
+                        ccsds_cuc cu;
+                        ccsds_cuc_time ct = cuc_time(w + 4);
+                        size_t cap = (size_t)atoi(w[7]), r;
+                        if (!ccsds_cuc_init(&cu, (unsigned)atoi(w[1]),
+                                            (unsigned)atoi(w[2]),
+                                            epoch(w[3]))) {
+                                puts("bad layout");
+                                continue;
+                        }
+                        r = w[6][0] == '1'
+                                    ? ccsds_cuc_encode_exact(&cu, &ct, out, cap)
+                                    : ccsds_cuc_encode_t_exact(&cu, &ct, out,
+                                                               cap);
+                        encoded(r, out, cap);
+                } else if (!strcmp(w[0], "cds_encode_x")) {
+                        ccsds_cds cd = cds_layout(w + 1);
+                        ccsds_cds_time dt = cds_time(w + 4);
+                        size_t cap = (size_t)atoi(w[8]), r;
+                        r = w[7][0] == '1'
+                                    ? ccsds_cds_encode_exact(&cd, &dt, out, cap)
+                                    : ccsds_cds_encode_t_exact(&cd, &dt, out,
+                                                               cap);
+                        encoded(r, out, cap);
+                } else if (!strcmp(w[0], "cuc_decode")) {
                         n = unhex(w[1], data);
                         ok = ccsds_decode_cuc(data, n, &k, &s);
                         decoded(ok, &k, &s);

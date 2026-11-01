@@ -32,3 +32,25 @@ cds_encode 0 1 0 410518180833c600 1 32 | 41000200000bbc0005
 cds_encode 0 1 0 3fefffff29406b2a 0 32 | 0000000003e80000
 # The last millisecond of day 65535 rounds into day 65536: too late
 cds_encode 0 0 0 41f517ffffffff97 0 32 | none
+# Exact forms.  CUC 0x1e, 1.5 s: seconds 1, fraction 0x80 then nine noughts
+cuc_decode_x 1e000000018000 | 7 0000000000000001 80000000000000000000
+# Seven coarse and ten fine octets keep every bit: P-field 9f 7c, then the
+# seven octets of seconds and the ten of fraction
+cuc_encode_x 7 10 0 00ffeeddccbbaa99 88776655443322110001 1 32 | 9f7cffeeddccbbaa9988776655443322110001
+# One fine octet: just under half a unit rounds down, half rounds up, and a
+# fraction rounding up to a second carries; past the coarse octet, none
+cuc_encode_x 1 1 1 0000000000000005 127fffffffffffffffff 0 2 | 0512
+cuc_encode_x 1 1 1 0000000000000005 12800000000000000000 0 2 | 0513
+cuc_encode_x 1 1 1 0000000000000005 ffffffffffffffffffff 0 2 | 0600
+cuc_encode_x 1 1 1 00000000000000ff ffffffffffffffffffff 0 2 | none
+# CDS 0x41: day 2, 3004 ms and 5 us, which is 5 000 000 ps
+cds_decode_x 41000200000bbc0005 | 9 2 3004 5000000
+# The last half millisecond of an ordinary day ends it; in a leap second
+# the day goes on a second longer
+cds_encode_x 0 0 0 9 86399999 500000000 0 6 | 000a00000000
+cds_encode_x 0 0 0 9 86400000 500000000 0 6 | 000905265c01
+cds_encode_x 0 0 0 9 86400999 500000000 0 6 | 000a00000000
+# P-field 4e: agency epoch, 24-bit days, picoseconds; every picosecond kept
+cds_encode_x 1 2 1 1193046 86399999 999999999 1 32 | 4e12345605265bff3b9ac9ff
+# A picosecond field of 10^9 is out of range
+cds_encode_x 0 2 0 0 0 1000000000 0 32 | none

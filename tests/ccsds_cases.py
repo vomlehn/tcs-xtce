@@ -60,6 +60,50 @@ def seconds(rng, limit: float) -> float:
          rng.randrange(1000) + rng.choice([0.999, 0.9999996, 0.001, 0.5])])
 
 
+def cuc_time(rng, coarse: int) -> str:
+    """A random exact CUC time, often at an edge: a fraction just under,
+    at or over half a unit of some number of fine octets, or all ones.
+
+    Args:
+        rng:    The random number generator.
+        coarse: The coarse octets of the layout it is for.
+
+    Returns:
+        Its seconds and fraction in hex, as the tool reads them.
+    """
+    top = (1 << (8 * coarse)) - 1
+    secs = rng.choice([0, 1, top, top - 1, rng.randrange(top + 1),
+                       rng.randrange(1 << 64)])
+    f = rng.randint(1, 10)
+    half = 1 << (80 - 8 * f - 1) if f < 10 else 1
+    frac = rng.choice([0, (1 << 80) - 1, half, half - 1, half + 1,
+                       rng.randrange(1 << 80),
+                       (rng.randrange(1 << (8 * f)) << (80 - 8 * f))
+                       | rng.choice([0, half, half - 1])])
+    return f"{secs:016x} {frac:020x}"
+
+
+def cds_time(rng, d24: int) -> str:
+    """A random exact CDS time, often at an edge of a field, a rounding or a
+    leap second, and now and then out of range.
+
+    Args:
+        rng: The random number generator.
+        d24: Whether the layout it is for has 24-bit days.
+
+    Returns:
+        Its day, milliseconds and picoseconds in decimal.
+    """
+    top = (1 << (24 if d24 else 16)) - 1
+    day = rng.choice([0, 1, top, top + 1, rng.randrange(top + 1)])
+    ms = rng.choice([0, 86_399_999, 86_400_000, 86_400_999, 86_401_000,
+                     rng.randrange(86_401_000)])
+    picos = rng.choice([0, 499_999, 500_000, 499_999_999, 500_000_000,
+                        999_999_999, 999_500_000, 1_000_000_000,
+                        rng.randrange(10**9), rng.randrange(1000) * 10**6])
+    return f"{day} {ms} {picos}"
+
+
 def main() -> None:
     """Prints COUNT random cases, seeded with SEED, as the module docstring
     describes.
@@ -67,7 +111,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     out = []
     for _ in range(int(sys.argv[2])):
-        kind = rng.randrange(6)
+        kind = rng.randrange(10)
         cap = rng.choice([0, 3, 7, 12, 32])
         if kind == 0:
             out.append("cuc_decode "
@@ -91,11 +135,35 @@ def main() -> None:
             out.append(f"cds_decode_t {rng.randrange(2)} {rng.randrange(3)} "
                        f"{rng.randrange(2)} "
                        + hexs(rng.randbytes(rng.randrange(12))))
-        else:
+        elif kind == 5:
             d24 = rng.randrange(2)
             s = seconds(rng, float(1 << (24 if d24 else 16)) * 86400.0)
             out.append(f"cds_encode {d24} {rng.randrange(3)} "
                        f"{rng.randrange(2)} {bits(s)} {rng.randrange(2)} {cap}")
+        elif kind == 6:
+            # Decoding exactly, from the same octets the others decode.
+            if rng.randrange(2):
+                data = cuc_pfield(rng) + rng.randbytes(rng.randrange(20))
+                out.append("cuc_decode_x " + hexs(data))
+            else:
+                p = rng.choice([0x40, 0x41, 0x42, 0x44, 0x45, 0x46, 0x48, 0x4d,
+                                rng.randrange(256)])
+                data = bytes([p]) + rng.randbytes(rng.randrange(12))
+                out.append("cds_decode_x " + hexs(data))
+        elif kind == 7:
+            c, f = rng.randint(1, 7), rng.randint(0, 10)
+            out.append(f"cuc_encode_x {c} {f} {rng.randrange(2)} "
+                       f"{cuc_time(rng, c)} {rng.randrange(2)} {cap}")
+        elif kind == 8:
+            d24 = rng.randrange(2)
+            out.append(f"cds_encode_x {d24} {rng.randrange(3)} "
+                       f"{rng.randrange(2)} {cds_time(rng, d24)} "
+                       f"{rng.randrange(2)} {cap}")
+        elif rng.randrange(2):
+            out.append(f"cuc_seconds {cuc_time(rng, 7)}")
+        else:
+            d24 = rng.randrange(2)
+            out.append(f"cds_seconds {cds_time(rng, d24)}")
     print("\n".join(out))
 
 

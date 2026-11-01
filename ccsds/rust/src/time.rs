@@ -14,6 +14,14 @@
 //! versions do the same way, so all three give the same octets and seconds.
 //! Encoding rounds to the nearest unit of the layout, halves up, carrying
 //! into the seconds or days.
+//!
+//! A double holds about a quarter of a microsecond at today's times, which
+//! is coarser than a CUC time of more than three fine octets or a CDS time
+//! of microseconds or picoseconds. So each code also has an exact form, in
+//! integers, that holds every time its layouts can: [`CucTime`], whose
+//! fraction is in units of 2^-80, and [`CdsTime`], in days, milliseconds
+//! and picoseconds. Its decoders and encoders are the `_exact` ones, and
+//! the double ones are the exact ones followed by `to_seconds`.
 
 /// The epoch a time code counts from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +30,66 @@ pub enum Epoch {
     Ccsds,
     /// One that the agency (the mission) defines, such as the Unix epoch.
     Agency,
+}
+
+/// The bits of binary fraction a CUC time can hold: ten fine octets' worth.
+pub const CUC_FRACTION_BITS: u32 = 80;
+
+/// A CUC time, exactly: whole seconds since the epoch, and the fraction of
+/// a second in units of 2^-80, which holds every layout's fine octets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct CucTime {
+    pub seconds: u64,
+    /// Less than 2^80: the fine octets, most significant first, with the
+    /// unused ones nought.
+    pub fraction: u128,
+}
+
+impl CucTime {
+    /// Gives the time as seconds since the epoch, rounded to a double as
+    /// the double decoders do.
+    ///
+    /// # Returns
+    ///
+    /// The seconds.
+    pub fn to_seconds(&self) -> f64 {
+        // The fraction, least significant octet first, so every step is
+        // exact until the octets hold more bits than an f64.
+        let frac = (0..CUC_FRACTION_BITS / 8).fold(0.0, |v, i| {
+            (v + f64::from((self.fraction >> (8 * i)) as u8)) / 256.0
+        });
+        self.seconds as f64 + frac
+    }
+}
+
+/// A CDS time, exactly: days since the epoch, milliseconds of the day, and
+/// picoseconds of the millisecond, which holds every layout's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct CdsTime {
+    pub day: u32,
+    /// Less than 86 401 000: a day with a leap second has a thousand more.
+    pub ms: u32,
+    /// Less than 10^9.
+    pub picos: u32,
+}
+
+impl CdsTime {
+    /// Gives the time as seconds since the epoch, as a double: its
+    /// picoseconds divided by 10^12, which is what the double decoder of a
+    /// picosecond layout gives.
+    ///
+    /// # Returns
+    ///
+    /// The seconds.
+    pub fn to_seconds(&self) -> f64 {
+        self.whole_ms() + f64::from(self.picos) / 1e12
+    }
+
+    /// Gives the days and milliseconds as seconds, as every CDS double
+    /// starts from.
+    fn whole_ms(&self) -> f64 {
+        f64::from(self.day) * 86400.0 + f64::from(self.ms) / 1000.0
+    }
 }
 
 /// The layout of a CUC time: `coarse` octets (1 to 7) of whole seconds, most
@@ -127,13 +195,102 @@ impl Cuc {
     /// The octets read and the seconds since the epoch; `None` if `data`
     /// is shorter than the T-field.
     pub fn decode_t(&self, data: &[u8]) -> Option<(usize, f64)> {
+        let (k, t) = self.decode_t_exact(data)?;
+        Some((k, t.to_seconds()))
+    }
+
+    /// Decodes a T-field in this layout, exactly.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Octets that start with the T-field.
+    ///
+    /// # Returns
+    ///
+    /// The octets read and the time; `None` if `data` is shorter than the
+    /// T-field.
+    pub fn decode_t_exact(&self, data: &[u8]) -> Option<(usize, CucTime)> {
         let t = data.get(..self.t_len())?;
         let (c, f) = t.split_at(self.coarse as usize);
-        let whole = c.iter().fold(0u64, |v, &b| (v << 8) | u64::from(b));
-        // The fraction, least significant octet first, so every step is
-        // exact until the octets hold more bits than an f64.
-        let frac = f.iter().rev().fold(0.0, |v, &b| (v + f64::from(b)) / 256.0);
-        Some((self.t_len(), whole as f64 + frac))
+        let seconds = c.iter().fold(0u64, |v, &b| (v << 8) | u64::from(b));
+        let fine = f.iter().fold(0u128, |v, &b| (v << 8) | u128::from(b));
+        let fraction = fine << (CUC_FRACTION_BITS - 8 * u32::from(self.fine));
+        Some((self.t_len(), CucTime { seconds, fraction }))
+    }
+
+    /// Encodes a time as a T-field in this layout, exactly where the layout
+    /// has the bits and otherwise rounding the fraction to its fine octets,
+    /// halves up, carrying into the seconds.
+    ///
+    /// # Arguments
+    ///
+    /// * `time` - The time.
+    /// * `out`  - Where to write the T-field; nothing is written if it is
+    ///            too small.
+    ///
+    /// # Returns
+    ///
+    /// The octets written, or needed if `out` is too small; `None` if the
+    /// time's fraction is not less than 2^80 or the layout can't hold it.
+    pub fn encode_t_exact(
+        &self,
+        time: &CucTime,
+        out: &mut [u8],
+    ) -> Option<usize> {
+        if time.fraction >> CUC_FRACTION_BITS != 0 {
+            return None;
+        }
+        let drop = CUC_FRACTION_BITS - 8 * u32::from(self.fine);
+        let mut n = time.fraction >> drop;
+        let mut seconds = time.seconds;
+        if drop > 0 && (time.fraction >> (drop - 1)) & 1 == 1 {
+            n += 1;
+            if n >> (8 * u32::from(self.fine)) != 0 {
+                n = 0;
+                seconds = seconds.checked_add(1)?;
+            }
+        }
+        if 8 * u32::from(self.coarse) < 64 && seconds >> (8 * self.coarse) != 0
+        {
+            return None;
+        }
+        if out.len() < self.t_len() {
+            return Some(self.t_len());
+        }
+        let (c, f) = out[..self.t_len()].split_at_mut(self.coarse as usize);
+        for (i, b) in c.iter_mut().rev().enumerate() {
+            *b = (seconds >> (8 * i)) as u8;
+        }
+        for (i, b) in f.iter_mut().rev().enumerate() {
+            *b = (n >> (8 * i)) as u8;
+        }
+        Some(self.t_len())
+    }
+
+    /// Encodes a time exactly, with this layout's P-field first.
+    ///
+    /// # Arguments
+    ///
+    /// * `time` - The time.
+    /// * `out`  - Where to write the P-field and T-field; nothing is
+    ///            written if it is too small.
+    ///
+    /// # Returns
+    ///
+    /// The octets written, or needed if `out` is too small; `None` if the
+    /// layout can't hold the time.
+    pub fn encode_exact(
+        &self,
+        time: &CucTime,
+        out: &mut [u8],
+    ) -> Option<usize> {
+        let (p, n) = self.pfield();
+        let t = self.encode_t_exact(time, &mut [])?;
+        if out.len() < n + t {
+            return Some(n + t);
+        }
+        out[..n].copy_from_slice(&p[..n]);
+        self.encode_t_exact(time, &mut out[n..]).map(|k| n + k)
     }
 
     /// Encodes a time as a T-field in this layout, rounding to the nearest
@@ -219,9 +376,16 @@ impl Cuc {
 /// Decodes a CUC time that starts with its P-field: the octets read and the
 /// seconds since its epoch, which the P-field names.
 pub fn decode_cuc(data: &[u8]) -> Option<(usize, f64)> {
+    let (k, t) = decode_cuc_exact(data)?;
+    Some((k, t.to_seconds()))
+}
+
+/// Decodes a CUC time that starts with its P-field, exactly: the octets read
+/// and the time since its epoch, which the P-field names.
+pub fn decode_cuc_exact(data: &[u8]) -> Option<(usize, CucTime)> {
     let (layout, n) = Cuc::from_pfield(data)?;
-    let (k, s) = layout.decode_t(&data[n..])?;
-    Some((n + k, s))
+    let (k, t) = layout.decode_t_exact(&data[n..])?;
+    Some((n + k, t))
 }
 
 /// The resolution of a CDS time below a millisecond.
@@ -321,33 +485,148 @@ impl Cds {
     /// is shorter than the T-field or a field is beyond its range
     /// (milliseconds of a day count a leap second's too).
     pub fn decode_t(&self, data: &[u8]) -> Option<(usize, f64)> {
+        let (k, t) = self.decode_t_exact(data)?;
+        // In the layout's own unit, so microseconds are divided as such.
+        let s = match self.sub {
+            SubMs::None => t.whole_ms(),
+            SubMs::Micro => t.whole_ms() + f64::from(t.picos / 1_000_000) / 1e6,
+            SubMs::Pico => t.to_seconds(),
+        };
+        Some((k, s))
+    }
+
+    /// Decodes a T-field in this layout, exactly.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Octets that start with the T-field.
+    ///
+    /// # Returns
+    ///
+    /// The octets read and the time; `None` if `data` is shorter than the
+    /// T-field or a field is beyond its range (milliseconds of a day count
+    /// a leap second's too).
+    pub fn decode_t_exact(&self, data: &[u8]) -> Option<(usize, CdsTime)> {
         let t = data.get(..self.t_len())?;
         let be =
-            |b: &[u8]| b.iter().fold(0u64, |v, &x| (v << 8) | u64::from(x));
+            |b: &[u8]| b.iter().fold(0u32, |v, &x| (v << 8) | u32::from(x));
         let d = if self.day24 { 3 } else { 2 };
         let (day, ms) = (be(&t[..d]), be(&t[d..d + 4]));
         if ms >= 86_401_000 {
             return None;
         }
-        let mut s = day as f64 * 86400.0 + ms as f64 / 1000.0;
-        match self.sub {
-            SubMs::None => {}
+        let picos = match self.sub {
+            SubMs::None => 0,
             SubMs::Micro => {
                 let us = be(&t[d + 4..]);
                 if us >= 1000 {
                     return None;
                 }
-                s += us as f64 / 1e6;
+                us * 1_000_000
             }
             SubMs::Pico => {
                 let ps = be(&t[d + 4..]);
                 if ps >= 1_000_000_000 {
                     return None;
                 }
-                s += ps as f64 / 1e12;
+                ps
+            }
+        };
+        Some((self.t_len(), CdsTime { day, ms, picos }))
+    }
+
+    /// Encodes a time as a T-field in this layout, exactly where the layout
+    /// has the resolution and otherwise rounding to its unit, halves up,
+    /// carrying into the milliseconds and the days. A time in a leap
+    /// second carries into the next day only past the leap second.
+    ///
+    /// # Arguments
+    ///
+    /// * `time` - The time.
+    /// * `out`  - Where to write the T-field; nothing is written if it is
+    ///            too small.
+    ///
+    /// # Returns
+    ///
+    /// The octets written, or needed if `out` is too small; `None` if a
+    /// field of the time is beyond its range or the layout can't hold it.
+    pub fn encode_t_exact(
+        &self,
+        time: &CdsTime,
+        out: &mut [u8],
+    ) -> Option<usize> {
+        let days: u32 = if self.day24 { 1 << 24 } else { 1 << 16 };
+        if time.ms >= 86_401_000 || time.picos >= 1_000_000_000 {
+            return None;
+        }
+        let unit: u32 = match self.sub {
+            SubMs::None => 1_000_000_000,
+            SubMs::Micro => 1_000_000,
+            SubMs::Pico => 1,
+        };
+        let (mut day, mut ms) = (time.day, time.ms);
+        let mut sub = (time.picos + unit / 2) / unit;
+        if sub * unit == 1_000_000_000 {
+            sub = 0;
+            ms += 1;
+            // The day ends a second later when this millisecond was in its
+            // leap second.
+            let end = if time.ms >= 86_400_000 {
+                86_401_000
+            } else {
+                86_400_000
+            };
+            if ms == end {
+                ms = 0;
+                day = day.checked_add(1)?;
             }
         }
-        Some((self.t_len(), s))
+        if day >= days {
+            return None;
+        }
+        if out.len() < self.t_len() {
+            return Some(self.t_len());
+        }
+        let d = if self.day24 { 3 } else { 2 };
+        let put = |out: &mut [u8], v: u32| {
+            let n = out.len();
+            for (i, b) in out.iter_mut().enumerate() {
+                *b = (v >> (8 * (n - 1 - i))) as u8;
+            }
+        };
+        put(&mut out[..d], day);
+        put(&mut out[d..d + 4], ms);
+        match self.sub {
+            SubMs::None => {}
+            SubMs::Micro => put(&mut out[d + 4..d + 6], sub),
+            SubMs::Pico => put(&mut out[d + 4..d + 8], sub),
+        }
+        Some(self.t_len())
+    }
+
+    /// Encodes a time exactly, with this layout's P-field first.
+    ///
+    /// # Arguments
+    ///
+    /// * `time` - The time.
+    /// * `out`  - Where to write the P-field and T-field; nothing is
+    ///            written if it is too small.
+    ///
+    /// # Returns
+    ///
+    /// The octets written, or needed if `out` is too small; `None` if the
+    /// layout can't hold the time.
+    pub fn encode_exact(
+        &self,
+        time: &CdsTime,
+        out: &mut [u8],
+    ) -> Option<usize> {
+        let t = self.encode_t_exact(time, &mut [])?;
+        if out.len() < 1 + t {
+            return Some(1 + t);
+        }
+        out[0] = self.pfield();
+        self.encode_t_exact(time, &mut out[1..]).map(|k| 1 + k)
     }
 
     /// Encodes a time as a T-field in this layout, rounding to the nearest
@@ -436,6 +715,14 @@ pub fn decode_cds(data: &[u8]) -> Option<(usize, f64)> {
     Some((1 + k, s))
 }
 
+/// Decodes a CDS time that starts with its P-field, exactly: the octets read
+/// and the time since its epoch, which the P-field names.
+pub fn decode_cds_exact(data: &[u8]) -> Option<(usize, CdsTime)> {
+    let layout = Cds::from_pfield(data)?;
+    let (k, t) = layout.decode_t_exact(&data[1..])?;
+    Some((1 + k, t))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -469,5 +756,130 @@ mod tests {
         assert_eq!(c.encode(s, &mut b), Some(9));
         assert_eq!(b, [0x41, 0, 2, 0, 0, 0x0b, 0xbc, 0, 5]);
         assert_eq!(decode_cds(&b), Some((9, 2.0 * 86400.0 + 3.004 + 5e-6)));
+    }
+
+    #[test]
+    fn cuc_exact_round_trip_keeps_every_bit() {
+        // Seven coarse and ten fine octets: more than a double holds.
+        let c = Cuc::new(7, 10, Epoch::Ccsds).unwrap();
+        let t = CucTime {
+            seconds: 0x00ff_eedd_ccbb_aa99,
+            fraction: 0x8877_6655_4433_2211_0001,
+        };
+        let mut b = [0u8; 19];
+        assert_eq!(c.encode_exact(&t, &mut b), Some(19));
+        assert_eq!(decode_cuc_exact(&b), Some((19, t)));
+        // The double decoder gives the double of the same time.
+        assert_eq!(decode_cuc(&b), Some((19, t.to_seconds())));
+    }
+
+    #[test]
+    fn cuc_exact_rounds_half_up_and_carries() {
+        let c = Cuc::new(1, 1, Epoch::Agency).unwrap();
+        let mut b = [0u8; 2];
+        let half = 1u128 << (CUC_FRACTION_BITS - 9);
+        // Just under half a unit rounds down, half rounds up.
+        let t = CucTime {
+            seconds: 5,
+            fraction: (0x12 << (CUC_FRACTION_BITS - 8)) + half - 1,
+        };
+        assert_eq!(c.encode_t_exact(&t, &mut b), Some(2));
+        assert_eq!(b, [5, 0x12]);
+        let t = CucTime {
+            fraction: t.fraction + 1,
+            ..t
+        };
+        c.encode_t_exact(&t, &mut b);
+        assert_eq!(b, [5, 0x13]);
+        // A fraction rounding up to a whole second carries, and past the
+        // coarse octets it is a time the layout can't hold.
+        let t = CucTime {
+            seconds: 5,
+            fraction: (1 << CUC_FRACTION_BITS) - 1,
+        };
+        c.encode_t_exact(&t, &mut b);
+        assert_eq!(b, [6, 0]);
+        let t = CucTime { seconds: 255, ..t };
+        assert_eq!(c.encode_t_exact(&t, &mut b), None);
+        let t = CucTime {
+            seconds: 0,
+            fraction: 1 << CUC_FRACTION_BITS,
+        };
+        assert_eq!(c.encode_t_exact(&t, &mut b), None);
+    }
+
+    #[test]
+    fn cds_exact_keeps_picoseconds() {
+        let c = Cds::new(true, SubMs::Pico, Epoch::Agency);
+        let t = CdsTime {
+            day: 0x12_3456,
+            ms: 86_399_999,
+            picos: 999_999_999,
+        };
+        let mut b = [0u8; 12];
+        assert_eq!(c.encode_exact(&t, &mut b), Some(12));
+        assert_eq!(decode_cds_exact(&b), Some((12, t)));
+        assert_eq!(decode_cds(&b), Some((12, t.to_seconds())));
+    }
+
+    #[test]
+    fn cds_exact_rounds_into_the_next_day_after_any_leap_second() {
+        let mut b = [0u8; 7];
+        let c = Cds::new(false, SubMs::None, Epoch::Ccsds);
+        // The last half millisecond of an ordinary day ends it.
+        let t = CdsTime {
+            day: 9,
+            ms: 86_399_999,
+            picos: 500_000_000,
+        };
+        assert_eq!(c.encode_exact(&t, &mut b), Some(7));
+        assert_eq!(
+            decode_cds_exact(&b),
+            Some((
+                7,
+                CdsTime {
+                    day: 10,
+                    ..CdsTime::default()
+                }
+            ))
+        );
+        // In a leap second the day goes on a second longer.
+        let t = CdsTime {
+            ms: 86_400_000,
+            ..t
+        };
+        c.encode_exact(&t, &mut b);
+        assert_eq!(
+            decode_cds_exact(&b),
+            Some((
+                7,
+                CdsTime {
+                    day: 9,
+                    ms: 86_400_001,
+                    picos: 0
+                }
+            ))
+        );
+        let t = CdsTime {
+            ms: 86_400_999,
+            ..t
+        };
+        c.encode_exact(&t, &mut b);
+        assert_eq!(
+            decode_cds_exact(&b),
+            Some((
+                7,
+                CdsTime {
+                    day: 10,
+                    ..CdsTime::default()
+                }
+            ))
+        );
+        // A field out of range is refused.
+        let t = CdsTime {
+            picos: 1_000_000_000,
+            ..t
+        };
+        assert_eq!(c.encode_exact(&t, &mut b), None);
     }
 }

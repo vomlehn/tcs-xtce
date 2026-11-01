@@ -1212,6 +1212,16 @@ CUC octets beyond what a double holds are exact, so only up to six are
 rounded. CCS and the ASCII codes are left out for now: they are usually
 UTC, and turning them into seconds needs a table of leap seconds.
 
+A double cannot hold every time a layout can: at today's times its unit
+is about a quarter of a microsecond, coarser than four or more fine CUC
+octets or CDS microseconds and picoseconds. So each code has an exact
+form too, in the code's own integers -- a CUC time's seconds and an 80-bit
+binary fraction, a CDS time's day, milliseconds and picoseconds. There is
+no one exact form for both, because a CUC fraction is binary and a CDS one
+decimal, and only an unnatural unit holds both exactly. The double
+decoders are built on the exact ones, which keeps one decoder per code and
+leaves their results bit for bit as they were.
+
 
 The digest (xtce-digest)
 ========================

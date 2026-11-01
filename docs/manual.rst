@@ -2975,10 +2975,53 @@ with ``pfield``, ``from_pfield``, ``decode_t``, ``encode_t`` and
 ``encode``. In Rust and C, encoding into too small an output writes
 nothing and gives the octets it needs, more than the room given.
 
+**Exact times.** A double holds about a quarter of a microsecond at
+today's times, which is coarser than a CUC time of more than three fine
+octets or a CDS time of microseconds or picoseconds. So each code also has
+an exact form, in integers, that holds every time its layouts can:
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Code
+     - Rust and Python
+     - C/C++
+     - Fields
+   * - CUC
+     - ``CucTime``
+     - ``ccsds_cuc_time``
+     - ``seconds``, and ``fraction``: the fraction of a second in units of
+       2\ :sup:`-80`, ten fine octets' worth. Rust holds it in a ``u128``
+       below 2\ :sup:`80`, Python in an ``int``, and C as ten octets, most
+       significant first; all three are the same number.
+   * - CDS
+     - ``CdsTime``
+     - ``ccsds_cds_time``
+     - ``day``; ``ms``, milliseconds of the day, below 86 401 000 for a
+       leap second's; ``picos``, picoseconds of the millisecond, below
+       10\ :sup:`9`.
+
+The layouts' ``decode_t_exact``, ``encode_t_exact`` and ``encode_exact``,
+and ``decode_cuc_exact`` and ``decode_cds_exact``
+(``ccsds_cuc_decode_t_exact`` and so on in C), are the exact decoders and
+encoders. Decoding is exact for every layout. Encoding is exact wherever
+the layout has the resolution, and otherwise rounds to its unit, halves
+up: a CUC fraction to its fine octets, carrying into the seconds, and CDS
+picoseconds to its microseconds or milliseconds, carrying into the
+milliseconds and the day. A time in a leap second carries into the next
+day only past the leap second. A field out of range, or a time the layout
+can't hold once rounded, gives nothing. ``to_seconds``
+(``ccsds_cuc_time_seconds`` and ``ccsds_cds_time_seconds``) converts an
+exact time to a double: the double decoders are the exact ones followed by
+it, except that a CDS microsecond layout divides microseconds rather than
+picoseconds, as it always has.
+
 ``make ccsds-check`` runs ``tests/ccsds_check.sh``: Rust, C, C++ and
 Python decode and encode the cases of ``tests/ccsds/known.txt``, worked
 out by hand from the formats (extended P-fields, a leap second, rounding
-that carries, times a layout can't hold), and must give their results;
+that carries, times a layout can't hold, and the exact forms keeping every
+bit and picosecond), and must give their results;
 on random cases from ``tests/ccsds_cases.py`` they must agree with each
 other.
 

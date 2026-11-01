@@ -3382,10 +3382,55 @@ milliseconds may reach a leap second's.</p>
 with <tt class="docutils literal">pfield</tt>, <tt class="docutils literal">from_pfield</tt>, <tt class="docutils literal">decode_t</tt>, <tt class="docutils literal">encode_t</tt> and
 <tt class="docutils literal">encode</tt>. In Rust and C, encoding into too small an output writes
 nothing and gives the octets it needs, more than the room given.</p>
+<p><strong>Exact times.</strong> A double holds about a quarter of a microsecond at
+today's times, which is coarser than a CUC time of more than three fine
+octets or a CDS time of microseconds or picoseconds. So each code also has
+an exact form, in integers, that holds every time its layouts can:</p>
+<table border="1" class="docutils">
+<thead valign="bottom">
+<tr><th class="head">Code</th>
+<th class="head">Rust and Python</th>
+<th class="head">C/C++</th>
+<th class="head">Fields</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>CUC</td>
+<td><tt class="docutils literal">CucTime</tt></td>
+<td><tt class="docutils literal">ccsds_cuc_time</tt></td>
+<td><tt class="docutils literal">seconds</tt>, and <tt class="docutils literal">fraction</tt>: the fraction of a second in units of
+2<sup>-80</sup>, ten fine octets' worth. Rust holds it in a <tt class="docutils literal">u128</tt>
+below 2<sup>80</sup>, Python in an <tt class="docutils literal">int</tt>, and C as ten octets, most
+significant first; all three are the same number.</td>
+</tr>
+<tr><td>CDS</td>
+<td><tt class="docutils literal">CdsTime</tt></td>
+<td><tt class="docutils literal">ccsds_cds_time</tt></td>
+<td><tt class="docutils literal">day</tt>; <tt class="docutils literal">ms</tt>, milliseconds of the day, below 86 401 000 for a
+leap second's; <tt class="docutils literal">picos</tt>, picoseconds of the millisecond, below
+10<sup>9</sup>.</td>
+</tr>
+</tbody>
+</table>
+<p>The layouts' <tt class="docutils literal">decode_t_exact</tt>, <tt class="docutils literal">encode_t_exact</tt> and <tt class="docutils literal">encode_exact</tt>,
+and <tt class="docutils literal">decode_cuc_exact</tt> and <tt class="docutils literal">decode_cds_exact</tt>
+(<tt class="docutils literal">ccsds_cuc_decode_t_exact</tt> and so on in C), are the exact decoders and
+encoders. Decoding is exact for every layout. Encoding is exact wherever
+the layout has the resolution, and otherwise rounds to its unit, halves
+up: a CUC fraction to its fine octets, carrying into the seconds, and CDS
+picoseconds to its microseconds or milliseconds, carrying into the
+milliseconds and the day. A time in a leap second carries into the next
+day only past the leap second. A field out of range, or a time the layout
+can't hold once rounded, gives nothing. <tt class="docutils literal">to_seconds</tt>
+(<tt class="docutils literal">ccsds_cuc_time_seconds</tt> and <tt class="docutils literal">ccsds_cds_time_seconds</tt>) converts an
+exact time to a double: the double decoders are the exact ones followed by
+it, except that a CDS microsecond layout divides microseconds rather than
+picoseconds, as it always has.</p>
 <p><tt class="docutils literal">make <span class="pre">ccsds-check</span></tt> runs <tt class="docutils literal">tests/ccsds_check.sh</tt>: Rust, C, C++ and
 Python decode and encode the cases of <tt class="docutils literal">tests/ccsds/known.txt</tt>, worked
 out by hand from the formats (extended P-fields, a leap second, rounding
-that carries, times a layout can't hold), and must give their results;
+that carries, times a layout can't hold, and the exact forms keeping every
+bit and picosecond), and must give their results;
 on random cases from <tt class="docutils literal">tests/ccsds_cases.py</tt> they must agree with each
 other.</p>
 </div>

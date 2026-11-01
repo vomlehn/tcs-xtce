@@ -12,11 +12,24 @@
 //!   PFIELD is 1, into CAP octets: they print the octets, `needs N`, or
 //!   `none`.
 //!
+//! * `cuc_decode_x HEX` and `cds_decode_x HEX` decode exactly, printing the
+//!   octets read and the time: for CUC its seconds in 16 hex digits and its
+//!   fraction in 20, for CDS its day, milliseconds and picoseconds in
+//!   decimal; or `none`.
+//! * `cuc_encode_x COARSE FINE EPOCH SECONDS FRACTION PFIELD CAP` and
+//!   `cds_encode_x DAY24 SUB EPOCH DAY MS PICOS PFIELD CAP` encode such a
+//!   time exactly, printing as the other encodings do.
+//! * `cuc_seconds SECONDS FRACTION` and `cds_seconds DAY MS PICOS` print
+//!   the bits of the double such a time converts to.
+//!
 //! EPOCH is 0 for CCSDS's and 1 for the agency's, SUB 0, 1 or 2 for none,
 //! microseconds or picoseconds.
 
 use std::io::{self, BufRead, Write};
-use tcs_ccsds::time::{decode_cds, decode_cuc, Cds, Cuc, Epoch, SubMs};
+use tcs_ccsds::time::{
+    decode_cds, decode_cds_exact, decode_cuc, decode_cuc_exact, Cds, CdsTime,
+    Cuc, CucTime, Epoch, SubMs,
+};
 
 fn unhex(s: &str) -> Vec<u8> {
     (0..s.len() / 2)
@@ -117,7 +130,50 @@ fn run(w: &[&str]) -> String {
     let n = |i: usize| w[i].parse::<u8>().unwrap();
     let secs =
         |i: usize| f64::from_bits(u64::from_str_radix(w[i], 16).unwrap());
+    let cuc_time = |i: usize| CucTime {
+        seconds: u64::from_str_radix(w[i], 16).unwrap(),
+        fraction: u128::from_str_radix(w[i + 1], 16).unwrap(),
+    };
+    let cds_time = |i: usize| CdsTime {
+        day: w[i].parse().unwrap(),
+        ms: w[i + 1].parse().unwrap(),
+        picos: w[i + 2].parse().unwrap(),
+    };
     match w[0] {
+        "cuc_decode_x" => decode_cuc_exact(&unhex(w[1]))
+            .map_or("none".into(), |(k, t)| {
+                format!("{k} {:016x} {:020x}", t.seconds, t.fraction)
+            }),
+        "cds_decode_x" => decode_cds_exact(&unhex(w[1]))
+            .map_or("none".into(), |(k, t)| {
+                format!("{k} {} {} {}", t.day, t.ms, t.picos)
+            }),
+        "cuc_seconds" => format!("{:016x}", cuc_time(1).to_seconds().to_bits()),
+        "cds_seconds" => format!("{:016x}", cds_time(1).to_seconds().to_bits()),
+        "cuc_encode_x" => {
+            let cap: usize = w[7].parse().unwrap();
+            let mut out = vec![0u8; cap];
+            let c = Cuc::new(n(1), n(2), epoch(w[3])).unwrap();
+            let t = cuc_time(4);
+            let r = if w[6] == "1" {
+                c.encode_exact(&t, &mut out)
+            } else {
+                c.encode_t_exact(&t, &mut out)
+            };
+            encoded(r, &out, cap)
+        }
+        "cds_encode_x" => {
+            let cap: usize = w[8].parse().unwrap();
+            let mut out = vec![0u8; cap];
+            let c = Cds::new(w[1] == "1", sub(w[2]), epoch(w[3]));
+            let t = cds_time(4);
+            let r = if w[7] == "1" {
+                c.encode_exact(&t, &mut out)
+            } else {
+                c.encode_t_exact(&t, &mut out)
+            };
+            encoded(r, &out, cap)
+        }
         "cuc_decode" => decoded(decode_cuc(&unhex(w[1]))),
         "cds_decode" => decoded(decode_cds(&unhex(w[1]))),
         "cuc_decode_t" => {
