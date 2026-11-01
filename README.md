@@ -400,6 +400,17 @@ random packets.
 
 ## Incompatible changes
 
+**0.5.0: wide enumerations hold wide integers.** An enumeration whose
+integer encoding has more than 64 bits now holds its value in the type a
+wide integer of that encoding has, rather than a 64-bit one, so that raw
+values no label lists survive decoding and re-encoding: in Rust a `u128`,
+an `i128` or a bnum integer instead of `i64`, and in C and C++ the
+`xtce-bnum.h` integer instead of `int64_t`, with label macros that are
+`XTCE_BN_LIT` constants. Code using such an enumeration's value changes
+with it; code that `tcs-xtce` generated has to be generated again. The
+Rust runtime's `wide_to_i64`, which only that code used, is gone.
+Enumerations on encodings of 64 bits or fewer are unchanged.
+
 **0.4.0: the C and C++ headers were renamed.** They are no longer
 in the directories `xtce/` and `ccsds/` but straight in the include
 directory, each with its library's prefix, so that installed in a shared
