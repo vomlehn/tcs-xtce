@@ -3335,6 +3335,14 @@ though the bytes are -251), where the library gives none.</p>
 </div>
 <div class="section" id="ccsds-time-codes-tcs-ccsds">
 <h1><a class="toc-backref" href="#toc-entry-32">CCSDS time codes (tcs-ccsds)</a></h1>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">tcs-ccsds is very early software and is subject to rapid change. Until
+1.0, any change to its API changes the minor version number (0.1 to
+0.2), so a release that changes only the patch number never breaks code
+built against it. Feedback is welcome, even at this stage: open an issue
+at <a class="reference external" href="https://github.com/vomlehn/tcs-xtce/issues">https://github.com/vomlehn/tcs-xtce/issues</a>.</p>
+</div>
 <p>tcs-ccsds is a second library, in <tt class="docutils literal">ccsds/</tt>, for CCSDS standards that XTCE
 knows nothing about. It doesn't depend on tcs-xtce: it is plain functions
 over bytes, which a packet codec can use as hooks, or any program can use

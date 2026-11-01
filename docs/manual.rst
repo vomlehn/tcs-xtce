@@ -2930,6 +2930,14 @@ though the bytes are -251), where the library gives none.
 CCSDS time codes (tcs-ccsds)
 ============================
 
+.. warning::
+
+   tcs-ccsds is very early software and is subject to rapid change. Until
+   1.0, any change to its API changes the minor version number (0.1 to
+   0.2), so a release that changes only the patch number never breaks code
+   built against it. Feedback is welcome, even at this stage: open an issue
+   at https://github.com/vomlehn/tcs-xtce/issues.
+
 tcs-ccsds is a second library, in ``ccsds/``, for CCSDS standards that XTCE
 knows nothing about. It doesn't depend on tcs-xtce: it is plain functions
 over bytes, which a packet codec can use as hooks, or any program can use

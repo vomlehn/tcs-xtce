@@ -365,6 +365,12 @@ tcs-ccsds, in `ccsds/`, is a separate library of CCSDS standards that XTCE
 doesn't define, in the same four languages: so far the CUC and CDS time
 codes.
 
+> **Warning:** tcs-ccsds is very early software and is subject to rapid
+> change. Until 1.0, any change to its API changes the minor version
+> number (0.1 to 0.2), so a release that changes only the patch number
+> never breaks code built against it. Feedback is welcome, even at this
+> stage: open an issue at https://github.com/vomlehn/tcs-xtce/issues.
+
 See the manual for the exact list. `tests/packet_check.sh` checks that
 Rust, C, C++ and Python produce identical results on hand-built and
 random packets.
