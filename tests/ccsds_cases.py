@@ -104,6 +104,65 @@ def cds_time(rng, d24: int) -> str:
     return f"{day} {ms} {picos}"
 
 
+def calendar(rng) -> str:
+    """A random calendar time, often at an edge: a leap day or a day that
+    does not exist, a leap second or a second of 60 that is not one, the
+    last picosecond before a carry, the ends of the years and of the
+    leap-second table, and now and then a field out of range.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        Its year, month, day, hour, minute, second and picoseconds.
+    """
+    year = rng.choice([1, 1958, 1971, 1972, 1999, 2000, 2016, 2024, 2027, 9999,
+                       0, 10000, rng.randint(1972, 2026), rng.randint(1, 9999)])
+    month = rng.choice([1, 2, 6, 7, 12, 0, 13, rng.randint(1, 12)])
+    day = rng.choice([1, 28, 29, 30, 31, 0, 32, rng.randint(1, 31)])
+    hour = rng.choice([0, 23, 24, rng.randrange(24)])
+    minute = rng.choice([0, 59, 60, rng.randrange(60)])
+    second = rng.choice([0, 59, 60, 61, rng.randrange(60)])
+    if rng.random() < 0.3:
+        # The end of a June or December, where leap seconds go.
+        month, day, hour, minute = rng.choice([(6, 30), (12, 31)]) + (23, 59)
+        second = rng.choice([59, 60])
+    picos = rng.choice([0, 999_999_999_999, 500_000_000_000, 499_999_999_999,
+                        10**12, rng.randrange(10**12),
+                        rng.randrange(10**6) * 10**6])
+    return f"{year} {month} {day} {hour} {minute} {second} {picos}"
+
+
+def ascii_text(rng) -> str:
+    """A random ASCII time code, often valid, now and then cut short, given
+    too many fraction digits, or with a character out of place.
+
+    Args:
+        rng: The random number generator.
+
+    Returns:
+        The text, which has no white space.
+    """
+    year = rng.choice([2016, 2024, 1, 9999, rng.randint(1, 9999)])
+    if rng.randrange(2):
+        date = f"{year:04d}-{rng.randint(0, 13):02d}-{rng.randint(0, 32):02d}"
+    else:
+        date = f"{year:04d}-{rng.randint(0, 367):03d}"
+    text = (f"{date}T{rng.choice([23, rng.randrange(25)]):02d}:"
+            f"{rng.choice([59, rng.randrange(61)]):02d}:"
+            f"{rng.choice([59, 60, rng.randrange(62)]):02d}")
+    if rng.randrange(2):
+        text += "." + "".join(str(rng.randrange(10))
+                              for _ in range(rng.randint(0, 14)))
+    text += rng.choice(["", "Z", "Zx", "x"])
+    if rng.random() < 0.1:
+        text = text[:rng.randrange(len(text))] or "x"
+    if rng.random() < 0.05:
+        i = rng.randrange(len(text))
+        text = text[:i] + rng.choice("-T:.Za") + text[i + 1:]
+    return text or "x"
+
+
 def main() -> None:
     """Prints COUNT random cases, seeded with SEED, as the module docstring
     describes.
@@ -111,7 +170,7 @@ def main() -> None:
     rng = random.Random(int(sys.argv[1]))
     out = []
     for _ in range(int(sys.argv[2])):
-        kind = rng.randrange(10)
+        kind = rng.randrange(16)
         cap = rng.choice([0, 3, 7, 12, 32])
         if kind == 0:
             out.append("cuc_decode "
@@ -159,11 +218,39 @@ def main() -> None:
             out.append(f"cds_encode_x {d24} {rng.randrange(3)} "
                        f"{rng.randrange(2)} {cds_time(rng, d24)} "
                        f"{rng.randrange(2)} {cap}")
-        elif rng.randrange(2):
-            out.append(f"cuc_seconds {cuc_time(rng, 7)}")
+        elif kind == 9:
+            if rng.randrange(2):
+                out.append(f"cuc_seconds {cuc_time(rng, 7)}")
+            else:
+                d24 = rng.randrange(2)
+                out.append(f"cds_seconds {cds_time(rng, d24)}")
+        elif kind == 10:
+            # A CCS P-field, often valid, then octets that are often BCD.
+            p = rng.choice([0x50, 0x52, 0x56, 0x58, 0x5b, 0x5e, 0x57, 0xd0,
+                            rng.randrange(256)])
+            t = bytes(rng.choice([rng.randrange(256),
+                                  (rng.randrange(10) << 4) | rng.randrange(10)])
+                      for _ in range(rng.randrange(15)))
+            out.append("ccs_decode " + hexs(bytes([p]) + t))
+        elif kind == 11:
+            out.append(f"ccs_encode {rng.randrange(2)} {rng.randint(0, 6)} "
+                       f"{calendar(rng)} {rng.randrange(2)} {cap}")
+        elif kind == 12:
+            out.append("ascii_parse " + ascii_text(rng))
+        elif kind == 13:
+            out.append(f"ascii_format {rng.choice('AB')} {rng.randint(0, 13)} "
+                       f"{rng.randrange(2)} {calendar(rng)} "
+                       f"{rng.choice([0, 17, 24, 40])}")
+        elif kind == 14:
+            out.append(f"utc_to_tai {calendar(rng)}")
         else:
-            d24 = rng.randrange(2)
-            out.append(f"cds_seconds {cds_time(rng, d24)}")
+            # Around the table's first change, a leap second, its expiry,
+            # and anywhere.
+            s = rng.choice([5113 * 86400 + 10, 5113 * 86400 + 9, 1861920035,
+                            1861920036, 1861920037, 2192832037, 2192832036,
+                            rng.randrange(2**34)])
+            picos = rng.choice([0, 10**12 - 1, 10**12, rng.randrange(10**12)])
+            out.append(f"tai_to_utc {s} {picos}")
     print("\n".join(out))
 
 

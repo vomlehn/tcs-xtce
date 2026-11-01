@@ -1,7 +1,8 @@
 # tcs-ccsds
 
 CCSDS standards for flight software, the same in Rust, C, C++ and Python. So
-far: the binary time codes of CCSDS 301.0-B-4, *Time Code Formats*.
+far: the time codes of CCSDS 301.0-B-4, *Time Code Formats*, and TAI and UTC
+with their leap seconds.
 
 > **Warning:** tcs-ccsds is very early software and is subject to rapid
 > change. Until 1.0, any change to its API changes the minor version
@@ -32,6 +33,20 @@ A time comes in two forms:
 
 Encoding rounds to the layout's unit, halves up, carrying into the seconds
 or the day.
+
+It also reads and writes the calendar time codes of the same standard,
+which give a date and a time of day, usually UTC, held exactly as a
+`CalendarTime`:
+
+* **CCS**, the CCSDS Calendar Segmented time code, in BCD, with a month
+  and day or a day of the year and down to a picosecond.
+* **ASCII codes A and B**, `YYYY-MM-DDThh:mm:ss.d...dZ` and
+  `YYYY-DDDThh:mm:ss.d...dZ`.
+
+And it converts between TAI, which the binary codes count, and UTC, which
+the calendar codes give, with a table of leap seconds: the IERS's, built in,
+or the mission's own. Times before 1972 or past the table's expiry are
+refused rather than guessed at.
 
 ## Why use it
 
@@ -114,9 +129,8 @@ on random cases.
 
 ## Not yet
 
-* CCS (calendar segmented) and the ASCII time codes, which are usually UTC
-  and need a table of leap seconds.
-* Conversion between TAI and UTC, which is left to the caller.
+* Leap seconds announced after the built-in table's expiry, 28 June 2027:
+  give the conversions a newer table.
 
 ## License
 

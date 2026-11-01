@@ -54,3 +54,35 @@ cds_encode_x 0 0 0 9 86400999 500000000 0 6 | 000a00000000
 cds_encode_x 1 2 1 1193046 86399999 999999999 1 32 | 4e12345605265bff3b9ac9ff
 # A picosecond field of 10^9 is out of range
 cds_encode_x 0 2 0 0 0 1000000000 0 32 | none
+# CCS.  P-field 52: month and day, two sub-second octets; 2026-11-01
+# 12:34:56.7890
+ccs_decode 52202611011234567890 | 10 2026 11 1 12 34 56 789000000000
+# As a day of the year, 305, with no sub-second octets: .789 rounds up
+ccs_encode 1 0 2026 11 1 12 34 56 789000000000 1 32 | 5820260305123457
+# A nibble that is not a digit, a month of 13, or the reserved resolution 7
+ccs_decode 58202a0305123457 | none
+ccs_decode 50202613010000000 | none
+ccs_decode 5720261101123456 | none
+# ASCII code A in a leap second, and code B, with the text after it left
+ascii_parse 2016-12-31T23:59:60.250Z | 24 A 2016 12 31 23 59 60 250000000000
+ascii_parse 2016-366T23:59:60rest | 17 B 2016 12 31 23 59 60 0
+# A second of 61, or a point with no digits after it
+ascii_parse 2016-12-31T23:59:61 | none
+ascii_parse 2016-12-31T23:59:59. | none
+# Rounding out of a leap second carries into the next year
+ascii_format B 3 1 2016 12 31 23 59 60 999600000000 40 | 2017-001T00:00:00.000Z
+ascii_format A 0 0 2024 2 29 0 0 0 0 10 | needs 19
+# UTC began 10 s behind TAI on 1972-01-01, 5113 days after the epoch
+utc_to_tai 1972 1 1 0 0 0 0 | 441763210 0
+utc_to_tai 1971 12 31 23 59 59 0 | none
+# 2017-01-01 is 21550 days after the epoch, when TAI - UTC became 37: the
+# leap second before it is one second of TAI, and converts back
+utc_to_tai 2016 12 31 23 59 60 0 | 1861920036 0
+tai_to_utc 1861920036 5 | 2016 12 31 23 59 60 5
+tai_to_utc 1861920037 0 | 2017 1 1 0 0 0 0
+# No leap second at the end of 2017
+utc_to_tai 2017 12 31 23 59 60 0 | none
+# The table expires on 2027-06-28
+tai_to_utc 2192832036 0 | 2027 6 27 23 59 59 0
+tai_to_utc 2192832037 0 | none
+utc_to_tai 2027 6 28 0 0 0 0 | none

@@ -122,6 +122,30 @@ static ccsds_cds cds_layout(char** w) {
         return cd;
 }
 
+/** Reads a calendar time's seven fields from words.
+ *
+ * @param w  The words: year, month, day, hour, minute, second, picoseconds.
+ * @return   The time. */
+static ccsds_calendar_time cal(char** w) {
+        ccsds_calendar_time t;
+        t.year = (uint16_t)strtoul(w[0], NULL, 10);
+        t.month = (uint8_t)strtoul(w[1], NULL, 10);
+        t.day = (uint8_t)strtoul(w[2], NULL, 10);
+        t.hour = (uint8_t)strtoul(w[3], NULL, 10);
+        t.minute = (uint8_t)strtoul(w[4], NULL, 10);
+        t.second = (uint8_t)strtoul(w[5], NULL, 10);
+        t.picos = strtoull(w[6], NULL, 10);
+        return t;
+}
+
+/** Prints a calendar time's seven fields, after a prefix.
+ *
+ * @param t  The time. */
+static void show(const ccsds_calendar_time* t) {
+        printf("%u %u %u %u %u %u %llu\n", t->year, t->month, t->day,
+               t->hour, t->minute, t->second, (unsigned long long)t->picos);
+}
+
 static ccsds_epoch epoch(const char* s) {
         return s[0] == '1' ? CCSDS_EPOCH_AGENCY : CCSDS_EPOCH_CCSDS;
 }
@@ -134,18 +158,82 @@ int main(void) {
         char line[1024];
         static uint8_t data[512], out[512];
         while (fgets(line, sizeof line, stdin)) {
-                char* w[10] = {0};
+                char* w[14] = {0};
                 int c = 0;
                 char* t = strtok(line, " \t\n");
                 size_t k = 0, n;
                 bool ok;
                 double s = 0.0;
-                while (t && c < 10) {
+                while (t && c < 14) {
                         w[c++] = t;
                         t = strtok(NULL, " \t\n");
                 }
                 if (!c) continue;
-                if (!strcmp(w[0], "cuc_decode_x")) {
+                if (!strcmp(w[0], "ccs_decode")) {
+                        ccsds_calendar_time ct;
+                        n = unhex(w[1], data);
+                        if (!ccsds_decode_ccs(data, n, &k, &ct)) {
+                                puts("none");
+                                continue;
+                        }
+                        printf("%zu ", k);
+                        show(&ct);
+                } else if (!strcmp(w[0], "ccs_encode")) {
+                        ccsds_ccs cc;
+                        ccsds_calendar_time ct = cal(w + 3);
+                        size_t cap = (size_t)atoi(w[11]), r;
+                        cc.day_of_year = w[1][0] == '1';
+                        cc.sub = (uint8_t)atoi(w[2]);
+                        r = w[10][0] == '1'
+                                    ? ccsds_ccs_encode(&cc, &ct, out, cap)
+                                    : ccsds_ccs_encode_t(&cc, &ct, out, cap);
+                        encoded(r, out, cap);
+                } else if (!strcmp(w[0], "ascii_parse")) {
+                        ccsds_calendar_time ct;
+                        ccsds_ascii_form f;
+                        if (!ccsds_parse_ascii(w[1], strlen(w[1]), &k, &f,
+                                               &ct)) {
+                                puts("none");
+                                continue;
+                        }
+                        printf("%zu %c ", k, f == CCSDS_ASCII_A ? 'A' : 'B');
+                        show(&ct);
+                } else if (!strcmp(w[0], "ascii_format")) {
+                        ccsds_calendar_time ct = cal(w + 4);
+                        size_t cap = (size_t)atoi(w[11]), r;
+                        char text[64];
+                        r = ccsds_format_ascii(
+                                &ct,
+                                w[1][0] == 'A' ? CCSDS_ASCII_A : CCSDS_ASCII_B,
+                                (unsigned)atoi(w[2]), w[3][0] == '1', text,
+                                cap < sizeof text ? cap : sizeof text);
+                        if (r == CCSDS_NONE)
+                                puts("none");
+                        else if (r > cap)
+                                printf("needs %zu\n", r);
+                        else
+                                printf("%.*s\n", (int)r, text);
+                } else if (!strcmp(w[0], "utc_to_tai")) {
+                        ccsds_calendar_time ct = cal(w + 1);
+                        ccsds_tai_time tt;
+                        if (!ccsds_utc_to_tai(&ct, &ccsds_leap_seconds_table,
+                                              &tt))
+                                puts("none");
+                        else
+                                printf("%llu %llu\n",
+                                       (unsigned long long)tt.seconds,
+                                       (unsigned long long)tt.picos);
+                } else if (!strcmp(w[0], "tai_to_utc")) {
+                        ccsds_calendar_time ct;
+                        ccsds_tai_time tt;
+                        tt.seconds = strtoull(w[1], NULL, 10);
+                        tt.picos = strtoull(w[2], NULL, 10);
+                        if (!ccsds_tai_to_utc(&tt, &ccsds_leap_seconds_table,
+                                              &ct))
+                                puts("none");
+                        else
+                                show(&ct);
+                } else if (!strcmp(w[0], "cuc_decode_x")) {
                         ccsds_cuc_time ct;
                         n = unhex(w[1], data);
                         if (!ccsds_decode_cuc_exact(data, n, &k, &ct)) {

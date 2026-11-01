@@ -15,6 +15,19 @@
 //! code built against it. Feedback is welcome, even at this stage: open an
 //! issue at <https://github.com/vomlehn/tcs-xtce/issues>.
 
-#![no_std]
+//!
+//! [`calendar`] reads and writes the calendar time codes of the same
+//! standard: CCS (calendar segmented) and the ASCII codes A and B, as dates
+//! and times held exactly. [`utc`] converts between TAI, which the binary
+//! codes count, and UTC, which the calendar codes give, with a table of leap
+//! seconds.
 
+#![no_std]
+// Each argument's description in a doc comment, continuation lines and all,
+// starts in one column, as the TCS projects' documentation rule has it, which
+// is deeper than this lint asks of a list item's continuation.
+#![allow(clippy::doc_overindented_list_items)]
+
+pub mod calendar;
 pub mod time;
+pub mod utc;

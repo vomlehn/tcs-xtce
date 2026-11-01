@@ -1209,8 +1209,17 @@ language, truncating with casts rather than calling ``floor`` (which
 rounds to the layout's unit, halves up, because truncation turns a time
 like 3.004005 s, which no double holds exactly, into 4 microseconds. Fine
 CUC octets beyond what a double holds are exact, so only up to six are
-rounded. CCS and the ASCII codes are left out for now: they are usually
-UTC, and turning them into seconds needs a table of leap seconds.
+rounded.
+
+The calendar codes, CCS and ASCII A and B, are dates and times, usually of
+UTC, so they are held as dates and times -- ``CalendarTime`` -- and never as
+a count of seconds: turning one into seconds needs to know which days had
+leap seconds, and that is kept apart, in ``utc``, with the table as data a
+mission can replace. The built-in table is the IERS's
+``leap-seconds.list``, and conversion refuses times before 1972 and from
+the table's expiry rather than guessing, as the TCS projects fail on data
+they cannot interpret: a converter that assumed no further leap seconds
+would be silently wrong by a second the day one was inserted.
 
 A double cannot hold every time a layout can: at today's times its unit
 is about a quarter of a microsecond, coarser than four or more fine CUC

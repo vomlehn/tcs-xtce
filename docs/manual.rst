@@ -3025,11 +3025,54 @@ exact time to a double: the double decoders are the exact ones followed by
 it, except that a CDS microsecond layout divides microseconds rather than
 picoseconds, as it always has.
 
+**Calendar time codes.** ``calendar`` (``tcs_ccsds.calendar`` in Python,
+the ``ccsds_calendar``, ``ccsds_ccs`` and ASCII functions in C) has the
+codes that give a date and a time of day, usually UTC, held exactly as a
+``CalendarTime`` (``ccsds_calendar_time``): year 1 to 9999, month, day,
+hour, minute, second (60 in a leap second, which only ends a day, at
+23:59) and picoseconds.
+
+CCS (CCSDS Calendar Segmented time code)
+   An optional one-octet P-field, then BCD digits: the year in two octets,
+   the month and day in one each or the day of the year in two, the hour,
+   minute and second in one each, and 0 to 6 octets of two decimal digits
+   of a second, hundredths first. The layout is ``Ccs`` (``ccsds_ccs``),
+   with the same ``pfield``, ``from_pfield``, ``decode_t``, ``encode_t``
+   and ``encode`` as the binary codes, and ``decode_ccs``.
+
+ASCII time codes A and B
+   ``YYYY-MM-DDThh:mm:ss.d...dZ`` and ``YYYY-DDDThh:mm:ss.d...dZ``. The
+   fraction and the ``Z`` are optional; here a fraction has at most twelve
+   digits, a picosecond. ``parse_ascii`` reads one from the start of some
+   characters, saying how many it read and which code it was;
+   ``format_ascii`` writes one with as many fraction digits as asked.
+
+Decoding and parsing check every field: digits, a Gregorian date, and a
+second of 60 only at 23:59. Encoding and formatting round the picoseconds
+to the unit asked for, halves up, carrying through the calendar; a carry
+out of second 59 goes to the next minute, because the codes do not know
+which days had leap seconds.
+
+**TAI and UTC.** ``utc`` (``tcs_ccsds.utc``; ``ccsds_utc_to_tai`` and
+``ccsds_tai_to_utc`` in C) converts between a ``CalendarTime`` of UTC and a
+``TaiTime`` (``ccsds_tai_time``): seconds since the CCSDS epoch,
+1958-01-01T00:00:00 TAI, and picoseconds, exactly, with ``to_seconds`` for
+the binary codes' double encoders. It takes a table of leap seconds:
+``LEAP_SECONDS`` (``ccsds_leap_seconds_table``) is the IERS's
+``leap-seconds.list``, updated through Bulletin C and expiring on 28 June
+2027, with TAI - UTC at 37 seconds since 2017-01-01; a mission can give its
+own ``LeapSeconds`` as newer bulletins come. A second of 60 is accepted only
+before a midnight where TAI - UTC goes up, and converts to the one TAI
+second the leap second is. A time before 1972-01-01, when UTC took its
+present form, or from the table's expiry is refused: nobody can say how
+many leap seconds it is from TAI.
+
 ``make ccsds-check`` runs ``tests/ccsds_check.sh``: Rust, C, C++ and
 Python decode and encode the cases of ``tests/ccsds/known.txt``, worked
 out by hand from the formats (extended P-fields, a leap second, rounding
-that carries, times a layout can't hold, and the exact forms keeping every
-bit and picosecond), and must give their results;
+that carries, times a layout can't hold, the exact forms keeping every bit
+and picosecond, CCS and ASCII codes, and the leap second at the end of
+2016 and the table's expiry), and must give their results;
 on random cases from ``tests/ccsds_cases.py`` they must agree with each
 other.
 

@@ -22,14 +22,34 @@
 //! * `cuc_seconds SECONDS FRACTION` and `cds_seconds DAY MS PICOS` print
 //!   the bits of the double such a time converts to.
 //!
+//! * `ccs_decode HEX` decodes a CCS time with its P-field, printing the
+//!   octets read and the time as `Y M D h m s PICOS`, or `none`;
+//!   `ccs_encode DOY SUB Y M D h m s PICOS PFIELD CAP` encodes one, DOY
+//!   being 1 for a day of the year.
+//! * `ascii_parse TEXT` parses an ASCII time code, printing the characters
+//!   read, `A` or `B`, and the time, or `none`; `ascii_format FORM DIGITS Z
+//!   Y M D h m s PICOS CAP` formats one, printing its text, `needs N` or
+//!   `none`.
+//! * `utc_to_tai Y M D h m s PICOS` prints the TAI seconds and picoseconds
+//!   of a time of UTC, and `tai_to_utc SECONDS PICOS` the time of UTC, with
+//!   the built-in leap seconds; or `none`.
+//!
 //! EPOCH is 0 for CCSDS's and 1 for the agency's, SUB 0, 1 or 2 for none,
 //! microseconds or picoseconds.
 
+// Argument descriptions start in one column, as the TCS projects' rule has
+// it; see the crate's own allowance.
+#![allow(clippy::doc_overindented_list_items)]
+
 use std::io::{self, BufRead, Write};
+use tcs_ccsds::calendar::{
+    decode_ccs, format_ascii, parse_ascii, AsciiForm, CalendarTime, Ccs,
+};
 use tcs_ccsds::time::{
     decode_cds, decode_cds_exact, decode_cuc, decode_cuc_exact, Cds, CdsTime,
     Cuc, CucTime, Epoch, SubMs,
 };
+use tcs_ccsds::utc::{tai_to_utc, utc_to_tai, TaiTime, LEAP_SECONDS};
 
 fn unhex(s: &str) -> Vec<u8> {
     (0..s.len() / 2)
@@ -139,7 +159,66 @@ fn run(w: &[&str]) -> String {
         ms: w[i + 1].parse().unwrap(),
         picos: w[i + 2].parse().unwrap(),
     };
+    let cal = |i: usize| CalendarTime {
+        year: w[i].parse().unwrap(),
+        month: w[i + 1].parse().unwrap(),
+        day: w[i + 2].parse().unwrap(),
+        hour: w[i + 3].parse().unwrap(),
+        minute: w[i + 4].parse().unwrap(),
+        second: w[i + 5].parse().unwrap(),
+        picos: w[i + 6].parse().unwrap(),
+    };
+    let show = |t: &CalendarTime| {
+        format!(
+            "{} {} {} {} {} {} {}",
+            t.year, t.month, t.day, t.hour, t.minute, t.second, t.picos
+        )
+    };
     match w[0] {
+        "ccs_decode" => decode_ccs(&unhex(w[1]))
+            .map_or("none".into(), |(k, t)| format!("{k} {}", show(&t))),
+        "ccs_encode" => {
+            let cap: usize = w[11].parse().unwrap();
+            let mut out = vec![0u8; cap];
+            let c = Ccs::new(w[1] == "1", n(2)).unwrap();
+            let t = cal(3);
+            let r = if w[10] == "1" {
+                c.encode(&t, &mut out)
+            } else {
+                c.encode_t(&t, &mut out)
+            };
+            encoded(r, &out, cap)
+        }
+        "ascii_parse" => {
+            parse_ascii(w[1].as_bytes()).map_or("none".into(), |(k, f, t)| {
+                let f = if f == AsciiForm::A { "A" } else { "B" };
+                format!("{k} {f} {}", show(&t))
+            })
+        }
+        "ascii_format" => {
+            let cap: usize = w[11].parse().unwrap();
+            let mut out = vec![0u8; cap];
+            let form = if w[1] == "A" {
+                AsciiForm::A
+            } else {
+                AsciiForm::B
+            };
+            let r = format_ascii(&cal(4), form, n(2), w[3] == "1", &mut out);
+            match r {
+                None => "none".into(),
+                Some(k) if k > cap => format!("needs {k}"),
+                Some(k) => String::from_utf8_lossy(&out[..k]).into_owned(),
+            }
+        }
+        "utc_to_tai" => utc_to_tai(&cal(1), &LEAP_SECONDS)
+            .map_or("none".into(), |t| format!("{} {}", t.seconds, t.picos)),
+        "tai_to_utc" => {
+            let t = TaiTime {
+                seconds: w[1].parse().unwrap(),
+                picos: w[2].parse().unwrap(),
+            };
+            tai_to_utc(&t, &LEAP_SECONDS).map_or("none".into(), |t| show(&t))
+        }
         "cuc_decode_x" => decode_cuc_exact(&unhex(w[1]))
             .map_or("none".into(), |(k, t)| {
                 format!("{k} {:016x} {:020x}", t.seconds, t.fraction)

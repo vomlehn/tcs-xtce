@@ -8,6 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from tcs_ccsds.calendar import (  # noqa: E402
+    AsciiForm, CalendarTime, Ccs, decode_ccs, format_ascii, parse_ascii)
+from tcs_ccsds.utc import TaiTime, tai_to_utc, utc_to_tai  # noqa: E402
 from tcs_ccsds.time import (  # noqa: E402
     Cds, CdsTime, Cuc, CucTime, Epoch, SubMs, decode_cds, decode_cds_exact,
     decode_cuc, decode_cuc_exact)
@@ -35,6 +38,17 @@ def encoded(r, cap: int) -> str:
             else r.hex() or "x")
 
 
+def cal(w) -> CalendarTime:
+    """Reads a calendar time's seven fields from words."""
+    return CalendarTime(*(int(x) for x in w[:7]))
+
+
+def show(t: CalendarTime) -> str:
+    """Writes a calendar time's seven fields."""
+    return (f"{t.year} {t.month} {t.day} {t.hour} {t.minute} {t.second} "
+            f"{t.picos}")
+
+
 def decoded(r) -> str:
     if r is None:
         return "none"
@@ -54,7 +68,30 @@ def main() -> None:
         if not w:
             continue
         op = w[0]
-        if op == "cuc_decode_x":
+        if op == "ccs_decode":
+            r = decode_ccs(unhex(w[1]))
+            print("none" if r is None else f"{r[0]} {show(r[1])}")
+        elif op == "ccs_encode":
+            c = Ccs(w[1] == "1", int(w[2]))
+            t = cal(w[3:10])
+            r = c.encode(t) if w[10] == "1" else c.encode_t(t)
+            print(encoded(r, int(w[11])))
+        elif op == "ascii_parse":
+            r = parse_ascii(w[1])
+            print("none" if r is None else f"{r[0]} {r[1].name} {show(r[2])}")
+        elif op == "ascii_format":
+            r = format_ascii(cal(w[4:11]), AsciiForm[w[1]], int(w[2]),
+                             w[3] == "1")
+            cap = int(w[11])
+            print("none" if r is None else f"needs {len(r)}" if len(r) > cap
+                  else r)
+        elif op == "utc_to_tai":
+            r = utc_to_tai(cal(w[1:8]))
+            print("none" if r is None else f"{r.seconds} {r.picos}")
+        elif op == "tai_to_utc":
+            r = tai_to_utc(TaiTime(int(w[1]), int(w[2])))
+            print("none" if r is None else show(r))
+        elif op == "cuc_decode_x":
             r = decode_cuc_exact(unhex(w[1]))
             print("none" if r is None
                   else f"{r[0]} {r[1].seconds:016x} {r[1].fraction:020x}")

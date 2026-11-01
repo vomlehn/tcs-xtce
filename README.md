@@ -362,8 +362,9 @@ Supported features:
 * custom algorithms, which the application supplies as functions.
 
 tcs-ccsds, in `ccsds/`, is a separate library of CCSDS standards that XTCE
-doesn't define, in the same four languages: so far the CUC and CDS time
-codes. See [its README](ccsds/README.md).
+doesn't define, in the same four languages: so far the CUC, CDS, CCS and
+ASCII time codes, and TAI and UTC with their leap seconds. See
+[its README](ccsds/README.md).
 
 > **Warning:** tcs-ccsds is very early software and is subject to rapid
 > change. Until 1.0, any change to its API changes the minor version
