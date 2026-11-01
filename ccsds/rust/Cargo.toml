@@ -1,6 +1,6 @@
 [package]
 name = "tcs-ccsds"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = """\
     Flight software: CCSDS standards, such as the CCSDS time codes, without \
