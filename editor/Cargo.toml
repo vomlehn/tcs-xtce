@@ -31,10 +31,11 @@ rfd = { version = "0.17.2", default-features = false, features = [
     "xdg-portal",
 ] }
 
-[dev-dependencies]
-# Directories a test can fill and have cleaned up after it: the saving,
-# autosave and recovery tests write real files.
+# A directory, removed afterwards, to write a mission in for the tcs-xtce
+# compiler to read; the tests use it for the files they write.
 tempfile = "3.27.0"
+
+[dev-dependencies]
 # Lays the windows out headlessly, so a test can drive them.
 i-slint-backend-testing = "1.18"
 
