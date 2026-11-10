@@ -213,6 +213,7 @@ impl Walk<'_> {
                 if let Some(text) = ct.text {
                     self.no_children(e);
                     self.value(e.id, None, text, &e.text());
+                    self.fixed(e, d);
                 } else {
                     if !ct.mixed && e.has_text() {
                         self.error(
@@ -244,12 +245,43 @@ impl Walk<'_> {
                 }
                 self.no_children(e);
                 self.value(e.id, None, sr, &e.text());
+                self.fixed(e, d);
             }
         }
         if !d.keys.is_empty() {
             self.keys(e, d, scope);
         }
         scope.bindings.truncate(scope.bindings.len() - pushed);
+    }
+
+    /// Checks an element's text against the value its declaration fixes,
+    /// if it fixes one.
+    ///
+    /// # Arguments
+    ///
+    /// * `e` - The element.
+    /// * `d` - Its declaration.
+    fn fixed(&mut self, e: &Element, d: &ElementDecl) {
+        if let Some(f) = &d.fixed {
+            let text = e.text();
+            if &text != f {
+                self.error(
+                    e.id,
+                    None,
+                    if f.is_empty() {
+                        format!(
+                            "{} must be empty; take its text out",
+                            e.local()
+                        )
+                    } else {
+                        format!(
+                            "{} must hold {f:?} and nothing else",
+                            e.local()
+                        )
+                    },
+                );
+            }
+        }
     }
 
     /// Checks that an element of simple content has no child elements.
@@ -790,6 +822,20 @@ mod tests {
         assert!(m.contains("has no attribute bogus"), "{m}");
         assert!(m.contains("must have name"), "{m}");
         assert!(m.contains("Header may not be here"), "{m}");
+    }
+
+    #[test]
+    fn holds_an_element_to_its_fixed_value() {
+        let doc = doc13(
+            "<xtce:TelemetryMetaData><xtce:AlgorithmSet>\
+             <xtce:MathAlgorithm name=\"m\"><xtce:MathOperation \
+             outputParameterRef=\"p\"><xtce:ThisParameterOperand>1\
+             </xtce:ThisParameterOperand></xtce:MathOperation>\
+             </xtce:MathAlgorithm></xtce:AlgorithmSet>\
+             </xtce:TelemetryMetaData>",
+        );
+        let m = messages(&doc).join("\n");
+        assert!(m.contains("ThisParameterOperand must be empty"), "{m}");
     }
 
     #[test]

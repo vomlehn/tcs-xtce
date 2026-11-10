@@ -4,7 +4,10 @@
 
 pub mod cli;
 pub mod content;
+pub mod convert;
 pub mod edit;
+pub mod make;
+pub mod save;
 pub mod schema;
 pub mod tree;
 pub mod validate;

@@ -229,6 +229,8 @@ pub struct ElementDecl {
     pub ty: TypeRef,
     /// The value its text has when it is empty, if the schema gives one.
     pub default: Option<String>,
+    /// The one value its text may have, if the schema fixes it.
+    pub fixed: Option<String>,
     /// The keys declared on it, which hold below it.
     pub keys: Vec<Key>,
     /// The schema's documentation of it, as one paragraph.
@@ -881,6 +883,7 @@ impl Schema {
             name: name.clone(),
             ty: TypeRef::Simple(SimpleRef::Builtin(Builtin::String)),
             default: e.get("default"),
+            fixed: e.get("fixed"),
             keys: Vec::new(),
             doc: doc_of(e),
         });
