@@ -10,6 +10,12 @@
 #   xml.xsd           - W3C schema imported by SpaceSystem.xsd (for validation)
 #   catalog.xml       - XML catalog mapping the import URL to xml.xsd, use with
 #                       XML_CATALOG_FILES=references/catalog.xml xmllint --nonet
+#
+# `make editor` also fetches, once, the schema and specification of each
+# XTCE version the editor holds documents to, by fixed address, since the
+# editor has rules for exactly those versions and no others:
+#
+#   xtce-<version>.xsd, XTCE-<version>.pdf   for 1.1, 1.2 and 1.3
 
 XTCE_SPEC_URL ?= https://www.omg.org/spec/XTCE/
 CURL          ?= curl -fsSL --retry 3 --retry-delay 2 \
@@ -25,6 +31,30 @@ CATALOG_NS    := urn:oasis:names:tc:entity:xmlns:xml:catalog
 
 .PHONY: all
 all: fetch
+
+# The versions the editor knows, and where OMG publishes each one's schema.
+# XTCE 1.0's schema was published only inside its specification.
+EDITOR_VERSIONS := 1.1 1.2 1.3
+XSD_URL_1.1     := https://www.omg.org/spec/XTCE/20061101/06-11-06.xsd
+XSD_URL_1.2     := https://www.omg.org/spec/XTCE/20180204/SpaceSystem.xsd
+XSD_URL_1.3     := https://www.omg.org/spec/XTCE/20250214/SpaceSystem.xsd
+EDITOR_FILES    := $(foreach v,$(EDITOR_VERSIONS),xtce-$(v).xsd XTCE-$(v).pdf)
+
+.PHONY: editor
+editor: $(EDITOR_FILES)
+
+xtce-%.xsd:
+	@echo "  $(XSD_URL_$*)"
+	@$(CURL) -o $@.tmp "$(XSD_URL_$*)"
+	@xmllint --noout $@.tmp
+	@mv $@.tmp $@
+
+XTCE-%.pdf:
+	@echo "  $(XTCE_SPEC_URL)$*/PDF"
+	@$(CURL) -o $@.tmp "$(XTCE_SPEC_URL)$*/PDF"
+	@head -c 5 $@.tmp | grep -q '%PDF-' || \
+		{ echo "error: $@ is not a PDF" >&2; rm -f $@.tmp; exit 1; }
+	@mv $@.tmp $@
 
 # Always re-check the landing page so that "latest" really is the latest.
 .PHONY: fetch
@@ -76,4 +106,5 @@ clean:
 
 .PHONY: distclean
 distclean: clean
-	rm -f SpaceSystem.xsd XTCE.pdf VERSION xml.xsd catalog.xml
+	rm -f SpaceSystem.xsd XTCE.pdf VERSION xml.xsd catalog.xml \
+		$(EDITOR_FILES)

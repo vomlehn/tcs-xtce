@@ -1,0 +1,47 @@
+[package]
+name = "tcs-xtce-editor"
+version = "0.1.0"
+edition = "2021"
+description = """\
+    A graphical editor for OMG XTCE documents that keeps them valid for \
+    the XTCE version they are written in\
+"""
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vomlehn/tcs-xtce"
+keywords = ["xtce", "ccsds", "telemetry", "omg", "editor"]
+publish = false
+
+[[bin]]
+name = "xtce-edit"
+path = "src/main.rs"
+
+[dependencies]
+# The digest of what a document means, which the editor shows and which
+# its semantic comparison agrees with: the same code xtce-digest runs.
+tcs-xtce = { path = "../rust" }
+# The windows. 1.18 for its builtin menu bar, as tcsgui chose it.
+slint = "1.18"
+# The schemas' patterns, which are XSD regular expressions: those the XTCE
+# schemas use are all in the part of that language the regex crate reads
+# the same way, once anchored.
+regex = "1.11"
+# The desktop's own Open and Save dialogs, through the XDG desktop portal
+# rather than GTK.
+rfd = { version = "0.17.2", default-features = false, features = [
+    "xdg-portal",
+] }
+
+[dev-dependencies]
+# Directories a test can fill and have cleaned up after it: the saving,
+# autosave and recovery tests write real files.
+tempfile = "3.27.0"
+# Lays the windows out headlessly, so a test can drive them.
+i-slint-backend-testing = "1.18"
+
+[build-dependencies]
+slint-build = "1.18"
+
+[lints.clippy]
+# Every description in a function's list of arguments starts in one column,
+# which this lint takes for a mistake.
+doc_overindented_list_items = "allow"
