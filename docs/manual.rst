@@ -3215,6 +3215,185 @@ tcs-xtce ignores them. An attribute given its default value explicitly
 also changes the digest, though the meaning is the same.
 
 
+The XTCE editor (xtce-edit)
+===========================
+
+``xtce-edit`` is a graphical editor for XTCE documents.  It holds a
+document to the XTCE version it is written in: XTCE 1.1, 1.2 or 1.3,
+each checked against the schema OMG published for it.  It changes a
+document only where it is edited, so a file it saves differs from the
+file it opened only in what was changed: comments, blank lines,
+indentation, quoting and the order of attributes are kept as written,
+and a comment stays where it was put when the elements around it are
+edited, moved or deleted.
+
+XTCE 1.0 is not one of the versions: its schema was published only
+inside its specification, never in a form a program can read.
+
+Building it
+-----------
+
+.. code-block:: sh
+
+   make editor                  # fetches the schemas once, then builds
+   editor/target/release/xtce-edit FILE...
+
+``make editor`` fetches each version's schema and specification into
+``references/`` (``make -C references editor``), once, and builds the
+editor with the schemas inside it.  The packet layout, the encode and
+decode window and the compiler's check use the Python package, as
+`Running the compiler`_ describes: from a checkout, run ``make generate``
+first, or set ``TCS_XTCE_PYTHONPATH`` to the directory that holds
+``tcs_xtce``.
+
+Its windows
+-----------
+
+``xtce-edit FILE...`` opens each file in a window of its own.  The files
+given together are one mission (`Missions in several documents`_): a
+reference in one can name a definition in another, and File > Open adds
+another document to the mission.
+
+Each window shows:
+
+* an outline of the document's elements and comments.  An element with
+  a problem in it is marked **E** for an error or **W** for a warning,
+  on its row and on every row above it, so a closed row shows that
+  something inside it is wrong;
+* the selected element's documentation, from its version's schema, and
+  its attributes: each with what the schema says of it, marked
+  *(required)* where the schema requires it, as a list where the schema
+  gives the values it may take, and with a **Go to** button where it is
+  a reference;
+* the problems: every schema error, every reference that names nothing
+  in the open documents, and every two definitions of one name.  Picking
+  one selects the element it is about;
+* a Source tab, where the document's text can be edited and applied as
+  a whole.
+
+Changes the version does not allow
+----------------------------------
+
+Every change is held to the document's version.  An attribute set to a
+value its type does not allow, an element put where the schema does not
+allow it, a required element or attribute taken out, a source edit that
+breaks the schema: each is refused, the document is left as it was, and
+the status line says why and what the schema wants.  A document opened
+with errors can be corrected a change at a time, but no change may make
+it worse.
+
+So that nothing is ever put in half-made, Insert offers only the
+elements the schema allows in the selected element, and each is made
+complete: with its required attributes, each given a value of the right
+kind, and the fewest children that complete it.  Ready-made parts are
+offered where they fit: integer, float and boolean types in a
+ParameterTypeSet, and in a SpaceSystem the six-byte primary header of a
+CCSDS space packet (CCSDS 133.0-B), with its types, its parameters and
+the abstract container a packet builds on.
+
+Undo and redo
+-------------
+
+Edit > Undo and Redo name the change they undo or redo.  Each document
+has a history of its own.  A rename across documents -- Edit > Rename
+everywhere, which renames a definition and every reference to it in the
+open documents -- is one step in each document's history, and is undone
+in all of them at once, when it is the last change in each.  The
+histories are kept only while the editor runs: they are gone when it is
+closed.
+
+Saving, autosave and recovery
+-----------------------------
+
+With autosave on, a changed document is written to its file two seconds
+after the last change.  File > Autosave turns it off and on, and the
+setting is kept in ``~/.config/xtce-edit/settings``
+(``$XDG_CONFIG_HOME`` if set).  With it off, a changed document that has
+not been saved is kept in a recovery copy in
+``~/.local/state/xtce-edit/`` (``$XDG_STATE_HOME`` if set), so that a
+crash loses at most the last seconds; the next time the document is
+opened, the editor offers the copy's changes, which Undo then takes back
+if they are not wanted.  Saving removes the copy.
+
+A file is written whole or not at all: to a temporary file beside it,
+flushed, then renamed over it.  A file changed on disk by another
+program -- git, another editor -- is noticed, and the editor asks
+whether to reload it, which Undo can undo, or keep its own version; it
+does not write over the other change until one is chosen.
+
+Converting between versions
+---------------------------
+
+Version > Convert converts the document to another version, a version
+at a time, as one change that Undo undoes.  Before anything is changed
+the conversion dialog lists:
+
+* **Changed**: what is written another way in the other version, such
+  as an element 1.3 renamed (``RelativeTimeAgumentType``, as 1.2 spells
+  it, becomes ``RelativeTimeArgumentType``), 1.1's byte order list
+  becoming 1.2's ``byteOrder`` attribute, or a default the versions read
+  differently written out so that its meaning is kept;
+* **Lost**: what the older version cannot say, on the way down, such as
+  1.3's ``disabled`` on an alarm.  A conversion that loses anything is
+  made only when the box agreeing to the loss is ticked;
+* **Needed**: what the document does not hold and the other version
+  requires, such as the sizes of an array's dimensions, which 1.1 does
+  not give, or a DiscreteLookupList's ``defaultValue``, which 1.3
+  requires.  Each is asked for in the dialog;
+* **Refused**: what cannot be converted at all, with why, such as a 1.3
+  unit 1.2 has no word for.
+
+The rules come from comparing the three schemas element by element and
+attribute by attribute; the design describes them.  A converted document
+is checked against its new version's schema before it is taken.
+
+Tools
+-----
+
+Tools > Packet layout
+   Draws each packet's fields to scale, each with its name and size
+   written in it, as the tcs-xtce compiler lays the packet out, and shows
+   the compiler's size report (`Size report`_).
+
+Tools > Encode and decode
+   Encodes values given as JSON into a packet's bytes, and decodes bytes
+   given in hexadecimal, with the Python codecs the compiler generates
+   for the mission, so what it shows is what the generated code does.
+
+Tools > Compare with a file
+   Lists how another file differs from the document in what it means:
+   comments, layout, attribute order, prefixes and the order of
+   unordered sets are ignored, as the digest ignores them.
+
+Tools > Digest
+   Gives the document's digest, as ``xtce-digest`` computes it.
+
+Tools > Specification of this element
+   Opens the version's specification, searching it for the selected
+   element where the PDF viewer can (Evince can).
+
+A mission in XTCE 1.1 or 1.2 is converted to 1.3 in memory for the
+compiler's tools, which read 1.3; its files are not changed.
+
+From the command line
+---------------------
+
+The same checking and converting run without the windows, for a
+Makefile or a CI job:
+
+.. code-block:: sh
+
+   xtce-edit check FILE...
+   xtce-edit convert FILE --to 1.2 [--allow-loss] [--set KEY=VALUE]... [-o OUT]
+   xtce-edit sample VERSION SEED
+
+``check`` prints each problem as ``FILE:LINE: error: ...``, and fails if
+there is an error.  ``convert`` prints what it changed, lost, needs and
+refuses; it writes nothing if anything is refused or needed, or, without
+``--allow-loss``, if anything would be lost.  Each need is printed with
+the ``--set`` that answers it.  ``sample`` prints a random valid document
+of a version, which the tests use.
+
 Examples
 ========
 
@@ -3659,6 +3838,12 @@ a failed round trip, a failed compile or digests that differ always fails
 the check. After an intended change, ``python3 -I
 tests/samples_check.py --update`` rewrites ``expected.txt``; review its
 diff.
+
+``make test`` also runs the editor's tests (``make test-editor``):
+its documents, schemas, checker, conversions and windows, the windows
+drawn without a display.  ``make editor-check`` holds the editor to
+``xmllint``: it makes random documents of every version, converts each to
+every other, and has ``xmllint`` judge every document made.
 
 License
 =======

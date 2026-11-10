@@ -40,6 +40,11 @@
 #                        libraries unless STRIP=0 is given
 #   make lint-packages   check the packages and their shell scripts with
 #                        lintian, rpmlint and shellcheck
+#   make editor          build xtce-edit, the XTCE editor (fetches the
+#                        schemas of the versions it knows, once)
+#   make test-editor     run the editor's tests
+#   make editor-check    hold the editor to xmllint on random documents of
+#                        every version and their conversions
 #   make html            remake the HTML documents from their sources
 #   make help            print this list
 #   make clean           remove build products (keeps generated sources)
@@ -152,7 +157,7 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 .PHONY: test
 test: test-rust test-cpp test-python cross-check packet-check \
       stream-check digest-check float-check bnum-check ccsds-check examples \
-      line-width doc-headers
+      test-editor line-width doc-headers
 
 # Every non-trivial function, hand-written or generated, has a header that
 # describes it, its parameters and what it returns.  Last, with line-width,
@@ -176,6 +181,26 @@ test-generator: $(PY_GEN)
 .PHONY: test-rust
 test-rust: rust $(SAMPLES)
 	cd rust && $(CARGO) test --release
+
+# The XTCE editor, xtce-edit.  It is built with the schema of every XTCE
+# version it holds documents to, fetched once by address, and its tests ask
+# the compiler, so they need the Python binding.
+EDITOR_XSD := $(foreach v,1.1 1.2 1.3,references/xtce-$(v).xsd)
+
+$(EDITOR_XSD):
+	$(MAKE) -C references editor
+
+.PHONY: editor
+editor: $(EDITOR_XSD)
+	cd editor && $(CARGO) build --release
+
+.PHONY: test-editor
+test-editor: $(EDITOR_XSD) $(PY_GEN)
+	cd editor && $(CARGO) test --release
+
+.PHONY: editor-check
+editor-check: editor
+	tests/editor_check.sh
 
 .PHONY: test-cpp
 test-cpp: cpp $(SAMPLES)
@@ -292,6 +317,7 @@ ccsds-check: ccsds
 .PHONY: fmt
 fmt:
 	cd rust && $(CARGO) fmt
+	cd editor && $(CARGO) fmt
 	cd ccsds/rust && $(CARGO) fmt
 	for d in $(EXAMPLES); do \
 	    $(MAKE) -C $$d generate && \
@@ -302,6 +328,7 @@ fmt:
 .PHONY: fmt-check
 fmt-check:
 	cd rust && $(CARGO) fmt --check
+	cd editor && $(CARGO) fmt --check
 	cd ccsds/rust && $(CARGO) fmt --check
 	for d in $(EXAMPLES); do \
 	    $(MAKE) -C $$d generate && \
@@ -586,6 +613,7 @@ endif
 .PHONY: clean
 clean:
 	cd rust && $(CARGO) clean
+	cd editor && $(CARGO) clean
 	$(MAKE) -C cpp clean
 	$(MAKE) -C ccsds clean
 	for d in $(EXAMPLES); do $(MAKE) -C $$d clean; done

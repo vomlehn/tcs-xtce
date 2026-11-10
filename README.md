@@ -48,6 +48,7 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | `cpp/`        | C++20 library (`libxtce.a`, `libxtce.so`) with a C API (`xtce.h`), and the header-only C/C++ packet runtime (`xtce-packet.h`) |
 | `python/`     | `tcs_xtce` Python package (3.10+, standard library only): the Python runtime, `tcs_xtce.binding` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `tcs_xtce.compiler`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
 | `tests/`      | The demo mission, packet vectors and the cross-language checks; `make` generates the schema-coverage samples into `tests/samples/` |
+| `editor/`     | `xtce-edit`, a graphical XTCE editor that keeps a document valid for its XTCE version (1.1, 1.2 or 1.3), its comments and layout as written, and converts between versions |
 | `docs/`       | `manual.rst` and `design.rst` |
 | `examples/`   | Example XTCE files and a program per language that uses the code generated from them (start with `simple-string`) |
 
@@ -58,6 +59,7 @@ make              # fetch references if missing, generate, build, run all tests
 make references   # re-check OMG and pull the latest XTCE documents
 make generate     # regenerate the bindings after the schema or generator changes
 make packets      # regenerate the demo mission's packet codecs
+make editor       # build xtce-edit, the XTCE editor
 make test         # per-language tests, both cross-language checks, the examples
                   # and the 80-column check
 make examples     # build and run the examples in examples/
