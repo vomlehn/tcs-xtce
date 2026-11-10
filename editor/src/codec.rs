@@ -62,7 +62,12 @@ def plain(v):
 req = sys.argv[3]
 try:
     if req == "list":
-        print(json.dumps({n: fields(c) for n, c in packets().items()}))
+        # One line a packet, then one a field, tab-separated, which the
+        # editor reads without a JSON library.
+        for n, c in packets().items():
+            print("PACKET\t" + n)
+            for f, t in fields(c):
+                print("FIELD\t" + f + "\t" + t)
     elif req == "encode":
         cls = packets()[sys.argv[4]]
         p = cls(**json.loads(sys.argv[5]))
@@ -377,8 +382,10 @@ impl Tester {
         if !out.status.success() || text.is_empty() {
             return Err(String::from_utf8_lossy(&out.stderr).to_string());
         }
-        if let Some(e) = json_string(&text, "error") {
-            return Err(e);
+        if text.starts_with('{') {
+            if let Some(e) = json_string(&text, "error") {
+                return Err(e);
+            }
         }
         Ok(text)
     }
@@ -387,7 +394,8 @@ impl Tester {
     ///
     /// # Returns
     ///
-    /// JSON: each packet's name, and its fields as name and type.
+    /// A line `PACKET\tname` for each packet, each followed by a line
+    /// `FIELD\tname\ttype` for each of its fields.
     ///
     /// # Errors
     ///

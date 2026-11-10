@@ -3,12 +3,23 @@
 
 use std::process::ExitCode;
 
-/// Runs a command given on the command line, or opens the editor.
+/// Runs a command given on the command line, or opens the editor on the
+/// files given.
 ///
 /// # Returns
 ///
-/// Success, or failure if a command found a problem or could not run.
+/// Success, or failure if a command found a problem or the editor could
+/// not run.
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    tcs_xtce_editor::cli::run(&args)
+    if tcs_xtce_editor::cli::is_command(&args) {
+        return tcs_xtce_editor::cli::run(&args);
+    }
+    match tcs_xtce_editor::gui::run(&args) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("xtce-edit: {e}");
+            ExitCode::FAILURE
+        }
+    }
 }

@@ -25,6 +25,23 @@ usage: xtce-edit [FILE...]             open the files in the editor
                                        an XTCE version, for testing
 ";
 
+/// Whether a command line names one of the commands, rather than files to
+/// open in the editor.
+///
+/// # Arguments
+///
+/// * `args` - The arguments, without the program's name.
+///
+/// # Returns
+///
+/// True for a command.
+pub fn is_command(args: &[String]) -> bool {
+    matches!(
+        args.first().map(String::as_str),
+        Some("check" | "convert" | "sample" | "-h" | "--help")
+    )
+}
+
 /// Runs the command a command line gives.
 ///
 /// # Arguments

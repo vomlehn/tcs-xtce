@@ -4,14 +4,15 @@
 
 use std::path::Path;
 
-/// Checks that each schema is in `references/`, and has Cargo build the
-/// editor again when one changes.
+/// Compiles the windows, checks that each schema is in `references/`, and
+/// has Cargo build the editor again when one changes.
 ///
 /// # Panics
 ///
 /// Panics, saying how to fetch the schemas, if one is missing, since a
 /// build script reports a failure by panicking.
 fn main() {
+    slint_build::compile("ui/editor.slint").expect("the windows compile");
     for v in ["1.1", "1.2", "1.3"] {
         let p = format!("../references/xtce-{v}.xsd");
         println!("cargo:rerun-if-changed={p}");

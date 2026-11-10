@@ -1,0 +1,758 @@
+// The XTCE editor's windows.
+//
+// One window per document: the document's elements as an outline on the
+// left, the selected element's attributes and documentation on the right,
+// and below them what is wrong.  A Source tab shows the document's text,
+// which can be edited and applied as a whole.  Colour never carries a
+// meaning alone: every mark that is coloured also says what it is in
+// words or a symbol, and the colours are the Okabe-Ito palette, which
+// colour-blind readers can tell apart.
+
+import {
+    Button, CheckBox, ComboBox, LineEdit, ListView, ScrollView, TabWidget,
+    TextEdit, VerticalBox, HorizontalBox, GroupBox
+} from "std-widgets.slint";
+
+// The colours, each paired everywhere with a word or a symbol.
+export global Palette {
+    // A window's background, white as every TCS window's is.
+    out property <color> window: #ffffff;
+    // Errors: vermillion.
+    out property <color> error: #D55E00;
+    // Warnings: reddish purple.
+    out property <color> warning: #CC79A7;
+    // The selected row: sky blue.
+    out property <color> selected: #56B4E9;
+    // Comments in the outline: bluish green.
+    out property <color> comment: #009E73;
+    // Fields in a packet's layout, alternating blue and orange.
+    out property <color> field-a: #0072B2;
+    out property <color> field-b: #E69F00;
+}
+
+// One row of the outline: an element or a comment.
+export struct Row {
+    // The element's or comment's id in the document.
+    id: int,
+    // How deep it is: 0 for the root.
+    depth: int,
+    // What the row says: the element's name and its name attribute, or the
+    // comment's first line.
+    label: string,
+    // "element" or "comment".
+    kind: string,
+    // Whether its children are shown.
+    open: bool,
+    // Whether it has children to show.
+    has-kids: bool,
+    // "error", "warning" or "" for the worst problem in it.
+    mark: string,
+    // Whether it is the selected row.
+    selected: bool,
+}
+
+// One attribute of the selected element.
+export struct AttrRow {
+    // The attribute's name.
+    name: string,
+    // Its value, or its default in brackets if it is not given.
+    value: string,
+    // Whether the schema requires it.
+    required: bool,
+    // Whether the element gives it.
+    present: bool,
+    // The values it may have, if they are a list; empty otherwise.
+    choices: [string],
+    // What the schema says it is.
+    doc: string,
+    // What is wrong with it, if anything.
+    problem: string,
+    // Whether it is a reference, which can be followed.
+    is-ref: bool,
+}
+
+// One problem, or one usage of a definition.
+export struct ProblemRow {
+    // The element it is in.
+    id: int,
+    // "error", "warning" or "usage".
+    severity: string,
+    // What it says.
+    text: string,
+}
+
+// Something that can be put in: an element or a ready-made part.
+export struct Choice {
+    // What the menu says.
+    title: string,
+    // Which one: the declaration's or the template's index.
+    index: int,
+    // What it is.
+    about: string,
+}
+
+// One question a conversion asks.
+export struct NeedRow {
+    // What names it.
+    key: string,
+    // The question.
+    question: string,
+    // The answer given so far, or the suggestion.
+    answer: string,
+}
+
+// One field of a packet's layout.
+export struct FieldRow {
+    // Its name.
+    name: string,
+    // The bits it takes.
+    bits: int,
+    // Where it starts, in bits from the packet's start.
+    offset: int,
+    // What the report says about it.
+    note: string,
+}
+
+// One packet's layout.
+export struct PacketRow {
+    // The packet's heading.
+    name: string,
+    // Its size, as the report says it.
+    size: string,
+    // Its fields, in order.
+    fields: [FieldRow],
+    // The bits all its fields take.
+    total: int,
+}
+
+// A mark that says in a word what its colour shows.
+component Mark inherits Rectangle {
+    in property <string> mark;
+    width: self.mark == "" ? 0px : 18px;
+    height: 16px;
+    border-radius: 3px;
+    background: self.mark == "error" ? Palette.error
+        : self.mark == "warning" ? Palette.warning : transparent;
+    Text {
+        text: root.mark == "error" ? "E" : root.mark == "warning" ? "W" : "";
+        color: white;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+// One row of the outline.
+component OutlineRow inherits Rectangle {
+    in property <Row> item;
+    callback toggle(int);
+    callback select(int);
+    height: 24px;
+    background: root.item.selected ? Palette.selected : transparent;
+    HorizontalLayout {
+        padding-left: root.item.depth * 16px + 4px;
+        spacing: 4px;
+        // The disclosure triangle says open or closed by its shape.
+        Rectangle {
+            width: 16px;
+            Text {
+                text: !root.item.has-kids ? ""
+                    : root.item.open ? "▾" : "▸";
+                vertical-alignment: center;
+            }
+            TouchArea { clicked => { root.toggle(root.item.id); } }
+        }
+        Mark { mark: root.item.mark; y: 4px; }
+        Text {
+            text: root.item.label;
+            vertical-alignment: center;
+            font-italic: root.item.kind == "comment";
+            color: root.item.kind == "comment" ? Palette.comment : black;
+            overflow: elide;
+        }
+    }
+    TouchArea {
+        x: root.item.depth * 16px + 20px;
+        width: parent.width - self.x;
+        clicked => { root.select(root.item.id); }
+    }
+}
+
+// One attribute of the selected element, to read and set.
+component AttrEditor inherits VerticalLayout {
+    in property <AttrRow> attr;
+    callback set(string, string);
+    callback follow(string);
+    callback remove(string);
+    HorizontalLayout {
+        spacing: 6px;
+        // Required is said with a word, not a colour.
+        Text {
+            text: root.attr.name + (root.attr.required ? " (required)" : "");
+            min-width: 200px;
+            vertical-alignment: center;
+            font-weight: root.attr.present ? 700 : 400;
+        }
+        if root.attr.choices.length > 0: ComboBox {
+            model: root.attr.choices;
+            current-value: root.attr.value;
+            horizontal-stretch: 1;
+            selected(v) => { root.set(root.attr.name, v); }
+        }
+        if root.attr.choices.length == 0: LineEdit {
+            text: root.attr.value;
+            placeholder-text: root.attr.present ? "" : "(not given)";
+            horizontal-stretch: 1;
+            accepted => { root.set(root.attr.name, self.text); }
+        }
+        if root.attr.is-ref && root.attr.present: Button {
+            text: "Go to";
+            clicked => { root.follow(root.attr.name); }
+        }
+        if root.attr.present && !root.attr.required: Button {
+            text: "Remove";
+            clicked => { root.remove(root.attr.name); }
+        }
+    }
+    if root.attr.problem != "": Text {
+        text: "E " + root.attr.problem;
+        color: Palette.error;
+        wrap: word-wrap;
+    }
+}
+
+// A document's window.
+export component DocWindow inherits Window {
+    in property <string> doc-title;
+    in property <[Row]> rows;
+    in property <[AttrRow]> attrs;
+    in property <[ProblemRow]> problems;
+    in property <string> problems-title: "Problems";
+    in property <string> element-name;
+    in property <string> element-doc;
+    in property <bool> has-element;
+    in property <bool> is-comment;
+    in property <bool> has-value;
+    in property <string> value-text;
+    in property <string> value-problem;
+    in-out property <string> comment-text;
+    in property <[Choice]> inserts;
+    in property <[Choice]> templates;
+    in property <string> undo-label;
+    in property <string> redo-label;
+    in property <bool> autosave;
+    in property <string> status;
+    in-out property <string> source;
+    in property <[string]> other-versions;
+    in property <bool> is-definition;
+    in property <string> version;
+    in property <bool> dirty;
+
+    callback new-doc();
+    callback open-doc();
+    callback add-doc();
+    callback save();
+    callback save-as();
+    callback close-doc();
+    callback toggle-autosave();
+    callback undo();
+    callback redo();
+    callback select(int);
+    callback toggle(int);
+    callback set-attr(string, string);
+    callback remove-attr(string);
+    callback follow(string);
+    callback set-value(string);
+    callback set-comment(string);
+    callback add-comment();
+    callback insert(int);
+    callback insert-template(int);
+    callback delete-selected();
+    callback move-up();
+    callback move-down();
+    callback rename();
+    callback find-usages();
+    callback convert(string);
+    callback load-source();
+    callback apply-source(string);
+    callback show-layout();
+    callback show-tester();
+    callback compare();
+    callback digest();
+    callback spec();
+    callback pick-problem(int);
+
+    title: (root.dirty ? "* " : "") + root.doc-title + " - XTCE "
+        + root.version;
+    preferred-width: 1200px;
+    preferred-height: 800px;
+    background: Palette.window;
+
+    MenuBar {
+        Menu {
+            title: "File";
+            MenuItem {
+                title: "New document...";
+                activated => { root.new-doc(); }
+            }
+            MenuItem { title: "Open..."; activated => { root.open-doc(); } }
+            // A mission is several documents: one added here is opened in
+            // a window of its own, and references between them resolve.
+            MenuItem {
+                title: "Add a document to the mission...";
+                activated => { root.add-doc(); }
+            }
+            MenuSeparator { }
+            MenuItem { title: "Save"; activated => { root.save(); } }
+            MenuItem { title: "Save as..."; activated => { root.save-as(); } }
+            MenuItem {
+                title: root.autosave ? "Autosave: on (turn off)"
+                    : "Autosave: off (turn on)";
+                activated => { root.toggle-autosave(); }
+            }
+            MenuSeparator { }
+            MenuItem { title: "Close"; activated => { root.close-doc(); } }
+        }
+        Menu {
+            title: "Edit";
+            MenuItem {
+                title: root.undo-label == "" ? "Undo"
+                    : "Undo " + root.undo-label;
+                enabled: root.undo-label != "";
+                activated => { root.undo(); }
+            }
+            MenuItem {
+                title: root.redo-label == "" ? "Redo"
+                    : "Redo " + root.redo-label;
+                enabled: root.redo-label != "";
+                activated => { root.redo(); }
+            }
+            MenuSeparator { }
+            MenuItem {
+                title: "Rename everywhere...";
+                enabled: root.is-definition;
+                activated => { root.rename(); }
+            }
+            MenuItem {
+                title: "Find usages";
+                enabled: root.is-definition;
+                activated => { root.find-usages(); }
+            }
+            MenuSeparator { }
+            MenuItem {
+                title: "Move up";
+                enabled: root.has-element;
+                activated => { root.move-up(); }
+            }
+            MenuItem {
+                title: "Move down";
+                enabled: root.has-element;
+                activated => { root.move-down(); }
+            }
+            MenuItem {
+                title: "Delete";
+                enabled: root.has-element || root.is-comment;
+                activated => { root.delete-selected(); }
+            }
+            MenuItem {
+                title: "Add a comment before";
+                enabled: root.has-element;
+                activated => { root.add-comment(); }
+            }
+        }
+        Menu {
+            title: "Insert";
+            for c in root.inserts: MenuItem {
+                title: c.title;
+                activated => { root.insert(c.index); }
+            }
+            MenuSeparator { }
+            for c in root.templates: MenuItem {
+                title: "Ready-made: " + c.title;
+                activated => { root.insert-template(c.index); }
+            }
+        }
+        Menu {
+            title: "Version";
+            for v in root.other-versions: MenuItem {
+                title: "Convert to XTCE " + v + "...";
+                activated => { root.convert(v); }
+            }
+        }
+        Menu {
+            title: "Tools";
+            MenuItem {
+                title: "Packet layout";
+                activated => { root.show-layout(); }
+            }
+            MenuItem {
+                title: "Encode and decode...";
+                activated => { root.show-tester(); }
+            }
+            MenuItem {
+                title: "Compare with a file...";
+                activated => { root.compare(); }
+            }
+            MenuItem { title: "Digest"; activated => { root.digest(); } }
+            MenuItem {
+                title: "Specification of this element";
+                enabled: root.has-element;
+                activated => { root.spec(); }
+            }
+        }
+    }
+
+    VerticalBox {
+        TabWidget {
+            Tab {
+                title: "Structure";
+                HorizontalBox {
+                    // The outline.
+                    ListView {
+                        min-width: 380px;
+                        horizontal-stretch: 1;
+                        for r in root.rows: OutlineRow {
+                            item: r;
+                            toggle(id) => { root.toggle(id); }
+                            select(id) => { root.select(id); }
+                        }
+                    }
+                    // The selected element.
+                    VerticalBox {
+                        horizontal-stretch: 1;
+                        min-width: 420px;
+                        Text {
+                            text: root.is-comment ? "Comment"
+                                : root.element-name;
+                            font-size: 18px;
+                            font-weight: 700;
+                        }
+                        Text {
+                            text: root.element-doc;
+                            wrap: word-wrap;
+                            max-height: 90px;
+                            overflow: elide;
+                        }
+                        if root.is-comment: VerticalBox {
+                            comment-edit := TextEdit {
+                                text <=> root.comment-text;
+                                min-height: 120px;
+                            }
+                            Button {
+                                text: "Apply the comment";
+                                clicked => {
+                                    root.set-comment(comment-edit.text);
+                                }
+                            }
+                        }
+                        if root.has-value: HorizontalBox {
+                            Text { text: "Value"; vertical-alignment: center; }
+                            value-edit := LineEdit {
+                                text: root.value-text;
+                                accepted => { root.set-value(self.text); }
+                            }
+                            Button {
+                                text: "Set";
+                                clicked => { root.set-value(value-edit.text); }
+                            }
+                        }
+                        if root.value-problem != "": Text {
+                            text: "E " + root.value-problem;
+                            color: Palette.error;
+                            wrap: word-wrap;
+                        }
+                        ScrollView {
+                            vertical-stretch: 1;
+                            VerticalLayout {
+                                spacing: 6px;
+                                for a in root.attrs: AttrEditor {
+                                    attr: a;
+                                    set(n, v) => { root.set-attr(n, v); }
+                                    follow(n) => { root.follow(n); }
+                                    remove(n) => { root.remove-attr(n); }
+                                }
+                            }
+                        }
+                        Text {
+                            text: "Press Enter in a field to set it.  A change "
+                                + "the XTCE version does not allow is refused, "
+                                + "and the reason shown below.";
+                            wrap: word-wrap;
+                            font-size: 11px;
+                        }
+                    }
+                }
+            }
+            Tab {
+                title: "Source";
+                VerticalBox {
+                    source-edit := TextEdit {
+                        text <=> root.source;
+                        font-family: "monospace";
+                        vertical-stretch: 1;
+                    }
+                    HorizontalBox {
+                        Button {
+                            text: "Apply the source";
+                            clicked => { root.apply-source(source-edit.text); }
+                        }
+                        Button {
+                            text: "Show the document as it is";
+                            clicked => { root.load-source(); }
+                        }
+                    }
+                }
+            }
+        }
+        // What is wrong, or what a search found.
+        Text { text: root.problems-title; font-weight: 700; }
+        ListView {
+            height: 140px;
+            for p in root.problems: Rectangle {
+                height: 22px;
+                HorizontalLayout {
+                    spacing: 6px;
+                    Mark {
+                        mark: p.severity == "usage" ? "" : p.severity;
+                        y: 3px;
+                    }
+                    Text {
+                        text: (p.severity == "error" ? "Error: "
+                            : p.severity == "warning" ? "Warning: "
+                            : "Used in: ") + p.text;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+                TouchArea { clicked => { root.pick-problem(p.id); } }
+            }
+        }
+        Text { text: root.status; wrap: word-wrap; }
+    }
+}
+
+// A question with up to three answers.
+export component AskDialog inherits Window {
+    in property <string> message;
+    in property <string> first: "OK";
+    in property <string> second;
+    in property <string> third;
+    callback chosen(int);
+    title: "XTCE editor";
+    background: Palette.window;
+    preferred-width: 520px;
+    VerticalBox {
+        Text { text: root.message; wrap: word-wrap; }
+        HorizontalBox {
+            alignment: end;
+            Button { text: root.first; clicked => { root.chosen(0); } }
+            if root.second != "": Button {
+                text: root.second;
+                clicked => { root.chosen(1); }
+            }
+            if root.third != "": Button {
+                text: root.third;
+                clicked => { root.chosen(2); }
+            }
+        }
+    }
+}
+
+// A question answered in words.
+export component InputDialog inherits Window {
+    in property <string> message;
+    in-out property <string> answer;
+    callback done(bool, string);
+    title: "XTCE editor";
+    background: Palette.window;
+    preferred-width: 520px;
+    VerticalBox {
+        Text { text: root.message; wrap: word-wrap; }
+        field := LineEdit {
+            text <=> root.answer;
+            accepted => { root.done(true, self.text); }
+        }
+        HorizontalBox {
+            alignment: end;
+            Button { text: "OK"; clicked => { root.done(true, field.text); } }
+            Button { text: "Cancel"; clicked => { root.done(false, ""); } }
+        }
+    }
+}
+
+// Text to read: a comparison, a digest, a size report.
+export component TextWindow inherits Window {
+    in property <string> heading;
+    in property <string> body;
+    title: root.heading;
+    background: Palette.window;
+    preferred-width: 800px;
+    preferred-height: 600px;
+    VerticalBox {
+        TextEdit {
+            text: root.body;
+            read-only: true;
+            font-family: "monospace";
+        }
+    }
+}
+
+// What a conversion will do, and what it asks.
+export component ConvertDialog inherits Window {
+    in property <string> target;
+    in property <string> summary;
+    in property <[NeedRow]> needs;
+    in property <bool> loses;
+    in property <bool> refused;
+    in-out property <bool> accept-loss;
+    callback answer(string, string);
+    callback go();
+    callback cancel();
+    title: "Convert to XTCE " + root.target;
+    background: Palette.window;
+    preferred-width: 760px;
+    preferred-height: 560px;
+    VerticalBox {
+        TextEdit {
+            text: root.summary;
+            read-only: true;
+            vertical-stretch: 1;
+        }
+        for n in root.needs: VerticalLayout {
+            Text { text: n.question; wrap: word-wrap; }
+            LineEdit {
+                text: n.answer;
+                edited(t) => { root.answer(n.key, t); }
+            }
+        }
+        if root.loses: CheckBox {
+            text: "Convert anyway, losing what is listed as lost";
+            checked <=> root.accept-loss;
+        }
+        HorizontalBox {
+            alignment: end;
+            Button {
+                text: root.needs.length > 0 ? "Try again with these answers"
+                    : "Convert";
+                enabled: !root.refused && (!root.loses || root.accept-loss
+                    || root.needs.length > 0);
+                clicked => { root.go(); }
+            }
+            Button { text: "Cancel"; clicked => { root.cancel(); } }
+        }
+    }
+}
+
+// Each packet's fields, drawn to scale, with their names and sizes written
+// in each, so the drawing is read by its words as well as by its shading.
+export component LayoutWindow inherits Window {
+    in property <[PacketRow]> packets;
+    in property <string> note;
+    title: "Packet layout";
+    background: Palette.window;
+    preferred-width: 1000px;
+    preferred-height: 640px;
+    VerticalBox {
+        Text { text: root.note; wrap: word-wrap; }
+        ScrollView {
+            VerticalLayout {
+                alignment: start;
+                spacing: 14px;
+                for p in root.packets: VerticalLayout {
+                    alignment: start;
+                    spacing: 4px;
+                    Text { text: p.name + ": " + p.size; font-weight: 700; }
+                    bar := Rectangle {
+                        height: 46px;
+                        border-width: 1px;
+                        border-color: black;
+                        for f[i] in p.fields: Rectangle {
+                            x: p.total == 0 ? 0px
+                                : f.offset * (bar.width - 2px) / p.total + 1px;
+                            width: p.total == 0 ? 0px : max(1px,
+                                f.bits * (bar.width - 2px) / p.total);
+                            y: 1px;
+                            height: parent.height - 2px;
+                            background: Math.mod(i, 2) == 0 ? Palette.field-a
+                                : Palette.field-b;
+                            border-width: 1px;
+                            border-color: white;
+                            Text {
+                                text: f.name + "\n" + f.bits + " bit"
+                                    + (f.bits == 1 ? "" : "s");
+                                color: Math.mod(i, 2) == 0 ? white : black;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                font-size: 11px;
+                                overflow: elide;
+                                width: parent.width - 2px;
+                            }
+                        }
+                    }
+                    for f in p.fields: Text {
+                        text: "  bit " + f.offset + ": " + f.name + ", "
+                            + f.bits + " bit" + (f.bits == 1 ? "" : "s")
+                            + (f.note == "" ? "" : " (" + f.note + ")");
+                        font-size: 12px;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Encoding values into a packet, and decoding a packet's bytes, with the
+// codecs the compiler generates.
+export component TesterWindow inherits Window {
+    in property <[string]> packets;
+    in property <string> fields;
+    in-out property <string> chosen;
+    in-out property <string> values: "{}";
+    in-out property <string> hex;
+    in property <string> result;
+    callback pick(string);
+    callback encode(string, string);
+    callback decode(string, string);
+    title: "Encode and decode";
+    background: Palette.window;
+    preferred-width: 820px;
+    preferred-height: 620px;
+    VerticalBox {
+        HorizontalBox {
+            Text { text: "Packet"; vertical-alignment: center; }
+            ComboBox {
+                model: root.packets;
+                current-value <=> root.chosen;
+                selected(v) => { root.pick(v); }
+                horizontal-stretch: 1;
+            }
+        }
+        Text { text: root.fields; wrap: word-wrap; font-family: "monospace"; }
+        Text { text: "Values, as JSON: field names as above"; }
+        values-edit := TextEdit {
+            text <=> root.values;
+            font-family: "monospace";
+            min-height: 100px;
+        }
+        HorizontalBox {
+            Button {
+                text: "Encode";
+                clicked => { root.encode(root.chosen, values-edit.text); }
+            }
+        }
+        Text { text: "Bytes, in hexadecimal"; }
+        hex-edit := LineEdit { text <=> root.hex; font-family: "monospace"; }
+        HorizontalBox {
+            Button {
+                text: "Decode";
+                clicked => { root.decode(root.chosen, hex-edit.text); }
+            }
+        }
+        TextEdit {
+            text: root.result;
+            read-only: true;
+            font-family: "monospace";
+            vertical-stretch: 1;
+        }
+    }
+}

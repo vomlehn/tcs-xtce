@@ -361,25 +361,22 @@ impl Session {
         text: &str,
         label: &str,
     ) -> Result<(), String> {
-        self.replace(doc, text, label, true)
+        self.replace_any(doc, text, label, true, false)
     }
 
-    /// Replaces a document's whole text, as one change that can be undone.
+    /// Replaces a document's whole text, as one change that can be undone,
+    /// keeping its version.
     ///
     /// # Arguments
     ///
     /// * `doc`    - The document's index.
     /// * `text`   - The new text.
     /// * `label`  - What the change is, for the Undo menu item.
-    /// * `strict` - Whether to refuse text with more schema errors than
-    ///              the document has: true for an edit made in the editor,
-    ///              false for taking what is in the file, which is the
-    ///              file's whatever it holds.
+    /// * `strict` - As [`Session::replace_any`].
     ///
     /// # Errors
     ///
-    /// Says why, if the text is not well-formed, changes the version, or
-    /// is strict and has more schema errors than the document had.
+    /// As [`Session::replace_any`].
     fn replace(
         &mut self,
         doc: usize,
@@ -387,11 +384,63 @@ impl Session {
         label: &str,
         strict: bool,
     ) -> Result<(), String> {
+        self.replace_any(doc, text, label, strict, false)
+    }
+
+    /// Takes a converted document in place of one, as one change that can
+    /// be undone.  The converter has checked it against its version's
+    /// schema, so it is not held to the document's old version.
+    ///
+    /// # Arguments
+    ///
+    /// * `doc`       - The document's index.
+    /// * `converted` - The document the conversion made.
+    /// * `label`     - What the change is, for the Undo menu item.
+    ///
+    /// # Errors
+    ///
+    /// Says why, if it could not be taken.
+    pub fn take_conversion(
+        &mut self,
+        doc: usize,
+        converted: &Document,
+        label: &str,
+    ) -> Result<(), String> {
+        self.replace_any(doc, &converted.write(), label, false, true)
+    }
+
+    /// Replaces a document's whole text, as one change that can be undone.
+    ///
+    /// # Arguments
+    ///
+    /// * `doc`     - The document's index.
+    /// * `text`    - The new text.
+    /// * `label`   - What the change is, for the Undo menu item.
+    /// * `strict`  - Whether to refuse text with more schema errors than
+    ///               the document has: true for an edit made in the
+    ///               editor, false for taking what is in the file, which
+    ///               is the file's whatever it holds.
+    /// * `convert` - Whether the text may be in another version, as a
+    ///               conversion's is.
+    ///
+    /// # Errors
+    ///
+    /// Says why, if the text is not well-formed, changes the version when
+    /// that is not allowed, or is strict and has more schema errors than
+    /// the document had.
+    fn replace_any(
+        &mut self,
+        doc: usize,
+        text: &str,
+        label: &str,
+        strict: bool,
+        convert: bool,
+    ) -> Result<(), String> {
         let o = self.docs.get(doc).ok_or("that document is not open")?;
         let mut new = Document::parse(text).map_err(|e| e.to_string())?;
         let was = o.report.version;
         let now = check(&new);
-        if now.version != was {
+        if now.version != was && !convert {
             return Err(format!(
                 "the text is not XTCE {}, as the document is; use Upgrade or \
                  Downgrade to change its version",
