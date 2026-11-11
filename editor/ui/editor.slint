@@ -704,7 +704,10 @@ export component DocWindow inherits Window {
                         tree := VerticalLayout {
                             x: 0px;
                             y: 0px;
-                            width: tree-view.visible-width;
+                            // Fluent's scroll bar is drawn over what it
+                            // scrolls, 14px wide at the right, so the
+                            // rows stop short of it.
+                            width: tree-view.visible-width - 14px;
                             height: self.preferred-height;
                             alignment: start;
                             for r in root.rows: TreeRow {
