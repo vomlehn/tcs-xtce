@@ -1,5 +1,5 @@
 [package]
-name = "tcs-xtce-editor"
+name = "tcs-xtcee"
 version = "0.1.0"
 edition = "2021"
 description = """\

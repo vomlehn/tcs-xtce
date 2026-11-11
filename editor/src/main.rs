@@ -12,10 +12,10 @@ use std::process::ExitCode;
 /// not run.
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if tcs_xtce_editor::cli::is_command(&args) {
-        return tcs_xtce_editor::cli::run(&args);
+    if tcs_xtcee::cli::is_command(&args) {
+        return tcs_xtcee::cli::run(&args);
     }
-    match tcs_xtce_editor::gui::run(&args) {
+    match tcs_xtcee::gui::run(&args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("tcs-xtcee: {e}");

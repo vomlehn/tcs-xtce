@@ -1300,7 +1300,7 @@ The XTCE editor (tcs-xtcee)
 
 The editor is a Rust program in ``editor/``, its windows in Slint, as
 the TCS ground programs' are.  Its parts, each a module of the
-``tcs-xtce-editor`` crate:
+``tcs-xtcee`` crate:
 
 ``tree``
    The document as it was written.  The XML binding reads a document into

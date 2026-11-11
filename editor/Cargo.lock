@@ -4345,7 +4345,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tcs-xtce-editor"
+name = "tcs-xtcee"
 version = "0.1.0"
 dependencies = [
  "i-slint-backend-testing",
