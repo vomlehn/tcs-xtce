@@ -387,7 +387,7 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.5.0
+TCS_HELPERS_REQUIRED := 0.6.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include
@@ -486,7 +486,10 @@ tcs-helpers:
 # installed as committed, not remade, so that installing needs no
 # rst2html; `make html` before a commit keeps it current. An example that
 # starts with "#!" is a script to run, so it is installed executable and
-# the rest are not.
+# the rest are not. THIRD-PARTY-NOTICES, which tcs-helpers'
+# third-party-notices.py writes, lists the crates compiled into tcs-xtcee,
+# the one Rust program installed, with the licence notices each requires
+# to go with every copy.
 .PHONY: install-files
 install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 	@[ "$(VERSION)" = "$(RUST_VERSION)" ] || { \
@@ -522,6 +525,7 @@ install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 	$(call pyinstall,tcs_ccsds,$(CCSDS_VERSION), \
 		ccsds/python/pyproject.toml ccsds/python/tcs_ccsds)
 	install -D -m 644 -t $(DOCDIR) $(DOCS)
+	$(THIRD_PARTY_NOTICES) editor $(DOCDIR)/THIRD-PARTY-NOTICES tcs-xtce
 	files=$$(git ls-files examples) && [ -n "$$files" ] || { \
 	    echo "install takes the examples from git, so run it in a" \
 	        "clone of the repository" >&2; \

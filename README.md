@@ -456,8 +456,18 @@ changes.
 Licensed under either of the Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/vomlehn/tcs-xtce/blob/main/LICENSE-APACHE)
 or <http://www.apache.org/licenses/LICENSE-2.0>) or the MIT license
 ([LICENSE-MIT](https://github.com/vomlehn/tcs-xtce/blob/main/LICENSE-MIT) or <http://opensource.org/licenses/MIT>), at your option.
-This covers all of it: the generator, the Rust crate, the C/C++ library and
-the Python package.
+This covers all of it: the generator, the Rust crate, the C/C++ library,
+the Python package and the editor.
+
+The package lists the Rust crates compiled into tcs-xtcee, with their
+licences and the notices those require, in
+`/opt/tcs/share/doc/tcs-xtce/THIRD-PARTY-NOTICES`.
+
+tcs-xtcee, the editor, is built with [Slint](https://slint.dev), under its
+royalty-free licence for desktop applications, which asks for this
+attribution:
+
+[![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be

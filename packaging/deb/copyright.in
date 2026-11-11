@@ -6,6 +6,9 @@ Source: https://github.com/vomlehn/tcs-xtce
 Files: *
 Copyright: @COPYRIGHT@
 License: MIT or Apache-2.0
+Comment: tcs-xtcee has the Rust crates it depends on compiled into it,
+ each under its own licence. Each is listed, with its licence and the
+ notices it requires, in /opt/tcs/share/doc/@PACKAGE@/THIRD-PARTY-NOTICES.
 
 License: MIT
 @MIT@
