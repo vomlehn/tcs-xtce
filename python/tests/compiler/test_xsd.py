@@ -10,8 +10,8 @@ from tcs_xtce.binding.xsd import parse
 
 # The schema the bindings are generated from, as make references fetches
 # it.
-SCHEMA = os.path.join(os.path.dirname(__file__), "..", "..", "..",
-                      "references", "SpaceSystem.xsd")
+SCHEMA = os.path.join(os.path.dirname(__file__), "..", "..", "..", "references",
+                      "SpaceSystem.xsd")
 
 
 def docs(node, seen=None):
