@@ -411,6 +411,13 @@ random packets.
 
 ## Incompatible changes
 
+**0.6.0: OMG's documentation is no longer copied.** The generated code
+describes each XTCE declaration in a line of its own, where it used to
+carry the schema's documentation, which is OMG's and may not be
+redistributed; versions 0.1.0 to 0.5.0 were withdrawn from crates.io
+for that reason. Nothing the generated code does, and no name in it,
+changed, so code using it needs no change.
+
 **0.5.0: wide enumerations hold wide integers.** An enumeration whose
 integer encoding has more than 64 bits now holds its value in the type a
 wide integer of that encoding has, rather than a 64-bit one, so that raw
