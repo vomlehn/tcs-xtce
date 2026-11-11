@@ -4,6 +4,7 @@
 use std::process::ExitCode;
 
 use crate::convert::{convert, Answers};
+use crate::fetch::Missing;
 use crate::schema::Version;
 use crate::tree::Document;
 use crate::validate::{check, Severity};
@@ -23,6 +24,10 @@ usage: tcs-xtcee [FILE...]             open the files in the editor
                                        answers what it asks
        tcs-xtcee sample VERSION SEED   print a random valid document of
                                        an XTCE version, for testing
+
+A command that needs an XTCE schema not yet on this machine asks, at a
+terminal, before downloading it from OMG; elsewhere it stops, unless
+given --download, which downloads it without asking.
 ";
 
 /// Whether a command line names one of the commands, rather than files to
@@ -37,7 +42,7 @@ usage: tcs-xtcee [FILE...]             open the files in the editor
 /// True for a command.
 pub fn is_command(args: &[String]) -> bool {
     matches!(
-        args.first().map(String::as_str),
+        args.iter().map(String::as_str).find(|a| *a != "--download"),
         Some("check" | "convert" | "sample" | "-h" | "--help")
     )
 }
@@ -52,10 +57,16 @@ pub fn is_command(args: &[String]) -> bool {
 ///
 /// Success, or failure if the command found a problem or could not run.
 pub fn run(args: &[String]) -> ExitCode {
+    let download = args.iter().any(|a| a == "--download");
+    let args: Vec<String> = args
+        .iter()
+        .filter(|a| *a != "--download")
+        .cloned()
+        .collect();
     match args.first().map(String::as_str) {
-        Some("check") => check_files(&args[1..]),
-        Some("convert") => convert_file(&args[1..]),
-        Some("sample") => sample(&args[1..]),
+        Some("check") => check_files(&args[1..], download),
+        Some("convert") => convert_file(&args[1..], download),
+        Some("sample") => sample(&args[1..], download),
         Some("-h" | "--help") => {
             print!("{USAGE}");
             ExitCode::SUCCESS
@@ -67,16 +78,72 @@ pub fn run(args: &[String]) -> ExitCode {
     }
 }
 
+/// Reads the schemas of some versions, downloading any that is not on
+/// this machine if the person agrees.
+///
+/// # Arguments
+///
+/// * `versions` - The versions.
+/// * `download` - Whether `--download` was given, which agrees to every
+///                download without asking.
+///
+/// # Errors
+///
+/// Says why a schema could not be had: not agreed to, with how to put it
+/// in place, or its download failed.
+fn ensure(versions: &[Version], download: bool) -> Result<(), String> {
+    for &v in versions {
+        let Some(m) = v.missing()? else {
+            v.load()?;
+            continue;
+        };
+        if !download && !agreed(&m) {
+            return Err(format!(
+                "{}, or give --download to have it downloaded",
+                m.refused()
+            ));
+        }
+        v.download(&m)?;
+    }
+    Ok(())
+}
+
+/// Asks on the terminal whether to download a file.
+///
+/// # Arguments
+///
+/// * `m` - The file.
+///
+/// # Returns
+///
+/// True if the answer was yes.  Without a terminal to ask at, as in a
+/// Makefile or a CI job, nothing is asked and the answer is no, so that
+/// nothing is downloaded that nobody agreed to.
+fn agreed(m: &Missing) -> bool {
+    use std::io::{BufRead, IsTerminal, Write};
+    if !std::io::stdin().is_terminal() {
+        return false;
+    }
+    eprint!("tcs-xtcee: {} [y/N] ", m.question());
+    let _ = std::io::stderr().flush();
+    let mut answer = String::new();
+    if std::io::stdin().lock().read_line(&mut answer).is_err() {
+        return false;
+    }
+    matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
+}
+
 /// Checks files and prints each problem with its file and line.
 ///
 /// # Arguments
 ///
-/// * `files` - The files.
+/// * `files`    - The files.
+/// * `download` - Whether to download a schema without asking.
 ///
 /// # Returns
 ///
 /// Success if no file has an error.
-fn check_files(files: &[String]) -> ExitCode {
+fn check_files(files: &[String], download: bool) -> ExitCode {
     let mut failed = false;
     for f in files {
         let bytes = match std::fs::read(f) {
@@ -95,6 +162,13 @@ fn check_files(files: &[String]) -> ExitCode {
                 continue;
             }
         };
+        if let Ok(v) = Version::of_document(&doc) {
+            if let Err(e) = ensure(&[v], download) {
+                println!("{f}:1: error: {e}");
+                failed = true;
+                continue;
+            }
+        }
         let report = check(&doc);
         for p in &report.problems {
             let line = doc.line_of(p.id).unwrap_or(1);
@@ -120,12 +194,13 @@ fn check_files(files: &[String]) -> ExitCode {
 ///
 /// # Arguments
 ///
-/// * `args` - The file, `--to VERSION`, and the options in [`USAGE`].
+/// * `args`     - The file, `--to VERSION`, and the options in [`USAGE`].
+/// * `download` - Whether to download a schema without asking.
 ///
 /// # Returns
 ///
 /// Success if the file was converted and written.
-fn convert_file(args: &[String]) -> ExitCode {
+fn convert_file(args: &[String], download: bool) -> ExitCode {
     let mut file = None;
     let mut to = None;
     let mut out = None;
@@ -169,6 +244,14 @@ fn convert_file(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // The document's own version's schema checks it, and the target's
+    // the conversion.
+    let mut versions = vec![to];
+    versions.extend(Version::of_document(&doc).ok());
+    if let Err(e) = ensure(&versions, download) {
+        eprintln!("{file}: {e}");
+        return ExitCode::FAILURE;
+    }
     let o = convert(&doc, to, &answers);
     for c in &o.changed {
         println!("{file}: changed: {c}");
@@ -207,16 +290,22 @@ fn convert_file(args: &[String]) -> ExitCode {
 ///
 /// # Arguments
 ///
-/// * `args` - The version and the seed.
+/// * `args`     - The version and the seed.
+/// * `download` - Whether to download the schema without asking.
 ///
 /// # Returns
 ///
-/// Success, or failure if the arguments are not a version and a number.
-fn sample(args: &[String]) -> ExitCode {
+/// Success, or failure if the arguments are not a version and a number,
+/// or the version's schema cannot be had.
+fn sample(args: &[String], download: bool) -> ExitCode {
     let v = args.first().and_then(|v| Version::parse(v));
     let seed = args.get(1).and_then(|s| s.parse::<u64>().ok());
     match (v, seed) {
         (Some(v), Some(seed)) => {
+            if let Err(e) = ensure(&[v], download) {
+                eprintln!("tcs-xtcee: {e}");
+                return ExitCode::FAILURE;
+            }
             print!("{}", crate::make::sample(v, seed));
             ExitCode::SUCCESS
         }

@@ -1611,8 +1611,12 @@ so it stays where it was put.  Elements and comments carry ids that
 do not change while the document is open, so that an edit can name
 what it changes without depending on where it is.</dd>
 <dt><tt class="docutils literal">schema</tt> and <tt class="docutils literal">content</tt></dt>
-<dd>Each version's schema, read from the file OMG published, built into
-the program: element and attribute declarations, complex types with
+<dd>Each version's schema, read from the file OMG published, which the
+program does not carry, OMG not allowing it to be redistributed: it is
+read the first time a document of its version is opened, made or
+converted to, from <tt class="docutils literal">references/</tt> in a checkout or the user's data
+directory, where <tt class="docutils literal">fetch</tt> downloads it once the person agrees.  What
+is read is element and attribute declarations, complex types with
 their bases merged in, simple types with their enumerations, patterns
 and ranges, and keys.  The part of XML Schema the XTCE schemas use is
 read, and anything else is refused, so that a schema using more of the

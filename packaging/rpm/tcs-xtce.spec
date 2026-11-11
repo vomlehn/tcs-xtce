@@ -54,6 +54,9 @@ Requires:	libGL.so.1()(64bit)
 Requires:	libwayland-client.so.0()(64bit)
 Requires:	libwayland-egl.so.1()(64bit)
 Requires:	libdbus-1.so.3()(64bit)
+# The editor downloads OMG's schemas and specifications with curl, when
+# the person agrees, since OMG does not allow them to be packaged.
+Requires:	curl
 # The .pth file that puts /opt/tcs on python3's own path is in the
 # directory of one Python version, the one this RPM was built for; the
 # commands find the package without it. A Recommends, as tcslog's is.

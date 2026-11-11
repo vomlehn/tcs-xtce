@@ -18,12 +18,13 @@ use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 use crate::codec;
 use crate::convert::{convert, Answers, Outcome};
 use crate::edit;
+use crate::fetch::Missing;
 use crate::make::Maker;
 use crate::refs::{Kind, Loc};
 use crate::schema::{TypeRef, Version};
 use crate::session::{Change, Session};
 use crate::tools;
-use crate::tree::{Comment, Element, Id, Node};
+use crate::tree::{Comment, Document, Element, Id, Node};
 use crate::validate::{insertable, Severity};
 
 slint::include_modules!();
@@ -194,7 +195,9 @@ pub fn run(files: &[String]) -> Result<(), String> {
 }
 
 /// Makes the editor and opens files in it, each in a window of its own,
-/// or one empty window if none opens.
+/// or one empty window if none opens.  A file whose version's schema has
+/// to be downloaded first opens once the person has agreed and it has
+/// been.
 ///
 /// # Arguments
 ///
@@ -217,15 +220,11 @@ fn start(files: &[String]) -> Shared {
         inputs: Vec::new(),
         converting: None,
     }));
-    let mut opened = false;
+    // An empty window first, which the first document opened takes, so
+    // that a question about a download has the editor behind it.
+    new_window(&app, None);
     for f in files {
-        match open_file(&app, PathBuf::from(f)) {
-            Ok(()) => opened = true,
-            Err(e) => eprintln!("{e}"),
-        }
-    }
-    if !opened {
-        new_window(&app, None);
+        open_path(&app, PathBuf::from(f), None);
     }
     app
 }
@@ -565,6 +564,144 @@ fn input(
     app.borrow_mut().inputs.push(d);
 }
 
+/// Asks whether to download one of OMG's files, and if the answer is yes
+/// downloads it on a thread of its own, so that the windows go on
+/// working, and then does something with what was downloaded.
+///
+/// # Arguments
+///
+/// * `app`   - The editor.
+/// * `m`     - The file to download.
+/// * `fetch` - Downloads it, on the thread.
+/// * `then`  - Called with the editor and what `fetch` gave, back on
+///             the windows' thread, once the download has worked.  A
+///             download refused or failed says why in the status lines
+///             instead.
+fn after_download<T: Send + 'static>(
+    app: &Shared,
+    m: Missing,
+    fetch: impl FnOnce(&Missing) -> Result<T, String> + Send + 'static,
+    then: impl FnOnce(&Shared, T) + 'static,
+) {
+    // The answer comes to a callback that may be called more than once,
+    // and the download and what follows it are done once.
+    let pending = RefCell::new(Some((fetch, then)));
+    let question = m.question();
+    ask(app, &question, &["Download", "Cancel"], move |app, i| {
+        let Some((fetch, then)) = pending.borrow_mut().take() else {
+            return;
+        };
+        if i != 0 {
+            status_all(&app.borrow(), &m.refused());
+            return;
+        }
+        status_all(&app.borrow(), &format!("Downloading {}...", m.what));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let m2 = m.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(fetch(&m2));
+        });
+        wait_for(app.clone(), rx, then);
+    });
+}
+
+/// Waits, without stopping the windows, for a download's result, and
+/// does something with it.
+///
+/// # Arguments
+///
+/// * `app`  - The editor.
+/// * `rx`   - Where the download's thread sends its result.
+/// * `then` - Called with the editor and what was downloaded.
+fn wait_for<T: 'static>(
+    app: Shared,
+    rx: std::sync::mpsc::Receiver<Result<T, String>>,
+    then: impl FnOnce(&Shared, T) + 'static,
+) {
+    match rx.try_recv() {
+        Ok(Ok(got)) => then(&app, got),
+        Ok(Err(e)) => status_all(&app.borrow(), &e),
+        Err(std::sync::mpsc::TryRecvError::Empty) => {
+            slint::Timer::single_shot(Duration::from_millis(100), move || {
+                wait_for(app, rx, then)
+            });
+        }
+        Err(std::sync::mpsc::TryRecvError::Disconnected) => status_all(
+            &app.borrow(),
+            "the download stopped without saying why; try again",
+        ),
+    }
+}
+
+/// Has the schemas of some versions read, asking before downloading any
+/// that is not on this machine, and then does something that needs them.
+///
+/// # Arguments
+///
+/// * `app`      - The editor.
+/// * `versions` - The versions.
+/// * `then`     - Called with the editor once every schema is read; not
+///                called if one is refused or cannot be had, which the
+///                status lines say.
+fn with_schemas(
+    app: &Shared,
+    versions: Vec<Version>,
+    then: impl FnOnce(&Shared) + 'static,
+) {
+    let mut rest = versions.into_iter();
+    while let Some(v) = rest.next() {
+        match v.missing() {
+            Err(e) => return status_all(&app.borrow(), &e),
+            Ok(None) => {
+                if let Err(e) = v.load() {
+                    return status_all(&app.borrow(), &e);
+                }
+            }
+            Ok(Some(m)) => {
+                let rest: Vec<Version> = rest.collect();
+                after_download(
+                    app,
+                    m,
+                    move |m| v.download(m).map(|_| ()),
+                    move |app, ()| with_schemas(app, rest, then),
+                );
+                return;
+            }
+        }
+    }
+    then(app);
+}
+
+/// Opens a file once its version's schema is read, asking first if that
+/// has to be downloaded.
+///
+/// # Arguments
+///
+/// * `app`  - The editor.
+/// * `path` - The file.
+/// * `key`  - The window whose status line says why if it fails, or
+///            `None` for every window's.
+fn open_path(app: &Shared, path: PathBuf, key: Option<u64>) {
+    // The version is read from the file here only to know which schema to
+    // have; a file that cannot be read, or says no version, is opened
+    // straight away, so that opening says what is wrong with it.
+    let version = std::fs::read(&path)
+        .ok()
+        .and_then(|b| Document::from_bytes(&b).ok())
+        .and_then(|d| Version::of_document(&d).ok());
+    with_schemas(app, version.into_iter().collect(), move |app| {
+        if let Err(e) = open_file(app, path) {
+            match key {
+                Some(k) => status_of(app, k, &e),
+                None => status_all(&app.borrow(), &e),
+            }
+            if app.borrow().wins.iter().all(|w| w.path.is_none()) {
+                eprintln!("{e}");
+            }
+        }
+    });
+}
+
 /// Shows text in a window of its own.
 ///
 /// # Arguments
@@ -834,15 +971,16 @@ impl Shown<'_> {
         keys: &mut Vec<(RowKey, i32)>,
     ) {
         let o = &self.s.docs[self.d];
-        let version = o.report.version.unwrap_or(Version::NEWEST);
-        let schema = version.schema();
+        // The checker gives a version, and found declarations, only if
+        // it read the version's schema.
+        let schema = o.report.version.map(Version::schema);
         let decl = o.report.decls.get(&e.id).copied();
         // What the schema says of the element, its attributes and whether
         // it holds a value.
         let mut doc = String::new();
         let mut decl_attrs = &[][..];
         let mut has_value = false;
-        if let Some(dc) = decl {
+        if let (Some(dc), Some(schema)) = (decl, schema) {
             let de = &schema.elements[dc];
             doc = de.doc.clone();
             match de.ty {
@@ -927,7 +1065,8 @@ impl Shown<'_> {
                     .into(),
                     choices: ModelRc::new(VecModel::from(
                         schema
-                            .enumeration(a.ty)
+                            .map(|s| s.enumeration(a.ty))
+                            .unwrap_or_default()
                             .into_iter()
                             .map(SharedString::from)
                             .collect::<Vec<_>>(),
@@ -1169,18 +1308,21 @@ fn new_doc(app: &Shared, _: u64) {
         &refs,
         move |app, i| {
             let v = Version::ALL[i.min(Version::ALL.len() - 1)];
-            let name = path
-                .file_stem()
-                .map_or("mission".into(), |s| s.to_string_lossy().to_string());
-            let r = app.borrow_mut().session.create(&path, v, &name);
-            match r {
-                Ok(d) => {
-                    let p = app.borrow().session.docs[d].path.clone();
-                    let _ = app.borrow_mut().session.save(d);
-                    let _ = open_file(app, p);
+            let path = path.clone();
+            with_schemas(app, vec![v], move |app| {
+                let name = path.file_stem().map_or("mission".into(), |s| {
+                    s.to_string_lossy().to_string()
+                });
+                let r = app.borrow_mut().session.create(&path, v, &name);
+                match r {
+                    Ok(d) => {
+                        let p = app.borrow().session.docs[d].path.clone();
+                        let _ = app.borrow_mut().session.save(d);
+                        let _ = open_file(app, p);
+                    }
+                    Err(e) => status_all(&app.borrow(), &e),
                 }
-                Err(e) => status_all(&app.borrow(), &e),
-            }
+            });
         },
     );
 }
@@ -1199,11 +1341,7 @@ fn open_doc(app: &Shared, key: u64) {
         return;
     };
     for f in files {
-        if let Err(e) = open_file(app, f) {
-            if let Some(w) = app.borrow().wins.iter().find(|w| w.key == key) {
-                w.window.set_status(e.into());
-            }
-        }
+        open_path(app, f, Some(key));
     }
 }
 
@@ -2206,7 +2344,9 @@ fn pick_problem(app: &Shared, key: u64, id: i32) {
     }
 }
 
-/// Starts converting the window's document to another version.
+/// Starts converting the window's document to another version, once
+/// that version's schema is read, asking first if it has to be
+/// downloaded.
 ///
 /// # Arguments
 ///
@@ -2214,6 +2354,21 @@ fn pick_problem(app: &Shared, key: u64, id: i32) {
 /// * `key` - The window's key.
 /// * `v`   - The version, as its name.
 fn start_convert(app: &Shared, key: u64, v: SharedString) {
+    let Some(target) = Version::parse(&v) else {
+        return;
+    };
+    with_schemas(app, vec![target], move |app| convert_to(app, key, v));
+}
+
+/// Opens the dialog for converting a window's document to another
+/// version, whose schema has been read.
+///
+/// # Arguments
+///
+/// * `app` - The editor.
+/// * `key` - The window's key.
+/// * `v`   - The version, as the menu names it.
+fn convert_to(app: &Shared, key: u64, v: SharedString) {
     let Some(target) = Version::parse(&v) else {
         return;
     };
@@ -2644,10 +2799,20 @@ fn spec(app: &Shared, key: u64) {
             .element(id)
             .map(|e| e.local().to_string())
             .unwrap_or_default();
-        tools::open_spec(o.report.version.unwrap_or(Version::NEWEST), &name)
+        (o.report.version.unwrap_or(Version::NEWEST), name)
     };
-    if let Err(e) = r {
-        status_of(app, key, &e);
+    let (version, name) = r;
+    let show = move |app: &Shared, pdf: PathBuf| {
+        if let Err(e) = tools::show_spec(&pdf, &name) {
+            status_of(app, key, &e);
+        }
+    };
+    match tools::spec_file(version) {
+        Err(e) => status_of(app, key, &e),
+        Ok(Ok(pdf)) => show(app, pdf),
+        Ok(Err(m)) => {
+            after_download(app, m, tools::download_spec, show);
+        }
     }
 }
 

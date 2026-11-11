@@ -412,28 +412,29 @@ ul.auto-toc {
 <li><a class="reference internal" href="#xtce-digest" id="toc-entry-33">xtce-digest</a></li>
 <li><a class="reference internal" href="#the-xtce-editor-tcs-xtcee" id="toc-entry-34">The XTCE editor (tcs-xtcee)</a><ul>
 <li><a class="reference internal" href="#building-it" id="toc-entry-35">Building it</a></li>
-<li><a class="reference internal" href="#its-windows" id="toc-entry-36">Its windows</a></li>
-<li><a class="reference internal" href="#selecting-opening-and-closing" id="toc-entry-37">Selecting, opening and closing</a></li>
-<li><a class="reference internal" href="#changes-the-version-does-not-allow" id="toc-entry-38">Changes the version does not allow</a></li>
-<li><a class="reference internal" href="#undo-and-redo" id="toc-entry-39">Undo and redo</a></li>
-<li><a class="reference internal" href="#saving-autosave-and-recovery" id="toc-entry-40">Saving, autosave and recovery</a></li>
-<li><a class="reference internal" href="#converting-between-versions" id="toc-entry-41">Converting between versions</a></li>
-<li><a class="reference internal" href="#tools" id="toc-entry-42">Tools</a></li>
-<li><a class="reference internal" href="#from-the-command-line" id="toc-entry-43">From the command line</a></li>
+<li><a class="reference internal" href="#omg-s-files" id="toc-entry-36">OMG's files</a></li>
+<li><a class="reference internal" href="#its-windows" id="toc-entry-37">Its windows</a></li>
+<li><a class="reference internal" href="#selecting-opening-and-closing" id="toc-entry-38">Selecting, opening and closing</a></li>
+<li><a class="reference internal" href="#changes-the-version-does-not-allow" id="toc-entry-39">Changes the version does not allow</a></li>
+<li><a class="reference internal" href="#undo-and-redo" id="toc-entry-40">Undo and redo</a></li>
+<li><a class="reference internal" href="#saving-autosave-and-recovery" id="toc-entry-41">Saving, autosave and recovery</a></li>
+<li><a class="reference internal" href="#converting-between-versions" id="toc-entry-42">Converting between versions</a></li>
+<li><a class="reference internal" href="#tools" id="toc-entry-43">Tools</a></li>
+<li><a class="reference internal" href="#from-the-command-line" id="toc-entry-44">From the command line</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#examples" id="toc-entry-44">Examples</a><ul>
-<li><a class="reference internal" href="#housekeeping" id="toc-entry-45"><tt class="docutils literal">housekeeping</tt></a></li>
-<li><a class="reference internal" href="#simple-string" id="toc-entry-46"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
-<li><a class="reference internal" href="#to-from" id="toc-entry-47"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></li>
-<li><a class="reference internal" href="#variable-array" id="toc-entry-48"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></li>
-<li><a class="reference internal" href="#enum-labels" id="toc-entry-49"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></li>
-<li><a class="reference internal" href="#split-mission" id="toc-entry-50"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></li>
+<li><a class="reference internal" href="#examples" id="toc-entry-45">Examples</a><ul>
+<li><a class="reference internal" href="#housekeeping" id="toc-entry-46"><tt class="docutils literal">housekeeping</tt></a></li>
+<li><a class="reference internal" href="#simple-string" id="toc-entry-47"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></li>
+<li><a class="reference internal" href="#to-from" id="toc-entry-48"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></li>
+<li><a class="reference internal" href="#variable-array" id="toc-entry-49"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></li>
+<li><a class="reference internal" href="#enum-labels" id="toc-entry-50"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></li>
+<li><a class="reference internal" href="#split-mission" id="toc-entry-51"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing" id="toc-entry-51">Testing</a></li>
-<li><a class="reference internal" href="#license" id="toc-entry-52">License</a></li>
-<li><a class="reference internal" href="#see-also" id="toc-entry-53">See Also</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-52">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-53">License</a></li>
+<li><a class="reference internal" href="#see-also" id="toc-entry-54">See Also</a></li>
 </ul>
 </div>
 <div class="section" id="summary">
@@ -3643,21 +3644,46 @@ inside its specification, never in a form a program can read.</p>
 <div class="section" id="building-it">
 <h2><a class="toc-backref" href="#toc-entry-35">Building it</a></h2>
 <pre class="code sh literal-block">
-make<span class="whitespace"> </span>editor<span class="whitespace">                  </span><span class="comment single"># fetches the schemas once, then builds
+make<span class="whitespace"> </span>editor<span class="whitespace">                  </span><span class="comment single"># builds it
 </span>editor/target/release/tcs-xtcee<span class="whitespace"> </span>FILE...
 </pre>
 <p>The tcs-xtce package installs it as <tt class="docutils literal"><span class="pre">/opt/tcs/bin/tcs-xtcee</span></tt>,
 already built, with the Python package it uses installed beside it.</p>
-<p><tt class="docutils literal">make editor</tt> fetches each version's schema and specification into
-<tt class="docutils literal">references/</tt> (<tt class="docutils literal">make <span class="pre">-C</span> references editor</tt>), once, and builds the
-editor with the schemas inside it.  The packet layout, the encode and
+<p>The packet layout, the encode and
 decode window and the compiler's check use the Python package, as
 <a class="reference internal" href="#running-the-compiler">Running the compiler</a> describes: from a checkout, run <tt class="docutils literal">make generate</tt>
 first, or set <tt class="docutils literal">TCS_XTCE_PYTHONPATH</tt> to the directory that holds
 <tt class="docutils literal">tcs_xtce</tt>.</p>
 </div>
+<div class="section" id="omg-s-files">
+<h2><a class="toc-backref" href="#toc-entry-36">OMG's files</a></h2>
+<p>The editor holds each document to the schema OMG published for its XTCE
+version, and opens OMG's specification at an element.  OMG does not allow
+either to be redistributed, so neither is built into the editor or
+packaged with it.  Each is downloaded from OMG, with <tt class="docutils literal">curl</tt>, the first
+time it is needed, and only once you have agreed:</p>
+<ul class="simple">
+<li>a version's schema when a document of that version is opened or made,
+or a document is converted to it;</li>
+<li>a version's specification when Tools &gt; Specification of this element
+asks for it.</li>
+</ul>
+<p>The editor asks in a dialog, saying what is to be downloaded, from where
+and to where; Cancel downloads nothing and leaves the document unopened,
+and the status line says how to download the file yourself.  The
+commands (<a class="reference internal" href="#from-the-command-line">From the command line</a>) ask on the terminal, and without a
+terminal, as in a Makefile or a CI job, download nothing and stop, unless
+given <tt class="docutils literal"><span class="pre">--download</span></tt>.</p>
+<p>What is downloaded is kept in <tt class="docutils literal"><span class="pre">~/.local/share/tcs-xtcee/</span></tt>
+(<tt class="docutils literal"><span class="pre">$XDG_DATA_HOME/tcs-xtcee</span></tt> if set), as <tt class="docutils literal"><span class="pre">xtce-1.3.xsd</span></tt> and
+<tt class="docutils literal"><span class="pre">XTCE-1.3.pdf</span></tt> (or <tt class="docutils literal">1.1</tt>, <tt class="docutils literal">1.2</tt>), so each is asked about once.  A
+file you download yourself and save there under that name is used as it
+is.  In a checkout, the editor uses the copies in <tt class="docutils literal">references/</tt>
+instead, which <tt class="docutils literal">make <span class="pre">test-editor</span></tt> fetches (<tt class="docutils literal">make <span class="pre">-C</span> references
+editor</tt>), so that its tests need no network and ask nothing.</p>
+</div>
 <div class="section" id="its-windows">
-<h2><a class="toc-backref" href="#toc-entry-36">Its windows</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-37">Its windows</a></h2>
 <p><tt class="docutils literal"><span class="pre">tcs-xtcee</span> <span class="pre">FILE...</span></tt> opens each file in a window of its own.  The files
 given together are one mission (<a class="reference internal" href="#missions-in-several-documents">Missions in several documents</a>): a
 reference in one can name a definition in another, and File &gt; Open adds
@@ -3684,7 +3710,7 @@ a whole.</li>
 </ul>
 </div>
 <div class="section" id="selecting-opening-and-closing">
-<h2><a class="toc-backref" href="#toc-entry-37">Selecting, opening and closing</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-38">Selecting, opening and closing</a></h2>
 <p>A click on a name selects its row, which the Edit and Insert menus act
 on; Ctrl+click adds a row to the selection or takes it out, and
 Shift+click selects every row from the selected one to it.  Dragging
@@ -3704,7 +3730,7 @@ closed what is closed.  Elements outside the selection are not changed.
 The triangle beside a name opens or closes that element alone.</p>
 </div>
 <div class="section" id="changes-the-version-does-not-allow">
-<h2><a class="toc-backref" href="#toc-entry-38">Changes the version does not allow</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-39">Changes the version does not allow</a></h2>
 <p>Every change is held to the document's version.  An attribute set to a
 value its type does not allow, an element put where the schema does not
 allow it, a required element or attribute taken out, a source edit that
@@ -3722,7 +3748,7 @@ CCSDS space packet (CCSDS 133.0-B), with its types, its parameters and
 the abstract container a packet builds on.</p>
 </div>
 <div class="section" id="undo-and-redo">
-<h2><a class="toc-backref" href="#toc-entry-39">Undo and redo</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-40">Undo and redo</a></h2>
 <p>Edit &gt; Undo and Redo name the change they undo or redo.  Each document
 has a history of its own.  A rename across documents -- Edit &gt; Rename
 everywhere, which renames a definition and every reference to it in the
@@ -3732,7 +3758,7 @@ histories are kept only while the editor runs: they are gone when it is
 closed.</p>
 </div>
 <div class="section" id="saving-autosave-and-recovery">
-<h2><a class="toc-backref" href="#toc-entry-40">Saving, autosave and recovery</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-41">Saving, autosave and recovery</a></h2>
 <p>With autosave on, a changed document is written to its file two seconds
 after the last change.  File &gt; Autosave turns it off and on, and the
 setting is kept in <tt class="docutils literal"><span class="pre">~/.config/tcs-xtcee/settings</span></tt>
@@ -3749,7 +3775,7 @@ whether to reload it, which Undo can undo, or keep its own version; it
 does not write over the other change until one is chosen.</p>
 </div>
 <div class="section" id="converting-between-versions">
-<h2><a class="toc-backref" href="#toc-entry-41">Converting between versions</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-42">Converting between versions</a></h2>
 <p>Version &gt; Convert converts the document to another version, a version
 at a time, as one change that Undo undoes.  Before anything is changed
 the conversion dialog lists:</p>
@@ -3774,7 +3800,7 @@ attribute by attribute; the design describes them.  A converted document
 is checked against its new version's schema before it is taken.</p>
 </div>
 <div class="section" id="tools">
-<h2><a class="toc-backref" href="#toc-entry-42">Tools</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-43">Tools</a></h2>
 <dl class="docutils">
 <dt>Tools &gt; Packet layout</dt>
 <dd>Draws each packet's fields to scale, each with its name and size
@@ -3792,18 +3818,14 @@ unordered sets are ignored, as the digest ignores them.</dd>
 <dd>Gives the document's digest, as <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> computes it.</dd>
 <dt>Tools &gt; Specification of this element</dt>
 <dd>Opens the version's specification, searching it for the selected
-element where the PDF viewer can (Evince can).  A checkout has it in
-<tt class="docutils literal">references/</tt> once <tt class="docutils literal">make editor</tt> has run.  The package does not
-carry OMG's specifications, so an installed editor looks for
-<tt class="docutils literal"><span class="pre">XTCE-1.3.pdf</span></tt> (or <tt class="docutils literal">1.1</tt>, <tt class="docutils literal">1.2</tt>) in
-<tt class="docutils literal"><span class="pre">~/.local/share/tcs-xtcee/</span></tt> (<tt class="docutils literal">$XDG_DATA_HOME</tt> if set), and says
-where to download it from when it is not there.</dd>
+element where the PDF viewer can (Evince can), asking first to
+download it the first time (<a class="reference internal" href="#omg-s-files">OMG's files</a>).</dd>
 </dl>
 <p>A mission in XTCE 1.1 or 1.2 is converted to 1.3 in memory for the
 compiler's tools, which read 1.3; its files are not changed.</p>
 </div>
 <div class="section" id="from-the-command-line">
-<h2><a class="toc-backref" href="#toc-entry-43">From the command line</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-44">From the command line</a></h2>
 <p>The same checking and converting run without the windows, for a
 Makefile or a CI job:</p>
 <pre class="code sh literal-block">
@@ -3812,7 +3834,8 @@ tcs-xtcee<span class="whitespace"> </span>check<span class="whitespace"> </span>
               </span><span class="operator">[</span>-o<span class="whitespace"> </span>OUT<span class="operator">]</span><span class="whitespace">
 </span>tcs-xtcee<span class="whitespace"> </span>sample<span class="whitespace"> </span>VERSION<span class="whitespace"> </span>SEED
 </pre>
-<p><tt class="docutils literal">check</tt> prints each problem as <tt class="docutils literal">FILE:LINE: error: ...</tt>, and fails if
+<p>Each takes <tt class="docutils literal"><span class="pre">--download</span></tt>, which downloads a schema not yet on this
+machine without asking (<a class="reference internal" href="#omg-s-files">OMG's files</a>).  <tt class="docutils literal">check</tt> prints each problem as <tt class="docutils literal">FILE:LINE: error: ...</tt>, and fails if
 there is an error.  <tt class="docutils literal">convert</tt> prints what it changed, lost, needs and
 refuses; it writes nothing if anything is refused or needed, or, without
 <tt class="docutils literal"><span class="pre">--allow-loss</span></tt>, if anything would be lost.  Each need is printed with
@@ -3821,7 +3844,7 @@ of a version, which the tests use.</p>
 </div>
 </div>
 <div class="section" id="examples">
-<h1><a class="toc-backref" href="#toc-entry-44">Examples</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-45">Examples</a></h1>
 <p><tt class="docutils literal">examples/</tt> holds self-contained examples. Every example supports all
 four languages <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> generates: C, C++, Rust and Python 3, one for
 each <tt class="docutils literal"><span class="pre">--lang</span></tt> value. <tt class="docutils literal">make examples</tt> fails if an example is missing
@@ -3872,7 +3895,7 @@ thread to another, each after its length.</li>
 </ul>
 <p>Each is summarized below; its README has the details.</p>
 <div class="section" id="housekeeping">
-<h2><a class="toc-backref" href="#toc-entry-45"><tt class="docutils literal">housekeeping</tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-46"><tt class="docutils literal">housekeeping</tt></a></h2>
 <p><tt class="docutils literal">examples/housekeeping/housekeeping.xtce</tt> describes a container,
 <tt class="docutils literal">Status</tt>:</p>
 <pre class="literal-block">
@@ -3909,7 +3932,7 @@ encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=n
 more.</p>
 </div>
 <div class="section" id="simple-string">
-<h2><a class="toc-backref" href="#toc-entry-46"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-47"><tt class="docutils literal"><span class="pre">simple-string</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/simple-string/simple_string.xtce</span></tt> describes a container,
 <tt class="docutils literal">SimpleString</tt>, holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string
 that always occupies 64 bits and ends at a NUL byte, so it holds up to
@@ -3951,7 +3974,7 @@ buffers reused without reallocation: true
 for more.</p>
 </div>
 <div class="section" id="to-from">
-<h2><a class="toc-backref" href="#toc-entry-47"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-48"><tt class="docutils literal"><span class="pre">to-from</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/to-from/to_from.xtce</span></tt> describes a container, <tt class="docutils literal">Word</tt>,
 holding one parameter, <tt class="docutils literal">Text</tt>. <tt class="docutils literal">Text</tt> is a string of varying length
 with a 32-bit size tag before it. The tag and the string together occupy
@@ -3991,7 +4014,7 @@ same bytes, and runs all 16 pairs of reader and writer.</p>
 <p>See the <a class="reference external" href="../examples/to-from/README.html">to-from README</a> for more.</p>
 </div>
 <div class="section" id="variable-array">
-<h2><a class="toc-backref" href="#toc-entry-48"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-49"><tt class="docutils literal"><span class="pre">variable-array</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/variable-array/variable_array.xtce</span></tt> describes a container,
 <tt class="docutils literal">Paragraph</tt>, holding a two-dimensional array whose dimensions both vary:
 an array of lines, each an array of words. A count before each array gives
@@ -4055,7 +4078,7 @@ cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est la
 for more.</p>
 </div>
 <div class="section" id="enum-labels">
-<h2><a class="toc-backref" href="#toc-entry-49"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-50"><tt class="docutils literal"><span class="pre">enum-labels</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/enum-labels/modes.xtce</span></tt> describes a probe's <tt class="docutils literal">Status</tt>, whose
 <tt class="docutils literal">Mode</tt> is an enumeration (<tt class="docutils literal">SAFE</tt>, <tt class="docutils literal">IDLE</tt>, <tt class="docutils literal">SCIENCE</tt>,
 <tt class="docutils literal">DOWNLINK</tt>, and <tt class="docutils literal">TEST</tt> for the values 16 to 31). Everything that
@@ -4089,7 +4112,7 @@ decode 2850 -&gt; Status{mode=40, battery=80, target=none, station=none} | alarm
 more.</p>
 </div>
 <div class="section" id="split-mission">
-<h2><a class="toc-backref" href="#toc-entry-50"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></h2>
+<h2><a class="toc-backref" href="#toc-entry-51"><tt class="docutils literal"><span class="pre">split-mission</span></tt></a></h2>
 <p><tt class="docutils literal"><span class="pre">examples/split-mission</span></tt> describes a rover's PUS telemetry in three
 documents, as Yamcs's PUS example lays them out: <tt class="docutils literal">dt.xtce</tt> holds data
 types, <tt class="docutils literal">pus.xtce</tt> the CCSDS primary header and PUS telemetry secondary
@@ -4120,7 +4143,7 @@ for more.</p>
 </div>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-51">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-52">Testing</a></h1>
 <p><tt class="docutils literal">make test</tt> runs:</p>
 <ul class="simple">
 <li>the unit tests of every language (<tt class="docutils literal">cargo test</tt>, <tt class="docutils literal">cpp/tests</tt>,
@@ -4223,7 +4246,7 @@ drawn without a display.  <tt class="docutils literal">make <span class="pre">ed
 every other, and has <tt class="docutils literal">xmllint</tt> judge every document made.</p>
 </div>
 <div class="section" id="license">
-<h1><a class="toc-backref" href="#toc-entry-52">License</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-53">License</a></h1>
 <p>tcs-xtce -- the generator, the Rust crate, the C/C++ library and the Python
 package -- is licensed under either of the Apache License, Version 2.0
 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT
@@ -4235,7 +4258,7 @@ for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.</p>
 </div>
 <div class="section" id="see-also">
-<h1><a class="toc-backref" href="#toc-entry-53">See Also</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-54">See Also</a></h1>
 <dl class="docutils">
 <dt><a class="reference external" href="https://www.omg.org/spec/XTCE/">XTCE, the OMG specification</a></dt>
 <dd>The Object Management Group's XML Telemetric and Command Exchange

@@ -1315,8 +1315,12 @@ the TCS ground programs' are.  Its parts, each a module of the
    what it changes without depending on where it is.
 
 ``schema`` and ``content``
-   Each version's schema, read from the file OMG published, built into
-   the program: element and attribute declarations, complex types with
+   Each version's schema, read from the file OMG published, which the
+   program does not carry, OMG not allowing it to be redistributed: it is
+   read the first time a document of its version is opened, made or
+   converted to, from ``references/`` in a checkout or the user's data
+   directory, where ``fetch`` downloads it once the person agrees.  What
+   is read is element and attribute declarations, complex types with
    their bases merged in, simple types with their enumerations, patterns
    and ranges, and keys.  The part of XML Schema the XTCE schemas use is
    read, and anything else is refused, so that a schema using more of the

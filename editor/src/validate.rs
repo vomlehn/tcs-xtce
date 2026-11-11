@@ -85,15 +85,19 @@ impl Report {
 ///
 /// # Returns
 ///
-/// What was found.  A document whose version is not known has one problem,
-/// which says so, and nothing else is checked.
+/// What was found.  A document whose version is not known, or whose
+/// version's schema is not on this machine, has one problem, which says
+/// so, and nothing else is checked.
 pub fn check(doc: &Document) -> Report {
     let mut r = Report::default();
-    match Version::of_document(doc) {
-        Ok(v) => {
+    // A schema not on this machine is one the person has not agreed to
+    // download yet; the document is then checked against nothing, and
+    // says why, rather than stopping the editor.
+    match Version::of_document(doc).and_then(|v| Ok((v, v.load()?))) {
+        Ok((v, schema)) => {
             r.version = Some(v);
             let mut w = Walk {
-                schema: v.schema(),
+                schema,
                 ns: v.namespace(),
                 report: &mut r,
             };

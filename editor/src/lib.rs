@@ -7,6 +7,7 @@ pub mod codec;
 pub mod content;
 pub mod convert;
 pub mod edit;
+pub mod fetch;
 pub mod gui;
 pub mod make;
 pub mod refs;

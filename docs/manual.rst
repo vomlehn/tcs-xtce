@@ -3239,19 +3239,46 @@ Building it
 
 .. code-block:: sh
 
-   make editor                  # fetches the schemas once, then builds
+   make editor                  # builds it
    editor/target/release/tcs-xtcee FILE...
 
 The tcs-xtce package installs it as ``/opt/tcs/bin/tcs-xtcee``,
 already built, with the Python package it uses installed beside it.
 
-``make editor`` fetches each version's schema and specification into
-``references/`` (``make -C references editor``), once, and builds the
-editor with the schemas inside it.  The packet layout, the encode and
+The packet layout, the encode and
 decode window and the compiler's check use the Python package, as
 `Running the compiler`_ describes: from a checkout, run ``make generate``
 first, or set ``TCS_XTCE_PYTHONPATH`` to the directory that holds
 ``tcs_xtce``.
+
+OMG's files
+-----------
+
+The editor holds each document to the schema OMG published for its XTCE
+version, and opens OMG's specification at an element.  OMG does not allow
+either to be redistributed, so neither is built into the editor or
+packaged with it.  Each is downloaded from OMG, with ``curl``, the first
+time it is needed, and only once you have agreed:
+
+* a version's schema when a document of that version is opened or made,
+  or a document is converted to it;
+* a version's specification when Tools > Specification of this element
+  asks for it.
+
+The editor asks in a dialog, saying what is to be downloaded, from where
+and to where; Cancel downloads nothing and leaves the document unopened,
+and the status line says how to download the file yourself.  The
+commands (`From the command line`_) ask on the terminal, and without a
+terminal, as in a Makefile or a CI job, download nothing and stop, unless
+given ``--download``.
+
+What is downloaded is kept in ``~/.local/share/tcs-xtcee/``
+(``$XDG_DATA_HOME/tcs-xtcee`` if set), as ``xtce-1.3.xsd`` and
+``XTCE-1.3.pdf`` (or ``1.1``, ``1.2``), so each is asked about once.  A
+file you download yourself and save there under that name is used as it
+is.  In a checkout, the editor uses the copies in ``references/``
+instead, which ``make test-editor`` fetches (``make -C references
+editor``), so that its tests need no network and ask nothing.
 
 Its windows
 -----------
@@ -3402,12 +3429,8 @@ Tools > Digest
 
 Tools > Specification of this element
    Opens the version's specification, searching it for the selected
-   element where the PDF viewer can (Evince can).  A checkout has it in
-   ``references/`` once ``make editor`` has run.  The package does not
-   carry OMG's specifications, so an installed editor looks for
-   ``XTCE-1.3.pdf`` (or ``1.1``, ``1.2``) in
-   ``~/.local/share/tcs-xtcee/`` (``$XDG_DATA_HOME`` if set), and says
-   where to download it from when it is not there.
+   element where the PDF viewer can (Evince can), asking first to
+   download it the first time (`OMG's files`_).
 
 A mission in XTCE 1.1 or 1.2 is converted to 1.3 in memory for the
 compiler's tools, which read 1.3; its files are not changed.
@@ -3425,7 +3448,8 @@ Makefile or a CI job:
                  [-o OUT]
    tcs-xtcee sample VERSION SEED
 
-``check`` prints each problem as ``FILE:LINE: error: ...``, and fails if
+Each takes ``--download``, which downloads a schema not yet on this
+machine without asking (`OMG's files`_).  ``check`` prints each problem as ``FILE:LINE: error: ...``, and fails if
 there is an error.  ``convert`` prints what it changed, lost, needs and
 refuses; it writes nothing if anything is refused or needed, or, without
 ``--allow-loss``, if anything would be lost.  Each need is printed with

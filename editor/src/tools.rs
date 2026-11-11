@@ -3,7 +3,7 @@
 //! describes an element.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::convert::{convert, Answers};
 use crate::schema::Version;
@@ -353,21 +353,6 @@ fn prefix_all(e: &mut Element, prefix: &str) {
     }
 }
 
-/// Where the user keeps files of the editor's own:
-/// `$XDG_DATA_HOME/tcs-xtcee` or `~/.local/share/tcs-xtcee`.
-///
-/// # Returns
-///
-/// The directory, which may not exist, or `None` without a home
-/// directory.
-fn user_data() -> Option<PathBuf> {
-    let base = match std::env::var_os("XDG_DATA_HOME") {
-        Some(d) if !d.is_empty() => PathBuf::from(d),
-        _ => PathBuf::from(std::env::var_os("HOME")?).join(".local/share"),
-    };
-    Some(base.join("tcs-xtcee"))
-}
-
 /// Finds something installed with the editor, from where the editor is,
 /// so that an install under any prefix, or a staged one, finds its own.
 ///
@@ -384,52 +369,76 @@ pub fn installed(rel: &str) -> Option<PathBuf> {
     p.exists().then_some(p)
 }
 
-/// Opens the specification of a version at an element's description.
+/// Finds the specification of a version, without downloading it.
 ///
 /// # Arguments
 ///
 /// * `version` - The version.
+///
+/// # Returns
+///
+/// Where it is, or what to download if it is not on this machine.
+///
+/// # Errors
+///
+/// Says so when there is no home directory to keep it in.
+pub fn spec_file(
+    version: Version,
+) -> Result<Result<PathBuf, crate::fetch::Missing>, String> {
+    crate::fetch::find(
+        &format!("XTCE-{version}.pdf"),
+        &format!("https://www.omg.org/spec/XTCE/{version}/PDF"),
+        &format!("the XTCE {version} specification"),
+    )
+}
+
+/// Downloads a specification, which the person has agreed to.  It takes
+/// a while, so the editor calls this away from its windows' thread.
+///
+/// # Arguments
+///
+/// * `m` - The download, as [`spec_file`] gave it.
+///
+/// # Returns
+///
+/// Where the specification is.
+///
+/// # Errors
+///
+/// Says why it could not be downloaded, and how to put it in place by
+/// hand.
+pub fn download_spec(m: &crate::fetch::Missing) -> Result<PathBuf, String> {
+    crate::fetch::download(m, |bytes| {
+        if bytes.starts_with(b"%PDF-") {
+            Ok(())
+        } else {
+            Err("what came back is not a PDF".to_string())
+        }
+    })
+}
+
+/// Opens a specification at an element's description.
+///
+/// # Arguments
+///
+/// * `pdf`     - The specification.
 /// * `element` - The element's name.
 ///
 /// # Errors
 ///
-/// Says why, if the specification cannot be found or no viewer started.
-pub fn open_spec(version: Version, element: &str) -> Result<(), String> {
-    let name = format!("XTCE-{version}.pdf");
-    // A build in a checkout has the one `make -C references editor`
-    // fetched; an installed editor has none, OMG's specification not being
-    // ours to package, so its user puts one where they can write.
-    let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../references")
-        .join(&name);
-    let own = user_data().map(|d| d.join(&name));
-    let installed = installed("share/doc/tcs-xtce").map(|d| d.join(&name));
-    let Some(pdf) = [Some(checkout), own.clone(), installed]
-        .into_iter()
-        .flatten()
-        .find(|p| p.exists())
-    else {
-        let to = own.map_or_else(
-            || "~/.local/share/tcs-xtcee".to_string(),
-            |p| p.display().to_string(),
-        );
-        return Err(format!(
-            "the XTCE {version} specification is not here: download \
-             https://www.omg.org/spec/XTCE/{version}/PDF and save it as \
-             {to}"
-        ));
-    };
+/// Says why, if no viewer started.
+pub fn show_spec(pdf: &Path, element: &str) -> Result<(), String> {
     // Evince can open a PDF searching for a word, which lands on the
     // element's first mention; other viewers open it at the start.
     let tried = std::process::Command::new("evince")
         .arg(format!("--find={element}"))
-        .arg(&pdf)
+        .arg(pdf)
         .spawn();
     if tried.is_ok() {
         return Ok(());
     }
     std::process::Command::new("xdg-open")
-        .arg(&pdf)
+        .arg(pdf)
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("no PDF viewer could be started: {e}"))

@@ -1006,7 +1006,10 @@ export component AskDialog inherits Window {
     background: Palette.window;
     preferred-width: 520px;
     VerticalBox {
-        Text { text: root.message; wrap: word-wrap; }
+        // A width of its own, the window's less the box's padding, so
+        // that its height is that of the text wrapped to it and a long
+        // question is not cut off with the buttons below it.
+        Text { text: root.message; wrap: word-wrap; width: 496px; }
         HorizontalBox {
             alignment: end;
             Button { text: root.first; clicked => { root.chosen(0); } }

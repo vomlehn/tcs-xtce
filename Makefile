@@ -182,16 +182,20 @@ test-generator: $(PY_GEN)
 test-rust: rust $(SAMPLES)
 	cd rust && $(CARGO) test --release
 
-# The XTCE editor, tcs-xtcee.  It is built with the schema of every XTCE
-# version it holds documents to, fetched once by address, and its tests ask
-# the compiler, so they need the Python binding.
+# The XTCE editor, tcs-xtcee.  It carries none of OMG's files, which OMG
+# does not allow to be redistributed: it reads each version's schema when
+# a document of that version is first opened, from references/ in a
+# checkout or else from the user's data directory, where it downloads it
+# once the person agrees.  Its tests use the schemas in references/,
+# fetched once by address, so that they need no network and ask nothing,
+# and they ask the compiler, so they need the Python binding.
 EDITOR_XSD := $(foreach v,1.1 1.2 1.3,references/xtce-$(v).xsd)
 
 $(EDITOR_XSD):
 	$(MAKE) -C references editor
 
 .PHONY: editor
-editor: $(EDITOR_XSD)
+editor:
 	cd editor && $(CARGO) build --release
 
 .PHONY: test-editor

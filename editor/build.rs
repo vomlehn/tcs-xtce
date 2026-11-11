@@ -1,27 +1,12 @@
-//! Checks that the XTCE schemas the editor is built with have been
-//! fetched, and says how to fetch them if not, rather than leaving the
-//! compiler to say a file is missing.
+//! Compiles the editor's windows.  The XTCE schemas are not built in: the
+//! editor finds or downloads them when it runs (see `src/fetch.rs`).
 
-use std::path::Path;
-
-/// Compiles the windows, checks that each schema is in `references/`, and
-/// has Cargo build the editor again when one changes.
+/// Compiles the windows.
 ///
 /// # Panics
 ///
-/// Panics, saying how to fetch the schemas, if one is missing, since a
-/// build script reports a failure by panicking.
+/// Panics, with the Slint compiler's message, if they do not compile,
+/// since a build script reports a failure by panicking.
 fn main() {
     slint_build::compile("ui/editor.slint").expect("the windows compile");
-    for v in ["1.1", "1.2", "1.3"] {
-        let p = format!("../references/xtce-{v}.xsd");
-        println!("cargo:rerun-if-changed={p}");
-        if !Path::new(&p).exists() {
-            panic!(
-                "{p} is missing: run `make -C references editor` at the top \
-                 of tcs-xtce to fetch the XTCE schemas the editor is built \
-                 with"
-            );
-        }
-    }
 }

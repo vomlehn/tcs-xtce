@@ -1,8 +1,10 @@
 //! The XTCE schemas, read into what the editor checks a document against.
 //!
 //! Each XTCE version the editor knows has its own schema, as OMG published
-//! it, built into the program from `references/`, and its own namespace, by
-//! which a document says which version it is written in.  A document is
+//! it, read the first time a document of that version is opened, made or
+//! converted to, from where [`crate::fetch`] finds it or, once the person
+//! has agreed, downloads it; and its own namespace, by which a document
+//! says which version it is written in.  A document is
 //! held to the schema of its version and no other: that is what "strictly
 //! enforced" means, and why nothing here is written by hand -- the rules are
 //! the schema's, read from it.
@@ -25,6 +27,7 @@ use std::sync::OnceLock;
 use regex::Regex;
 
 use crate::content::Automaton;
+use crate::fetch::Missing;
 use crate::tree::{local_name, Document, Element};
 
 /// An XTCE version the editor knows.
@@ -134,39 +137,130 @@ impl Version {
         }
     }
 
-    /// Gives the schema's text, built into the program.
+    /// Says what the schema is, as a sentence names it.
     ///
     /// # Returns
     ///
-    /// The text of the XSD file.
-    fn text(self) -> &'static str {
-        match self {
-            Version::V1_1 => include_str!("../../references/xtce-1.1.xsd"),
-            Version::V1_2 => include_str!("../../references/xtce-1.2.xsd"),
-            Version::V1_3 => include_str!("../../references/xtce-1.3.xsd"),
-        }
+    /// Such as "the XTCE 1.3 schema".
+    fn what(self) -> String {
+        format!("the XTCE {self} schema")
     }
 
-    /// Gives the schema, read the first time it is asked for.
+    /// Finds the schema's file, without downloading it.
+    ///
+    /// # Returns
+    ///
+    /// Where it is, or what to download if it is not on this machine.
+    ///
+    /// # Errors
+    ///
+    /// Says so when there is no home directory to keep it in.
+    fn find(self) -> Result<Result<std::path::PathBuf, Missing>, String> {
+        crate::fetch::find(
+            &format!("xtce-{self}.xsd"),
+            self.schema_url(),
+            &self.what(),
+        )
+    }
+
+    /// Says whether the schema has to be downloaded before it can be read.
+    ///
+    /// # Returns
+    ///
+    /// What to download, or `None` if it is read already or on this
+    /// machine.
+    ///
+    /// # Errors
+    ///
+    /// Says so when there is no home directory to keep it in.
+    pub fn missing(self) -> Result<Option<Missing>, String> {
+        if SCHEMAS[self as usize].get().is_some() {
+            return Ok(None);
+        }
+        Ok(self.find()?.err())
+    }
+
+    /// Downloads the schema, which the person has agreed to, and reads it.
+    ///
+    /// # Arguments
+    ///
+    /// * `m` - The download, as [`Version::missing`] gave it.
     ///
     /// # Returns
     ///
     /// The schema, which lasts as long as the program.
     ///
+    /// # Errors
+    ///
+    /// Says why it could not be downloaded or read, and how to put it in
+    /// place by hand.
+    pub fn download(self, m: &Missing) -> Result<&'static Schema, String> {
+        let ns = self.namespace();
+        crate::fetch::download(m, |bytes| {
+            let text = String::from_utf8_lossy(bytes);
+            if text.contains(&format!("targetNamespace=\"{ns}\"")) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "what came back is not the XTCE {self} schema, whose \
+                     namespace is {ns}"
+                ))
+            }
+        })?;
+        self.load()
+    }
+
+    /// Reads the schema from this machine; only the first call for a
+    /// version reads it.  Nothing is downloaded: that is
+    /// [`Version::download`]'s, once the person has agreed.
+    ///
+    /// # Returns
+    ///
+    /// The schema, which lasts as long as the program.
+    ///
+    /// # Errors
+    ///
+    /// Says why it could not be read, or, if it is not on this machine,
+    /// how to put it there.
+    pub fn load(self) -> Result<&'static Schema, String> {
+        let slot = &SCHEMAS[self as usize];
+        if let Some(s) = slot.get() {
+            return Ok(s);
+        }
+        let path = self.find()?.map_err(|m| m.refused())?;
+        let text = std::fs::read_to_string(&path)
+            .map_err(|e| format!("{} cannot be read: {e}", path.display()))?;
+        let schema = Schema::read(self, &text).map_err(|e| {
+            format!(
+                "{} is not an XTCE {self} schema the editor can read ({e}); \
+                 delete it, and it is downloaded again when next needed",
+                path.display()
+            )
+        })?;
+        Ok(slot.get_or_init(|| schema))
+    }
+
+    /// Gives the schema, which [`Version::load`] has read.
+    ///
+    /// # Returns
+    ///
+    /// The schema.
+    ///
     /// # Panics
     ///
-    /// Panics if the built-in schema cannot be read, which the tests
-    /// rule out for every version before the program is shipped.
+    /// Panics, saying why, if the schema cannot be read.  Everything that
+    /// takes a document into the editor -- opening, making, converting,
+    /// checking -- loads its version's schema first, and stops there,
+    /// saying why, if it cannot; so this is called only where the schema
+    /// has been read.
     pub fn schema(self) -> &'static Schema {
-        static SCHEMAS: [OnceLock<Schema>; 3] =
-            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
-        SCHEMAS[self as usize].get_or_init(|| {
-            Schema::read(self, self.text()).unwrap_or_else(|e| {
-                panic!("the built-in XTCE {self} schema cannot be read: {e}")
-            })
-        })
+        self.load().unwrap_or_else(|e| panic!("{e}"))
     }
 }
+
+/// Each version's schema, once read.
+static SCHEMAS: [OnceLock<Schema>; 3] =
+    [OnceLock::new(), OnceLock::new(), OnceLock::new()];
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
