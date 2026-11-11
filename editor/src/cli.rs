@@ -8,12 +8,12 @@ use crate::schema::Version;
 use crate::tree::Document;
 use crate::validate::{check, Severity};
 
-/// What `xtce-edit --help` prints.
+/// What `tcs-xtcee --help` prints.
 const USAGE: &str = "\
-usage: xtce-edit [FILE...]             open the files in the editor
-       xtce-edit check FILE...         check each file against its XTCE
+usage: tcs-xtcee [FILE...]             open the files in the editor
+       tcs-xtcee check FILE...         check each file against its XTCE
                                        version's schema
-       xtce-edit convert FILE --to VERSION [--allow-loss]
+       tcs-xtcee convert FILE --to VERSION [--allow-loss]
                  [--set KEY=VALUE]... [-o OUT]
                                        convert FILE to another XTCE
                                        version, writing OUT (FILE itself
@@ -21,7 +21,7 @@ usage: xtce-edit [FILE...]             open the files in the editor
                                        downgrade take out what the older
                                        version cannot say, and --set
                                        answers what it asks
-       xtce-edit sample VERSION SEED   print a random valid document of
+       tcs-xtcee sample VERSION SEED   print a random valid document of
                                        an XTCE version, for testing
 ";
 

@@ -1,4 +1,4 @@
-//! `xtce-edit`: the XTCE editor, and the same checks and conversions from
+//! `tcs-xtcee`: the XTCE editor, and the same checks and conversions from
 //! the command line.
 
 use std::process::ExitCode;
@@ -18,7 +18,7 @@ fn main() -> ExitCode {
     match tcs_xtce_editor::gui::run(&args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("xtce-edit: {e}");
+            eprintln!("tcs-xtcee: {e}");
             ExitCode::FAILURE
         }
     }

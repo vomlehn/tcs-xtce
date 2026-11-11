@@ -12,7 +12,7 @@ keywords = ["xtce", "ccsds", "telemetry", "omg", "editor"]
 publish = false
 
 [[bin]]
-name = "xtce-edit"
+name = "tcs-xtcee"
 path = "src/main.rs"
 
 [dependencies]

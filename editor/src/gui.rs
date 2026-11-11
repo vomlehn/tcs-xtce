@@ -90,8 +90,8 @@ struct App {
 /// The editor, shared among the callbacks.
 type Shared = Rc<RefCell<App>>;
 
-/// Where the editor's settings are kept: `$XDG_CONFIG_HOME/xtce-edit` or
-/// `~/.config/xtce-edit`.
+/// Where the editor's settings are kept: `$XDG_CONFIG_HOME/tcs-xtcee` or
+/// `~/.config/tcs-xtcee`.
 ///
 /// # Returns
 ///
@@ -101,7 +101,7 @@ fn settings_path() -> Option<PathBuf> {
         Some(d) if !d.is_empty() => PathBuf::from(d),
         _ => PathBuf::from(std::env::var_os("HOME")?).join(".config"),
     };
-    Some(base.join("xtce-edit").join("settings"))
+    Some(base.join("tcs-xtcee").join("settings"))
 }
 
 /// Reads whether autosave is on.  It is on unless the settings say off.

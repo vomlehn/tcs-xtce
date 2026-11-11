@@ -85,12 +85,16 @@ except Exception as e:
 /// # Returns
 ///
 /// The directory to put on `PYTHONPATH`, or `None` to rely on the
-/// package being installed.  `TCS_XTCE_PYTHONPATH` says where, if set;
-/// otherwise, a build in a checkout uses the checkout's own package, if it
-/// has been generated.
+/// package being on Python's own path.  `TCS_XTCE_PYTHONPATH` says
+/// where, if set; otherwise an installed editor uses the package installed
+/// with it, and a build in a checkout the checkout's own, if it has been
+/// generated.
 fn python_path() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("TCS_XTCE_PYTHONPATH") {
         return Some(PathBuf::from(p));
+    }
+    if let Some(p) = crate::tools::installed("lib/python3/site-packages") {
+        return Some(p);
     }
     let here = Path::new(env!("CARGO_MANIFEST_DIR")).join("../python");
     here.join("tcs_xtce/generated.py").exists().then_some(here)
@@ -139,7 +143,7 @@ pub struct Written {
 /// or the files cannot be written.
 pub fn write(docs: &[(&str, &Document)]) -> Result<Written, String> {
     let dir = tempfile::Builder::new()
-        .prefix("xtce-edit-")
+        .prefix("tcs-xtcee-")
         .tempdir()
         .map_err(|e| format!("no temporary directory: {e}"))?;
     let mut files = Vec::new();

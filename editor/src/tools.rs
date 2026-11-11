@@ -3,6 +3,7 @@
 //! describes an element.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use crate::convert::{convert, Answers};
 use crate::schema::Version;
@@ -352,6 +353,37 @@ fn prefix_all(e: &mut Element, prefix: &str) {
     }
 }
 
+/// Where the user keeps files of the editor's own:
+/// `$XDG_DATA_HOME/tcs-xtcee` or `~/.local/share/tcs-xtcee`.
+///
+/// # Returns
+///
+/// The directory, which may not exist, or `None` without a home
+/// directory.
+fn user_data() -> Option<PathBuf> {
+    let base = match std::env::var_os("XDG_DATA_HOME") {
+        Some(d) if !d.is_empty() => PathBuf::from(d),
+        _ => PathBuf::from(std::env::var_os("HOME")?).join(".local/share"),
+    };
+    Some(base.join("tcs-xtcee"))
+}
+
+/// Finds something installed with the editor, from where the editor is,
+/// so that an install under any prefix, or a staged one, finds its own.
+///
+/// # Arguments
+///
+/// * `rel` - Its path from the prefix, the directory above `bin`.
+///
+/// # Returns
+///
+/// Its path, or `None` if it is not there, as in a checkout.
+pub fn installed(rel: &str) -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
+    let p = exe.parent()?.parent()?.join(rel);
+    p.exists().then_some(p)
+}
+
 /// Opens the specification of a version at an element's description.
 ///
 /// # Arguments
@@ -363,18 +395,30 @@ fn prefix_all(e: &mut Element, prefix: &str) {
 ///
 /// Says why, if the specification cannot be found or no viewer started.
 pub fn open_spec(version: Version, element: &str) -> Result<(), String> {
-    let pdf = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("../references/XTCE-{version}.pdf"));
-    let installed = std::path::PathBuf::from(format!(
-        "/opt/tcs/share/doc/tcs-xtce/XTCE-{version}.pdf"
-    ));
-    let pdf = if pdf.exists() { pdf } else { installed };
-    if !pdf.exists() {
+    let name = format!("XTCE-{version}.pdf");
+    // A build in a checkout has the one `make -C references editor`
+    // fetched; an installed editor has none, OMG's specification not being
+    // ours to package, so its user puts one where they can write.
+    let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../references")
+        .join(&name);
+    let own = user_data().map(|d| d.join(&name));
+    let installed = installed("share/doc/tcs-xtce").map(|d| d.join(&name));
+    let Some(pdf) = [Some(checkout), own.clone(), installed]
+        .into_iter()
+        .flatten()
+        .find(|p| p.exists())
+    else {
+        let to = own.map_or_else(
+            || "~/.local/share/tcs-xtcee".to_string(),
+            |p| p.display().to_string(),
+        );
         return Err(format!(
-            "the XTCE {version} specification is not here; fetch it with \
-             `make -C references editor` in tcs-xtce"
+            "the XTCE {version} specification is not here: download \
+             https://www.omg.org/spec/XTCE/{version}/PDF and save it as \
+             {to}"
         ));
-    }
+    };
     // Evince can open a PDF searching for a word, which lands on the
     // element's first mention; other viewers open it at the start.
     let tried = std::process::Command::new("evince")

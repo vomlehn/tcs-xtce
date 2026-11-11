@@ -260,8 +260,11 @@ Everything installs under ``/opt/tcs``, the tree the TCS packages share
    * - ``bin/tcs-xtce``, ``bin/xtce-digest``
      - The compiler and the digest, run with ``/usr/bin/python3``; each
        finds the package in ``lib/python3/site-packages`` by itself
+   * - ``bin/tcs-xtcee``
+     - The editor (`The XTCE editor (tcs-xtcee)`_), which finds
+       the package the same way
    * - ``sbin/tcs-xtce-links``
-     - Links those two into ``/usr/local/bin``, or removes the links
+     - Links those three into ``/usr/local/bin``, or removes the links
    * - ``include/xtce.h``, ``include/xtce-*.h``, ``include/xtce-*.hpp``,
        ``include/ccsds-time.h``
      - The C and C++ headers
@@ -329,8 +332,9 @@ packages on its path.
 
 ``/etc/profile.d`` is read only by login shells, so ``sudo``, cron and
 other minimal environments do not see ``/opt/tcs/bin``. The package's
-``/opt/tcs/sbin/tcs-xtce-links`` links its programs, ``tcs-xtce`` and
-``xtce-digest`` and no others, into ``/usr/local/bin``, which they all
+``/opt/tcs/sbin/tcs-xtce-links`` links its programs, ``tcs-xtce``,
+``xtce-digest`` and ``tcs-xtcee`` and no others, into
+``/usr/local/bin``, which they all
 search (``sudo``'s ``secure_path`` included):
 
 .. code-block:: sh
@@ -3215,10 +3219,10 @@ tcs-xtce ignores them. An attribute given its default value explicitly
 also changes the digest, though the meaning is the same.
 
 
-The XTCE editor (xtce-edit)
+The XTCE editor (tcs-xtcee)
 ===========================
 
-``xtce-edit`` is a graphical editor for XTCE documents.  It holds a
+``tcs-xtcee`` is a graphical editor for XTCE documents.  It holds a
 document to the XTCE version it is written in: XTCE 1.1, 1.2 or 1.3,
 each checked against the schema OMG published for it.  It changes a
 document only where it is edited, so a file it saves differs from the
@@ -3236,7 +3240,10 @@ Building it
 .. code-block:: sh
 
    make editor                  # fetches the schemas once, then builds
-   editor/target/release/xtce-edit FILE...
+   editor/target/release/tcs-xtcee FILE...
+
+The tcs-xtce package installs it as ``/opt/tcs/bin/tcs-xtcee``,
+already built, with the Python package it uses installed beside it.
 
 ``make editor`` fetches each version's schema and specification into
 ``references/`` (``make -C references editor``), once, and builds the
@@ -3249,7 +3256,7 @@ first, or set ``TCS_XTCE_PYTHONPATH`` to the directory that holds
 Its windows
 -----------
 
-``xtce-edit FILE...`` opens each file in a window of its own.  The files
+``tcs-xtcee FILE...`` opens each file in a window of its own.  The files
 given together are one mission (`Missions in several documents`_): a
 reference in one can name a definition in another, and File > Open adds
 another document to the mission.
@@ -3307,10 +3314,10 @@ Saving, autosave and recovery
 
 With autosave on, a changed document is written to its file two seconds
 after the last change.  File > Autosave turns it off and on, and the
-setting is kept in ``~/.config/xtce-edit/settings``
+setting is kept in ``~/.config/tcs-xtcee/settings``
 (``$XDG_CONFIG_HOME`` if set).  With it off, a changed document that has
 not been saved is kept in a recovery copy in
-``~/.local/state/xtce-edit/`` (``$XDG_STATE_HOME`` if set), so that a
+``~/.local/state/tcs-xtcee/`` (``$XDG_STATE_HOME`` if set), so that a
 crash loses at most the last seconds; the next time the document is
 opened, the editor offers the copy's changes, which Undo then takes back
 if they are not wanted.  Saving removes the copy.
@@ -3370,7 +3377,12 @@ Tools > Digest
 
 Tools > Specification of this element
    Opens the version's specification, searching it for the selected
-   element where the PDF viewer can (Evince can).
+   element where the PDF viewer can (Evince can).  A checkout has it in
+   ``references/`` once ``make editor`` has run.  The package does not
+   carry OMG's specifications, so an installed editor looks for
+   ``XTCE-1.3.pdf`` (or ``1.1``, ``1.2``) in
+   ``~/.local/share/tcs-xtcee/`` (``$XDG_DATA_HOME`` if set), and says
+   where to download it from when it is not there.
 
 A mission in XTCE 1.1 or 1.2 is converted to 1.3 in memory for the
 compiler's tools, which read 1.3; its files are not changed.
@@ -3383,9 +3395,10 @@ Makefile or a CI job:
 
 .. code-block:: sh
 
-   xtce-edit check FILE...
-   xtce-edit convert FILE --to 1.2 [--allow-loss] [--set KEY=VALUE]... [-o OUT]
-   xtce-edit sample VERSION SEED
+   tcs-xtcee check FILE...
+   tcs-xtcee convert FILE --to 1.2 [--allow-loss] [--set KEY=VALUE]...
+                 [-o OUT]
+   tcs-xtcee sample VERSION SEED
 
 ``check`` prints each problem as ``FILE:LINE: error: ...``, and fails if
 there is an error.  ``convert`` prints what it changed, lost, needs and

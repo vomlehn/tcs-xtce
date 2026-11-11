@@ -8,13 +8,15 @@ Suggests: rustfmt, pkgconf
 Section: libdevel
 Priority: optional
 Homepage: https://github.com/vomlehn/tcs-xtce
-Description: XTCE serialization libraries and packet compiler
+Description: XTCE serialization libraries, packet compiler and editor
  Tcs-xtce reads and writes OMG XTCE (XML Telemetric and Command Exchange)
  documents, and compiles a mission's XTCE into typed telemetry and command
  structures with binary encoders and decoders, in Rust, C, C++ and Python,
  using managed, preallocated buffers.
  .
- This package holds the compiler (tcs-xtce) and xtce-digest, the Python 3
+ This package holds the compiler (tcs-xtce), xtce-digest, the graphical
+ XTCE editor (tcs-xtcee), which keeps a document valid for its XTCE
+ version and converts between versions 1.1, 1.2 and 1.3, the Python 3
  runtime, the C/C++ library (shared and static) with its headers and
  pkg-config file, tcs-ccsds's CCSDS time codes for C, C++ and Python, and
  the documentation and examples, all under /opt/tcs.

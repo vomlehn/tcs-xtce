@@ -1,5 +1,5 @@
 #!/bin/sh
-# Holds xtce-edit to xmllint: makes random documents of every XTCE version
+# Holds tcs-xtcee to xmllint: makes random documents of every XTCE version
 # the editor knows, checks each with both, converts each to every other
 # version and has xmllint judge the result.  A need is answered with 8, which
 # a few needs refuse; a refusal is reported, not counted as a failure.
@@ -12,7 +12,7 @@ seeds=${1:-40}
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 export XML_CATALOG_FILES=references/catalog.xml
-E=editor/target/release/xtce-edit
+E=editor/target/release/tcs-xtcee
 fail=0
 ok=0
 for v in 1.1 1.2 1.3; do

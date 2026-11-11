@@ -958,10 +958,11 @@ fn stamp_of(path: &Path) -> Option<(SystemTime, u64)> {
 }
 
 /// Where the recovery copy of a document is kept: in the user's state
-/// directory, `$XDG_STATE_HOME/xtce-edit` or `~/.local/state/xtce-edit`,
-/// named by the file's stem and a digest of its full path.  Not beside the
-/// file, where it would turn up in `git status`; and named by the digest so
-/// that two files of one name in two directories have two copies.
+/// directory, `$XDG_STATE_HOME/tcs-xtcee` or
+/// `~/.local/state/tcs-xtcee`, named by the file's stem and a digest of
+/// its full path.  Not beside the file, where it would turn up in `git
+/// status`; and named by the digest so that two files of one name in two
+/// directories have two copies.
 ///
 /// # Arguments
 ///
@@ -985,7 +986,7 @@ pub fn recovery_path(state: Option<&Path>, path: &Path) -> Option<PathBuf> {
         h ^= u64::from(b);
         h = h.wrapping_mul(0x100000001b3);
     }
-    Some(base.join("xtce-edit").join(format!("{stem}-{h:016x}.xtce")))
+    Some(base.join("tcs-xtcee").join(format!("{stem}-{h:016x}.xtce")))
 }
 
 #[cfg(test)]

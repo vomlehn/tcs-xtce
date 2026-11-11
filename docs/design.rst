@@ -1295,7 +1295,7 @@ The runtimes don't check documents against the schema; the
 each file with the Python runtime. Computing a digest allocates memory,
 so it belongs at start-up, not in code that must not allocate.
 
-The XTCE editor (xtce-edit)
+The XTCE editor (tcs-xtcee)
 ===========================
 
 The editor is a Rust program in ``editor/``, its windows in Slint, as

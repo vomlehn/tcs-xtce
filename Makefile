@@ -37,10 +37,10 @@
 #   make rpm             build build/packages/tcs-xtce-<version>-1.<arch>.rpm
 #                        (says so and does nothing without rpmbuild)
 #   make packages        both; install-files, stage and the packages strip the
-#                        libraries unless STRIP=0 is given
+#                        libraries and the editor unless STRIP=0 is given
 #   make lint-packages   check the packages and their shell scripts with
 #                        lintian, rpmlint and shellcheck
-#   make editor          build xtce-edit, the XTCE editor (fetches the
+#   make editor          build tcs-xtcee, the XTCE editor (fetches the
 #                        schemas of the versions it knows, once)
 #   make test-editor     run the editor's tests
 #   make editor-check    hold the editor to xmllint on random documents of
@@ -182,7 +182,7 @@ test-generator: $(PY_GEN)
 test-rust: rust $(SAMPLES)
 	cd rust && $(CARGO) test --release
 
-# The XTCE editor, xtce-edit.  It is built with the schema of every XTCE
+# The XTCE editor, tcs-xtcee.  It is built with the schema of every XTCE
 # version it holds documents to, fetched once by address, and its tests ask
 # the compiler, so they need the Python binding.
 EDITOR_XSD := $(foreach v,1.1 1.2 1.3,references/xtce-$(v).xsd)
@@ -376,11 +376,11 @@ DESTDIR ?=
 # where these belong. Each is named after this package, so no two TCS
 # packages own the same file.
 HOOKS   ?= 0
-# Whether install-files strips what it installs: the shared library of what
-# only a debugger needs (--strip-unneeded) and the static one of its
-# debugging information (--strip-debug), which keeps the symbol table a
-# link needs. On unless STRIP=0 is given, for an installed tree or a
-# package to debug; `make stage`, and so the packages, follow it too.
+# Whether install-files strips what it installs: the shared library and the
+# editor of what only a debugger needs (--strip-unneeded) and the static
+# library of its debugging information (--strip-debug), which keeps the
+# symbol table a link needs. On unless STRIP=0 is given, for an installed
+# tree or a package to debug; `make stage`, and so the packages, follow it too.
 STRIP   ?= 1
 # tcs-helpers, the packaging scripts the TCS projects share: a checkout
 # of https://github.com/vomlehn/tcs-helpers, beside this one unless
@@ -407,7 +407,10 @@ PYDIR   ?= $(PREFIX)/lib/python3/site-packages
 # installed copies are to read and to build by hand.
 DOCS    := README.md CONTRIBUTING.md LICENSE-APACHE LICENSE-MIT \
            docs/manual.html docs/design.html
-COMMANDS := packaging/bin/tcs-xtce packaging/bin/xtce-digest
+# The editor is the one command built rather than copied; `make editor`
+# builds it.
+EDITOR_BIN := editor/target/release/tcs-xtcee
+COMMANDS := packaging/bin/tcs-xtce packaging/bin/xtce-digest $(EDITOR_BIN)
 # The headers go straight into include, each named with its library's
 # prefix, xtce- or ccsds-, so that none can be mistaken for another
 # library's. The generated one is named because it may not have been
@@ -473,7 +476,7 @@ tcs-helpers:
 # Copy everything into place under $(DESTDIR)$(PREFIX): what `make
 # install` once did, kept for development and for `make stage`, which
 # cuts the packages from it; `make install` installs the packages. What
-# is copied: the two commands, and in sbin
+# is copied: the three commands, and in sbin
 # tcs-xtce-links, which links them into /usr/local/bin; the headers,
 # straight into include; the shared library under its soname,
 # with its development name linked to it, and the static one; pkg-config
@@ -485,7 +488,7 @@ tcs-helpers:
 # starts with "#!" is a script to run, so it is installed executable and
 # the rest are not.
 .PHONY: install-files
-install-files: $(PY_GEN) $(CPP_GEN) tcs-helpers
+install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 	@[ "$(VERSION)" = "$(RUST_VERSION)" ] || { \
 	    echo "pyproject.toml is $(VERSION) and rust/Cargo.toml" \
 	        "$(RUST_VERSION); make them agree" >&2; \
@@ -506,6 +509,7 @@ install-files: $(PY_GEN) $(CPP_GEN) tcs-helpers
 	if [ "$(STRIP)" = 1 ]; then \
 	    strip --strip-unneeded $(LIBDIR)/$(SONAME); \
 	    strip --strip-debug $(LIBDIR)/libxtce.a; \
+	    strip --strip-unneeded $(BINDIR)/$(notdir $(EDITOR_BIN)); \
 	fi
 	install -d $(PCDIR)
 	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' \

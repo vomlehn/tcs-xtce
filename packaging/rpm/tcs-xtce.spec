@@ -27,15 +27,16 @@
 Name:		tcs-xtce
 Version:	%{tcs_version}
 Release:	%{tcs_release}%{?dist}
-Summary:	XTCE serialization libraries and packet compiler
+Summary:	XTCE serialization libraries, packet compiler and editor
 Group:		Development/Libraries
 License:	MIT OR Apache-2.0
 URL:		https://github.com/vomlehn/tcs-xtce
 %global tcs_maintainer David VomLehn <dvomlehn@gmail.com>
 Packager:	%{tcs_maintainer}
-# The compiler and xtce-digest are Python, so unlike tcslog's this is a
-# Requires. Any Python 3.10 or later will do: the package's directory has
-# no Python version in it.
+# The compiler and xtce-digest are Python, and the editor runs the
+# compiler, so unlike tcslog's this is a Requires. Any Python 3.10 or later
+# will do: the package's directory has no Python version in it. The
+# libraries the editor links with RPM finds for itself.
 Requires:	python3 >= 3.10
 # The .pth file that puts /opt/tcs on python3's own path is in the
 # directory of one Python version, the one this RPM was built for; the
@@ -53,7 +54,9 @@ documents, and compiles a mission's XTCE into typed telemetry and command
 structures with binary encoders and decoders, in Rust, C, C++ and Python,
 using managed, preallocated buffers.
 
-This package holds the compiler (tcs-xtce) and xtce-digest, the Python 3
+This package holds the compiler (tcs-xtce), xtce-digest, the graphical
+XTCE editor (tcs-xtcee), which keeps a document valid for its XTCE
+version and converts between versions 1.1, 1.2 and 1.3, the Python 3
 runtime, the C/C++ library (shared and static) with its headers and
 pkg-config file, tcs-ccsds's CCSDS time codes for C, C++ and Python, and
 the documentation and examples, all under /opt/tcs.
@@ -101,6 +104,7 @@ fi
 %dir /opt/tcs/share/examples
 /opt/tcs/bin/tcs-xtce
 /opt/tcs/bin/xtce-digest
+/opt/tcs/bin/tcs-xtcee
 /opt/tcs/sbin/tcs-xtce-links
 /opt/tcs/include/xtce.h
 /opt/tcs/include/xtce-*.h

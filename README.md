@@ -48,7 +48,7 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | `cpp/`        | C++20 library (`libxtce.a`, `libxtce.so`) with a C API (`xtce.h`), and the header-only C/C++ packet runtime (`xtce-packet.h`) |
 | `python/`     | `tcs_xtce` Python package (3.10+, standard library only): the Python runtime, `tcs_xtce.binding` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `tcs_xtce.compiler`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
 | `tests/`      | The demo mission, packet vectors and the cross-language checks; `make` generates the schema-coverage samples into `tests/samples/` |
-| `editor/`     | `xtce-edit`, a graphical XTCE editor that keeps a document valid for its XTCE version (1.1, 1.2 or 1.3), its comments and layout as written, and converts between versions |
+| `editor/`     | `tcs-xtcee`, a graphical XTCE editor that keeps a document valid for its XTCE version (1.1, 1.2 or 1.3), its comments and layout as written, and converts between versions |
 | `docs/`       | `manual.rst` and `design.rst` |
 | `examples/`   | Example XTCE files and a program per language that uses the code generated from them (start with `simple-string`) |
 
@@ -59,7 +59,7 @@ make              # fetch references if missing, generate, build, run all tests
 make references   # re-check OMG and pull the latest XTCE documents
 make generate     # regenerate the bindings after the schema or generator changes
 make packets      # regenerate the demo mission's packet codecs
-make editor       # build xtce-edit, the XTCE editor
+make editor       # build tcs-xtcee, the XTCE editor
 make test         # per-language tests, both cross-language checks, the examples
                   # and the 80-column check
 make examples     # build and run the examples in examples/
@@ -78,7 +78,8 @@ writing that is XTCE 1.3, schema namespace
 ## Installing
 
 Everything below installs under `/opt/tcs`, the tree the TCS packages
-share: the `tcs-xtce` and `xtce-digest` commands in `bin/`, the C/C++
+share: the `tcs-xtce`, `xtce-digest` and `tcs-xtcee` commands in
+`bin/`, the C/C++
 headers in `include/`, `libxtce.so` and `libxtce.a` with `xtce.pc` (and
 `tcs-ccsds.pc`, for the header-only time codes) in `lib/`, and the Python
 packages `tcs_xtce` and `tcs_ccsds` in `lib/python3/site-packages/`.
@@ -128,8 +129,9 @@ say so and carry on without the tool, so that `make packages` builds
 what it can.
 
 `/etc/profile.d` is read only by login shells, so `sudo`, cron and other
-minimal environments do not see `/opt/tcs/bin`. To make `tcs-xtce` and
-`xtce-digest` available everywhere, link them into `/usr/local/bin`:
+minimal environments do not see `/opt/tcs/bin`. To make `tcs-xtce`,
+`xtce-digest` and `tcs-xtcee` available everywhere, link them into
+`/usr/local/bin`:
 
 ```sh
 sudo /opt/tcs/sbin/tcs-xtce-links             # make the links
