@@ -3263,20 +3263,45 @@ another document to the mission.
 
 Each window shows:
 
-* an outline of the document's elements and comments.  An element with
-  a problem in it is marked **E** for an error or **W** for a warning,
-  on its row and on every row above it, so a closed row shows that
-  something inside it is wrong;
-* the selected element's documentation, from its version's schema, and
-  its attributes: each with what the schema says of it, marked
-  *(required)* where the schema requires it, as a list where the schema
-  gives the values it may take, and with a **Go to** button where it is
-  a reference;
+* the document as a tree.  An open element shows, one level deeper,
+  its attributes, its value if it holds one, its comments and the
+  elements in it.  Each attribute is a field one line high, which grows
+  as its text wraps: marked *(required)* where the schema requires it, a
+  list where the schema gives the values it may take, and with a **Go
+  to** button where it is a reference.  Only the attributes an element
+  gives, and those it must, are shown; the row *attribute* below them
+  offers the rest, and one chosen there is put in when it is given a
+  value.  An element with a problem in it is marked **E** for an error
+  or **W** for a warning, on its row and on every row above it, so a
+  closed row shows that something inside it is wrong.  Resting the
+  pointer on a name shows what the schema says of it;
 * the problems: every schema error, every reference that names nothing
   in the open documents, and every two definitions of one name.  Picking
   one selects the element it is about;
 * a Source tab, where the document's text can be edited and applied as
   a whole.
+
+Selecting, opening and closing
+------------------------------
+
+A click on a name selects its row, which the Edit and Insert menus act
+on; Ctrl+click adds a row to the selection or takes it out, and
+Shift+click selects every row from the selected one to it.  Dragging
+across names selects every row dragged across, Ctrl added to those
+already selected; dragged past the top or the bottom, the tree scrolls,
+faster the further past the pointer goes.
+
+The selection is marked by its rows' colour and by a line down the
+column where its topmost element starts, with a ↔ handle at the middle
+of the part of the line in view.  Dragging the handle opens or closes
+every selected element, and everything in it, to the depth whose column
+the pointer is let go over; the line follows the pointer, and words
+beside it say what letting go will do.  Dragged right, it opens each
+element less deep than that, so that the rows down to that depth are
+shown, and leaves open what is open.  Dragged left, it closes each
+element as deep or deeper, so that none deeper is shown, and leaves
+closed what is closed.  Elements outside the selection are not changed.
+The triangle beside a name opens or closes that element alone.
 
 Changes the version does not allow
 ----------------------------------

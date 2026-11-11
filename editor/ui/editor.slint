@@ -36,44 +36,49 @@ export global Palette {
     out property <color> hint: #6e6e6e;
 }
 
-// One row of the outline: an element or a comment.
+// One row of the outline: an element, one of its attributes, its value, a
+// comment, or the row that adds an attribute.
 export struct Row {
-    // The element's or comment's id in the document.
+    // Its place among the rows, which a selection by dragging is made of.
+    index: int,
+    // The element's or comment's id in the document; for an attribute, the
+    // value or the adding row, the element's.
     id: int,
-    // How deep it is: 0 for the root.
+    // How deep it is: 0 for the root.  An element's attributes, value and
+    // children are one deeper than it.
     depth: int,
-    // What the row says: the element's name and its name attribute, or the
-    // comment's first line.
-    label: string,
-    // "element" or "comment".
+    // "element", "comment", "attr", "value" or "add".
     kind: string,
-    // Whether its children are shown.
-    open: bool,
-    // Whether it has children to show.
-    has-kids: bool,
-    // "error", "warning" or "" for the worst problem in it.
-    mark: string,
-    // Whether it is the selected row.
-    selected: bool,
-}
-
-// One attribute of the selected element.
-export struct AttrRow {
-    // The attribute's name.
-    name: string,
-    // Its value, or its default in brackets if it is not given.
+    // What the row says: the element's name and its name attribute, the
+    // attribute's name, or "value".
+    label: string,
+    // The attribute's, value's or comment's text, to edit.
     value: string,
-    // Whether the schema requires it.
-    required: bool,
-    // Whether the element gives it.
-    present: bool,
-    // The values it may have, if they are a list; empty otherwise.
+    // What an empty field says: "(not given)", or a default.
+    placeholder: string,
+    // The values it may have, if they are a list; for the adding row, the
+    // attributes that may be added.  Empty otherwise.
     choices: [string],
-    // What the schema says it is.
+    // What the schema says it is, shown when the pointer rests on its
+    // name.
     doc: string,
     // What is wrong with it, if anything.
     problem: string,
-    // Whether it is a reference, which can be followed.
+    // Whether an element's attributes and children are shown.
+    open: bool,
+    // Whether an element has anything to show.
+    has-kids: bool,
+    // "error", "warning" or "" for the worst problem in an element.
+    mark: string,
+    // Whether it is the row the menus act on.
+    selected: bool,
+    // Whether it is among the rows selected together.
+    marked: bool,
+    // Whether the schema requires an attribute.
+    required: bool,
+    // Whether the element gives an attribute.
+    present: bool,
+    // Whether an attribute is a reference, which can be followed.
     is-ref: bool,
 }
 
@@ -157,7 +162,8 @@ component Field inherits Rectangle {
     in property <string> value;
     // What it says when empty.
     in property <string> placeholder;
-    // Whether Enter sets it, rather than starting a new line.
+    // Whether Enter sets it, rather than starting a new line; Ctrl+Enter
+    // sets either.
     in property <bool> one-line: true;
     // What it holds now, as edited.
     out property <string> text: input.text;
@@ -186,7 +192,8 @@ component Field inherits Rectangle {
         single-line: false;
         wrap: word-wrap;
         key-pressed(e) => {
-            if (root.one-line && e.text == Key.Return) {
+            if (e.text == Key.Return
+                    && (root.one-line || e.modifiers.control)) {
                 root.accepted(self.text);
                 return accept;
             }
@@ -256,85 +263,193 @@ component Choices inherits Rectangle {
     }
 }
 
-// One row of the outline.
-component OutlineRow inherits Rectangle {
-    in property <Row> item;
-    callback toggle(int);
-    callback select(int);
-    height: 24px;
-    background: root.item.selected ? Palette.selected : transparent;
-    HorizontalLayout {
-        padding-left: root.item.depth * 16px + 4px;
-        spacing: 4px;
-        // The disclosure triangle says open or closed by its shape.
-        Rectangle {
-            width: 16px;
-            Text {
-                text: !root.item.has-kids ? ""
-                    : root.item.open ? "▾" : "▸";
-                vertical-alignment: center;
-            }
-            TouchArea { clicked => { root.toggle(root.item.id); } }
-        }
-        Mark { mark: root.item.mark; y: 4px; }
-        Text {
-            text: root.item.label;
-            vertical-alignment: center;
-            font-italic: root.item.kind == "comment";
-            color: root.item.kind == "comment" ? Palette.comment : black;
-            overflow: elide;
-        }
+// A small button, one line high like a Field.
+component Small inherits Rectangle {
+    // What it says.
+    in property <string> text;
+    // It was clicked.
+    callback clicked();
+    width: label.preferred-width + 12px;
+    height: label.preferred-height + 6px;
+    border-width: 1px;
+    border-radius: 3px;
+    border-color: Palette.border;
+    background: touch.has-hover ? Palette.selected : Palette.window;
+    label := Text {
+        text: root.text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
     }
-    TouchArea {
-        x: root.item.depth * 16px + 20px;
-        width: parent.width - self.x;
-        clicked => { root.select(root.item.id); }
-    }
+    touch := TouchArea { clicked => { root.clicked(); } }
 }
 
-// One attribute of the selected element, to read and set.
-component AttrEditor inherits VerticalLayout {
-    in property <AttrRow> attr;
-    callback set(string, string);
-    callback follow(string);
-    callback remove(string);
-    HorizontalLayout {
-        spacing: 6px;
-        // Required is said with a word, not a colour.
-        // Lined up with the first line of the field's text, which is
-        // inset by its border.
-        VerticalLayout {
-            padding-top: 3px;
-            Text {
-                text: root.attr.name
-                    + (root.attr.required ? " (required)" : "");
-                min-width: 200px;
-                font-weight: root.attr.present ? 700 : 400;
-            }
-        }
-        if root.attr.choices.length > 0: Choices {
-            model: root.attr.choices;
-            current: root.attr.value;
-            selected(v) => { root.set(root.attr.name, v); }
-        }
-        if root.attr.choices.length == 0: Field {
-            value: root.attr.value;
-            placeholder: root.attr.present ? "" : "(not given)";
-            accepted(t) => { root.set(root.attr.name, t); }
-        }
-        if root.attr.is-ref && root.attr.present: Button {
-            text: "Go to";
-            clicked => { root.follow(root.attr.name); }
-        }
-        if root.attr.present && !root.attr.required: Button {
-            text: "Remove";
-            clicked => { root.remove(root.attr.name); }
-        }
+// One row of the outline.  Pressing on its name and dragging selects the
+// rows dragged across, or, on a selected row, opens or closes the
+// selection to a depth; the row reports where the pointer is in the
+// outline's coordinates, which it shares with every other row.
+component TreeRow inherits Rectangle {
+    in property <Row> item;
+    // The width of one level of indentation.
+    in property <length> indent;
+    // Whether a drag is selecting this row.
+    in property <bool> swept;
+    // The pointer was pressed on the row's name, at a place in the outline.
+    callback press(int, length, length, bool, bool);
+    // The pointer moved, still pressed, to a place in the outline.
+    callback drag(length, length);
+    // The pointer was let go.
+    callback release();
+    // The pointer rests on, or left, a name: what it says, and where.
+    callback hover(string, length, length);
+    callback unhover();
+    callback toggle(int);
+    callback set-attr(int, string, string);
+    callback remove-attr(int, string);
+    callback add-attr(int, string);
+    callback follow(int, string);
+    callback set-value(int, string);
+    callback set-comment(int, string);
+    property <bool> is-element: root.item.kind == "element";
+    property <bool> is-comment: root.item.kind == "comment";
+    property <bool> has-field: root.item.kind == "attr"
+        || root.item.kind == "value";
+    // Selection is said by the background and, so as not to be colour
+    // alone, by a bar at the row's left edge.
+    background: root.item.selected || root.item.marked || root.swept
+        ? Palette.selected : transparent;
+    min-height: 22px;
+    if root.item.marked || root.swept: Rectangle {
+        x: 0px;
+        width: 3px;
+        background: black;
     }
-    if root.attr.problem != "": Text {
-        text: "E " + root.attr.problem;
-        color: Palette.error;
-        wrap: word-wrap;
+    VerticalLayout {
+        // One level more than its depth, which leaves a gutter at the
+        // left for the line that marks the selection and its handle.
+        padding-left: (root.item.depth + 1) * root.indent;
+        padding-top: 1px;
+        padding-bottom: 1px;
+        HorizontalLayout {
+            spacing: 4px;
+            // The disclosure triangle says open or closed by its shape.
+            Rectangle {
+                width: 16px;
+                Text {
+                    text: !root.item.has-kids ? ""
+                        : root.item.open ? "▾" : "▸";
+                    vertical-alignment: center;
+                }
+                TouchArea { clicked => { root.toggle(root.item.id); } }
+            }
+            Mark { mark: root.item.mark; y: 3px; }
+            // The name, which is where a selection or a depth is dragged
+            // from and where the schema's description is shown.
+            name := Rectangle {
+                width: root.is-element || root.is-comment
+                    ? label.preferred-width + 8px : 200px;
+                horizontal-stretch: 0;
+                label := Text {
+                    x: 0px;
+                    text: root.is-comment ? "comment" : root.item.label
+                        + (root.item.required ? " (required)" : "");
+                    font-weight: root.is-element
+                        || (root.item.kind == "attr" && root.item.present)
+                        ? 700 : 400;
+                    font-italic: root.is-comment;
+                    color: root.is-comment ? Palette.comment : black;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                touch := TouchArea {
+                    pointer-event(e) => {
+                        if (e.kind == PointerEventKind.down
+                                && e.button == PointerEventButton.left) {
+                            root.press(root.item.index,
+                                root.x + self.absolute-position.x
+                                    - root.absolute-position.x
+                                    + self.mouse-x,
+                                root.y + self.mouse-y,
+                                e.modifiers.shift, e.modifiers.control);
+                        } else if (e.kind == PointerEventKind.up
+                                && e.button == PointerEventButton.left) {
+                            root.release();
+                        }
+                    }
+                    moved => {
+                        root.drag(
+                            root.x + self.absolute-position.x
+                                - root.absolute-position.x + self.mouse-x,
+                            root.y + self.mouse-y);
+                    }
+                    changed has-hover => {
+                        if (self.has-hover && root.item.doc != "") {
+                            root.hover(root.item.doc,
+                                self.absolute-position.x,
+                                self.absolute-position.y + self.height);
+                        } else {
+                            root.unhover();
+                        }
+                    }
+                }
+            }
+            if root.has-field && root.item.choices.length > 0: Choices {
+                model: root.item.choices;
+                current: root.item.value;
+                selected(v) => {
+                    root.set-attr(root.item.id, root.item.label, v);
+                }
+            }
+            if root.has-field && root.item.choices.length == 0: Field {
+                value: root.item.value;
+                placeholder: root.item.placeholder;
+                accepted(t) => {
+                    if (root.item.kind == "value") {
+                        root.set-value(root.item.id, t);
+                    } else {
+                        root.set-attr(root.item.id, root.item.label, t);
+                    }
+                }
+            }
+            // A comment is lines, so Enter starts one and Ctrl+Enter, or
+            // the button, sets it.
+            if root.is-comment: HorizontalLayout {
+                spacing: 4px;
+                comment := Field {
+                    value: root.item.value;
+                    one-line: false;
+                    accepted(t) => { root.set-comment(root.item.id, t); }
+                }
+                Small {
+                    text: "Set";
+                    clicked => {
+                        root.set-comment(root.item.id, comment.text);
+                    }
+                }
+            }
+            if root.item.kind == "add": Choices {
+                model: root.item.choices;
+                current: "add an attribute";
+                selected(v) => { root.add-attr(root.item.id, v); }
+            }
+            if root.item.is-ref && root.item.present: Small {
+                text: "Go to";
+                clicked => { root.follow(root.item.id, root.item.label); }
+            }
+            if root.item.kind == "attr" && !root.item.required: Small {
+                text: "Remove";
+                clicked => {
+                    root.remove-attr(root.item.id, root.item.label);
+                }
+            }
+            // An element's own row takes what width is left, so that its
+            // fields line up on the right.
+            if root.is-element: Rectangle { horizontal-stretch: 1; }
+        }
+        if root.item.problem != "": Text {
+            text: "E " + root.item.problem;
+            color: Palette.error;
+            wrap: word-wrap;
+        }
     }
 }
 
@@ -342,17 +457,16 @@ component AttrEditor inherits VerticalLayout {
 export component DocWindow inherits Window {
     in property <string> doc-title;
     in property <[Row]> rows;
-    in property <[AttrRow]> attrs;
+    // The depth of the topmost selected element, where the line a depth
+    // is dragged with starts, or -1 if no element is selected.
+    in property <int> top-depth: -1;
+    // The places of the first and last selected rows, or -1.
+    in property <int> first-marked: -1;
+    in property <int> last-marked: -1;
     in property <[ProblemRow]> problems;
     in property <string> problems-title: "Problems";
-    in property <string> element-name;
-    in property <string> element-doc;
     in property <bool> has-element;
     in property <bool> is-comment;
-    in property <bool> has-value;
-    in property <string> value-text;
-    in property <string> value-problem;
-    in-out property <string> comment-text;
     in property <[Choice]> inserts;
     in property <[Choice]> templates;
     in property <string> undo-label;
@@ -374,13 +488,21 @@ export component DocWindow inherits Window {
     callback toggle-autosave();
     callback undo();
     callback redo();
-    callback select(int);
+    // A row's name was clicked, with Shift or Ctrl held or not.
+    callback pick(int, bool, bool);
+    // Rows were selected by dragging from one to another, added to those
+    // selected if Ctrl was held.
+    callback mark-range(int, int, bool);
+    // The selected elements are opened (true) or closed (false) to a
+    // depth.
+    callback depth-to(int, bool);
     callback toggle(int);
-    callback set-attr(string, string);
-    callback remove-attr(string);
-    callback follow(string);
-    callback set-value(string);
-    callback set-comment(string);
+    callback set-attr(int, string, string);
+    callback remove-attr(int, string);
+    callback add-attr(int, string);
+    callback follow(int, string);
+    callback set-value(int, string);
+    callback set-comment(int, string);
     callback add-comment();
     callback insert(int);
     callback insert-template(int);
@@ -404,6 +526,54 @@ export component DocWindow inherits Window {
     preferred-width: 1200px;
     preferred-height: 800px;
     background: Palette.window;
+
+    // The width of one level of the outline.
+    property <length> indent: 20px;
+    // What a drag on the outline is doing: 0 nothing, 1 selecting rows,
+    // 2 opening or closing the selection to a depth with the handle.
+    property <int> drag-mode: 0;
+    // The row the drag started on, and the row the pointer is on now.
+    property <int> anchor;
+    property <int> reach;
+    // Where the drag started and where the pointer is, in the outline.
+    property <length> press-x;
+    property <length> press-y;
+    property <length> cur-x;
+    property <length> cur-y;
+    // Whether Shift and Ctrl were held when it started.
+    property <bool> drag-shift;
+    property <bool> drag-ctrl;
+    // Whether the pointer has moved far enough to be a drag, not a click.
+    property <bool> moved-far: abs(root.cur-x - root.press-x) > 4px
+        || abs(root.cur-y - root.press-y) > 4px;
+    // The depth whose column the pointer is nearest.
+    property <int> target-depth:
+        max(0, round((root.cur-x - root.bar-margin) / root.indent));
+    // Whether a depth drag opens, being to the right of where it started.
+    property <bool> opening: root.cur-x > root.press-x;
+    // Where the selected rows start and end in the outline, as the first
+    // and last of them report it.
+    property <length> sel-top;
+    property <length> sel-bottom;
+    // Where in its level's gutter the line that marks the selection runs,
+    // just before the element's disclosure triangle.
+    property <length> bar-margin: 9px;
+    // The column of the line that marks the selection: where the topmost
+    // selected element starts.
+    property <length> bar-x: root.top-depth * root.indent + root.bar-margin;
+    // The description shown for a name, where, and whether it is wanted
+    // and shown yet: it waits for the pointer to rest.
+    property <string> tip;
+    property <length> tip-x;
+    property <length> tip-y;
+    property <bool> tip-wanted;
+    property <bool> tip-on;
+
+    Timer {
+        interval: 600ms;
+        running: root.tip-wanted && !root.tip-on;
+        triggered => { root.tip-on = true; }
+    }
 
     MenuBar {
         Menu {
@@ -523,79 +693,234 @@ export component DocWindow inherits Window {
         TabWidget {
             Tab {
                 title: "Structure";
-                HorizontalBox {
-                    // The outline.
-                    ListView {
-                        min-width: 380px;
-                        horizontal-stretch: 1;
-                        for r in root.rows: OutlineRow {
-                            item: r;
-                            toggle(id) => { root.toggle(id); }
-                            select(id) => { root.select(id); }
+                VerticalLayout {
+                    padding: 4px;
+                    spacing: 4px;
+                    tree-view := ScrollView {
+                        vertical-stretch: 1;
+                        content-height: max(tree.preferred-height,
+                            self.visible-height);
+                        content-width: self.visible-width;
+                        tree := VerticalLayout {
+                            x: 0px;
+                            y: 0px;
+                            width: tree-view.visible-width;
+                            height: self.preferred-height;
+                            alignment: start;
+                            for r in root.rows: TreeRow {
+                                item: r;
+                                indent: root.indent;
+                                // Whether the pointer is over this row in
+                                // a drag that selects.
+                                property <bool> under: root.drag-mode == 1
+                                    && root.cur-y >= self.y
+                                    && root.cur-y < self.y + self.height;
+                                // The first and last selected rows say
+                                // where the line marking the selection
+                                // runs.
+                                init => { self.report(); }
+                                changed y => { self.report(); }
+                                changed height => { self.report(); }
+                                function report() {
+                                    if (r.index == root.first-marked) {
+                                        root.sel-top = self.y;
+                                    }
+                                    if (r.index == root.last-marked) {
+                                        root.sel-bottom = self.y + self.height;
+                                    }
+                                }
+                                changed under => {
+                                    if (self.under) {
+                                        root.reach = r.index;
+                                    }
+                                }
+                                swept: root.drag-mode == 1 && root.moved-far
+                                    && r.index >= min(root.anchor, root.reach)
+                                    && r.index <= max(root.anchor, root.reach);
+                                press(i, x, y, shift, ctrl) => {
+                                    root.anchor = i;
+                                    root.reach = i;
+                                    root.press-x = x;
+                                    root.cur-x = x;
+                                    root.press-y = y;
+                                    root.cur-y = y;
+                                    root.drag-shift = shift;
+                                    root.drag-ctrl = ctrl;
+                                    root.tip-wanted = false;
+                                    root.tip-on = false;
+                                    root.drag-mode = 1;
+                                }
+                                drag(x, y) => {
+                                    root.cur-x = x;
+                                    root.cur-y = y;
+                                }
+                                release => {
+                                    if (!root.moved-far) {
+                                        root.pick(root.anchor,
+                                            root.drag-shift, root.drag-ctrl);
+                                    } else if (root.drag-mode == 1) {
+                                        root.mark-range(root.anchor,
+                                            root.reach, root.drag-ctrl);
+                                    } else if (root.drag-mode == 2) {
+                                        root.depth-to(root.target-depth,
+                                            root.opening);
+                                    }
+                                    root.drag-mode = 0;
+                                }
+                                hover(doc, x, y) => {
+                                    if (root.drag-mode == 0) {
+                                        root.tip = doc;
+                                        root.tip-x = x;
+                                        root.tip-y = y;
+                                        root.tip-on = false;
+                                        root.tip-wanted = true;
+                                    }
+                                }
+                                unhover => {
+                                    root.tip-wanted = false;
+                                    root.tip-on = false;
+                                }
+                                toggle(id) => { root.toggle(id); }
+                                set-attr(id, n, v) => {
+                                    root.set-attr(id, n, v);
+                                }
+                                remove-attr(id, n) => {
+                                    root.remove-attr(id, n);
+                                }
+                                add-attr(id, n) => { root.add-attr(id, n); }
+                                follow(id, n) => { root.follow(id, n); }
+                                set-value(id, t) => { root.set-value(id, t); }
+                                set-comment(id, t) => {
+                                    root.set-comment(id, t);
+                                }
+                            }
+                        }
+                        // The line that marks the selection, down the
+                        // column where its topmost element starts, and on
+                        // it the handle that drags it to a depth: right to
+                        // open, left to close.  While it is dragged, the
+                        // line follows the depth under the pointer, and
+                        // words say what letting go will do.
+                        if root.first-marked >= 0 && root.top-depth >= 0
+                                : Rectangle {
+                            x: (root.drag-mode == 2
+                                ? root.target-depth * root.indent
+                                    + root.bar-margin
+                                : root.bar-x) - 1px;
+                            y: root.sel-top;
+                            width: 3px;
+                            height: max(0px, root.sel-bottom - root.sel-top);
+                            background: root.drag-mode != 2 ? black
+                                : root.opening ? Palette.field-a
+                                : Palette.error;
+                        }
+                        if root.first-marked >= 0 && root.top-depth >= 0
+                                : handle := Rectangle {
+                            // The middle of the part of the line in view.
+                            property <length> seen-top: max(root.sel-top,
+                                -tree-view.content-y);
+                            property <length> seen-bottom: min(
+                                root.sel-bottom,
+                                -tree-view.content-y
+                                    + tree-view.visible-height);
+                            width: 18px;
+                            height: 18px;
+                            x: (root.drag-mode == 2 ? root.cur-x : root.bar-x)
+                                - 9px;
+                            y: (self.seen-top + self.seen-bottom) / 2 - 9px;
+                            visible: self.seen-bottom > self.seen-top;
+                            border-width: 1px;
+                            border-radius: 9px;
+                            border-color: black;
+                            background: grab.has-hover || root.drag-mode == 2
+                                ? Palette.selected : Palette.window;
+                            Text {
+                                text: "↔";
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                            grab := TouchArea {
+                                mouse-cursor: ew-resize;
+                                pointer-event(e) => {
+                                    if (e.kind == PointerEventKind.down) {
+                                        root.press-x = root.bar-x;
+                                        root.cur-x = root.bar-x;
+                                        root.press-y = 0px;
+                                        root.cur-y = 0px;
+                                        root.tip-wanted = false;
+                                        root.tip-on = false;
+                                        root.drag-mode = 2;
+                                    } else if (e.kind == PointerEventKind.up
+                                            && root.drag-mode == 2) {
+                                        if (abs(root.cur-x - root.press-x)
+                                                > 4px) {
+                                            root.depth-to(root.target-depth,
+                                                root.opening);
+                                        }
+                                        root.drag-mode = 0;
+                                    }
+                                }
+                                moved => {
+                                    root.cur-x = self.absolute-position.x
+                                        + self.mouse-x
+                                        - tree.absolute-position.x;
+                                }
+                            }
+                        }
+                        if root.drag-mode == 2
+                                && abs(root.cur-x - root.press-x) > 4px
+                                : Rectangle {
+                            x: root.cur-x + 16px;
+                            y: max(root.sel-top, -tree-view.content-y);
+                            width: what.preferred-width + 10px;
+                            height: what.preferred-height + 4px;
+                            border-width: 1px;
+                            border-color: Palette.border;
+                            background: Palette.window;
+                            what := Text {
+                                text: (root.opening ? "open" : "close")
+                                    + " to depth " + root.target-depth;
+                            }
                         }
                     }
-                    // The selected element.
-                    VerticalBox {
-                        horizontal-stretch: 1;
-                        min-width: 420px;
-                        Text {
-                            text: root.is-comment ? "Comment"
-                                : root.element-name;
-                            font-size: 18px;
-                            font-weight: 700;
-                        }
-                        if root.is-comment: VerticalBox {
-                            // A comment is lines, so Enter starts one.
-                            comment-edit := Field {
-                                value: root.comment-text;
-                                one-line: false;
-                            }
-                            Button {
-                                text: "Apply the comment";
-                                clicked => {
-                                    root.set-comment(comment-edit.text);
-                                }
-                            }
-                        }
-                        if root.has-value: HorizontalBox {
-                            Text { text: "Value"; vertical-alignment: center; }
-                            value-edit := Field {
-                                value: root.value-text;
-                                accepted(t) => { root.set-value(t); }
-                            }
-                            Button {
-                                text: "Set";
-                                clicked => { root.set-value(value-edit.text); }
+                    // While rows are selected by dragging past the top or
+                    // the bottom of the outline, it scrolls, faster the
+                    // further past the pointer is.
+                    Timer {
+                        property <length> top: -tree-view.content-y;
+                        property <length> bottom: self.top
+                            + tree-view.visible-height;
+                        interval: 30ms;
+                        running: root.drag-mode == 1
+                            && (root.cur-y < self.top
+                                || root.cur-y > self.bottom);
+                        triggered => {
+                            if (root.cur-y < self.top) {
+                                let step = min(-tree-view.content-y,
+                                    clamp((self.top - root.cur-y) / 2,
+                                        4px, 40px));
+                                tree-view.content-y += step;
+                                root.cur-y -= step;
+                            } else {
+                                let step = min(
+                                    tree-view.content-height
+                                        - tree-view.visible-height
+                                        + tree-view.content-y,
+                                    clamp((root.cur-y - self.bottom) / 2,
+                                        4px, 40px));
+                                tree-view.content-y -= max(0px, step);
+                                root.cur-y += max(0px, step);
                             }
                         }
-                        if root.value-problem != "": Text {
-                            text: "E " + root.value-problem;
-                            color: Palette.error;
-                            wrap: word-wrap;
-                        }
-                        ScrollView {
-                            vertical-stretch: 1;
-                            // Packed at the top: a layout given more room
-                            // than it needs would share it among the
-                            // rows and make each a tall box.
-                                VerticalLayout {
-                                spacing: 4px;
-                                alignment: start;
-                                for a in root.attrs: AttrEditor {
-                                    attr: a;
-                                    set(n, v) => { root.set-attr(n, v); }
-                                    follow(n) => { root.follow(n); }
-                                    remove(n) => { root.remove-attr(n); }
-                                }
-                            }
-                        }
-                        Text {
-                            text: "Press Enter in a field to set it.  A change "
-                                + "the XTCE version does not allow is refused, "
-                                + "and the reason shown below.";
-                            wrap: word-wrap;
-                            font-size: 11px;
-                        }
+                    }
+                    Text {
+                        text: "Enter in a field sets it (Ctrl+Enter in a "
+                            + "comment).  Drag across names to select rows; "
+                            + "drag the selection's \u{2194} handle right to "
+                            + "open it, left to close it, to the depth under "
+                            + "the pointer.";
+                        wrap: word-wrap;
+                        font-size: 11px;
                     }
                 }
             }
@@ -644,6 +969,26 @@ export component DocWindow inherits Window {
             }
         }
         Text { text: root.status; wrap: word-wrap; }
+    }
+
+    // The description of the name the pointer rests on, kept inside the
+    // window and above the name when there is no room below it.
+    if root.tip-on && root.tip != "": Rectangle {
+        width: min(480px, root.width - 16px);
+        height: tip-text.preferred-height + 12px;
+        x: max(8px, min(root.tip-x, root.width - self.width - 8px));
+        y: root.tip-y + 2px + self.height > root.height
+            ? root.tip-y - 26px - self.height : root.tip-y + 2px;
+        border-width: 1px;
+        border-color: Palette.border;
+        background: #f6f6f6;
+        tip-text := Text {
+            x: 6px;
+            y: 6px;
+            width: parent.width - 12px;
+            text: root.tip;
+            wrap: word-wrap;
+        }
     }
 }
 

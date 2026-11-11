@@ -28,6 +28,36 @@ use crate::validate::{insertable, Severity};
 
 slint::include_modules!();
 
+/// What a row of the outline shows, which names it across redrawing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RowKey {
+    /// An element or a comment, by its id.
+    Node(Id),
+    /// An attribute of an element: the element's id and the attribute's
+    /// name.
+    Attr(Id, String),
+    /// An element's value.
+    Value(Id),
+    /// The row that adds an attribute to an element.
+    Add(Id),
+}
+
+impl RowKey {
+    /// The element or comment the row belongs to.
+    ///
+    /// # Returns
+    ///
+    /// Its id.
+    fn id(&self) -> Id {
+        match self {
+            RowKey::Node(id)
+            | RowKey::Attr(id, _)
+            | RowKey::Value(id)
+            | RowKey::Add(id) => *id,
+        }
+    }
+}
+
 /// One document window.
 struct Win {
     /// What names the window to its callbacks, which outlive any index.
@@ -38,10 +68,16 @@ struct Win {
     window: DocWindow,
     /// The elements whose children are shown.
     open: HashSet<Id>,
-    /// The selected element or comment.
+    /// The selected element or comment, which the menus act on.
     selected: Option<Id>,
-    /// The ids of the rows, in the order shown, to find a row's place.
-    order: Vec<Id>,
+    /// The rows selected together, which a depth is dragged for.
+    marked: Vec<RowKey>,
+    /// What each row shows, and how deep it is, in the order shown, to
+    /// find a row from its place.
+    keys: Vec<(RowKey, i32)>,
+    /// Attributes chosen to be added and not yet given a value, by their
+    /// elements: shown as empty fields until set.
+    adding: Vec<(Id, String)>,
     /// Usages being shown in place of the problems, with their documents,
     /// or empty to show the problems.
     usages: Vec<Loc>,
@@ -353,7 +389,10 @@ fn open_file(app: &Shared, path: PathBuf) -> Result<(), String> {
         let root = a.session.docs[d].doc.root().id;
         if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
             w.open.insert(root);
-            w.selected.get_or_insert(root);
+            if w.selected.is_none() {
+                w.selected = Some(root);
+                w.marked = vec![RowKey::Node(root)];
+            }
         }
     }
     refresh_all(app);
@@ -392,7 +431,9 @@ fn new_window(app: &Shared, path: Option<PathBuf>) -> u64 {
         window,
         open: HashSet::new(),
         selected: None,
-        order: Vec::new(),
+        marked: Vec::new(),
+        keys: Vec::new(),
+        adding: Vec::new(),
         usages: Vec::new(),
     });
     refresh_all(app);
@@ -428,13 +469,16 @@ fn connect(app: &Shared, window: &DocWindow, key: u64) {
     on!(on_toggle_autosave, toggle_autosave);
     on!(on_undo, |app, key| history(app, key, true));
     on!(on_redo, |app, key| history(app, key, false));
-    on!(on_select, select, id);
+    on!(on_pick, pick, index, shift, ctrl);
+    on!(on_mark_range, mark_range, from, to, add);
+    on!(on_depth_to, depth_to, depth, opening);
     on!(on_toggle, toggle, id);
-    on!(on_set_attr, set_attr, name, value);
-    on!(on_remove_attr, remove_attr, name);
-    on!(on_follow, follow, name);
-    on!(on_set_value, set_value, text);
-    on!(on_set_comment, set_comment, text);
+    on!(on_set_attr, set_attr, id, name, value);
+    on!(on_remove_attr, remove_attr, id, name);
+    on!(on_add_attr, add_attr, id, name);
+    on!(on_follow, follow, id, name);
+    on!(on_set_value, set_value, id, text);
+    on!(on_set_comment, set_comment, id, text);
     on!(on_add_comment, add_comment);
     on!(on_insert, insert_decl, index);
     on!(on_insert_template, insert_template, index);
@@ -584,9 +628,25 @@ fn refresh(a: &mut App, key: u64) {
         }
     }
     let mut rows = Vec::new();
-    let mut order = Vec::new();
+    let mut keys = Vec::new();
     let w = &a.wins[wi];
-    build_rows(doc.root(), 0, w, &worst, &mut rows, &mut order);
+    let shown = Shown {
+        s: session,
+        d,
+        w,
+        worst: &worst,
+        problems: &problems,
+    };
+    shown.element(doc.root(), 0, &mut rows, &mut keys);
+    let top_depth = keys
+        .iter()
+        .filter(|(k, _)| {
+            w.marked.contains(k)
+                && matches!(k, RowKey::Node(id) if doc.element(*id).is_some())
+        })
+        .map(|(_, depth)| *depth)
+        .min()
+        .unwrap_or(-1);
     let window = &w.window;
     window.set_doc_title(
         open.path
@@ -660,26 +720,11 @@ fn refresh(a: &mut App, key: u64) {
     };
     window.set_problems(ModelRc::new(VecModel::from(rows)));
     let sel = w.selected;
-    let (
-        attrs,
-        name,
-        docstr,
-        has_el,
-        is_comment,
-        has_value,
-        value,
-        value_problem,
-        comment,
-    ) = details(session, d, sel);
-    window.set_attrs(ModelRc::new(VecModel::from(attrs)));
-    window.set_element_name(name.into());
-    window.set_element_doc(docstr.into());
-    window.set_has_element(has_el);
-    window.set_is_comment(is_comment);
-    window.set_has_value(has_value);
-    window.set_value_text(value.into());
-    window.set_value_problem(value_problem.into());
-    window.set_comment_text(comment.into());
+    window.set_top_depth(top_depth);
+    window.set_has_element(sel.is_some_and(|id| doc.element(id).is_some()));
+    window.set_is_comment(
+        sel.is_some_and(|id| matches!(doc.node(id), Some(Node::Comment(_)))),
+    );
     window.set_is_definition(
         sel.is_some_and(|id| {
             session.index.def_at(Loc { doc: d, id }).is_some()
@@ -691,231 +736,290 @@ fn refresh(a: &mut App, key: u64) {
     window.set_templates(ModelRc::new(VecModel::from(template_choices(
         session, d, sel,
     ))));
-    a.wins[wi].order = order;
-}
-
-/// Makes the outline's rows for an element and what is shown inside it.
-///
-/// # Arguments
-///
-/// * `e`     - The element.
-/// * `depth` - How deep it is.
-/// * `w`     - The window, which says what is open and selected.
-/// * `worst` - The worst problem in each element.
-/// * `rows`  - The rows, added to.
-/// * `order` - The rows' ids, added to.
-fn build_rows(
-    e: &Element,
-    depth: i32,
-    w: &Win,
-    worst: &std::collections::HashMap<Id, Severity>,
-    rows: &mut Vec<Row>,
-    order: &mut Vec<Id>,
-) {
-    let has_kids = e
-        .children
+    // Rows no longer shown, closed or taken out, are no longer selected.
+    let w = &mut a.wins[wi];
+    w.marked.retain(|k| keys.iter().any(|(x, _)| x == k));
+    let marked: Vec<i32> = keys
         .iter()
-        .any(|c| matches!(c, Node::Element(_) | Node::Comment(_)));
-    let open = w.open.contains(&e.id);
-    let label = match e.get("name") {
-        Some(n) => format!("{}  {n}", e.local()),
-        None => e.local().to_string(),
-    };
-    rows.push(Row {
-        id: e.id as i32,
-        depth,
-        label: label.into(),
-        kind: "element".into(),
-        open,
-        has_kids,
-        mark: match worst.get(&e.id) {
-            Some(Severity::Error) => "error".into(),
-            Some(Severity::Warning) => "warning".into(),
-            None => "".into(),
-        },
-        selected: w.selected == Some(e.id),
-    });
-    order.push(e.id);
-    if !open {
-        return;
-    }
-    for c in &e.children {
-        match c {
-            Node::Element(k) => build_rows(k, depth + 1, w, worst, rows, order),
-            Node::Comment(k) => {
-                let first =
-                    k.text.trim().lines().next().unwrap_or("").to_string();
-                rows.push(Row {
-                    id: k.id as i32,
-                    depth: depth + 1,
-                    label: format!("<!-- {first} -->").into(),
-                    kind: "comment".into(),
-                    open: false,
-                    has_kids: false,
-                    mark: "".into(),
-                    selected: w.selected == Some(k.id),
-                });
-                order.push(k.id);
-            }
-            _ => {}
-        }
-    }
+        .enumerate()
+        .filter(|(_, (k, _))| w.marked.contains(k))
+        .map(|(i, _)| i as i32)
+        .collect();
+    w.window
+        .set_first_marked(marked.first().copied().unwrap_or(-1));
+    w.window
+        .set_last_marked(marked.last().copied().unwrap_or(-1));
+    w.keys = keys;
 }
 
-/// What the details pane shows for the selection.
-type Details = (
-    Vec<AttrRow>,
-    String,
-    String,
-    bool,
-    bool,
-    bool,
-    String,
-    String,
-    String,
-);
+/// What the outline is drawn from: the document, the window and the
+/// problems found in it.
+struct Shown<'a> {
+    /// The session.
+    s: &'a Session,
+    /// The document's index.
+    d: usize,
+    /// The window, which says what is open, selected and being added.
+    w: &'a Win,
+    /// The worst problem in each element.
+    worst: &'a std::collections::HashMap<Id, Severity>,
+    /// The document's problems.
+    problems: &'a [crate::validate::Problem],
+}
 
-/// Works out what the details pane shows.
-///
-/// # Arguments
-///
-/// * `s`   - The session.
-/// * `d`   - The document's index.
-/// * `sel` - The selected element or comment.
-///
-/// # Returns
-///
-/// The attributes' rows, the element's name, its documentation, whether an
-/// element is selected, whether a comment is, whether the element holds a
-/// value, the value, what is wrong with the value, and the comment's text.
-fn details(s: &Session, d: usize, sel: Option<Id>) -> Details {
-    let empty = (
-        Vec::new(),
-        String::new(),
-        String::new(),
-        false,
-        false,
-        false,
-        String::new(),
-        String::new(),
-        String::new(),
-    );
-    let Some(id) = sel else {
-        return empty;
-    };
-    let o = &s.docs[d];
-    match o.doc.node(id) {
-        Some(Node::Comment(c)) => (
-            Vec::new(),
-            String::new(),
-            "A comment.  It stays where it is, before the element after it, \
-             when the elements around it are edited."
-                .to_string(),
-            false,
-            true,
-            false,
-            String::new(),
-            String::new(),
-            c.text.clone(),
-        ),
-        Some(Node::Element(e)) => {
-            let problems = s.problems(d);
-            let mine = |attr: Option<&str>| -> String {
-                problems
-                    .iter()
-                    .filter(|p| p.id == id && p.attr.as_deref() == attr)
-                    .map(|p| p.message.clone())
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            };
-            let version = o.report.version.unwrap_or(Version::NEWEST);
-            let schema = version.schema();
-            let decl = o.report.decls.get(&id).copied();
-            let in_cmd = o.doc.ancestry(id).iter().any(|a| {
-                o.doc
-                    .element(*a)
-                    .is_some_and(|x| x.local() == "CommandMetaData")
-            });
-            let mut rows = Vec::new();
-            let mut doc = String::new();
-            let mut has_value = false;
-            if let Some(dc) = decl {
-                let de = &schema.elements[dc];
-                doc = de.doc.clone();
-                match de.ty {
-                    TypeRef::Complex(ci) => {
-                        let ct = &schema.complex[ci];
-                        has_value = ct.text.is_some();
-                        if doc.is_empty() {
-                            doc = ct.doc.clone();
-                        }
-                        for a in &ct.attrs {
-                            let present = e.get(&a.name);
-                            rows.push(AttrRow {
-                                name: a.name.clone().into(),
-                                value: present
-                                    .clone()
-                                    .or_else(|| a.default.clone())
-                                    .unwrap_or_default()
-                                    .into(),
-                                required: a.required,
-                                present: present.is_some(),
-                                choices: ModelRc::new(VecModel::from(
-                                    schema
-                                        .enumeration(a.ty)
-                                        .into_iter()
-                                        .map(SharedString::from)
-                                        .collect::<Vec<_>>(),
-                                )),
-                                doc: a.doc.clone().into(),
-                                problem: mine(Some(&a.name)).into(),
-                                is_ref: Kind::of_attr(
-                                    &a.name,
-                                    e.local(),
-                                    in_cmd,
-                                )
-                                .is_some(),
-                            });
-                        }
+impl Shown<'_> {
+    /// Adds a row.
+    ///
+    /// # Arguments
+    ///
+    /// * `rows`  - The rows, added to.
+    /// * `keys`  - What each row shows, added to.
+    /// * `key`   - What this one shows.
+    /// * `depth` - How deep it is.
+    /// * `row`   - The row, whose index, depth, selection and marking are
+    ///             filled in here.
+    fn push(
+        &self,
+        rows: &mut Vec<Row>,
+        keys: &mut Vec<(RowKey, i32)>,
+        key: RowKey,
+        depth: i32,
+        row: Row,
+    ) {
+        let selected = matches!(key, RowKey::Node(id)
+            if self.w.selected == Some(id));
+        rows.push(Row {
+            index: rows.len() as i32,
+            depth,
+            selected,
+            marked: self.w.marked.contains(&key),
+            ..row
+        });
+        keys.push((key, depth));
+    }
+
+    /// What is wrong with an element, or one of its attributes.
+    ///
+    /// # Arguments
+    ///
+    /// * `id`   - The element.
+    /// * `attr` - The attribute, or `None` for the element itself.
+    ///
+    /// # Returns
+    ///
+    /// The problems' messages, joined, or nothing.
+    fn problem(&self, id: Id, attr: Option<&str>) -> String {
+        self.problems
+            .iter()
+            .filter(|p| p.id == id && p.attr.as_deref() == attr)
+            .map(|p| p.message.clone())
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+
+    /// Makes the rows for an element and, if it is open, its attributes,
+    /// its value and what is in it.
+    ///
+    /// # Arguments
+    ///
+    /// * `e`     - The element.
+    /// * `depth` - How deep it is.
+    /// * `rows`  - The rows, added to.
+    /// * `keys`  - What each row shows, added to.
+    fn element(
+        &self,
+        e: &Element,
+        depth: i32,
+        rows: &mut Vec<Row>,
+        keys: &mut Vec<(RowKey, i32)>,
+    ) {
+        let o = &self.s.docs[self.d];
+        let version = o.report.version.unwrap_or(Version::NEWEST);
+        let schema = version.schema();
+        let decl = o.report.decls.get(&e.id).copied();
+        // What the schema says of the element, its attributes and whether
+        // it holds a value.
+        let mut doc = String::new();
+        let mut decl_attrs = &[][..];
+        let mut has_value = false;
+        if let Some(dc) = decl {
+            let de = &schema.elements[dc];
+            doc = de.doc.clone();
+            match de.ty {
+                TypeRef::Complex(ci) => {
+                    let ct = &schema.complex[ci];
+                    has_value = ct.text.is_some();
+                    if doc.is_empty() {
+                        doc = ct.doc.clone();
                     }
-                    TypeRef::Simple(_) => has_value = true,
+                    decl_attrs = &ct.attrs[..];
                 }
+                TypeRef::Simple(_) => has_value = true,
             }
-            // Attributes the schema does not have are shown too, with what
-            // is wrong with them, so they can be taken out.
-            for a in &e.attrs {
-                if crate::validate::is_namespace_attr(&a.name)
-                    || rows.iter().any(|r| r.name == a.name.as_str())
-                {
-                    continue;
-                }
-                rows.push(AttrRow {
-                    name: a.name.clone().into(),
-                    value: a.value().into(),
-                    required: false,
-                    present: true,
-                    choices: ModelRc::new(VecModel::from(
-                        Vec::<SharedString>::new(),
-                    )),
-                    doc: "".into(),
-                    problem: mine(Some(&a.name)).into(),
-                    is_ref: false,
-                });
-            }
-            let element_problem = mine(None);
-            (
-                rows,
-                e.local().to_string(),
-                doc,
-                true,
-                false,
-                has_value,
-                if has_value { e.text() } else { String::new() },
-                element_problem,
-                String::new(),
-            )
         }
-        _ => empty,
+        let has_kids = !decl_attrs.is_empty()
+            || has_value
+            || e.attrs
+                .iter()
+                .any(|a| !crate::validate::is_namespace_attr(&a.name))
+            || e.children
+                .iter()
+                .any(|c| matches!(c, Node::Element(_) | Node::Comment(_)));
+        let open = self.w.open.contains(&e.id);
+        let label = match e.get("name") {
+            Some(n) => format!("{}  {n}", e.local()),
+            None => e.local().to_string(),
+        };
+        self.push(
+            rows,
+            keys,
+            RowKey::Node(e.id),
+            depth,
+            Row {
+                id: e.id as i32,
+                kind: "element".into(),
+                label: label.into(),
+                doc: doc.into(),
+                problem: self.problem(e.id, None).into(),
+                open,
+                has_kids,
+                mark: match self.worst.get(&e.id) {
+                    Some(Severity::Error) => "error".into(),
+                    Some(Severity::Warning) => "warning".into(),
+                    None => "".into(),
+                },
+                ..Row::default()
+            },
+        );
+        if !open {
+            return;
+        }
+        let in_cmd = o.doc.ancestry(e.id).iter().any(|a| {
+            o.doc
+                .element(*a)
+                .is_some_and(|x| x.local() == "CommandMetaData")
+        });
+        // The attributes given, those required, and those chosen to be
+        // added; the rest are offered by the adding row, so that an
+        // element shows only what it says.
+        let mut addable = Vec::new();
+        for a in decl_attrs {
+            let present = e.get(&a.name);
+            let adding = self.w.adding.contains(&(e.id, a.name.clone()));
+            if present.is_none() && !a.required && !adding {
+                addable.push(SharedString::from(a.name.as_str()));
+                continue;
+            }
+            self.push(
+                rows,
+                keys,
+                RowKey::Attr(e.id, a.name.clone()),
+                depth + 1,
+                Row {
+                    id: e.id as i32,
+                    kind: "attr".into(),
+                    label: a.name.clone().into(),
+                    value: present.clone().unwrap_or_default().into(),
+                    placeholder: match &a.default {
+                        Some(d) => format!("(not given: {d})"),
+                        None => "(not given)".to_string(),
+                    }
+                    .into(),
+                    choices: ModelRc::new(VecModel::from(
+                        schema
+                            .enumeration(a.ty)
+                            .into_iter()
+                            .map(SharedString::from)
+                            .collect::<Vec<_>>(),
+                    )),
+                    doc: a.doc.clone().into(),
+                    problem: self.problem(e.id, Some(&a.name)).into(),
+                    required: a.required,
+                    present: present.is_some(),
+                    is_ref: Kind::of_attr(&a.name, e.local(), in_cmd).is_some(),
+                    ..Row::default()
+                },
+            );
+        }
+        // Attributes the schema does not have are shown too, with what is
+        // wrong with them, so they can be taken out.
+        for a in &e.attrs {
+            if crate::validate::is_namespace_attr(&a.name)
+                || decl_attrs.iter().any(|d| d.name == a.name)
+            {
+                continue;
+            }
+            self.push(
+                rows,
+                keys,
+                RowKey::Attr(e.id, a.name.clone()),
+                depth + 1,
+                Row {
+                    id: e.id as i32,
+                    kind: "attr".into(),
+                    label: a.name.clone().into(),
+                    value: a.value().into(),
+                    problem: self.problem(e.id, Some(&a.name)).into(),
+                    present: true,
+                    ..Row::default()
+                },
+            );
+        }
+        if !addable.is_empty() {
+            self.push(
+                rows,
+                keys,
+                RowKey::Add(e.id),
+                depth + 1,
+                Row {
+                    id: e.id as i32,
+                    kind: "add".into(),
+                    label: "attribute".into(),
+                    choices: ModelRc::new(VecModel::from(addable)),
+                    ..Row::default()
+                },
+            );
+        }
+        if has_value {
+            self.push(
+                rows,
+                keys,
+                RowKey::Value(e.id),
+                depth + 1,
+                Row {
+                    id: e.id as i32,
+                    kind: "value".into(),
+                    label: "value".into(),
+                    value: e.text().into(),
+                    placeholder: "(empty)".into(),
+                    doc: "The element's text.".into(),
+                    ..Row::default()
+                },
+            );
+        }
+        for c in &e.children {
+            match c {
+                Node::Element(k) => self.element(k, depth + 1, rows, keys),
+                Node::Comment(k) => self.push(
+                    rows,
+                    keys,
+                    RowKey::Node(k.id),
+                    depth + 1,
+                    Row {
+                        id: k.id as i32,
+                        kind: "comment".into(),
+                        label: "comment".into(),
+                        value: k.text.clone().into(),
+                        doc: "A comment.  It stays where it is, before the \
+                              element after it, when the elements around \
+                              it are edited."
+                            .into(),
+                        ..Row::default()
+                    },
+                ),
+                _ => {}
+            }
+        }
     }
 }
 
@@ -1297,19 +1401,153 @@ fn history(app: &Shared, key: u64, back: bool) {
     refresh_all(app);
 }
 
-/// Selects a row.
+/// Selects a row by a click on its name: that row alone, or with Ctrl
+/// held, added to or taken from those selected, or with Shift held, every
+/// row from the selected one to it.
 ///
 /// # Arguments
 ///
-/// * `app` - The editor.
-/// * `key` - The window's key.
-/// * `id`  - The row's id.
-fn select(app: &Shared, key: u64, id: i32) {
+/// * `app`   - The editor.
+/// * `key`   - The window's key.
+/// * `index` - The row's place.
+/// * `shift` - Whether Shift was held.
+/// * `ctrl`  - Whether Ctrl was held.
+fn pick(app: &Shared, key: u64, index: i32, shift: bool, ctrl: bool) {
     {
         let mut a = app.borrow_mut();
-        if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
-            w.selected = Some(id as Id);
-            w.usages.clear();
+        let Some(w) = a.wins.iter_mut().find(|w| w.key == key) else {
+            return;
+        };
+        let Some((k, _)) = w.keys.get(index as usize).cloned() else {
+            return;
+        };
+        if shift {
+            let from = w
+                .keys
+                .iter()
+                .position(|(x, _)| Some(x.id()) == w.selected)
+                .unwrap_or(index as usize);
+            let (lo, hi) = (from.min(index as usize), from.max(index as usize));
+            w.marked = w.keys[lo..=hi].iter().map(|(x, _)| x.clone()).collect();
+        } else if ctrl {
+            match w.marked.iter().position(|x| *x == k) {
+                Some(i) => {
+                    w.marked.remove(i);
+                }
+                None => w.marked.push(k.clone()),
+            }
+        } else {
+            w.marked = vec![k.clone()];
+        }
+        w.selected = Some(k.id());
+        w.usages.clear();
+    }
+    refresh_all(app);
+}
+
+/// Selects the rows a drag went across.
+///
+/// # Arguments
+///
+/// * `app`  - The editor.
+/// * `key`  - The window's key.
+/// * `from` - The place of the row the drag started on.
+/// * `to`   - The place of the row it ended on.
+/// * `add`  - Whether they are added to those selected, Ctrl being held.
+fn mark_range(app: &Shared, key: u64, from: i32, to: i32, add: bool) {
+    {
+        let mut a = app.borrow_mut();
+        let Some(w) = a.wins.iter_mut().find(|w| w.key == key) else {
+            return;
+        };
+        let n = w.keys.len();
+        if n == 0 {
+            return;
+        }
+        let lo = (from.min(to).max(0) as usize).min(n - 1);
+        let hi = (from.max(to).max(0) as usize).min(n - 1);
+        if !add {
+            w.marked.clear();
+        }
+        for (k, _) in &w.keys[lo..=hi] {
+            if !w.marked.contains(k) {
+                w.marked.push(k.clone());
+            }
+        }
+        w.selected = Some(w.keys[to.clamp(0, n as i32 - 1) as usize].0.id());
+        w.usages.clear();
+    }
+    refresh_all(app);
+}
+
+/// Opens or closes the selected elements, and everything in them, to a
+/// depth.  Opening opens each one less deep than it, so that the rows down
+/// to it are shown, and leaves open what is open; closing closes each one
+/// as deep or deeper, so that none deeper is shown, and leaves closed what
+/// is closed.  Elements outside the selection are left as they are.
+///
+/// # Arguments
+///
+/// * `app`     - The editor.
+/// * `key`     - The window's key.
+/// * `depth`   - The depth.
+/// * `opening` - Whether to open, rather than close.
+fn depth_to(app: &Shared, key: u64, depth: i32, opening: bool) {
+    {
+        let mut a = app.borrow_mut();
+        let Some(wi) = a.wins.iter().position(|w| w.key == key) else {
+            return;
+        };
+        let Some(d) = doc_index(&a, &a.wins[wi]) else {
+            return;
+        };
+        let a = &mut *a;
+        let doc = &a.session.docs[d].doc;
+        let w = &mut a.wins[wi];
+        /// Opens or closes an element and those in it.
+        ///
+        /// # Arguments
+        ///
+        /// * `e`       - The element.
+        /// * `at`      - How deep it is.
+        /// * `depth`   - The depth opened or closed to.
+        /// * `opening` - Whether to open.
+        /// * `open`    - The open elements, changed.
+        fn walk(
+            e: &Element,
+            at: i32,
+            depth: i32,
+            opening: bool,
+            open: &mut HashSet<Id>,
+        ) {
+            if opening && at < depth {
+                open.insert(e.id);
+            } else if !opening && at >= depth {
+                open.remove(&e.id);
+            }
+            // Opening goes no deeper than the depth; closing goes all the
+            // way, since a closed element may hide open ones.
+            if !opening || at + 1 < depth {
+                for k in e.elements() {
+                    walk(k, at + 1, depth, opening, open);
+                }
+            }
+        }
+        let tops: Vec<(Id, i32)> = w
+            .keys
+            .iter()
+            .filter(|(k, _)| w.marked.contains(k))
+            .filter_map(|(k, at)| match k {
+                RowKey::Node(id) if doc.element(*id).is_some() => {
+                    Some((*id, *at))
+                }
+                _ => None,
+            })
+            .collect();
+        for (id, at) in tops {
+            if let Some(e) = doc.element(id) {
+                walk(e, at, depth, opening, &mut w.open);
+            }
         }
     }
     refresh_all(app);
@@ -1335,18 +1573,23 @@ fn toggle(app: &Shared, key: u64, id: i32) {
     refresh_all(app);
 }
 
-/// Sets an attribute of the selected element.
+/// Sets an attribute of an element.
 ///
 /// # Arguments
 ///
 /// * `app`   - The editor.
 /// * `key`   - The window's key.
+/// * `id`    - The element.
 /// * `name`  - The attribute.
 /// * `value` - Its value.
-fn set_attr(app: &Shared, key: u64, name: SharedString, value: SharedString) {
-    let Some((_, id)) = selection(&app.borrow(), key) else {
-        return;
-    };
+fn set_attr(
+    app: &Shared,
+    key: u64,
+    id: i32,
+    name: SharedString,
+    value: SharedString,
+) {
+    let id = id as Id;
     change(app, key, &format!("set {name}"), |s, d| {
         Ok(edit::set_attr(&s.docs[d].doc, id, &name, &value)
             .map(|op| {
@@ -1357,19 +1600,46 @@ fn set_attr(app: &Shared, key: u64, name: SharedString, value: SharedString) {
             })
             .unwrap_or_default())
     });
+    // An attribute being added is no longer once it is given.
+    let mut a = app.borrow_mut();
+    let given = selection_doc(&a, key).is_some_and(|d| {
+        a.session.docs[d]
+            .doc
+            .element(id)
+            .is_some_and(|e| e.get(&name).is_some())
+    });
+    if given {
+        if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
+            w.adding.retain(|(i, n)| !(*i == id && n == name.as_str()));
+        }
+        drop(a);
+        refresh_all(app);
+    }
 }
 
-/// Takes an attribute of the selected element out.
+/// Takes an attribute of an element out, or, if it is only being added,
+/// stops adding it.
 ///
 /// # Arguments
 ///
 /// * `app`  - The editor.
 /// * `key`  - The window's key.
+/// * `id`   - The element.
 /// * `name` - The attribute.
-fn remove_attr(app: &Shared, key: u64, name: SharedString) {
-    let Some((_, id)) = selection(&app.borrow(), key) else {
-        return;
-    };
+fn remove_attr(app: &Shared, key: u64, id: i32, name: SharedString) {
+    let id = id as Id;
+    {
+        let mut a = app.borrow_mut();
+        if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
+            let n = w.adding.len();
+            w.adding.retain(|(i, x)| !(*i == id && x == name.as_str()));
+            if w.adding.len() != n {
+                drop(a);
+                refresh_all(app);
+                return;
+            }
+        }
+    }
     change(app, key, &format!("remove {name}"), |s, d| {
         Ok(edit::remove_attr(&s.docs[d].doc, id, &name)
             .map(|op| {
@@ -1382,17 +1652,41 @@ fn remove_attr(app: &Shared, key: u64, name: SharedString) {
     });
 }
 
-/// Sets the selected element's value.
+/// Shows an empty field for an attribute to be added to an element.  The
+/// attribute is put in the document only when it is given a value, since
+/// an empty one is seldom allowed.
 ///
 /// # Arguments
 ///
 /// * `app`  - The editor.
 /// * `key`  - The window's key.
+/// * `id`   - The element.
+/// * `name` - The attribute.
+fn add_attr(app: &Shared, key: u64, id: i32, name: SharedString) {
+    {
+        let mut a = app.borrow_mut();
+        if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
+            let id = id as Id;
+            w.adding.push((id, name.to_string()));
+            w.open.insert(id);
+            w.window.set_status(
+                format!("Give {name} a value and press Enter").into(),
+            );
+        }
+    }
+    refresh_all(app);
+}
+
+/// Sets an element's value.
+///
+/// # Arguments
+///
+/// * `app`  - The editor.
+/// * `key`  - The window's key.
+/// * `id`   - The element.
 /// * `text` - The value.
-fn set_value(app: &Shared, key: u64, text: SharedString) {
-    let Some((_, id)) = selection(&app.borrow(), key) else {
-        return;
-    };
+fn set_value(app: &Shared, key: u64, id: i32, text: SharedString) {
+    let id = id as Id;
     change(app, key, "set the value", |s, d| {
         Ok(edit::set_text(&s.docs[d].doc, id, &text)
             .map(|op| {
@@ -1405,17 +1699,16 @@ fn set_value(app: &Shared, key: u64, text: SharedString) {
     });
 }
 
-/// Sets the selected comment's text.
+/// Sets a comment's text.
 ///
 /// # Arguments
 ///
 /// * `app`  - The editor.
 /// * `key`  - The window's key.
+/// * `id`   - The comment.
 /// * `text` - The text.
-fn set_comment(app: &Shared, key: u64, text: SharedString) {
-    let Some((_, id)) = selection(&app.borrow(), key) else {
-        return;
-    };
+fn set_comment(app: &Shared, key: u64, id: i32, text: SharedString) {
+    let id = id as Id;
     change(app, key, "edit the comment", |s, d| {
         let op = edit::set_comment(&s.docs[d].doc, id, &text)?;
         Ok(vec![Change {
@@ -1423,6 +1716,20 @@ fn set_comment(app: &Shared, key: u64, text: SharedString) {
             ops: vec![op],
         }])
     });
+}
+
+/// The index of a window's document.
+///
+/// # Arguments
+///
+/// * `a`   - The editor.
+/// * `key` - The window's key.
+///
+/// # Returns
+///
+/// The index, if the window has a document.
+fn selection_doc(a: &App, key: u64) -> Option<usize> {
+    doc_index(a, a.wins.iter().find(|w| w.key == key)?)
 }
 
 /// Puts a new comment before the selected element.
@@ -1638,8 +1945,13 @@ fn delete_selected(app: &Shared, key: u64) {
     if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
         if w.selected == Some(id) {
             // The selection moves to the row before, if the delete was made.
-            let i = w.order.iter().position(|x| *x == id);
-            w.selected = i.and_then(|i| i.checked_sub(1)).map(|i| w.order[i]);
+            let i = w.keys.iter().position(|(k, _)| *k == RowKey::Node(id));
+            w.selected = w.keys[..i.unwrap_or(0)].iter().rev().find_map(
+                |(k, _)| match k {
+                    RowKey::Node(x) => Some(*x),
+                    _ => None,
+                },
+            );
         }
     }
     let ok = a
@@ -1768,20 +2080,22 @@ fn find_usages(app: &Shared, key: u64) {
     }
 }
 
-/// Goes to what an attribute of the selected element refers to, opening
-/// a window for its document if it is in another.
+/// Goes to what an attribute of an element refers to, opening a window
+/// for its document if it is in another.
 ///
 /// # Arguments
 ///
 /// * `app`  - The editor.
 /// * `key`  - The window's key.
+/// * `id`   - The element.
 /// * `name` - The attribute.
-fn follow(app: &Shared, key: u64, name: SharedString) {
+fn follow(app: &Shared, key: u64, id: i32, name: SharedString) {
     let target = {
         let a = app.borrow();
-        let Some((d, id)) = selection(&a, key) else {
+        let Some(d) = selection_doc(&a, key) else {
             return;
         };
+        let id = id as Id;
         a.session
             .index
             .refs
@@ -1833,6 +2147,7 @@ fn reveal(app: &Shared, loc: Loc) {
                 }
             }
             w.selected = Some(loc.id);
+            w.marked = vec![RowKey::Node(loc.id)];
             w.usages.clear();
             let _ = w.window.show();
         }
@@ -2390,12 +2705,47 @@ mod tests {
     ///
     /// # Returns
     ///
-    /// The labels, with their ids.
+    /// The labels of the element rows, with their ids.
     fn rows(w: &DocWindow) -> Vec<(i32, String)> {
         w.get_rows()
             .iter()
+            .filter(|r| r.kind == "element")
             .map(|r| (r.id, r.label.to_string()))
             .collect()
+    }
+
+    /// Selects an element's row, as a click on its name does.
+    ///
+    /// # Arguments
+    ///
+    /// * `w`  - The window.
+    /// * `id` - The element.
+    fn select(w: &DocWindow, id: i32) {
+        let index = w
+            .get_rows()
+            .iter()
+            .find(|r| r.kind == "element" && r.id == id)
+            .expect("the element is shown")
+            .index;
+        w.invoke_pick(index, false, false);
+    }
+
+    /// The depths of the element rows shown.
+    ///
+    /// # Arguments
+    ///
+    /// * `w` - The window.
+    ///
+    /// # Returns
+    ///
+    /// The deepest.
+    fn deepest(w: &DocWindow) -> i32 {
+        w.get_rows()
+            .iter()
+            .filter(|r| r.kind == "element")
+            .map(|r| r.depth)
+            .max()
+            .unwrap()
     }
 
     /// Opens every row of a window's outline, so all are shown.
@@ -2449,15 +2799,15 @@ mod tests {
         let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
         let w = win(&app, 0);
         let root = row(&w, "SpaceSystem");
-        w.invoke_select(root);
-        w.invoke_set_attr("name".into(), "a b".into());
+        select(&w, root);
+        w.invoke_set_attr(root, "name".into(), "a b".into());
         assert!(
             w.get_status().contains("does not allow"),
             "{}",
             w.get_status()
         );
         assert_eq!(w.get_undo_label(), "");
-        w.invoke_set_attr("shortDescription".into(), "the probe".into());
+        w.invoke_set_attr(root, "shortDescription".into(), "the probe".into());
         assert_eq!(w.get_undo_label(), "set shortDescription");
         assert!(w.get_dirty());
         w.invoke_undo();
@@ -2470,7 +2820,7 @@ mod tests {
         let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
         let w = win(&app, 0);
         open_all(&app, 0);
-        w.invoke_select(row(&w, "ParameterTypeSet"));
+        select(&w, row(&w, "ParameterTypeSet"));
         let inserts: Vec<String> = w
             .get_inserts()
             .iter()
@@ -2496,7 +2846,7 @@ mod tests {
         assert!(rows(&w).len() > before);
         assert!(w.get_problems_title().starts_with("Problems: 0 error"));
         // The template of a CCSDS header goes in a SpaceSystem.
-        w.invoke_select(row(&w, "SpaceSystem"));
+        select(&w, row(&w, "SpaceSystem"));
         let t = w.get_templates().iter().next().expect("a template").index;
         w.invoke_insert_template(t);
         assert!(w.get_status().contains("done"), "{}", w.get_status());
@@ -2518,26 +2868,89 @@ mod tests {
             .find(|r| r.label.starts_with("Parameter "))
             .expect("a parameter")
             .id;
-        rover.invoke_select(p);
+        select(&rover, p);
         let wanted = rover
-            .get_attrs()
+            .get_rows()
             .iter()
-            .find(|a| a.name == "parameterTypeRef")
-            .map(|a| a.value.to_string())
+            .find(|r| {
+                r.kind == "attr" && r.id == p && r.label == "parameterTypeRef"
+            })
+            .map(|r| r.value.to_string())
             .unwrap();
-        rover.invoke_follow("parameterTypeRef".into());
+        rover.invoke_follow(p, "parameterTypeRef".into());
         // The type is shown selected in the window of the document that
         // defines it, whose name is the reference's last part.
         let name = wanted.rsplit('/').next().unwrap().to_string();
         let a = app.borrow();
         let shown = a.wins.iter().any(|w| {
-            w.window
-                .get_attrs()
-                .iter()
-                .any(|x| x.name == "name" && x.value == name.as_str())
-                && w.window.get_element_name().ends_with("Type")
+            w.window.get_rows().iter().any(|r| {
+                r.selected
+                    && r.kind == "element"
+                    && r.label.ends_with(&format!("Type  {name}"))
+            })
         });
         assert!(shown, "{wanted} was not shown");
+    }
+
+    #[test]
+    fn opens_and_closes_the_selection_to_a_depth() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        assert_eq!(deepest(&w), 1);
+        let root = row(&w, "SpaceSystem");
+        select(&w, root);
+        // Opening to 3 shows the elements three deep, and no deeper.
+        w.invoke_depth_to(3, true);
+        assert_eq!(deepest(&w), 3);
+        // Closing a part of what is shown to 2 leaves the rest open.
+        let tm = row(&w, "TelemetryMetaData");
+        let tm_index = w
+            .get_rows()
+            .iter()
+            .find(|r| r.kind == "element" && r.id == tm)
+            .unwrap()
+            .index;
+        w.invoke_pick(tm_index, false, false);
+        w.invoke_depth_to(2, false);
+        let rows = w.get_rows();
+        let under_tm: Vec<_> = rows
+            .iter()
+            .skip_while(|r| r.id != tm)
+            .skip(1)
+            .take_while(|r| r.depth > 1)
+            .filter(|r| r.kind == "element")
+            .collect();
+        assert!(under_tm.iter().all(|r| r.depth == 2 && !r.open));
+        assert!(
+            rows.iter().any(|r| r.id == root && r.open),
+            "what holds it stays open"
+        );
+        // Closing the root to 1 closes everything below it.
+        select(&w, root);
+        w.invoke_depth_to(1, false);
+        assert_eq!(deepest(&w), 1);
+    }
+
+    #[test]
+    fn selects_the_rows_dragged_across() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        select(&w, row(&w, "SpaceSystem"));
+        w.invoke_depth_to(3, true);
+        w.invoke_mark_range(3, 1, false);
+        let marked: Vec<i32> = w
+            .get_rows()
+            .iter()
+            .filter(|r| r.marked)
+            .map(|r| r.index)
+            .collect();
+        assert_eq!(marked, vec![1, 2, 3]);
+        assert_eq!((w.get_first_marked(), w.get_last_marked()), (1, 3));
+        // With Ctrl, a second drag adds to the first.
+        let last = w.get_rows().row_count() as i32 - 1;
+        assert!(last > 3, "{last} rows");
+        w.invoke_mark_range(last, last, true);
+        assert_eq!(w.get_rows().iter().filter(|r| r.marked).count(), 4);
     }
 
     #[test]
