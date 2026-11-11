@@ -279,7 +279,11 @@ impl Ccs {
         7 + self.sub as usize
     }
 
-    /// The picoseconds of the layout's last digit.
+    /// Gives what the layout's last digit of a second counts.
+    ///
+    /// # Returns
+    ///
+    /// The picoseconds of one unit of its last digit.
     const fn unit(&self) -> u64 {
         let mut unit = PICOS;
         let mut i = 0;
@@ -519,6 +523,13 @@ pub fn parse_ascii(text: &[u8]) -> Option<(usize, AsciiForm, CalendarTime)> {
 }
 
 /// Writes a number in a fixed number of decimal digits.
+///
+/// # Arguments
+///
+/// * `out` - Where the digits go, one ASCII digit to an octet, as many
+///           as it holds, with leading zeros; higher digits of `v` that
+///           do not fit are left out.
+/// * `v`   - The number.
 fn put_digits(out: &mut [u8], mut v: u64) {
     for c in out.iter_mut().rev() {
         *c = b'0' + (v % 10) as u8;
@@ -601,7 +612,19 @@ pub fn format_ascii(
 mod tests {
     use super::*;
 
-    /// A time of the calendar, for the tests.
+    /// Makes a time of the calendar, for the tests.
+    ///
+    /// # Arguments
+    ///
+    /// * `year`  - The year.
+    /// * `month` - The month, from 1.
+    /// * `day`   - The day of the month, from 1.
+    /// * `hms`   - The hour, minute and second.
+    /// * `picos` - The picoseconds into the second.
+    ///
+    /// # Returns
+    ///
+    /// The time.
     fn at(
         year: u16,
         month: u8,

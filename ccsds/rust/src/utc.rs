@@ -61,7 +61,18 @@ pub struct LeapSeconds<'a> {
     pub expires: (u16, u8, u8),
 }
 
-/// A change, for the table below.
+/// Makes a change in TAI - UTC, for the table below, on the first of
+/// a month.
+///
+/// # Arguments
+///
+/// * `year`          - The year it takes effect.
+/// * `month`         - The month, on whose first day it does.
+/// * `tai_minus_utc` - TAI - UTC from then on, in seconds.
+///
+/// # Returns
+///
+/// The change.
 const fn change(year: u16, month: u8, tai_minus_utc: i32) -> LeapSecond {
     LeapSecond {
         year,
@@ -229,7 +240,20 @@ pub fn tai_to_utc(tai: &TaiTime, table: &LeapSeconds) -> Option<CalendarTime> {
 mod tests {
     use super::*;
 
-    /// A time of UTC, for the tests.
+    /// Makes a time of UTC, for the tests.
+    ///
+    /// # Arguments
+    ///
+    /// * `y`  - The year.
+    /// * `mo` - The month, from 1.
+    /// * `d`  - The day of the month, from 1.
+    /// * `h`  - The hour.
+    /// * `mi` - The minute.
+    /// * `s`  - The second, 60 in a leap second.
+    ///
+    /// # Returns
+    ///
+    /// The time, with no picoseconds.
     fn utc(y: u16, mo: u8, d: u8, h: u8, mi: u8, s: u8) -> CalendarTime {
         CalendarTime {
             year: y,
