@@ -7,7 +7,6 @@ producing incomplete bindings.
 
 from __future__ import annotations
 
-import re
 import xml.etree.ElementTree as ET
 from typing import Optional
 
@@ -37,20 +36,24 @@ def _local(qname: str) -> tuple[Optional[str], str]:
     return None, qname
 
 
-def _doc(node: ET.Element) -> str:
-    """Reads a schema node's documentation annotation.
+def _doc(kind: str, name: str) -> str:
+    """Describes a schema declaration in this project's own words.
+
+    The schema's documentation annotations are OMG's text, which OMG does
+    not allow to be redistributed, and the code generated here is; so
+    none of it is copied, and each declaration is described by what it is
+    and what it is called.
 
     Args:
-        node: The XSD element, such as an xs:complexType.
+        kind: What it is: "type", "enumeration", "element" or "attribute".
+        name: Its name in the schema, or ``""`` for an anonymous type.
 
     Returns:
-        The text of its xs:annotation/xs:documentation with runs of
-        whitespace collapsed to single spaces, or ``""`` if it has none.
+        A one-sentence description.
     """
-    d = node.find(f"{XS}annotation/{XS}documentation")
-    if d is None or d.text is None:
-        return ""
-    return re.sub(r"\s+", " ", d.text).strip()
+    if kind in ("type", "enumeration"):
+        return f"The XTCE {kind} `{name}`." if name else f"An XTCE {kind}."
+    return f"The `{name}` {kind}."
 
 
 def _occurs(node: ET.Element) -> tuple[int, int]:
@@ -140,7 +143,8 @@ class _Parser:
             values = [e.get("value", "")
                       for e in restriction.findall(f"{XS}enumeration")]
             if values:
-                self.schema.enums[name] = EnumType(name, values, _doc(node))
+                self.schema.enums[name] = EnumType(name, values,
+                                                   _doc("enumeration", name))
                 return EnumRef(name)
             base = restriction.get("base")
             if base is None:
@@ -240,7 +244,8 @@ class _Parser:
             raise XsdError(f"attribute without name in {owner}")
         return Attribute(name=name, type=self.type_of(node, owner),
                          required=node.get("use") == "required",
-                         default=node.get("default"), doc=_doc(node))
+                         default=node.get("default"),
+                         doc=_doc("attribute", name))
 
     def parse_particle(self, node: ET.Element, owner: str):
         """Parses a particle and, for a group, the particles in it.
@@ -263,9 +268,10 @@ class _Parser:
                 _, local = _local(ref)
                 target = self.element_nodes[local]
                 return Element(local, self.type_of(target, owner), lo, hi,
-                               doc=_doc(node))
+                               doc=_doc("element", local))
             return Element(node.get("name", ""), self.type_of(node, owner), lo,
-                           hi, fixed=node.get("fixed"), doc=_doc(node))
+                           hi, fixed=node.get("fixed"),
+                           doc=_doc("element", node.get("name", "")))
         if tag in (f"{XS}sequence", f"{XS}choice"):
             items = [self.parse_particle(c, owner) for c in node
                      if c.tag not in (f"{XS}annotation",)]
@@ -316,7 +322,8 @@ class _Parser:
                       with elements or uses an unsupported construct.
         """
         ct = ComplexType(name=name, abstract=node.get("abstract") == "true",
-                         doc=_doc(node), anonymous=anonymous)
+                         doc=_doc("type", "" if anonymous else name),
+                         anonymous=anonymous)
         cc = node.find(f"{XS}complexContent")
         sc = node.find(f"{XS}simpleContent")
         if cc is not None:
