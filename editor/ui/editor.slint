@@ -28,6 +28,12 @@ export global Palette {
     // Fields in a packet's layout, alternating blue and orange.
     out property <color> field-a: #0072B2;
     out property <color> field-b: #E69F00;
+    // A text field's border, and its border when it has the focus, which
+    // its text cursor shows too.
+    out property <color> border: #8c8c8c;
+    out property <color> border-focus: #0072B2;
+    // What an empty field says it would hold.
+    out property <color> hint: #6e6e6e;
 }
 
 // One row of the outline: an element or a comment.
@@ -142,6 +148,114 @@ component Mark inherits Rectangle {
     }
 }
 
+// A text field one line high that grows a line at a time as its text
+// wraps, so that a short value takes little room and a long one is all in
+// view.  The standard LineEdit is a fixed height with generous padding,
+// which in a list of attributes left more space than text.
+component Field inherits Rectangle {
+    // What it holds when shown.
+    in property <string> value;
+    // What it says when empty.
+    in property <string> placeholder;
+    // Whether Enter sets it, rather than starting a new line.
+    in property <bool> one-line: true;
+    // What it holds now, as edited.
+    out property <string> text: input.text;
+    // Enter was pressed in a one-line field.
+    callback accepted(string);
+    min-width: 120px;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    height: max(input.preferred-height, hint.preferred-height) + 6px;
+    border-width: 1px;
+    border-radius: 3px;
+    border-color: input.has-focus ? Palette.border-focus : Palette.border;
+    background: Palette.window;
+    forward-focus: input;
+    hint := Text {
+        x: 6px;
+        y: 3px;
+        text: input.text == "" ? root.placeholder : "";
+        color: Palette.hint;
+    }
+    input := TextInput {
+        x: 6px;
+        y: 3px;
+        width: parent.width - 12px;
+        text: root.value;
+        single-line: false;
+        wrap: word-wrap;
+        key-pressed(e) => {
+            if (root.one-line && e.text == Key.Return) {
+                root.accepted(self.text);
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+// A choice among a list of values, one line high like a Field, with the
+// list dropped below it.  The standard ComboBox is as tall as a LineEdit.
+component Choices inherits Rectangle {
+    // The values that may be chosen.
+    in property <[string]> model;
+    // The value shown.
+    in property <string> current;
+    // A value was chosen from the list.
+    callback selected(string);
+    min-width: 120px;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    height: shown.preferred-height + 6px;
+    border-width: 1px;
+    border-radius: 3px;
+    border-color: Palette.border;
+    background: Palette.window;
+    shown := Text {
+        x: 6px;
+        y: 3px;
+        width: parent.width - 24px;
+        text: root.current;
+        overflow: elide;
+    }
+    // The arrow says, without colour, that this is a list.
+    Text {
+        x: parent.width - 16px;
+        y: 3px;
+        text: "\u{25BE}";
+    }
+    TouchArea {
+        clicked => { list.show(); }
+    }
+    list := PopupWindow {
+        x: 0px;
+        y: root.height;
+        width: root.width;
+        Rectangle {
+            border-width: 1px;
+            border-color: Palette.border;
+            background: Palette.window;
+            VerticalLayout {
+                padding: 1px;
+                for v in root.model: Rectangle {
+                    height: item.preferred-height + 4px;
+                    background: pick.has-hover ? Palette.selected
+                        : transparent;
+                    item := Text {
+                        x: 6px;
+                        text: v + (v == root.current ? "  (now)" : "");
+                        vertical-alignment: center;
+                    }
+                    pick := TouchArea {
+                        clicked => { root.selected(v); }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // One row of the outline.
 component OutlineRow inherits Rectangle {
     in property <Row> item;
@@ -187,23 +301,26 @@ component AttrEditor inherits VerticalLayout {
     HorizontalLayout {
         spacing: 6px;
         // Required is said with a word, not a colour.
-        Text {
-            text: root.attr.name + (root.attr.required ? " (required)" : "");
-            min-width: 200px;
-            vertical-alignment: center;
-            font-weight: root.attr.present ? 700 : 400;
+        // Lined up with the first line of the field's text, which is
+        // inset by its border.
+        VerticalLayout {
+            padding-top: 3px;
+            Text {
+                text: root.attr.name
+                    + (root.attr.required ? " (required)" : "");
+                min-width: 200px;
+                font-weight: root.attr.present ? 700 : 400;
+            }
         }
-        if root.attr.choices.length > 0: ComboBox {
+        if root.attr.choices.length > 0: Choices {
             model: root.attr.choices;
-            current-value: root.attr.value;
-            horizontal-stretch: 1;
+            current: root.attr.value;
             selected(v) => { root.set(root.attr.name, v); }
         }
-        if root.attr.choices.length == 0: LineEdit {
-            text: root.attr.value;
-            placeholder-text: root.attr.present ? "" : "(not given)";
-            horizontal-stretch: 1;
-            accepted => { root.set(root.attr.name, self.text); }
+        if root.attr.choices.length == 0: Field {
+            value: root.attr.value;
+            placeholder: root.attr.present ? "" : "(not given)";
+            accepted(t) => { root.set(root.attr.name, t); }
         }
         if root.attr.is-ref && root.attr.present: Button {
             text: "Go to";
@@ -427,16 +544,11 @@ export component DocWindow inherits Window {
                             font-size: 18px;
                             font-weight: 700;
                         }
-                        Text {
-                            text: root.element-doc;
-                            wrap: word-wrap;
-                            max-height: 90px;
-                            overflow: elide;
-                        }
                         if root.is-comment: VerticalBox {
-                            comment-edit := TextEdit {
-                                text <=> root.comment-text;
-                                min-height: 120px;
+                            // A comment is lines, so Enter starts one.
+                            comment-edit := Field {
+                                value: root.comment-text;
+                                one-line: false;
                             }
                             Button {
                                 text: "Apply the comment";
@@ -447,9 +559,9 @@ export component DocWindow inherits Window {
                         }
                         if root.has-value: HorizontalBox {
                             Text { text: "Value"; vertical-alignment: center; }
-                            value-edit := LineEdit {
-                                text: root.value-text;
-                                accepted => { root.set-value(self.text); }
+                            value-edit := Field {
+                                value: root.value-text;
+                                accepted(t) => { root.set-value(t); }
                             }
                             Button {
                                 text: "Set";
@@ -463,8 +575,12 @@ export component DocWindow inherits Window {
                         }
                         ScrollView {
                             vertical-stretch: 1;
-                            VerticalLayout {
-                                spacing: 6px;
+                            // Packed at the top: a layout given more room
+                            // than it needs would share it among the
+                            // rows and make each a tall box.
+                                VerticalLayout {
+                                spacing: 4px;
+                                alignment: start;
                                 for a in root.attrs: AttrEditor {
                                     attr: a;
                                     set(n, v) => { root.set-attr(n, v); }
