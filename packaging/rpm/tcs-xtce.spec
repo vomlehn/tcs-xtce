@@ -38,6 +38,22 @@ Packager:	%{tcs_maintainer}
 # will do: the package's directory has no Python version in it. The
 # libraries the editor links with RPM finds for itself.
 Requires:	python3 >= 3.10
+# The editor opens its windows through libraries it loads when it runs,
+# which RPM cannot see that it needs: the keyboard, X11 or Wayland, EGL
+# and OpenGL, and D-Bus for the desktop's Open and Save dialogs.  The
+# .deb names the same ones.
+Requires:	libxkbcommon.so.0()(64bit)
+Requires:	libxkbcommon-x11.so.0()(64bit)
+Requires:	libX11.so.6()(64bit)
+Requires:	libX11-xcb.so.1()(64bit)
+Requires:	libXcursor.so.1()(64bit)
+Requires:	libXi.so.6()(64bit)
+Requires:	libXrender.so.1()(64bit)
+Requires:	libEGL.so.1()(64bit)
+Requires:	libGL.so.1()(64bit)
+Requires:	libwayland-client.so.0()(64bit)
+Requires:	libwayland-egl.so.1()(64bit)
+Requires:	libdbus-1.so.3()(64bit)
 # The .pth file that puts /opt/tcs on python3's own path is in the
 # directory of one Python version, the one this RPM was built for; the
 # commands find the package without it. A Recommends, as tcslog's is.

@@ -26,7 +26,7 @@ Filters = [
 	# default, and not the old SysV one as well.
 	' missing-hash-section /opt/tcs/lib/libxtce\.so\.',
 	# Words of the trade that rpmlint's dictionary does not have.
-	" spelling-error \\('(preallocated|config)',",
+	" spelling-error \\('(preallocated|config|xtcee)',",
 	" spelling-error \\(\"ccsds's\",",
 	# The licence texts are shipped with the documents and again in the
 	# Python package's metadata, where pip puts them.

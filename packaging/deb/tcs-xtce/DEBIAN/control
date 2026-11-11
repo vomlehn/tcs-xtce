@@ -3,7 +3,7 @@ Version: @VERSION@
 Architecture: @ARCH@
 Maintainer: David VomLehn <dvomlehn@gmail.com>
 Installed-Size: @SIZE@
-Depends: python3 (>= 3.10), @SHLIBS@
+Depends: python3 (>= 3.10), @SHLIBS@, libxkbcommon0, libxkbcommon-x11-0, libx11-6, libx11-xcb1, libxcursor1, libxi6, libxrender1, libegl1, libgl1, libwayland-client0, libwayland-egl1, libdbus-1-3
 Suggests: rustfmt, pkgconf
 Section: libdevel
 Priority: optional
