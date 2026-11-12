@@ -4,9 +4,9 @@
   <title>What happens to a change in tcs-xtcee</title>
   <desc>A change is checked against the document's XTCE version.  If it
     adds an error it is refused and the document is left as it was;
-    otherwise it is taken, and two seconds after the last change it is
-    written to the file (autosave on) or kept in a recovery copy until
-    File &gt; Save (autosave off).</desc>
+    otherwise it is taken, and two to three seconds after the last
+    change it is written to the file (autosave on) or kept in a
+    recovery copy until File &gt; Save (autosave off).</desc>
   <defs>
     <!-- Arrowheads: black for the common path, vermillion for refused,
          bluish green for taken. -->
@@ -75,9 +75,9 @@
         stroke-width="1.5" marker-end="url(#arrow)"/>
   <path d="M594,392 V430" fill="none" stroke="#000000"
         stroke-width="1.5" marker-end="url(#arrow)"/>
-  <rect x="300" y="400" width="244" height="22" fill="#ffffff"/>
-  <text x="422" y="416" text-anchor="middle" font-style="italic">two
-    seconds after the last change</text>
+  <rect x="272" y="400" width="300" height="22" fill="#ffffff"/>
+  <text x="422" y="416" text-anchor="middle" font-style="italic">two to
+    three seconds after the last change</text>
 
   <!-- Autosave on. -->
   <rect x="100" y="432" width="300" height="96" rx="8" fill="#ffffff"

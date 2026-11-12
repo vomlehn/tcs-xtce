@@ -418,11 +418,10 @@ make<span class="whitespace"> </span>editor<span class="whitespace">            
 </pre>
 <p>The tcs-xtce package installs it as <tt class="docutils literal"><span class="pre">/opt/tcs/bin/tcs-xtcee</span></tt>,
 already built, with the Python package it uses installed beside it.</p>
-<p>The packet layout, the encode and
-decode window and the compiler's check use the Python package, as
-<a class="reference external" href="tcs-xtce.html#running-the-compiler">Running the compiler</a> describes: from a checkout, run <tt class="docutils literal">make generate</tt>
-first, or set <tt class="docutils literal">TCS_XTCE_PYTHONPATH</tt> to the directory that holds
-<tt class="docutils literal">tcs_xtce</tt>.</p>
+<p>The packet layout, the encode and decode window and the compiler's
+check use the Python package, as <a class="reference external" href="tcs-xtce.html#running-the-compiler">Running the compiler</a> describes: from a checkout, run
+<tt class="docutils literal">make generate</tt> first, or set <tt class="docutils literal">TCS_XTCE_PYTHONPATH</tt> to the directory
+that holds <tt class="docutils literal">tcs_xtce</tt>.</p>
 </div>
 <div class="section" id="omg-s-files">
 <h1><a class="toc-backref" href="#toc-entry-3">OMG's files</a></h1>
@@ -454,9 +453,9 @@ editor</tt>), so that its tests need no network and ask nothing.</p>
 <div class="section" id="its-windows">
 <h1><a class="toc-backref" href="#toc-entry-4">Its windows</a></h1>
 <p><tt class="docutils literal"><span class="pre">tcs-xtcee</span> <span class="pre">FILE...</span></tt> opens each file in a window of its own.  The files
-given together are one mission (<a class="reference external" href="tcs-xtce.html#missions-in-several-documents">Missions in several documents</a>): a
-reference in one can name a definition in another, and File &gt; Open adds
-another document to the mission.</p>
+given together are one mission (<a class="reference external" href="tcs-xtce.html#missions-in-several-documents">Missions in several documents</a>): a reference in one can
+name a definition in another, and File &gt; Open adds another document to
+the mission.</p>
 <p>Each window shows:</p>
 <ul class="simple">
 <li>the document as a tree.  An open element shows, one level deeper,
@@ -469,11 +468,13 @@ gives, and those it must, are shown; the row <em>attribute</em> below them
 offers the rest, and one chosen there is put in when it is given a
 value.  An element with a problem in it is marked <strong>E</strong> for an error
 or <strong>W</strong> for a warning, on its row and on every row above it, so a
-closed row shows that something inside it is wrong.  Resting the
-pointer on a name shows what the schema says of it;</li>
-<li>the problems: every schema error, every reference that names nothing
-in the open documents, and every two definitions of one name.  Picking
-one selects the element it is about;</li>
+closed row shows that something inside it is wrong, and what is wrong
+is written under the row of the element or attribute it is in, marked
+the same way.  Resting the pointer on a name shows what the schema says
+of it;</li>
+<li>the problems: every schema error, and, as warnings, every reference
+that names nothing in the open documents and every two definitions of
+one name.  Picking one selects the element it is about;</li>
 <li>a Source tab, where the document's text can be edited and applied as
 a whole.</li>
 </ul>
@@ -597,9 +598,10 @@ the abstract container a packet builds on.</p>
 below them the ready-made parts that fit.</p>
 </div>
 <div class="figure">
-<img alt="A new row, IntegerParameterType new1, selected at the end of ParameterTypeSet and open, showing its required name, new1." src="shots/tcs-xtcee-insert-2.png" />
+<img alt="A new row, IntegerParameterType new1, selected at the end of ParameterTypeSet and open, showing its required name, new1; the line marking the selection, with its handle, is beside it, and ParameterTypeSet is no longer selected." src="shots/tcs-xtcee-insert-2.png" />
 <p class="caption"><strong>2.</strong> IntegerParameterType chosen: one is put in, complete, its required
-<tt class="docutils literal">name</tt> given a value of the right kind, and selected.</p>
+<tt class="docutils literal">name</tt> given a value of the right kind, and selected in place of
+ParameterTypeSet.</p>
 </div>
 </div>
 <div class="section" id="problems-in-a-document">
@@ -616,9 +618,10 @@ named <tt class="docutils literal">PowrType</tt>, which nothing defines.</p>
 worse mark, closed or not.</p>
 </div>
 <div class="figure">
-<img alt="After clicking the warning: Parameter HeaterPower, marked W, is selected and open, and under its parameterTypeRef, which holds PowrType, the problem's text is written." src="shots/tcs-xtcee-problems-2.png" />
+<img alt="After clicking the warning: Parameter HeaterPower, marked W, is selected and open, and under its parameterTypeRef, which holds PowrType, the problem's text is written, marked W." src="shots/tcs-xtcee-problems-2.png" />
 <p class="caption"><strong>2.</strong> A click on the warning selects Parameter HeaterPower; opened, it
-shows the problem under the attribute it is about.</p>
+shows the problem under the attribute it is about, marked <strong>W</strong> as a
+warning, as it is in the list.</p>
 </div>
 <div class="figure">
 <img alt="After setting parameterTypeRef to PowerType: no W marks, and the list titled &quot;Problems: 1 error(s), 0 warning(s)&quot; holding only the error on line 44." src="shots/tcs-xtcee-problems-3.png" />
@@ -638,15 +641,21 @@ closed.</p>
 </div>
 <div class="section" id="saving-autosave-and-recovery">
 <h1><a class="toc-backref" href="#toc-entry-11">Saving, autosave and recovery</a></h1>
-<p>With autosave on, a changed document is written to its file two seconds
-after the last change.  File &gt; Autosave turns it off and on, and the
-setting is kept in <tt class="docutils literal"><span class="pre">~/.config/tcs-xtcee/settings</span></tt>
-(<tt class="docutils literal">$XDG_CONFIG_HOME</tt> if set).  With it off, a changed document that has
-not been saved is kept in a recovery copy in
-<tt class="docutils literal"><span class="pre">~/.local/state/tcs-xtcee/</span></tt> (<tt class="docutils literal">$XDG_STATE_HOME</tt> if set), so that a
-crash loses at most the last seconds; the next time the document is
-opened, the editor offers the copy's changes, which Undo then takes back
-if they are not wanted.  Saving removes the copy.</p>
+<p>The editor looks at its documents once a second, and does what is
+below once two seconds have passed since the last change: so two to
+three seconds after it.</p>
+<p>With autosave on, a changed document is then written to its file.
+File &gt; Autosave turns it off and on, and the setting is kept in
+<tt class="docutils literal"><span class="pre">~/.config/tcs-xtcee/settings</span></tt> (<tt class="docutils literal">$XDG_CONFIG_HOME</tt> if set).  With it
+off, a changed document that has not been saved is kept in a recovery
+copy in <tt class="docutils literal"><span class="pre">~/.local/state/tcs-xtcee/</span></tt> (<tt class="docutils literal">$XDG_STATE_HOME</tt> if set), so
+that a crash loses at most the last seconds; the next time the document
+is opened, the editor offers the copy's changes, which Undo then takes
+back if they are not wanted.  Saving removes the copy.</p>
+<p>Autosave on or off, a document never yet saved -- one made with File &gt;
+New document -- has no file to write over, so it gets a recovery copy
+until File &gt; Save writes it; so does a document whose file another
+program has changed, until you choose what to do (below).</p>
 <div class="figure">
 <img alt="The File menu open: New document, Open, Add a document to the mission, Save, Save as, &quot;Autosave: on (turn off)&quot; and Close." src="shots/tcs-xtcee-save-1.png" />
 <p class="caption">File &gt; Save writes the document now; the item below Save as says
@@ -661,11 +670,11 @@ vermillion box with a cross: the document is left as it was and
 the status line says why.  Otherwise it is taken, shown by a
 solid bluish green box with a tick: Edit > Undo names it, the
 title starts with *, and the outline and problems are drawn
-again.  Two seconds after the last change, with autosave on, it
-is written to its file through a temporary file renamed over it;
-with autosave off, it is kept in a recovery copy in
-~/.local/state/tcs-xtcee/ until File > Save writes it the same
-way and removes the copy.</object>
+again.  Two to three seconds after the last change, with
+autosave on, it is written to its file through a temporary file
+renamed over it; with autosave off, it is kept in a recovery
+copy in ~/.local/state/tcs-xtcee/ until File > Save writes it
+the same way and removes the copy.</object>
 <p class="caption">What happens to a change, from the check to the file.</p>
 </div>
 <p>A file is written whole or not at all: to a temporary file beside it,
@@ -736,7 +745,7 @@ compiler's tools, which read 1.3; its files are not changed.</p>
 </div>
 <div class="section" id="from-the-command-line">
 <h1><a class="toc-backref" href="#toc-entry-14">From the command line</a></h1>
-<p>The same checking and converting run without the windows, for a
+<p>The schema checking and the converting run without the windows, for a
 Makefile or a CI job:</p>
 <pre class="code sh literal-block">
 tcs-xtcee<span class="whitespace"> </span>check<span class="whitespace"> </span>FILE...<span class="whitespace">
@@ -745,8 +754,12 @@ tcs-xtcee<span class="whitespace"> </span>check<span class="whitespace"> </span>
 </span>tcs-xtcee<span class="whitespace"> </span>sample<span class="whitespace"> </span>VERSION<span class="whitespace"> </span>SEED
 </pre>
 <p>Each takes <tt class="docutils literal"><span class="pre">--download</span></tt>, which downloads a schema not yet on this
-machine without asking (<a class="reference internal" href="#omg-s-files">OMG's files</a>).  <tt class="docutils literal">check</tt> prints each problem as <tt class="docutils literal">FILE:LINE: error: ...</tt>, and fails if
-there is an error.  <tt class="docutils literal">convert</tt> prints what it changed, lost, needs and
+machine without asking (<a class="reference internal" href="#omg-s-files">OMG's files</a>).  <tt class="docutils literal">check</tt> holds each file, on
+its own, to its version's schema, prints each error as
+<tt class="docutils literal">FILE:LINE: error: ...</tt>, and fails if there is one.  It does not look
+at references: a reference that names nothing, or two definitions of one
+name, is a warning in the editor, not an error, so <tt class="docutils literal">check</tt> neither
+prints it nor fails on it.  <tt class="docutils literal">convert</tt> prints what it changed, lost, needs and
 refuses; it writes nothing if anything is refused or needed, or, without
 <tt class="docutils literal"><span class="pre">--allow-loss</span></tt>, if anything would be lost.  Each need is printed with
 the <tt class="docutils literal"><span class="pre">--set</span></tt> that answers it.  <tt class="docutils literal">sample</tt> prints a random valid document

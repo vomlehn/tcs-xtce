@@ -44,10 +44,10 @@ the TCS ground programs' are.  Its parts, each a module of the
    A document against its version's schema, the version chosen by the
    root's namespace and no other.  It agrees with ``xmllint`` on every
    shipped document and on random documents of every version and their
-   conversions (``make editor-check``); two quirks of the schemas are followed as a
-   validator follows them: 1.2's Derivation is of an abstract type, so
-   no 1.2 document may hold one, and 1.2's message key takes in a
-   MessageSet's LongDescription, which has no name.
+   conversions (``make editor-check``); two quirks of the schemas are
+   followed as a validator follows them: 1.2's Derivation is of an
+   abstract type, so no 1.2 document may hold one, and 1.2's message key
+   takes in a MessageSet's LongDescription, which has no name.
 
 ``edit`` and ``session``
    Every change is one of three ops -- replacing some of an element's

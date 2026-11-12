@@ -42,11 +42,11 @@ Building it
 The tcs-xtce package installs it as ``/opt/tcs/bin/tcs-xtcee``,
 already built, with the Python package it uses installed beside it.
 
-The packet layout, the encode and
-decode window and the compiler's check use the Python package, as
-`Running the compiler <tcs-xtce.html#running-the-compiler>`__ describes: from a checkout, run ``make generate``
-first, or set ``TCS_XTCE_PYTHONPATH`` to the directory that holds
-``tcs_xtce``.
+The packet layout, the encode and decode window and the compiler's
+check use the Python package, as `Running the compiler
+<tcs-xtce.html#running-the-compiler>`__ describes: from a checkout, run
+``make generate`` first, or set ``TCS_XTCE_PYTHONPATH`` to the directory
+that holds ``tcs_xtce``.
 
 OMG's files
 ===========
@@ -81,9 +81,10 @@ Its windows
 ===========
 
 ``tcs-xtcee FILE...`` opens each file in a window of its own.  The files
-given together are one mission (`Missions in several documents <tcs-xtce.html#missions-in-several-documents>`__): a
-reference in one can name a definition in another, and File > Open adds
-another document to the mission.
+given together are one mission (`Missions in several documents
+<tcs-xtce.html#missions-in-several-documents>`__): a reference in one can
+name a definition in another, and File > Open adds another document to
+the mission.
 
 Each window shows:
 
@@ -97,11 +98,13 @@ Each window shows:
   offers the rest, and one chosen there is put in when it is given a
   value.  An element with a problem in it is marked **E** for an error
   or **W** for a warning, on its row and on every row above it, so a
-  closed row shows that something inside it is wrong.  Resting the
-  pointer on a name shows what the schema says of it;
-* the problems: every schema error, every reference that names nothing
-  in the open documents, and every two definitions of one name.  Picking
-  one selects the element it is about;
+  closed row shows that something inside it is wrong, and what is wrong
+  is written under the row of the element or attribute it is in, marked
+  the same way.  Resting the pointer on a name shows what the schema says
+  of it;
+* the problems: every schema error, and, as warnings, every reference
+  that names nothing in the open documents and every two definitions of
+  one name.  Picking one selects the element it is about;
 * a Source tab, where the document's text can be edited and applied as
   a whole.
 
@@ -275,10 +278,13 @@ the abstract container a packet builds on.
 
 .. figure:: shots/tcs-xtcee-insert-2.png
    :alt: A new row, IntegerParameterType new1, selected at the end of
-         ParameterTypeSet and open, showing its required name, new1.
+         ParameterTypeSet and open, showing its required name, new1; the
+         line marking the selection, with its handle, is beside it, and
+         ParameterTypeSet is no longer selected.
 
    **2.** IntegerParameterType chosen: one is put in, complete, its required
-   ``name`` given a value of the right kind, and selected.
+   ``name`` given a value of the right kind, and selected in place of
+   ParameterTypeSet.
 
 Problems in a document
 ======================
@@ -304,10 +310,11 @@ named ``PowrType``, which nothing defines.
 .. figure:: shots/tcs-xtcee-problems-2.png
    :alt: After clicking the warning: Parameter HeaterPower, marked W,
          is selected and open, and under its parameterTypeRef, which
-         holds PowrType, the problem's text is written.
+         holds PowrType, the problem's text is written, marked W.
 
    **2.** A click on the warning selects Parameter HeaterPower; opened, it
-   shows the problem under the attribute it is about.
+   shows the problem under the attribute it is about, marked **W** as a
+   warning, as it is in the list.
 
 .. figure:: shots/tcs-xtcee-problems-3.png
    :alt: After setting parameterTypeRef to PowerType: no W marks, and the
@@ -331,15 +338,23 @@ closed.
 Saving, autosave and recovery
 =============================
 
-With autosave on, a changed document is written to its file two seconds
-after the last change.  File > Autosave turns it off and on, and the
-setting is kept in ``~/.config/tcs-xtcee/settings``
-(``$XDG_CONFIG_HOME`` if set).  With it off, a changed document that has
-not been saved is kept in a recovery copy in
-``~/.local/state/tcs-xtcee/`` (``$XDG_STATE_HOME`` if set), so that a
-crash loses at most the last seconds; the next time the document is
-opened, the editor offers the copy's changes, which Undo then takes back
-if they are not wanted.  Saving removes the copy.
+The editor looks at its documents once a second, and does what is
+below once two seconds have passed since the last change: so two to
+three seconds after it.
+
+With autosave on, a changed document is then written to its file.
+File > Autosave turns it off and on, and the setting is kept in
+``~/.config/tcs-xtcee/settings`` (``$XDG_CONFIG_HOME`` if set).  With it
+off, a changed document that has not been saved is kept in a recovery
+copy in ``~/.local/state/tcs-xtcee/`` (``$XDG_STATE_HOME`` if set), so
+that a crash loses at most the last seconds; the next time the document
+is opened, the editor offers the copy's changes, which Undo then takes
+back if they are not wanted.  Saving removes the copy.
+
+Autosave on or off, a document never yet saved -- one made with File >
+New document -- has no file to write over, so it gets a recovery copy
+until File > Save writes it; so does a document whose file another
+program has changed, until you choose what to do (below).
 
 .. figure:: shots/tcs-xtcee-save-1.png
    :alt: The File menu open: New document, Open, Add a document to the
@@ -357,11 +372,11 @@ if they are not wanted.  Saving removes the copy.
          the status line says why.  Otherwise it is taken, shown by a
          solid bluish green box with a tick: Edit > Undo names it, the
          title starts with *, and the outline and problems are drawn
-         again.  Two seconds after the last change, with autosave on, it
-         is written to its file through a temporary file renamed over it;
-         with autosave off, it is kept in a recovery copy in
-         ~/.local/state/tcs-xtcee/ until File > Save writes it the same
-         way and removes the copy.
+         again.  Two to three seconds after the last change, with
+         autosave on, it is written to its file through a temporary file
+         renamed over it; with autosave off, it is kept in a recovery
+         copy in ~/.local/state/tcs-xtcee/ until File > Save writes it
+         the same way and removes the copy.
 
    What happens to a change, from the check to the file.
 
@@ -447,7 +462,7 @@ compiler's tools, which read 1.3; its files are not changed.
 From the command line
 =====================
 
-The same checking and converting run without the windows, for a
+The schema checking and the converting run without the windows, for a
 Makefile or a CI job:
 
 .. code-block:: sh
@@ -458,8 +473,12 @@ Makefile or a CI job:
    tcs-xtcee sample VERSION SEED
 
 Each takes ``--download``, which downloads a schema not yet on this
-machine without asking (`OMG's files`_).  ``check`` prints each problem as ``FILE:LINE: error: ...``, and fails if
-there is an error.  ``convert`` prints what it changed, lost, needs and
+machine without asking (`OMG's files`_).  ``check`` holds each file, on
+its own, to its version's schema, prints each error as
+``FILE:LINE: error: ...``, and fails if there is one.  It does not look
+at references: a reference that names nothing, or two definitions of one
+name, is a warning in the editor, not an error, so ``check`` neither
+prints it nor fails on it.  ``convert`` prints what it changed, lost, needs and
 refuses; it writes nothing if anything is refused or needed, or, without
 ``--allow-loss``, if anything would be lost.  Each need is printed with
 the ``--set`` that answers it.  ``sample`` prints a random valid document

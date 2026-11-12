@@ -935,7 +935,8 @@ impl Shown<'_> {
         keys.push((key, depth));
     }
 
-    /// What is wrong with an element, or one of its attributes.
+    /// What is wrong with an element, or one of its attributes, as the
+    /// part of its row that shows it.
     ///
     /// # Arguments
     ///
@@ -944,14 +945,30 @@ impl Shown<'_> {
     ///
     /// # Returns
     ///
-    /// The problems' messages, joined, or nothing.
-    fn problem(&self, id: Id, attr: Option<&str>) -> String {
-        self.problems
+    /// A row giving only the problems' messages, joined, and the worst
+    /// one's severity, "error" or "warning"; both empty if nothing is
+    /// wrong.
+    fn problem(&self, id: Id, attr: Option<&str>) -> Row {
+        let found: Vec<_> = self
+            .problems
             .iter()
             .filter(|p| p.id == id && p.attr.as_deref() == attr)
-            .map(|p| p.message.clone())
+            .collect();
+        let message = found
+            .iter()
+            .map(|p| p.message.as_str())
             .collect::<Vec<_>>()
-            .join("; ")
+            .join("; ");
+        let severity = match found.iter().map(|p| p.severity).min() {
+            Some(Severity::Error) => "error",
+            Some(Severity::Warning) => "warning",
+            None => "",
+        };
+        Row {
+            problem: message.into(),
+            problem_severity: severity.into(),
+            ..Row::default()
+        }
     }
 
     /// Makes the rows for an element and, if it is open, its attributes,
@@ -1018,7 +1035,6 @@ impl Shown<'_> {
                 kind: "element".into(),
                 label: label.into(),
                 doc: doc.into(),
-                problem: self.problem(e.id, None).into(),
                 open,
                 has_kids,
                 mark: match self.worst.get(&e.id) {
@@ -1026,7 +1042,7 @@ impl Shown<'_> {
                     Some(Severity::Warning) => "warning".into(),
                     None => "".into(),
                 },
-                ..Row::default()
+                ..self.problem(e.id, None)
             },
         );
         if !open {
@@ -1072,11 +1088,10 @@ impl Shown<'_> {
                             .collect::<Vec<_>>(),
                     )),
                     doc: a.doc.clone().into(),
-                    problem: self.problem(e.id, Some(&a.name)).into(),
                     required: a.required,
                     present: present.is_some(),
                     is_ref: Kind::of_attr(&a.name, e.local(), in_cmd).is_some(),
-                    ..Row::default()
+                    ..self.problem(e.id, Some(&a.name))
                 },
             );
         }
@@ -1098,9 +1113,8 @@ impl Shown<'_> {
                     kind: "attr".into(),
                     label: a.name.clone().into(),
                     value: a.value().into(),
-                    problem: self.problem(e.id, Some(&a.name)).into(),
                     present: true,
-                    ..Row::default()
+                    ..self.problem(e.id, Some(&a.name))
                 },
             );
         }
@@ -1907,6 +1921,7 @@ fn add_comment(app: &Shared, key: u64) {
             doc.last_id = doc.last_id.max(new_id);
             if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
                 w.selected = Some(new_id);
+                w.marked = vec![RowKey::Node(new_id)];
             }
         }
     }
@@ -1957,8 +1972,8 @@ fn insert_decl(app: &Shared, key: u64, decl: i32) {
     finish_insert(app, key, parent, made, last);
 }
 
-/// Selects what was just put in, and moves the document's last id past
-/// the ids it was made with.
+/// Selects what was just put in, in place of what was selected, and moves
+/// the document's last id past the ids it was made with.
 ///
 /// # Arguments
 ///
@@ -1988,6 +2003,7 @@ fn finish_insert(
             let w = &mut a.wins[wi];
             w.open.insert(parent);
             w.selected = Some(id);
+            w.marked = vec![RowKey::Node(id)];
         }
     }
     drop(a);
@@ -2048,6 +2064,25 @@ fn delete_selected(app: &Shared, key: u64) {
     let Some((_, id)) = selection(&app.borrow(), key) else {
         return;
     };
+    // The elements and comments shown before it, nearest first, which the
+    // selection may move to: found now, while they are still shown.
+    let before: Vec<Id> = app
+        .borrow()
+        .wins
+        .iter()
+        .find(|w| w.key == key)
+        .map(|w| {
+            let i = w.keys.iter().position(|(k, _)| *k == RowKey::Node(id));
+            w.keys[..i.unwrap_or(0)]
+                .iter()
+                .rev()
+                .filter_map(|(k, _)| match k {
+                    RowKey::Node(x) => Some(*x),
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     change(app, key, "delete", |s, d| {
         let doc = &s.docs[d].doc;
         let op = match doc.node(id) {
@@ -2080,28 +2115,23 @@ fn delete_selected(app: &Shared, key: u64) {
         }])
     });
     let mut a = app.borrow_mut();
-    if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
-        if w.selected == Some(id) {
-            // The selection moves to the row before, if the delete was made.
-            let i = w.keys.iter().position(|(k, _)| *k == RowKey::Node(id));
-            w.selected = w.keys[..i.unwrap_or(0)].iter().rev().find_map(
-                |(k, _)| match k {
-                    RowKey::Node(x) => Some(*x),
-                    _ => None,
-                },
-            );
-        }
-    }
-    let ok = a
-        .wins
-        .iter()
-        .find(|w| w.key == key)
-        .and_then(|w| doc_index(&a, w))
-        .is_some_and(|d| a.session.docs[d].doc.node(id).is_none());
-    if !ok {
-        if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
-            w.selected = Some(id);
-        }
+    let Some(wi) = a.wins.iter().position(|w| w.key == key) else {
+        return;
+    };
+    let Some(d) = doc_index(&a, &a.wins[wi]) else {
+        return;
+    };
+    let doc = &a.session.docs[d].doc;
+    if doc.node(id).is_none() {
+        // The delete was made: the selection, and its mark, move to the
+        // nearest element or comment before it that is still there, its
+        // own comments having gone with it.
+        let to = before.into_iter().find(|x| doc.node(*x).is_some());
+        let w = &mut a.wins[wi];
+        w.selected = to;
+        w.marked = to.map(RowKey::Node).into_iter().collect();
+    } else {
+        a.wins[wi].selected = Some(id);
     }
     drop(a);
     refresh_all(app);
@@ -3022,6 +3052,106 @@ mod tests {
         w.invoke_insert_template(t);
         assert!(w.get_status().contains("done"), "{}", w.get_status());
         assert!(w.get_problems_title().starts_with("Problems: 0 error"));
+    }
+
+    #[test]
+    fn what_is_put_in_takes_the_selection() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        open_all(&app, 0);
+        let set = row(&w, "ParameterTypeSet");
+        select(&w, set);
+        let int = w
+            .get_inserts()
+            .iter()
+            .find(|c| c.title.starts_with("IntegerParameterType"))
+            .unwrap();
+        w.invoke_insert(int.index);
+        let made: Vec<_> = w
+            .get_rows()
+            .iter()
+            .filter(|r| r.selected || r.marked)
+            .map(|r| (r.id, r.label.to_string(), r.selected, r.marked))
+            .collect();
+        assert_eq!(made.len(), 1, "{made:?}");
+        assert!(made[0].1.starts_with("IntegerParameterType"), "{made:?}");
+        assert!(made[0].2 && made[0].3, "{made:?}");
+        assert_ne!(made[0].0, set);
+        // The line and its handle are at the new element's depth.
+        let depth = w
+            .get_rows()
+            .iter()
+            .find(|r| r.marked)
+            .map(|r| r.depth)
+            .unwrap();
+        assert_eq!(w.get_top_depth(), depth);
+        // So is a new comment, put in before the selected element.
+        w.invoke_add_comment();
+        let marked: Vec<_> = w
+            .get_rows()
+            .iter()
+            .filter(|r| r.selected || r.marked)
+            .map(|r| (r.kind.to_string(), r.selected, r.marked))
+            .collect();
+        assert_eq!(marked, vec![("comment".to_string(), true, true)]);
+    }
+
+    #[test]
+    fn the_selection_moves_with_its_mark_after_a_delete() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        open_all(&app, 0);
+        let gone = row(&w, "FloatParameterType  PowerType");
+        select(&w, gone);
+        w.invoke_delete_selected();
+        let left: Vec<_> = w
+            .get_rows()
+            .iter()
+            .filter(|r| r.selected || r.marked)
+            .map(|r| (r.label.to_string(), r.selected, r.marked))
+            .collect();
+        assert_eq!(left.len(), 1, "{left:?}");
+        assert!(left[0].1 && left[0].2, "{left:?}");
+        assert!(!left[0].0.contains("PowerType"), "{left:?}");
+        assert!(w.get_top_depth() >= 0);
+    }
+
+    #[test]
+    fn a_problem_under_a_row_says_whether_it_is_a_warning() {
+        let (app, dir) = editor(&[]);
+        let from = format!(
+            "{}/../examples/housekeeping/housekeeping.xtce",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let text = std::fs::read_to_string(from)
+            .unwrap()
+            .replacen(
+                "parameterTypeRef=\"PowerType\"",
+                "parameterTypeRef=\"PowrType\"",
+                1,
+            )
+            .replacen("coefficient=\"0.125\"", "coefficient=\"one eighth\"", 1);
+        let path = dir.path().join("faulty.xtce");
+        std::fs::write(&path, text).unwrap();
+        open_path(&app, path, None);
+        open_all(&app, 0);
+        let w = win(&app, 0);
+        let shown: Vec<_> = w
+            .get_rows()
+            .iter()
+            .filter(|r| !r.problem.is_empty())
+            .map(|r| (r.problem.to_string(), r.problem_severity.to_string()))
+            .collect();
+        let of = |text: &str| {
+            shown
+                .iter()
+                .find(|(p, _)| p.contains(text))
+                .unwrap_or_else(|| panic!("no {text}: {shown:?}"))
+                .1
+                .clone()
+        };
+        assert_eq!(of("PowrType"), "warning");
+        assert_eq!(of("one eighth"), "error");
     }
 
     #[test]

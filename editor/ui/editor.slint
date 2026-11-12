@@ -1,12 +1,18 @@
 // The XTCE editor's windows.
 //
-// One window per document: the document's elements as an outline on the
-// left, the selected element's attributes and documentation on the right,
-// and below them what is wrong.  A Source tab shows the document's text,
-// which can be edited and applied as a whole.  Colour never carries a
-// meaning alone: every mark that is coloured also says what it is in
-// words or a symbol, and the colours are the Okabe-Ito palette, which
-// colour-blind readers can tell apart.
+// One window per document, its menus above two tabs.  The Structure tab
+// is the document as one outline: an open element shows, one row deeper,
+// its attributes as fields edited in place, its value, its comments and
+// the elements in it, and what is wrong with a row is written under it;
+// resting the pointer on a name shows what the schema says of it.  The
+// Source tab shows the document's text, which can be edited and applied
+// as a whole.  Below the tabs are the document's problems, a click on one
+// selecting the element it is about, and the status line.  The other
+// windows are here too: packet layouts, encoding and decoding, a
+// conversion's dialog, text such as a digest, and questions.  Colour
+// never carries a meaning alone: every mark that is coloured also says
+// what it is in words or a symbol, and the colours are the Okabe-Ito
+// palette, which colour-blind readers can tell apart.
 
 import {
     Button, CheckBox, ComboBox, LineEdit, ListView, ScrollView, TabWidget,
@@ -64,6 +70,9 @@ export struct Row {
     doc: string,
     // What is wrong with it, if anything.
     problem: string,
+    // "error" or "warning", the worse of what is wrong with it, or "" if
+    // nothing is.
+    problem-severity: string,
     // Whether an element's attributes and children are shown.
     open: bool,
     // Whether an element has anything to show.
@@ -445,10 +454,21 @@ component TreeRow inherits Rectangle {
             // fields line up on the right.
             if root.is-element: Rectangle { horizontal-stretch: 1; }
         }
-        if root.item.problem != "": Text {
-            text: "E " + root.item.problem;
-            color: Palette.error;
-            wrap: word-wrap;
+        // What is wrong, marked E for an error or W for a warning as the
+        // rows and the problems are, so the letter says which, not the
+        // colour alone.
+        if root.item.problem != "": HorizontalLayout {
+            spacing: 6px;
+            Mark {
+                mark: root.item.problem-severity;
+                y: 1px;
+            }
+            Text {
+                text: root.item.problem;
+                color: root.item.problem-severity == "warning"
+                    ? Palette.warning : Palette.error;
+                wrap: word-wrap;
+            }
         }
     }
 }
