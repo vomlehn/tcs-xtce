@@ -425,7 +425,7 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.7.0
+TCS_HELPERS_REQUIRED := 0.8.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include
@@ -618,9 +618,9 @@ uninstall-files:
 LINKDIR ?= /usr/local/bin
 
 # The packaging targets -- install, uninstall, stage, deb, rpm, packages,
-# lint-packages, links and unlinks -- are tcs-helpers' packaging.mk's,
-# shared by the TCS projects; see it for what each does. This repository
-# has the one package, built from packaging/deb/tcs-xtce and
+# lint-packages, links, unlinks and publish-release -- are tcs-helpers'
+# packaging.mk's, shared by the TCS projects; see it for what each does.
+# This repository has the one package, built from packaging/deb/tcs-xtce and
 # packaging/rpm/tcs-xtce.spec, which is also given the library's ABI
 # version, tcs-ccsds's version and where the RPM's Python looks for
 # packages. Without a tcs-helpers checkout new enough to have
@@ -628,6 +628,11 @@ LINKDIR ?= /usr/local/bin
 # is nothing to include that has every target here, and the targets stop
 # as the tcs-helpers target says.
 PACKAGES    := tcs-xtce
+# Its programs with windows are built with Slint, whose royalty-free
+# licence asks for its badge where they are downloaded: make
+# publish-release adds it to the notes of every release (see tcs-helpers'
+# README).
+RELEASE_ATTRIBUTION := slint
 RPM_DEFINES  = --define "tcs_abi $(ABI)" \
                --define "tcs_ccsds_version $(CCSDS_VERSION)" \
                --define "tcs_pysite $$($(PYTHON) -c 'import sysconfig; \
@@ -656,6 +661,8 @@ lint-packages: tcs-helpers
 links: tcs-helpers
 .PHONY: unlinks
 unlinks: tcs-helpers
+.PHONY: publish-release
+publish-release: tcs-helpers
 endif
 
 .PHONY: clean
