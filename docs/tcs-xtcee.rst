@@ -8,10 +8,10 @@ tcs-xtcee User Manual
 
 .. note::
 
-   This is a very early release of tcs-xtcee. Comments are very welcome,
-   as are people interested in collaborating on it. Please open an issue
-   or a pull request at https://github.com/vomlehn/tcs-xtce; the
-   contributing guide,
+   This is an alpha release of tcs-xtcee. It is not fully tested and not
+   feature complete. Comments are very welcome, as are people interested in
+   collaborating on it. Please open an issue or a pull request at
+   https://github.com/vomlehn/tcs-xtce; the contributing guide,
    https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md, says
    how.
 

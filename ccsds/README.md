@@ -4,11 +4,12 @@ CCSDS standards for flight software, the same in Rust, C, C++ and Python. So
 far: the time codes of CCSDS 301.0-B-4, *Time Code Formats*, and TAI and UTC
 with their leap seconds.
 
-> **Warning:** tcs-ccsds is very early software and is subject to rapid
-> change. Until 1.0, any change to its API changes the minor version
-> number (0.1 to 0.2), so a release that changes only the patch number
-> never breaks code built against it. Feedback is welcome, even at this
-> stage: open an issue at https://github.com/vomlehn/tcs-xtce/issues.
+> **Warning:** tcs-ccsds is an alpha release. It is not fully tested, it
+> is not feature complete, and it is subject to rapid change. Until 1.0,
+> any change to its API changes the minor version number (0.1 to 0.2), so
+> a release that changes only the patch number never breaks code built
+> against it. Feedback is welcome, even at this stage: open an issue at
+> https://github.com/vomlehn/tcs-xtce/issues.
 
 ## What it does
 

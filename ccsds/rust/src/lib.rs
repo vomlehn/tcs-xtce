@@ -9,11 +9,12 @@
 //! transform hooks take, so a packet codec generated from a mission's XTCE
 //! document can use them directly.
 //!
-//! **Warning:** this is very early software and is subject to rapid change.
-//! Until 1.0, any change to its API changes the minor version number (0.1
-//! to 0.2), so a release that changes only the patch number never breaks
-//! code built against it. Feedback is welcome, even at this stage: open an
-//! issue at <https://github.com/vomlehn/tcs-xtce/issues>.
+//! **Warning:** this is an alpha release. It is not fully tested, it is not
+//! feature complete, and it is subject to rapid change. Until 1.0, any
+//! change to its API changes the minor version number (0.1 to 0.2), so a
+//! release that changes only the patch number never breaks code built
+//! against it. Feedback is welcome, even at this stage: open an issue at
+//! <https://github.com/vomlehn/tcs-xtce/issues>.
 
 //!
 //! [`calendar`] reads and writes the calendar time codes of the same

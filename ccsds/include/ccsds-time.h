@@ -27,11 +27,12 @@
  * The header compiles as C11 and as C++, needs only the C standard library
  * and allocates nothing.
  *
- * Warning: this is very early software and is subject to rapid change.
- * Until 1.0, any change to its API changes the minor version number (0.1 to
- * 0.2), so a release that changes only the patch number never breaks code
- * built against it.  Feedback is welcome, even at this stage: open an issue
- * at https://github.com/vomlehn/tcs-xtce/issues.
+ * Warning: this is an alpha release.  It is not fully tested, it is not
+ * feature complete, and it is subject to rapid change.  Until 1.0, any
+ * change to its API changes the minor version number (0.1 to 0.2), so a
+ * release that changes only the patch number never breaks code built
+ * against it.  Feedback is welcome, even at this stage: open an issue at
+ * https://github.com/vomlehn/tcs-xtce/issues.
  */
 #ifndef CCSDS_TIME_H
 #define CCSDS_TIME_H

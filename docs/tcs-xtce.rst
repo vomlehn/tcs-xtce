@@ -11,10 +11,10 @@ Summary
 
 .. note::
 
-   This is a very early release of tcs-xtce. Comments are very welcome,
-   as are people interested in collaborating on it. Please open an issue
-   or a pull request at https://github.com/vomlehn/tcs-xtce; the
-   contributing guide,
+   This is an alpha release of tcs-xtce. It is not fully tested and not
+   feature complete. Comments are very welcome, as are people interested in
+   collaborating on it. Please open an issue or a pull request at
+   https://github.com/vomlehn/tcs-xtce; the contributing guide,
    https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md, says
    how.
 
@@ -2936,11 +2936,12 @@ CCSDS time codes (tcs-ccsds)
 
 .. warning::
 
-   tcs-ccsds is very early software and is subject to rapid change. Until
-   1.0, any change to its API changes the minor version number (0.1 to
-   0.2), so a release that changes only the patch number never breaks code
-   built against it. Feedback is welcome, even at this stage: open an issue
-   at https://github.com/vomlehn/tcs-xtce/issues.
+   tcs-ccsds is an alpha release. It is not fully tested, it is not
+   feature complete, and it is subject to rapid change. Until 1.0, any
+   change to its API changes the minor version number (0.1 to 0.2), so a
+   release that changes only the patch number never breaks code built
+   against it. Feedback is welcome, even at this stage: open an issue at
+   https://github.com/vomlehn/tcs-xtce/issues.
 
 tcs-ccsds is a second library, in ``ccsds/``, for CCSDS standards that XTCE
 knows nothing about. It doesn't depend on tcs-xtce: it is plain functions

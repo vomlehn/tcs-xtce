@@ -376,11 +376,12 @@ doesn't define, in the same four languages: so far the CUC, CDS, CCS and
 ASCII time codes, and TAI and UTC with their leap seconds. See
 [its README](ccsds/README.md).
 
-> **Warning:** tcs-ccsds is very early software and is subject to rapid
-> change. Until 1.0, any change to its API changes the minor version
-> number (0.1 to 0.2), so a release that changes only the patch number
-> never breaks code built against it. Feedback is welcome, even at this
-> stage: open an issue at https://github.com/vomlehn/tcs-xtce/issues.
+> **Warning:** tcs-ccsds is an alpha release. It is not fully tested, it
+> is not feature complete, and it is subject to rapid change. Until 1.0,
+> any change to its API changes the minor version number (0.1 to 0.2), so
+> a release that changes only the patch number never breaks code built
+> against it. Feedback is welcome, even at this stage: open an issue at
+> https://github.com/vomlehn/tcs-xtce/issues.
 
 See the manual for the exact list. `tests/packet_check.sh` checks that
 Rust, C, C++ and Python produce identical results on hand-built and
@@ -464,8 +465,9 @@ The functions, types and macros in them keep their names.
 
 ## Contributing
 
-This is a very early release, and comments and collaborators are very
-welcome. See [CONTRIBUTING.md](https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md)
+This is an alpha release: it is not fully tested and not feature
+complete. Comments and collaborators are very welcome. See
+[CONTRIBUTING.md](https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md)
 for how to report problems, ask for XTCE features, and build, test and send
 changes.
 

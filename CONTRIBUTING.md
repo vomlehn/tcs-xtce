@@ -1,9 +1,10 @@
 # Contributing to tcs-xtce
 
-tcs-xtce is a very early release. Comments are very welcome, as are people
-interested in collaborating on it. You don't need to write code to help:
-telling us what is missing or wrong, or which XTCE documents it can't
-handle, is just as useful.
+tcs-xtce is an alpha release: it is not fully tested and not feature
+complete. Comments are very welcome, as are people interested in
+collaborating on it. You don't need to write code to help: telling us what
+is missing or wrong, or which XTCE documents it can't handle, is just as
+useful.
 
 ## Ways to help
 
