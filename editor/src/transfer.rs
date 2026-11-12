@@ -20,7 +20,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::edit::{self, Op};
-use crate::refs::{base_of, Index, Loc, Ref};
+use crate::refs::{base_of, Index, Kind, Loc, Ref};
 use crate::schema::Version;
 use crate::session::{Change, Session};
 use crate::tree::{Attr, Document, Element, Id, Node, DOCUMENT};
@@ -96,6 +96,35 @@ pub struct Pasted {
     pub ids: Vec<Id>,
     /// The last id given to it.
     pub last: Id,
+    /// How many references in it were written again to keep naming what
+    /// they named.
+    pub rewritten: usize,
+    /// How many would name something else, or nothing, and no way of
+    /// writing them names what they named.
+    pub unkept: usize,
+}
+
+/// What a reference in copied rows named when they were copied.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Named {
+    /// A definition copied with it: the definition's place among the
+    /// copied elements and comments, in document order.
+    Inside(usize),
+    /// A definition outside the copy, by its kind and its path from the
+    /// root: its SpaceSystems' names, then its own.
+    Outside(Kind, Vec<String>),
+}
+
+/// A reference in copied rows, and what it named.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefNote {
+    /// The place among the copied elements and comments, in document
+    /// order, of the element it is written on.
+    pub at: usize,
+    /// The attribute it is written in, or `None` for the element's text.
+    pub attr: Option<String>,
+    /// What it named.
+    pub named: Named,
 }
 
 /// The ids of a document's elements and comments in document order.
@@ -902,7 +931,47 @@ pub fn first_local(nodes: &[Node]) -> Option<String> {
     })
 }
 
-/// Makes the change that puts copies of rows in a document.
+/// What the references in rows name, noted as they are copied so that a
+/// paste of the copy can keep them naming it.
+///
+/// # Arguments
+///
+/// * `s`     - The session.
+/// * `d`     - The document's index.
+/// * `roots` - The rows, as [`roots`] gives them.
+///
+/// # Returns
+///
+/// A note for each reference in the rows that names something.
+pub fn copy_notes(s: &Session, d: usize, roots: &[Id]) -> Vec<RefNote> {
+    let ids = all_ids(&spans(&s.docs[d].doc, roots));
+    let place: HashMap<Id, usize> =
+        ids.iter().enumerate().map(|(i, id)| (*id, i)).collect();
+    let ix = &s.index;
+    ix.refs
+        .iter()
+        .filter(|r| r.loc.doc == d)
+        .filter_map(|r| {
+            let at = *place.get(&r.loc.id)?;
+            let def = &ix.defs[r.target?];
+            let named = match place.get(&def.loc.id) {
+                Some(i) if def.loc.doc == d => Named::Inside(*i),
+                _ => Named::Outside(def.kind, def.key.clone()),
+            };
+            Some(RefNote {
+                at,
+                attr: r.attr.clone(),
+                named,
+            })
+        })
+        .collect()
+}
+
+/// Makes the change that puts copies of rows in a document, writing again
+/// each reference in them that would name something else, or nothing,
+/// where they go: one that named a definition copied with it names the
+/// copy, and one that named a definition outside the copy names that.
+/// References elsewhere are left as they are.
 ///
 /// # Arguments
 ///
@@ -911,10 +980,13 @@ pub fn first_local(nodes: &[Node]) -> Option<String> {
 /// * `parent` - The element they go in.
 /// * `at`     - Where among its elements.
 /// * `nodes`  - What to put in, as [`fragment`] gives it.
+/// * `notes`  - What the references in it named when it was copied, as
+///              [`copy_notes`] gives it; empty for text from elsewhere.
 ///
 /// # Returns
 ///
-/// The change and the ids given to what goes in.
+/// The change, the ids given to what goes in, and how many references
+/// were written again.
 ///
 /// # Errors
 ///
@@ -925,6 +997,7 @@ pub fn paste_changes(
     parent: Id,
     at: usize,
     nodes: Vec<Node>,
+    notes: &[RefNote],
 ) -> Result<Pasted, String> {
     let o = &s.docs[d];
     fits(
@@ -940,14 +1013,67 @@ pub fn paste_changes(
         n.renumber(&mut next);
     }
     let ids = nodes.iter().filter_map(Node::id).collect();
+    let every = all_ids(&nodes);
     let op = edit::insert(&o.doc, parent, at, nodes).ok_or("not found")?;
+    let mut doc = o.doc.clone();
+    op.apply(&mut doc)?;
+    let mut ops = vec![op];
+    // The references in the copy, as they resolve where it is.
+    let mut edits: Vec<(Id, Option<String>, String)> = Vec::new();
+    let mut unkept = 0;
+    {
+        let docs: Vec<&Document> = (0..s.docs.len())
+            .map(|i| if i == d { &doc } else { &s.docs[i].doc })
+            .collect();
+        let after = Index::of(&docs);
+        for n in notes {
+            let Some(id) = every.get(n.at).copied() else {
+                continue;
+            };
+            let loc = Loc { doc: d, id };
+            let Some(r) =
+                after.refs.iter().find(|r| r.loc == loc && r.attr == n.attr)
+            else {
+                continue;
+            };
+            let def = match &n.named {
+                Named::Inside(i) => every
+                    .get(*i)
+                    .and_then(|x| after.def_at(Loc { doc: d, id: *x })),
+                Named::Outside(kind, key) => {
+                    after.resolve(&format!("/{}", key.join("/")), &[], *kind)
+                }
+            };
+            let Some(def) = def else {
+                unkept += 1;
+                continue;
+            };
+            if r.target == Some(def) {
+                continue;
+            }
+            match rewrite(&after, r, def) {
+                Some(t) => edits.push((id, n.attr.clone(), t)),
+                None => unkept += 1,
+            }
+        }
+    }
+    let rewritten = edits.len();
+    for (id, attr, text) in edits {
+        let op = match &attr {
+            Some(a) => edit::set_attr(&doc, id, a, &text),
+            None => edit::set_text(&doc, id, &text),
+        };
+        if let Some(op) = op {
+            op.apply(&mut doc)?;
+            ops.push(op);
+        }
+    }
     Ok(Pasted {
-        changes: vec![Change {
-            doc: d,
-            ops: vec![op],
-        }],
+        changes: vec![Change { doc: d, ops }],
         ids,
         last: next,
+        rewritten,
+        unkept,
     })
 }
 
@@ -1328,7 +1454,7 @@ mod tests {
         };
         assert_eq!(e.name, "xtce:Parameter");
         assert!(e.attrs.iter().all(|a| declares(&a.name).is_none()));
-        let p = paste_changes(&s, 1, set, 1, nodes).unwrap();
+        let p = paste_changes(&s, 1, set, 1, nodes, &[]).unwrap();
         s.apply(p.changes, "paste").unwrap();
         assert_eq!(
             names(&s.docs[1].doc, set),
@@ -1341,7 +1467,7 @@ mod tests {
         // namespace.
         let plain = "<Parameter name=\"y\" parameterTypeRef=\"LengthType\"/>";
         let nodes = fragment(plain, &s.docs[1].doc, set, ns).unwrap();
-        let p = paste_changes(&s, 1, set, 0, nodes).unwrap();
+        let p = paste_changes(&s, 1, set, 0, nodes, &[]).unwrap();
         s.apply(p.changes, "paste").unwrap();
         assert!(s.docs[1].doc.write().contains("<xtce:Parameter name=\"y\""));
     }
@@ -1355,7 +1481,7 @@ mod tests {
         let text = copy_text(doc, &[p]);
         let nodes =
             fragment(&text, doc, types, Version::V1_3.namespace()).unwrap();
-        let e = paste_changes(&s, 0, types, 0, nodes).unwrap_err();
+        let e = paste_changes(&s, 0, types, 0, nodes, &[]).unwrap_err();
         assert!(e.contains("does not allow Parameter"), "{e}");
         // Rows of another version are refused.
         let old =
@@ -1488,6 +1614,55 @@ mod tests {
         let space = find(doc, "SpaceSystem", Some("In"));
         let e = move_changes(&s, 0, &[space], 0, space, 0).unwrap_err();
         assert!(e.contains("themselves"), "{e}");
+    }
+
+    #[test]
+    fn a_copy_keeps_its_references_naming_what_they_named() {
+        let ns = Version::V1_3.namespace();
+        let a = format!(
+            "<?xml version=\"1.0\"?>\n<SpaceSystem xmlns=\"{ns}\" \
+             name=\"S\">\n  <TelemetryMetaData>\n    \
+             <ParameterTypeSet>\n      <BooleanParameterType \
+             name=\"d\"/>\n    </ParameterTypeSet>\n  \
+             </TelemetryMetaData>\n  <SpaceSystem name=\"In\">\n    \
+             <TelemetryMetaData>\n      <ParameterTypeSet>\n        \
+             <BooleanParameterType name=\"c\"/>\n      \
+             </ParameterTypeSet>\n      <ParameterSet>\n        \
+             <Parameter name=\"q\" parameterTypeRef=\"/S/In/c\"/>\n        \
+             <Parameter name=\"r\" parameterTypeRef=\"d\"/>\n      \
+             </ParameterSet>\n    </TelemetryMetaData>\n  \
+             </SpaceSystem>\n</SpaceSystem>\n"
+        );
+        let b = format!(
+            "<?xml version=\"1.0\"?>\n<SpaceSystem xmlns=\"{ns}\" \
+             name=\"T\">\n  <TelemetryMetaData/>\n</SpaceSystem>\n"
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = Session::new();
+        s.state_dir = Some(dir.path().join("state"));
+        for (name, text) in [("a.xtce", &a), ("b.xtce", &b)] {
+            let path = dir.path().join(name);
+            std::fs::write(&path, text).unwrap();
+            s.open(&path).unwrap();
+        }
+        assert!(s.problems(0).is_empty(), "{:?}", s.problems(0));
+        let inner = find(&s.docs[0].doc, "SpaceSystem", Some("In"));
+        let notes = copy_notes(&s, 0, &[inner]);
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        let text = copy_text(&s.docs[0].doc, &[inner]);
+        let root = s.docs[1].doc.root().id;
+        let nodes = fragment(&text, &s.docs[1].doc, root, ns).unwrap();
+        let p = paste_changes(&s, 1, root, 1, nodes, &notes).unwrap();
+        assert_eq!((p.rewritten, p.unkept), (2, 0));
+        s.apply(p.changes, "paste").unwrap();
+        // The type copied with it names the copy; the one outside names
+        // the original, by its path.
+        let b = s.docs[1].doc.write();
+        assert!(b.contains("parameterTypeRef=\"/T/In/c\""), "{b}");
+        assert!(b.contains("parameterTypeRef=\"/S/d\""), "{b}");
+        assert!(s.problems(1).is_empty(), "{:?}", s.problems(1));
+        // The original is as it was.
+        assert_eq!(s.docs[0].doc.write(), a);
     }
 
     #[test]

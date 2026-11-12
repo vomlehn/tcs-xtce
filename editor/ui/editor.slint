@@ -339,8 +339,11 @@ component TreeRow inherits Rectangle {
     // The pointer was pressed on the row's name, at a place in the outline.
     callback press(int, length, length, bool, bool);
     // The pointer was pressed on the row's grip, at a place in the
-    // outline, to move it, or the selection it is in.
-    callback grab(int, length, length);
+    // outline, to move it, or the selection it is in, or with Ctrl held
+    // to copy them.
+    callback grab(int, length, length, bool);
+    // While a grip is dragged, whether Ctrl is held.
+    callback ctrl(bool);
     // The pointer moved, still pressed, to a place in the outline.
     callback drag(length, length);
     // The pointer was let go.
@@ -399,9 +402,13 @@ component TreeRow inherits Rectangle {
                                 root.x + self.absolute-position.x
                                     - root.absolute-position.x
                                     + self.mouse-x,
-                                root.y + self.mouse-y);
+                                root.y + self.mouse-y,
+                                e.modifiers.control);
+                        } else if (e.kind == PointerEventKind.move) {
+                            root.ctrl(e.modifiers.control);
                         } else if (e.kind == PointerEventKind.up
                                 && e.button == PointerEventButton.left) {
+                            root.ctrl(e.modifiers.control);
                             root.release();
                         }
                     }
@@ -626,11 +633,15 @@ export component DocWindow inherits Window {
     callback paste(int);
     // Pastes where Ctrl+V does: after the selection, or in it.
     callback paste-here();
-    // What letting go of the rows selected on a row, before (0) it,
-    // after (1) it or in (2) it, would do.
-    callback drop-what(int, int) -> DropInfo;
-    // The rows selected were dropped on a row, before, after or in it.
-    callback drop-rows(int, int);
+    // What letting go of rows dragged by a grip on a row, before (0) it,
+    // after (1) it or in (2) it, would do: move them, or with Ctrl held
+    // (true) copy them.  The last is the place of the row whose grip is
+    // dragged: the rows selected are dragged if it is one of them, and
+    // otherwise it alone.
+    callback drop-what(int, int, bool, int) -> DropInfo;
+    // Rows dragged by a grip were dropped on a row, before, after or in
+    // it, to be moved, or with Ctrl held (true) copied.
+    callback drop-rows(int, int, bool, int);
     callback move-up();
     callback move-down();
     callback rename();
@@ -666,6 +677,16 @@ export component DocWindow inherits Window {
     property <length> drop-y;
     property <length> drop-h;
     property <DropInfo> drop;
+    // Whether the rows dragged by a grip would be copied, Ctrl being
+    // held, rather than moved.
+    property <bool> drag-copy;
+    // Holding Ctrl or letting it go says again what letting go would do.
+    changed drag-copy => {
+        if (root.drag-mode == 3 && root.drop-row >= 0) {
+            root.drop = root.drop-what(root.drop-row, root.drop-at,
+                root.drag-copy, root.anchor);
+        }
+    }
     // The row the drag started on, and the row the pointer is on now.
     property <int> anchor;
     property <int> reach;
@@ -715,7 +736,13 @@ export component DocWindow inherits Window {
     outline-keys := FocusScope {
         width: 0px;
         height: 0px;
+        // Ctrl pressed or let go while rows are dragged by a grip makes
+        // the drag a copy or a move again.
         key-pressed(e) => {
+            if (e.text == Key.Control && root.drag-mode == 3) {
+                root.drag-copy = true;
+                return accept;
+            }
             if (!e.modifiers.control) {
                 return reject;
             }
@@ -729,6 +756,13 @@ export component DocWindow inherits Window {
                 return reject;
             }
             return accept;
+        }
+        key-released(e) => {
+            if (e.text == Key.Control && root.drag-mode == 3) {
+                root.drag-copy = false;
+                return accept;
+            }
+            return reject;
         }
     }
 
@@ -930,7 +964,8 @@ export component DocWindow inherits Window {
                                             ? self.y + self.height : self.y;
                                         root.drop-h = self.height;
                                         root.drop = root.drop-what(r.index,
-                                            self.drop-place);
+                                            self.drop-place, root.drag-copy,
+                                            root.anchor);
                                     }
                                 }
                                 // The first and last selected rows say
@@ -970,11 +1005,12 @@ export component DocWindow inherits Window {
                                     outline-keys.focus();
                                 }
                                 // A grip pressed on drags the selection,
-                                // or, outside it, its own row alone.
-                                grab(i, x, y) => {
-                                    if (!r.marked) {
-                                        root.pick(i, false, false);
-                                    }
+                                // or, outside it, its own row alone, which
+                                // is not selected until it is dropped:
+                                // selecting draws the rows again, which
+                                // would end the drag.
+                                grab(i, x, y, copy) => {
+                                    root.drag-copy = copy;
                                     root.anchor = i;
                                     root.reach = i;
                                     root.press-x = x;
@@ -993,11 +1029,17 @@ export component DocWindow inherits Window {
                                     root.cur-x = x;
                                     root.cur-y = y;
                                 }
+                                ctrl(held) => {
+                                    if (root.drag-mode == 3) {
+                                        root.drag-copy = held;
+                                    }
+                                }
                                 release => {
                                     if (root.drag-mode == 3) {
                                         if (root.moved-far && root.drop.ok) {
                                             root.drop-rows(root.drop-row,
-                                                root.drop-at);
+                                                root.drop-at, root.drag-copy,
+                                                root.anchor);
                                         }
                                     } else if (!root.moved-far) {
                                         root.pick(root.anchor,
@@ -1129,9 +1171,10 @@ export component DocWindow inherits Window {
                         // Where rows being moved by a grip would go: a
                         // line with an arrowhead before or after a row, or
                         // a box round the row they would go in, drawn
-                        // only where the schema allows them; and beside
-                        // the pointer, words saying what letting go
-                        // would do, or why it would do nothing.
+                        // only where the schema allows them, blue for a
+                        // move and orange with a + beside it for a copy;
+                        // and beside the pointer, words saying what
+                        // letting go would do, or why it would do nothing.
                         if root.drag-mode == 3 && root.moved-far
                                 && root.drop.ok && root.drop-at != 2
                                 : Rectangle {
@@ -1139,7 +1182,8 @@ export component DocWindow inherits Window {
                             y: root.drop-y - 1px;
                             width: tree.width - root.drop-x;
                             height: 3px;
-                            background: Palette.field-a;
+                            background: root.drag-copy ? Palette.field-b
+                                : Palette.field-a;
                         }
                         if root.drag-mode == 3 && root.moved-far
                                 && root.drop.ok && root.drop-at != 2
@@ -1147,7 +1191,29 @@ export component DocWindow inherits Window {
                             x: root.drop-x - 10px;
                             y: root.drop-y - self.preferred-height / 2;
                             text: "\u{25B6}";
-                            color: Palette.field-a;
+                            color: root.drag-copy ? Palette.field-b
+                                : Palette.field-a;
+                        }
+                        // A copy's +, left of the arrowhead or the box.
+                        if root.drag-mode == 3 && root.moved-far
+                                && root.drop.ok && root.drag-copy
+                                : Rectangle {
+                            x: root.drop-x - (root.drop-at == 2 ? 18px
+                                : 28px);
+                            y: (root.drop-at == 2
+                                ? root.drop-y + root.drop-h / 2
+                                : root.drop-y) - 7px;
+                            width: 14px;
+                            height: 14px;
+                            border-radius: 7px;
+                            background: black;
+                            Text {
+                                text: "+";
+                                color: white;
+                                font-weight: 700;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
                         }
                         if root.drag-mode == 3 && root.moved-far
                                 && root.drop.ok && root.drop-at == 2
@@ -1157,7 +1223,8 @@ export component DocWindow inherits Window {
                             width: tree.width - root.drop-x;
                             height: root.drop-h;
                             border-width: 2px;
-                            border-color: Palette.field-a;
+                            border-color: root.drag-copy ? Palette.field-b
+                                : Palette.field-a;
                         }
                         if root.drag-mode == 3 && root.moved-far
                                 && root.drop.words != "" : Rectangle {
@@ -1167,8 +1234,9 @@ export component DocWindow inherits Window {
                             width: words.preferred-width + 10px;
                             height: words.preferred-height + 4px;
                             border-width: 1px;
-                            border-color: root.drop.ok ? Palette.field-a
-                                : Palette.border;
+                            border-color: !root.drop.ok ? Palette.border
+                                : root.drag-copy ? Palette.field-b
+                                : Palette.field-a;
                             background: Palette.window;
                             words := Text {
                                 text: root.drop.words;
@@ -1211,7 +1279,8 @@ export component DocWindow inherits Window {
                             + "drag the selection's \u{2194} handle right to "
                             + "open it, left to close it, to the depth under "
                             + "the pointer; drag a row's grip, the dots at "
-                            + "its left, to move it or the selection.";
+                            + "its left, to move it or the selection, with "
+                            + "Ctrl held to copy.";
                         wrap: word-wrap;
                         font-size: 11px;
                     }

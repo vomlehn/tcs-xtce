@@ -399,6 +399,8 @@ fn screenshots() {
     cutting(&dir.join("cut"));
     moving(&dir.join("move"));
     dragging(&dir.join("drag"));
+    copying(&dir.join("copy"));
+    copy_dragging(&dir.join("copy-drag"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -703,4 +705,82 @@ fn dragging(dir: &Path) {
         "move 2 elements after Parameter HeaterPower"
     );
     snap(win, "drag-3", 40, 520);
+}
+
+/// The pictures of copying a parameter to another document of a mission,
+/// which writes again the reference in the copy so that it names the
+/// type it named.
+///
+/// # Arguments
+///
+/// * `dir` - The directory to open the documents in.
+fn copying(dir: &Path) {
+    let (_app, wins) = open_all(
+        dir,
+        &[
+            "split-mission/dt.xtce",
+            "split-mission/pus.xtce",
+            "split-mission/rover.xtce",
+        ],
+    );
+    let (pus, rover) = (&wins[1], &wins[2]);
+    rover.invoke_depth_to(3, true);
+    let battery = "Parameter  battery";
+    toggle(rover, battery);
+    pick(rover, battery);
+    rover.invoke_copy();
+    snap(rover.window(), "copy-1", 40, 400);
+    pus.invoke_depth_to(3, true);
+    pick(pus, "Parameter  ccsds-version");
+    pus.invoke_paste(0);
+    assert!(pus.get_status().contains("written again"));
+    toggle(pus, battery);
+    snap(pus.window(), "copy-2", 0, HEIGHT);
+}
+
+/// The pictures of copying a row by dragging its grip with Ctrl held.
+///
+/// # Arguments
+///
+/// * `dir` - The directory to open the document in.
+fn copy_dragging(dir: &Path) {
+    let (_app, w) = open(dir, "housekeeping/housekeeping.xtce", &[]);
+    let win = w.window();
+    // Taller than the others, so that every entry is in view.
+    win.set_size(slint::PhysicalSize::new(WIDTH, HEIGHT + 120));
+    w.invoke_depth_to(3, true);
+    toggle(&w, "ParameterTypeSet");
+    toggle(&w, "ParameterSet");
+    toggle(&w, "SequenceContainer  Status");
+    let entries: Vec<Row> = w
+        .get_rows()
+        .iter()
+        .filter(|r| r.label == "EntryList")
+        .collect();
+    w.invoke_toggle(entries[0].id);
+    // The second entry, HeaterOn's, by its grip.
+    let found = all(&w, "ParameterRefEntry");
+    let second = found[1].absolute_position();
+    let height = found[1].size().height;
+    let from = LogicalPosition::new(second.x - 33.0, second.y + height / 2.0);
+    press(win, from);
+    let last = at(&w, "ParameterRefEntry", found[4].absolute_position().y);
+    let below = LogicalPosition::new(last.x + 60.0, last.y + 10.0);
+    drag_to(win, LogicalPosition::new(from.x + 20.0, from.y + 20.0));
+    drag_to(win, below);
+    snap(win, "copy-drag-1", 160, 520);
+    // Ctrl held: the same place, a copy.
+    let control: SharedString = Key::Control.into();
+    win.dispatch_event(WindowEvent::KeyPressed {
+        text: control.clone(),
+    });
+    drag_to(win, below);
+    snap(win, "copy-drag-2", 160, 520);
+    release(win, below);
+    win.dispatch_event(WindowEvent::KeyReleased { text: control });
+    assert_eq!(
+        w.get_undo_label(),
+        "copy ParameterRefEntry after ParameterRefEntry"
+    );
+    snap(win, "copy-drag-3", 160, 540);
 }

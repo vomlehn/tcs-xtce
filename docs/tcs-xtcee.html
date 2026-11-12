@@ -669,6 +669,26 @@ their own, so a copy pasted beside what it copies is refused until one
 of them is renamed; where the schema allows two definitions of one name,
 the paste is made, the copy is marked <strong>W</strong> and the status line says
 so.</p>
+<p>A copy pasted keeps the references in it naming what they named where
+they were copied, writing again, by name or by path from the root as a
+move does (<a class="reference internal" href="#references-kept-whole">References kept whole</a>), each that would name something
+else, or nothing, where the copy goes.  A reference to a definition
+copied with it names the copy, so that a container copied with the types
+it uses uses the copied types; a reference to a definition outside the
+copy names the original.  References elsewhere are not touched: the
+original is still there.  This holds for rows copied in this editor;
+text from another program is pasted as it is.</p>
+<div class="figure">
+<img alt="rover.xtce's Parameter battery selected and open, its parameterTypeRef volts, a type of the Rover SpaceSystem." src="shots/tcs-xtcee-copy-1.png" />
+<p class="caption"><strong>1.</strong> <tt class="docutils literal"><span class="pre">split-mission</span></tt>'s documents open, and Rover's parameter
+<tt class="docutils literal">battery</tt>, of the type <tt class="docutils literal">volts</tt>, copied with Edit &gt; Copy.</p>
+</div>
+<div class="figure">
+<img alt="pus.xtce's window: Parameter battery first in its ParameterSet, selected and open, its parameterTypeRef /Rover/volts; no problems; the status line &quot;paste Parameter battery before Parameter ccsds-version: done; 1 reference(s) written again to name what they named&quot;." src="shots/tcs-xtcee-copy-2.png" />
+<p class="caption"><strong>2.</strong> Paste before the PUS document's first parameter: <tt class="docutils literal">volts</tt>
+names nothing in PUS, so the copy's reference is written
+<tt class="docutils literal">/Rover/volts</tt>, which names the type it named.</p>
+</div>
 <p>Rows cut and then pasted are moved, not copied: the paste puts them
 back as one change, named &quot;move ... after ...&quot; in Edit &gt; Undo, in place
 of the cut, so long as the clipboard still holds them and nothing else
@@ -724,6 +744,13 @@ it is where they are.  Near a row's top they go before it, near its
 bottom after it, and between, in it; over an attribute's row, in its
 element.  Dragged past the top or the bottom, the outline scrolls.  Let
 go, they are moved as one change, their references kept whole.</p>
+<p>Held while letting go, Ctrl copies the rows instead of moving them,
+pressed or let go at any time in the drag: the line or box is orange,
+not blue, with a <strong>+</strong> in a black circle beside it, and the words say
+&quot;copy&quot; rather than &quot;move&quot;.  The copy is put in as one change, checked
+as a paste is, its references kept naming what they named as a pasted
+copy's are; and since a copy leaves the rows where they are, it may go
+beside them or in them.</p>
 <div class="figure">
 <img alt="Parameters HeaterOn and Temperature selected; a blue line with an arrowhead at its left under Parameter HeaterPower, and beside the pointer a box saying &quot;move 2 elements after Parameter HeaterPower&quot;." src="shots/tcs-xtcee-drag-1.png" />
 <p class="caption"><strong>1.</strong> The two parameters dragged by HeaterOn's grip to the bottom of
@@ -736,6 +763,20 @@ HeaterPower's row.</p>
 <div class="figure">
 <img alt="The parameters in the order PacketLength, BusVoltage, HeaterPower, HeaterOn, Temperature, the last two still selected." src="shots/tcs-xtcee-drag-3.png" />
 <p class="caption"><strong>3.</strong> Let go after HeaterPower: both move, and stay selected.</p>
+</div>
+<div class="figure">
+<img alt="The container Status open, its five ParameterRefEntry rows; a blue line with an arrowhead under the last, and the words &quot;move ParameterRefEntry after ParameterRefEntry&quot;." src="shots/tcs-xtcee-copy-drag-1.png" />
+<p class="caption"><strong>4.</strong> The container's second entry, HeaterOn's, dragged by its grip
+to the end of the list.  It is not selected, so it is dragged alone.</p>
+</div>
+<div class="figure">
+<img alt="The same, with Ctrl held: the line orange, a + in a black circle left of its arrowhead, and the words &quot;copy ParameterRefEntry after ParameterRefEntry&quot;." src="shots/tcs-xtcee-copy-drag-2.png" />
+<p class="caption"><strong>5.</strong> Ctrl pressed: letting go now copies it.</p>
+</div>
+<div class="figure">
+<img alt="Six ParameterRefEntry rows, the new last one selected." src="shots/tcs-xtcee-copy-drag-3.png" />
+<p class="caption"><strong>6.</strong> Let go: a copy of the entry is put at the end, and selected;
+the entry itself stays where it was.</p>
 </div>
 <div class="figure">
 <img alt="The Remove button beside the root's name greyed and slanted, and below it a box saying &quot;The schema requires name, so it cannot be removed.&quot;" src="shots/tcs-xtcee-remove-1.png" />

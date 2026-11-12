@@ -24,7 +24,7 @@ use crate::refs::{Kind, Loc};
 use crate::schema::{TypeRef, Version};
 use crate::session::{Change, Session};
 use crate::tools;
-use crate::transfer::{self, Place};
+use crate::transfer::{self, Place, RefNote};
 use crate::tree::{Comment, Document, Element, Id, Node};
 use crate::validate::{insertable, Severity};
 
@@ -127,6 +127,9 @@ struct App {
     clip: Clip,
     /// The rows last cut, which pasting moves back rather than copies.
     cut: Option<Cut>,
+    /// The text rows were last copied or cut as, and what the references
+    /// in them named, so that a paste of that text keeps them naming it.
+    copied: Option<(String, Vec<RefNote>)>,
 }
 
 /// The clipboard rows are cut and copied to: the desktop's, so that they
@@ -337,6 +340,7 @@ fn start(files: &[String]) -> Shared {
             head: Err("the clipboard is empty".into()),
         },
         cut: None,
+        copied: None,
     }));
     // An empty window first, which the first document opened takes, so
     // that a question about a download has the editor behind it.
@@ -614,11 +618,11 @@ fn connect(app: &Shared, window: &DocWindow, key: u64) {
     on!(on_copy, copy);
     on!(on_paste, paste, place);
     on!(on_paste_here, paste_here);
-    on!(on_drop_rows, drop_rows, index, place);
+    on!(on_drop_rows, drop_rows, index, place, copy, from);
     {
         let app = app.clone();
-        window.on_drop_what(move |index, place| {
-            drop_what(&app, key, index, place)
+        window.on_drop_what(move |index, place, copy, from| {
+            drop_what(&app, key, index, place, copy, from)
         });
     }
     on!(on_move_up, |app, key| move_selected(app, key, true));
@@ -2478,6 +2482,8 @@ fn copy_rows(app: &Shared, key: u64) -> Option<(String, String)> {
     let doc = &a.session.docs[d].doc;
     let text = transfer::copy_text(doc, &roots);
     let what = transfer::describe(doc, &roots);
+    let notes = transfer::copy_notes(&a.session, d, &roots);
+    a.copied = Some((text.clone(), notes));
     let msg = match a.clip.set(&text) {
         Ok(()) => format!("Copied {what}"),
         Err(e) => format!(
@@ -2608,37 +2614,65 @@ fn paste(app: &Shared, key: u64, place: i32) {
         }
     };
     let (parent, at, nodes, label) = made;
+    let notes = match &app.borrow().copied {
+        Some((t, notes)) if *t == text => notes.clone(),
+        _ => Vec::new(),
+    };
+    put_copy(app, key, parent, at, nodes, &notes, &label);
+}
+
+/// Puts copies of rows in a window's document, as one step, keeping the
+/// references in them naming what they named, and selects them.
+///
+/// # Arguments
+///
+/// * `app`    - The editor.
+/// * `key`    - The window's key.
+/// * `parent` - The element they go in.
+/// * `at`     - Where among its elements.
+/// * `nodes`  - What to put in, as [`transfer::fragment`] gives it.
+/// * `notes`  - What the references in it named where it was copied.
+/// * `label`  - What the step is, for the Undo menu item.
+fn put_copy(
+    app: &Shared,
+    key: u64,
+    parent: Id,
+    at: usize,
+    nodes: Vec<Node>,
+    notes: &[RefNote],
+    label: &str,
+) {
     let mut ids = Vec::new();
     let mut last = 0;
-    let done = change(app, key, &label, |s, d| {
-        let p = transfer::paste_changes(s, d, parent, at, nodes)?;
+    let mut counts = (0, 0);
+    let done = change(app, key, label, |s, d| {
+        let p = transfer::paste_changes(s, d, parent, at, nodes, notes)?;
         ids = p.ids;
         last = p.last;
+        counts = (p.rewritten, p.unkept);
         Ok(p.changes)
     });
-    if done {
-        let dupes = {
-            let mut a = app.borrow_mut();
-            let Some(d) = selection_doc(&a, key) else {
-                return;
-            };
-            let doc = &mut a.session.docs[d].doc;
-            doc.last_id = doc.last_id.max(last);
-            duplicates(&a.session, d, &ids)
-        };
-        show_put(app, key, parent, &ids);
-        if dupes > 0 {
-            status_of(
-                app,
-                key,
-                &format!(
-                    "{label}: done; {dupes} of what was pasted has the name \
-                     of a definition already there, marked W: rename it \
-                     (Edit > Rename everywhere)"
-                ),
-            );
-        }
+    if !done {
+        return;
     }
+    let dupes = {
+        let mut a = app.borrow_mut();
+        let Some(d) = selection_doc(&a, key) else {
+            return;
+        };
+        let doc = &mut a.session.docs[d].doc;
+        doc.last_id = doc.last_id.max(last);
+        duplicates(&a.session, d, &ids)
+    };
+    show_put(app, key, parent, &ids);
+    let mut msg = moved_message(label, counts.0, counts.1);
+    if dupes > 0 {
+        msg.push_str(&format!(
+            "; {dupes} of what was put in has the name of a definition \
+             already there, marked W: rename it (Edit > Rename everywhere)"
+        ));
+    }
+    status_of(app, key, &msg);
 }
 
 /// How many of some new elements are definitions with the name of another
@@ -2821,11 +2855,16 @@ fn moved_message(label: &str, rewritten: usize, unkept: usize) -> String {
 /// * `key`   - The window's key.
 /// * `index` - The row's place in the outline.
 /// * `place` - 0 before it, 1 after it, 2 in it.
+/// * `copy`  - True if copies of them would go there, Ctrl being held,
+///             rather than they themselves.
+/// * `from`  - The place of the row whose grip is dragged: the rows
+///             selected if it is one of them, or else that row alone.
 ///
 /// # Returns
 ///
 /// The document's index, the rows, the parent and the place among its
-/// elements they would go, and the Undo menu's name for the move.
+/// elements they would go, and the Undo menu's name for the move or
+/// copy.
 ///
 /// # Errors
 ///
@@ -2835,9 +2874,16 @@ fn drop_target(
     key: u64,
     index: i32,
     place: i32,
+    copy: bool,
+    from: i32,
 ) -> Result<(usize, Vec<Id>, Id, usize, String), String> {
     let w = a.wins.iter().find(|w| w.key == key).ok_or("no window")?;
-    let (d, roots) = acted(a, key).ok_or("no document")?;
+    let (d, mut roots) = acted(a, key).ok_or("no document")?;
+    if let Some((k @ RowKey::Node(id), _)) = w.keys.get(from as usize) {
+        if !w.marked.contains(k) {
+            roots = transfer::roots(&a.session.docs[d].doc, &[*id]);
+        }
+    }
     if roots.is_empty() {
         return Err("nothing is selected".into());
     }
@@ -2848,12 +2894,13 @@ fn drop_target(
         other => (other.id(), Place::Into),
     };
     let o = &a.session.docs[d];
-    if roots.contains(&id) {
+    // A copy may go beside what it copies, or in it.
+    if !copy && roots.contains(&id) {
         return Err("that is where they are".into());
     }
     let (parent, at) = transfer::place_of(&o.doc, id, place)
         .ok_or("nothing may be put there")?;
-    if o.doc.ancestry(parent).iter().any(|x| roots.contains(x)) {
+    if !copy && o.doc.ancestry(parent).iter().any(|x| roots.contains(x)) {
         return Err("rows cannot be moved into themselves".into());
     }
     let first = roots
@@ -2861,7 +2908,8 @@ fn drop_target(
         .find_map(|r| o.doc.element(*r).map(|e| e.local().to_string()));
     transfer::fits(&o.doc, &o.report, parent, at, first.as_deref())?;
     let label = format!(
-        "move {} {} {}",
+        "{} {} {} {}",
+        if copy { "copy" } else { "move" },
         transfer::describe(&o.doc, &roots),
         place.word(),
         transfer::describe_one(&o.doc, id)
@@ -2877,12 +2925,21 @@ fn drop_target(
 /// * `key`   - The window's key.
 /// * `index` - The row's place in the outline.
 /// * `place` - 0 before it, 1 after it, 2 in it.
+/// * `copy`  - True if copies of them would go, Ctrl being held.
+/// * `from`  - The place of the row whose grip is dragged.
 ///
 /// # Returns
 ///
 /// Whether they may go there, and the words to show.
-fn drop_what(app: &Shared, key: u64, index: i32, place: i32) -> DropInfo {
-    match drop_target(&app.borrow(), key, index, place) {
+fn drop_what(
+    app: &Shared,
+    key: u64,
+    index: i32,
+    place: i32,
+    copy: bool,
+    from: i32,
+) -> DropInfo {
+    match drop_target(&app.borrow(), key, index, place, copy, from) {
         Ok((.., label)) => DropInfo {
             ok: true,
             words: label.into(),
@@ -2894,8 +2951,9 @@ fn drop_what(app: &Shared, key: u64, index: i32, place: i32) -> DropInfo {
     }
 }
 
-/// Moves the rows selected to where they were dropped, as one step, with
-/// the references to what moved written again.
+/// Moves the rows selected to where they were dropped, or with Ctrl
+/// held puts copies of them there, as one step, with the references to
+/// what moved, or in the copies, written again.
 ///
 /// # Arguments
 ///
@@ -2903,8 +2961,18 @@ fn drop_what(app: &Shared, key: u64, index: i32, place: i32) -> DropInfo {
 /// * `key`   - The window's key.
 /// * `index` - The place of the row they were dropped on.
 /// * `place` - 0 before it, 1 after it, 2 in it.
-fn drop_rows(app: &Shared, key: u64, index: i32, place: i32) {
-    let found = drop_target(&app.borrow(), key, index, place);
+/// * `copy`  - True to put copies there, Ctrl being held.
+/// * `from`  - The place of the row whose grip was dragged: the rows
+///             selected if it is one of them, or else that row alone.
+fn drop_rows(
+    app: &Shared,
+    key: u64,
+    index: i32,
+    place: i32,
+    copy: bool,
+    from: i32,
+) {
+    let found = drop_target(&app.borrow(), key, index, place, copy, from);
     let (d, roots, parent, at, label) = match found {
         Ok(x) => x,
         Err(e) => {
@@ -2912,6 +2980,23 @@ fn drop_rows(app: &Shared, key: u64, index: i32, place: i32) {
             return;
         }
     };
+    if copy {
+        let made = {
+            let a = app.borrow();
+            let o = &a.session.docs[d];
+            let ns = o.report.version.map(|v| v.namespace()).unwrap_or("");
+            let text = transfer::copy_text(&o.doc, &roots);
+            transfer::fragment(&text, &o.doc, parent, ns)
+                .map(|n| (n, transfer::copy_notes(&a.session, d, &roots)))
+        };
+        match made {
+            Ok((nodes, notes)) => {
+                put_copy(app, key, parent, at, nodes, &notes, &label)
+            }
+            Err(e) => status_of(app, key, &e),
+        }
+        return;
+    }
     let mut counts = (0, 0);
     let done = change(app, key, &label, |s, _| {
         let m = transfer::move_changes(s, d, &roots, d, parent, at)?;
@@ -4046,19 +4131,29 @@ mod tests {
         select(&w, row(&w, "Parameter  HeaterOn"));
         add(&w, row(&w, "Parameter  Temperature"));
         let power = index_of(&w, row(&w, "Parameter  HeaterPower"));
-        let ok = w.invoke_drop_what(power, 1);
+        let ok = w.invoke_drop_what(power, 1, false, -1);
         assert!(ok.ok, "{}", ok.words);
         assert_eq!(ok.words, "move 2 elements after Parameter HeaterPower");
         let types = index_of(&w, row(&w, "FloatParameterType  PowerType"));
-        let no = w.invoke_drop_what(types, 1);
+        let no = w.invoke_drop_what(types, 1, false, -1);
         assert!(
             !no.ok && no.words.contains("does not allow"),
             "{}",
             no.words
         );
         let own = index_of(&w, row(&w, "Parameter  HeaterOn"));
-        assert!(!w.invoke_drop_what(own, 2).ok);
-        w.invoke_drop_rows(power, 1);
+        assert!(!w.invoke_drop_what(own, 2, false, -1).ok);
+        // By the grip of a row not selected, that row alone is dragged.
+        let first = index_of(&w, row(&w, "Parameter  PacketLength"));
+        let alone = w.invoke_drop_what(power, 1, false, first);
+        assert_eq!(
+            alone.words,
+            "move Parameter PacketLength after Parameter HeaterPower"
+        );
+        // By the grip of a selected row, the selection is.
+        let by = w.invoke_drop_what(power, 1, false, own);
+        assert_eq!(by.words, "move 2 elements after Parameter HeaterPower");
+        w.invoke_drop_rows(power, 1, false, -1);
         assert_eq!(
             params(&w),
             [
@@ -4077,6 +4172,95 @@ mod tests {
         assert_eq!(marked, 2);
         w.invoke_undo();
         assert_eq!(params(&w)[1], "HeaterOn");
+    }
+
+    #[test]
+    fn a_drag_with_ctrl_held_copies() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        open_all(&app, 0);
+        let entries = || -> Vec<(i32, String)> {
+            w.get_rows()
+                .iter()
+                .filter(|r| r.kind == "element")
+                .filter(|r| r.label == "ParameterRefEntry")
+                .map(|r| (r.id, r.label.to_string()))
+                .collect()
+        };
+        let before = entries();
+        assert_eq!(before.len(), 5);
+        select(&w, before[1].0);
+        let last = index_of(&w, before[4].0);
+        // Moving it after the last entry, or copying it there.
+        let moving = w.invoke_drop_what(last, 1, false, -1);
+        assert_eq!(
+            moving.words,
+            "move ParameterRefEntry after ParameterRefEntry"
+        );
+        let copying = w.invoke_drop_what(last, 1, true, -1);
+        assert!(copying.ok, "{}", copying.words);
+        assert_eq!(
+            copying.words,
+            "copy ParameterRefEntry after ParameterRefEntry"
+        );
+        // A copy may go beside what it copies; a move there does nothing.
+        let own = index_of(&w, before[1].0);
+        assert!(!w.invoke_drop_what(own, 0, false, -1).ok);
+        assert!(w.invoke_drop_what(own, 0, true, -1).ok);
+        w.invoke_drop_rows(last, 1, true, -1);
+        let after = entries();
+        assert_eq!(after.len(), 6);
+        assert_eq!(after[1].0, before[1].0, "the original stays");
+        assert_eq!(
+            w.get_undo_label(),
+            "copy ParameterRefEntry after ParameterRefEntry"
+        );
+        let sel: Vec<i32> = w
+            .get_rows()
+            .iter()
+            .filter(|r| r.selected)
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(sel, [after[5].0], "the copy is selected");
+        w.invoke_undo();
+        assert_eq!(entries(), before);
+    }
+
+    #[test]
+    fn a_pasted_copy_keeps_its_references_naming_what_they_named() {
+        let (app, _dir) = editor(&[
+            "examples/split-mission/dt.xtce",
+            "examples/split-mission/pus.xtce",
+            "examples/split-mission/rover.xtce",
+        ]);
+        let (pus, rover) = (win(&app, 1), win(&app, 2));
+        open_all(&app, 1);
+        open_all(&app, 2);
+        let original = app.borrow().session.docs[2].doc.write();
+        select(&rover, row(&rover, "Parameter  battery"));
+        rover.invoke_copy();
+        select(&pus, row(&pus, "ParameterSet"));
+        pus.invoke_paste(2);
+        assert_eq!(
+            pus.get_undo_label(),
+            "paste Parameter battery into ParameterSet"
+        );
+        assert!(
+            pus.get_status().contains("1 reference(s) written again"),
+            "{}",
+            pus.get_status()
+        );
+        let text = app.borrow().session.docs[1].doc.write();
+        assert!(
+            text.contains("name=\"battery\" parameterTypeRef=\"/Rover/volts\""),
+            "{text}"
+        );
+        assert!(pus.get_problems_title().contains("0 error(s), 0 warning"));
+        // The original, and its document, are as they were.
+        assert_eq!(app.borrow().session.docs[2].doc.write(), original);
+        assert!(rover.get_undo_label().is_empty());
+        pus.invoke_undo();
+        assert!(!app.borrow().session.docs[1].doc.write().contains("battery"));
     }
 
     #[test]

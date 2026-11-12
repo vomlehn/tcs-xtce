@@ -365,6 +365,34 @@ of them is renamed; where the schema allows two definitions of one name,
 the paste is made, the copy is marked **W** and the status line says
 so.
 
+A copy pasted keeps the references in it naming what they named where
+they were copied, writing again, by name or by path from the root as a
+move does (`References kept whole`_), each that would name something
+else, or nothing, where the copy goes.  A reference to a definition
+copied with it names the copy, so that a container copied with the types
+it uses uses the copied types; a reference to a definition outside the
+copy names the original.  References elsewhere are not touched: the
+original is still there.  This holds for rows copied in this editor;
+text from another program is pasted as it is.
+
+.. figure:: shots/tcs-xtcee-copy-1.png
+   :alt: rover.xtce's Parameter battery selected and open, its
+         parameterTypeRef volts, a type of the Rover SpaceSystem.
+
+   **1.** ``split-mission``'s documents open, and Rover's parameter
+   ``battery``, of the type ``volts``, copied with Edit > Copy.
+
+.. figure:: shots/tcs-xtcee-copy-2.png
+   :alt: pus.xtce's window: Parameter battery first in its ParameterSet,
+         selected and open, its parameterTypeRef /Rover/volts; no
+         problems; the status line "paste Parameter battery before
+         Parameter ccsds-version: done; 1 reference(s) written again to
+         name what they named".
+
+   **2.** Paste before the PUS document's first parameter: ``volts``
+   names nothing in PUS, so the copy's reference is written
+   ``/Rover/volts``, which names the type it named.
+
 Rows cut and then pasted are moved, not copied: the paste puts them
 back as one change, named "move ... after ..." in Edit > Undo, in place
 of the cut, so long as the clipboard still holds them and nothing else
@@ -439,6 +467,14 @@ bottom after it, and between, in it; over an attribute's row, in its
 element.  Dragged past the top or the bottom, the outline scrolls.  Let
 go, they are moved as one change, their references kept whole.
 
+Held while letting go, Ctrl copies the rows instead of moving them,
+pressed or let go at any time in the drag: the line or box is orange,
+not blue, with a **+** in a black circle beside it, and the words say
+"copy" rather than "move".  The copy is put in as one change, checked
+as a paste is, its references kept naming what they named as a pasted
+copy's are; and since a copy leaves the rows where they are, it may go
+beside them or in them.
+
 .. figure:: shots/tcs-xtcee-drag-1.png
    :alt: Parameters HeaterOn and Temperature selected; a blue line with
          an arrowhead at its left under Parameter HeaterPower, and beside
@@ -460,6 +496,27 @@ go, they are moved as one change, their references kept whole.
          HeaterPower, HeaterOn, Temperature, the last two still selected.
 
    **3.** Let go after HeaterPower: both move, and stay selected.
+
+.. figure:: shots/tcs-xtcee-copy-drag-1.png
+   :alt: The container Status open, its five ParameterRefEntry rows; a
+         blue line with an arrowhead under the last, and the words "move
+         ParameterRefEntry after ParameterRefEntry".
+
+   **4.** The container's second entry, HeaterOn's, dragged by its grip
+   to the end of the list.  It is not selected, so it is dragged alone.
+
+.. figure:: shots/tcs-xtcee-copy-drag-2.png
+   :alt: The same, with Ctrl held: the line orange, a + in a black circle
+         left of its arrowhead, and the words "copy ParameterRefEntry
+         after ParameterRefEntry".
+
+   **5.** Ctrl pressed: letting go now copies it.
+
+.. figure:: shots/tcs-xtcee-copy-drag-3.png
+   :alt: Six ParameterRefEntry rows, the new last one selected.
+
+   **6.** Let go: a copy of the entry is put at the end, and selected;
+   the entry itself stays where it was.
 
 .. figure:: shots/tcs-xtcee-remove-1.png
    :alt: The Remove button beside the root's name greyed and slanted,

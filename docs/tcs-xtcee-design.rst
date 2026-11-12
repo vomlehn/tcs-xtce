@@ -122,6 +122,23 @@ the TCS ground programs' are.  Its parts, each a module of the
    A delete that would leave a reference outside what is deleted naming
    nothing asks first.
 
+   A copy keeps the references in it naming what they named, and touches
+   no others, since the original is still there.  As rows are copied,
+   what each reference in them resolves to is noted: a definition copied
+   with it, by its place among the copied elements, or one outside the
+   copy, by its kind and its path from the root.  The note is kept with
+   the text the copy was put on the clipboard as, and a paste of that
+   text, or a drag with Ctrl held, resolves the copy's references where
+   it goes and writes again, in the same change and as a move does, each
+   that does not name what was noted.  A reference to a definition
+   copied with it names the copy, not the original: a container copied
+   with the types it uses is then a whole that stands by itself, as a
+   SpaceSystem copied whole is, rather than half a copy leaning on the
+   original; and a copy of a definition beside the original in one
+   SpaceSystem is refused by the schema's keys anyway.  A reference to a
+   definition outside the copy names the original.  Text that did not
+   come from this editor has no notes, and is pasted as it is.
+
 ``refs``
    The references between definitions, resolved by the compiler's rule
    (``resolve`` in ``compile.py``), so the editor and the compiler agree
@@ -173,7 +190,16 @@ the pointer's height in a row whether the rows would go before it, after
 it or in it; the editor is asked what that would do, by the same check a
 paste makes, and the answer is shown beside the pointer and decides
 whether a line, an arrowhead and the words, or a cross and the reason,
-are drawn.  A drop is made by the code a paste of cut rows uses.
+are drawn.  A drop is made by the code a paste of cut rows uses, or with
+Ctrl held by the code a paste of copied rows uses.  Ctrl is followed
+through the drag, from the pointer's events, which carry the keyboard's
+modifiers, and from the key itself pressed or let go while the pointer
+is still, and the words and the marks are asked for again when it
+changes; a copy is drawn orange with a + beside the line or box, a move
+blue without, so that the shape says which as well as the colour.  The
+row whose grip is pressed is not selected until the drop, since
+selecting draws the outline again and would end the drag: the editor is
+told which row it is, and drags it alone if it is not selected.
 
 See Also
 ========
