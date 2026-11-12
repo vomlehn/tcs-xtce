@@ -371,16 +371,21 @@ ul.auto-toc {
 <li><a class="reference internal" href="#building-it" id="toc-entry-2">Building it</a></li>
 <li><a class="reference internal" href="#omg-s-files" id="toc-entry-3">OMG's files</a></li>
 <li><a class="reference internal" href="#its-windows" id="toc-entry-4">Its windows</a></li>
-<li><a class="reference internal" href="#selecting-opening-and-closing" id="toc-entry-5">Selecting, opening and closing</a></li>
-<li><a class="reference internal" href="#changes-the-version-does-not-allow" id="toc-entry-6">Changes the version does not allow</a></li>
-<li><a class="reference internal" href="#undo-and-redo" id="toc-entry-7">Undo and redo</a></li>
-<li><a class="reference internal" href="#saving-autosave-and-recovery" id="toc-entry-8">Saving, autosave and recovery</a></li>
-<li><a class="reference internal" href="#converting-between-versions" id="toc-entry-9">Converting between versions</a></li>
-<li><a class="reference internal" href="#tools" id="toc-entry-10">Tools</a></li>
-<li><a class="reference internal" href="#from-the-command-line" id="toc-entry-11">From the command line</a></li>
-<li><a class="reference internal" href="#testing" id="toc-entry-12">Testing</a></li>
-<li><a class="reference internal" href="#license" id="toc-entry-13">License</a></li>
-<li><a class="reference internal" href="#see-also" id="toc-entry-14">See Also</a></li>
+<li><a class="reference internal" href="#selecting-opening-and-closing" id="toc-entry-5">Selecting, opening and closing</a><ul>
+<li><a class="reference internal" href="#finding-your-way-round-a-document" id="toc-entry-6">Finding your way round a document</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#editing-a-value" id="toc-entry-7">Editing a value</a></li>
+<li><a class="reference internal" href="#changes-the-version-does-not-allow" id="toc-entry-8">Changes the version does not allow</a></li>
+<li><a class="reference internal" href="#problems-in-a-document" id="toc-entry-9">Problems in a document</a></li>
+<li><a class="reference internal" href="#undo-and-redo" id="toc-entry-10">Undo and redo</a></li>
+<li><a class="reference internal" href="#saving-autosave-and-recovery" id="toc-entry-11">Saving, autosave and recovery</a></li>
+<li><a class="reference internal" href="#converting-between-versions" id="toc-entry-12">Converting between versions</a></li>
+<li><a class="reference internal" href="#tools" id="toc-entry-13">Tools</a></li>
+<li><a class="reference internal" href="#from-the-command-line" id="toc-entry-14">From the command line</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-15">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-16">License</a></li>
+<li><a class="reference internal" href="#see-also" id="toc-entry-17">See Also</a></li>
 </ul>
 </div>
 <div class="admonition note">
@@ -472,6 +477,17 @@ one selects the element it is about;</li>
 <li>a Source tab, where the document's text can be edited and applied as
 a whole.</li>
 </ul>
+<p>The window's title names the file and its XTCE version, and starts with
+<tt class="docutils literal">*</tt> while the document has changes that are not saved.  The pictures in
+this manual are the editor's own windows, opened on the documents in
+<tt class="docutils literal">examples/</tt> and drawn by <tt class="docutils literal">make screenshots</tt>.</p>
+<div class="figure">
+<img alt="The editor's window just after tcs-xtcee housekeeping.xtce: the menus File, Edit, Insert, Version and Tools; the Structure and Source tabs; an outline whose only open row, SpaceSystem Housekeeping, is selected and shows its name attribute, the row that adds an attribute, and the closed TelemetryMetaData; below it a line of hints, &quot;Problems: 0 error(s), 0 warning(s)&quot;, and the status line saying which file was opened." src="shots/tcs-xtcee-open-1.png" />
+<p class="caption"><tt class="docutils literal"><span class="pre">tcs-xtcee</span> housekeeping.xtce</tt>: the root, SpaceSystem Housekeeping,
+is open and selected.  Its attribute <tt class="docutils literal">name</tt> is required; the row
+<em>attribute</em> offers the others it may have.  Below the outline are the
+problems, none here, and the status line.</p>
+</div>
 </div>
 <div class="section" id="selecting-opening-and-closing">
 <h1><a class="toc-backref" href="#toc-entry-5">Selecting, opening and closing</a></h1>
@@ -492,9 +508,64 @@ shown, and leaves open what is open.  Dragged left, it closes each
 element as deep or deeper, so that none deeper is shown, and leaves
 closed what is closed.  Elements outside the selection are not changed.
 The triangle beside a name opens or closes that element alone.</p>
+<div class="section" id="finding-your-way-round-a-document">
+<h2><a class="toc-backref" href="#toc-entry-6">Finding your way round a document</a></h2>
+<p>A first look round <tt class="docutils literal">housekeeping.xtce</tt>, from the window it opens in:
+opening the outline a few levels at once, reading what the schema says
+of an element, and following a reference to what it names.</p>
+<div class="figure">
+<img alt="The selected root row, with the round handle dragged a few columns right of the line marking the selection, and beside it a box saying &quot;open to depth 3&quot;." src="shots/tcs-xtcee-open-2.png" />
+<p class="caption"><strong>1.</strong> The ↔ handle of the selection, the root, dragged right: the words
+beside it say what letting go will do.</p>
+</div>
+<div class="figure">
+<img alt="The outline opened three levels deep: TelemetryMetaData, in it ParameterTypeSet and ParameterSet, and in them five types and five parameters, each closed." src="shots/tcs-xtcee-open-3.png" />
+<p class="caption"><strong>2.</strong> Let go, the selection is opened so that the rows down to depth
+3 are shown: the root is depth 0, so the types and the parameters.</p>
+</div>
+<div class="figure">
+<img alt="The outline with ParameterTypeSet closed, and under the name ParameterSet a box saying &quot;A list of Parameters for this Space System.&quot;" src="shots/tcs-xtcee-browse-1.png" />
+<p class="caption"><strong>3.</strong> ParameterTypeSet closed with the triangle beside it, and the
+pointer resting on the name ParameterSet, which shows what the schema
+says of it.</p>
+</div>
+<div class="figure">
+<img alt="Parameter Temperature selected and open, showing its attributes name, Temperature, and parameterTypeRef, TemperatureType, both marked required, with a Go to button beside parameterTypeRef, and the row that adds an attribute." src="shots/tcs-xtcee-browse-2.png" />
+<p class="caption"><strong>4.</strong> Parameter Temperature opened with its triangle and selected with a
+click on its name.  <tt class="docutils literal">parameterTypeRef</tt> is a reference, so it has a <strong>Go
+to</strong> button.</p>
+</div>
+<div class="figure">
+<img alt="ParameterTypeSet open again, and FloatParameterType TemperatureType selected in it." src="shots/tcs-xtcee-browse-3.png" />
+<p class="caption"><strong>5.</strong> <strong>Go to</strong> selects the type the reference names, FloatParameterType
+TemperatureType, opening the rows above it.</p>
+</div>
+</div>
+</div>
+<div class="section" id="editing-a-value">
+<h1><a class="toc-backref" href="#toc-entry-7">Editing a value</a></h1>
+<p>An attribute's field is edited in place, and Enter sets it (Ctrl+Enter in
+a comment, whose Enter starts a new line); until then, nothing is
+changed.  Setting it is a change, which is checked as every change is
+(<a class="reference internal" href="#changes-the-version-does-not-allow">Changes the version does not allow</a>).</p>
+<div class="figure">
+<img alt="Parameter Temperature open, and the list under its &quot;add an attribute&quot; row dropped down, offering shortDescription and initialValue." src="shots/tcs-xtcee-edit-1.png" />
+<p class="caption"><strong>1.</strong> The list on the row <em>attribute</em> of Parameter Temperature offers
+the attributes the schema allows that it does not give.</p>
+</div>
+<div class="figure">
+<img alt="A new field for shortDescription, with a Remove button, above the parameter's name, holding the text &quot;The heater plate's temperature&quot; with the text cursor at its end." src="shots/tcs-xtcee-edit-2.png" />
+<p class="caption"><strong>2.</strong> <tt class="docutils literal">shortDescription</tt> chosen: an empty field for it, typed in.</p>
+</div>
+<div class="figure">
+<img alt="The Edit menu open, its first item &quot;Undo set shortDescription&quot;; behind it the field holds the text." src="shots/tcs-xtcee-edit-3.png" />
+<p class="caption"><strong>3.</strong> Enter sets it: the change is taken, and Edit &gt; Undo names it.
+The attribute's name is now in bold, as the names of those the
+element gives are.</p>
+</div>
 </div>
 <div class="section" id="changes-the-version-does-not-allow">
-<h1><a class="toc-backref" href="#toc-entry-6">Changes the version does not allow</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-8">Changes the version does not allow</a></h1>
 <p>Every change is held to the document's version.  An attribute set to a
 value its type does not allow, an element put where the schema does not
 allow it, a required element or attribute taken out, a source edit that
@@ -502,6 +573,16 @@ breaks the schema: each is refused, the document is left as it was, and
 the status line says why and what the schema wants.  A document opened
 with errors can be corrected a change at a time, but no change may make
 it worse.</p>
+<div class="figure">
+<img alt="The name field of Parameter Temperature holding &quot;Plate temperature&quot;, typed but not yet set." src="shots/tcs-xtcee-refuse-1.png" />
+<p class="caption"><strong>1.</strong> A name with a space in it typed into the parameter's <tt class="docutils literal">name</tt>.</p>
+</div>
+<div class="figure">
+<img alt="The whole window after Enter: the name field holds Temperature again, and the status line says &quot;XTCE 1.3 does not allow that, so it was not done: line 70: name: &quot;Plate temperature&quot; is not of the form NameType&quot;, with the pattern NameType requires." src="shots/tcs-xtcee-refuse-2.png" />
+<p class="caption"><strong>2.</strong> Enter: XTCE 1.3 does not allow a space in a name, so the change is
+refused.  The field shows the name as it was, and the status line says
+why, with the pattern the schema's NameType requires.</p>
+</div>
 <p>So that nothing is ever put in half-made, Insert offers only the
 elements the schema allows in the selected element, and each is made
 complete: with its required attributes, each given a value of the right
@@ -510,9 +591,43 @@ offered where they fit: integer, float and boolean types in a
 ParameterTypeSet, and in a SpaceSystem the six-byte primary header of a
 CCSDS space packet (CCSDS 133.0-B), with its types, its parameters and
 the abstract container a packet builds on.</p>
+<div class="figure">
+<img alt="The Insert menu open while ParameterTypeSet is selected, listing StringParameterType, EnumeratedParameterType, IntegerParameterType and the other parameter types &quot;in ParameterTypeSet&quot;, then five ready-made parts: unsigned 8-bit and 16-bit integer types, a signed 32-bit integer type, a 32-bit float type and a Boolean type." src="shots/tcs-xtcee-insert-1.png" />
+<p class="caption"><strong>1.</strong> ParameterTypeSet selected: Insert lists what may go in it, and
+below them the ready-made parts that fit.</p>
+</div>
+<div class="figure">
+<img alt="A new row, IntegerParameterType new1, selected at the end of ParameterTypeSet and open, showing its required name, new1." src="shots/tcs-xtcee-insert-2.png" />
+<p class="caption"><strong>2.</strong> IntegerParameterType chosen: one is put in, complete, its required
+<tt class="docutils literal">name</tt> given a value of the right kind, and selected.</p>
+</div>
+</div>
+<div class="section" id="problems-in-a-document">
+<h1><a class="toc-backref" href="#toc-entry-9">Problems in a document</a></h1>
+<p>The problems list is drawn again after every change, and a click on a
+problem selects the element it is about, opening the rows above it.  The
+pictures are of a copy of <tt class="docutils literal">housekeeping.xtce</tt> with two mistakes put in
+it: a coefficient that is not a number, and a parameter whose type is
+named <tt class="docutils literal">PowrType</tt>, which nothing defines.</p>
+<div class="figure">
+<img alt="The window just after opening the faulty copy: the root and the closed TelemetryMetaData marked E; the problems list titled &quot;Problems: 1 error(s), 1 warning(s)&quot;, an error marked E on line 44, &quot;coefficient: &quot;one eighth&quot; is not a number&quot;, and a warning marked W on line 72, &quot;PowrType names no parameter type in this mission&quot;." src="shots/tcs-xtcee-problems-1.png" />
+<p class="caption"><strong>1.</strong> Opened: the list gives each problem with its line, an error marked
+<strong>E</strong> and a warning <strong>W</strong>, and every row above a problem carries the
+worse mark, closed or not.</p>
+</div>
+<div class="figure">
+<img alt="After clicking the warning: Parameter HeaterPower, marked W, is selected and open, and under its parameterTypeRef, which holds PowrType, the problem's text is written." src="shots/tcs-xtcee-problems-2.png" />
+<p class="caption"><strong>2.</strong> A click on the warning selects Parameter HeaterPower; opened, it
+shows the problem under the attribute it is about.</p>
+</div>
+<div class="figure">
+<img alt="After setting parameterTypeRef to PowerType: no W marks, and the list titled &quot;Problems: 1 error(s), 0 warning(s)&quot; holding only the error on line 44." src="shots/tcs-xtcee-problems-3.png" />
+<p class="caption"><strong>3.</strong> <tt class="docutils literal">PowerType</tt> typed in its place and Enter pressed: the warning is
+gone, from the list and from the rows.</p>
+</div>
 </div>
 <div class="section" id="undo-and-redo">
-<h1><a class="toc-backref" href="#toc-entry-7">Undo and redo</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-10">Undo and redo</a></h1>
 <p>Edit &gt; Undo and Redo name the change they undo or redo.  Each document
 has a history of its own.  A rename across documents -- Edit &gt; Rename
 everywhere, which renames a definition and every reference to it in the
@@ -522,7 +637,7 @@ histories are kept only while the editor runs: they are gone when it is
 closed.</p>
 </div>
 <div class="section" id="saving-autosave-and-recovery">
-<h1><a class="toc-backref" href="#toc-entry-8">Saving, autosave and recovery</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-11">Saving, autosave and recovery</a></h1>
 <p>With autosave on, a changed document is written to its file two seconds
 after the last change.  File &gt; Autosave turns it off and on, and the
 setting is kept in <tt class="docutils literal"><span class="pre">~/.config/tcs-xtcee/settings</span></tt>
@@ -532,6 +647,27 @@ not been saved is kept in a recovery copy in
 crash loses at most the last seconds; the next time the document is
 opened, the editor offers the copy's changes, which Undo then takes back
 if they are not wanted.  Saving removes the copy.</p>
+<div class="figure">
+<img alt="The File menu open: New document, Open, Add a document to the mission, Save, Save as, &quot;Autosave: on (turn off)&quot; and Close." src="shots/tcs-xtcee-save-1.png" />
+<p class="caption">File &gt; Save writes the document now; the item below Save as says
+whether autosave is on, and turns it off or on.</p>
+</div>
+<div class="figure">
+<object data="tcs-xtcee-change.svg" type="image/svg+xml">A flow chart.  A change -- a field and Enter, Insert, Delete,
+Move, Apply the source or Convert -- is checked against the
+document's XTCE version.  If it adds an error, or gives an
+element one it did not have, it is refused, shown by a dashed
+vermillion box with a cross: the document is left as it was and
+the status line says why.  Otherwise it is taken, shown by a
+solid bluish green box with a tick: Edit > Undo names it, the
+title starts with *, and the outline and problems are drawn
+again.  Two seconds after the last change, with autosave on, it
+is written to its file through a temporary file renamed over it;
+with autosave off, it is kept in a recovery copy in
+~/.local/state/tcs-xtcee/ until File > Save writes it the same
+way and removes the copy.</object>
+<p class="caption">What happens to a change, from the check to the file.</p>
+</div>
 <p>A file is written whole or not at all: to a temporary file beside it,
 flushed, then renamed over it.  A file changed on disk by another
 program -- git, another editor -- is noticed, and the editor asks
@@ -539,10 +675,10 @@ whether to reload it, which Undo can undo, or keep its own version; it
 does not write over the other change until one is chosen.</p>
 </div>
 <div class="section" id="converting-between-versions">
-<h1><a class="toc-backref" href="#toc-entry-9">Converting between versions</a></h1>
-<p>Version &gt; Convert converts the document to another version, a version
-at a time, as one change that Undo undoes.  Before anything is changed
-the conversion dialog lists:</p>
+<h1><a class="toc-backref" href="#toc-entry-12">Converting between versions</a></h1>
+<p>Version &gt; Convert to XTCE <em>version</em> converts the document to another
+version, a version at a time, as one change that Undo undoes.  Before
+anything is changed the conversion dialog lists:</p>
 <ul class="simple">
 <li><strong>Changed</strong>: what is written another way in the other version, such
 as an element 1.3 renamed (<tt class="docutils literal">RelativeTimeAgumentType</tt>, as 1.2 spells
@@ -559,12 +695,22 @@ requires.  Each is asked for in the dialog;</li>
 <li><strong>Refused</strong>: what cannot be converted at all, with why, such as a 1.3
 unit 1.2 has no word for.</li>
 </ul>
+<div class="figure">
+<img alt="The Version menu open on simple_string.xtce, offering &quot;Convert to XTCE 1.1...&quot; and &quot;Convert to XTCE 1.2...&quot;." src="shots/tcs-xtcee-convert-1.png" />
+<p class="caption"><strong>1.</strong> The Version menu offers the versions the document is not in;
+<tt class="docutils literal">simple_string.xtce</tt> is in 1.3.</p>
+</div>
+<div class="figure">
+<img alt="The conversion dialog: &quot;The conversion can be made.&quot;; under &quot;Lost: what the other version cannot say (1)&quot;, the TerminationChar of String8Type's encoding, and under &quot;Changed (2)&quot;, an empty LongDescription and an empty UnitSet that XTCE 1.1 requires; an unticked box &quot;Convert anyway, losing what is listed as lost&quot;; the Convert button, not available, and Cancel." src="shots/tcs-xtcee-convert-2.png" />
+<p class="caption"><strong>2.</strong> Convert to XTCE 1.1, by way of 1.2: 1.1 cannot say the string's
+termination character, so Convert waits for the box agreeing to lose it.</p>
+</div>
 <p>The rules come from comparing the three schemas element by element and
 attribute by attribute; the design describes them.  A converted document
 is checked against its new version's schema before it is taken.</p>
 </div>
 <div class="section" id="tools">
-<h1><a class="toc-backref" href="#toc-entry-10">Tools</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-13">Tools</a></h1>
 <dl class="docutils">
 <dt>Tools &gt; Packet layout</dt>
 <dd>Draws each packet's fields to scale, each with its name and size
@@ -589,7 +735,7 @@ download it the first time (<a class="reference internal" href="#omg-s-files">OM
 compiler's tools, which read 1.3; its files are not changed.</p>
 </div>
 <div class="section" id="from-the-command-line">
-<h1><a class="toc-backref" href="#toc-entry-11">From the command line</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-14">From the command line</a></h1>
 <p>The same checking and converting run without the windows, for a
 Makefile or a CI job:</p>
 <pre class="code sh literal-block">
@@ -607,7 +753,7 @@ the <tt class="docutils literal"><span class="pre">--set</span></tt> that answer
 of a version, which the tests use.</p>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-12">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-15">Testing</a></h1>
 <p><tt class="docutils literal">make test</tt> in the tcs-xtce checkout runs the editor's tests with the
 rest (<tt class="docutils literal">make <span class="pre">test-editor</span></tt> runs them alone): its documents, schemas,
 checker, conversions and windows, the windows drawn without a display.
@@ -616,14 +762,14 @@ documents of every version, converts each to every other, and has
 <tt class="docutils literal">xmllint</tt> judge every document made.</p>
 </div>
 <div class="section" id="license">
-<h1><a class="toc-backref" href="#toc-entry-13">License</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-16">License</a></h1>
 <p>tcs-xtcee is part of tcs-xtce, and is licensed as it is: under either of
 the Apache License, Version 2.0 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or
 <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT license
 (<tt class="docutils literal"><span class="pre">LICENSE-MIT</span></tt>, or <a class="reference external" href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>), at your option.</p>
 </div>
 <div class="section" id="see-also">
-<h1><a class="toc-backref" href="#toc-entry-14">See Also</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-17">See Also</a></h1>
 <dl class="docutils">
 <dt><a class="reference external" href="manual.html">The tcs-xtce manuals</a></dt>
 <dd>What each of tcs-xtce's manuals covers.</dd>

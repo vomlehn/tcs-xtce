@@ -32,7 +32,12 @@ manual.html: manual.rst
 tcs-xtce.html: tcs-xtce.rst
 	$(RST2HTML) --halt=warning $< $@
 
-tcs-xtcee.html: tcs-xtcee.rst
+# The editor's manual shows screenshots, which make screenshots in the top
+# directory makes, and a diagram.  The page links to them rather than
+# holding them, so depending on them only keeps it no older than they are.
+TCS_XTCEE_FIGURES := $(wildcard shots/tcs-xtcee-*.png) tcs-xtcee-change.svg
+
+tcs-xtcee.html: tcs-xtcee.rst $(TCS_XTCEE_FIGURES)
 	$(RST2HTML) --halt=warning $< $@
 
 design.html: design.rst

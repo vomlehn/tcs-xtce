@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="640"
+     viewBox="0 0 760 640" font-family="DejaVu Sans, Verdana, sans-serif"
+     font-size="13">
+  <title>What happens to a change in tcs-xtcee</title>
+  <desc>A change is checked against the document's XTCE version.  If it
+    adds an error it is refused and the document is left as it was;
+    otherwise it is taken, and two seconds after the last change it is
+    written to the file (autosave on) or kept in a recovery copy until
+    File &gt; Save (autosave off).</desc>
+  <defs>
+    <!-- Arrowheads: black for the common path, vermillion for refused,
+         bluish green for taken. -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000000"/>
+    </marker>
+    <marker id="arrow-refused" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#D55E00"/>
+    </marker>
+    <marker id="arrow-taken" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#009E73"/>
+    </marker>
+  </defs>
+  <rect width="760" height="640" fill="#ffffff"/>
+
+  <!-- The change. -->
+  <rect x="210" y="14" width="340" height="66" rx="8" fill="#ffffff"
+        stroke="#000000" stroke-width="1.5"/>
+  <text x="380" y="38" text-anchor="middle" font-weight="bold">You
+    make a change</text>
+  <text x="380" y="58" text-anchor="middle">a field and Enter, Insert,
+    Delete, Move,</text>
+  <text x="380" y="74" text-anchor="middle">Apply the source or
+    Convert</text>
+  <line x1="380" y1="80" x2="380" y2="98" stroke="#000000"
+        stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- The check. -->
+  <polygon points="380,100 600,166 380,232 160,166" fill="#ffffff"
+           stroke="#000000" stroke-width="1.5"/>
+  <text x="380" y="150" text-anchor="middle">Checked against the
+    document's</text>
+  <text x="380" y="168" text-anchor="middle">XTCE version: does it add
+    an error,</text>
+  <text x="380" y="186" text-anchor="middle">or give an element one it
+    did not have?</text>
+
+  <!-- Refused: vermillion, dashed, and said in words. -->
+  <path d="M160,166 H150 V262" fill="none" stroke="#D55E00"
+        stroke-width="2" stroke-dasharray="7 4"
+        marker-end="url(#arrow-refused)"/>
+  <text x="142" y="204" text-anchor="end" font-weight="bold">yes</text>
+  <rect x="16" y="264" width="300" height="96" rx="8" fill="#ffffff"
+        stroke="#D55E00" stroke-width="2" stroke-dasharray="7 4"/>
+  <text x="30" y="288" font-weight="bold">&#x2716; Refused</text>
+  <text x="30" y="310">The document is left as it was.</text>
+  <text x="30" y="328">The status line says why, and</text>
+  <text x="30" y="346">what the schema wants.</text>
+
+  <!-- Taken: bluish green, solid, and said in words. -->
+  <path d="M600,166 H610 V262" fill="none" stroke="#009E73"
+        stroke-width="2" marker-end="url(#arrow-taken)"/>
+  <text x="618" y="204" font-weight="bold">no</text>
+  <rect x="444" y="264" width="300" height="96" rx="8" fill="#ffffff"
+        stroke="#009E73" stroke-width="2"/>
+  <text x="458" y="288" font-weight="bold">&#x2714; Taken</text>
+  <text x="458" y="310">Edit &gt; Undo names it; the title</text>
+  <text x="458" y="328">starts with *; the outline and the</text>
+  <text x="458" y="346">problems are drawn again.</text>
+
+  <!-- After a pause. -->
+  <path d="M594,360 V392 H250 V430" fill="none" stroke="#000000"
+        stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M594,392 V430" fill="none" stroke="#000000"
+        stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="300" y="400" width="244" height="22" fill="#ffffff"/>
+  <text x="422" y="416" text-anchor="middle" font-style="italic">two
+    seconds after the last change</text>
+
+  <!-- Autosave on. -->
+  <rect x="100" y="432" width="300" height="96" rx="8" fill="#ffffff"
+        stroke="#0072B2" stroke-width="2"/>
+  <text x="114" y="456" font-weight="bold">Autosave on</text>
+  <text x="114" y="478">Written to its file: to a temporary</text>
+  <text x="114" y="496">file beside it, then renamed over it,</text>
+  <text x="114" y="514">so it is written whole or not at all.</text>
+
+  <!-- Autosave off. -->
+  <rect x="444" y="432" width="300" height="96" rx="8" fill="#ffffff"
+        stroke="#0072B2" stroke-width="2" stroke-dasharray="2 3"/>
+  <text x="458" y="456" font-weight="bold">Autosave off</text>
+  <text x="458" y="478">Kept in a recovery copy in</text>
+  <text x="458" y="496" font-family="DejaVu Sans Mono, monospace"
+        font-size="12">~/.local/state/tcs-xtcee/</text>
+  <text x="458" y="514">until the document is saved.</text>
+  <line x1="594" y1="528" x2="594" y2="556" stroke="#000000"
+        stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Saving. -->
+  <rect x="444" y="558" width="300" height="72" rx="8" fill="#ffffff"
+        stroke="#000000" stroke-width="1.5"/>
+  <text x="458" y="582" font-weight="bold">File &gt; Save</text>
+  <text x="458" y="604">Written to its file the same way;</text>
+  <text x="458" y="622">the recovery copy is removed.</text>
+</svg>

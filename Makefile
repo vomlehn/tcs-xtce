@@ -51,6 +51,9 @@
 #   make test-editor     run the editor's tests
 #   make editor-check    hold the editor to xmllint on random documents of
 #                        every version and their conversions
+#   make screenshots     remake the editor manual's screenshots in
+#                        docs/shots/, drawn without a display (not part
+#                        of make test)
 #   make html            remake the HTML documents from their sources
 #   make help            print this list
 #   make clean           remove build products (keeps generated sources)
@@ -211,6 +214,20 @@ test-editor: $(EDITOR_XSD) $(PY_GEN)
 .PHONY: editor-check
 editor-check: editor
 	tests/editor_check.sh
+
+# The screenshots in the editor's manual, docs/shots/tcs-xtcee-*.png: its
+# windows opened on copies of the examples, driven by its own code and
+# drawn by Slint's software renderer in memory, never on a display (see
+# editor/src/gui_shots.rs). Made only when asked for: make test, the
+# editor's tests and html-check never make them. Finding what is in a
+# window by what it says needs Slint's debug information, which changes
+# how the windows are compiled, so they are built in a target directory
+# of their own, leaving the editor's own build alone.
+.PHONY: screenshots
+screenshots: $(EDITOR_XSD)
+	cd editor && SLINT_EMIT_DEBUG_INFO=1 CARGO_TARGET_DIR=target/shots \
+		$(CARGO) test --release --lib gui::shots::screenshots -- \
+		--ignored --exact
 
 .PHONY: test-cpp
 test-cpp: cpp $(SAMPLES)
@@ -446,7 +463,9 @@ PYDIR   ?= $(PREFIX)/lib/python3/site-packages
 DOCS    := README.md CONTRIBUTING.md LICENSE-APACHE LICENSE-MIT \
            docs/manual.html docs/tcs-xtce.html docs/tcs-xtcee.html \
            docs/design.html docs/tcs-xtce-design.html \
-           docs/tcs-xtcee-design.html
+           docs/tcs-xtcee-design.html docs/tcs-xtcee-change.svg
+# The editor manual's screenshots, which it finds in shots/ beside it.
+SHOTS   := $(wildcard docs/shots/*.png)
 # The editor is the one command built rather than copied; `make editor`
 # builds it.
 EDITOR_BIN := editor/target/release/tcs-xtcee
@@ -565,6 +584,7 @@ install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 	$(call pyinstall,tcs_ccsds,$(CCSDS_VERSION), \
 		ccsds/python/pyproject.toml ccsds/python/tcs_ccsds)
 	install -D -m 644 -t $(DOCDIR) $(DOCS)
+	install -D -m 644 -t $(DOCDIR)/shots $(SHOTS)
 	$(THIRD_PARTY_NOTICES) editor $(DOCDIR)/THIRD-PARTY-NOTICES tcs-xtce
 	files=$$(git ls-files examples) && [ -n "$$files" ] || { \
 	    echo "install takes the examples from git, so run it in a" \

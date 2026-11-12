@@ -105,6 +105,25 @@ Each window shows:
 * a Source tab, where the document's text can be edited and applied as
   a whole.
 
+The window's title names the file and its XTCE version, and starts with
+``*`` while the document has changes that are not saved.  The pictures in
+this manual are the editor's own windows, opened on the documents in
+``examples/`` and drawn by ``make screenshots``.
+
+.. figure:: shots/tcs-xtcee-open-1.png
+   :alt: The editor's window just after tcs-xtcee housekeeping.xtce: the
+         menus File, Edit, Insert, Version and Tools; the Structure and
+         Source tabs; an outline whose only open row, SpaceSystem
+         Housekeeping, is selected and shows its name attribute, the row
+         that adds an attribute, and the closed TelemetryMetaData; below
+         it a line of hints, "Problems: 0 error(s), 0 warning(s)", and the
+         status line saying which file was opened.
+
+   ``tcs-xtcee housekeeping.xtce``: the root, SpaceSystem Housekeeping,
+   is open and selected.  Its attribute ``name`` is required; the row
+   *attribute* offers the others it may have.  Below the outline are the
+   problems, none here, and the status line.
+
 Selecting, opening and closing
 ==============================
 
@@ -127,6 +146,86 @@ element as deep or deeper, so that none deeper is shown, and leaves
 closed what is closed.  Elements outside the selection are not changed.
 The triangle beside a name opens or closes that element alone.
 
+Finding your way round a document
+---------------------------------
+
+A first look round ``housekeeping.xtce``, from the window it opens in:
+opening the outline a few levels at once, reading what the schema says
+of an element, and following a reference to what it names.
+
+.. figure:: shots/tcs-xtcee-open-2.png
+   :alt: The selected root row, with the round handle dragged a few
+         columns right of the line marking the selection, and beside it a
+         box saying "open to depth 3".
+
+   **1.** The ↔ handle of the selection, the root, dragged right: the words
+   beside it say what letting go will do.
+
+.. figure:: shots/tcs-xtcee-open-3.png
+   :alt: The outline opened three levels deep: TelemetryMetaData, in it
+         ParameterTypeSet and ParameterSet, and in them five types and
+         five parameters, each closed.
+
+   **2.** Let go, the selection is opened so that the rows down to depth
+   3 are shown: the root is depth 0, so the types and the parameters.
+
+.. figure:: shots/tcs-xtcee-browse-1.png
+   :alt: The outline with ParameterTypeSet closed, and under the name
+         ParameterSet a box saying "A list of Parameters for this Space
+         System."
+
+   **3.** ParameterTypeSet closed with the triangle beside it, and the
+   pointer resting on the name ParameterSet, which shows what the schema
+   says of it.
+
+.. figure:: shots/tcs-xtcee-browse-2.png
+   :alt: Parameter Temperature selected and open, showing its attributes
+         name, Temperature, and parameterTypeRef, TemperatureType, both
+         marked required, with a Go to button beside parameterTypeRef,
+         and the row that adds an attribute.
+
+   **4.** Parameter Temperature opened with its triangle and selected with a
+   click on its name.  ``parameterTypeRef`` is a reference, so it has a **Go
+   to** button.
+
+.. figure:: shots/tcs-xtcee-browse-3.png
+   :alt: ParameterTypeSet open again, and FloatParameterType
+         TemperatureType selected in it.
+
+   **5.** **Go to** selects the type the reference names, FloatParameterType
+   TemperatureType, opening the rows above it.
+
+Editing a value
+===============
+
+An attribute's field is edited in place, and Enter sets it (Ctrl+Enter in
+a comment, whose Enter starts a new line); until then, nothing is
+changed.  Setting it is a change, which is checked as every change is
+(`Changes the version does not allow`_).
+
+.. figure:: shots/tcs-xtcee-edit-1.png
+   :alt: Parameter Temperature open, and the list under its "add an
+         attribute" row dropped down, offering shortDescription and
+         initialValue.
+
+   **1.** The list on the row *attribute* of Parameter Temperature offers
+   the attributes the schema allows that it does not give.
+
+.. figure:: shots/tcs-xtcee-edit-2.png
+   :alt: A new field for shortDescription, with a Remove button, above
+         the parameter's name, holding the text "The heater plate's
+         temperature" with the text cursor at its end.
+
+   **2.** ``shortDescription`` chosen: an empty field for it, typed in.
+
+.. figure:: shots/tcs-xtcee-edit-3.png
+   :alt: The Edit menu open, its first item "Undo set shortDescription";
+         behind it the field holds the text.
+
+   **3.** Enter sets it: the change is taken, and Edit > Undo names it.
+   The attribute's name is now in bold, as the names of those the
+   element gives are.
+
 Changes the version does not allow
 ==================================
 
@@ -138,6 +237,22 @@ the status line says why and what the schema wants.  A document opened
 with errors can be corrected a change at a time, but no change may make
 it worse.
 
+.. figure:: shots/tcs-xtcee-refuse-1.png
+   :alt: The name field of Parameter Temperature holding "Plate
+         temperature", typed but not yet set.
+
+   **1.** A name with a space in it typed into the parameter's ``name``.
+
+.. figure:: shots/tcs-xtcee-refuse-2.png
+   :alt: The whole window after Enter: the name field holds Temperature
+         again, and the status line says "XTCE 1.3 does not allow that,
+         so it was not done: line 70: name: "Plate temperature" is not of
+         the form NameType", with the pattern NameType requires.
+
+   **2.** Enter: XTCE 1.3 does not allow a space in a name, so the change is
+   refused.  The field shows the name as it was, and the status line says
+   why, with the pattern the schema's NameType requires.
+
 So that nothing is ever put in half-made, Insert offers only the
 elements the schema allows in the selected element, and each is made
 complete: with its required attributes, each given a value of the right
@@ -146,6 +261,61 @@ offered where they fit: integer, float and boolean types in a
 ParameterTypeSet, and in a SpaceSystem the six-byte primary header of a
 CCSDS space packet (CCSDS 133.0-B), with its types, its parameters and
 the abstract container a packet builds on.
+
+.. figure:: shots/tcs-xtcee-insert-1.png
+   :alt: The Insert menu open while ParameterTypeSet is selected, listing
+         StringParameterType, EnumeratedParameterType,
+         IntegerParameterType and the other parameter types "in
+         ParameterTypeSet", then five ready-made parts: unsigned 8-bit
+         and 16-bit integer types, a signed 32-bit integer type, a 32-bit
+         float type and a Boolean type.
+
+   **1.** ParameterTypeSet selected: Insert lists what may go in it, and
+   below them the ready-made parts that fit.
+
+.. figure:: shots/tcs-xtcee-insert-2.png
+   :alt: A new row, IntegerParameterType new1, selected at the end of
+         ParameterTypeSet and open, showing its required name, new1.
+
+   **2.** IntegerParameterType chosen: one is put in, complete, its required
+   ``name`` given a value of the right kind, and selected.
+
+Problems in a document
+======================
+
+The problems list is drawn again after every change, and a click on a
+problem selects the element it is about, opening the rows above it.  The
+pictures are of a copy of ``housekeeping.xtce`` with two mistakes put in
+it: a coefficient that is not a number, and a parameter whose type is
+named ``PowrType``, which nothing defines.
+
+.. figure:: shots/tcs-xtcee-problems-1.png
+   :alt: The window just after opening the faulty copy: the root and the
+         closed TelemetryMetaData marked E; the problems list titled
+         "Problems: 1 error(s), 1 warning(s)", an error marked E on line
+         44, "coefficient: "one eighth" is not a number", and a warning
+         marked W on line 72, "PowrType names no parameter type in this
+         mission".
+
+   **1.** Opened: the list gives each problem with its line, an error marked
+   **E** and a warning **W**, and every row above a problem carries the
+   worse mark, closed or not.
+
+.. figure:: shots/tcs-xtcee-problems-2.png
+   :alt: After clicking the warning: Parameter HeaterPower, marked W,
+         is selected and open, and under its parameterTypeRef, which
+         holds PowrType, the problem's text is written.
+
+   **2.** A click on the warning selects Parameter HeaterPower; opened, it
+   shows the problem under the attribute it is about.
+
+.. figure:: shots/tcs-xtcee-problems-3.png
+   :alt: After setting parameterTypeRef to PowerType: no W marks, and the
+         list titled "Problems: 1 error(s), 0 warning(s)" holding only
+         the error on line 44.
+
+   **3.** ``PowerType`` typed in its place and Enter pressed: the warning is
+   gone, from the list and from the rows.
 
 Undo and redo
 =============
@@ -171,6 +341,30 @@ crash loses at most the last seconds; the next time the document is
 opened, the editor offers the copy's changes, which Undo then takes back
 if they are not wanted.  Saving removes the copy.
 
+.. figure:: shots/tcs-xtcee-save-1.png
+   :alt: The File menu open: New document, Open, Add a document to the
+         mission, Save, Save as, "Autosave: on (turn off)" and Close.
+
+   File > Save writes the document now; the item below Save as says
+   whether autosave is on, and turns it off or on.
+
+.. figure:: tcs-xtcee-change.svg
+   :alt: A flow chart.  A change -- a field and Enter, Insert, Delete,
+         Move, Apply the source or Convert -- is checked against the
+         document's XTCE version.  If it adds an error, or gives an
+         element one it did not have, it is refused, shown by a dashed
+         vermillion box with a cross: the document is left as it was and
+         the status line says why.  Otherwise it is taken, shown by a
+         solid bluish green box with a tick: Edit > Undo names it, the
+         title starts with *, and the outline and problems are drawn
+         again.  Two seconds after the last change, with autosave on, it
+         is written to its file through a temporary file renamed over it;
+         with autosave off, it is kept in a recovery copy in
+         ~/.local/state/tcs-xtcee/ until File > Save writes it the same
+         way and removes the copy.
+
+   What happens to a change, from the check to the file.
+
 A file is written whole or not at all: to a temporary file beside it,
 flushed, then renamed over it.  A file changed on disk by another
 program -- git, another editor -- is noticed, and the editor asks
@@ -180,9 +374,9 @@ does not write over the other change until one is chosen.
 Converting between versions
 ===========================
 
-Version > Convert converts the document to another version, a version
-at a time, as one change that Undo undoes.  Before anything is changed
-the conversion dialog lists:
+Version > Convert to XTCE *version* converts the document to another
+version, a version at a time, as one change that Undo undoes.  Before
+anything is changed the conversion dialog lists:
 
 * **Changed**: what is written another way in the other version, such
   as an element 1.3 renamed (``RelativeTimeAgumentType``, as 1.2 spells
@@ -198,6 +392,24 @@ the conversion dialog lists:
   requires.  Each is asked for in the dialog;
 * **Refused**: what cannot be converted at all, with why, such as a 1.3
   unit 1.2 has no word for.
+
+.. figure:: shots/tcs-xtcee-convert-1.png
+   :alt: The Version menu open on simple_string.xtce, offering "Convert
+         to XTCE 1.1..." and "Convert to XTCE 1.2...".
+
+   **1.** The Version menu offers the versions the document is not in;
+   ``simple_string.xtce`` is in 1.3.
+
+.. figure:: shots/tcs-xtcee-convert-2.png
+   :alt: The conversion dialog: "The conversion can be made."; under
+         "Lost: what the other version cannot say (1)", the
+         TerminationChar of String8Type's encoding, and under "Changed
+         (2)", an empty LongDescription and an empty UnitSet that XTCE 1.1
+         requires; an unticked box "Convert anyway, losing what is listed
+         as lost"; the Convert button, not available, and Cancel.
+
+   **2.** Convert to XTCE 1.1, by way of 1.2: 1.1 cannot say the string's
+   termination character, so Convert waits for the box agreeing to lose it.
 
 The rules come from comparing the three schemas element by element and
 attribute by attribute; the design describes them.  A converted document

@@ -2816,6 +2816,12 @@ fn spec(app: &Shared, key: u64) {
     }
 }
 
+/// The manual's screenshots, which `make screenshots` makes: the windows
+/// drawn by Slint's software renderer, without a display.
+#[cfg(test)]
+#[path = "gui_shots.rs"]
+mod shots;
+
 #[cfg(test)]
 mod tests {
     use super::*;

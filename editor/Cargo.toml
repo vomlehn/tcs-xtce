@@ -38,6 +38,9 @@ tempfile = "3.27.0"
 [dev-dependencies]
 # Lays the windows out headlessly, so a test can drive them.
 i-slint-backend-testing = "1.18"
+# Writes the manual's screenshots, which `make screenshots` asks for:
+# see src/gui_shots.rs.
+png = "0.18"
 
 [build-dependencies]
 slint-build = "1.18"

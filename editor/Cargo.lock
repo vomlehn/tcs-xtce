@@ -4349,6 +4349,7 @@ name = "tcs-xtcee"
 version = "0.1.0"
 dependencies = [
  "i-slint-backend-testing",
+ "png",
  "regex",
  "rfd",
  "slint",
