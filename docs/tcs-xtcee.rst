@@ -96,12 +96,16 @@ Each window shows:
   to** button where it is a reference.  Only the attributes an element
   gives, and those it must, are shown; the row *attribute* below them
   offers the rest, and one chosen there is put in when it is given a
-  value.  An element with a problem in it is marked **E** for an error
-  or **W** for a warning, on its row and on every row above it, so a
-  closed row shows that something inside it is wrong, and what is wrong
-  is written under the row of the element or attribute it is in, marked
-  the same way.  Resting the pointer on a name shows what the schema says
-  of it;
+  value.  An attribute's **Remove** button takes it out; for one the
+  schema requires, the button is greyed and its words slanted, and
+  resting the pointer on it says why.  An element with a problem in it
+  is marked **E** for an error or **W** for a warning, on its row and on
+  every row above it, so a closed row shows that something inside it is
+  wrong, and what is wrong is written under the row of the element or
+  attribute it is in, marked the same way.  Resting the pointer on a
+  name shows what the schema says of it.  Each element's and comment's
+  row starts with a grip, six dots, by which it is dragged
+  (`Dragging rows`_);
 * the problems: every schema error, and, as warnings, every reference
   that names nothing in the open documents and every two definitions of
   one name.  Picking one selects the element it is about;
@@ -136,6 +140,10 @@ Shift+click selects every row from the selected one to it.  Dragging
 across names selects every row dragged across, Ctrl added to those
 already selected; dragged past the top or the bottom, the tree scrolls,
 faster the further past the pointer goes.
+
+The rows selected together are what Cut, Copy, Delete and Move up and
+down act on; the row clicked last is the one Insert, Paste and the other
+menu items act on.
 
 The selection is marked by its rows' colour and by a line down the
 column where its topmost element starts, with a ↔ handle at the middle
@@ -285,6 +293,181 @@ the abstract container a packet builds on.
    **2.** IntegerParameterType chosen: one is put in, complete, its required
    ``name`` given a value of the right kind, and selected in place of
    ParameterTypeSet.
+
+Deleting, moving and copying
+============================
+
+Delete, Cut, Copy, Move up and Move down, in the Edit menu, act on every
+row selected (`Selecting, opening and closing`_), each element with
+everything in it and the comments written just before it, as one change
+that one Undo takes back.  A row inside another selected row goes with
+it.  The root cannot be deleted or cut.
+
+Move up and Move down move a run of selected elements next to each other
+under one element, together, past the element before or after the run.
+For rows under different elements, or with others between them, the two
+items are greyed, though such rows can still be deleted, cut and copied.
+
+.. figure:: shots/tcs-xtcee-delete-1.png
+   :alt: Parameter HeaterOn and Parameter BusVoltage selected together,
+         each with a bar at its left, Parameter Temperature between them
+         not selected.
+
+   **1.** Parameter HeaterOn clicked, and Parameter BusVoltage added with
+   Ctrl+click.
+
+Deleting a definition that a reference outside what is deleted still
+names asks first, listing the references.  **Show the usages** lists them
+in place of the problems, as Edit > Find usages does, and deletes
+nothing.
+
+.. figure:: shots/tcs-xtcee-delete-2.png
+   :alt: A question: "2 elements are still named by 3 reference(s):",
+         then HeaterOn on lines 78 and 83 and BusVoltage on line 80 of
+         housekeeping.xtce, "Delete anyway?  The references will then
+         name nothing.", and the buttons Delete anyway, Show the usages
+         and Cancel.
+
+   **2.** Edit > Delete: the container Status names both parameters.
+
+.. figure:: shots/tcs-xtcee-delete-3.png
+   :alt: The outline without HeaterOn and BusVoltage, Parameter
+         PacketLength selected, the rows above it marked W, and three
+         warnings that HeaterOn and BusVoltage name no parameter; the
+         status line says "delete 2 elements: done".
+
+   **3.** Delete anyway: both go, as one change, and the references
+   that named them are now warnings.  The row before them is selected.
+
+Cut, copy and paste
+-------------------
+
+Cut (Ctrl+X) and Copy (Ctrl+C) put the selected rows on the desktop's
+clipboard as XTCE text, the elements as they are written, each with the
+namespace declarations it needs, so they can be pasted in another
+document, in another window, or in a text editor.  Paste puts what the
+clipboard holds before the selected row, after it (Ctrl+V), or in it,
+after what it holds; each is greyed where the schema does not allow the
+clipboard's first element, as Insert offers only what fits, and Ctrl+V
+pastes in the selected row when after it is not allowed.  The keys act
+on the outline once a row has been clicked; in a field being edited
+they cut, copy and paste its text.
+
+Text pasted is put in the document's namespace prefix.  Text that
+declares no namespace, as a piece copied from a file in a text editor
+usually does, is taken to be in the document's own; text of another XTCE
+version is refused, to be converted first (`Converting between
+versions`_).  A paste is checked as every change is: one that breaks
+the schema is refused, the status line saying why.  XTCE gives the
+parameters, types, containers and commands of a SpaceSystem names of
+their own, so a copy pasted beside what it copies is refused until one
+of them is renamed; where the schema allows two definitions of one name,
+the paste is made, the copy is marked **W** and the status line says
+so.
+
+Rows cut and then pasted are moved, not copied: the paste puts them
+back as one change, named "move ... after ..." in Edit > Undo, in place
+of the cut, so long as the clipboard still holds them and nothing else
+has been changed in their document since the cut.  Their references are
+kept whole as a move keeps them (`References kept whole`_).
+
+.. figure:: shots/tcs-xtcee-cut-1.png
+   :alt: The Edit menu open after cutting Parameter HeaterOn, with
+         Parameter HeaterPower selected: "Undo cut Parameter HeaterOn",
+         Cut (Ctrl+X), Copy (Ctrl+C), Paste before and Paste after
+         (Ctrl+V) available, Paste in, last greyed.
+
+   **1.** Parameter HeaterOn cut with Ctrl+X, and Parameter HeaterPower
+   clicked: a Parameter may go before or after another, not in it.
+
+.. figure:: shots/tcs-xtcee-cut-2.png
+   :alt: The outline with Parameter HeaterOn selected after Parameter
+         HeaterPower, no problems, and the status line "move Parameter
+         HeaterOn after Parameter HeaterPower: done".
+
+   **2.** Ctrl+V: the parameter is moved, as one change.
+
+References kept whole
+---------------------
+
+A move -- a cut and its paste, or a drag -- that changes how a
+reference finds what it named writes the reference again, in the same
+change, so that it names what it named: by the definition's name alone
+where that finds it, or else by its path from the root, an absolute
+reference staying absolute, as Edit > Rename everywhere writes them.
+This holds for references in every open document of the mission, and
+for those in what is moved.  The status line says how many were
+written again.
+
+.. figure:: shots/tcs-xtcee-move-1.png
+   :alt: The Edit menu of rover.xtce's window after IntegerParameterType
+         uint16 was cut from dt.xtce, with ParameterTypeSet selected:
+         Paste before and Paste after greyed, Paste in, last available.
+
+   **1.** ``split-mission``'s three documents open; the type ``uint16``
+   cut from ``dt.xtce``, and Rover's ParameterTypeSet selected.
+
+.. figure:: shots/tcs-xtcee-move-2.png
+   :alt: Rover's ParameterTypeSet with IntegerParameterType uint16 at
+         its end, selected; no problems; the status line "move
+         IntegerParameterType uint16 into ParameterTypeSet: done; 4
+         reference(s) written again to name what they named".
+
+   **2.** Paste in, last: the type moves to ``rover.xtce``, and the four
+   references to it, written ``/dt/uint16``, are written again.
+
+.. figure:: shots/tcs-xtcee-move-3.png
+   :alt: Rover's Parameter event-data open, its parameterTypeRef now
+         /Rover/uint16.
+
+   **3.** ``event-data``'s type is now ``/Rover/uint16``; so are the
+   PUS document's.  One Undo, in any of the three windows, puts it all
+   back.
+
+Dragging rows
+-------------
+
+Each element's and comment's row has a grip at its left, six dots, by
+which it is dragged; dragging across names still selects rows.  A grip
+on a selected row drags every row selected; on another row, that row
+alone.  While dragging, a line with an arrowhead before or after the row
+under the pointer, or a box round it, shows where the rows would go,
+and words beside the pointer say what letting go will do, or, after a
+cross, why it would do nothing: the schema does not allow them there, or
+it is where they are.  Near a row's top they go before it, near its
+bottom after it, and between, in it; over an attribute's row, in its
+element.  Dragged past the top or the bottom, the outline scrolls.  Let
+go, they are moved as one change, their references kept whole.
+
+.. figure:: shots/tcs-xtcee-drag-1.png
+   :alt: Parameters HeaterOn and Temperature selected; a blue line with
+         an arrowhead at its left under Parameter HeaterPower, and beside
+         the pointer a box saying "move 2 elements after Parameter
+         HeaterPower".
+
+   **1.** The two parameters dragged by HeaterOn's grip to the bottom of
+   HeaterPower's row.
+
+.. figure:: shots/tcs-xtcee-drag-2.png
+   :alt: The same selection dragged to the top of ParameterTypeSet's
+         row: no line, and a box saying "not here: XTCE 1.3 does not
+         allow Parameter there, in TelemetryMetaData" after a cross.
+
+   **2.** Over the top of ParameterTypeSet, where a Parameter may not go.
+
+.. figure:: shots/tcs-xtcee-drag-3.png
+   :alt: The parameters in the order PacketLength, BusVoltage,
+         HeaterPower, HeaterOn, Temperature, the last two still selected.
+
+   **3.** Let go after HeaterPower: both move, and stay selected.
+
+.. figure:: shots/tcs-xtcee-remove-1.png
+   :alt: The Remove button beside the root's name greyed and slanted,
+         and below it a box saying "The schema requires name, so it
+         cannot be removed."
+
+   An attribute the schema requires cannot be removed: its button says
+   why.
 
 Problems in a document
 ======================

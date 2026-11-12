@@ -570,6 +570,38 @@ pub fn remove(doc: &Document, id: Id) -> Option<(Op, Vec<Node>)> {
     Some((op, taken))
 }
 
+/// Makes the op that takes a comment out, with the whitespace that put it
+/// on a line of its own.
+///
+/// # Arguments
+///
+/// * `doc` - The document.
+/// * `id`  - The comment.
+///
+/// # Returns
+///
+/// The op, or `None` if there is no such comment.
+pub fn remove_comment(doc: &Document, id: Id) -> Option<Op> {
+    if !matches!(doc.node(id), Some(Node::Comment(_))) {
+        return None;
+    }
+    let (parent, i) = doc.parent_of(id)?;
+    let kids = doc.children(parent)?;
+    let start = if i > 0 && kids[i - 1].is_space() {
+        i - 1
+    } else {
+        i
+    };
+    let empty = doc.element(parent).is_some_and(|p| p.empty);
+    Some(Op::Splice {
+        parent,
+        at: start,
+        removed: kids[start..=i].to_vec(),
+        inserted: Vec::new(),
+        empty: (empty, empty),
+    })
+}
+
 /// Strips the whitespace that laid nodes out, so they can be laid out
 /// again somewhere else.
 ///

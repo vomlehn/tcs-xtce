@@ -24,6 +24,7 @@ use crate::refs::{Kind, Loc};
 use crate::schema::{TypeRef, Version};
 use crate::session::{Change, Session};
 use crate::tools;
+use crate::transfer::{self, Place};
 use crate::tree::{Comment, Document, Element, Id, Node};
 use crate::validate::{insertable, Severity};
 
@@ -122,6 +123,115 @@ struct App {
     inputs: Vec<InputDialog>,
     /// The conversion being set up, if any.
     converting: Option<Converting>,
+    /// The clipboard rows are cut and copied to.
+    clip: Clip,
+    /// The rows last cut, which pasting moves back rather than copies.
+    cut: Option<Cut>,
+}
+
+/// The clipboard rows are cut and copied to: the desktop's, so that they
+/// can be pasted in another program or come from one, and a copy kept
+/// here, which is all the tests use.
+struct Clip {
+    /// Whether the desktop's clipboard is used; off in the tests, which
+    /// must not touch the desktop.
+    use_system: bool,
+    /// The desktop's clipboard, once it has been opened.
+    system: Option<arboard::Clipboard>,
+    /// The text last put on it or read from it.
+    text: String,
+    /// The first element of that text and the namespace it declares, or
+    /// why it cannot be pasted, kept so that the Edit menu can say where it
+    /// may go without reading it again.
+    head: Result<Option<(String, Option<String>)>, String>,
+}
+
+impl Clip {
+    /// The desktop's clipboard, opened the first time it is wanted.
+    ///
+    /// # Returns
+    ///
+    /// The clipboard.
+    ///
+    /// # Errors
+    ///
+    /// Says why, if it cannot be used.
+    fn system(&mut self) -> Result<&mut arboard::Clipboard, String> {
+        if self.system.is_none() {
+            // One that cannot be opened is not tried again: the copy kept
+            // here is used from then on.
+            match arboard::Clipboard::new() {
+                Ok(c) => self.system = Some(c),
+                Err(e) => {
+                    self.use_system = false;
+                    return Err(e.to_string());
+                }
+            }
+        }
+        Ok(self.system.as_mut().expect("opened above"))
+    }
+
+    /// Keeps a text, and what it starts with.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The text.
+    fn keep(&mut self, text: &str) {
+        self.text = text.to_string();
+        self.head = transfer::head(text);
+    }
+
+    /// Puts text on the clipboard.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The text.
+    ///
+    /// # Errors
+    ///
+    /// Says why, if the desktop's clipboard could not take it; the text is
+    /// kept here even so.
+    fn set(&mut self, text: &str) -> Result<(), String> {
+        self.keep(text);
+        if !self.use_system {
+            return Ok(());
+        }
+        self.system()?
+            .set_text(text.to_string())
+            .map_err(|e| e.to_string())
+    }
+
+    /// What the clipboard holds now.
+    ///
+    /// # Returns
+    ///
+    /// Its text: the desktop's if it can be read, else what was last put
+    /// on it here.
+    fn get(&mut self) -> String {
+        if self.use_system {
+            let now = self.system().ok().and_then(|c| c.get_text().ok());
+            if let Some(t) = now {
+                if t != self.text {
+                    self.keep(&t);
+                }
+            }
+        }
+        self.text.clone()
+    }
+}
+
+/// Rows that were cut, which pasting puts back as a move.
+#[derive(Debug, Clone)]
+struct Cut {
+    /// The document they were cut from.
+    path: PathBuf,
+    /// The group of the cut in its history, which must still be its last
+    /// change for the paste to undo it.
+    group: u64,
+    /// The text they were put on the clipboard as.
+    text: String,
+    /// The rows, as they were before the cut.
+    roots: Vec<Id>,
 }
 
 /// The editor, shared among the callbacks.
@@ -182,6 +292,7 @@ fn write_autosave(on: bool) -> Result<(), String> {
 /// Says why the windows could not be made.
 pub fn run(files: &[String]) -> Result<(), String> {
     let app = start(files);
+    app.borrow_mut().clip.use_system = true;
     // Once a second: files changed on disk, and autosave or the recovery
     // copy once the person has paused.
     let timer = slint::Timer::default();
@@ -219,6 +330,13 @@ fn start(files: &[String]) -> Shared {
         asks: Vec::new(),
         inputs: Vec::new(),
         converting: None,
+        clip: Clip {
+            use_system: false,
+            system: None,
+            text: String::new(),
+            head: Err("the clipboard is empty".into()),
+        },
+        cut: None,
     }));
     // An empty window first, which the first document opened takes, so
     // that a question about a download has the editor behind it.
@@ -238,6 +356,16 @@ fn tick(app: &Shared) {
     let changed = {
         let mut a = app.borrow_mut();
         let changed = a.session.look_at_disk();
+        // What another program put on the clipboard decides where Paste
+        // may put it.
+        if a.clip.use_system {
+            let before = a.clip.text.clone();
+            if a.clip.get() != before {
+                drop(a);
+                refresh_all(app);
+                a = app.borrow_mut();
+            }
+        }
         if a.last_change.elapsed() >= Duration::from_secs(2) {
             let on = a.autosave;
             let errs = a.session.tick(on);
@@ -482,6 +610,17 @@ fn connect(app: &Shared, window: &DocWindow, key: u64) {
     on!(on_insert, insert_decl, index);
     on!(on_insert_template, insert_template, index);
     on!(on_delete_selected, delete_selected);
+    on!(on_cut, cut);
+    on!(on_copy, copy);
+    on!(on_paste, paste, place);
+    on!(on_paste_here, paste_here);
+    on!(on_drop_rows, drop_rows, index, place);
+    {
+        let app = app.clone();
+        window.on_drop_what(move |index, place| {
+            drop_what(&app, key, index, place)
+        });
+    }
     on!(on_move_up, |app, key| move_selected(app, key, true));
     on!(on_move_down, |app, key| move_selected(app, key, false));
     on!(on_rename, rename);
@@ -873,6 +1012,26 @@ fn refresh(a: &mut App, key: u64) {
     window.set_templates(ModelRc::new(VecModel::from(template_choices(
         session, d, sel,
     ))));
+    // What the Edit menu's acts on several rows may do.
+    let roots = acted(a, key).map(|(_, r)| r).unwrap_or_default();
+    let w = &a.wins[wi];
+    let doc = &a.session.docs[d].doc;
+    let root = doc.root().id;
+    w.window.set_can_copy(!roots.is_empty());
+    w.window
+        .set_can_delete(!roots.is_empty() && !roots.contains(&root));
+    w.window
+        .set_can_move(transfer::block(doc, &roots).is_some());
+    for (place, set) in [
+        (
+            Place::Before,
+            DocWindow::set_paste_before as fn(&DocWindow, bool),
+        ),
+        (Place::After, DocWindow::set_paste_after),
+        (Place::Into, DocWindow::set_paste_into),
+    ] {
+        set(&w.window, paste_fits(a, d, w.selected, place));
+    }
     // Rows no longer shown, closed or taken out, are no longer selected.
     let w = &mut a.wins[wi];
     w.marked.retain(|k| keys.iter().any(|(x, _)| x == k));
@@ -887,6 +1046,41 @@ fn refresh(a: &mut App, key: u64) {
     w.window
         .set_last_marked(marked.last().copied().unwrap_or(-1));
     w.keys = keys;
+}
+
+/// Whether what the clipboard holds may be pasted at a place beside or in
+/// the selection, as Insert asks whether an element may go there.
+///
+/// # Arguments
+///
+/// * `a`     - The editor.
+/// * `d`     - The document's index.
+/// * `sel`   - The selected element or comment.
+/// * `place` - Where, beside it or in it.
+///
+/// # Returns
+///
+/// True if the clipboard's first element may go there.
+fn paste_fits(a: &App, d: usize, sel: Option<Id>, place: Place) -> bool {
+    let Some(sel) = sel else {
+        return false;
+    };
+    let o = &a.session.docs[d];
+    let Some(version) = o.report.version else {
+        return false;
+    };
+    let Ok(head) = &a.clip.head else {
+        return false;
+    };
+    let Some((parent, at)) = transfer::place_of(&o.doc, sel, place) else {
+        return false;
+    };
+    let local = match head {
+        Some((_, Some(ns))) if ns != version.namespace() => return false,
+        Some((local, _)) => Some(local.as_str()),
+        None => None,
+    };
+    transfer::fits(&o.doc, &o.report, parent, at, local).is_ok()
 }
 
 /// What the outline is drawn from: the document, the window and the
@@ -1255,21 +1449,27 @@ fn template_choices(s: &Session, d: usize, sel: Option<Id>) -> Vec<Choice> {
 /// * `label` - What the change is, for the Undo menu item.
 /// * `make`  - Makes the change's ops from the session and the document's
 ///             index, or says why it cannot be made.
+///
+/// # Returns
+///
+/// Whether the change was made.
 fn change(
     app: &Shared,
     key: u64,
     label: &str,
     make: impl FnOnce(&Session, usize) -> Result<Vec<Change>, String>,
-) {
+) -> bool {
+    let done;
     {
         let mut a = app.borrow_mut();
         let Some(w) = a.wins.iter().find(|w| w.key == key) else {
-            return;
+            return false;
         };
         let Some(d) = doc_index(&a, w) else {
-            return;
+            return false;
         };
         let r = make(&a.session, d).and_then(|c| a.session.apply(c, label));
+        done = r.is_ok();
         let msg = match r {
             Ok(()) => {
                 a.last_change = Instant::now();
@@ -1282,6 +1482,7 @@ fn change(
         }
     }
     refresh_all(app);
+    done
 }
 
 /// The window's document's index and its selection.
@@ -2054,131 +2255,673 @@ fn insert_template(app: &Shared, key: u64, index: i32) {
     finish_insert(app, key, parent, made, last);
 }
 
-/// Takes the selected element or comment out.
+/// The rows the Edit menu's acts act on: those selected together, or the
+/// selected row alone, less any inside another of them.
+///
+/// # Arguments
+///
+/// * `a`   - The editor.
+/// * `key` - The window's key.
+///
+/// # Returns
+///
+/// The document's index and the rows, in document order; `None` without
+/// a document.
+fn acted(a: &App, key: u64) -> Option<(usize, Vec<Id>)> {
+    let w = a.wins.iter().find(|w| w.key == key)?;
+    let d = doc_index(a, w)?;
+    let mut ids: Vec<Id> = w
+        .marked
+        .iter()
+        .filter_map(|k| match k {
+            RowKey::Node(id) => Some(*id),
+            _ => None,
+        })
+        .collect();
+    if ids.is_empty() {
+        ids.extend(w.selected);
+    }
+    Some((d, transfer::roots(&a.session.docs[d].doc, &ids)))
+}
+
+/// Takes the rows selected out, as one step, asking first if a definition
+/// among them is named by a reference outside them.
 ///
 /// # Arguments
 ///
 /// * `app` - The editor.
 /// * `key` - The window's key.
 fn delete_selected(app: &Shared, key: u64) {
-    let Some((_, id)) = selection(&app.borrow(), key) else {
-        return;
-    };
-    // The elements and comments shown before it, nearest first, which the
-    // selection may move to: found now, while they are still shown.
-    let before: Vec<Id> = app
-        .borrow()
-        .wins
-        .iter()
-        .find(|w| w.key == key)
-        .map(|w| {
-            let i = w.keys.iter().position(|(k, _)| *k == RowKey::Node(id));
-            w.keys[..i.unwrap_or(0)]
-                .iter()
-                .rev()
-                .filter_map(|(k, _)| match k {
-                    RowKey::Node(x) => Some(*x),
-                    _ => None,
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    change(app, key, "delete", |s, d| {
-        let doc = &s.docs[d].doc;
-        let op = match doc.node(id) {
-            Some(Node::Comment(_)) => {
-                let (parent, i) = doc.parent_of(id).ok_or("not found")?;
-                let kids = doc.children(parent).ok_or("not found")?;
-                let start = if i > 0 && kids[i - 1].is_space() {
-                    i - 1
-                } else {
-                    i
-                };
-                let empty = doc.element(parent).is_some_and(|p| p.empty);
-                edit::Op::Splice {
-                    parent,
-                    at: start,
-                    removed: kids[start..=i].to_vec(),
-                    inserted: Vec::new(),
-                    empty: (empty, empty),
-                }
-            }
-            _ => {
-                edit::remove(doc, id)
-                    .ok_or("the root cannot be taken out")?
-                    .0
-            }
+    let (msg, roots, usages) = {
+        let a = app.borrow();
+        let Some((d, roots)) = acted(&a, key) else {
+            return;
         };
-        Ok(vec![Change {
-            doc: d,
-            ops: vec![op],
-        }])
+        if roots.is_empty() {
+            return;
+        }
+        let usages = transfer::outside_usages(&a.session, d, &roots);
+        let mut msg = format!(
+            "{} {} still named by {} reference(s):\n",
+            transfer::describe(&a.session.docs[d].doc, &roots),
+            if roots.len() == 1 { "is" } else { "are" },
+            usages.len()
+        );
+        for (name, l) in usages.iter().take(10) {
+            let o = &a.session.docs[l.doc];
+            msg.push_str(&format!(
+                "\n{name}: {} line {}",
+                o.path
+                    .file_name()
+                    .map_or("?".into(), |n| n.to_string_lossy()),
+                o.doc.line_of(l.id).unwrap_or(1)
+            ));
+        }
+        if usages.len() > 10 {
+            msg.push_str(&format!("\nand {} more", usages.len() - 10));
+        }
+        msg.push_str(
+            "\n\nDelete anyway?  The references will then name nothing.",
+        );
+        (msg, roots, usages)
+    };
+    if usages.is_empty() {
+        remove_rows(app, key, &roots, "delete");
+        return;
+    }
+    ask(
+        app,
+        &msg,
+        &["Delete anyway", "Show the usages", "Cancel"],
+        move |app, i| match i {
+            0 => {
+                remove_rows(app, key, &roots, "delete");
+            }
+            1 => {
+                show_usages(app, key, usages.iter().map(|(_, l)| *l).collect())
+            }
+            _ => {}
+        },
+    );
+}
+
+/// Takes rows out, as one step, and moves the selection to the row
+/// before the first of them that is still there.
+///
+/// # Arguments
+///
+/// * `app`   - The editor.
+/// * `key`   - The window's key.
+/// * `roots` - The rows, as [`transfer::roots`] gives them.
+/// * `verb`  - What the step is, "delete" or "cut", for the Undo menu
+///             item.
+///
+/// # Returns
+///
+/// Whether they were taken out.
+fn remove_rows(app: &Shared, key: u64, roots: &[Id], verb: &str) -> bool {
+    let Some(first) = roots.first().copied() else {
+        return false;
+    };
+    // The elements and comments shown before them, nearest first, which
+    // the selection may move to: found now, while they are still shown.
+    let (before, label) = {
+        let a = app.borrow();
+        let Some(w) = a.wins.iter().find(|w| w.key == key) else {
+            return false;
+        };
+        let Some(d) = doc_index(&a, w) else {
+            return false;
+        };
+        let i = w.keys.iter().position(|(k, _)| *k == RowKey::Node(first));
+        let before: Vec<Id> = w.keys[..i.unwrap_or(0)]
+            .iter()
+            .rev()
+            .filter_map(|(k, _)| match k {
+                RowKey::Node(x) => Some(*x),
+                _ => None,
+            })
+            .collect();
+        let what = transfer::describe(&a.session.docs[d].doc, roots);
+        (before, format!("{verb} {what}"))
+    };
+    let done = change(app, key, &label, |s, d| {
+        transfer::delete_changes(s, d, roots)
     });
     let mut a = app.borrow_mut();
     let Some(wi) = a.wins.iter().position(|w| w.key == key) else {
-        return;
+        return done;
     };
     let Some(d) = doc_index(&a, &a.wins[wi]) else {
-        return;
+        return done;
     };
-    let doc = &a.session.docs[d].doc;
-    if doc.node(id).is_none() {
-        // The delete was made: the selection, and its mark, move to the
-        // nearest element or comment before it that is still there, its
-        // own comments having gone with it.
+    if done {
+        // The selection, and its mark, move to the nearest element or
+        // comment before them that is still there, their own comments
+        // having gone with them.
+        let doc = &a.session.docs[d].doc;
         let to = before.into_iter().find(|x| doc.node(*x).is_some());
         let w = &mut a.wins[wi];
         w.selected = to;
         w.marked = to.map(RowKey::Node).into_iter().collect();
-    } else {
-        a.wins[wi].selected = Some(id);
     }
     drop(a);
     refresh_all(app);
+    done
 }
 
-/// Moves the selected element before the one before it, or after the one
-/// after it, with its comments.
+/// Lists references in place of the problems, as Find usages does.
+///
+/// # Arguments
+///
+/// * `app`  - The editor.
+/// * `key`  - The window's key.
+/// * `locs` - Where the references are.
+fn show_usages(app: &Shared, key: u64, locs: Vec<Loc>) {
+    let n = locs.len();
+    {
+        let mut a = app.borrow_mut();
+        if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
+            w.usages = locs;
+            w.window.set_status(
+                format!(
+                    "{n} usage(s); select a row in the outline to see the \
+                     problems again"
+                )
+                .into(),
+            );
+        }
+    }
+    refresh_all(app);
+    let a = app.borrow();
+    if let Some(w) = a.wins.iter().find(|w| w.key == key) {
+        w.window.set_problems_title(format!("Usages: {n}").into());
+    }
+}
+
+/// Moves the rows selected, a run of sibling elements, up past the
+/// element before them or down past the one after them, as one step.
 ///
 /// # Arguments
 ///
 /// * `app` - The editor.
 /// * `key` - The window's key.
-/// * `up`  - True to move it up.
+/// * `up`  - True to move them up.
 fn move_selected(app: &Shared, key: u64, up: bool) {
-    let Some((_, id)) = selection(&app.borrow(), key) else {
+    let Some((_, roots)) = acted(&app.borrow(), key) else {
         return;
     };
     change(
         app,
         key,
         if up { "move up" } else { "move down" },
-        |s, d| {
-            let doc = &s.docs[d].doc;
-            let (parent, _) =
-                doc.parent_of(id).ok_or("the root does not move")?;
-            let p = doc.element(parent).ok_or("the root does not move")?;
-            let at =
-                p.elements().position(|c| c.id == id).ok_or("not found")?;
-            let n = p.elements().count();
-            let to = if up {
-                at.checked_sub(1).ok_or("it is first already")?
-            } else if at + 1 < n {
-                at + 1
-            } else {
-                return Err("it is last already".into());
-            };
-            let (out, taken) = edit::remove(doc, id).ok_or("not found")?;
-            let mut after = doc.clone();
-            out.apply(&mut after)?;
-            let back = edit::insert(&after, parent, to, edit::unlaid(taken))
-                .ok_or("not found")?;
-            Ok(vec![Change {
-                doc: d,
-                ops: vec![out, back],
-            }])
-        },
+        |s, d| transfer::shift_changes(s, d, &roots, up),
     );
+}
+
+/// Puts the rows selected on the clipboard as XTCE text.
+///
+/// # Arguments
+///
+/// * `app` - The editor.
+/// * `key` - The window's key.
+///
+/// # Returns
+///
+/// The text and what it is, or `None` if nothing is selected.
+fn copy_rows(app: &Shared, key: u64) -> Option<(String, String)> {
+    let mut a = app.borrow_mut();
+    let (d, roots) = acted(&a, key)?;
+    if roots.is_empty() {
+        return None;
+    }
+    let doc = &a.session.docs[d].doc;
+    let text = transfer::copy_text(doc, &roots);
+    let what = transfer::describe(doc, &roots);
+    let msg = match a.clip.set(&text) {
+        Ok(()) => format!("Copied {what}"),
+        Err(e) => format!(
+            "Copied {what} for this editor only: the desktop's clipboard \
+             could not be used: {e}"
+        ),
+    };
+    if let Some(w) = a.wins.iter().find(|w| w.key == key) {
+        w.window.set_status(msg.into());
+    }
+    Some((text, what))
+}
+
+/// Copies the rows selected to the clipboard.
+///
+/// # Arguments
+///
+/// * `app` - The editor.
+/// * `key` - The window's key.
+fn copy(app: &Shared, key: u64) {
+    copy_rows(app, key);
+    refresh_all(app);
+}
+
+/// Copies the rows selected to the clipboard and takes them out, as one
+/// step; pasting them then moves them.
+///
+/// # Arguments
+///
+/// * `app` - The editor.
+/// * `key` - The window's key.
+fn cut(app: &Shared, key: u64) {
+    let Some((d, roots)) = acted(&app.borrow(), key) else {
+        return;
+    };
+    let usages = transfer::outside_usages(&app.borrow().session, d, &roots);
+    let Some((text, what)) = copy_rows(app, key) else {
+        return;
+    };
+    if !remove_rows(app, key, &roots, "cut") {
+        return;
+    }
+    let mut a = app.borrow_mut();
+    let o = &a.session.docs[d];
+    let group = o.undo.last().map_or(0, |e| e.group);
+    let path = o.path.clone();
+    a.cut = Some(Cut {
+        path,
+        group,
+        text,
+        roots,
+    });
+    if !usages.is_empty() {
+        if let Some(w) = a.wins.iter().find(|w| w.key == key) {
+            w.window.set_status(
+                format!(
+                    "cut {what}: done; {} reference(s) name nothing until \
+                     it is pasted",
+                    usages.len()
+                )
+                .into(),
+            );
+        }
+    }
+}
+
+/// Pastes the clipboard after the selection, or if that is not allowed,
+/// in it, as Ctrl+V does.
+///
+/// # Arguments
+///
+/// * `app` - The editor.
+/// * `key` - The window's key.
+fn paste_here(app: &Shared, key: u64) {
+    let into = {
+        let a = app.borrow();
+        a.wins.iter().find(|w| w.key == key).is_some_and(|w| {
+            !w.window.get_paste_after() && w.window.get_paste_into()
+        })
+    };
+    paste(app, key, if into { 2 } else { 1 });
+}
+
+/// Pastes the clipboard beside the selection or in it: a move of rows cut
+/// and not yet put back, or else a copy.
+///
+/// # Arguments
+///
+/// * `app`   - The editor.
+/// * `key`   - The window's key.
+/// * `place` - 0 before the selection, 1 after it, 2 in it.
+fn paste(app: &Shared, key: u64, place: i32) {
+    let Some(place) = Place::of(place) else {
+        return;
+    };
+    let text = app.borrow_mut().clip.get();
+    if move_cut(app, key, place, &text) {
+        return;
+    }
+    let made = {
+        let a = app.borrow();
+        let Some((d, sel)) = selection(&a, key) else {
+            return;
+        };
+        let o = &a.session.docs[d];
+        let r = (|| {
+            let version =
+                o.report.version.ok_or("the document has no version")?;
+            let (parent, at) = transfer::place_of(&o.doc, sel, place)
+                .ok_or("nothing may be put there")?;
+            let nodes =
+                transfer::fragment(&text, &o.doc, parent, version.namespace())?;
+            let label = format!(
+                "paste {} {} {}",
+                transfer::describe_nodes(&nodes),
+                place.word(),
+                transfer::describe_one(&o.doc, sel)
+            );
+            Ok::<_, String>((parent, at, nodes, label))
+        })();
+        match r {
+            Ok(x) => x,
+            Err(e) => {
+                drop(a);
+                status_of(app, key, &e);
+                return;
+            }
+        }
+    };
+    let (parent, at, nodes, label) = made;
+    let mut ids = Vec::new();
+    let mut last = 0;
+    let done = change(app, key, &label, |s, d| {
+        let p = transfer::paste_changes(s, d, parent, at, nodes)?;
+        ids = p.ids;
+        last = p.last;
+        Ok(p.changes)
+    });
+    if done {
+        let dupes = {
+            let mut a = app.borrow_mut();
+            let Some(d) = selection_doc(&a, key) else {
+                return;
+            };
+            let doc = &mut a.session.docs[d].doc;
+            doc.last_id = doc.last_id.max(last);
+            duplicates(&a.session, d, &ids)
+        };
+        show_put(app, key, parent, &ids);
+        if dupes > 0 {
+            status_of(
+                app,
+                key,
+                &format!(
+                    "{label}: done; {dupes} of what was pasted has the name \
+                     of a definition already there, marked W: rename it \
+                     (Edit > Rename everywhere)"
+                ),
+            );
+        }
+    }
+}
+
+/// How many of some new elements are definitions with the name of another
+/// already there, which the problems mark as a warning.
+///
+/// # Arguments
+///
+/// * `s`   - The session.
+/// * `d`   - The document's index.
+/// * `ids` - The elements, and everything in them.
+///
+/// # Returns
+///
+/// How many.
+fn duplicates(s: &Session, d: usize, ids: &[Id]) -> usize {
+    let doc = &s.docs[d].doc;
+    let inside = |id: Id| doc.ancestry(id).iter().any(|a| ids.contains(a));
+    let defs = &s.index.defs;
+    defs.iter()
+        .filter(|x| x.loc.doc == d && inside(x.loc.id))
+        .filter(|x| {
+            defs.iter()
+                .any(|y| y.loc != x.loc && y.kind == x.kind && y.key == x.key)
+        })
+        .count()
+}
+
+/// Selects rows just put in, opening every row above them.
+///
+/// # Arguments
+///
+/// * `app`    - The editor.
+/// * `key`    - The window's key.
+/// * `parent` - Where they were put.
+/// * `ids`    - The rows' elements and comments.
+fn show_put(app: &Shared, key: u64, parent: Id, ids: &[Id]) {
+    {
+        let mut a = app.borrow_mut();
+        let Some(wi) = a.wins.iter().position(|w| w.key == key) else {
+            return;
+        };
+        let Some(d) = doc_index(&a, &a.wins[wi]) else {
+            return;
+        };
+        let chain = a.session.docs[d].doc.ancestry(parent);
+        let w = &mut a.wins[wi];
+        w.open.extend(chain);
+        w.selected = ids.first().copied();
+        w.marked = ids.iter().map(|id| RowKey::Node(*id)).collect();
+        w.usages.clear();
+    }
+    refresh_all(app);
+}
+
+/// Puts back rows that were cut, if the clipboard still holds them and
+/// the cut is still the last change to their document, as a move: the cut
+/// is undone and the move made in its place, as one step, with the
+/// references to what moved written again.
+///
+/// # Arguments
+///
+/// * `app`   - The editor.
+/// * `key`   - The window's key.
+/// * `place` - Where, beside the selection or in it.
+/// * `text`  - What the clipboard holds.
+///
+/// # Returns
+///
+/// True if it was such a paste, made or refused.
+fn move_cut(app: &Shared, key: u64, place: Place, text: &str) -> bool {
+    let mut a = app.borrow_mut();
+    let Some(cut) = a.cut.clone() else {
+        return false;
+    };
+    let from = a.session.docs.iter().position(|o| o.path == cut.path);
+    let still = from.is_some_and(|f| {
+        a.session.docs[f].undo.last().map(|e| e.group) == Some(cut.group)
+    });
+    if cut.text != text || !still {
+        a.cut = None;
+        return false;
+    }
+    let from = from.expect("checked above");
+    let Some((to, sel)) = selection(&a, key) else {
+        return false;
+    };
+    let Some((parent, at)) =
+        transfer::place_of(&a.session.docs[to].doc, sel, place)
+    else {
+        return false;
+    };
+    // The place is named by the element it is before, which putting the
+    // rows back does not move.
+    let anchor = a.session.docs[to]
+        .doc
+        .element(parent)
+        .and_then(|p| p.elements().nth(at).map(|e| e.id));
+    if a.session.undo(from).is_err() {
+        a.cut = None;
+        return false;
+    }
+    let s = &a.session;
+    let at = match anchor {
+        Some(x) => s.docs[to]
+            .doc
+            .element(parent)
+            .and_then(|p| p.elements().position(|e| e.id == x))
+            .unwrap_or(at),
+        None => s.docs[to]
+            .doc
+            .element(parent)
+            .map_or(at, |p| p.elements().count()),
+    };
+    let label = format!(
+        "move {} {} {}",
+        transfer::describe(&s.docs[from].doc, &cut.roots),
+        place.word(),
+        transfer::describe_one(&s.docs[to].doc, sel)
+    );
+    let r = transfer::move_changes(s, from, &cut.roots, to, parent, at)
+        .and_then(|m| {
+            let extra = (m.ids.clone(), m.last, m.rewritten, m.unkept);
+            a.session.apply(m.changes, &label).map(|()| extra)
+        });
+    let msg = match r {
+        Ok((ids, last, rewritten, unkept)) => {
+            a.last_change = Instant::now();
+            a.cut = None;
+            let doc = &mut a.session.docs[to].doc;
+            doc.last_id = doc.last_id.max(last);
+            drop(a);
+            show_put(app, key, parent, &ids);
+            moved_message(&label, rewritten, unkept)
+        }
+        Err(e) => {
+            // The rows stay cut.
+            let _ = a.session.redo(from);
+            drop(a);
+            refresh_all(app);
+            e
+        }
+    };
+    status_of(app, key, &msg);
+    true
+}
+
+/// What the status line says of a move.
+///
+/// # Arguments
+///
+/// * `label`     - The move, as the Undo menu item names it.
+/// * `rewritten` - How many references were written again.
+/// * `unkept`    - How many could not be.
+///
+/// # Returns
+///
+/// The message.
+fn moved_message(label: &str, rewritten: usize, unkept: usize) -> String {
+    let mut msg = format!("{label}: done");
+    if rewritten > 0 {
+        msg.push_str(&format!(
+            "; {rewritten} reference(s) written again to name what they \
+             named"
+        ));
+    }
+    if unkept > 0 {
+        msg.push_str(&format!(
+            "; {unkept} reference(s) no longer name what they named, and \
+             no reference from where they are can"
+        ));
+    }
+    msg
+}
+
+/// Where a drop on a row would put the rows selected.
+///
+/// # Arguments
+///
+/// * `a`     - The editor.
+/// * `key`   - The window's key.
+/// * `index` - The row's place in the outline.
+/// * `place` - 0 before it, 1 after it, 2 in it.
+///
+/// # Returns
+///
+/// The document's index, the rows, the parent and the place among its
+/// elements they would go, and the Undo menu's name for the move.
+///
+/// # Errors
+///
+/// Says why they may not go there.
+fn drop_target(
+    a: &App,
+    key: u64,
+    index: i32,
+    place: i32,
+) -> Result<(usize, Vec<Id>, Id, usize, String), String> {
+    let w = a.wins.iter().find(|w| w.key == key).ok_or("no window")?;
+    let (d, roots) = acted(a, key).ok_or("no document")?;
+    if roots.is_empty() {
+        return Err("nothing is selected".into());
+    }
+    let (k, _) = w.keys.get(index as usize).ok_or("no such row")?;
+    // On an attribute's row, the rows go in its element.
+    let (id, place) = match k {
+        RowKey::Node(id) => (*id, Place::of(place).ok_or("no such place")?),
+        other => (other.id(), Place::Into),
+    };
+    let o = &a.session.docs[d];
+    if roots.contains(&id) {
+        return Err("that is where they are".into());
+    }
+    let (parent, at) = transfer::place_of(&o.doc, id, place)
+        .ok_or("nothing may be put there")?;
+    if o.doc.ancestry(parent).iter().any(|x| roots.contains(x)) {
+        return Err("rows cannot be moved into themselves".into());
+    }
+    let first = roots
+        .iter()
+        .find_map(|r| o.doc.element(*r).map(|e| e.local().to_string()));
+    transfer::fits(&o.doc, &o.report, parent, at, first.as_deref())?;
+    let label = format!(
+        "move {} {} {}",
+        transfer::describe(&o.doc, &roots),
+        place.word(),
+        transfer::describe_one(&o.doc, id)
+    );
+    Ok((d, roots, parent, at, label))
+}
+
+/// Says what letting go of rows dragged over a row would do.
+///
+/// # Arguments
+///
+/// * `app`   - The editor.
+/// * `key`   - The window's key.
+/// * `index` - The row's place in the outline.
+/// * `place` - 0 before it, 1 after it, 2 in it.
+///
+/// # Returns
+///
+/// Whether they may go there, and the words to show.
+fn drop_what(app: &Shared, key: u64, index: i32, place: i32) -> DropInfo {
+    match drop_target(&app.borrow(), key, index, place) {
+        Ok((.., label)) => DropInfo {
+            ok: true,
+            words: label.into(),
+        },
+        Err(e) => DropInfo {
+            ok: false,
+            words: format!("\u{2717} not here: {e}").into(),
+        },
+    }
+}
+
+/// Moves the rows selected to where they were dropped, as one step, with
+/// the references to what moved written again.
+///
+/// # Arguments
+///
+/// * `app`   - The editor.
+/// * `key`   - The window's key.
+/// * `index` - The place of the row they were dropped on.
+/// * `place` - 0 before it, 1 after it, 2 in it.
+fn drop_rows(app: &Shared, key: u64, index: i32, place: i32) {
+    let found = drop_target(&app.borrow(), key, index, place);
+    let (d, roots, parent, at, label) = match found {
+        Ok(x) => x,
+        Err(e) => {
+            status_of(app, key, &e);
+            return;
+        }
+    };
+    let mut counts = (0, 0);
+    let done = change(app, key, &label, |s, _| {
+        let m = transfer::move_changes(s, d, &roots, d, parent, at)?;
+        counts = (m.rewritten, m.unkept);
+        Ok(m.changes)
+    });
+    if done {
+        show_put(app, key, parent, &roots);
+        status_of(app, key, &moved_message(&label, counts.0, counts.1));
+    }
 }
 
 /// Renames the selected definition and every reference to it, asking for
@@ -2220,32 +2963,17 @@ fn rename(app: &Shared, key: u64) {
 /// * `app` - The editor.
 /// * `key` - The window's key.
 fn find_usages(app: &Shared, key: u64) {
-    let mut a = app.borrow_mut();
-    let Some((d, id)) = selection(&a, key) else {
-        return;
+    let locs = {
+        let a = app.borrow();
+        let Some((d, id)) = selection(&a, key) else {
+            return;
+        };
+        let Some(def) = a.session.index.def_at(Loc { doc: d, id }) else {
+            return;
+        };
+        a.session.index.usages(def).iter().map(|r| r.loc).collect()
     };
-    let Some(def) = a.session.index.def_at(Loc { doc: d, id }) else {
-        return;
-    };
-    let locs: Vec<Loc> =
-        a.session.index.usages(def).iter().map(|r| r.loc).collect();
-    let n = locs.len();
-    if let Some(w) = a.wins.iter_mut().find(|w| w.key == key) {
-        w.usages = locs;
-        w.window.set_status(
-            format!(
-                "{n} usage(s); select a row in the outline to see the \
-                 problems again"
-            )
-            .into(),
-        );
-    }
-    drop(a);
-    refresh_all(app);
-    let a = app.borrow();
-    if let Some(w) = a.wins.iter().find(|w| w.key == key) {
-        w.window.set_problems_title(format!("Usages: {n}").into());
-    }
+    show_usages(app, key, locs);
 }
 
 /// Goes to what an attribute of an element refers to, opening a window
@@ -2995,6 +3723,362 @@ mod tests {
             .0
     }
 
+    /// Adds an element's row to the selection, as a Ctrl+click on its
+    /// name does.
+    ///
+    /// # Arguments
+    ///
+    /// * `w`  - The window.
+    /// * `id` - The element.
+    fn add(w: &DocWindow, id: i32) {
+        let index = w
+            .get_rows()
+            .iter()
+            .find(|r| r.kind == "element" && r.id == id)
+            .expect("the element is shown")
+            .index;
+        w.invoke_pick(index, false, true);
+    }
+
+    /// The labels of the element rows that start with a text, in order.
+    ///
+    /// # Arguments
+    ///
+    /// * `w`    - The window.
+    /// * `text` - The start of the labels.
+    ///
+    /// # Returns
+    ///
+    /// The labels.
+    fn labels(w: &DocWindow, text: &str) -> Vec<String> {
+        rows(w)
+            .into_iter()
+            .map(|(_, l)| l)
+            .filter(|l| l.starts_with(text))
+            .collect()
+    }
+
+    /// Answers the last question asked, as a click on one of its buttons
+    /// does.
+    ///
+    /// # Arguments
+    ///
+    /// * `app` - The editor.
+    /// * `i`   - The button's place: 0 for the first.
+    ///
+    /// # Returns
+    ///
+    /// The question.
+    fn answer(app: &Shared, i: i32) -> String {
+        let d = app.borrow().asks.last().expect("a question").clone_strong();
+        let q = d.get_message().to_string();
+        d.invoke_chosen(i);
+        q
+    }
+
+    #[test]
+    fn deletes_every_selected_row_as_one_step() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        open_all(&app, 0);
+        let before = labels(&w, "Parameter ");
+        select(&w, row(&w, "Parameter  BusVoltage"));
+        add(&w, row(&w, "Parameter  HeaterOn"));
+        w.invoke_delete_selected();
+        // The container names both, so the editor asks first; Cancel
+        // leaves them.
+        let q = answer(&app, 2);
+        assert!(q.contains("2 elements are still named by 3"), "{q}");
+        assert!(q.contains("HeaterOn: housekeeping.xtce line"), "{q}");
+        assert_eq!(labels(&w, "Parameter "), before);
+        w.invoke_delete_selected();
+        answer(&app, 0);
+        let after = labels(&w, "Parameter ");
+        assert_eq!(after.len(), before.len() - 2, "{after:?}");
+        assert!(!after.iter().any(|l| l.ends_with("HeaterOn")));
+        assert!(!after.iter().any(|l| l.ends_with("BusVoltage")));
+        w.invoke_undo();
+        assert_eq!(labels(&w, "Parameter "), before);
+        assert_eq!(w.get_undo_label(), "");
+    }
+
+    #[test]
+    fn moves_a_run_of_selected_rows_as_a_block() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        open_all(&app, 0);
+        let before = labels(&w, "Parameter ");
+        select(&w, row(&w, "Parameter  HeaterOn"));
+        add(&w, row(&w, "Parameter  Temperature"));
+        w.invoke_move_up();
+        let names: Vec<String> = labels(&w, "Parameter ")
+            .iter()
+            .map(|l| l.rsplit(' ').next().unwrap().to_string())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "HeaterOn",
+                "Temperature",
+                "PacketLength",
+                "BusVoltage",
+                "HeaterPower"
+            ],
+        );
+        w.invoke_move_down();
+        w.invoke_move_down();
+        let names: Vec<String> = labels(&w, "Parameter ")
+            .iter()
+            .map(|l| l.rsplit(' ').next().unwrap().to_string())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "PacketLength",
+                "BusVoltage",
+                "HeaterOn",
+                "Temperature",
+                "HeaterPower"
+            ],
+        );
+        w.invoke_undo();
+        w.invoke_undo();
+        w.invoke_undo();
+        assert_eq!(labels(&w, "Parameter "), before);
+    }
+
+    /// The names of the parameters, in order.
+    ///
+    /// # Arguments
+    ///
+    /// * `w` - The window.
+    ///
+    /// # Returns
+    ///
+    /// The names.
+    fn params(w: &DocWindow) -> Vec<String> {
+        labels(w, "Parameter ")
+            .iter()
+            .map(|l| l.rsplit(' ').next().unwrap().to_string())
+            .collect()
+    }
+
+    /// The place of an element's row in the outline.
+    ///
+    /// # Arguments
+    ///
+    /// * `w`  - The window.
+    /// * `id` - The element.
+    ///
+    /// # Returns
+    ///
+    /// The row's index.
+    fn index_of(w: &DocWindow, id: i32) -> i32 {
+        w.get_rows()
+            .iter()
+            .find(|r| r.kind == "element" && r.id == id)
+            .expect("the element is shown")
+            .index
+    }
+
+    #[test]
+    fn moves_up_and_down_only_a_run_of_siblings() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        open_all(&app, 0);
+        select(&w, row(&w, "Parameter  HeaterOn"));
+        add(&w, row(&w, "Parameter  Temperature"));
+        assert!(w.get_can_move());
+        add(&w, row(&w, "Parameter  HeaterPower"));
+        assert!(!w.get_can_move(), "not next to each other");
+        assert!(w.get_can_delete() && w.get_can_copy());
+        select(&w, row(&w, "Parameter  HeaterOn"));
+        add(&w, row(&w, "FloatParameterType  PowerType"));
+        assert!(!w.get_can_move(), "under two parents");
+        assert!(w.get_can_delete(), "but they can be deleted");
+        select(&w, row(&w, "SpaceSystem"));
+        assert!(!w.get_can_delete() && w.get_can_copy());
+    }
+
+    #[test]
+    fn copies_and_pastes_where_the_schema_allows() {
+        let (app, _dir) = editor(&[
+            "examples/housekeeping/housekeeping.xtce",
+            "examples/split-mission/rover.xtce",
+        ]);
+        let (w, rover) = (win(&app, 0), win(&app, 1));
+        open_all(&app, 0);
+        open_all(&app, 1);
+        select(&w, row(&w, "Parameter  HeaterOn"));
+        assert!(!w.get_paste_after(), "nothing copied yet");
+        w.invoke_copy();
+        assert!(w.get_status().starts_with("Copied Parameter HeaterOn"));
+        assert!(w.get_paste_before() && w.get_paste_after());
+        assert!(!w.get_paste_into(), "a Parameter holds no Parameter");
+        select(&w, row(&w, "FloatParameterType  PowerType"));
+        assert!(!w.get_paste_after(), "not among the types");
+        // Pasted all the same, it is refused, saying why.
+        w.invoke_paste(1);
+        assert!(
+            w.get_status().contains("does not allow"),
+            "{}",
+            w.get_status()
+        );
+        // XTCE gives each parameter of a SpaceSystem its own name, so a
+        // copy beside the original is refused.
+        select(&w, row(&w, "ParameterSet"));
+        assert!(w.get_paste_into());
+        w.invoke_paste_here();
+        assert!(
+            w.get_status().contains("has the name of another"),
+            "{}",
+            w.get_status()
+        );
+        assert_eq!(params(&w).len(), 5);
+        // In another document's SpaceSystem, it goes in.
+        select(&rover, row(&rover, "ParameterSet"));
+        rover.invoke_paste_here();
+        assert_eq!(
+            rover.get_undo_label(),
+            "paste Parameter HeaterOn into ParameterSet"
+        );
+        let names = params(&rover);
+        assert_eq!(names.last().unwrap(), "HeaterOn", "{names:?}");
+        let sel: Vec<_> =
+            rover.get_rows().iter().filter(|r| r.selected).collect();
+        assert_eq!(sel.len(), 1);
+        assert_eq!(sel[0].label, "Parameter  HeaterOn");
+        rover.invoke_undo();
+        assert!(!params(&rover).contains(&"HeaterOn".to_string()));
+    }
+
+    #[test]
+    fn cut_and_paste_is_one_move() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        open_all(&app, 0);
+        let before = params(&w);
+        select(&w, row(&w, "Parameter  HeaterOn"));
+        w.invoke_cut();
+        assert_eq!(w.get_undo_label(), "cut Parameter HeaterOn");
+        assert!(
+            w.get_status().contains("name nothing until"),
+            "{}",
+            w.get_status()
+        );
+        select(&w, row(&w, "Parameter  HeaterPower"));
+        w.invoke_paste(1);
+        assert_eq!(
+            w.get_undo_label(),
+            "move Parameter HeaterOn after Parameter HeaterPower"
+        );
+        assert_eq!(
+            params(&w),
+            [
+                "PacketLength",
+                "Temperature",
+                "BusVoltage",
+                "HeaterPower",
+                "HeaterOn"
+            ]
+        );
+        assert!(w.get_problems_title().contains("0 warning"));
+        // One step: one Undo puts it back, and there is no cut to undo.
+        w.invoke_undo();
+        assert_eq!(params(&w), before);
+        assert_eq!(w.get_undo_label(), "");
+        // Pasted again, the clipboard gives a copy, which XTCE refuses
+        // beside the original.
+        w.invoke_redo();
+        select(&w, row(&w, "Parameter  PacketLength"));
+        w.invoke_paste(0);
+        assert!(
+            w.get_status().contains("has the name of another"),
+            "{}",
+            w.get_status()
+        );
+    }
+
+    #[test]
+    fn a_move_to_another_document_keeps_references_whole() {
+        let (app, _dir) = editor(&[
+            "examples/split-mission/dt.xtce",
+            "examples/split-mission/pus.xtce",
+            "examples/split-mission/rover.xtce",
+        ]);
+        let (dt, pus, rover) = (win(&app, 0), win(&app, 1), win(&app, 2));
+        open_all(&app, 0);
+        open_all(&app, 2);
+        select(&dt, row(&dt, "IntegerParameterType  uint16"));
+        dt.invoke_cut();
+        select(&rover, row(&rover, "ParameterTypeSet"));
+        rover.invoke_paste(2);
+        let label = rover.get_undo_label().to_string();
+        assert_eq!(
+            label,
+            "move IntegerParameterType uint16 into ParameterTypeSet"
+        );
+        assert!(
+            rover.get_status().contains("reference(s) written again"),
+            "{}",
+            rover.get_status()
+        );
+        // One step in each document it changed.
+        assert_eq!(dt.get_undo_label(), label);
+        assert_eq!(pus.get_undo_label(), label);
+        for w in [&dt, &pus, &rover] {
+            assert!(
+                w.get_problems_title().contains("0 error(s), 0 warning"),
+                "{}",
+                w.get_problems_title()
+            );
+        }
+        rover.invoke_undo();
+        assert!(dt.get_undo_label().is_empty());
+        assert!(rows(&dt).iter().any(|(_, l)| l.ends_with(" uint16")));
+    }
+
+    #[test]
+    fn drops_rows_only_where_the_schema_allows() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        open_all(&app, 0);
+        select(&w, row(&w, "Parameter  HeaterOn"));
+        add(&w, row(&w, "Parameter  Temperature"));
+        let power = index_of(&w, row(&w, "Parameter  HeaterPower"));
+        let ok = w.invoke_drop_what(power, 1);
+        assert!(ok.ok, "{}", ok.words);
+        assert_eq!(ok.words, "move 2 elements after Parameter HeaterPower");
+        let types = index_of(&w, row(&w, "FloatParameterType  PowerType"));
+        let no = w.invoke_drop_what(types, 1);
+        assert!(
+            !no.ok && no.words.contains("does not allow"),
+            "{}",
+            no.words
+        );
+        let own = index_of(&w, row(&w, "Parameter  HeaterOn"));
+        assert!(!w.invoke_drop_what(own, 2).ok);
+        w.invoke_drop_rows(power, 1);
+        assert_eq!(
+            params(&w),
+            [
+                "PacketLength",
+                "BusVoltage",
+                "HeaterPower",
+                "HeaterOn",
+                "Temperature"
+            ]
+        );
+        assert_eq!(
+            w.get_undo_label(),
+            "move 2 elements after Parameter HeaterPower"
+        );
+        let marked = w.get_rows().iter().filter(|r| r.marked).count();
+        assert_eq!(marked, 2);
+        w.invoke_undo();
+        assert_eq!(params(&w)[1], "HeaterOn");
+    }
+
     #[test]
     fn edits_are_held_to_the_version_and_undone() {
         let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
@@ -3104,6 +4188,7 @@ mod tests {
         let gone = row(&w, "FloatParameterType  PowerType");
         select(&w, gone);
         w.invoke_delete_selected();
+        answer(&app, 0);
         let left: Vec<_> = w
             .get_rows()
             .iter()

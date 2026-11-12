@@ -4348,6 +4348,7 @@ dependencies = [
 name = "tcs-xtcee"
 version = "0.1.0"
 dependencies = [
+ "arboard",
  "i-slint-backend-testing",
  "png",
  "regex",

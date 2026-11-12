@@ -4,7 +4,8 @@
 // is the document as one outline: an open element shows, one row deeper,
 // its attributes as fields edited in place, its value, its comments and
 // the elements in it, and what is wrong with a row is written under it;
-// resting the pointer on a name shows what the schema says of it.  The
+// resting the pointer on a name shows what the schema says of it, and an
+// element's or comment's row starts with a grip it is dragged by.  The
 // Source tab shows the document's text, which can be edited and applied
 // as a whole.  Below the tabs are the document's problems, a click on one
 // selecting the element it is about, and the status line.  The other
@@ -99,6 +100,14 @@ export struct ProblemRow {
     severity: string,
     // What it says.
     text: string,
+}
+
+// What letting go of rows dragged over a place would do.
+export struct DropInfo {
+    // Whether the rows may go there.
+    ok: bool,
+    // What letting go would do, or why it would do nothing.
+    words: string,
 }
 
 // Something that can be put in: an element or a ready-made part.
@@ -276,20 +285,45 @@ component Choices inherits Rectangle {
 component Small inherits Rectangle {
     // What it says.
     in property <string> text;
+    // Whether it can be clicked; one that cannot has grey words and a
+    // dotted border, not colour alone.
+    in property <bool> enabled: true;
+    // What resting the pointer on it shows, if anything.
+    in property <string> tip;
     // It was clicked.
     callback clicked();
+    // The pointer rests on it, or left it: its tip, and where.
+    callback hover(string, length, length);
+    callback unhover();
     width: label.preferred-width + 12px;
     height: label.preferred-height + 6px;
     border-width: 1px;
     border-radius: 3px;
     border-color: Palette.border;
-    background: touch.has-hover ? Palette.selected : Palette.window;
+    background: touch.has-hover && root.enabled ? Palette.selected
+        : Palette.window;
     label := Text {
         text: root.text;
+        color: root.enabled ? black : Palette.hint;
+        font-italic: !root.enabled;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
-    touch := TouchArea { clicked => { root.clicked(); } }
+    touch := TouchArea {
+        clicked => {
+            if (root.enabled) {
+                root.clicked();
+            }
+        }
+        changed has-hover => {
+            if (self.has-hover && root.tip != "") {
+                root.hover(root.tip, self.absolute-position.x,
+                    self.absolute-position.y + self.height);
+            } else {
+                root.unhover();
+            }
+        }
+    }
 }
 
 // One row of the outline.  Pressing on its name and dragging selects the
@@ -304,6 +338,9 @@ component TreeRow inherits Rectangle {
     in property <bool> swept;
     // The pointer was pressed on the row's name, at a place in the outline.
     callback press(int, length, length, bool, bool);
+    // The pointer was pressed on the row's grip, at a place in the
+    // outline, to move it, or the selection it is in.
+    callback grab(int, length, length);
     // The pointer moved, still pressed, to a place in the outline.
     callback drag(length, length);
     // The pointer was let go.
@@ -340,6 +377,42 @@ component TreeRow inherits Rectangle {
         padding-bottom: 1px;
         HorizontalLayout {
             spacing: 4px;
+            // The grip an element or a comment is dragged by, to move it,
+            // or the selection it is in: six dots, as grips are drawn.
+            Rectangle {
+                width: 10px;
+                if root.is-element || root.is-comment: Rectangle {
+                    for i in 6: Rectangle {
+                        x: mod(i, 2) * 4px + 1px;
+                        y: (parent.height - 10px) / 2 + floor(i / 2) * 4px;
+                        width: 2px;
+                        height: 2px;
+                        background: Palette.hint;
+                    }
+                }
+                if root.is-element || root.is-comment: TouchArea {
+                    mouse-cursor: move;
+                    pointer-event(e) => {
+                        if (e.kind == PointerEventKind.down
+                                && e.button == PointerEventButton.left) {
+                            root.grab(root.item.index,
+                                root.x + self.absolute-position.x
+                                    - root.absolute-position.x
+                                    + self.mouse-x,
+                                root.y + self.mouse-y);
+                        } else if (e.kind == PointerEventKind.up
+                                && e.button == PointerEventButton.left) {
+                            root.release();
+                        }
+                    }
+                    moved => {
+                        root.drag(
+                            root.x + self.absolute-position.x
+                                - root.absolute-position.x + self.mouse-x,
+                            root.y + self.mouse-y);
+                    }
+                }
+            }
             // The disclosure triangle says open or closed by its shape.
             Rectangle {
                 width: 16px;
@@ -444,11 +517,20 @@ component TreeRow inherits Rectangle {
                 text: "Go to";
                 clicked => { root.follow(root.item.id, root.item.label); }
             }
-            if root.item.kind == "attr" && !root.item.required: Small {
+            // An attribute the schema requires cannot be removed, which
+            // its button says when the pointer rests on it.
+            if root.item.kind == "attr": Small {
                 text: "Remove";
+                enabled: !root.item.required;
+                tip: root.item.required
+                    ? "The schema requires " + root.item.label
+                        + ", so it cannot be removed."
+                    : "";
                 clicked => {
                     root.remove-attr(root.item.id, root.item.label);
                 }
+                hover(t, x, y) => { root.hover(t, x, y); }
+                unhover => { root.unhover(); }
             }
             // An element's own row takes what width is left, so that its
             // fields line up on the right.
@@ -498,6 +580,17 @@ export component DocWindow inherits Window {
     in property <bool> is-definition;
     in property <string> version;
     in property <bool> dirty;
+    // What the Edit menu's acts on the rows selected may do: copy them,
+    // delete or cut them, and move them up or down, which only a run of
+    // elements next to each other under one element can be.
+    in property <bool> can-copy;
+    in property <bool> can-delete;
+    in property <bool> can-move;
+    // Whether what the clipboard holds may be pasted before the
+    // selection, after it, or in it.
+    in property <bool> paste-before;
+    in property <bool> paste-after;
+    in property <bool> paste-into;
 
     callback new-doc();
     callback open-doc();
@@ -527,6 +620,17 @@ export component DocWindow inherits Window {
     callback insert(int);
     callback insert-template(int);
     callback delete-selected();
+    callback cut();
+    callback copy();
+    // Pastes before (0), after (1) or in (2) the selection.
+    callback paste(int);
+    // Pastes where Ctrl+V does: after the selection, or in it.
+    callback paste-here();
+    // What letting go of the rows selected on a row, before (0) it,
+    // after (1) it or in (2) it, would do.
+    callback drop-what(int, int) -> DropInfo;
+    // The rows selected were dropped on a row, before, after or in it.
+    callback drop-rows(int, int);
     callback move-up();
     callback move-down();
     callback rename();
@@ -550,8 +654,18 @@ export component DocWindow inherits Window {
     // The width of one level of the outline.
     property <length> indent: 20px;
     // What a drag on the outline is doing: 0 nothing, 1 selecting rows,
-    // 2 opening or closing the selection to a depth with the handle.
+    // 2 opening or closing the selection to a depth with the handle, 3
+    // moving the selection by a row's grip.
     property <int> drag-mode: 0;
+    // Where rows being moved would go: the row under the pointer, the
+    // place beside it or in it (0 before, 1 after, 2 in), where that row
+    // is in the outline, and what letting go would do.
+    property <int> drop-row: -1;
+    property <int> drop-at: -1;
+    property <length> drop-x;
+    property <length> drop-y;
+    property <length> drop-h;
+    property <DropInfo> drop;
     // The row the drag started on, and the row the pointer is on now.
     property <int> anchor;
     property <int> reach;
@@ -593,6 +707,29 @@ export component DocWindow inherits Window {
         interval: 600ms;
         running: root.tip-wanted && !root.tip-on;
         triggered => { root.tip-on = true; }
+    }
+
+    // The outline's keys, given the focus when a row is pressed on:
+    // Ctrl+X, Ctrl+C and Ctrl+V cut, copy and paste the rows selected.  A
+    // field being edited has the focus instead, and the keys for its text.
+    outline-keys := FocusScope {
+        width: 0px;
+        height: 0px;
+        key-pressed(e) => {
+            if (!e.modifiers.control) {
+                return reject;
+            }
+            if (e.text == "x" || e.text == "X") {
+                root.cut();
+            } else if (e.text == "c" || e.text == "C") {
+                root.copy();
+            } else if (e.text == "v" || e.text == "V") {
+                root.paste-here();
+            } else {
+                return reject;
+            }
+            return accept;
+        }
     }
 
     MenuBar {
@@ -646,19 +783,48 @@ export component DocWindow inherits Window {
                 activated => { root.find-usages(); }
             }
             MenuSeparator { }
+            // Ctrl+X, Ctrl+C and Ctrl+V are the outline's, not the
+            // menu's, so that in a text field they cut, copy and paste
+            // its text.
+            MenuItem {
+                title: "Cut (Ctrl+X)";
+                enabled: root.can-delete;
+                activated => { root.cut(); }
+            }
+            MenuItem {
+                title: "Copy (Ctrl+C)";
+                enabled: root.can-copy;
+                activated => { root.copy(); }
+            }
+            MenuItem {
+                title: "Paste before";
+                enabled: root.paste-before;
+                activated => { root.paste(0); }
+            }
+            MenuItem {
+                title: "Paste after (Ctrl+V)";
+                enabled: root.paste-after;
+                activated => { root.paste(1); }
+            }
+            MenuItem {
+                title: "Paste in, last";
+                enabled: root.paste-into;
+                activated => { root.paste(2); }
+            }
+            MenuSeparator { }
             MenuItem {
                 title: "Move up";
-                enabled: root.has-element;
+                enabled: root.can-move;
                 activated => { root.move-up(); }
             }
             MenuItem {
                 title: "Move down";
-                enabled: root.has-element;
+                enabled: root.can-move;
                 activated => { root.move-down(); }
             }
             MenuItem {
                 title: "Delete";
-                enabled: root.has-element || root.is-comment;
+                enabled: root.can-delete;
                 activated => { root.delete-selected(); }
             }
             MenuItem {
@@ -735,9 +901,38 @@ export component DocWindow inherits Window {
                                 indent: root.indent;
                                 // Whether the pointer is over this row in
                                 // a drag that selects.
-                                property <bool> under: root.drag-mode == 1
+                                property <bool> under: (root.drag-mode == 1
+                                        || root.drag-mode == 3)
                                     && root.cur-y >= self.y
                                     && root.cur-y < self.y + self.height;
+                                // Where rows being moved would go when
+                                // the pointer is over this row: before it
+                                // (0) near its top, after it (1) near its
+                                // bottom, and in it (2) between, or on
+                                // an attribute's row; -1 when not.
+                                property <int> drop-place:
+                                    !self.under || root.drag-mode != 3 ? -1
+                                    : r.kind == "comment"
+                                        ? (root.cur-y < self.y
+                                            + self.height / 2 ? 0 : 1)
+                                    : r.kind != "element" ? 2
+                                    : root.cur-y < self.y + self.height / 4
+                                        ? 0
+                                    : root.cur-y > self.y
+                                        + self.height * 3 / 4 ? 1 : 2;
+                                changed drop-place => {
+                                    if (self.drop-place >= 0) {
+                                        root.drop-row = r.index;
+                                        root.drop-at = self.drop-place;
+                                        root.drop-x = (r.depth + 1)
+                                            * root.indent;
+                                        root.drop-y = self.drop-place == 1
+                                            ? self.y + self.height : self.y;
+                                        root.drop-h = self.height;
+                                        root.drop = root.drop-what(r.index,
+                                            self.drop-place);
+                                    }
+                                }
                                 // The first and last selected rows say
                                 // where the line marking the selection
                                 // runs.
@@ -772,13 +967,39 @@ export component DocWindow inherits Window {
                                     root.tip-wanted = false;
                                     root.tip-on = false;
                                     root.drag-mode = 1;
+                                    outline-keys.focus();
+                                }
+                                // A grip pressed on drags the selection,
+                                // or, outside it, its own row alone.
+                                grab(i, x, y) => {
+                                    if (!r.marked) {
+                                        root.pick(i, false, false);
+                                    }
+                                    root.anchor = i;
+                                    root.reach = i;
+                                    root.press-x = x;
+                                    root.cur-x = x;
+                                    root.press-y = y;
+                                    root.cur-y = y;
+                                    root.tip-wanted = false;
+                                    root.tip-on = false;
+                                    root.drop-row = -1;
+                                    root.drop-at = -1;
+                                    root.drop = { ok: false, words: "" };
+                                    root.drag-mode = 3;
+                                    outline-keys.focus();
                                 }
                                 drag(x, y) => {
                                     root.cur-x = x;
                                     root.cur-y = y;
                                 }
                                 release => {
-                                    if (!root.moved-far) {
+                                    if (root.drag-mode == 3) {
+                                        if (root.moved-far && root.drop.ok) {
+                                            root.drop-rows(root.drop-row,
+                                                root.drop-at);
+                                        }
+                                    } else if (!root.moved-far) {
                                         root.pick(root.anchor,
                                             root.drag-shift, root.drag-ctrl);
                                     } else if (root.drag-mode == 1) {
@@ -905,6 +1126,54 @@ export component DocWindow inherits Window {
                                     + " to depth " + root.target-depth;
                             }
                         }
+                        // Where rows being moved by a grip would go: a
+                        // line with an arrowhead before or after a row, or
+                        // a box round the row they would go in, drawn
+                        // only where the schema allows them; and beside
+                        // the pointer, words saying what letting go
+                        // would do, or why it would do nothing.
+                        if root.drag-mode == 3 && root.moved-far
+                                && root.drop.ok && root.drop-at != 2
+                                : Rectangle {
+                            x: root.drop-x;
+                            y: root.drop-y - 1px;
+                            width: tree.width - root.drop-x;
+                            height: 3px;
+                            background: Palette.field-a;
+                        }
+                        if root.drag-mode == 3 && root.moved-far
+                                && root.drop.ok && root.drop-at != 2
+                                : Text {
+                            x: root.drop-x - 10px;
+                            y: root.drop-y - self.preferred-height / 2;
+                            text: "\u{25B6}";
+                            color: Palette.field-a;
+                        }
+                        if root.drag-mode == 3 && root.moved-far
+                                && root.drop.ok && root.drop-at == 2
+                                : Rectangle {
+                            x: root.drop-x;
+                            y: root.drop-y;
+                            width: tree.width - root.drop-x;
+                            height: root.drop-h;
+                            border-width: 2px;
+                            border-color: Palette.field-a;
+                        }
+                        if root.drag-mode == 3 && root.moved-far
+                                && root.drop.words != "" : Rectangle {
+                            x: min(root.cur-x + 16px,
+                                max(0px, tree.width - self.width));
+                            y: root.cur-y + 12px;
+                            width: words.preferred-width + 10px;
+                            height: words.preferred-height + 4px;
+                            border-width: 1px;
+                            border-color: root.drop.ok ? Palette.field-a
+                                : Palette.border;
+                            background: Palette.window;
+                            words := Text {
+                                text: root.drop.words;
+                            }
+                        }
                     }
                     // While rows are selected by dragging past the top or
                     // the bottom of the outline, it scrolls, faster the
@@ -914,7 +1183,7 @@ export component DocWindow inherits Window {
                         property <length> bottom: self.top
                             + tree-view.visible-height;
                         interval: 30ms;
-                        running: root.drag-mode == 1
+                        running: (root.drag-mode == 1 || root.drag-mode == 3)
                             && (root.cur-y < self.top
                                 || root.cur-y > self.bottom);
                         triggered => {
@@ -941,7 +1210,8 @@ export component DocWindow inherits Window {
                             + "comment).  Drag across names to select rows; "
                             + "drag the selection's \u{2194} handle right to "
                             + "open it, left to close it, to the depth under "
-                            + "the pointer.";
+                            + "the pointer; drag a row's grip, the dots at "
+                            + "its left, to move it or the selection.";
                         wrap: word-wrap;
                         font-size: 11px;
                     }

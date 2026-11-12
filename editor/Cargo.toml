@@ -31,6 +31,12 @@ rfd = { version = "0.17.2", default-features = false, features = [
     "xdg-portal",
 ] }
 
+# The desktop's clipboard, which rows are cut and copied to as XTCE text:
+# the crate Slint's own text fields use, already among its dependencies.
+arboard = { version = "3.7", default-features = false, features = [
+    "wayland-data-control",
+] }
+
 # A directory, removed afterwards, to write a mission in for the tcs-xtce
 # compiler to read; the tests use it for the files they write.
 tempfile = "3.27.0"

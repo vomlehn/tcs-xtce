@@ -377,15 +377,21 @@ ul.auto-toc {
 </li>
 <li><a class="reference internal" href="#editing-a-value" id="toc-entry-7">Editing a value</a></li>
 <li><a class="reference internal" href="#changes-the-version-does-not-allow" id="toc-entry-8">Changes the version does not allow</a></li>
-<li><a class="reference internal" href="#problems-in-a-document" id="toc-entry-9">Problems in a document</a></li>
-<li><a class="reference internal" href="#undo-and-redo" id="toc-entry-10">Undo and redo</a></li>
-<li><a class="reference internal" href="#saving-autosave-and-recovery" id="toc-entry-11">Saving, autosave and recovery</a></li>
-<li><a class="reference internal" href="#converting-between-versions" id="toc-entry-12">Converting between versions</a></li>
-<li><a class="reference internal" href="#tools" id="toc-entry-13">Tools</a></li>
-<li><a class="reference internal" href="#from-the-command-line" id="toc-entry-14">From the command line</a></li>
-<li><a class="reference internal" href="#testing" id="toc-entry-15">Testing</a></li>
-<li><a class="reference internal" href="#license" id="toc-entry-16">License</a></li>
-<li><a class="reference internal" href="#see-also" id="toc-entry-17">See Also</a></li>
+<li><a class="reference internal" href="#deleting-moving-and-copying" id="toc-entry-9">Deleting, moving and copying</a><ul>
+<li><a class="reference internal" href="#cut-copy-and-paste" id="toc-entry-10">Cut, copy and paste</a></li>
+<li><a class="reference internal" href="#references-kept-whole" id="toc-entry-11">References kept whole</a></li>
+<li><a class="reference internal" href="#dragging-rows" id="toc-entry-12">Dragging rows</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#problems-in-a-document" id="toc-entry-13">Problems in a document</a></li>
+<li><a class="reference internal" href="#undo-and-redo" id="toc-entry-14">Undo and redo</a></li>
+<li><a class="reference internal" href="#saving-autosave-and-recovery" id="toc-entry-15">Saving, autosave and recovery</a></li>
+<li><a class="reference internal" href="#converting-between-versions" id="toc-entry-16">Converting between versions</a></li>
+<li><a class="reference internal" href="#tools" id="toc-entry-17">Tools</a></li>
+<li><a class="reference internal" href="#from-the-command-line" id="toc-entry-18">From the command line</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-19">Testing</a></li>
+<li><a class="reference internal" href="#license" id="toc-entry-20">License</a></li>
+<li><a class="reference internal" href="#see-also" id="toc-entry-21">See Also</a></li>
 </ul>
 </div>
 <div class="admonition note">
@@ -466,12 +472,16 @@ list where the schema gives the values it may take, and with a <strong>Go
 to</strong> button where it is a reference.  Only the attributes an element
 gives, and those it must, are shown; the row <em>attribute</em> below them
 offers the rest, and one chosen there is put in when it is given a
-value.  An element with a problem in it is marked <strong>E</strong> for an error
-or <strong>W</strong> for a warning, on its row and on every row above it, so a
-closed row shows that something inside it is wrong, and what is wrong
-is written under the row of the element or attribute it is in, marked
-the same way.  Resting the pointer on a name shows what the schema says
-of it;</li>
+value.  An attribute's <strong>Remove</strong> button takes it out; for one the
+schema requires, the button is greyed and its words slanted, and
+resting the pointer on it says why.  An element with a problem in it
+is marked <strong>E</strong> for an error or <strong>W</strong> for a warning, on its row and on
+every row above it, so a closed row shows that something inside it is
+wrong, and what is wrong is written under the row of the element or
+attribute it is in, marked the same way.  Resting the pointer on a
+name shows what the schema says of it.  Each element's and comment's
+row starts with a grip, six dots, by which it is dragged
+(<a class="reference internal" href="#dragging-rows">Dragging rows</a>);</li>
 <li>the problems: every schema error, and, as warnings, every reference
 that names nothing in the open documents and every two definitions of
 one name.  Picking one selects the element it is about;</li>
@@ -498,6 +508,9 @@ Shift+click selects every row from the selected one to it.  Dragging
 across names selects every row dragged across, Ctrl added to those
 already selected; dragged past the top or the bottom, the tree scrolls,
 faster the further past the pointer goes.</p>
+<p>The rows selected together are what Cut, Copy, Delete and Move up and
+down act on; the row clicked last is the one Insert, Paste and the other
+menu items act on.</p>
 <p>The selection is marked by its rows' colour and by a line down the
 column where its topmost element starts, with a ↔ handle at the middle
 of the part of the line in view.  Dragging the handle opens or closes
@@ -604,8 +617,135 @@ below them the ready-made parts that fit.</p>
 ParameterTypeSet.</p>
 </div>
 </div>
+<div class="section" id="deleting-moving-and-copying">
+<h1><a class="toc-backref" href="#toc-entry-9">Deleting, moving and copying</a></h1>
+<p>Delete, Cut, Copy, Move up and Move down, in the Edit menu, act on every
+row selected (<a class="reference internal" href="#selecting-opening-and-closing">Selecting, opening and closing</a>), each element with
+everything in it and the comments written just before it, as one change
+that one Undo takes back.  A row inside another selected row goes with
+it.  The root cannot be deleted or cut.</p>
+<p>Move up and Move down move a run of selected elements next to each other
+under one element, together, past the element before or after the run.
+For rows under different elements, or with others between them, the two
+items are greyed, though such rows can still be deleted, cut and copied.</p>
+<div class="figure">
+<img alt="Parameter HeaterOn and Parameter BusVoltage selected together, each with a bar at its left, Parameter Temperature between them not selected." src="shots/tcs-xtcee-delete-1.png" />
+<p class="caption"><strong>1.</strong> Parameter HeaterOn clicked, and Parameter BusVoltage added with
+Ctrl+click.</p>
+</div>
+<p>Deleting a definition that a reference outside what is deleted still
+names asks first, listing the references.  <strong>Show the usages</strong> lists them
+in place of the problems, as Edit &gt; Find usages does, and deletes
+nothing.</p>
+<div class="figure">
+<img alt="A question: &quot;2 elements are still named by 3 reference(s):&quot;, then HeaterOn on lines 78 and 83 and BusVoltage on line 80 of housekeeping.xtce, &quot;Delete anyway?  The references will then name nothing.&quot;, and the buttons Delete anyway, Show the usages and Cancel." src="shots/tcs-xtcee-delete-2.png" />
+<p class="caption"><strong>2.</strong> Edit &gt; Delete: the container Status names both parameters.</p>
+</div>
+<div class="figure">
+<img alt="The outline without HeaterOn and BusVoltage, Parameter PacketLength selected, the rows above it marked W, and three warnings that HeaterOn and BusVoltage name no parameter; the status line says &quot;delete 2 elements: done&quot;." src="shots/tcs-xtcee-delete-3.png" />
+<p class="caption"><strong>3.</strong> Delete anyway: both go, as one change, and the references
+that named them are now warnings.  The row before them is selected.</p>
+</div>
+<div class="section" id="cut-copy-and-paste">
+<h2><a class="toc-backref" href="#toc-entry-10">Cut, copy and paste</a></h2>
+<p>Cut (Ctrl+X) and Copy (Ctrl+C) put the selected rows on the desktop's
+clipboard as XTCE text, the elements as they are written, each with the
+namespace declarations it needs, so they can be pasted in another
+document, in another window, or in a text editor.  Paste puts what the
+clipboard holds before the selected row, after it (Ctrl+V), or in it,
+after what it holds; each is greyed where the schema does not allow the
+clipboard's first element, as Insert offers only what fits, and Ctrl+V
+pastes in the selected row when after it is not allowed.  The keys act
+on the outline once a row has been clicked; in a field being edited
+they cut, copy and paste its text.</p>
+<p>Text pasted is put in the document's namespace prefix.  Text that
+declares no namespace, as a piece copied from a file in a text editor
+usually does, is taken to be in the document's own; text of another XTCE
+version is refused, to be converted first (<a class="reference internal" href="#converting-between-versions">Converting between
+versions</a>).  A paste is checked as every change is: one that breaks
+the schema is refused, the status line saying why.  XTCE gives the
+parameters, types, containers and commands of a SpaceSystem names of
+their own, so a copy pasted beside what it copies is refused until one
+of them is renamed; where the schema allows two definitions of one name,
+the paste is made, the copy is marked <strong>W</strong> and the status line says
+so.</p>
+<p>Rows cut and then pasted are moved, not copied: the paste puts them
+back as one change, named &quot;move ... after ...&quot; in Edit &gt; Undo, in place
+of the cut, so long as the clipboard still holds them and nothing else
+has been changed in their document since the cut.  Their references are
+kept whole as a move keeps them (<a class="reference internal" href="#references-kept-whole">References kept whole</a>).</p>
+<div class="figure">
+<img alt="The Edit menu open after cutting Parameter HeaterOn, with Parameter HeaterPower selected: &quot;Undo cut Parameter HeaterOn&quot;, Cut (Ctrl+X), Copy (Ctrl+C), Paste before and Paste after (Ctrl+V) available, Paste in, last greyed." src="shots/tcs-xtcee-cut-1.png" />
+<p class="caption"><strong>1.</strong> Parameter HeaterOn cut with Ctrl+X, and Parameter HeaterPower
+clicked: a Parameter may go before or after another, not in it.</p>
+</div>
+<div class="figure">
+<img alt="The outline with Parameter HeaterOn selected after Parameter HeaterPower, no problems, and the status line &quot;move Parameter HeaterOn after Parameter HeaterPower: done&quot;." src="shots/tcs-xtcee-cut-2.png" />
+<p class="caption"><strong>2.</strong> Ctrl+V: the parameter is moved, as one change.</p>
+</div>
+</div>
+<div class="section" id="references-kept-whole">
+<h2><a class="toc-backref" href="#toc-entry-11">References kept whole</a></h2>
+<p>A move -- a cut and its paste, or a drag -- that changes how a
+reference finds what it named writes the reference again, in the same
+change, so that it names what it named: by the definition's name alone
+where that finds it, or else by its path from the root, an absolute
+reference staying absolute, as Edit &gt; Rename everywhere writes them.
+This holds for references in every open document of the mission, and
+for those in what is moved.  The status line says how many were
+written again.</p>
+<div class="figure">
+<img alt="The Edit menu of rover.xtce's window after IntegerParameterType uint16 was cut from dt.xtce, with ParameterTypeSet selected: Paste before and Paste after greyed, Paste in, last available." src="shots/tcs-xtcee-move-1.png" />
+<p class="caption"><strong>1.</strong> <tt class="docutils literal"><span class="pre">split-mission</span></tt>'s three documents open; the type <tt class="docutils literal">uint16</tt>
+cut from <tt class="docutils literal">dt.xtce</tt>, and Rover's ParameterTypeSet selected.</p>
+</div>
+<div class="figure">
+<img alt="Rover's ParameterTypeSet with IntegerParameterType uint16 at its end, selected; no problems; the status line &quot;move IntegerParameterType uint16 into ParameterTypeSet: done; 4 reference(s) written again to name what they named&quot;." src="shots/tcs-xtcee-move-2.png" />
+<p class="caption"><strong>2.</strong> Paste in, last: the type moves to <tt class="docutils literal">rover.xtce</tt>, and the four
+references to it, written <tt class="docutils literal">/dt/uint16</tt>, are written again.</p>
+</div>
+<div class="figure">
+<img alt="Rover's Parameter event-data open, its parameterTypeRef now /Rover/uint16." src="shots/tcs-xtcee-move-3.png" />
+<p class="caption"><strong>3.</strong> <tt class="docutils literal"><span class="pre">event-data</span></tt>'s type is now <tt class="docutils literal">/Rover/uint16</tt>; so are the
+PUS document's.  One Undo, in any of the three windows, puts it all
+back.</p>
+</div>
+</div>
+<div class="section" id="dragging-rows">
+<h2><a class="toc-backref" href="#toc-entry-12">Dragging rows</a></h2>
+<p>Each element's and comment's row has a grip at its left, six dots, by
+which it is dragged; dragging across names still selects rows.  A grip
+on a selected row drags every row selected; on another row, that row
+alone.  While dragging, a line with an arrowhead before or after the row
+under the pointer, or a box round it, shows where the rows would go,
+and words beside the pointer say what letting go will do, or, after a
+cross, why it would do nothing: the schema does not allow them there, or
+it is where they are.  Near a row's top they go before it, near its
+bottom after it, and between, in it; over an attribute's row, in its
+element.  Dragged past the top or the bottom, the outline scrolls.  Let
+go, they are moved as one change, their references kept whole.</p>
+<div class="figure">
+<img alt="Parameters HeaterOn and Temperature selected; a blue line with an arrowhead at its left under Parameter HeaterPower, and beside the pointer a box saying &quot;move 2 elements after Parameter HeaterPower&quot;." src="shots/tcs-xtcee-drag-1.png" />
+<p class="caption"><strong>1.</strong> The two parameters dragged by HeaterOn's grip to the bottom of
+HeaterPower's row.</p>
+</div>
+<div class="figure">
+<img alt="The same selection dragged to the top of ParameterTypeSet's row: no line, and a box saying &quot;not here: XTCE 1.3 does not allow Parameter there, in TelemetryMetaData&quot; after a cross." src="shots/tcs-xtcee-drag-2.png" />
+<p class="caption"><strong>2.</strong> Over the top of ParameterTypeSet, where a Parameter may not go.</p>
+</div>
+<div class="figure">
+<img alt="The parameters in the order PacketLength, BusVoltage, HeaterPower, HeaterOn, Temperature, the last two still selected." src="shots/tcs-xtcee-drag-3.png" />
+<p class="caption"><strong>3.</strong> Let go after HeaterPower: both move, and stay selected.</p>
+</div>
+<div class="figure">
+<img alt="The Remove button beside the root's name greyed and slanted, and below it a box saying &quot;The schema requires name, so it cannot be removed.&quot;" src="shots/tcs-xtcee-remove-1.png" />
+<p class="caption">An attribute the schema requires cannot be removed: its button says
+why.</p>
+</div>
+</div>
+</div>
 <div class="section" id="problems-in-a-document">
-<h1><a class="toc-backref" href="#toc-entry-9">Problems in a document</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-13">Problems in a document</a></h1>
 <p>The problems list is drawn again after every change, and a click on a
 problem selects the element it is about, opening the rows above it.  The
 pictures are of a copy of <tt class="docutils literal">housekeeping.xtce</tt> with two mistakes put in
@@ -630,7 +770,7 @@ gone, from the list and from the rows.</p>
 </div>
 </div>
 <div class="section" id="undo-and-redo">
-<h1><a class="toc-backref" href="#toc-entry-10">Undo and redo</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-14">Undo and redo</a></h1>
 <p>Edit &gt; Undo and Redo name the change they undo or redo.  Each document
 has a history of its own.  A rename across documents -- Edit &gt; Rename
 everywhere, which renames a definition and every reference to it in the
@@ -640,7 +780,7 @@ histories are kept only while the editor runs: they are gone when it is
 closed.</p>
 </div>
 <div class="section" id="saving-autosave-and-recovery">
-<h1><a class="toc-backref" href="#toc-entry-11">Saving, autosave and recovery</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-15">Saving, autosave and recovery</a></h1>
 <p>The editor looks at its documents once a second, and does what is
 below once two seconds have passed since the last change: so two to
 three seconds after it.</p>
@@ -684,7 +824,7 @@ whether to reload it, which Undo can undo, or keep its own version; it
 does not write over the other change until one is chosen.</p>
 </div>
 <div class="section" id="converting-between-versions">
-<h1><a class="toc-backref" href="#toc-entry-12">Converting between versions</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-16">Converting between versions</a></h1>
 <p>Version &gt; Convert to XTCE <em>version</em> converts the document to another
 version, a version at a time, as one change that Undo undoes.  Before
 anything is changed the conversion dialog lists:</p>
@@ -719,7 +859,7 @@ attribute by attribute; the design describes them.  A converted document
 is checked against its new version's schema before it is taken.</p>
 </div>
 <div class="section" id="tools">
-<h1><a class="toc-backref" href="#toc-entry-13">Tools</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-17">Tools</a></h1>
 <dl class="docutils">
 <dt>Tools &gt; Packet layout</dt>
 <dd>Draws each packet's fields to scale, each with its name and size
@@ -744,7 +884,7 @@ download it the first time (<a class="reference internal" href="#omg-s-files">OM
 compiler's tools, which read 1.3; its files are not changed.</p>
 </div>
 <div class="section" id="from-the-command-line">
-<h1><a class="toc-backref" href="#toc-entry-14">From the command line</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-18">From the command line</a></h1>
 <p>The schema checking and the converting run without the windows, for a
 Makefile or a CI job:</p>
 <pre class="code sh literal-block">
@@ -766,7 +906,7 @@ the <tt class="docutils literal"><span class="pre">--set</span></tt> that answer
 of a version, which the tests use.</p>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-15">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-19">Testing</a></h1>
 <p><tt class="docutils literal">make test</tt> in the tcs-xtce checkout runs the editor's tests with the
 rest (<tt class="docutils literal">make <span class="pre">test-editor</span></tt> runs them alone): its documents, schemas,
 checker, conversions and windows, the windows drawn without a display.
@@ -775,14 +915,14 @@ documents of every version, converts each to every other, and has
 <tt class="docutils literal">xmllint</tt> judge every document made.</p>
 </div>
 <div class="section" id="license">
-<h1><a class="toc-backref" href="#toc-entry-16">License</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-20">License</a></h1>
 <p>tcs-xtcee is part of tcs-xtce, and is licensed as it is: under either of
 the Apache License, Version 2.0 (<tt class="docutils literal"><span class="pre">LICENSE-APACHE</span></tt>, or
 <a class="reference external" href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT license
 (<tt class="docutils literal"><span class="pre">LICENSE-MIT</span></tt>, or <a class="reference external" href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>), at your option.</p>
 </div>
 <div class="section" id="see-also">
-<h1><a class="toc-backref" href="#toc-entry-17">See Also</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-21">See Also</a></h1>
 <dl class="docutils">
 <dt><a class="reference external" href="manual.html">The tcs-xtce manuals</a></dt>
 <dd>What each of tcs-xtce's manuals covers.</dd>

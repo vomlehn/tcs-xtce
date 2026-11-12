@@ -285,6 +285,96 @@ fn open(
     (app, w)
 }
 
+/// Copies examples into a directory and opens the editor on them as one
+/// mission, as `tcs-xtcee FILE...` does, each window the size the
+/// pictures are.
+///
+/// # Arguments
+///
+/// * `dir`      - The directory.
+/// * `examples` - The examples' paths from `examples/`.
+///
+/// # Returns
+///
+/// The editor and its windows, in the order of the examples.
+///
+/// # Panics
+///
+/// Panics if an example cannot be copied.
+fn open_all(dir: &Path, examples: &[&str]) -> (Shared, Vec<DocWindow>) {
+    std::fs::create_dir_all(dir).unwrap();
+    let mut paths = Vec::new();
+    for example in examples {
+        let from = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../examples")
+            .join(example);
+        let to = dir.join(from.file_name().unwrap());
+        std::fs::copy(&from, &to).expect("the copy is written");
+        paths.push(to.display().to_string());
+    }
+    let app = start(&paths);
+    let wins: Vec<DocWindow> = app
+        .borrow()
+        .wins
+        .iter()
+        .map(|w| w.window.clone_strong())
+        .collect();
+    for w in &wins {
+        w.window().set_size(slint::PhysicalSize::new(WIDTH, HEIGHT));
+    }
+    (app, wins)
+}
+
+/// Adds an element to the selection, as a Ctrl+click on its name does.
+///
+/// # Arguments
+///
+/// * `w`     - The window.
+/// * `label` - What its row says.
+fn ctrl_pick(w: &DocWindow, label: &str) {
+    w.invoke_pick(row_of(w, label).index, false, true);
+}
+
+/// Finds the grip of an element's row, the dots at its left that it is
+/// dragged by: the grip, the triangle and the mark come before the name,
+/// each with the row's spacing after it.
+///
+/// # Arguments
+///
+/// * `w`     - The window.
+/// * `label` - What its row says.
+///
+/// # Returns
+///
+/// Where the grip's middle is.
+fn grip(w: &DocWindow, label: &str) -> LogicalPosition {
+    let e = all(w, label)
+        .into_iter()
+        .find(|e| e.absolute_position().y >= 60.0)
+        .unwrap_or_else(|| panic!("no row {label:?}"));
+    let p = e.absolute_position();
+    let mark = if row_of(w, label).mark.is_empty() {
+        0.0
+    } else {
+        18.0
+    };
+    LogicalPosition::new(
+        p.x - 4.0 - mark - 4.0 - 16.0 - 4.0 - 5.0,
+        p.y + e.size().height / 2.0,
+    )
+}
+
+/// Moves the pointer, pressed, to a place, as a drag does.
+///
+/// # Arguments
+///
+/// * `w`     - The window.
+/// * `place` - Where.
+fn drag_to(w: &slint::Window, place: LogicalPosition) {
+    w.dispatch_event(WindowEvent::PointerMoved { position: place });
+    slint::platform::update_timers_and_animations();
+}
+
 /// Makes every screenshot in the manual.
 ///
 /// # Panics
@@ -305,6 +395,10 @@ fn screenshots() {
     opening(&dir.join("open"));
     problems(&dir.join("problems"));
     converting(&dir.join("convert"));
+    deleting(&dir.join("delete"));
+    cutting(&dir.join("cut"));
+    moving(&dir.join("move"));
+    dragging(&dir.join("drag"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -471,4 +565,142 @@ fn converting(dir: &Path) {
         .window()
         .set_size(slint::PhysicalSize::new(WIDTH, 400));
     snap(dialog.window(), "convert-2", 0, 400);
+}
+
+/// The pictures of deleting several rows at once, one of them named by a
+/// reference.
+///
+/// # Arguments
+///
+/// * `dir` - The directory to open the document in.
+fn deleting(dir: &Path) {
+    let (app, w) = open(dir, "housekeeping/housekeeping.xtce", &[]);
+    let win = w.window();
+    w.invoke_depth_to(3, true);
+    toggle(&w, "ParameterTypeSet");
+    pick(&w, "Parameter  HeaterOn");
+    ctrl_pick(&w, "Parameter  BusVoltage");
+    snap(win, "delete-1", 40, 400);
+    w.invoke_delete_selected();
+    let ask = app.borrow().asks.last().expect("a question").clone_strong();
+    ask.window()
+        .set_size(slint::PhysicalSize::new(WIDTH * 3 / 4, 260));
+    snap(ask.window(), "delete-2", 0, 260);
+    ask.invoke_chosen(0);
+    assert_eq!(w.get_undo_label(), "delete 2 elements");
+    snap(win, "delete-3", 0, HEIGHT);
+}
+
+/// The pictures of cutting a row and pasting it somewhere else, which is
+/// one move.
+///
+/// # Arguments
+///
+/// * `dir` - The directory to open the document in.
+fn cutting(dir: &Path) {
+    let (_app, w) = open(dir, "housekeeping/housekeeping.xtce", &[]);
+    let win = w.window();
+    w.invoke_depth_to(3, true);
+    toggle(&w, "ParameterTypeSet");
+    let on = "Parameter  HeaterOn";
+    click(win, at(&w, on, 60.0));
+    key(win, "x".into(), true);
+    assert_eq!(w.get_undo_label(), "cut Parameter HeaterOn");
+    click(win, at(&w, "Parameter  HeaterPower", 60.0));
+    click(win, at(&w, "Edit", 0.0));
+    snap(win, "cut-1", 0, 400);
+    key(win, Key::Escape.into(), false);
+    key(win, "v".into(), true);
+    assert_eq!(
+        w.get_undo_label(),
+        "move Parameter HeaterOn after Parameter HeaterPower"
+    );
+    snap(win, "cut-2", 0, HEIGHT);
+}
+
+/// The pictures of moving a type to another document of a mission, which
+/// writes again the references to it in every document.
+///
+/// # Arguments
+///
+/// * `dir` - The directory to open the documents in.
+fn moving(dir: &Path) {
+    let (_app, wins) = open_all(
+        dir,
+        &[
+            "split-mission/dt.xtce",
+            "split-mission/pus.xtce",
+            "split-mission/rover.xtce",
+        ],
+    );
+    let (dt, pus, rover) = (&wins[0], &wins[1], &wins[2]);
+    dt.invoke_depth_to(3, true);
+    let uint16 = "IntegerParameterType  uint16";
+    click(dt.window(), at(dt, uint16, 60.0));
+    key(dt.window(), "x".into(), true);
+    rover.invoke_depth_to(3, true);
+    toggle(rover, "ParameterSet");
+    pick(rover, "ParameterTypeSet");
+    click(rover.window(), at(rover, "Edit", 0.0));
+    snap(rover.window(), "move-1", 0, 400);
+    key(rover.window(), Key::Escape.into(), false);
+    rover.invoke_paste(2);
+    assert!(rover.get_status().contains("written again"));
+    snap(rover.window(), "move-2", 0, HEIGHT);
+    // A parameter that names the type, in Rover itself; those in the PUS
+    // document are written again the same way.
+    toggle(rover, "ParameterTypeSet");
+    toggle(rover, "ParameterSet");
+    let data = "Parameter  event-data";
+    toggle(rover, data);
+    pick(rover, data);
+    snap(rover.window(), "move-3", 40, 400);
+    assert!(pus
+        .get_undo_label()
+        .starts_with("move IntegerParameterType"));
+}
+
+/// The pictures of an attribute that cannot be removed, and of dragging
+/// rows by a grip, to a place the schema allows and to one it does not.
+///
+/// # Arguments
+///
+/// * `dir` - The directory to open the document in.
+fn dragging(dir: &Path) {
+    let (_app, w) = open(dir, "housekeeping/housekeeping.xtce", &[]);
+    let win = w.window();
+    // The pointer resting on the Remove button of an attribute the schema
+    // requires, which cannot be removed.
+    let remove = at(&w, "Remove", 60.0);
+    win.dispatch_event(WindowEvent::PointerMoved { position: remove });
+    std::thread::sleep(Duration::from_millis(700));
+    snap(win, "remove-1", 40, 220);
+    win.dispatch_event(WindowEvent::PointerMoved {
+        position: LogicalPosition::new(700.0, 400.0),
+    });
+    w.invoke_depth_to(3, true);
+    toggle(&w, "ParameterTypeSet");
+    pick(&w, "Parameter  HeaterOn");
+    ctrl_pick(&w, "Parameter  Temperature");
+    let from = grip(&w, "Parameter  HeaterOn");
+    press(win, from);
+    // Just above the line between HeaterPower's row and the next, in the
+    // bottom quarter of HeaterPower's row: after it.
+    let power = at(&w, "Parameter  HeaterPower", 60.0);
+    let next = at(&w, "ContainerSet", power.y + 1.0);
+    let below =
+        LogicalPosition::new(power.x + 40.0, (power.y + next.y) / 2.0 - 1.0);
+    drag_to(win, LogicalPosition::new(from.x + 20.0, from.y + 20.0));
+    drag_to(win, below);
+    snap(win, "drag-1", 40, 520);
+    let types = at(&w, "ParameterTypeSet", 60.0);
+    drag_to(win, LogicalPosition::new(types.x + 40.0, types.y - 6.0));
+    snap(win, "drag-2", 40, 520);
+    drag_to(win, below);
+    release(win, below);
+    assert_eq!(
+        w.get_undo_label(),
+        "move 2 elements after Parameter HeaterPower"
+    );
+    snap(win, "drag-3", 40, 520);
 }
