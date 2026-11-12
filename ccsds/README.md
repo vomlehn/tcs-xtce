@@ -118,7 +118,7 @@ assert decode_cds_exact(octets) == (12, CdsTime(0x123456, 86399999,
 ## Documentation and tests
 
 The **CCSDS time codes** chapter of the
-[tcs-xtce manual](https://vomlehn.github.io/tcs-xtce/docs/manual.html#ccsds-time-codes-tcs-ccsds)
+[tcs-xtce manual](https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html#ccsds-time-codes-tcs-ccsds)
 describes the whole API in each language; the
 [crate's documentation](https://docs.rs/tcs-ccsds) describes the Rust.
 

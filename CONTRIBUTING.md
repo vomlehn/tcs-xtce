@@ -14,7 +14,7 @@ handle, is just as useful.
 * **Ask for an XTCE feature.** `tcs-xtce` names any construct it doesn't
   support and where it is. Open an issue with that message and, if you
   can, the document that uses it. The supported subset is listed under
-  [Supported XTCE](https://vomlehn.github.io/tcs-xtce/docs/manual.html#supported-xtce)
+  [Supported XTCE](https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html#supported-xtce)
   in the manual.
 * **Discuss a larger idea**, such as the cFS and F´ integration, in an
   issue before writing code, so we can agree on the approach first.
@@ -129,12 +129,17 @@ code paths.
 `python/tests/compiler`, and where it affects packets, extend the demo mission
 (`tests/mission/demo.xtce`) and its vectors (`tests/mission/vectors.txt` and
 `vectors.expected`). List the construct under Supported XTCE in
-`docs/manual.rst`.
+`docs/tcs-xtce.rst`.
 
-**Keep the documentation current.** The user manual is `docs/manual.rst` and
-the design is `docs/design.rst`. Their HTML is committed beside them and
-served by GitHub Pages, so run `make html` and commit the HTML with any
-change to them.
+**Keep the documentation current.** The code generator's manual is
+`docs/tcs-xtce.rst`, the editor's `docs/tcs-xtcee.rst`, and
+`docs/manual.rst` says what each covers; their designs are
+`docs/tcs-xtce-design.rst` and `docs/tcs-xtcee-design.rst`, and
+`docs/design.rst` says what each covers.
+Their HTML is committed beside them and served by GitHub Pages. `make` (or
+`make hooks`) sets up a pre-commit hook, from tcs-helpers, that remakes the
+page of each document a commit changes and adds it to the commit, and
+`make html-check` fails where a committed page is behind its source.
 
 **Match the code around you.** Rust is formatted with `rustfmt`
 (`make fmt`, checked by `make rust`), C and C++ with `clang-format`, and

@@ -26,10 +26,16 @@ that they agree on every field's type and order. That avoids the per-message cos
 of self-describing formats: the same packet is 77 bytes as JSON and 29 as
 Protocol Buffers.
 
-The full documentation is in [`docs/manual.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/manual.rst) (user
-manual, including every data structure and method) and
-[`docs/design.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/design.rst) (design and rationale), each rendered
-to HTML beside it by `make html`: see [See also](#see-also).
+The full documentation is in `docs/`:
+[`docs/tcs-xtce.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtce.rst)
+(the code generator's manual, including every data structure and method),
+[`docs/tcs-xtcee.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtcee.rst)
+(the editor's manual), [`docs/manual.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/manual.rst)
+(what each manual covers), and the design and rationale of each,
+[`docs/tcs-xtce-design.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtce-design.rst)
+and [`docs/tcs-xtcee-design.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtcee-design.rst),
+which [`docs/design.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/design.rst)
+lists; each is rendered to HTML beside it: see [See also](#see-also).
 
 Work is under way on integrating tcs-xtce with NASA's core Flight System (cFS)
 and JPL's F´ (F Prime): generating cFS messages and F´ FPP from XTCE, or
@@ -49,7 +55,7 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | `python/`     | `tcs_xtce` Python package (3.10+, standard library only): the Python runtime, `tcs_xtce.binding` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `tcs_xtce.compiler`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
 | `tests/`      | The demo mission, packet vectors and the cross-language checks; `make` generates the schema-coverage samples into `tests/samples/` |
 | `editor/`     | `tcs-xtcee`, a graphical XTCE editor that keeps a document valid for its XTCE version (1.1, 1.2 or 1.3), its comments and layout as written, and converts between versions |
-| `docs/`       | `manual.rst` and `design.rst` |
+| `docs/`       | The manuals, `manual.rst`, `tcs-xtce.rst` and `tcs-xtcee.rst`, and the designs, `design.rst`, `tcs-xtce-design.rst` and `tcs-xtcee-design.rst` |
 | `examples/`   | Example XTCE files and a program per language that uses the code generated from them (start with `simple-string`) |
 
 ## Building
@@ -400,8 +406,13 @@ random packets.
 
 ## See also
 
-* [The tcs-xtce manual](https://vomlehn.github.io/tcs-xtce/docs/manual.html):
-  every data structure and method, and the packet codecs.
+* [The tcs-xtce manuals](https://vomlehn.github.io/tcs-xtce/docs/manual.html):
+  what each manual covers.
+* [The tcs-xtce manual](https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html):
+  the code generator, every data structure and method, and the packet
+  codecs.
+* [The tcs-xtcee manual](https://vomlehn.github.io/tcs-xtce/docs/tcs-xtcee.html):
+  the XTCE editor.
 * [The tcs-xtce design](https://vomlehn.github.io/tcs-xtce/docs/design.html):
   the design and its rationale.
 * [The examples](https://vomlehn.github.io/tcs-xtce/examples/README.html):

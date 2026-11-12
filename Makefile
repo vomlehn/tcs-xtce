@@ -1,6 +1,7 @@
 # Top-level build for the XTCE serialization libraries.
 #
-#   make                 fetch references (if missing), generate, build, test
+#   make                 fetch references (if missing), generate, build, test,
+#                        and set up the pre-commit hook (see make hooks)
 #   make references      pull the latest XTCE documents into references/
 #   make generate        regenerate the Rust, C/C++ and Python bindings
 #   make samples         regenerate the schema-covering test documents
@@ -13,6 +14,11 @@
 #                        bnum crate
 #   make ccsds-check     check tcs-ccsds's time codes in every language
 #   make line-width      check that no line of code is wider than 80 columns
+#   make html            remake the HTML pages of docs/ and the examples
+#   make html-check      fail where a committed page is behind its source
+#   make hooks           have git run tcs-helpers' pre-commit hook, which
+#                        remakes the page of each document a commit changes
+#                        and adds it to the commit
 #   make samples-check   check tcs-xtce against public XTCE documents
 #                        (downloads them)
 #   make examples        build and run every example in examples/
@@ -85,7 +91,7 @@ C_PKT_TOOL    := cpp/build/packet_tool
 CXX_PKT_TOOL  := cpp/build/packet_tool_cxx
 
 .PHONY: all
-all: generate rust cpp python test
+all: hooks-if-there generate rust cpp python test
 
 # The list of targets is the comment that opens this file, so there is one
 # list to keep current.
@@ -157,7 +163,7 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 .PHONY: test
 test: test-rust test-cpp test-python cross-check packet-check \
       stream-check digest-check float-check bnum-check ccsds-check examples \
-      test-editor line-width doc-headers
+      test-editor line-width doc-headers html-check
 
 # Every non-trivial function, hand-written or generated, has a header that
 # describes it, its parameters and what it returns.  Last, with line-width,
@@ -348,6 +354,34 @@ html:
 	$(MAKE) -C docs html
 	$(MAKE) -C examples html
 
+# The directories whose make builds the committed pages.
+HTML_DIRS := docs examples
+
+# Fail where a committed page is behind its source, naming it, having made
+# every page again in place: tcs-helpers' html-pages check.
+.PHONY: html-check
+html-check: tcs-helpers
+	"$(TCS_HELPERS)/bin/html-pages" check $(HTML_DIRS)
+
+# Have git run tcs-helpers' pre-commit hook in this checkout, which remakes
+# the page of each document a commit changes and adds it to the commit.
+.PHONY: hooks
+hooks: tcs-helpers
+	git config core.hooksPath "$(TCS_HELPERS)/githooks"
+
+# What make does of make hooks: the same where the tcs-helpers checkout is
+# there and new enough, and only a note where it is not, so that building
+# never needs it.
+.PHONY: hooks-if-there
+hooks-if-there:
+	@if "$(TCS_HELPERS)/bin/tcs-helpers" --require \
+	        $(TCS_HELPERS_REQUIRED) > /dev/null 2>&1; then \
+	    git config core.hooksPath "$(TCS_HELPERS)/githooks"; \
+	else \
+	    echo "note: no tcs-helpers $(TCS_HELPERS_REQUIRED) at" \
+	        "$(TCS_HELPERS), so no pre-commit hook: see make hooks"; \
+	fi
+
 # Installing, and the .deb and .rpm packages, as tcslog, tcslog-tools and
 # tcspecial do them.
 #
@@ -391,7 +425,7 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.6.0
+TCS_HELPERS_REQUIRED := 0.7.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include
@@ -410,7 +444,9 @@ PYDIR   ?= $(PREFIX)/lib/python3/site-packages
 # leaves behind; their Makefiles expect to be in the repository, so the
 # installed copies are to read and to build by hand.
 DOCS    := README.md CONTRIBUTING.md LICENSE-APACHE LICENSE-MIT \
-           docs/manual.html docs/design.html
+           docs/manual.html docs/tcs-xtce.html docs/tcs-xtcee.html \
+           docs/design.html docs/tcs-xtce-design.html \
+           docs/tcs-xtcee-design.html
 # The editor is the one command built rather than copied; `make editor`
 # builds it.
 EDITOR_BIN := editor/target/release/tcs-xtcee
