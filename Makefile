@@ -675,11 +675,10 @@ LINKDIR ?= /usr/local/bin
 # packaging.mk's, shared by the TCS projects; see it for what each does.
 # This repository has the one package, built from packaging/deb/tcs-xtce and
 # packaging/rpm/tcs-xtce.spec, which is also given the library's ABI
-# version, tcsccsds's version and where the RPM's Python looks for
-# packages. Without a tcs-helpers checkout new enough to have
-# install-packages.sh, which came with the install target in 0.4.0, there
-# is nothing to include that has every target here, and the targets stop
-# as the tcs-helpers target says.
+# version and tcsccsds's version. Without a tcs-helpers checkout new
+# enough to have install-packages.sh, which came with the install target
+# in 0.4.0, there is nothing to include that has every target here, and
+# the targets stop as the tcs-helpers target says.
 PACKAGES    := tcs-xtce
 # Its programs with windows are built with Slint, whose royalty-free
 # licence asks for its badge where they are downloaded: make
@@ -687,12 +686,7 @@ PACKAGES    := tcs-xtce
 # README).
 RELEASE_ATTRIBUTION := slint
 RPM_DEFINES  = --define "tcs_abi $(ABI)" \
-               --define "tcsccsds_version $(CCSDS_VERSION)" \
-               --define "tcs_pysite $$($(PYTHON) -c 'import sysconfig; \
-                   print(sysconfig.get_path("purelib", "posix_prefix", \
-                   vars={"base": "/usr"}))')" \
-               --define "tcs_pyversion $$($(PYTHON) -c 'import sysconfig; \
-                   print(sysconfig.get_python_version())')"
+               --define "tcsccsds_version $(CCSDS_VERSION)"
 ifneq ($(wildcard $(TCS_HELPERS)/packaging/install-packages.sh),)
 include $(TCS_HELPERS)/packaging/packaging.mk
 else
