@@ -19,7 +19,7 @@ path = "src/main.rs"
 # The digest of what a document means, which the editor shows and which
 # its semantic comparison agrees with: the same code xtce-digest runs.
 tcs-xtce = { path = "../rust" }
-# The windows. 1.18 for its builtin menu bar, as tcsgui chose it.
+# The windows. 1.18 for its builtin menu bar, as tcs-gui chose it.
 slint = "1.18"
 # The schemas' patterns, which are XSD regular expressions: those the XTCE
 # schemas use are all in the part of that language the regex crate reads

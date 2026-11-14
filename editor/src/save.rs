@@ -6,7 +6,7 @@
 //! directory, are flushed to the disk, and the temporary file is renamed
 //! over the old one, which is atomic within a filesystem; then the
 //! directory is flushed so the rename itself survives a power failure.
-//! This is tcsgui's recipe for its configurations, for the same reasons.
+//! This is tcs-gui's recipe for its configurations, for the same reasons.
 
 use std::fs::{self, File};
 use std::io::Write;
