@@ -640,6 +640,10 @@ class Compiler:
         # (kind, name) -> Hook, for the custom algorithms used
         self.hooks: dict[tuple, Hook] = {}
         self.mcs: dict[Key, tuple] = {}
+        # What the documents allow that the generated code can only guess
+        # at, such as binary data with no maximum size: a warning each,
+        # once, in the order found.
+        self.warnings: list[str] = []
         # CommandContainer -> MetaCommand
         self.mc_containers: dict[Key, Key] = {}
         # The containers a CommandContainer may include or extend: those of
@@ -1110,6 +1114,14 @@ class Compiler:
             if not isinstance(enc, (BinaryEnc, XformEnc)):
                 raise Unsupported(f"{where}: binary with {enc_name}")
             vt.kind = "binary"
+            # Nothing but the end of the packet bounds it; an EmbeddedTc's
+            # own packet length does.
+            if (enc.rest if isinstance(enc, BinaryEnc)
+                    else enc.raw is None and not enc.time):
+                self.warn(f"{where}: binary data that takes the rest of the "
+                          "packet, of no maximum size: the generated code's "
+                          "buffer is the maximum field size, "
+                          f"{self.max_field_bits // 8} bytes, instead")
         if vt.kind == "enum":
             names = Namer()
             for ev in t.enumeration_list.enumeration:
@@ -1469,8 +1481,8 @@ class Compiler:
                     if sib.vtype.kind != "int":
                         raise Unsupported(f"{where}: size or count from "
                                           f"{sib.vtype.kind} member {sib.name}")
-                    mt = bounded(mt, dataclasses.replace(d, member=sib.ident),
-                                 int_bounds(sib.vtype), self.max_field_bits)
+                    mt = self.bound(mt, dataclasses.replace(
+                        d, member=sib.ident), int_bounds(sib.vtype), where)
                 if is_rest(mt):
                     raise Unsupported(f"{where}: member {m.name} takes the "
                                       "rest of the packet")
@@ -2323,8 +2335,49 @@ class Compiler:
                     vt, enc=dataclasses.replace(e, elem=elem, gap=gap))
         if vt.dyn is not None and unbound(vt.dyn):
             b, rng = self.bind_dyn(vt.dyn, scope, where, arg_key)
-            vt = bounded(vt, b, rng, self.max_field_bits)
+            vt = self.bound(vt, b, rng, where)
         return vt
+
+    def bound(self, vt: VType, b: DynSize, rng: tuple[int, int],
+              where: str) -> VType:
+        """Makes a type's size or count a bound DynSize, as ``bounded``
+        does, at most the maximum field size, and warns where the
+        document gives binary data no maximum size of its own.
+
+        Binary data has no maximum in XTCE but what the value that gives
+        its size allows: its range, its ValidRange or its width.  Where
+        that is more than the maximum field size, the generated code's
+        buffer is that size, which the document does not state.
+
+        Args:
+            vt:    The type: an array, string or binary data.
+            b:     The bound DynSize; its ``max`` is set.
+            rng:   The range (lo, hi) of the value it adjusts.
+            where: What it is in, for the warning.
+
+        Returns:
+            A copy of ``vt`` whose size or count is ``b``.
+        """
+        cap = self.max_field_bits
+        if (isinstance(vt.enc, BinaryEnc)
+                and dyn_units(b, rng, cap) >= cap // 8):
+            given = (f"the value of {b.name}" if b.table is None
+                     else "a DiscreteLookupList")
+            self.warn(f"{where}: {vt.name} is binary data with no maximum "
+                      f"size: its size, {given}, allows more than the "
+                      f"maximum field size, {cap // 8} bytes, which the "
+                      "generated code's buffer is instead; give the size a "
+                      "ValidRange")
+        return bounded(vt, b, rng, cap)
+
+    def warn(self, message: str) -> None:
+        """Notes a warning, once however often it is found.
+
+        Args:
+            message: What to say.
+        """
+        if message not in self.warnings:
+            self.warnings.append(message)
 
     def bind_calibrators(self, vt: VType, scope: list, where: str,
                          arg_key) -> VType:
@@ -3548,9 +3601,10 @@ class Compiler:
             raise Unsupported(f"{what}: size or count from {sib.vtype.kind} "
                               f"entry {sib.name}")
         wide = sib.vtype if sib.vtype.wide else None
-        return bounded(vt,
-                       dataclasses.replace(d, member=sib.ident, wide_type=wide),
-                       int_bounds(sib.vtype), self.max_field_bits)
+        return self.bound(vt,
+                          dataclasses.replace(d, member=sib.ident,
+                                              wide_type=wide),
+                          int_bounds(sib.vtype), what)
 
     def tm_node(self, key: Key) -> Node:
         """Compiles a SequenceContainer, and its bases, once.
@@ -4921,7 +4975,7 @@ class Compiler:
             name=self.roots[-1].name, spaces=[r.name for r in self.roots],
             source="", types=list(used.values()),
             aggregates=list(aggregates.values()), nodes=concrete, kinds=kinds,
-            roots=roots, skipped=msgs,
+            roots=roots, skipped=msgs, warnings=self.warnings,
             monitored=[(k, mnames.take(snake(k.rsplit("/", 1)[-1]), snake(k)),
                         h) for k, h in monitored.items()], streams=streams,
             hooks=list(self.hooks.values()))

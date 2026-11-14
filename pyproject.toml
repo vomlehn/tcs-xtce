@@ -18,7 +18,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tcs-xtce"
 # The same as the Rust crate's, in rust/Cargo.toml.
-version = "0.7.0"
+version = "0.7.1"
 description = """\
     Serialization and deserialization of OMG XTCE documents into managed, \
     preallocated buffers, a compiler of packet codecs, and tcsxtce, the \

@@ -643,12 +643,12 @@ make<span class="whitespace">                 </span><span class="comment single
 </span>make<span class="whitespace"> </span>fmt-check<span class="whitespace">       </span><span class="comment single"># verify it (Rust is also checked by every `make rust`)
 </span>make<span class="whitespace"> </span>install<span class="whitespace">         </span><span class="comment single"># build the packages, install them (see Installing)
 </span>make<span class="whitespace"> </span>install<span class="whitespace"> </span><span class="name variable">DRY_RUN</span><span class="operator">=</span><span class="literal number">1</span><span class="whitespace">   </span><span class="comment single"># show what install would do; change nothing
-</span>make<span class="whitespace"> </span>uninstall<span class="whitespace">       </span><span class="comment single"># remove the package
+</span>make<span class="whitespace"> </span>uninstall<span class="whitespace">       </span><span class="comment single"># remove the packages
 </span>make<span class="whitespace"> </span>install-files<span class="whitespace">   </span><span class="comment single"># copy the files under PREFIX, /opt/tcs, unpackaged
 </span>make<span class="whitespace"> </span>uninstall-files<span class="whitespace"> </span><span class="comment single"># remove what install-files put there
 </span>make<span class="whitespace"> </span>links<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>unlinks<span class="whitespace"> </span><span class="comment single"># link the installed programs into /usr/local/bin
-</span>make<span class="whitespace"> </span>stage<span class="whitespace">           </span><span class="comment single"># install-files into build/stage/tcs-xtce
-</span>make<span class="whitespace"> </span>deb<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>rpm<span class="whitespace">       </span><span class="comment single"># build the tcs-xtce package into build/packages
+</span>make<span class="whitespace"> </span>stage<span class="whitespace">           </span><span class="comment single"># install each package into build/stage/&lt;package&gt;
+</span>make<span class="whitespace"> </span>deb<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>rpm<span class="whitespace">       </span><span class="comment single"># build the tcsxtce and tcs-xtce packages
 </span>make<span class="whitespace"> </span>packages<span class="whitespace">        </span><span class="comment single"># both; STRIP=0 keeps the libraries unstripped
 </span>make<span class="whitespace"> </span>lint-packages<span class="whitespace">   </span><span class="comment single"># check them with lintian, rpmlint and shellcheck
 </span>make<span class="whitespace"> </span>clean<span class="whitespace">           </span><span class="comment single"># remove build products
@@ -732,16 +732,31 @@ installer, one of <tt class="docutils literal"><span class="pre">apt-get</span><
 <tt class="docutils literal">zypper</tt> and <tt class="docutils literal">rpm</tt>. If the kind the system takes was not built,
 because <tt class="docutils literal"><span class="pre">dpkg-deb</span></tt> or <tt class="docutils literal">rpmbuild</tt> is missing, it stops, saying which
 to install.</p>
-<p><tt class="docutils literal">make deb</tt> and <tt class="docutils literal">make rpm</tt> build one package, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt>, holding
-all of it, into <tt class="docutils literal">build/packages/</tt>; <tt class="docutils literal">make packages</tt> builds both, the RPM
-only where <tt class="docutils literal">rpmbuild</tt> is installed and the .deb only where <tt class="docutils literal"><span class="pre">dpkg-deb</span></tt>
-is. They are made from the tree <tt class="docutils literal">make
-stage</tt> installs into <tt class="docutils literal"><span class="pre">build/stage/tcs-xtce/</span></tt>. Besides <tt class="docutils literal">/opt/tcs</tt> the package
-installs <tt class="docutils literal"><span class="pre">/etc/ld.so.conf.d/tcs-xtce.conf</span></tt>, so the loader finds
-<tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt>; <tt class="docutils literal"><span class="pre">/etc/profile.d/tcs-xtce.sh</span></tt>, which puts <tt class="docutils literal">/opt/tcs/bin</tt>
-on <tt class="docutils literal">PATH</tt> and <tt class="docutils literal">/opt/tcs/lib/pkgconfig</tt> on <tt class="docutils literal">PKG_CONFIG_PATH</tt>; and a
-<tt class="docutils literal"><span class="pre">tcs-xtce.pth</span></tt> in <tt class="docutils literal">python3</tt>'s own site-packages, which puts the Python
-packages on its path.</p>
+<p><tt class="docutils literal">make deb</tt> and <tt class="docutils literal">make rpm</tt> build two packages into
+<tt class="docutils literal">build/packages/</tt>, since a package with operational code holds nothing
+else:</p>
+<dl class="docutils">
+<dt><tt class="docutils literal">tcsxtce</tt></dt>
+<dd>The operational code: the <tt class="docutils literal"><span class="pre">tcsxtce-*</span></tt> headers and the <tt class="docutils literal">tcsxtce</tt>
+Python package, the packet runtime and digest the generated code runs
+on, and tcsccsds's <tt class="docutils literal"><span class="pre">tcsccsds-time.h</span></tt> and Python package, with
+<tt class="docutils literal">tcsxtce.pc</tt> and <tt class="docutils literal">tcsccsds.pc</tt>.</dd>
+<dt><tt class="docutils literal"><span class="pre">tcs-xtce</span></tt></dt>
+<dd>The software tools: the <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt>, <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> and
+<tt class="docutils literal"><span class="pre">tcs-xtcee</span></tt> commands, <tt class="docutils literal"><span class="pre">libtcs-xtce</span></tt> with its headers and
+<tt class="docutils literal"><span class="pre">tcs-xtce.pc</span></tt>, and the <tt class="docutils literal">tcs_xtce</tt> Python package, with the
+documents and examples. It requires the <tt class="docutils literal">tcsxtce</tt> built with it.</dd>
+</dl>
+<p><tt class="docutils literal">make packages</tt> builds both kinds, the RPMs only where <tt class="docutils literal">rpmbuild</tt> is
+installed and the .debs only where <tt class="docutils literal"><span class="pre">dpkg-deb</span></tt> is. Each is made from the
+tree <tt class="docutils literal">make stage</tt> installs it into, <tt class="docutils literal"><span class="pre">build/stage/&lt;package&gt;/</span></tt>. Besides
+<tt class="docutils literal">/opt/tcs</tt>, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> installs <tt class="docutils literal"><span class="pre">/etc/ld.so.conf.d/tcs-xtce.conf</span></tt>, so
+the loader finds <tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt>, and <tt class="docutils literal"><span class="pre">/etc/profile.d/tcs-xtce.sh</span></tt>,
+which puts <tt class="docutils literal">/opt/tcs/bin</tt> on <tt class="docutils literal">PATH</tt> and <tt class="docutils literal">/opt/tcs/lib/pkgconfig</tt> on
+<tt class="docutils literal">PKG_CONFIG_PATH</tt>; <tt class="docutils literal">tcsxtce</tt> installs <tt class="docutils literal">/etc/profile.d/tcsxtce.sh</tt>,
+which puts <tt class="docutils literal">/opt/tcs/lib/pkgconfig</tt> on <tt class="docutils literal">PKG_CONFIG_PATH</tt>; and each
+installs a <tt class="docutils literal">.pth</tt> file named for it in <tt class="docutils literal">python3</tt>'s own site-packages,
+which puts the Python packages on its path.</p>
 <p><tt class="docutils literal">/etc/profile.d</tt> is read only by login shells, so <tt class="docutils literal">sudo</tt>, cron and
 other minimal environments do not see <tt class="docutils literal">/opt/tcs/bin</tt>. The package's
 <tt class="docutils literal"><span class="pre">/opt/tcs/sbin/tcs-xtce-links</span></tt> links its programs, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt>,
@@ -1291,10 +1306,29 @@ See <a class="reference internal" href="#code-without-dynamic-allocation">Code w
 <td>Mission file name recorded in the generated headers (default: the
 <tt class="docutils literal">INPUT</tt> file names)</td>
 </tr>
+<tr><td><tt class="docutils literal"><span class="pre">--fatal-warnings</span></tt></td>
+<td>Fail if there is any warning, as GNU ld's option of the name does:
+every warning is still printed, nothing is written, and the exit
+status is 1</td>
+</tr>
 </tbody>
 </table>
 <p>By default the compiler stops if any container or meta-command uses an
 unsupported construct, and lists every such construct with its cause.</p>
+<p>It warns, on standard error, and writes the code all the same, where a
+document leaves the generated code to guess:</p>
+<ul class="simple">
+<li>binary data whose size another value gives, where nothing bounds that
+value below the maximum field size -- no <tt class="docutils literal">ValidRange</tt>, and a width
+that allows more -- so that its buffer is the maximum field size, which
+the document does not state (give the size a <tt class="docutils literal">ValidRange</tt>);</li>
+<li>binary data that takes the rest of the packet (a size of -1), which
+only the end of the packet bounds, but for a Yamcs <tt class="docutils literal">EmbeddedTc</tt>, whose
+own packet length does.</li>
+</ul>
+<p>A string always states its maximum, as XTCE requires. <tt class="docutils literal"><span class="pre">--skip-unsupported</span></tt>
+warns of each construct it leaves out too. <tt class="docutils literal"><span class="pre">--fatal-warnings</span></tt> turns every
+warning into a failure, for a build that must know each buffer's size.</p>
 </div>
 <div class="section" id="missions-in-several-documents">
 <h2><a class="toc-backref" href="#toc-entry-19">Missions in several documents</a></h2>

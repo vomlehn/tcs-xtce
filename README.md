@@ -1,5 +1,10 @@
-# tcs-xtce: XTCE serialization libraries for Rust, C/C++ and Python
-Flight software: a parser that takes XTCE (XML Telemetric and Command Exchange) definitions of commands and telemetry and produces data structures and methods for packing and unpacking data into and from buffers. It is a standard for space applications,equally useful for terrestrial applications, such as drones. Supports C/C++, Rust, and Python.
+# tcs-xtce: an XTCE compiler, editor and packet runtime
+Software tools for XTCE (XML Telemetric and Command Exchange): a compiler
+that turns a mission's XTCE definitions of commands and telemetry into the
+data structures and code that pack and unpack them, in C/C++, Rust and
+Python; an XTCE editor; and tcsxtce, the operational runtime the generated
+code runs on, aboard and in the mission operations center. Made for space
+applications, and as useful on the ground, such as for drones.
 
 Includes libraries that serialize and deserialize OMG **XTCE** (XML Telemetric and
 Command Exchange) data into managed, preallocated buffers, in two layers:
@@ -111,11 +116,17 @@ headers in `include/`, `libtcs-xtce.so` and `libtcs-xtce.a` with `tcs-xtce.pc` (
 packages `tcs_xtce` and `tcsccsds` in `lib/python3/site-packages/`.
 
 **Packages.** `make deb` and `make rpm` (or `make packages`, both) build
-one package, `tcs-xtce`, version `<version>-1`, into `build/packages/`; it needs `python3` 3.10 or
-later. The package also puts `/opt/tcs/bin` on `PATH` and
-`/opt/tcs/lib/pkgconfig` on `PKG_CONFIG_PATH` for login shells, tells the
-loader about `/opt/tcs/lib`, and puts the Python packages on `python3`'s
-path.
+two packages, version `<version>-1`, into `build/packages/`, since a
+package with operational code holds nothing else: `tcsxtce`, the
+operational code -- the `tcsxtce-*` headers, the `tcsxtce` Python package
+and tcsccsds's time codes, with `tcsxtce.pc` and `tcsccsds.pc` -- and
+`tcs-xtce`, the software tools -- the commands, `libtcs-xtce` with its
+headers and `tcs-xtce.pc`, the `tcs_xtce` Python package -- with the
+documents and examples. `tcs-xtce` requires the `tcsxtce` built with it,
+and `python3` 3.10 or later. The packages also put `/opt/tcs/bin` on
+`PATH` and `/opt/tcs/lib/pkgconfig` on `PKG_CONFIG_PATH` for login
+shells, tell the loader about `/opt/tcs/lib`, and put the Python packages
+on `python3`'s path.
 
 Installing and packaging use
 [tcs-helpers](https://github.com/vomlehn/tcs-helpers), the packaging scripts
@@ -177,7 +188,7 @@ install` once did, but nothing outside `/opt/tcs`; `make install-files
 PREFIX=$HOME` installs under your home instead, `DESTDIR` stages it, and
 `make uninstall-files`, with the same variables, removes them. `make
 install` takes neither variable, and stops if given one. `make stage`
-copies into `build/stage/tcs-xtce/`, from which the packages are made.
+copies into `build/stage/<package>/`, from which the packages are made.
 
 `make install-files`, `make stage` and so the packages strip the
 libraries they install: `libtcs-xtce.so` of all a debugger needs (`strip

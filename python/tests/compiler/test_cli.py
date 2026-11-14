@@ -126,5 +126,54 @@ class InputTests(unittest.TestCase):
             self.assertEqual(report.read_text(), out)
 
 
+class WarningTests(unittest.TestCase):
+    """Binary data with no maximum size, and --fatal-warnings."""
+
+    run_main = InputTests.run_main
+
+    def test_unbounded_binary_is_warned_of(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "out.rs"
+            status, _, err = self.run_main(DEMO, str(out), "--lang", "rust")
+            self.assertEqual(status, 0)
+            # The code is written all the same.
+            self.assertTrue(out.exists())
+        # Sized by a 32-bit value with no ValidRange.
+        self.assertIn("WideBlobType is binary data with no maximum size",
+                      err)
+        self.assertIn("give the size a ValidRange", err)
+        # The rest of the packet, transformed or not.
+        self.assertIn("type /Demo/RestType: binary data that takes the rest "
+                      "of the packet", err)
+        self.assertIn("type /Demo/StuffedType: binary data that takes the "
+                      "rest of the packet", err)
+        # Each once, however many packets use the type.
+        lines = err.splitlines()
+        self.assertEqual(len(lines), len(set(lines)))
+        self.assertTrue(all(x.startswith("tcs-xtce: warning: ")
+                            for x in lines), err)
+
+    def test_fatal_warnings_fail_and_write_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "out.rs"
+            status, _, err = self.run_main(DEMO, str(out), "--lang", "rust",
+                                           "--fatal-warnings")
+            self.assertEqual(status, 1)
+            self.assertFalse(out.exists())
+        self.assertIn("tcs-xtce: warning: ", err)
+        self.assertIn("--fatal-warnings was given: nothing written", err)
+
+    def test_fatal_warnings_without_warnings(self):
+        with tempfile.TemporaryDirectory() as d:
+            names = []
+            for name, text in (("dt", TYPES), ("hdr", HEADER), ("app", APP)):
+                names.append(str(Path(d) / f"{name}.xtce"))
+                Path(names[-1]).write_text(text)
+            status, out, err = self.run_main(*names, "-", "--lang", "rust",
+                                             "--fatal-warnings")
+        self.assertEqual((status, err), (0, ""))
+        self.assertIn("pub struct Ping", out)
+
+
 if __name__ == "__main__":
     unittest.main()

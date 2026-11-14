@@ -1354,6 +1354,9 @@ class Mission:
     kinds: list[Kind]
     roots: list[Node]  # roots of the trees behind ``kinds``
     skipped: list[str] = field(default_factory=list)
+    # What the documents allow that the generated code can only guess at,
+    # such as binary data with no maximum size, as warnings.
+    warnings: list[str] = field(default_factory=list)
     # The parameters whose alarms depend on earlier samples: (qualified
     # name, field name in the AlarmMonitor, samples of history to keep),
     # one per parameter whatever packets hold it.

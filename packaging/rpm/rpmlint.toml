@@ -1,4 +1,4 @@
-# What rpmlint is to accept in the tcs-xtce RPM, read by `make
+# What rpmlint is to accept in the tcs-xtce and tcsxtce RPMs, read by `make
 # lint-packages` and never shipped. Each filter is a finding that is
 # intended, with why; anything else rpmlint reports is to be fixed.
 
@@ -46,5 +46,14 @@ Filters = [
 	# The rm the triggers and %preun run takes away only the package's own
 	# .pth file, which the python3 installed says where to write, so it
 	# cannot be a file the package lists.
-	'^tcs-xtce\.[^:]+: E: dangerous-command-in-%(trigger|preun) rm$',
+	'^tcsx?-?xtce\.[^:]+: E: dangerous-command-in-%(trigger|preun) rm$',
+	# tcsxtce is headers and Python alone, the packet runtime the generated
+	# code runs on, so it has no binary; it is built for the machine's
+	# architecture all the same, as every TCS package is, so that its file
+	# is named as the others are.
+	'^tcsxtce\.[^:]+: E: no-binary$',
+	# tcs-xtce's compiler and tcsxtce's runtime are built together and must
+	# agree on the packet format, so tcs-xtce requires exactly the tcsxtce
+	# built with it.
+	'^tcs-xtce\.[^:]+: E: requires-on-release tcsxtce = ',
 ]

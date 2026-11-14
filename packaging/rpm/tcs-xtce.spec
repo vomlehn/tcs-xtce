@@ -36,6 +36,9 @@ Packager:	%{tcs_maintainer}
 # will do: the package's directory has no Python version in it. The
 # libraries the editor links with RPM finds for itself.
 Requires:	python3 >= 3.10
+# The packet runtime and digest the compiler's Python imports, and the
+# generated code runs on: the operational code, packaged apart.
+Requires:	tcsxtce = %{version}-%{release}
 # The editor opens its windows through libraries it loads when it runs,
 # which RPM cannot see that it needs: the keyboard, X11 or Wayland, EGL
 # and OpenGL, and D-Bus for the desktop's Open and Save dialogs.  The
@@ -67,13 +70,13 @@ documents, and compiles a mission's XTCE into typed telemetry and command
 structures with binary encoders and decoders, in Rust, C, C++ and Python,
 using managed, preallocated buffers.
 
-This package holds the compiler (tcs-xtce), xtce-digest, the graphical XTCE
-editor (tcs-xtcee), which keeps a document valid for its XTCE version and
-converts between versions 1.1, 1.2 and 1.3, the packet runtime tcsxtce for
-Python 3 and for C and C++ (header-only), the C/C++ XTCE library
-libtcs-xtce (shared and static) with its headers, the pkg-config files,
-tcsccsds's CCSDS time codes for C, C++ and Python, and the documentation
-and examples, all under /opt/tcs.
+This package holds the software tools: the compiler (tcs-xtce),
+xtce-digest, the graphical XTCE editor (tcs-xtcee), which keeps a document
+valid for its XTCE version and converts between versions 1.1, 1.2 and
+1.3, and the C/C++ XTCE library libtcs-xtce (shared and static) with its
+headers and pkg-config file, and the documentation and examples, all
+under /opt/tcs. The packet runtime the generated code runs on is the
+tcsxtce package.
 
 %install
 cp -a %{tcs_stage}/. %{buildroot}/
@@ -137,20 +140,12 @@ fi
 /opt/tcs/sbin/tcs-xtce-links
 /opt/tcs/include/tcs-xtce.h
 /opt/tcs/include/tcs-xtce-*.hpp
-/opt/tcs/include/tcsxtce-*.h
-/opt/tcs/include/tcsxtce-*.hpp
-/opt/tcs/include/tcsccsds-time.h
 /opt/tcs/lib/libtcs-xtce.so
 /opt/tcs/lib/libtcs-xtce.so.%{tcs_abi}
 /opt/tcs/lib/libtcs-xtce.a
 /opt/tcs/lib/pkgconfig/tcs-xtce.pc
-/opt/tcs/lib/pkgconfig/tcsxtce.pc
-/opt/tcs/lib/pkgconfig/tcsccsds.pc
-/opt/tcs/lib/python3/site-packages/tcsxtce/
 /opt/tcs/lib/python3/site-packages/tcs_xtce/
 /opt/tcs/lib/python3/site-packages/tcs_xtce-%{version}.dist-info/
-/opt/tcs/lib/python3/site-packages/tcsccsds/
-/opt/tcs/lib/python3/site-packages/tcsccsds-%{tcsccsds_version}.dist-info/
 %doc /opt/tcs/share/doc/tcs-xtce/
 /opt/tcs/share/examples/tcs-xtce/
 %config(noreplace) /etc/ld.so.conf.d/tcs-xtce.conf

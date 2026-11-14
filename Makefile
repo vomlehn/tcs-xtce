@@ -464,13 +464,14 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.10.0
+TCS_HELPERS_REQUIRED := 0.11.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include
 LIBDIR  := $(DESTDIR)$(PREFIX)/lib
 PCDIR   := $(LIBDIR)/pkgconfig
 DOCDIR  := $(DESTDIR)$(PREFIX)/share/doc/tcs-xtce
+RT_DOCDIR := $(DESTDIR)$(PREFIX)/share/doc/tcsxtce
 EXDIR   := $(DESTDIR)$(PREFIX)/share/examples/tcs-xtce
 # Where the Python packages go: the same directory for every Python 3, so
 # the path has no minor version in it to go stale when Python is upgraded.
@@ -499,6 +500,14 @@ COMMANDS := packaging/bin/tcs-xtce packaging/bin/xtce-digest $(EDITOR_BIN)
 HEADERS := $(sort $(wildcard cpp/include/*.h cpp/include/*.hpp \
                              ccsds/include/*.h) \
                   cpp/include/tcs-xtce-generated.hpp)
+# The two packages, since a package with operational code holds nothing
+# else: tcsxtce, the operational code -- the packet runtime and digest,
+# header-only for C and C++ and a Python package, and tcsccsds's time
+# codes -- and tcs-xtce, the software tools, the C/C++ XTCE library and
+# the examples. Each is installed by its install-<package>.
+PACKAGES := tcsxtce tcs-xtce
+RT_HEADERS := $(filter cpp/include/tcsxtce-% ccsds/include/%,$(HEADERS))
+TOOL_HEADERS := $(filter-out $(RT_HEADERS),$(HEADERS))
 # The hooks HOOKS=1 installs name /opt/tcs, so they are refused with any
 # other PREFIX rather than installed pointing at the wrong tree.
 ifeq ($(HOOKS),1)
@@ -514,6 +523,8 @@ endif
 LDCONF  := $(DESTDIR)/etc/ld.so.conf.d/tcs-xtce.conf
 PROFILE := $(DESTDIR)/etc/profile.d/tcs-xtce.sh
 PTH     := $(DESTDIR)/usr/lib/python3/dist-packages/tcs-xtce.pth
+RT_PROFILE := $(DESTDIR)/etc/profile.d/tcsxtce.sh
+RT_PTH  := $(DESTDIR)/usr/lib/python3/dist-packages/tcsxtce.pth
 
 # Installs one Python package with pip, so that it has the metadata pip
 # and importlib.metadata read, from a copy of its sources made for the
@@ -566,13 +577,49 @@ install-tools:
 
 # Copy everything into place under $(DESTDIR)$(PREFIX): what `make
 # install` once did, kept for development and for `make stage`, which
-# cuts the packages from it; `make install` installs the packages. What
-# is copied: the three commands, and in sbin
-# tcs-xtce-links, which links them into /usr/local/bin; the headers,
-# straight into include; the shared library under its soname,
-# with its development name linked to it, and the static one; pkg-config
-# files naming the real prefix; the Python packages tcsxtce, tcs_xtce and
-# tcsccsds; and the documents and examples. The Rust crates are not
+# cuts the packages from it; `make install` installs the packages.
+# install-tcsxtce and install-tcs-xtce each install one of PACKAGES, and
+# are the whole account of which file is in which.
+.PHONY: install-files
+install-files: $(addprefix install-,$(PACKAGES))
+
+# The operational code: the tcsxtce headers and Python package, tcsccsds's
+# header and Python package, their pkg-config files and a README. The
+# Python package tcsxtce is in the tcs_xtce distribution, whose pip install
+# tcs-xtce's package makes, so it is copied here as it is, without
+# metadata of its own.
+.PHONY: install-tcsxtce
+install-tcsxtce: $(PY_GEN) tcs-helpers
+	@echo "Installing tcsxtce $(VERSION) to $(DESTDIR)$(PREFIX)..."
+	install -D -m 644 -t $(INCDIR) $(RT_HEADERS)
+	install -d $(PCDIR)
+	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' \
+		packaging/tcsxtce.pc.in > $(PCDIR)/tcsxtce.pc
+	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(CCSDS_VERSION)|' \
+		packaging/tcsccsds.pc.in > $(PCDIR)/tcsccsds.pc
+	chmod 644 $(PCDIR)/tcsxtce.pc $(PCDIR)/tcsccsds.pc
+	install -d $(DESTDIR)$(PYDIR)
+	rm -rf $(DESTDIR)$(PYDIR)/tcsxtce
+	cp -R python/tcsxtce $(DESTDIR)$(PYDIR)/
+	find $(DESTDIR)$(PYDIR)/tcsxtce -name __pycache__ -type d -prune \
+		-exec rm -rf {} +
+	$(call pyinstall,tcsccsds,$(CCSDS_VERSION), \
+		ccsds/python/pyproject.toml ccsds/python/tcsccsds)
+	install -D -m 644 -t $(RT_DOCDIR) README.md LICENSE-APACHE \
+		LICENSE-MIT
+	if [ "$(HOOKS)" = 1 ]; then \
+	    install -D -m 644 packaging/hooks/tcsxtce.sh $(RT_PROFILE); \
+	    install -D -m 644 packaging/hooks/tcs-xtce.pth $(RT_PTH); \
+	fi
+
+# The software tools. The tcs_xtce distribution's pip install brings
+# tcsxtce too, which is the tcsxtce package's, so it is taken out again,
+# with its lines in RECORD. What is copied is the three commands, and in
+# sbin tcs-xtce-links, which links them into /usr/local/bin; the
+# library's headers, straight into include; the shared library under its
+# soname, with its development name linked to it, and the static one; its
+# pkg-config file naming the real prefix; the Python package tcs_xtce;
+# and the documents and examples. The Rust crates are not
 # installed, a Rust program taking them through cargo. The HTML is
 # installed as committed, not remade, so that installing needs no
 # rst2html; `make html` before a commit keeps it current. An example that
@@ -581,8 +628,8 @@ install-tools:
 # third-party-notices.py writes, lists the crates compiled into tcs-xtcee,
 # the one Rust program installed, with the licence notices each requires
 # to go with every copy.
-.PHONY: install-files
-install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
+.PHONY: install-tcs-xtce
+install-tcs-xtce: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 	@[ "$(VERSION)" = "$(RUST_VERSION)" ] || { \
 	    echo "pyproject.toml is $(VERSION) and rust/Cargo.toml" \
 	        "$(RUST_VERSION); make them agree" >&2; \
@@ -596,7 +643,7 @@ install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 		-e 's|@PROGRAMS@|$(notdir $(COMMANDS))|g' \
 		$(TCS_HELPERS)/packaging/links.sh.in > $(SBINDIR)/tcs-xtce-links
 	chmod 755 $(SBINDIR)/tcs-xtce-links
-	install -D -m 644 -t $(INCDIR) $(HEADERS)
+	install -D -m 644 -t $(INCDIR) $(TOOL_HEADERS)
 	install -D -m 644 cpp/build/libtcs-xtce.so $(LIBDIR)/$(SONAME)
 	ln -sf $(SONAME) $(LIBDIR)/libtcs-xtce.so
 	install -D -m 644 cpp/build/libtcs-xtce.a $(LIBDIR)/libtcs-xtce.a
@@ -608,15 +655,12 @@ install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 	install -d $(PCDIR)
 	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' \
 		packaging/tcs-xtce.pc.in > $(PCDIR)/tcs-xtce.pc
-	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' \
-		packaging/tcsxtce.pc.in > $(PCDIR)/tcsxtce.pc
-	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(CCSDS_VERSION)|' \
-		packaging/tcsccsds.pc.in > $(PCDIR)/tcsccsds.pc
-	chmod 644 $(PCDIR)/tcs-xtce.pc $(PCDIR)/tcsxtce.pc $(PCDIR)/tcsccsds.pc
+	chmod 644 $(PCDIR)/tcs-xtce.pc
 	$(call pyinstall,tcs_xtce,$(VERSION),pyproject.toml README.md \
 		LICENSE-APACHE LICENSE-MIT python)
-	$(call pyinstall,tcsccsds,$(CCSDS_VERSION), \
-		ccsds/python/pyproject.toml ccsds/python/tcsccsds)
+	rm -rf $(DESTDIR)$(PYDIR)/tcsxtce
+	sed -i '/^tcsxtce\//d' \
+		$(DESTDIR)$(PYDIR)/tcs_xtce-$(VERSION).dist-info/RECORD
 	install -D -m 644 -t $(DOCDIR) $(DOCS)
 	install -D -m 644 -t $(DOCDIR)/shots $(SHOTS)
 	$(THIRD_PARTY_NOTICES) editor $(DOCDIR)/THIRD-PARTY-NOTICES tcs-xtce
@@ -662,9 +706,9 @@ uninstall-files:
 		$(DESTDIR)$(PYDIR)/tcs_xtce-$(VERSION).dist-info \
 		$(DESTDIR)$(PYDIR)/tcsccsds \
 		$(DESTDIR)$(PYDIR)/tcsccsds-$(CCSDS_VERSION).dist-info
-	rm -rf $(DOCDIR) $(EXDIR)
+	rm -rf $(DOCDIR) $(RT_DOCDIR) $(EXDIR)
 	if [ "$(HOOKS)" = 1 ]; then \
-	    rm -f $(LDCONF) $(PROFILE) $(PTH); \
+	    rm -f $(LDCONF) $(PROFILE) $(PTH) $(RT_PROFILE) $(RT_PTH); \
 	fi
 	@echo "[OK] Uninstalled from $(DESTDIR)$(PREFIX)"
 
@@ -675,13 +719,14 @@ LINKDIR ?= /usr/local/bin
 # The packaging targets -- install, uninstall, stage, deb, rpm, packages,
 # lint-packages, links, unlinks and publish-release -- are tcs-helpers'
 # packaging.mk's, shared by the TCS projects; see it for what each does.
-# This repository has the one package, built from packaging/deb/tcs-xtce and
-# packaging/rpm/tcs-xtce.spec, which is also given the library's ABI
+# This repository has two packages, PACKAGES, each staged by its own
+# install-<package> and built from packaging/deb/<package> and
+# packaging/rpm/<package>.spec, which are also given the library's ABI
 # version and tcsccsds's version. Without a tcs-helpers checkout new
 # enough to have install-packages.sh, which came with the install target
 # in 0.4.0, there is nothing to include that has every target here, and
 # the targets stop as the tcs-helpers target says.
-PACKAGES    := tcs-xtce
+STAGE_TARGET = install-$$package
 # Its programs with windows are built with Slint, whose royalty-free
 # licence asks for its badge where they are downloaded: make
 # publish-release adds it to the notes of every release (see tcs-helpers'

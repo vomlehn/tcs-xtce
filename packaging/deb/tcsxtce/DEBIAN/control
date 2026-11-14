@@ -1,0 +1,21 @@
+Package: tcsxtce
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: David VomLehn <dvomlehn@gmail.com>
+Installed-Size: @SIZE@
+Recommends: python3 (>= 3.10)
+Suggests: pkgconf
+Replaces: tcs-xtce (<< 0.7.1)
+Breaks: tcs-xtce (<< 0.7.1)
+Section: libdevel
+Priority: optional
+Homepage: https://github.com/vomlehn/tcs-xtce
+Description: packet runtime for code tcs-xtce generates, and CCSDS time codes
+ Tcsxtce is what the packet code tcs-xtce generates from a mission's XTCE
+ runs on, aboard a vehicle and in the mission operations center: the
+ packet runtime and the digest two programs check each other's XTCE
+ with, header-only for C and C++ and as a Python 3 package. tcsccsds's
+ CCSDS time codes for C, C++ and Python come with it.
+ .
+ This package is operational code alone, under /opt/tcs; the compiler
+ that generates the code is the tcs-xtce package.

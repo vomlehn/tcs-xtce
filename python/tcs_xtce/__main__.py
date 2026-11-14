@@ -17,6 +17,14 @@ after initialization: Rust gets fixed-capacity arrays, strings and binary
 fields, and C and C++ never allocate either way.  Python allocates every
 object on the heap, so it accepts only ``true``.
 
+Warnings go to standard error, and the code is written all the same:
+binary data whose size another value gives, with nothing in the document
+to bound it below the maximum field size, or that takes the rest of the
+packet, has no maximum size, and the generated code's buffer for it is the
+maximum field size instead.  ``--fatal-warnings`` makes any warning fail
+the run, as GNU ld's does: each is still printed, the output is not
+written, and the exit status is 1.
+
 ``python3 -m tcs_xtce INPUT... [OUTPUT] --size-report`` instead reports, for
 each packet, the bits every field uses on the wire and the bits the document
 says it needs.  OUTPUT may be left out when there is only one INPUT, and the
@@ -66,7 +74,8 @@ def main(argv=None) -> int:
 
     Returns:
         The exit status: 0 on success, 1 if a document can't be read or
-        uses something unsupported.  Bad arguments exit with status 2.
+        uses something unsupported, or there was a warning and
+        --fatal-warnings was given.  Bad arguments exit with status 2.
     """
 
     ap = argparse.ArgumentParser(
@@ -96,6 +105,9 @@ def main(argv=None) -> int:
         "--dynamic-allocations", choices=("true", "false"), default="true",
         help="whether the generated code may allocate heap memory at any time "
              "(true, the default) or only during initialization (false)")
+    ap.add_argument("--fatal-warnings", action="store_true",
+                    help="fail, writing nothing, if there is any warning, "
+                         "after printing them all")
     ap.add_argument("--source-name",
                     help="name of the input recorded in the generated header "
                          "comment (default: the INPUT file names)")
@@ -141,9 +153,16 @@ def main(argv=None) -> int:
         where = f"{inputs[0]}: " if len(inputs) == 1 else ""
         print(f"tcs-xtce: {where}{e}", file=sys.stderr)
         return 1
+    warnings = list(mission.warnings)
     if not args.size_report:  # the report lists them itself
-        for msg in mission.skipped:
-            print(f"tcs-xtce: warning: skipped {msg}", file=sys.stderr)
+        warnings += [f"skipped {msg}" for msg in mission.skipped]
+    for msg in warnings:
+        print(f"tcs-xtce: warning: {msg}", file=sys.stderr)
+    if warnings and args.fatal_warnings:
+        print(f"tcs-xtce: {len(warnings)} warning"
+              f"{'' if len(warnings) == 1 else 's'}, and --fatal-warnings "
+              "was given: nothing written", file=sys.stderr)
+        return 1
     source = args.source_name or ", ".join(Path(n).name for n in inputs)
     if args.size_report:
         write(output, report.report(mission))

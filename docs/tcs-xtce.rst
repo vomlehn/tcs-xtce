@@ -234,12 +234,12 @@ toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
    make fmt-check       # verify it (Rust is also checked by every `make rust`)
    make install         # build the packages, install them (see Installing)
    make install DRY_RUN=1   # show what install would do; change nothing
-   make uninstall       # remove the package
+   make uninstall       # remove the packages
    make install-files   # copy the files under PREFIX, /opt/tcs, unpackaged
    make uninstall-files # remove what install-files put there
    make links | unlinks # link the installed programs into /usr/local/bin
-   make stage           # install-files into build/stage/tcs-xtce
-   make deb | rpm       # build the tcs-xtce package into build/packages
+   make stage           # install each package into build/stage/<package>
+   make deb | rpm       # build the tcsxtce and tcs-xtce packages
    make packages        # both; STRIP=0 keeps the libraries unstripped
    make lint-packages   # check them with lintian, rpmlint and shellcheck
    make clean           # remove build products
@@ -319,16 +319,31 @@ installer, one of ``apt-get``, ``apt``, ``dpkg``, ``dnf``, ``yum``,
 because ``dpkg-deb`` or ``rpmbuild`` is missing, it stops, saying which
 to install.
 
-``make deb`` and ``make rpm`` build one package, ``tcs-xtce``, holding
-all of it, into ``build/packages/``; ``make packages`` builds both, the RPM
-only where ``rpmbuild`` is installed and the .deb only where ``dpkg-deb``
-is. They are made from the tree ``make
-stage`` installs into ``build/stage/tcs-xtce/``. Besides ``/opt/tcs`` the package
-installs ``/etc/ld.so.conf.d/tcs-xtce.conf``, so the loader finds
-``libtcs-xtce.so``; ``/etc/profile.d/tcs-xtce.sh``, which puts ``/opt/tcs/bin``
-on ``PATH`` and ``/opt/tcs/lib/pkgconfig`` on ``PKG_CONFIG_PATH``; and a
-``tcs-xtce.pth`` in ``python3``'s own site-packages, which puts the Python
-packages on its path.
+``make deb`` and ``make rpm`` build two packages into
+``build/packages/``, since a package with operational code holds nothing
+else:
+
+``tcsxtce``
+    The operational code: the ``tcsxtce-*`` headers and the ``tcsxtce``
+    Python package, the packet runtime and digest the generated code runs
+    on, and tcsccsds's ``tcsccsds-time.h`` and Python package, with
+    ``tcsxtce.pc`` and ``tcsccsds.pc``.
+``tcs-xtce``
+    The software tools: the ``tcs-xtce``, ``xtce-digest`` and
+    ``tcs-xtcee`` commands, ``libtcs-xtce`` with its headers and
+    ``tcs-xtce.pc``, and the ``tcs_xtce`` Python package, with the
+    documents and examples. It requires the ``tcsxtce`` built with it.
+
+``make packages`` builds both kinds, the RPMs only where ``rpmbuild`` is
+installed and the .debs only where ``dpkg-deb`` is. Each is made from the
+tree ``make stage`` installs it into, ``build/stage/<package>/``. Besides
+``/opt/tcs``, ``tcs-xtce`` installs ``/etc/ld.so.conf.d/tcs-xtce.conf``, so
+the loader finds ``libtcs-xtce.so``, and ``/etc/profile.d/tcs-xtce.sh``,
+which puts ``/opt/tcs/bin`` on ``PATH`` and ``/opt/tcs/lib/pkgconfig`` on
+``PKG_CONFIG_PATH``; ``tcsxtce`` installs ``/etc/profile.d/tcsxtce.sh``,
+which puts ``/opt/tcs/lib/pkgconfig`` on ``PKG_CONFIG_PATH``; and each
+installs a ``.pth`` file named for it in ``python3``'s own site-packages,
+which puts the Python packages on its path.
 
 ``/etc/profile.d`` is read only by login shells, so ``sudo``, cron and
 other minimal environments do not see ``/opt/tcs/bin``. The package's
@@ -832,9 +847,28 @@ the compiler is the ``tcs-xtce`` command, run from anywhere:
    * - ``--source-name NAME``
      - Mission file name recorded in the generated headers (default: the
        ``INPUT`` file names)
+   * - ``--fatal-warnings``
+     - Fail if there is any warning, as GNU ld's option of the name does:
+       every warning is still printed, nothing is written, and the exit
+       status is 1
 
 By default the compiler stops if any container or meta-command uses an
 unsupported construct, and lists every such construct with its cause.
+
+It warns, on standard error, and writes the code all the same, where a
+document leaves the generated code to guess:
+
+* binary data whose size another value gives, where nothing bounds that
+  value below the maximum field size -- no ``ValidRange``, and a width
+  that allows more -- so that its buffer is the maximum field size, which
+  the document does not state (give the size a ``ValidRange``);
+* binary data that takes the rest of the packet (a size of -1), which
+  only the end of the packet bounds, but for a Yamcs ``EmbeddedTc``, whose
+  own packet length does.
+
+A string always states its maximum, as XTCE requires. ``--skip-unsupported``
+warns of each construct it leaves out too. ``--fatal-warnings`` turns every
+warning into a failure, for a build that must know each buffer's size.
 
 Missions in several documents
 -----------------------------
