@@ -8,14 +8,16 @@
 #   make packets         regenerate the demo mission's packet codecs
 #   make rust|cpp|python build one library
 #   make test            run every language's tests, the cross-language
-#                        checks (packets and digests) and the line-width
-#                        check
+#                        checks (packets and digests), the line-width
+#                        check and the naming check
 #   make bnum-check      check tcsxtce-bnum.h and tcsxtce-bnum.hpp against the
 #                        bnum crate
 #   make ccsds-check     check tcs-ccsds's time codes in every language
 #   make line-width      check that no line of code is wider than 80 columns
 #   make html            remake the HTML pages of docs/ and the examples
 #   make html-check      fail where a committed page is behind its source
+#   make production-names  fail where production code is built from code
+#                        with a non-production name
 #   make hooks           have git run tcs-helpers' pre-commit hook, which
 #                        remakes the page of each document a commit changes
 #                        and adds it to the commit
@@ -166,7 +168,7 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 .PHONY: test
 test: test-rust test-cpp test-python cross-check packet-check \
       stream-check digest-check float-check bnum-check ccsds-check examples \
-      test-editor line-width doc-headers html-check
+      test-editor line-width doc-headers html-check production-names
 
 # Every non-trivial function, hand-written or generated, has a header that
 # describes it, its parameters and what it returns.  Last, with line-width,
@@ -380,6 +382,21 @@ HTML_DIRS := docs examples
 html-check: tcs-helpers
 	"$(TCS_HELPERS)/bin/html-pages" check $(HTML_DIRS)
 
+# Fail where production code -- code that runs aboard a vehicle or in a
+# mission operations center, whose name has a letter straight after tcs --
+# is built from or imports code with a non-production name, a hyphen or an
+# underscore after tcs: tcsxtce may be built from nothing of tcs-xtce's. The
+# rule, and the check, are tcs-helpers' production-names, which every TCS
+# project runs; its README says more.
+.PHONY: production-names
+production-names: tcs-helpers
+	"$(TCS_HELPERS)/bin/production-names" \
+		--manifest rust/Cargo.toml \
+		--manifest ccsds/rust/Cargo.toml \
+		--manifest editor/Cargo.toml \
+		--pyproject pyproject.toml \
+		--pyproject ccsds/python/pyproject.toml
+
 # Have git run tcs-helpers' pre-commit hook in this checkout, which remakes
 # the page of each document a commit changes and adds it to the commit.
 .PHONY: hooks
@@ -442,7 +459,7 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.8.0
+TCS_HELPERS_REQUIRED := 0.9.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include

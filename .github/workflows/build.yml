@@ -1,5 +1,7 @@
 # Build everything from a clean checkout and run every test, so anything
 # that only works because of files left over in a working tree is caught.
+# tcs-helpers is checked out beside it, as on a developer's machine: make
+# test runs its html-pages and production-names.
 name: build
 
 on:
@@ -9,8 +11,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tcs-xtce
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: tcs-xtce
+      - uses: actions/checkout@v4
+        with:
+          repository: vomlehn/tcs-helpers
+          path: tcs-helpers
 
       # The oldest Python the project supports.
       - uses: actions/setup-python@v5
@@ -29,15 +40,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            references/*
-            !references/Makefile
-          key: references-${{ hashFiles('references/Makefile') }}
+            tcs-xtce/references/*
+            !tcs-xtce/references/Makefile
+          key: references-${{ hashFiles('tcs-xtce/references/Makefile') }}
 
       - name: Cache public XTCE documents
         uses: actions/cache@v4
         with:
-          path: tests/external/files
-          key: external-${{ hashFiles('tests/external/sources.txt') }}
+          path: tcs-xtce/tests/external/files
+          key: external-${{ hashFiles('tcs-xtce/tests/external/sources.txt') }}
 
       - name: Build and test
         run: make
