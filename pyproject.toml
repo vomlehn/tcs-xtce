@@ -2,7 +2,7 @@
 # the compiler that generates code in every language, installable with pip.
 #
 # Two packages, in python/: tcsxtce, the packet runtime and the digest,
-# which are production software; and tcs_xtce, ground software, with the XML
+# which are operational code; and tcs_xtce, a software tool, with the XML
 # binding at its top, the compiler in tcs_xtce.compiler, the XML binding's
 # generator in tcs_xtce.binding and the digest's command line in
 # tcs_xtce.digest_cli. This file is at the repository's root so that the

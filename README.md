@@ -30,9 +30,13 @@ What the generated code runs on, the packet runtime, and the digest
 programs check each other with are a library of their own, `tcsxtce`, in
 each language: the `tcsxtce` crate, the `tcsxtce` Python package, and the
 header-only `tcsxtce-packet.h` and `tcsxtce-digest.h` for C and C++. It is
-production software, run aboard and in the operations center, and is all
-of tcs-xtce that is; the rest -- the XML binding, the compiler and the
-editor -- is ground software.
+operational code, run aboard and in the operations center, and is all of
+tcs-xtce that is, with tcsccsds; the rest -- the XML binding, the compiler
+and the editor -- is software tools, which make what operational code is
+built from. `categories.toml` puts each directory in its category, as
+"Code categories" in
+[tcs-helpers' README](https://github.com/vomlehn/tcs-helpers#code-categories)
+defines them.
 
 The full documentation is in `docs/`:
 [`docs/tcs-xtce.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtce.rst)
@@ -440,17 +444,17 @@ random packets.
 ## Incompatible changes
 
 **tcsccsds 0.3.0: tcs-ccsds is renamed tcsccsds.** Its time codes run
-aboard and in the operations center, so it takes a production name, as
+aboard and in the operations center, so it takes an operational name, as
 tcsxtce did: the crate `tcs-ccsds` is now `tcsccsds`, the Python package
 `tcs_ccsds` is `tcsccsds` (Python package version 0.2.0), the header
 `ccsds-time.h` is `tcsccsds-time.h`, and `tcs-ccsds.pc` is `tcsccsds.pc`.
 The functions, types and macros keep their names, `ccsds_` in C.
 
 **0.7.0: the packet runtime is a library of its own, `tcsxtce`.** What
-code that `tcs-xtce` generated runs on -- the packet runtime -- flies,
-while the rest of tcs-xtce is ground software, and the two are now named
-apart: a name that starts `tcs` and a letter is flight software, one
-that starts `tcs-` or `tcs_` is not. Code that `tcs-xtce` generated has
+code that `tcs-xtce` generated runs on -- the packet runtime -- is
+operational code, while the rest of tcs-xtce is software tools, and the
+two are now named apart: a name that starts `tcs` and a letter is
+operational code, one that starts `tcs-` or `tcs_` is not. Code that `tcs-xtce` generated has
 to be generated again, and depends on the runtime rather than on
 `tcs-xtce`.
 

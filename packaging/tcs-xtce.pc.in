@@ -1,4 +1,4 @@
-# The C/C++ XTCE library, ground software, installed by `make install` with
+# The C/C++ XTCE library, a software tool, installed by `make install` with
 # @PREFIX@ and @VERSION@ replaced by the prefix it installed under and the
 # package's version. The library is C++, so a program linking the static
 # one, as `pkg-config --static` asks, needs the C++ runtime too. It takes

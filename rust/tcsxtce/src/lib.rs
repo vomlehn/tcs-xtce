@@ -12,8 +12,8 @@
 //! as that takes, and computes the same digest in every language.
 //!
 //! This crate is only what generated code and that check run on. Reading and
-//! writing XTCE documents in full, and the compiler, are tcs-xtce's, which is
-//! ground software: see the `tcs-xtce` crate.
+//! writing XTCE documents in full, and the compiler, are tcs-xtce's, which
+//! are software tools: see the `tcs-xtce` crate.
 
 pub mod buffer;
 pub mod digest;

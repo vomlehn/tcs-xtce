@@ -1,7 +1,7 @@
 # Build everything from a clean checkout and run every test, so anything
 # that only works because of files left over in a working tree is caught.
 # tcs-helpers is checked out beside it, as on a developer's machine: make
-# test runs its html-pages and production-names.
+# test runs its html-pages and operational-names.
 name: build
 
 on:
@@ -24,7 +24,7 @@ jobs:
           path: tcs-helpers
 
       # The oldest Python building and testing support: tcs-helpers'
-      # production-names, which make test runs, needs 3.11's tomllib.
+      # operational-names, which make test runs, needs 3.11's tomllib.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

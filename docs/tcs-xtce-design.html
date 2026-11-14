@@ -1564,7 +1564,7 @@ send its digest and check the one it receives: <tt class="docutils literal">tcsx
 Python, <tt class="docutils literal"><span class="pre">tcsxtce::digest</span></tt> in Rust, and <tt class="docutils literal"><span class="pre">tcsxtce-digest.h</span></tt> for C and
 C++, header-only like <tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt> so that C programs still link
 no library. It is part of the runtime, <tt class="docutils literal">tcsxtce</tt>, because programs that
-are production software compute it as they run; one that must not read
+are operational code compute it as they run; one that must not read
 XTCE, such as one that flies, can be given its digest as a constant
 computed when it is built instead. The encoding is specified in
 <tt class="docutils literal">python/tcsxtce/digest.py</tt>, and each runtime has its own small XML

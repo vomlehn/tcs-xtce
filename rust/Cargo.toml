@@ -3,9 +3,9 @@ name = "tcs-xtce"
 version = "0.7.0"
 edition = "2021"
 description = """\
-    Ground software: serialization and deserialization of OMG XTCE documents \
+    A software tool: serialization and deserialization of OMG XTCE documents \
     into managed, preallocated buffers, and their digests; the packet runtime \
-    that flies is the tcsxtce crate\
+    that operational code runs is the tcsxtce crate\
 """
 license = "MIT OR Apache-2.0"
 # The repository's README, which is the crate's page on crates.io.

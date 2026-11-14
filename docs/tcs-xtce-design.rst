@@ -1264,7 +1264,7 @@ send its digest and check the one it receives: ``tcsxtce.digest`` in
 Python, ``tcsxtce::digest`` in Rust, and ``tcsxtce-digest.h`` for C and
 C++, header-only like ``tcsxtce-packet.h`` so that C programs still link
 no library. It is part of the runtime, ``tcsxtce``, because programs that
-are production software compute it as they run; one that must not read
+are operational code compute it as they run; one that must not read
 XTCE, such as one that flies, can be given its digest as a constant
 computed when it is built instead. The encoding is specified in
 ``python/tcsxtce/digest.py``, and each runtime has its own small XML

@@ -12,7 +12,7 @@ as much XML as that takes, and computes the same digest in every language.
 
 This package is only what generated code and that check run on, and needs
 nothing but the standard library. Reading and writing XTCE documents in
-full, and the compiler, are tcs-xtce's, which is ground software: see
+full, and the compiler, are tcs-xtce's, which are software tools: see
 :mod:`tcs_xtce`.
 """
 

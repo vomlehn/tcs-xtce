@@ -1,5 +1,6 @@
 //! Serialization and deserialization of OMG XTCE (XML Telemetric and Command
-//! Exchange) documents: part of tcs-xtce, which is ground software.
+//! Exchange) documents: part of tcs-xtce, whose compiler, binding and editor
+//! are software tools.
 //!
 //! The data structures in [`generated`] are produced from the XTCE schema
 //! (`references/SpaceSystem.xsd`) by the generator in `generator/`; do not

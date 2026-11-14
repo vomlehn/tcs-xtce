@@ -26,7 +26,7 @@ set -eu
 # headers for the editor's windows. make test: Python, xmllint, curl for
 # the XTCE references, rst2html for the pages html-check rebuilds, and git.
 # The editor needs Rust 1.92, Slint's. Python 3.11 because tcs-helpers'
-# production-names, which make test runs, reads TOML with tomllib.
+# operational-names, which make test runs, reads TOML with tomllib.
 PROJECT=tcs-xtce
 RUST_MIN=1.92
 PYTHON_MIN=3.11

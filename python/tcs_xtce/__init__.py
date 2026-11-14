@@ -1,5 +1,5 @@
 """Serialization and deserialization of OMG XTCE documents: part of tcs-xtce,
-which is ground software.
+whose compiler, binding and editor are software tools.
 
 The data classes in :mod:`tcs_xtce.generated` are produced from the XTCE
 schema (``references/SpaceSystem.xsd``) by :mod:`tcs_xtce.binding`; do not
@@ -12,8 +12,8 @@ codecs (:mod:`tcs_xtce.compiler`, run as ``python3 -m tcs_xtce`` or the
 (:mod:`tcs_xtce.digest_cli`).
 
 The packet runtime that the Python the compiler writes uses, and the digest
-(:mod:`tcsxtce.digest`), are the :mod:`tcsxtce` package, which flies; this
-one is ground software.
+(:mod:`tcsxtce.digest`), are the :mod:`tcsxtce` package, which is
+operational code; this one is a software tool.
 
 The XML binding is loaded the first time one of its names is used, so that
 the generators need neither its 1.4 MB nor, before

@@ -1,0 +1,47 @@
+# What each directory of tcs-xtce is, by the TCS code categories: see
+# "Code categories" in tcs-helpers' README. A directory stands for
+# everything under it but what a deeper path covers, and a file at the top
+# is infrastructure. make operational-names holds this to the files git
+# tracks, and to the names of the crates and Python packages in each.
+
+[categories]
+# tcsxtce, the packet runtime and the digest, in every language, and
+# tcsccsds's time codes: what the generated code runs on, aboard and in
+# the MOC.
+operational = [
+	"rust/tcsxtce",
+	"python/tcsxtce",
+	"cpp/include/tcsxtce-*",
+	"ccsds",
+]
+
+# The XML binding, the compiler and the XTCE editor, in every language.
+software-tools = [
+	"rust",
+	"python",
+	"cpp",
+	"editor",
+]
+
+# The demo mission, the packet vectors, the cross-language checks and
+# every test.
+verification-tools = [
+	"tests",
+	"*/tests",
+]
+
+# What builds, documents and checks the rest, and fetches OMG's
+# references.
+infrastructure = [
+	".github",
+	"bin",
+	"docs",
+	"packaging",
+	"references",
+]
+
+# The example XTCE files and the programs that use their code.
+examples = [
+	"examples",
+	"*/examples",
+]
