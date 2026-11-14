@@ -13,11 +13,19 @@ name = "housekeeping"
 version = "0.1.0"
 dependencies = [
  "tcs-xtce",
+ "tcsxtce",
 ]
 
 [[package]]
 name = "tcs-xtce"
-version = "0.6.0"
+version = "0.7.0"
+dependencies = [
+ "tcsxtce",
+]
+
+[[package]]
+name = "tcsxtce"
+version = "0.7.0"
 dependencies = [
  "bnum",
 ]

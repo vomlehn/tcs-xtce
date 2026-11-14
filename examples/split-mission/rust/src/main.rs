@@ -13,7 +13,7 @@ mod rover;
 use rover::{CcsdsKind, Event, EventType, Hk};
 use std::process::exit;
 use tcs_xtce::digest::{digest_files_bytes, hex as digest_hex};
-use tcs_xtce::packet::Packet;
+use tcsxtce::packet::Packet;
 
 /// The mission's documents: those the others build on first.
 const DOCUMENTS: [&str; 3] = ["dt.xtce", "pus.xtce", "rover.xtce"];

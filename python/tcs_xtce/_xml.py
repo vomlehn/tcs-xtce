@@ -13,7 +13,8 @@ import re
 import xml.parsers.expat as expat
 from typing import Callable, Optional
 
-from ._buffer import ManagedBuffer
+from tcsxtce import ManagedBuffer
+from tcsxtce.value import f_double
 
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 
@@ -389,26 +390,6 @@ def f_bool(v: bool) -> str:
 
 def f_int(v: int) -> str:
     return str(v)
-
-
-def f_double(v: float) -> str:
-    """Formats a double in the shortest form that reads back the same.
-
-    Matches the Rust and C++ libraries.
-
-    Args:
-        v: The value.
-
-    Returns:
-        Its text: ``NaN``, ``INF``, ``-INF`` or Python's ``repr``.
-    """
-    if v != v:
-        return "NaN"
-    if v == math.inf:
-        return "INF"
-    if v == -math.inf:
-        return "-INF"
-    return repr(float(v))
 
 
 # -- writing -------------------------------------------------------------------

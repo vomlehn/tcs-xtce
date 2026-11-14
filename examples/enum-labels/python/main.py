@@ -12,7 +12,7 @@ print identical output.
 import sys
 
 import probe
-from tcs_xtce.packet import PacketError, describe_alarms
+from tcsxtce.packet import PacketError, describe_alarms
 
 
 def fail(msg: str) -> None:

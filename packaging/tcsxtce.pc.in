@@ -1,0 +1,14 @@
+# The packet runtime for C and C++, which flies: the header-only
+# tcsxtce-packet.h and tcsxtce-bnum.h(pp) that code tcs-xtce generated
+# includes. Installed by `make install` with @PREFIX@ and @VERSION@
+# replaced by the prefix it installed under and the package's version. It
+# has no library of its own, but needs the maths library.
+prefix=@PREFIX@
+includedir=${prefix}/include
+
+Name: tcsxtce
+Description: The packet runtime for C and C++ (tcs-xtce)
+URL: https://github.com/vomlehn/tcs-xtce
+Version: @VERSION@
+Libs: -lm
+Cflags: -I${includedir}

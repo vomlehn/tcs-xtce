@@ -23,7 +23,7 @@ use std::process;
 use std::thread;
 
 use tcs_xtce::digest::{digest_file_bytes, hex};
-use tcs_xtce::packet::{Codec, Packet};
+use tcsxtce::packet::{Codec, Packet};
 use variable_array::{Length, Line, Paragraph};
 
 /// The lorem ipsum paragraph in five lines, as two arrays: three lines, then

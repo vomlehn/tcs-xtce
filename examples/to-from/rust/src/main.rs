@@ -21,7 +21,7 @@ use std::io::{self, Read, Write};
 use std::process;
 
 use tcs_xtce::digest::{digest_file_bytes, hex};
-use tcs_xtce::packet::{Codec, Packet};
+use tcsxtce::packet::{Codec, Packet};
 use to_from::Word;
 
 const LOREM_IPSUM: &str = "Lorem ipsum dolor sit amet, consectetur adipiscing \

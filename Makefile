@@ -10,7 +10,7 @@
 #   make test            run every language's tests, the cross-language
 #                        checks (packets and digests) and the line-width
 #                        check
-#   make bnum-check      check xtce-bnum.h and xtce-bnum.hpp against the
+#   make bnum-check      check tcsxtce-bnum.h and tcsxtce-bnum.hpp against the
 #                        bnum crate
 #   make ccsds-check     check tcs-ccsds's time codes in every language
 #   make line-width      check that no line of code is wider than 80 columns
@@ -68,7 +68,7 @@ GEN     := $(PYTHON) -m tcs_xtce.binding --xsd ../$(XSD)
 GEN_SRC := $(wildcard python/tcs_xtce/binding/*.py)
 
 RUST_GEN := rust/src/generated.rs
-CPP_GEN  := cpp/include/xtce-generated.hpp cpp/src/generated.cpp
+CPP_GEN  := cpp/include/tcs-xtce-generated.hpp cpp/src/generated.cpp
 PY_GEN   := python/tcs_xtce/generated.py
 SAMPLES  := tests/samples/COVERAGE.txt
 
@@ -119,7 +119,7 @@ $(RUST_GEN): $(XSD) $(GEN_SRC)
 	@touch $@
 
 $(CPP_GEN) &: $(XSD) $(GEN_SRC)
-	cd python && $(GEN) --cpp-header ../cpp/include/xtce-generated.hpp \
+	cd python && $(GEN) --cpp-header ../cpp/include/tcs-xtce-generated.hpp \
 		--cpp-source ../cpp/src/generated.cpp
 	@touch $(CPP_GEN)
 
@@ -159,7 +159,7 @@ cpp: $(CPP_GEN) $(PKT_CPP)
 
 .PHONY: python
 python: $(PY_GEN) $(PKT_PY)
-	$(PYTHON) -m compileall -q python/tcs_xtce
+	$(PYTHON) -m compileall -q python/tcsxtce python/tcs_xtce
 
 EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
@@ -413,7 +413,7 @@ RUST_VERSION := $(shell sed -n '1,/^version/s/^version = "\(.*\)"/\1/p' \
 CCSDS_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' \
                          ccsds/python/pyproject.toml)
 ABI     := $(shell cat cpp/abi-version)
-SONAME  := libxtce.so.$(ABI)
+SONAME  := libtcs-xtce.so.$(ABI)
 
 # Where `make install-files` puts everything: /opt/tcs, the tree the TCS
 # packages share under FHS 3.0's /opt/<package>, so that one PATH entry
@@ -476,7 +476,7 @@ COMMANDS := packaging/bin/tcs-xtce packaging/bin/xtce-digest $(EDITOR_BIN)
 # generated yet when this is read.
 HEADERS := $(sort $(wildcard cpp/include/*.h cpp/include/*.hpp \
                              ccsds/include/*.h) \
-                  cpp/include/xtce-generated.hpp)
+                  cpp/include/tcs-xtce-generated.hpp)
 # The hooks HOOKS=1 installs name /opt/tcs, so they are refused with any
 # other PREFIX rather than installed pointing at the wrong tree.
 ifeq ($(HOOKS),1)
@@ -539,7 +539,7 @@ tcs-helpers:
 # tcs-xtce-links, which links them into /usr/local/bin; the headers,
 # straight into include; the shared library under its soname,
 # with its development name linked to it, and the static one; pkg-config
-# files naming the real prefix; the Python packages tcs_xtce and
+# files naming the real prefix; the Python packages tcsxtce, tcs_xtce and
 # tcs_ccsds; and the documents and examples. The Rust crates are not
 # installed, a Rust program taking them through cargo. The HTML is
 # installed as committed, not remade, so that installing needs no
@@ -565,20 +565,22 @@ install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 		$(TCS_HELPERS)/packaging/links.sh.in > $(SBINDIR)/tcs-xtce-links
 	chmod 755 $(SBINDIR)/tcs-xtce-links
 	install -D -m 644 -t $(INCDIR) $(HEADERS)
-	install -D -m 644 cpp/build/libxtce.so $(LIBDIR)/$(SONAME)
-	ln -sf $(SONAME) $(LIBDIR)/libxtce.so
-	install -D -m 644 cpp/build/libxtce.a $(LIBDIR)/libxtce.a
+	install -D -m 644 cpp/build/libtcs-xtce.so $(LIBDIR)/$(SONAME)
+	ln -sf $(SONAME) $(LIBDIR)/libtcs-xtce.so
+	install -D -m 644 cpp/build/libtcs-xtce.a $(LIBDIR)/libtcs-xtce.a
 	if [ "$(STRIP)" = 1 ]; then \
 	    strip --strip-unneeded $(LIBDIR)/$(SONAME); \
-	    strip --strip-debug $(LIBDIR)/libxtce.a; \
+	    strip --strip-debug $(LIBDIR)/libtcs-xtce.a; \
 	    strip --strip-unneeded $(BINDIR)/$(notdir $(EDITOR_BIN)); \
 	fi
 	install -d $(PCDIR)
 	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' \
-		packaging/xtce.pc.in > $(PCDIR)/xtce.pc
+		packaging/tcs-xtce.pc.in > $(PCDIR)/tcs-xtce.pc
+	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' \
+		packaging/tcsxtce.pc.in > $(PCDIR)/tcsxtce.pc
 	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(CCSDS_VERSION)|' \
 		packaging/tcs-ccsds.pc.in > $(PCDIR)/tcs-ccsds.pc
-	chmod 644 $(PCDIR)/xtce.pc $(PCDIR)/tcs-ccsds.pc
+	chmod 644 $(PCDIR)/tcs-xtce.pc $(PCDIR)/tcsxtce.pc $(PCDIR)/tcs-ccsds.pc
 	$(call pyinstall,tcs_xtce,$(VERSION),pyproject.toml README.md \
 		LICENSE-APACHE LICENSE-MIT python)
 	$(call pyinstall,tcs_ccsds,$(CCSDS_VERSION), \
@@ -603,8 +605,8 @@ install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 	fi
 	@echo "[OK] Installed under $(DESTDIR)$(PREFIX)"
 	@echo "     Run $(PREFIX)/bin/tcs-xtce; compile against it with:"
-	@echo "       cc  prog.c   \$$(pkg-config --cflags --libs xtce)"
-	@echo "       c++ prog.cpp \$$(pkg-config --cflags --libs xtce)"
+	@echo "       cc  prog.c   \$$(pkg-config --cflags --libs tcs-xtce)"
+	@echo "       c++ prog.cpp \$$(pkg-config --cflags --libs tcs-xtce)"
 	@echo "     with PKG_CONFIG_PATH=$(PREFIX)/lib/pkgconfig, and from"
 	@echo "     Python 3, with $(PYDIR) on PYTHONPATH:"
 	@echo "       import tcs_xtce"
@@ -621,9 +623,10 @@ uninstall-files:
 	rm -f $(addprefix $(BINDIR)/,$(notdir $(COMMANDS))) \
 		$(SBINDIR)/tcs-xtce-links
 	rm -f $(addprefix $(INCDIR)/,$(notdir $(HEADERS)))
-	rm -f $(LIBDIR)/$(SONAME) $(LIBDIR)/libxtce.so $(LIBDIR)/libxtce.a \
-		$(PCDIR)/xtce.pc $(PCDIR)/tcs-ccsds.pc
-	rm -rf $(DESTDIR)$(PYDIR)/tcs_xtce \
+	rm -f $(LIBDIR)/$(SONAME) $(LIBDIR)/libtcs-xtce.so \
+		$(LIBDIR)/libtcs-xtce.a $(PCDIR)/tcs-xtce.pc \
+		$(PCDIR)/tcsxtce.pc $(PCDIR)/tcs-ccsds.pc
+	rm -rf $(DESTDIR)$(PYDIR)/tcsxtce $(DESTDIR)$(PYDIR)/tcs_xtce \
 		$(DESTDIR)$(PYDIR)/tcs_xtce-$(VERSION).dist-info \
 		$(DESTDIR)$(PYDIR)/tcs_ccsds \
 		$(DESTDIR)$(PYDIR)/tcs_ccsds-$(CCSDS_VERSION).dist-info

@@ -4,7 +4,7 @@ simple_string.xtce, using the code tcs-xtce generated into simple_string.py.
 The Rust and C/C++ versions of this program print identical output.
 """
 
-from tcs_xtce.packet import Codec, PacketError, describe_str
+from tcsxtce.packet import Codec, PacketError, describe_str
 
 from simple_string import SimpleString
 

@@ -2,11 +2,11 @@
 
 ``tcs-xtce`` (:mod:`tcs_xtce.compiler`) turns the containers and
 meta-commands of a mission database into Python dataclasses derived from
-:class:`Packet`.  The
-generated code reads packets with a :class:`BitReader` and writes them with a
-:class:`BitWriter` into a :class:`~tcs_xtce.ManagedBuffer`; this module provides
-those and the integer, float, string and calibration helpers they call.  It
-mirrors ``tcs_xtce::packet`` in Rust and ``xtce-packet.h`` in C and C++.
+:class:`Packet`.  The generated code reads packets with a :class:`BitReader`
+and writes them with a :class:`BitWriter` into a
+:class:`~tcsxtce.ManagedBuffer`; this module provides those and the integer,
+float, string and calibration helpers they call.  It mirrors
+``tcsxtce::packet`` in Rust and ``tcsxtce-packet.h`` in C and C++.
 
 A :class:`Codec` owns one input and one output buffer, preallocated for the
 largest packet it will see and reused until the codec is discarded.  A
@@ -23,7 +23,7 @@ from fractions import Fraction
 from typing import Optional
 
 from ._buffer import ManagedBuffer
-from ._xml import f_double
+from .value import f_double
 
 __all__ = ["BATCH_LENGTH_BYTES", "Batch", "BitReader", "BitWriter", "Codec",
            "Packet", "PacketError", "PacketKind"]

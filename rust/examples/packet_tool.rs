@@ -15,7 +15,7 @@
 mod demo;
 
 use std::fmt::Display;
-use tcs_xtce::packet::{Alarms, Codec, Outputs, Packet};
+use tcsxtce::packet::{Alarms, Codec, Outputs, Packet};
 
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()

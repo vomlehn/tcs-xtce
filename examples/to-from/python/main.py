@@ -18,7 +18,7 @@ import sys
 
 from tcs_xtce import XtceError
 from tcs_xtce.digest import digest_file_bytes
-from tcs_xtce.packet import Codec, PacketError
+from tcsxtce.packet import Codec, PacketError
 
 from to_from import Word
 

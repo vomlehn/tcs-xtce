@@ -7,7 +7,7 @@ import math
 import re
 import textwrap
 
-from tcs_xtce.binding import CRATE, REPOSITORY
+from tcs_xtce.binding import REPOSITORY, RUNTIME_CRATE
 
 from .model import (AggregateEnc, BinaryEnc, Cond, ContextCal, Criterion,
                     DynSize, Fill, FloatEnc, IntEnc, MathOp, Node, Polynomial,
@@ -472,7 +472,8 @@ def header_lines(mission, source: str) -> list:
     rest = ["Any changes made to this file will be lost when it is "
             "regenerated;",
             f"change the XTCE document{plural} instead and rerun `python3 -m "
-            "tcs_xtce`.", f"tcs-xtce: {REPOSITORY}", f"Rust crate: {CRATE}"]
+            "tcs_xtce`.", f"tcs-xtce: {REPOSITORY}",
+            f"Runtime crate: {RUNTIME_CRATE}"]
     return first + rest
 
 

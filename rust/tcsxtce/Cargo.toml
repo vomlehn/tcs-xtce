@@ -1,0 +1,25 @@
+[package]
+name = "tcsxtce"
+version = "0.7.0"
+edition = "2021"
+description = """\
+    Flight software: the runtime for the packet codecs tcs-xtce generates \
+    from OMG XTCE documents, packing and unpacking bit-packed packets in \
+    preallocated buffers\
+"""
+license = "MIT OR Apache-2.0"
+# The repository's README, which is the crate's page on crates.io.
+readme = "../../README.md"
+repository = "https://github.com/vomlehn/tcs-xtce"
+keywords = ["xtce", "ccsds", "telemetry", "omg", "spacecraft"]
+categories = ["aerospace::space-protocols", "encoding"]
+include = ["src/**/*.rs", "LICENSE-APACHE", "LICENSE-MIT"]
+
+[dependencies]
+# Integers of more than 128 bits.  Without its alloc feature it allocates
+# nothing, which the packet codecs promise; its formatting needs alloc, so
+# tcsxtce::packet formats them itself.
+bnum = { version = "0.14", default-features = false }
+
+[lib]
+path = "src/lib.rs"

@@ -6,9 +6,9 @@
 #include <ostream>
 #include <string_view>
 
-#include "xtce-buffer.hpp"
-#include "xtce-generated.hpp"
-#include "xtce-xml.hpp"
+#include "tcs-xtce-buffer.hpp"
+#include "tcs-xtce-generated.hpp"
+#include "tcs-xtce-xml.hpp"
 
 namespace xtce {
 

@@ -1,5 +1,5 @@
 //! Serialization and deserialization of OMG XTCE (XML Telemetric and Command
-//! Exchange) documents: part of tcs-xtce, which is flight software.
+//! Exchange) documents: part of tcs-xtce, which is ground software.
 //!
 //! The data structures in [`generated`] are produced from the XTCE schema
 //! (`references/SpaceSystem.xsd`) by the generator in `generator/`; do not
@@ -7,8 +7,9 @@
 //! preallocated and reused for as long as their owner (usually a
 //! [`Document`]) is alive.
 //!
-//! The [`packet`] module is the runtime for packet codecs that `tcs-xtce`
-//! generates from a mission's XTCE document.
+//! The runtime for the packet codecs that `tcs-xtce` generates from a
+//! mission's XTCE document is the `tcsxtce` crate, which flies; its modules
+//! [`buffer`], [`fixed`], [`packet`] and [`value`] are re-exported here.
 //!
 //! ```
 //! use tcs_xtce::{Document, SpaceSystemType};
@@ -22,14 +23,12 @@
 //! assert_eq!(back.root, doc.root);
 //! ```
 
-pub mod buffer;
 pub mod digest;
 pub mod document;
-pub mod fixed;
 pub mod generated;
-pub mod packet;
-pub mod value;
 pub mod xml;
+
+pub use tcsxtce::{buffer, fixed, packet, value};
 
 pub use buffer::{Buffer, DEFAULT_CAPACITY};
 pub use document::{from_xml, to_xml, Document};

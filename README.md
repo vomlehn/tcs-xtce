@@ -19,12 +19,18 @@ byte. The packets are bit-packed, so a field takes only the bits its encoding
 gives, with none of the padding a language's own structures have; the
 housekeeping example's status packet is 7 bytes, where the C structure is 40.
 Packets carry no field names or tags. Instead, programs check that they were
-built from the same definition by comparing digests, which every runtime
+built from the same definition by comparing digests, which every language
 (Rust, C/C++ and Python) computes the same way, as does `xtce-digest`: the
 sender sends its digest first, and the receiver checks it, which guarantees
 that they agree on every field's type and order. That avoids the per-message cost
 of self-describing formats: the same packet is 77 bytes as JSON and 29 as
 Protocol Buffers.
+
+What the generated code runs on, the packet runtime, is a library of its
+own, `tcsxtce`, in each language: the `tcsxtce` crate, the `tcsxtce`
+Python package, and the header-only `tcsxtce-packet.h` for C and C++. It
+is flight software, and is all of tcs-xtce that flies; the rest -- the XML
+binding, the compiler, the digest and the editor -- is ground software.
 
 The full documentation is in `docs/`:
 [`docs/tcs-xtce.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtce.rst)
@@ -50,9 +56,9 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | Directory     | Contents |
 |---------------|----------|
 | `references/` | Downloaded XTCE documents: `SpaceSystem.xsd`, `XTCE.pdf`, `VERSION`, plus `xml.xsd` and `catalog.xml` for offline validation |
-| `rust/`       | `tcs-xtce` Rust crate |
-| `cpp/`        | C++20 library (`libxtce.a`, `libxtce.so`) with a C API (`xtce.h`), and the header-only C/C++ packet runtime (`xtce-packet.h`) |
-| `python/`     | `tcs_xtce` Python package (3.10+, standard library only): the Python runtime, `tcs_xtce.binding` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `tcs_xtce.compiler`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
+| `rust/`       | `tcs-xtce` Rust crate, and in `rust/tcsxtce/` the `tcsxtce` crate, the packet runtime that generated Rust uses |
+| `cpp/`        | C++20 library (`libtcs-xtce.a`, `libtcs-xtce.so`) with a C API (`tcs-xtce.h`), and the header-only C/C++ packet runtime (`tcsxtce-packet.h`) |
+| `python/`     | `tcsxtce` Python package (3.10+, standard library only), the packet runtime that generated Python uses, and `tcs_xtce`: the XML binding, `tcs_xtce.binding` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `tcs_xtce.compiler`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
 | `tests/`      | The demo mission, packet vectors and the cross-language checks; `make` generates the schema-coverage samples into `tests/samples/` |
 | `editor/`     | `tcs-xtcee`, a graphical XTCE editor that keeps a document valid for its XTCE version (1.1, 1.2 or 1.3), its comments and layout as written, and converts between versions |
 | `docs/`       | The manuals, `manual.rst`, `tcs-xtce.rst` and `tcs-xtcee.rst`, and the designs, `design.rst`, `tcs-xtce-design.rst` and `tcs-xtcee-design.rst` |
@@ -86,7 +92,7 @@ writing that is XTCE 1.3, schema namespace
 Everything below installs under `/opt/tcs`, the tree the TCS packages
 share: the `tcs-xtce`, `xtce-digest` and `tcs-xtcee` commands in
 `bin/`, the C/C++
-headers in `include/`, `libxtce.so` and `libxtce.a` with `xtce.pc` (and
+headers in `include/`, `libtcs-xtce.so` and `libtcs-xtce.a` with `tcs-xtce.pc` (and
 `tcs-ccsds.pc`, for the header-only time codes) in `lib/`, and the Python
 packages `tcs_xtce` and `tcs_ccsds` in `lib/python3/site-packages/`.
 
@@ -160,8 +166,8 @@ install` takes neither variable, and stops if given one. `make stage`
 copies into `build/stage/tcs-xtce/`, from which the packages are made.
 
 `make install-files`, `make stage` and so the packages strip the
-libraries they install: `libxtce.so` of all a debugger needs (`strip
---strip-unneeded`), `libxtce.a` of its debugging information (`strip
+libraries they install: `libtcs-xtce.so` of all a debugger needs (`strip
+--strip-unneeded`), `libtcs-xtce.a` of its debugging information (`strip
 --strip-debug`). Give `STRIP=0`, as in `make packages STRIP=0`, to keep
 everything as built.
 
@@ -189,12 +195,12 @@ come from crates.io and nothing here installs them.
 **C and C++.** With `/opt/tcs/lib/pkgconfig` on `PKG_CONFIG_PATH`:
 
 ```sh
-cc  prog.c   $(pkg-config --cflags --libs xtce)
-c++ prog.cpp $(pkg-config --cflags --libs xtce)
-cc  prog.c   $(pkg-config --cflags --libs --static xtce)   # libxtce.a
+cc  prog.c   $(pkg-config --cflags --libs tcs-xtce)
+c++ prog.cpp $(pkg-config --cflags --libs tcs-xtce)
+cc  prog.c   $(pkg-config --cflags --libs --static tcs-xtce)   # libtcs-xtce.a
 ```
 
-The shared library's soname is `libxtce.so.N`, where N is the ABI version
+The shared library's soname is `libtcs-xtce.so.N`, where N is the ABI version
 in `cpp/abi-version`, which changes only when a change breaks programs
 already linked against it; it is not the package's version.
 
@@ -271,7 +277,7 @@ let bytes: &[u8] = doc.serialize()?;      // view into the managed buffer
 C++:
 
 ```cpp
-#include "xtce-document.hpp"
+#include "tcs-xtce-document.hpp"
 
 xtce::Document doc = xtce::Document::from_bytes(bytes);
 doc.root.short_description = "updated";
@@ -281,7 +287,7 @@ std::string_view out = doc.serialize();   // view into the managed buffer
 C:
 
 ```c
-#include "xtce.h"
+#include "tcs-xtce.h"
 
 xtce_document* doc = xtce_document_new(0, 0);
 if (xtce_document_load(doc, data, len) != XTCE_OK)
@@ -323,7 +329,7 @@ tcs-xtce mission.xtce mission.rs --lang rust
 ```
 
 `--lang c` and `--lang c++` write the same header, which compiles both as C11
-and as C++. It is self-contained (it includes only `xtce-packet.h`), allocates
+and as C++. It is self-contained (it includes only `tcsxtce-packet.h`), allocates
 nothing, and reports errors as return codes.
 
 For each concrete `SequenceContainer` and `MetaCommand`, this generates a
@@ -347,7 +353,7 @@ Supported features:
 
 * every XTCE data type: integers (any size, every signed encoding and
   BCD; past 64 bits they are held with the bnum crate in Rust and with
-  `xtce-bnum.h`, a C and C++ library that mirrors it), floats (IEEE 754
+  `tcsxtce-bnum.h`, a C and C++ library that mirrors it), floats (IEEE 754
   16 to 128 bits, MIL-STD-1750A, DEC, IBM, TI), strings in every
   character set, binary, enumerations, booleans, times, arrays and
   aggregates, in any bit and byte order, with valid ranges checked when
@@ -422,6 +428,29 @@ random packets.
   `cargo add tcs-xtce`.
 
 ## Incompatible changes
+
+**0.7.0: the packet runtime is a library of its own, `tcsxtce`.** What
+code that `tcs-xtce` generated runs on -- the packet runtime -- flies,
+while the rest of tcs-xtce is ground software, and the two are now named
+apart: a name that starts `tcs` and a letter is flight software, one
+that starts `tcs-` or `tcs_` is not. Code that `tcs-xtce` generated has
+to be generated again, and depends on the runtime rather than on
+`tcs-xtce`.
+
+| Was                                | Now                                |
+|------------------------------------|------------------------------------|
+| Rust `tcs_xtce::packet`, `buffer`, `fixed`, `value` | crate `tcsxtce`: `tcsxtce::packet` and the rest (still re-exported by `tcs-xtce`) |
+| Python `tcs_xtce.packet`           | `tcsxtce.packet`                   |
+| `xtce-packet.h`                    | `tcsxtce-packet.h`                 |
+| `xtce-bnum.h`, `xtce-bnum.hpp`     | `tcsxtce-bnum.h`, `tcsxtce-bnum.hpp` |
+| `xtce.h`                           | `tcs-xtce.h`                       |
+| `xtce-digest.h`                    | `tcs-xtce-digest.h`                |
+| `xtce-buffer.hpp`, `xtce-xml.hpp`, `xtce-document.hpp`, `xtce-generated.hpp` | `tcs-xtce-buffer.hpp` and so on |
+| `libxtce.a`, `libxtce.so`, `xtce.pc` | `libtcs-xtce.a`, `libtcs-xtce.so`, `tcs-xtce.pc` |
+
+The header-only C/C++ runtime has a pkg-config file of its own,
+`tcsxtce.pc`, which needs no library. The functions, types and macros
+keep their names.
 
 **0.6.0: OMG's documentation is no longer copied.** The generated code
 describes each XTCE declaration in a line of its own, where it used to

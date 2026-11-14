@@ -21,12 +21,12 @@ Filters = [
 	' devel-file-in-non-devel-package ',
 	# With STRIP=1, the default, the static library is stripped of its
 	# debugging information on purpose, keeping the symbols a link needs.
-	' static-library-without-debuginfo /opt/tcs/lib/libxtce\.a$',
+	' static-library-without-debuginfo /opt/tcs/lib/libtcs-xtce\.a$',
 	# The library is linked with the GNU hash section alone, the modern
 	# default, and not the old SysV one as well.
-	' missing-hash-section /opt/tcs/lib/libxtce\.so\.',
+	' missing-hash-section /opt/tcs/lib/libtcs-xtce\.so\.',
 	# Words of the trade that rpmlint's dictionary does not have.
-	" spelling-error \\('(preallocated|config|xtcee)',",
+	" spelling-error \\('(preallocated|config|xtcee|libtcs|tcsxtce)',",
 	" spelling-error \\(\"ccsds's\",",
 	# The licence texts are shipped with the documents and again in the
 	# Python package's metadata, where pip puts them.

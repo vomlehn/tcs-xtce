@@ -2,7 +2,8 @@
 # Checks the Python package that `make python-dist` builds.
 #
 #   1. The wheel and the sdist hold python/tcs_xtce/generated.py, which is
-#      not in git, and the wheel the package's py.typed.
+#      not in git, and the wheel tcsxtce, the packet runtime, and both
+#      packages' py.typed.
 #   2. Installed in a fresh virtual environment, with nothing from the
 #      repository on the path, tcs-xtce generates the demo mission's Python,
 #      C and Rust, and the Python it generated decodes a packet with the
@@ -34,6 +35,10 @@ grep -q 'tcs_xtce/generated.py' "$work/wheel.txt" ||
     fail "the wheel has no tcs_xtce/generated.py: run make generate first"
 grep -q 'tcs_xtce/py.typed' "$work/wheel.txt" ||
     fail "the wheel has no tcs_xtce/py.typed"
+grep -q 'tcsxtce/packet.py' "$work/wheel.txt" ||
+    fail "the wheel has no tcsxtce/packet.py, the packet runtime"
+grep -q 'tcsxtce/py.typed' "$work/wheel.txt" ||
+    fail "the wheel has no tcsxtce/py.typed"
 tar tzf "$sdist" | grep -q 'python/tcs_xtce/generated.py$' ||
     fail "the sdist has no python/tcs_xtce/generated.py"
 

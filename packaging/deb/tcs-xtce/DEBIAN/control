@@ -15,8 +15,9 @@ Description: XTCE serialization libraries, packet compiler and editor
  using managed, preallocated buffers.
  .
  This package holds the compiler (tcs-xtce), xtce-digest, the graphical
- XTCE editor (tcs-xtcee), which keeps a document valid for its XTCE
- version and converts between versions 1.1, 1.2 and 1.3, the Python 3
- runtime, the C/C++ library (shared and static) with its headers and
- pkg-config file, tcs-ccsds's CCSDS time codes for C, C++ and Python, and
- the documentation and examples, all under /opt/tcs.
+ XTCE editor (tcs-xtcee), which keeps a document valid for its XTCE version
+ and converts between versions 1.1, 1.2 and 1.3, the packet runtime tcsxtce
+ for Python 3 and for C and C++ (header-only), the C/C++ XTCE library
+ libtcs-xtce (shared and static) with its headers, the pkg-config files,
+ tcs-ccsds's CCSDS time codes for C, C++ and Python, and the documentation
+ and examples, all under /opt/tcs.

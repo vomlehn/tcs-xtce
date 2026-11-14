@@ -2,9 +2,10 @@
 //!
 //! A [`Buffer`] is preallocated when it is created and keeps its allocation
 //! across uses: clearing it only resets the length.  Buffers are owned by the
-//! data structures that use them (for example [`crate::Document`]), so the
-//! memory lives exactly as long as those structures and is released when they
-//! are dropped.
+//! data structures that use them (for example a
+//! [`Codec`](crate::packet::Codec), or tcs-xtce's `Document`), so the memory
+//! lives exactly as long as those structures and is released when they are
+//! dropped.
 
 /// Capacity used when no explicit capacity is requested.
 pub const DEFAULT_CAPACITY: usize = 64 * 1024;

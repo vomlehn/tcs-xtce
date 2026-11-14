@@ -9,7 +9,7 @@
 //! from START to END of DATA.
 
 use std::io::BufRead;
-use tcs_xtce::packet::{
+use tcsxtce::packet::{
     checksum, float_decode, float_encode, math, Checksum, FloatFormat,
     MathOperator,
 };

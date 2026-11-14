@@ -6,7 +6,8 @@ publish = false
 description = "Serializes and deserializes an 8-byte string described in XTCE"
 
 [dependencies]
-tcs-xtce = { path = "../../../rust" }
+# The packet runtime the generated code runs on.
+tcsxtce = { path = "../../../rust/tcsxtce" }
 
 # A stand-alone crate, not part of any enclosing workspace.
 [workspace]

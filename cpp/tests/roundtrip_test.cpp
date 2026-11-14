@@ -5,7 +5,7 @@
 #include <sstream>
 #include <string>
 
-#include "xtce-document.hpp"
+#include "tcs-xtce-document.hpp"
 
 namespace {
 

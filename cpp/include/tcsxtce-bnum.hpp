@@ -3,15 +3,15 @@
 // xtce::bnum::Integer<S, N> is an integer of N bytes, signed if S, like
 // Integer<S, N> in the Rust crate bnum (https://docs.rs/bnum), whose methods
 // it has under the same names.  It is built on the C functions of
-// xtce-bnum.h and holds the same bytes: least significant first, two's
+// tcsxtce-bnum.h and holds the same bytes: least significant first, two's
 // complement when signed.
 //
 // The operators wrap on overflow, as bnum's do in its Wrap overflow mode.
 // Where bnum panics (dividing by zero, or a strict_ method overflowing),
 // Integer calls XTCE_BNUM_PANIC, which aborts unless it is defined before
 // this header is included.  Nothing is allocated except by to_string.
-#ifndef XTCE_BNUM_HPP
-#define XTCE_BNUM_HPP
+#ifndef TCSXTCE_BNUM_HPP
+#define TCSXTCE_BNUM_HPP
 
 #include <array>
 #include <cstdint>
@@ -23,7 +23,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "xtce-bnum.h"
+#include "tcsxtce-bnum.h"
 
 #ifndef XTCE_BNUM_PANIC
 #define XTCE_BNUM_PANIC(what) std::abort()
@@ -640,4 +640,4 @@ using Int = Integer<true, N>;
 
 }  // namespace xtce::bnum
 
-#endif  // XTCE_BNUM_HPP
+#endif  // TCSXTCE_BNUM_HPP

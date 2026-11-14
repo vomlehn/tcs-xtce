@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "xtce.h"
+#include "tcs-xtce.h"
 
 #define CHECK(cond)                                                            \
         do {                                                                   \

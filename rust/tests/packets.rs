@@ -7,7 +7,7 @@
 mod demo;
 
 use demo::*;
-use tcs_xtce::packet::{Batch, Codec, Packet, PacketError};
+use tcsxtce::packet::{Batch, Codec, Packet, PacketError};
 
 /// Builds the Housekeeping packet the tests encode.
 ///

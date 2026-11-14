@@ -1,5 +1,5 @@
 """Serialization and deserialization of OMG XTCE documents: part of tcs-xtce,
-which is flight software.
+which is ground software.
 
 The data classes in :mod:`tcs_xtce.generated` are produced from the XTCE
 schema (``references/SpaceSystem.xsd``) by :mod:`tcs_xtce.binding`; do not
@@ -8,12 +8,14 @@ and reused for as long as their owner (usually a :class:`Document`) lives.
 
 The package also holds the compiler that turns a mission's XTCE into packet
 codecs (:mod:`tcs_xtce.compiler`, run as ``python3 -m tcs_xtce`` or the
-``tcs-xtce`` command), the packet runtime that the Python it writes uses
-(:mod:`tcs_xtce.packet`), and the digest (:mod:`tcs_xtce.digest`, with the
+``tcs-xtce`` command) and the digest (:mod:`tcs_xtce.digest`, with the
 ``xtce-digest`` command in :mod:`tcs_xtce.digest_cli`).
 
+The packet runtime that the Python the compiler writes uses is the
+:mod:`tcsxtce` package, which flies; this one is ground software.
+
 The XML binding is loaded the first time one of its names is used, so that
-the packet runtime and the generators need neither its 1.4 MB nor, before
+the generators need neither its 1.4 MB nor, before
 ``make generate`` has written it, its being there.
 
 >>> from tcs_xtce import Document, SpaceSystemType
@@ -23,7 +25,7 @@ the packet runtime and the generators need neither its 1.4 MB nor, before
 True
 """
 
-from ._buffer import DEFAULT_CAPACITY, ManagedBuffer
+from tcsxtce import DEFAULT_CAPACITY, ManagedBuffer
 from ._xml import XtceError
 
 # What the package itself gives, beside the XML binding's names.
@@ -31,10 +33,10 @@ _OWN = ["DEFAULT_CAPACITY", "Document", "ManagedBuffer", "XtceError",
         "from_xml", "to_xml"]
 
 # The package's modules and subpackages, which an import loads rather than
-# the XML binding: `from tcs_xtce import packet` asks for one of these by
+# the XML binding: `from tcs_xtce import digest` asks for one of these by
 # name before importing it.
-_MODULES = {"_buffer", "_xml", "binding", "compiler", "digest", "digest_cli",
-            "document", "generated", "packet", "__main__"}
+_MODULES = {"_xml", "binding", "compiler", "digest", "digest_cli", "document",
+            "generated", "__main__"}
 
 
 def __getattr__(name: str):

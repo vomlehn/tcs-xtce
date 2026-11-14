@@ -1,11 +1,11 @@
 [package]
 name = "tcs-xtce"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 description = """\
-    Flight software: serialization and deserialization of OMG XTCE documents \
-    into managed, preallocated buffers, being integrated with NASA's cFS and \
-    JPL's F Prime\
+    Ground software: serialization and deserialization of OMG XTCE documents \
+    into managed, preallocated buffers, and their digests; the packet runtime \
+    that flies is the tcsxtce crate\
 """
 license = "MIT OR Apache-2.0"
 # The repository's README, which is the crate's page on crates.io.
@@ -29,15 +29,18 @@ include = [
 ]
 
 [dependencies]
-# Integers of more than 128 bits.  Without its alloc feature it allocates
-# nothing, which the packet codecs promise; its formatting needs alloc, so
-# xtce::packet formats them itself.
-bnum = { version = "0.14", default-features = false }
-
+# The packet runtime, which flies: buffer, fixed, packet and value are its,
+# and are re-exported here so that ground code finds them where it did.
+tcsxtce = { path = "tcsxtce", version = "=0.7.0" }
 [dev-dependencies]
-# The examples that check xtce-bnum.h against bnum print with bnum's own
+# The examples that check tcsxtce-bnum.h against bnum print with bnum's own
 # formatting.
 bnum = { version = "0.14", features = ["alloc"] }
 
 [lib]
 path = "src/lib.rs"
+
+# The runtime is a crate of its own, so that what flies is only what
+# generated code runs on; both are tested from here.
+[workspace]
+members = [".", "tcsxtce"]

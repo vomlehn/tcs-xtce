@@ -3,8 +3,9 @@
 A :class:`ManagedBuffer` allocates its storage up front and keeps it between
 uses: clearing only resets the logical length, and writes go into the
 existing allocation with slice assignment.  Buffers are owned by the objects
-that use them (normally a :class:`tcs_xtce.Document`), so the memory lives as
-long as that object and is released with it.
+that use them (a :class:`~tcsxtce.packet.Codec`, or tcs-xtce's
+``Document``), so the memory lives as long as that object and is released
+with it.
 """
 
 from __future__ import annotations

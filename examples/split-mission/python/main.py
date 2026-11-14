@@ -13,7 +13,7 @@ import sys
 
 import rover
 from tcs_xtce.digest import digest_files_bytes
-from tcs_xtce.packet import PacketError
+from tcsxtce.packet import PacketError
 
 # The mission's documents: those the others build on first.
 DOCUMENTS = ["dt.xtce", "pus.xtce", "rover.xtce"]

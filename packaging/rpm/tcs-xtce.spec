@@ -73,12 +73,13 @@ documents, and compiles a mission's XTCE into typed telemetry and command
 structures with binary encoders and decoders, in Rust, C, C++ and Python,
 using managed, preallocated buffers.
 
-This package holds the compiler (tcs-xtce), xtce-digest, the graphical
-XTCE editor (tcs-xtcee), which keeps a document valid for its XTCE
-version and converts between versions 1.1, 1.2 and 1.3, the Python 3
-runtime, the C/C++ library (shared and static) with its headers and
-pkg-config file, tcs-ccsds's CCSDS time codes for C, C++ and Python, and
-the documentation and examples, all under /opt/tcs.
+This package holds the compiler (tcs-xtce), xtce-digest, the graphical XTCE
+editor (tcs-xtcee), which keeps a document valid for its XTCE version and
+converts between versions 1.1, 1.2 and 1.3, the packet runtime tcsxtce for
+Python 3 and for C and C++ (header-only), the C/C++ XTCE library
+libtcs-xtce (shared and static) with its headers, the pkg-config files,
+tcs-ccsds's CCSDS time codes for C, C++ and Python, and the documentation
+and examples, all under /opt/tcs.
 
 %install
 cp -a %{tcs_stage}/. %{buildroot}/
@@ -93,7 +94,7 @@ if [ "%{tcs_pysite}" != /usr/lib/python3/dist-packages ]; then
 fi
 # RPM finds what a shared library provides only in an executable file,
 # where Debian wants one that is not.
-chmod 755 %{buildroot}/opt/tcs/lib/libxtce.so.%{tcs_abi}
+chmod 755 %{buildroot}/opt/tcs/lib/libtcs-xtce.so.%{tcs_abi}
 
 # On removal, not upgrade, the links tcs-xtce-links may have made go
 # first, while it is still there to run, so that none is left pointing at
@@ -125,15 +126,19 @@ fi
 /opt/tcs/bin/xtce-digest
 /opt/tcs/bin/tcs-xtcee
 /opt/tcs/sbin/tcs-xtce-links
-/opt/tcs/include/xtce.h
-/opt/tcs/include/xtce-*.h
-/opt/tcs/include/xtce-*.hpp
+/opt/tcs/include/tcs-xtce.h
+/opt/tcs/include/tcs-xtce-*.h
+/opt/tcs/include/tcs-xtce-*.hpp
+/opt/tcs/include/tcsxtce-*.h
+/opt/tcs/include/tcsxtce-*.hpp
 /opt/tcs/include/ccsds-time.h
-/opt/tcs/lib/libxtce.so
-/opt/tcs/lib/libxtce.so.%{tcs_abi}
-/opt/tcs/lib/libxtce.a
-/opt/tcs/lib/pkgconfig/xtce.pc
+/opt/tcs/lib/libtcs-xtce.so
+/opt/tcs/lib/libtcs-xtce.so.%{tcs_abi}
+/opt/tcs/lib/libtcs-xtce.a
+/opt/tcs/lib/pkgconfig/tcs-xtce.pc
+/opt/tcs/lib/pkgconfig/tcsxtce.pc
 /opt/tcs/lib/pkgconfig/tcs-ccsds.pc
+/opt/tcs/lib/python3/site-packages/tcsxtce/
 /opt/tcs/lib/python3/site-packages/tcs_xtce/
 /opt/tcs/lib/python3/site-packages/tcs_xtce-%{version}.dist-info/
 /opt/tcs/lib/python3/site-packages/tcs_ccsds/

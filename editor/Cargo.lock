@@ -4339,9 +4339,9 @@ dependencies = [
 
 [[package]]
 name = "tcs-xtce"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
- "bnum",
+ "tcsxtce",
 ]
 
 [[package]]
@@ -4357,6 +4357,13 @@ dependencies = [
  "slint-build",
  "tcs-xtce",
  "tempfile",
+]
+
+[[package]]
+name = "tcsxtce"
+version = "0.7.0"
+dependencies = [
+ "bnum",
 ]
 
 [[package]]

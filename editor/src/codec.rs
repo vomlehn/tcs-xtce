@@ -31,7 +31,7 @@ const HELPER: &str = r#"
 import dataclasses, json, sys
 sys.path.insert(0, sys.argv[1])
 mod = __import__(sys.argv[2])
-from tcs_xtce import packet as pk
+from tcsxtce import packet as pk
 
 def packets():
     out = {}

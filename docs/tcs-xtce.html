@@ -380,7 +380,7 @@ ul.auto-toc {
 </li>
 <li><a class="reference internal" href="#managed-buffers" id="toc-entry-8">Managed buffers</a><ul>
 <li><a class="reference internal" href="#rust-tcs-xtce-buffer" id="toc-entry-9">Rust: <tt class="docutils literal"><span class="pre">tcs_xtce::Buffer</span></tt></a></li>
-<li><a class="reference internal" href="#c-xtce-buffer-xtce-buffer-hpp" id="toc-entry-10">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal"><span class="pre">xtce-buffer.hpp</span></tt>)</a></li>
+<li><a class="reference internal" href="#c-xtce-buffer-tcs-xtce-buffer-hpp" id="toc-entry-10">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal"><span class="pre">tcs-xtce-buffer.hpp</span></tt>)</a></li>
 <li><a class="reference internal" href="#python-tcs-xtce-managedbuffer" id="toc-entry-11">Python: <tt class="docutils literal">tcs_xtce.ManagedBuffer</tt></a></li>
 </ul>
 </li>
@@ -558,7 +558,7 @@ reads each field from where the document says it is.</p>
 <td>The <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> Rust crate (imported as <tt class="docutils literal">tcs_xtce</tt>)</td>
 </tr>
 <tr><td><tt class="docutils literal">cpp/</tt></td>
-<td>The C++20 library (<tt class="docutils literal">libxtce.a</tt>, <tt class="docutils literal">libxtce.so</tt>) and its C API</td>
+<td>The C++20 library (<tt class="docutils literal"><span class="pre">libtcs-xtce.a</span></tt>, <tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt>) and its C API</td>
 </tr>
 <tr><td><tt class="docutils literal">python/tcs_xtce/</tt></td>
 <td>The <tt class="docutils literal">tcs_xtce</tt> Python package (3.10+, standard library only): the
@@ -676,14 +676,14 @@ the package the same way</td>
 <tr><td><tt class="docutils literal"><span class="pre">sbin/tcs-xtce-links</span></tt></td>
 <td>Links those three into <tt class="docutils literal">/usr/local/bin</tt>, or removes the links</td>
 </tr>
-<tr><td><tt class="docutils literal">include/xtce.h</tt>, <tt class="docutils literal"><span class="pre">include/xtce-*.h</span></tt>, <tt class="docutils literal"><span class="pre">include/xtce-*.hpp</span></tt>,
+<tr><td><tt class="docutils literal"><span class="pre">include/tcs-xtce.h</span></tt>, <tt class="docutils literal"><span class="pre">include/xtce-*.h</span></tt>, <tt class="docutils literal"><span class="pre">include/xtce-*.hpp</span></tt>,
 <tt class="docutils literal"><span class="pre">include/ccsds-time.h</span></tt></td>
 <td>The C and C++ headers</td>
 </tr>
-<tr><td><tt class="docutils literal">lib/libxtce.so.N</tt>, <tt class="docutils literal">lib/libxtce.so</tt>, <tt class="docutils literal">lib/libxtce.a</tt></td>
+<tr><td><tt class="docutils literal"><span class="pre">lib/libtcs-xtce.so.N</span></tt>, <tt class="docutils literal"><span class="pre">lib/libtcs-xtce.so</span></tt>, <tt class="docutils literal"><span class="pre">lib/libtcs-xtce.a</span></tt></td>
 <td>The C/C++ library, shared and static</td>
 </tr>
-<tr><td><tt class="docutils literal">lib/pkgconfig/xtce.pc</tt>, <tt class="docutils literal"><span class="pre">lib/pkgconfig/tcs-ccsds.pc</span></tt></td>
+<tr><td><tt class="docutils literal"><span class="pre">lib/pkgconfig/tcs-xtce.pc</span></tt>, <tt class="docutils literal"><span class="pre">lib/pkgconfig/tcs-ccsds.pc</span></tt></td>
 <td>For <tt class="docutils literal"><span class="pre">pkg-config</span></tt>; tcs-ccsds is header only, so its file gives
 only <tt class="docutils literal"><span class="pre">-I</span></tt></td>
 </tr>
@@ -738,7 +738,7 @@ only where <tt class="docutils literal">rpmbuild</tt> is installed and the .deb 
 is. They are made from the tree <tt class="docutils literal">make
 stage</tt> installs into <tt class="docutils literal"><span class="pre">build/stage/tcs-xtce/</span></tt>. Besides <tt class="docutils literal">/opt/tcs</tt> the package
 installs <tt class="docutils literal"><span class="pre">/etc/ld.so.conf.d/tcs-xtce.conf</span></tt>, so the loader finds
-<tt class="docutils literal">libxtce.so</tt>; <tt class="docutils literal"><span class="pre">/etc/profile.d/tcs-xtce.sh</span></tt>, which puts <tt class="docutils literal">/opt/tcs/bin</tt>
+<tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt>; <tt class="docutils literal"><span class="pre">/etc/profile.d/tcs-xtce.sh</span></tt>, which puts <tt class="docutils literal">/opt/tcs/bin</tt>
 on <tt class="docutils literal">PATH</tt> and <tt class="docutils literal">/opt/tcs/lib/pkgconfig</tt> on <tt class="docutils literal">PKG_CONFIG_PATH</tt>; and a
 <tt class="docutils literal"><span class="pre">tcs-xtce.pth</span></tt> in <tt class="docutils literal">python3</tt>'s own site-packages, which puts the Python
 packages on its path.</p>
@@ -769,9 +769,9 @@ variables, removes them. <tt class="docutils literal">make install</tt> takes ne
 <tt class="docutils literal">DESTDIR</tt>, and stops if given one. The Rust crates, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> and
 <tt class="docutils literal"><span class="pre">tcs-ccsds</span></tt>, come from crates.io and are not installed.</p>
 <p><tt class="docutils literal"><span class="pre">install-files</span></tt>, stage and so the packages strip the libraries:
-<tt class="docutils literal">libxtce.so</tt> with <tt class="docutils literal">strip <span class="pre">--strip-unneeded</span></tt>, of all only a debugger
+<tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt> with <tt class="docutils literal">strip <span class="pre">--strip-unneeded</span></tt>, of all only a debugger
 needs, and
-<tt class="docutils literal">libxtce.a</tt> with <tt class="docutils literal">strip <span class="pre">--strip-debug</span></tt>, of its debugging information,
+<tt class="docutils literal"><span class="pre">libtcs-xtce.a</span></tt> with <tt class="docutils literal">strip <span class="pre">--strip-debug</span></tt>, of its debugging information,
 keeping the symbols a link needs. The stage is stripped, so the .deb and
 the .rpm hold the same files, and <tt class="docutils literal">rpmbuild</tt> is kept from stripping
 again. <tt class="docutils literal">STRIP=0</tt>, as in <tt class="docutils literal">make packages STRIP=0</tt>, keeps everything as
@@ -796,19 +796,19 @@ overridden. What is overridden is intended, and says why: for lintian in
 for rpmlint in <tt class="docutils literal">packaging/rpm/rpmlint.toml</tt>, which is not shipped.</p>
 <p>A C or C++ program compiles against the installed library with:</p>
 <pre class="code sh literal-block">
-cc<span class="whitespace">  </span>prog.c<span class="whitespace">   </span><span class="keyword">$(</span>pkg-config<span class="whitespace"> </span>--cflags<span class="whitespace"> </span>--libs<span class="whitespace"> </span>xtce<span class="keyword">)</span><span class="whitespace">
-</span>c++<span class="whitespace"> </span>prog.cpp<span class="whitespace"> </span><span class="keyword">$(</span>pkg-config<span class="whitespace"> </span>--cflags<span class="whitespace"> </span>--libs<span class="whitespace"> </span>xtce<span class="keyword">)</span><span class="whitespace">
-</span>cc<span class="whitespace">  </span>prog.c<span class="whitespace">   </span><span class="keyword">$(</span>pkg-config<span class="whitespace"> </span>--cflags<span class="whitespace"> </span>--libs<span class="whitespace"> </span>--static<span class="whitespace"> </span>xtce<span class="keyword">)</span><span class="whitespace">   </span><span class="comment single"># libxtce.a</span>
+cc<span class="whitespace">  </span>prog.c<span class="whitespace">   </span><span class="keyword">$(</span>pkg-config<span class="whitespace"> </span>--cflags<span class="whitespace"> </span>--libs<span class="whitespace"> </span>tcs-xtce<span class="keyword">)</span><span class="whitespace">
+</span>c++<span class="whitespace"> </span>prog.cpp<span class="whitespace"> </span><span class="keyword">$(</span>pkg-config<span class="whitespace"> </span>--cflags<span class="whitespace"> </span>--libs<span class="whitespace"> </span>tcs-xtce<span class="keyword">)</span><span class="whitespace">
+</span>cc<span class="whitespace">  </span>prog.c<span class="whitespace">   </span><span class="keyword">$(</span>pkg-config<span class="whitespace"> </span>--cflags<span class="whitespace"> </span>--libs<span class="whitespace"> </span>--static<span class="whitespace"> </span>tcs-xtce<span class="keyword">)</span><span class="whitespace">   </span><span class="comment single"># libtcs-xtce.a</span>
 </pre>
-<p>The shared library's soname is <tt class="docutils literal">libxtce.so.N</tt>. N is its ABI version,
+<p>The shared library's soname is <tt class="docutils literal"><span class="pre">libtcs-xtce.so.N</span></tt>. N is its ABI version,
 kept in <tt class="docutils literal"><span class="pre">cpp/abi-version</span></tt>, not the package's version: it is raised by
 one only when a change breaks programs already linked against the library
-(a function of <tt class="docutils literal">xtce.h</tt> removed or changed in its parameters or meaning,
+(a function of <tt class="docutils literal"><span class="pre">tcs-xtce.h</span></tt> removed or changed in its parameters or meaning,
 or a C++ type in <tt class="docutils literal"><span class="pre">xtce-*.hpp</span></tt> changed in size or layout), and not when
 functions are added.</p>
 <p>The headers are straight in the include directory, each named with its
 library's prefix. They used to be in <tt class="docutils literal">xtce/</tt> and
-<tt class="docutils literal">ccsds/</tt>: <tt class="docutils literal">xtce/xtce.h</tt> is now <tt class="docutils literal">xtce.h</tt>, <tt class="docutils literal">ccsds/time.h</tt> is
+<tt class="docutils literal">ccsds/</tt>: <tt class="docutils literal"><span class="pre">xtce/tcs-xtce.h</span></tt> is now <tt class="docutils literal"><span class="pre">tcs-xtce.h</span></tt>, <tt class="docutils literal">ccsds/time.h</tt> is
 <tt class="docutils literal"><span class="pre">ccsds-time.h</span></tt>, and each other <tt class="docutils literal">xtce/NAME</tt> is <tt class="docutils literal"><span class="pre">xtce-NAME</span></tt>.</p>
 </div>
 <div class="section" id="installing-the-python-package">
@@ -895,8 +895,8 @@ object.</li>
 </tbody>
 </table>
 </div>
-<div class="section" id="c-xtce-buffer-xtce-buffer-hpp">
-<h2><a class="toc-backref" href="#toc-entry-10">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal"><span class="pre">xtce-buffer.hpp</span></tt>)</a></h2>
+<div class="section" id="c-xtce-buffer-tcs-xtce-buffer-hpp">
+<h2><a class="toc-backref" href="#toc-entry-10">C++: <tt class="docutils literal"><span class="pre">xtce::Buffer</span></tt> (<tt class="docutils literal"><span class="pre">tcs-xtce-buffer.hpp</span></tt>)</a></h2>
 <table border="1" class="docutils">
 <tbody valign="top">
 <tr><td><tt class="docutils literal"><span class="pre">Buffer(std::size_t</span> capacity = kDefaultCapacity)</tt></td>
@@ -1007,7 +1007,7 @@ buffer and an output buffer.</p>
 a stand-alone element.</p>
 <p>Errors are <tt class="docutils literal"><span class="pre">tcs_xtce::Error</span> { message, line, column }</tt>. <tt class="docutils literal">line</tt> is 1-based,
 or 0 when the error is not tied to a position in the input.</p>
-<p>C++ (<tt class="docutils literal"><span class="pre">xtce::Document</span></tt>, <tt class="docutils literal">#include <span class="pre">&quot;xtce-document.hpp&quot;</span></tt>):</p>
+<p>C++ (<tt class="docutils literal"><span class="pre">xtce::Document</span></tt>, <tt class="docutils literal">#include <span class="pre">&quot;tcs-xtce-document.hpp&quot;</span></tt>):</p>
 <table border="1" class="docutils">
 <tbody valign="top">
 <tr><td><tt class="docutils literal">Document(SpaceSystemType root = {}, size_t in = kDefaultCapacity, size_t out = kDefaultCapacity)</tt></td>
@@ -1035,7 +1035,7 @@ or 0 when the error is not tied to a position in the input.</p>
 </table>
 <p>Errors are thrown as <tt class="docutils literal"><span class="pre">xtce::Error</span></tt>, with <tt class="docutils literal">message()</tt>, <tt class="docutils literal">line()</tt> and
 <tt class="docutils literal">column()</tt>.</p>
-<p>C (<tt class="docutils literal">#include &quot;xtce.h&quot;</tt>, link with <tt class="docutils literal">libxtce</tt> and the C++
+<p>C (<tt class="docutils literal">#include <span class="pre">&quot;tcs-xtce.h&quot;</span></tt>, link with <tt class="docutils literal"><span class="pre">libtcs-xtce</span></tt> and the C++
 runtime):</p>
 <table border="1" class="docutils">
 <tbody valign="top">
@@ -1229,8 +1229,8 @@ packet into whichever concrete container or command it matches;</li>
 <li>an <strong>enumeration type</strong> per enumerated parameter or argument type in
 use.</li>
 </ul>
-<p>The generated code uses a small runtime: <tt class="docutils literal"><span class="pre">tcs_xtce::packet</span></tt> in Rust,
-<tt class="docutils literal"><span class="pre">xtce-packet.h</span></tt> in C and C++, and <tt class="docutils literal">tcs_xtce.packet</tt> in Python.</p>
+<p>The generated code uses a small runtime: <tt class="docutils literal"><span class="pre">tcsxtce::packet</span></tt> in Rust,
+<tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt> in C and C++, and <tt class="docutils literal">tcsxtce.packet</tt> in Python.</p>
 </div>
 <div class="section" id="running-the-compiler">
 <h2><a class="toc-backref" href="#toc-entry-18">Running the compiler</a></h2>
@@ -1342,8 +1342,8 @@ allocates nothing after initialization.</p>
 <dl class="docutils">
 <dt>Rust</dt>
 <dd>Arrays, strings and binary fields become <tt class="docutils literal">FixedVec&lt;T, N&gt;</tt>,
-<tt class="docutils literal">FixedString&lt;N&gt;</tt> and <tt class="docutils literal">FixedBytes&lt;N&gt;</tt> (from <tt class="docutils literal"><span class="pre">tcs_xtce::fixed</span></tt>, also
-exported by <tt class="docutils literal"><span class="pre">tcs_xtce::packet</span></tt>). These hold up to <tt class="docutils literal">N</tt> elements inline
+<tt class="docutils literal">FixedString&lt;N&gt;</tt> and <tt class="docutils literal">FixedBytes&lt;N&gt;</tt> (from <tt class="docutils literal"><span class="pre">tcsxtce::fixed</span></tt>, also
+exported by <tt class="docutils literal"><span class="pre">tcsxtce::packet</span></tt>). These hold up to <tt class="docutils literal">N</tt> elements inline
 and dereference to <tt class="docutils literal">[T]</tt>, <tt class="docutils literal">str</tt> and <tt class="docutils literal">[u8]</tt>. Build them with
 <tt class="docutils literal">try_from</tt> or <tt class="docutils literal">push</tt>, which fail instead of growing.
 <tt class="docutils literal"><span class="pre">Packet::decode</span></tt>, <tt class="docutils literal">encode</tt> and <tt class="docutils literal">Display</tt> then never allocate.
@@ -1417,7 +1417,7 @@ is repacked.</p>
 <li><strong>Rust</strong>: add the file as a module (<tt class="docutils literal">mod demo;</tt>) in a crate that
 depends on <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt>.</li>
 <li><strong>C and C++</strong>: include the header with <tt class="docutils literal">cpp/include</tt> on the include
-path. The header and its runtime <tt class="docutils literal"><span class="pre">xtce-packet.h</span></tt> are self-contained
+path. The header and its runtime <tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt> are self-contained
 and need no library. In C, link with <tt class="docutils literal"><span class="pre">-lm</span></tt>.</li>
 <li><strong>Python</strong>: import the module with the <tt class="docutils literal">tcs_xtce</tt> package on the path.</li>
 </ul>
@@ -1708,7 +1708,7 @@ doesn't list survive decoding and re-encoding:</p>
 (<tt class="docutils literal">demo_ModeType_NOMINAL</tt>) and <tt class="docutils literal">const char* demo_ModeType_label(demo_ModeType)</tt>,
 which returns <tt class="docutils literal">NULL</tt> for an unlisted value.</li>
 <li><strong>Python</strong>: <tt class="docutils literal">class ModeType(enum.IntEnum)</tt> with a <tt class="docutils literal">label</tt>
-property. <tt class="docutils literal">tcs_xtce.packet.enum_value(ModeType, 20)</tt> builds a value
+property. <tt class="docutils literal">tcsxtce.packet.enum_value(ModeType, 20)</tt> builds a value
 even when it isn't listed.</li>
 </ul>
 <p>A range entry (<tt class="docutils literal">maxValue</tt>) gives one label to all values in the range.
@@ -1735,8 +1735,8 @@ returns an instance of the matching member class.</li>
 <div class="section" id="methods">
 <h2><a class="toc-backref" href="#toc-entry-23">Methods</a></h2>
 <p>Every packet struct and kind has the members below. Rust implements the
-<tt class="docutils literal"><span class="pre">tcs_xtce::packet::Packet</span></tt> trait. Python classes derive from
-<tt class="docutils literal">tcs_xtce.packet.Packet</tt> (structs) or <tt class="docutils literal">tcs_xtce.packet.PacketKind</tt> (kinds).
+<tt class="docutils literal"><span class="pre">tcsxtce::packet::Packet</span></tt> trait. Python classes derive from
+<tt class="docutils literal">tcsxtce.packet.Packet</tt> (structs) or <tt class="docutils literal">tcsxtce.packet.PacketKind</tt> (kinds).
 In C/C++ they are macros and <tt class="docutils literal">static inline</tt> functions named after the
 type, shown here for <tt class="docutils literal">T</tt> = <tt class="docutils literal">demo_Housekeeping</tt>.</p>
 <table border="1" class="docutils">
@@ -1830,7 +1830,7 @@ fixed values and fails with <tt class="docutils literal">Mismatch</tt> if a crit
 packet of its type. It reuses them for every packet until it is dropped.</p>
 <p>Rust:</p>
 <pre class="code rust literal-block">
-<span class="keyword">use</span><span class="whitespace"> </span><span class="name">tcs_xtce</span><span class="punctuation">::</span><span class="name">packet</span><span class="punctuation">::{</span><span class="name">Codec</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">Packet</span><span class="punctuation">};</span><span class="whitespace">
+<span class="keyword">use</span><span class="whitespace"> </span><span class="name">tcsxtce</span><span class="punctuation">::</span><span class="name">packet</span><span class="punctuation">::{</span><span class="name">Codec</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">Packet</span><span class="punctuation">};</span><span class="whitespace">
 
 </span><span class="keyword declaration">let</span><span class="whitespace"> </span><span class="keyword">mut</span><span class="whitespace"> </span><span class="name">codec</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">Codec</span><span class="punctuation">::</span><span class="name">for_packet</span><span class="punctuation">::</span><span class="operator">&lt;</span><span class="name">demo</span><span class="punctuation">::</span><span class="name">CCSDSPacketKind</span><span class="operator">&gt;</span><span class="punctuation">();</span><span class="whitespace">
 </span><span class="name">codec</span><span class="punctuation">.</span><span class="name">load</span><span class="punctuation">(</span><span class="operator">&amp;</span><span class="name">frame_bytes</span><span class="punctuation">);</span><span class="whitespace">                       </span><span class="comment single">// copy into the input buffer
@@ -1873,9 +1873,9 @@ and as C++:</p>
         </span><span class="name">send</span><span class="punctuation">(</span><span class="name">sock</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">out</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="name">len</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">0</span><span class="punctuation">);</span><span class="whitespace">
 </span><span class="punctuation">}</span>
 </pre>
-<p>Python (<tt class="docutils literal">tcs_xtce.packet.Codec</tt>):</p>
+<p>Python (<tt class="docutils literal">tcsxtce.packet.Codec</tt>):</p>
 <pre class="code python literal-block">
-<span class="keyword namespace">from</span><span class="whitespace"> </span><span class="name namespace">tcs_xtce.packet</span><span class="whitespace"> </span><span class="keyword namespace">import</span> <span class="name">Codec</span><span class="whitespace">
+<span class="keyword namespace">from</span><span class="whitespace"> </span><span class="name namespace">tcsxtce.packet</span><span class="whitespace"> </span><span class="keyword namespace">import</span> <span class="name">Codec</span><span class="whitespace">
 </span><span class="keyword namespace">import</span><span class="whitespace"> </span><span class="name namespace">demo</span><span class="whitespace">
 
 </span><span class="name">codec</span> <span class="operator">=</span> <span class="name">Codec</span><span class="operator">.</span><span class="name">for_packet</span><span class="punctuation">(</span><span class="name">demo</span><span class="operator">.</span><span class="name">CCSDSPacketKind</span><span class="punctuation">)</span><span class="whitespace">
@@ -1900,8 +1900,8 @@ there are and however their sizes vary.</p>
 the sender added them. A packet whose last value takes the rest of the
 packet, and that has no packet length field, takes the rest of the
 batch, so it must come last.</p>
-<p>Rust has <tt class="docutils literal"><span class="pre">tcs_xtce::packet::Batch</span></tt> and Python <tt class="docutils literal">tcs_xtce.packet.Batch</tt>.
-In C/C++ (<tt class="docutils literal"><span class="pre">xtce-packet.h</span></tt>) an <tt class="docutils literal">xtce_pk_batch</tt> is kept in a buffer the
+<p>Rust has <tt class="docutils literal"><span class="pre">tcsxtce::packet::Batch</span></tt> and Python <tt class="docutils literal">tcsxtce.packet.Batch</tt>.
+In C/C++ (<tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt>) an <tt class="docutils literal">xtce_pk_batch</tt> is kept in a buffer the
 caller gives; each packet type <tt class="docutils literal">T</tt> has <tt class="docutils literal">T_batch_add</tt> and
 <tt class="docutils literal">T_batch_next</tt>. The C/C++ functions return <tt class="docutils literal">0</tt> or an <tt class="docutils literal">XTCE_PK_*</tt>
 error code, filling in <tt class="docutils literal">err</tt>, the last argument, which may be <tt class="docutils literal">NULL</tt>.</p>
@@ -2000,8 +2000,8 @@ if bytes are left over</td>
 </div>
 <div class="section" id="errors">
 <h2><a class="toc-backref" href="#toc-entry-26">Errors</a></h2>
-<p>Errors are <tt class="docutils literal"><span class="pre">tcs_xtce::packet::PacketError</span></tt> (a Rust enum) and
-<tt class="docutils literal">tcs_xtce.packet.PacketError</tt> (a Python <tt class="docutils literal">ValueError</tt>). In C and C++
+<p>Errors are <tt class="docutils literal"><span class="pre">tcsxtce::packet::PacketError</span></tt> (a Rust enum) and
+<tt class="docutils literal">tcsxtce.packet.PacketError</tt> (a Python <tt class="docutils literal">ValueError</tt>). In C and C++
 they are the code a function returns, plus the <tt class="docutils literal">xtce_pk_error</tt> it
 fills in: <tt class="docutils literal">code</tt>, the <tt class="docutils literal">field</tt> involved and, for <tt class="docutils literal">Mismatch</tt>, the
 criterion in <tt class="docutils literal">detail</tt>. Each error carries a <em>kind</em> that is the same in
@@ -2098,7 +2098,7 @@ names.</li>
 <h2><a class="toc-backref" href="#toc-entry-28">Runtime reference</a></h2>
 <p>Generated code calls these, and they are also available for hand-written
 codecs. The names are the same in every language unless noted.</p>
-<p>In C/C++ (<tt class="docutils literal"><span class="pre">xtce-packet.h</span></tt>) every name has the prefix <tt class="docutils literal">xtce_pk_</tt>,
+<p>In C/C++ (<tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt>) every name has the prefix <tt class="docutils literal">xtce_pk_</tt>,
 types are structs operated on by functions, and fallible functions
 return an error code and their result through a pointer. Examples:
 <tt class="docutils literal">xtce_pk_reader_init(data, len, err)</tt> and
@@ -3280,14 +3280,14 @@ Python's <tt class="docutils literal">int</tt> has no size limit.</p>
 <p>The library is two headers in <tt class="docutils literal">cpp/include</tt>, which need only the
 standard library and allocate nothing:</p>
 <dl class="docutils">
-<dt><tt class="docutils literal"><span class="pre">xtce-bnum.h</span></tt></dt>
+<dt><tt class="docutils literal"><span class="pre">tcsxtce-bnum.h</span></tt></dt>
 <dd><p class="first">C11 functions, which also compile as C++, on integers of <tt class="docutils literal">n</tt> bytes
 held least significant first, two's complement when signed. Each is
 named after the bnum method it mirrors (<tt class="docutils literal">xtce_bn_wrapping_add</tt> is
 bnum's <tt class="docutils literal">wrapping_add</tt>) and takes its integers as byte pointers with
 their size and signedness:</p>
 <pre class="code c literal-block">
-<span class="comment preproc">#include</span><span class="whitespace"> </span><span class="comment preprocfile">&lt;xtce-bnum.h&gt;</span><span class="comment preproc">
+<span class="comment preproc">#include</span><span class="whitespace"> </span><span class="comment preprocfile">&lt;tcsxtce-bnum.h&gt;</span><span class="comment preproc">
 </span><span class="whitespace">
 </span><span class="name">XTCE_BN_TYPEDEF</span><span class="punctuation">(</span><span class="name">u256</span><span class="punctuation">,</span><span class="whitespace"> </span><span class="literal number integer">32</span><span class="punctuation">);</span><span class="whitespace">  </span><span class="comment multiline">/* typedef struct { uint8_t bytes[32]; } */</span><span class="whitespace">
 
@@ -3307,7 +3307,7 @@ the result overflowed, and <tt class="docutils literal">checked_</tt> ones wheth
 Functions that need room to work take a <tt class="docutils literal">scratch</tt> buffer of <tt class="docutils literal">n</tt>
 bytes; the header says which may not be given the same integer twice.</p>
 </dd>
-<dt><tt class="docutils literal"><span class="pre">xtce-bnum.hpp</span></tt></dt>
+<dt><tt class="docutils literal"><span class="pre">tcsxtce-bnum.hpp</span></tt></dt>
 <dd><p class="first">For C++20, <tt class="docutils literal"><span class="pre">xtce::bnum::Integer&lt;S,</span> N&gt;</tt>, like bnum's
 <tt class="docutils literal">Integer&lt;S, N&gt;</tt>: an integer of <tt class="docutils literal">N</tt> bytes, signed if <tt class="docutils literal">S</tt>, with
 <tt class="docutils literal">Uint&lt;N&gt;</tt> and <tt class="docutils literal">Int&lt;N&gt;</tt> for short. It has bnum's methods under the
@@ -3317,7 +3317,7 @@ mode. Where bnum panics (dividing by zero, or a <tt class="docutils literal">str
 overflowing) it calls <tt class="docutils literal">XTCE_BNUM_PANIC</tt>, which aborts unless defined
 otherwise before the header is included.</p>
 <pre class="code cpp last literal-block">
-<span class="comment preproc">#include</span><span class="whitespace"> </span><span class="comment preprocfile">&lt;xtce-bnum.hpp&gt;</span><span class="comment preproc">
+<span class="comment preproc">#include</span><span class="whitespace"> </span><span class="comment preprocfile">&lt;tcsxtce-bnum.hpp&gt;</span><span class="comment preproc">
 </span><span class="whitespace">
 </span><span class="keyword">using</span><span class="whitespace"> </span><span class="name">U256</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">xtce</span><span class="operator">::</span><span class="name">bnum</span><span class="operator">::</span><span class="name">Uint</span><span class="operator">&lt;</span><span class="literal number integer">32</span><span class="operator">&gt;</span><span class="punctuation">;</span><span class="whitespace">
 </span><span class="name">U256</span><span class="whitespace"> </span><span class="name">x</span><span class="whitespace"> </span><span class="operator">=</span><span class="whitespace"> </span><span class="name">U256</span><span class="operator">::</span><span class="name">one</span><span class="punctuation">()</span><span class="whitespace"> </span><span class="operator">&lt;&lt;</span><span class="whitespace"> </span><span class="literal number integer">160</span><span class="punctuation">;</span><span class="whitespace">
@@ -3549,7 +3549,7 @@ hex digits (to print):</p>
 a path)</td>
 <td><tt class="docutils literal"><span class="pre">Err(tcs_xtce::Error)</span></tt></td>
 </tr>
-<tr><td>C and C++ (<tt class="docutils literal"><span class="pre">xtce-digest.h</span></tt>, which needs no library)</td>
+<tr><td>C and C++ (<tt class="docutils literal"><span class="pre">tcs-xtce-digest.h</span></tt>, which needs no library)</td>
 <td><tt class="docutils literal">xtce_digest_bytes(data, len, out, &amp;err)</tt>,
 <tt class="docutils literal">xtce_digest(data, len, hex, &amp;err)</tt>,
 <tt class="docutils literal">xtce_digest_string(text, hex, &amp;err)</tt>,
@@ -3965,8 +3965,8 @@ and the same results as each other for random values from
 <li><tt class="docutils literal">tests/ccsds_check.sh</tt>: tcs-ccsds's time codes give the known results
 and the same results in Rust, C, C++ and Python (see <a class="reference internal" href="#ccsds-time-codes-tcs-ccsds">CCSDS time codes
 (tcs-ccsds)</a>).</li>
-<li><tt class="docutils literal">tests/bnum_check.sh</tt>: the C functions of <tt class="docutils literal"><span class="pre">xtce-bnum.h</span></tt> (built as
-C and as C++) and the C++ class of <tt class="docutils literal"><span class="pre">xtce-bnum.hpp</span></tt> give the same
+<li><tt class="docutils literal">tests/bnum_check.sh</tt>: the C functions of <tt class="docutils literal"><span class="pre">tcsxtce-bnum.h</span></tt> (built as
+C and as C++) and the C++ class of <tt class="docutils literal"><span class="pre">tcsxtce-bnum.hpp</span></tt> give the same
 results as the bnum crate for random cases from
 <tt class="docutils literal">tests/bnum_cases.py</tt>: every operation they have, on signed and
 unsigned integers of 1 to 32 bytes, with each type's edge values.</li>

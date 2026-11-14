@@ -3,6 +3,9 @@
 REPOSITORY = "https://github.com/vomlehn/tcs-xtce"
 # The Rust crate on crates.io.
 CRATE = "https://crates.io/crates/tcs-xtce"
+# The packet runtime's Rust crate on crates.io, which generated packet codecs
+# use.
+RUNTIME_CRATE = "https://crates.io/crates/tcsxtce"
 
 
 def header_lines() -> list:

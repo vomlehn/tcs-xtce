@@ -1,4 +1,4 @@
-"""Emit a Python module of packet codecs (uses ``tcs_xtce.packet``)."""
+"""Emit a Python module of packet codecs (uses ``tcsxtce.packet``)."""
 
 from __future__ import annotations
 
@@ -748,7 +748,7 @@ class PythonEmitter:
         self.line("from dataclasses import dataclass")
         self.line("from typing import ClassVar, Optional, Union")
         self.line()
-        self.line("from tcs_xtce import packet as pk")
+        self.line("from tcsxtce import packet as pk")
         self.line()
         self.line()
         self.line("def _describe_bool(v: bool) -> str:")
@@ -935,7 +935,7 @@ class PythonEmitter:
         self.line(f'"""Enumeration ``{vt.key}``.', 1)
         self.line()
         self.line("Decoding keeps values the enumeration does not list (see", 1)
-        self.line(':func:`tcs_xtce.packet.enum_value`)."""', 1)
+        self.line(':func:`tcsxtce.packet.enum_value`)."""', 1)
         self.line()
         for lab in vt.labels:
             self.line(f"{lab.ident} = {lab.value}", 1)

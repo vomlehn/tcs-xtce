@@ -5,9 +5,9 @@
  * generated code reads packets with an xtce_pk_reader and writes them with
  * an xtce_pk_writer into a buffer the caller owns; this header provides
  * those and the integer, float, string and calibration helpers they call.
- * It mirrors tcs_xtce::packet in Rust and tcs_xtce.packet in Python.
+ * It mirrors tcsxtce::packet in Rust and tcsxtce.packet in Python.
  *
- * The header needs only xtce-bnum.h, beside it, and the C standard library
+ * The header needs only tcsxtce-bnum.h, beside it, and the C standard library
  * (link with -lm), and compiles both as C11 and as C++.  Nothing is
  * allocated: callers preallocate buffers, typically of the generated
  * *_MAX_BYTES size, and reuse them for every packet.
@@ -15,8 +15,8 @@
  * Every fallible function returns 0 (XTCE_PK_OK) on success or an error code,
  * and fills in the xtce_pk_error it was given (which may be NULL).
  */
-#ifndef XTCE_PACKET_H
-#define XTCE_PACKET_H
+#ifndef TCSXTCE_PACKET_H
+#define TCSXTCE_PACKET_H
 
 #include <float.h>
 #include <math.h>
@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "xtce-bnum.h"
+#include "tcsxtce-bnum.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -1862,7 +1862,7 @@ static inline int xtce_pk_cmp_ui(uint64_t a, int64_t b) {
 
 /* --- integers of more than 64 bits -------------------------------------------
  *
- * They are xtce-bnum.h integers: generated structs of `bytes`, least
+ * They are tcsxtce-bnum.h integers: generated structs of `bytes`, least
  * significant first and two's complement when signed, of 16 bytes up to
  * 128 bits and of whole bytes beyond.  A raw field of `bits` bits is held
  * the same way, unsigned. */
@@ -5032,4 +5032,4 @@ static inline int xtce_pk_batch_finish(const xtce_pk_batch* b,
 }
 #endif
 
-#endif /* XTCE_PACKET_H */
+#endif /* TCSXTCE_PACKET_H */

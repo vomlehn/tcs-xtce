@@ -12,7 +12,7 @@ mod probe;
 
 use probe::{ModeType, ReasonType, SafeStatus, Status, StatusKind};
 use std::process::exit;
-use tcs_xtce::packet::Packet;
+use tcsxtce::packet::Packet;
 
 fn fail(msg: String) -> ! {
     eprintln!("enum-labels: {msg}");

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, BinaryIO, Optional
 
 from . import _xml as X
-from ._buffer import DEFAULT_CAPACITY, ManagedBuffer
+from tcsxtce import DEFAULT_CAPACITY, ManagedBuffer
 from .generated import (NAMESPACE, READERS, ROOT_ELEMENT, WRITERS,
                         SpaceSystemType)
 

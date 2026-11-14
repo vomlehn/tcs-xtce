@@ -10,8 +10,8 @@ mod demo;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fmt::{Display, Write as _};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tcs_xtce::fixed::{FixedBytes, FixedString};
-use tcs_xtce::packet::{Alarms, Codec, Outputs, Packet};
+use tcsxtce::fixed::{FixedBytes, FixedString};
+use tcsxtce::packet::{Alarms, Codec, Outputs, Packet};
 
 /// The system allocator, counting the allocations made through it.
 struct Counting;

@@ -20,13 +20,13 @@
  * doesn't depend on the order the documents are given in, and the digest of a
  * set of one document is that document's digest.
  *
- * This header needs no library, like xtce-packet.h.  Computing a digest
+ * This header needs no library, like tcsxtce-packet.h.  Computing a digest
  * allocates memory with malloc, so do it at start-up, not in code that must
  * not allocate.  The functions return 0 on success, or -1 after filling in
  * *err (which may be NULL).
  */
-#ifndef XTCE_DIGEST_H
-#define XTCE_DIGEST_H
+#ifndef TCS_XTCE_DIGEST_H
+#define TCS_XTCE_DIGEST_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -1269,4 +1269,4 @@ inline std::string digest_files(const std::vector<std::string>& paths) {
 }  // namespace xtce
 #endif
 
-#endif /* XTCE_DIGEST_H */
+#endif /* TCS_XTCE_DIGEST_H */
