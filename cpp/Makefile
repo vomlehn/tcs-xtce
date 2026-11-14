@@ -76,12 +76,12 @@ $(BUILD)/packet_test: tests/packet_test.c $(PKT_DEPS) | $(BUILD)
 $(BUILD)/packet_test_cxx: tests/packet_test.c $(PKT_DEPS) | $(BUILD)
 	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -Itests -x c++ $< -o $@
 
-# The XTCE digest, from the header tcs-xtce-digest.h alone, built both ways.
-$(BUILD)/digest_tool: tests/digest_tool.c include/tcs-xtce-digest.h \
+# The XTCE digest, from the header tcsxtce-digest.h alone, built both ways.
+$(BUILD)/digest_tool: tests/digest_tool.c include/tcsxtce-digest.h \
 		| $(BUILD)
 	$(CC) -std=c11 $(CFLAGS) $(WARN) -Iinclude $< -o $@
 
-$(BUILD)/digest_tool_cxx: tests/digest_tool.c include/tcs-xtce-digest.h \
+$(BUILD)/digest_tool_cxx: tests/digest_tool.c include/tcsxtce-digest.h \
 		| $(BUILD)
 	$(CXX) $(CXXSTD) $(CXXFLAGS) $(WARN) -Iinclude -x c++ $< -o $@
 

@@ -3,7 +3,7 @@
  * Two programs that exchange packets were built from the same packet
  * definitions if their XTCE documents have the same digest, so each can send
  * the other its digest and compare, rather than describing the data in every
- * message.  The Python (tcs_xtce.digest) and Rust (tcs_xtce::digest) runtimes
+ * message.  The Python (tcsxtce.digest) and Rust (tcsxtce::digest) runtimes
  * compute the same digest; the Python module describes exactly what it
  * covers.  In short, it leaves out comments and processing instructions,
  * whitespace between elements and around text, the order of attributes,
@@ -25,8 +25,8 @@
  * not allocate.  The functions return 0 on success, or -1 after filling in
  * *err (which may be NULL).
  */
-#ifndef TCS_XTCE_DIGEST_H
-#define TCS_XTCE_DIGEST_H
+#ifndef TCSXTCE_DIGEST_H
+#define TCSXTCE_DIGEST_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -1269,4 +1269,4 @@ inline std::string digest_files(const std::vector<std::string>& paths) {
 }  // namespace xtce
 #endif
 
-#endif /* TCS_XTCE_DIGEST_H */
+#endif /* TCSXTCE_DIGEST_H */

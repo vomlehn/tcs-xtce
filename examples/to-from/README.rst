@@ -123,12 +123,12 @@ runtime computes it the same way:
    * - Language
      - Function
    * - Rust
-     - ``tcs_xtce::digest::digest_file_bytes(path)``, giving ``[u8; 16]``
+     - ``tcsxtce::digest::digest_file_bytes(path)``, giving ``[u8; 16]``
    * - C, C++
      - ``xtce_digest_file_bytes(path, out, &err)``, from the header
-       ``tcs-xtce-digest.h``, which needs no library
+       ``tcsxtce-digest.h``, which needs no library
    * - Python
-     - ``tcs_xtce.digest.digest_file_bytes(path)``, giving ``bytes``
+     - ``tcsxtce.digest.digest_file_bytes(path)``, giving ``bytes``
 
 ``xtce-digest to_from.xtce`` prints the same digest in hex. Each program reads
 ``to_from.xtce`` from the current directory, so run it from this one.
@@ -234,7 +234,7 @@ C and C++
 
 `c/main.c <c/main.c>`__ is built twice, once as C11 and once as C++20. It
 needs only the headers ``../../cpp/include/tcsxtce-packet.h`` and
-``../../cpp/include/tcs-xtce-digest.h`` and the generated header; it links with
+``../../cpp/include/tcsxtce-digest.h`` and the generated header; it links with
 no tcs-xtce library.
 
 .. code-block:: sh

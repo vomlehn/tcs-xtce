@@ -26,7 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <tcs-xtce-digest.h>
+#include <tcsxtce-digest.h>
 
 #define N_READINGS 4
 

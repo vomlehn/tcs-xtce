@@ -1,15 +1,15 @@
 # The Python packages: the runtime that generated Python code imports, and
 # the compiler that generates code in every language, installable with pip.
 #
-# Two packages, in python/: tcsxtce, the packet runtime, which flies; and
-# tcs_xtce, ground software, with the XML binding and the digest at its top,
-# the compiler in tcs_xtce.compiler, the XML binding's generator in
-# tcs_xtce.binding and the digest's command line in tcs_xtce.digest_cli. This file is at the
-# repository's root so that the package can carry the README and the
-# license files. python/tcs_xtce/generated.py is not in git -- `make
-# generate` writes it from the XTCE schema -- so build the package with
-# `make python-dist`, which writes it first and checks that the wheel holds
-# it.
+# Two packages, in python/: tcsxtce, the packet runtime and the digest,
+# which are production software; and tcs_xtce, ground software, with the XML
+# binding at its top, the compiler in tcs_xtce.compiler, the XML binding's
+# generator in tcs_xtce.binding and the digest's command line in
+# tcs_xtce.digest_cli. This file is at the repository's root so that the
+# package can carry the README and the license files.
+# python/tcs_xtce/generated.py is not in git -- `make generate` writes it
+# from the XTCE schema -- so build the package with `make python-dist`,
+# which writes it first and checks that the wheel holds it.
 
 [build-system]
 requires = ["setuptools>=77"]

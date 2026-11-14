@@ -22,7 +22,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::process;
 use std::thread;
 
-use tcs_xtce::digest::{digest_file_bytes, hex};
+use tcsxtce::digest::{digest_file_bytes, hex};
 use tcsxtce::packet::{Codec, Packet};
 use variable_array::{Length, Line, Paragraph};
 

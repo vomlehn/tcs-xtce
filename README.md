@@ -26,11 +26,13 @@ that they agree on every field's type and order. That avoids the per-message cos
 of self-describing formats: the same packet is 77 bytes as JSON and 29 as
 Protocol Buffers.
 
-What the generated code runs on, the packet runtime, is a library of its
-own, `tcsxtce`, in each language: the `tcsxtce` crate, the `tcsxtce`
-Python package, and the header-only `tcsxtce-packet.h` for C and C++. It
-is flight software, and is all of tcs-xtce that flies; the rest -- the XML
-binding, the compiler, the digest and the editor -- is ground software.
+What the generated code runs on, the packet runtime, and the digest
+programs check each other with are a library of their own, `tcsxtce`, in
+each language: the `tcsxtce` crate, the `tcsxtce` Python package, and the
+header-only `tcsxtce-packet.h` and `tcsxtce-digest.h` for C and C++. It is
+production software, run aboard and in the operations center, and is all
+of tcs-xtce that is; the rest -- the XML binding, the compiler and the
+editor -- is ground software.
 
 The full documentation is in `docs/`:
 [`docs/tcs-xtce.rst`](https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtce.rst)
@@ -439,12 +441,12 @@ to be generated again, and depends on the runtime rather than on
 
 | Was                                | Now                                |
 |------------------------------------|------------------------------------|
-| Rust `tcs_xtce::packet`, `buffer`, `fixed`, `value` | crate `tcsxtce`: `tcsxtce::packet` and the rest (still re-exported by `tcs-xtce`) |
-| Python `tcs_xtce.packet`           | `tcsxtce.packet`                   |
+| Rust `tcs_xtce::packet`, `buffer`, `digest`, `fixed`, `value` | crate `tcsxtce`: `tcsxtce::packet` and the rest (still re-exported by `tcs-xtce`) |
+| Python `tcs_xtce.packet`, `tcs_xtce.digest` | `tcsxtce.packet`, `tcsxtce.digest` |
 | `xtce-packet.h`                    | `tcsxtce-packet.h`                 |
 | `xtce-bnum.h`, `xtce-bnum.hpp`     | `tcsxtce-bnum.h`, `tcsxtce-bnum.hpp` |
 | `xtce.h`                           | `tcs-xtce.h`                       |
-| `xtce-digest.h`                    | `tcs-xtce-digest.h`                |
+| `xtce-digest.h`                    | `tcsxtce-digest.h`                 |
 | `xtce-buffer.hpp`, `xtce-xml.hpp`, `xtce-document.hpp`, `xtce-generated.hpp` | `tcs-xtce-buffer.hpp` and so on |
 | `libxtce.a`, `libxtce.so`, `xtce.pc` | `libtcs-xtce.a`, `libtcs-xtce.so`, `tcs-xtce.pc` |
 

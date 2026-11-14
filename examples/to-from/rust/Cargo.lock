@@ -9,13 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1b08cb4ecbb540b940016b0a0f35b7e48ab0cc372ab88150c351de4cc469959"
 
 [[package]]
-name = "tcs-xtce"
-version = "0.7.0"
-dependencies = [
- "tcsxtce",
-]
-
-[[package]]
 name = "tcsxtce"
 version = "0.7.0"
 dependencies = [
@@ -26,6 +19,5 @@ dependencies = [
 name = "to-from"
 version = "0.1.0"
 dependencies = [
- "tcs-xtce",
  "tcsxtce",
 ]

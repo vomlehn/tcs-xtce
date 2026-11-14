@@ -3,7 +3,7 @@
 //! `tests/digest_check.sh` compares across languages.  With `--set`, prints
 //! the one digest of the set of documents instead.
 
-use tcs_xtce::digest::{digest_file, digest_files};
+use tcsxtce::digest::{digest_file, digest_files};
 
 /// Prints the digests the command line asks for.
 fn main() {

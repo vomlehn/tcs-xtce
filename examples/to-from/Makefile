@@ -27,7 +27,7 @@ GEN_SRC := $(wildcard $(TOP)/python/tcs_xtce/compiler/*.py \
                      $(TOP)/python/tcs_xtce/__main__.py \
                      $(TOP)/python/tcs_xtce/binding/*.py)
 PKT_H   := $(TOP)/cpp/include/tcsxtce-packet.h \
-           $(TOP)/cpp/include/tcs-xtce-digest.h
+           $(TOP)/cpp/include/tcsxtce-digest.h
 TCS_XTCE := cd $(TOP)/python && \
             $(PYTHON) -m tcs_xtce ../examples/to-from/$(XML) \
            --source-name examples/to-from/$(XML)

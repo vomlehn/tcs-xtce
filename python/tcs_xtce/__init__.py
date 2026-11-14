@@ -8,11 +8,12 @@ and reused for as long as their owner (usually a :class:`Document`) lives.
 
 The package also holds the compiler that turns a mission's XTCE into packet
 codecs (:mod:`tcs_xtce.compiler`, run as ``python3 -m tcs_xtce`` or the
-``tcs-xtce`` command) and the digest (:mod:`tcs_xtce.digest`, with the
-``xtce-digest`` command in :mod:`tcs_xtce.digest_cli`).
+``tcs-xtce`` command) and the ``xtce-digest`` command
+(:mod:`tcs_xtce.digest_cli`).
 
-The packet runtime that the Python the compiler writes uses is the
-:mod:`tcsxtce` package, which flies; this one is ground software.
+The packet runtime that the Python the compiler writes uses, and the digest
+(:mod:`tcsxtce.digest`), are the :mod:`tcsxtce` package, which flies; this
+one is ground software.
 
 The XML binding is loaded the first time one of its names is used, so that
 the generators need neither its 1.4 MB nor, before
@@ -26,17 +27,17 @@ True
 """
 
 from tcsxtce import DEFAULT_CAPACITY, ManagedBuffer
-from ._error import XtceError
+from tcsxtce import XtceError
 
 # What the package itself gives, beside the XML binding's names.
 _OWN = ["DEFAULT_CAPACITY", "Document", "ManagedBuffer", "XtceError",
         "from_xml", "to_xml"]
 
 # The package's modules and subpackages, which an import loads rather than
-# the XML binding: `from tcs_xtce import digest` asks for one of these by
+# the XML binding: `from tcsxtce import digest` asks for one of these by
 # name before importing it.
-_MODULES = {"_error", "_xml", "binding", "compiler", "digest", "digest_cli",
-            "document", "generated", "__main__"}
+_MODULES = {"_xml", "binding", "compiler", "digest_cli", "document",
+            "generated", "__main__"}
 
 
 def __getattr__(name: str):

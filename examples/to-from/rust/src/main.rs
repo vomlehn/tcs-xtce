@@ -20,7 +20,7 @@ use std::env;
 use std::io::{self, Read, Write};
 use std::process;
 
-use tcs_xtce::digest::{digest_file_bytes, hex};
+use tcsxtce::digest::{digest_file_bytes, hex};
 use tcsxtce::packet::{Codec, Packet};
 use to_from::Word;
 

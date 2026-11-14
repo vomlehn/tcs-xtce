@@ -541,15 +541,15 @@ packets of every document.</p>
 </thead>
 <tbody valign="top">
 <tr><td>Rust</td>
-<td><tt class="docutils literal"><span class="pre">tcs_xtce::digest::digest_files_bytes(&amp;paths)</span></tt>, giving
+<td><tt class="docutils literal"><span class="pre">tcsxtce::digest::digest_files_bytes(&amp;paths)</span></tt>, giving
 <tt class="docutils literal">[u8; 16]</tt></td>
 </tr>
 <tr><td>C, C++</td>
 <td><tt class="docutils literal">xtce_digest_files_bytes(paths, n, out, &amp;err)</tt>, from the header
-<tt class="docutils literal"><span class="pre">tcs-xtce-digest.h</span></tt>, which needs no library</td>
+<tt class="docutils literal"><span class="pre">tcsxtce-digest.h</span></tt>, which needs no library</td>
 </tr>
 <tr><td>Python</td>
-<td><tt class="docutils literal">tcs_xtce.digest.digest_files_bytes(paths)</tt>, giving <tt class="docutils literal">bytes</tt></td>
+<td><tt class="docutils literal">tcsxtce.digest.digest_files_bytes(paths)</tt>, giving <tt class="docutils literal">bytes</tt></td>
 </tr>
 </tbody>
 </table>
@@ -596,7 +596,7 @@ cargo<span class="whitespace"> </span>run<span class="whitespace"> </span>--rele
 <h2>C and C++</h2>
 <p><a class="reference external" href="c/main.c">c/main.c</a> is built twice, once as C11 and once as C++20. It
 needs only the headers <tt class="docutils literal"><span class="pre">../../cpp/include/tcsxtce-packet.h</span></tt> and
-<tt class="docutils literal"><span class="pre">../../cpp/include/tcs-xtce-digest.h</span></tt> and the generated header; it links with
+<tt class="docutils literal"><span class="pre">../../cpp/include/tcsxtce-digest.h</span></tt> and the generated header; it links with
 no tcs-xtce library.</p>
 <pre class="code sh literal-block">
 make<span class="whitespace"> </span>c<span class="whitespace">

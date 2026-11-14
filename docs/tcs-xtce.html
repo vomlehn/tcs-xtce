@@ -3540,7 +3540,7 @@ hex digits (to print):</p>
 </tr>
 </thead>
 <tbody valign="top">
-<tr><td>Rust (<tt class="docutils literal"><span class="pre">tcs_xtce::digest</span></tt>)</td>
+<tr><td>Rust (<tt class="docutils literal"><span class="pre">tcsxtce::digest</span></tt>)</td>
 <td><tt class="docutils literal"><span class="pre">digest_bytes(&amp;[u8])</span> <span class="pre">-&gt;</span> [u8; 16]</tt>, <tt class="docutils literal"><span class="pre">digest(&amp;[u8])</span></tt>,
 <tt class="docutils literal"><span class="pre">digest_string(&amp;str)</span></tt>, <tt class="docutils literal">digest_file_bytes(path)</tt>,
 <tt class="docutils literal">digest_file(path)</tt>, <tt class="docutils literal"><span class="pre">hex(&amp;[u8;</span> 16])</tt>; for a set,
@@ -3549,7 +3549,7 @@ hex digits (to print):</p>
 a path)</td>
 <td><tt class="docutils literal"><span class="pre">Err(tcs_xtce::Error)</span></tt></td>
 </tr>
-<tr><td>C and C++ (<tt class="docutils literal"><span class="pre">tcs-xtce-digest.h</span></tt>, which needs no library)</td>
+<tr><td>C and C++ (<tt class="docutils literal"><span class="pre">tcsxtce-digest.h</span></tt>, which needs no library)</td>
 <td><tt class="docutils literal">xtce_digest_bytes(data, len, out, &amp;err)</tt>,
 <tt class="docutils literal">xtce_digest(data, len, hex, &amp;err)</tt>,
 <tt class="docutils literal">xtce_digest_string(text, hex, &amp;err)</tt>,
@@ -3566,7 +3566,7 @@ a path)</td>
 <tt class="docutils literal"><span class="pre">std::vector&lt;std::string&gt;</span></tt>), returning <tt class="docutils literal"><span class="pre">std::string</span></tt></td>
 <td><tt class="docutils literal"><span class="pre">-1</span></tt> and <tt class="docutils literal">err.message</tt>; C++ throws <tt class="docutils literal"><span class="pre">std::runtime_error</span></tt></td>
 </tr>
-<tr><td>Python (<tt class="docutils literal">tcs_xtce.digest</tt>)</td>
+<tr><td>Python (<tt class="docutils literal">tcsxtce.digest</tt>)</td>
 <td><tt class="docutils literal">digest_bytes(data)</tt>, <tt class="docutils literal">digest(data)</tt>, <tt class="docutils literal">digest_string(text)</tt>,
 <tt class="docutils literal">digest_file_bytes(path)</tt>, <tt class="docutils literal">digest_file(path)</tt>; for a set,
 <tt class="docutils literal">digest_set_bytes(documents)</tt>, <tt class="docutils literal">digest_set(documents)</tt>,
@@ -3576,7 +3576,7 @@ a path)</td>
 </tbody>
 </table>
 <pre class="code python literal-block">
-<span class="keyword namespace">from</span><span class="whitespace"> </span><span class="name namespace">tcs_xtce.digest</span><span class="whitespace"> </span><span class="keyword namespace">import</span> <span class="name">digest_file</span><span class="punctuation">,</span> <span class="name">digest_file_bytes</span><span class="whitespace">
+<span class="keyword namespace">from</span><span class="whitespace"> </span><span class="name namespace">tcsxtce.digest</span><span class="whitespace"> </span><span class="keyword namespace">import</span> <span class="name">digest_file</span><span class="punctuation">,</span> <span class="name">digest_file_bytes</span><span class="whitespace">
 
 </span><span class="name">digest_file</span><span class="punctuation">(</span><span class="literal string double">&quot;tests/mission/demo.xtce&quot;</span><span class="punctuation">)</span>        <span class="comment single"># '6d2d1d775d75a68089fddade8e95c585'</span><span class="whitespace">
 </span><span class="name">digest_file_bytes</span><span class="punctuation">(</span><span class="literal string double">&quot;tests/mission/demo.xtce&quot;</span><span class="punctuation">)</span>  <span class="comment single"># the same 16 bytes</span>

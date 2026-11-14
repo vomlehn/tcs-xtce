@@ -186,13 +186,13 @@ and every runtime computes the digest of a set of documents the same way:
    * - Language
      - Function
    * - Rust
-     - ``tcs_xtce::digest::digest_files_bytes(&paths)``, giving
+     - ``tcsxtce::digest::digest_files_bytes(&paths)``, giving
        ``[u8; 16]``
    * - C, C++
      - ``xtce_digest_files_bytes(paths, n, out, &err)``, from the header
-       ``tcs-xtce-digest.h``, which needs no library
+       ``tcsxtce-digest.h``, which needs no library
    * - Python
-     - ``tcs_xtce.digest.digest_files_bytes(paths)``, giving ``bytes``
+     - ``tcsxtce.digest.digest_files_bytes(paths)``, giving ``bytes``
 
 ``xtce-digest --set dt.xtce pus.xtce rover.xtce`` prints the same digest in
 hex. The digest of a set is the MD5 digest of its documents' canonical
@@ -246,7 +246,7 @@ C and C++
 
 `c/main.c <c/main.c>`__ is built twice, once as C11 and once as C++20. It
 needs only the headers ``../../cpp/include/tcsxtce-packet.h`` and
-``../../cpp/include/tcs-xtce-digest.h`` and the generated header; it links with
+``../../cpp/include/tcsxtce-digest.h`` and the generated header; it links with
 no tcs-xtce library.
 
 .. code-block:: sh

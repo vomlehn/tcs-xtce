@@ -3143,7 +3143,7 @@ hex digits (to print):
    * - Language
      - Functions
      - Errors
-   * - Rust (``tcs_xtce::digest``)
+   * - Rust (``tcsxtce::digest``)
      - ``digest_bytes(&[u8]) -> [u8; 16]``, ``digest(&[u8])``,
        ``digest_string(&str)``, ``digest_file_bytes(path)``,
        ``digest_file(path)``, ``hex(&[u8; 16])``; for a set,
@@ -3151,7 +3151,7 @@ hex digits (to print):
        ``digest_files_bytes(&[P])`` and ``digest_files(&[P])`` (each ``P``
        a path)
      - ``Err(tcs_xtce::Error)``
-   * - C and C++ (``tcs-xtce-digest.h``, which needs no library)
+   * - C and C++ (``tcsxtce-digest.h``, which needs no library)
      - ``xtce_digest_bytes(data, len, out, &err)``,
        ``xtce_digest(data, len, hex, &err)``,
        ``xtce_digest_string(text, hex, &err)``,
@@ -3167,7 +3167,7 @@ hex digits (to print):
        ``xtce::digest_files(paths)`` (each a
        ``std::vector<std::string>``), returning ``std::string``
      - ``-1`` and ``err.message``; C++ throws ``std::runtime_error``
-   * - Python (``tcs_xtce.digest``)
+   * - Python (``tcsxtce.digest``)
      - ``digest_bytes(data)``, ``digest(data)``, ``digest_string(text)``,
        ``digest_file_bytes(path)``, ``digest_file(path)``; for a set,
        ``digest_set_bytes(documents)``, ``digest_set(documents)``,
@@ -3176,7 +3176,7 @@ hex digits (to print):
 
 .. code-block:: python
 
-   from tcs_xtce.digest import digest_file, digest_file_bytes
+   from tcsxtce.digest import digest_file, digest_file_bytes
 
    digest_file("tests/mission/demo.xtce")        # '6d2d1d775d75a68089fddade8e95c585'
    digest_file_bytes("tests/mission/demo.xtce")  # the same 16 bytes

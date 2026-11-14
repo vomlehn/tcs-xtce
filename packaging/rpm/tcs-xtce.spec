@@ -127,7 +127,6 @@ fi
 /opt/tcs/bin/tcs-xtcee
 /opt/tcs/sbin/tcs-xtce-links
 /opt/tcs/include/tcs-xtce.h
-/opt/tcs/include/tcs-xtce-*.h
 /opt/tcs/include/tcs-xtce-*.hpp
 /opt/tcs/include/tcsxtce-*.h
 /opt/tcs/include/tcsxtce-*.hpp

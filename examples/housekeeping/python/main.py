@@ -21,7 +21,7 @@ import sys
 from typing import NamedTuple, Optional
 
 from tcs_xtce import XtceError
-from tcs_xtce.digest import digest_file_bytes
+from tcsxtce.digest import digest_file_bytes
 from tcsxtce.packet import Codec, PacketError
 
 from housekeeping import Status

@@ -3,8 +3,8 @@
 //! Two programs that exchange packets were built from the same packet
 //! definitions if their XTCE documents have the same digest, so each can
 //! send the other its digest and compare, rather than describing the data
-//! in every message.  The Python (`tcs_xtce.digest`) and C/C++
-//! (`tcs-xtce-digest.h`) runtimes compute the same digest; the Python module
+//! in every message.  The Python (`tcsxtce.digest`) and C/C++
+//! (`tcsxtce-digest.h`) runtimes compute the same digest; the Python module
 //! describes exactly what it covers.  In short, it leaves out comments and
 //! processing instructions, whitespace between elements and around text,
 //! the order of attributes, namespace prefixes, and the order of the
@@ -24,7 +24,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::xml::{Error, Result};
+use crate::error::{Error, Result};
 
 /// Elements whose children may appear in any order without changing what
 /// the document means.  Every runtime has the same list.

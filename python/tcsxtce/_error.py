@@ -1,6 +1,5 @@
-"""The error tcs-xtce raises for XTCE it cannot read or write, in a module
-of its own so that the digest, which needs nothing else of the XML
-binding's, can be taken without it.
+"""The error the digest, and tcs-xtce's XML binding, raise for XTCE they
+cannot read or write.
 """
 
 from __future__ import annotations

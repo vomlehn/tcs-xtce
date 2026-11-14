@@ -109,12 +109,12 @@ Adding a function does not raise it.
 `ccsds-`, and live straight in `cpp/include/` or `ccsds/include/`, as they
 are installed straight in `/opt/tcs/include`.
 
-**The digest is the same in every runtime.** `python/tcs_xtce/digest.py`,
-`rust/src/digest.rs` and `cpp/include/tcs-xtce-digest.h` compute the same XTCE
-digest, and `tests/digest_check.sh` (part of `make test`) checks that they
-agree with each other and with `tests/digest/expected.txt`. A change to what
-the digest covers, including the `UNORDERED` list, goes into all three, with
-the expected digests updated.
+**The digest is the same in every runtime.** `python/tcsxtce/digest.py`,
+`rust/tcsxtce/src/digest.rs` and `cpp/include/tcsxtce-digest.h` compute the
+same XTCE digest, and `tests/digest_check.sh` (part of `make test`) checks
+that they agree with each other and with `tests/digest/expected.txt`. A change
+to what the digest covers, including the `UNORDERED` list, goes into all
+three, with the expected digests updated.
 
 **Don't edit generated files.** Files that start with `@generated` are
 rewritten by `make generate` (the XML binding, from `python/tcs_xtce/binding`) or

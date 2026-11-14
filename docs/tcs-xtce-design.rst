@@ -1259,18 +1259,20 @@ the document; a missed change would cost corrupted data. MD5 is used for
 its speed and ubiquity, not for security: it detects accidental
 differences, not deliberate collisions.
 
-Each language computes the digest itself, so a program in any language
-can send its digest and check the one it receives: ``tcs_xtce.digest`` in
-Python, ``tcs_xtce::digest`` in Rust, and ``tcs-xtce-digest.h`` for C and C++,
-header-only like ``tcsxtce-packet.h`` so that C programs still link no
-library. The digest is not part of the packet runtime, ``tcsxtce``: it reads
-XTCE, which is ground software's, so a program that flies takes its digest
-computed when it is built, as a constant. The encoding is specified in ``python/tcs_xtce/digest.py``, and each
-runtime has its own small XML reader for it: the readers the XML bindings
-use are driven by the schema and don't keep namespaces, and an
-implementation per language keeps each runtime free of dependencies
-(Rust and C have no MD5 either, so each has one, from RFC 1321, with the
-constant table written out rather than computed with ``sin``).
+Each language computes the digest itself, so a program in any language can
+send its digest and check the one it receives: ``tcsxtce.digest`` in
+Python, ``tcsxtce::digest`` in Rust, and ``tcsxtce-digest.h`` for C and
+C++, header-only like ``tcsxtce-packet.h`` so that C programs still link
+no library. It is part of the runtime, ``tcsxtce``, because programs that
+are production software compute it as they run; one that must not read
+XTCE, such as one that flies, can be given its digest as a constant
+computed when it is built instead. The encoding is specified in
+``python/tcsxtce/digest.py``, and each runtime has its own small XML
+reader for it: the readers the XML bindings use are driven by the schema
+and don't keep namespaces, and an implementation per language keeps each
+runtime free of dependencies (Rust and C have no MD5 either, so each has
+one, from RFC 1321, with the constant table written out rather than
+computed with ``sin``).
 
 Byte-identical digests need every reader to agree on details XML leaves
 to the parser, so the encoding pins them down: the document must be

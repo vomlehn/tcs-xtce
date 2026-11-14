@@ -49,7 +49,7 @@ from tcs_xtce.compiler import (  # noqa: E402
     emit_c, emit_python, emit_rust, report)
 from tcs_xtce.compiler.compile import compile_documents  # noqa: E402
 from tcs_xtce.compiler.model import Unsupported  # noqa: E402
-from tcs_xtce.digest import digest_file, digest_files  # noqa: E402
+from tcsxtce.digest import digest_file, digest_files  # noqa: E402
 
 XSD = TOP / "references" / "SpaceSystem.xsd"
 CATALOG = TOP / "references" / "catalog.xml"

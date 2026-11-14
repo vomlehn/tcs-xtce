@@ -12,7 +12,7 @@ that holds the documents.
 import sys
 
 import rover
-from tcs_xtce.digest import digest_files_bytes
+from tcsxtce.digest import digest_files_bytes
 from tcsxtce.packet import PacketError
 
 # The mission's documents: those the others build on first.

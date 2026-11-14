@@ -12,7 +12,7 @@ mod rover;
 
 use rover::{CcsdsKind, Event, EventType, Hk};
 use std::process::exit;
-use tcs_xtce::digest::{digest_files_bytes, hex as digest_hex};
+use tcsxtce::digest::{digest_files_bytes, hex as digest_hex};
 use tcsxtce::packet::Packet;
 
 /// The mission's documents: those the others build on first.

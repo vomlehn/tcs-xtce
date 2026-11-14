@@ -16,7 +16,7 @@ from typing import Callable, Optional
 from tcsxtce import ManagedBuffer
 from tcsxtce.value import f_double
 
-from ._error import XtceError
+from tcsxtce import XtceError
 
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 

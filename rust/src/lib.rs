@@ -8,8 +8,9 @@
 //! [`Document`]) is alive.
 //!
 //! The runtime for the packet codecs that `tcs-xtce` generates from a
-//! mission's XTCE document is the `tcsxtce` crate, which flies; its modules
-//! [`buffer`], [`fixed`], [`packet`] and [`value`] are re-exported here.
+//! mission's XTCE document is the `tcsxtce` crate, which flies, as does the
+//! digest; its modules [`buffer`], [`digest`], [`fixed`], [`packet`] and
+//! [`value`] are re-exported here.
 //!
 //! ```
 //! use tcs_xtce::{Document, SpaceSystemType};
@@ -23,12 +24,11 @@
 //! assert_eq!(back.root, doc.root);
 //! ```
 
-pub mod digest;
 pub mod document;
 pub mod generated;
 pub mod xml;
 
-pub use tcsxtce::{buffer, fixed, packet, value};
+pub use tcsxtce::{buffer, digest, fixed, packet, value};
 
 pub use buffer::{Buffer, DEFAULT_CAPACITY};
 pub use document::{from_xml, to_xml, Document};

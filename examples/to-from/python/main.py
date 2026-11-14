@@ -17,7 +17,7 @@ script in the directory above connects a writer to a reader.
 import sys
 
 from tcs_xtce import XtceError
-from tcs_xtce.digest import digest_file_bytes
+from tcsxtce.digest import digest_file_bytes
 from tcsxtce.packet import Codec, PacketError
 
 from to_from import Word

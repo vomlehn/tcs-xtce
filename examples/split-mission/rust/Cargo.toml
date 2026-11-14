@@ -9,10 +9,8 @@ description = """\
 """
 
 [dependencies]
-# The packet runtime the generated code runs on.
+# The packet runtime the generated code runs on, and the digest.
 tcsxtce = { path = "../../../rust/tcsxtce" }
-# The digest, which is ground software.
-tcs-xtce = { path = "../../../rust" }
 
 # A stand-alone crate, not part of any enclosing workspace.
 [workspace]

@@ -22,7 +22,7 @@ mod housekeeping;
 use std::process;
 
 use housekeeping::Status;
-use tcs_xtce::digest::{digest_file_bytes, hex as digest_hex};
+use tcsxtce::digest::{digest_file_bytes, hex as digest_hex};
 use tcsxtce::packet::Codec;
 
 /// The XTCE file that describes a `Status`, and the size of its digest.
