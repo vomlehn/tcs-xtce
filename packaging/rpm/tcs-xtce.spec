@@ -3,7 +3,7 @@
 # that tree, so the RPM and the .deb hold the same files, built once.
 # The Makefile passes tcs_version, from pyproject.toml; tcs_release, the
 # Debian revision, so that the two are named alike; tcs_abi, from
-# cpp/abi-version; tcs_ccsds_version, from ccsds/rust/Cargo.toml;
+# cpp/abi-version; tcsccsds_version, from ccsds/rust/Cargo.toml;
 # tcs_stage; tcs_date, the date of the commit built, for the %changelog;
 # and tcs_pysite and tcs_pyversion, the site-packages directory
 # and version of the python3 it found, which on Fedora are what its
@@ -78,7 +78,7 @@ editor (tcs-xtcee), which keeps a document valid for its XTCE version and
 converts between versions 1.1, 1.2 and 1.3, the packet runtime tcsxtce for
 Python 3 and for C and C++ (header-only), the C/C++ XTCE library
 libtcs-xtce (shared and static) with its headers, the pkg-config files,
-tcs-ccsds's CCSDS time codes for C, C++ and Python, and the documentation
+tcsccsds's CCSDS time codes for C, C++ and Python, and the documentation
 and examples, all under /opt/tcs.
 
 %install
@@ -130,18 +130,18 @@ fi
 /opt/tcs/include/tcs-xtce-*.hpp
 /opt/tcs/include/tcsxtce-*.h
 /opt/tcs/include/tcsxtce-*.hpp
-/opt/tcs/include/ccsds-time.h
+/opt/tcs/include/tcsccsds-time.h
 /opt/tcs/lib/libtcs-xtce.so
 /opt/tcs/lib/libtcs-xtce.so.%{tcs_abi}
 /opt/tcs/lib/libtcs-xtce.a
 /opt/tcs/lib/pkgconfig/tcs-xtce.pc
 /opt/tcs/lib/pkgconfig/tcsxtce.pc
-/opt/tcs/lib/pkgconfig/tcs-ccsds.pc
+/opt/tcs/lib/pkgconfig/tcsccsds.pc
 /opt/tcs/lib/python3/site-packages/tcsxtce/
 /opt/tcs/lib/python3/site-packages/tcs_xtce/
 /opt/tcs/lib/python3/site-packages/tcs_xtce-%{version}.dist-info/
-/opt/tcs/lib/python3/site-packages/tcs_ccsds/
-/opt/tcs/lib/python3/site-packages/tcs_ccsds-%{tcs_ccsds_version}.dist-info/
+/opt/tcs/lib/python3/site-packages/tcsccsds/
+/opt/tcs/lib/python3/site-packages/tcsccsds-%{tcsccsds_version}.dist-info/
 %doc /opt/tcs/share/doc/tcs-xtce/
 /opt/tcs/share/examples/tcs-xtce/
 %config(noreplace) /etc/ld.so.conf.d/tcs-xtce.conf

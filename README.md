@@ -95,8 +95,8 @@ Everything below installs under `/opt/tcs`, the tree the TCS packages
 share: the `tcs-xtce`, `xtce-digest` and `tcs-xtcee` commands in
 `bin/`, the C/C++
 headers in `include/`, `libtcs-xtce.so` and `libtcs-xtce.a` with `tcs-xtce.pc` (and
-`tcs-ccsds.pc`, for the header-only time codes) in `lib/`, and the Python
-packages `tcs_xtce` and `tcs_ccsds` in `lib/python3/site-packages/`.
+`tcsccsds.pc`, for the header-only time codes) in `lib/`, and the Python
+packages `tcs_xtce` and `tcsccsds` in `lib/python3/site-packages/`.
 
 **Packages.** `make deb` and `make rpm` (or `make packages`, both) build
 one package, `tcs-xtce`, version `<version>-1`, into `build/packages/`; it needs `python3` 3.10 or
@@ -191,7 +191,7 @@ finding that is not overridden; each override says why it is intended, in
 `make python-dist` builds in `dist/`, installs `tcs_xtce` and both
 commands.
 
-**Rust.** `cargo add tcs-xtce` (and `cargo add tcs-ccsds`); the crates
+**Rust.** `cargo add tcs-xtce` (and `cargo add tcsccsds`); the crates
 come from crates.io and nothing here installs them.
 
 **C and C++.** With `/opt/tcs/lib/pkgconfig` on `PKG_CONFIG_PATH`:
@@ -379,12 +379,12 @@ Supported features:
   PCM code including bi-phase, and custom streams that chain into them;
 * custom algorithms, which the application supplies as functions.
 
-tcs-ccsds, in `ccsds/`, is a separate library of CCSDS standards that XTCE
+tcsccsds, in `ccsds/`, is a separate library of CCSDS standards that XTCE
 doesn't define, in the same four languages: so far the CUC, CDS, CCS and
 ASCII time codes, and TAI and UTC with their leap seconds. See
 [its README](ccsds/README.md).
 
-> **Warning:** tcs-ccsds is an alpha release. It is not fully tested, it
+> **Warning:** tcsccsds is an alpha release. It is not fully tested, it
 > is not feature complete, and it is subject to rapid change. Until 1.0,
 > any change to its API changes the minor version number (0.1 to 0.2), so
 > a release that changes only the patch number never breaks code built
@@ -430,6 +430,13 @@ random packets.
   `cargo add tcs-xtce`.
 
 ## Incompatible changes
+
+**tcsccsds 0.3.0: tcs-ccsds is renamed tcsccsds.** Its time codes run
+aboard and in the operations center, so it takes a production name, as
+tcsxtce did: the crate `tcs-ccsds` is now `tcsccsds`, the Python package
+`tcs_ccsds` is `tcsccsds` (Python package version 0.2.0), the header
+`ccsds-time.h` is `tcsccsds-time.h`, and `tcs-ccsds.pc` is `tcsccsds.pc`.
+The functions, types and macros keep their names, `ccsds_` in C.
 
 **0.7.0: the packet runtime is a library of its own, `tcsxtce`.** What
 code that `tcs-xtce` generated runs on -- the packet runtime -- flies,

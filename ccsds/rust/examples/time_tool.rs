@@ -42,14 +42,14 @@
 #![allow(clippy::doc_overindented_list_items)]
 
 use std::io::{self, BufRead, Write};
-use tcs_ccsds::calendar::{
+use tcsccsds::calendar::{
     decode_ccs, format_ascii, parse_ascii, AsciiForm, CalendarTime, Ccs,
 };
-use tcs_ccsds::time::{
+use tcsccsds::time::{
     decode_cds, decode_cds_exact, decode_cuc, decode_cuc_exact, Cds, CdsTime,
     Cuc, CucTime, Epoch, SubMs,
 };
-use tcs_ccsds::utc::{tai_to_utc, utc_to_tai, TaiTime, LEAP_SECONDS};
+use tcsccsds::utc::{tai_to_utc, utc_to_tai, TaiTime, LEAP_SECONDS};
 
 fn unhex(s: &str) -> Vec<u8> {
     (0..s.len() / 2)

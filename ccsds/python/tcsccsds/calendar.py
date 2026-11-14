@@ -4,7 +4,7 @@ the CCSDS Calendar Segmented time code, and the ASCII time codes A and B.
 All three give a time as a date and a time of day, usually UTC, held here
 exactly as a ``CalendarTime``: year, month, day, hour, minute, second (60
 in a leap second) and picoseconds.  Turning one into a count of seconds
-needs to know which days had leap seconds, which is :mod:`tcs_ccsds.utc`'s
+needs to know which days had leap seconds, which is :mod:`tcsccsds.utc`'s
 business.
 
 * **CCS** is an optional P-field, then a T-field of BCD digits: the year in

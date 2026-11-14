@@ -12,7 +12,7 @@
 #                        check and the naming check
 #   make bnum-check      check tcsxtce-bnum.h and tcsxtce-bnum.hpp against the
 #                        bnum crate
-#   make ccsds-check     check tcs-ccsds's time codes in every language
+#   make ccsds-check     check tcsccsds's time codes in every language
 #   make line-width      check that no line of code is wider than 80 columns
 #   make html            remake the HTML pages of docs/ and the examples
 #   make html-check      fail where a committed page is behind its source
@@ -332,7 +332,7 @@ PY_FILES = $$(git -C .. ls-files '*.py' | sed 's|^|../|') \
 
 # The examples' Rust code includes their generated codecs, so generate them
 # first.
-# tcs-ccsds: the CCSDS time codes, in Rust, C, C++ and Python.
+# tcsccsds: the CCSDS time codes, in Rust, C, C++ and Python.
 .PHONY: ccsds
 ccsds:
 	$(MAKE) -C ccsds
@@ -423,7 +423,7 @@ hooks-if-there:
 # by hand; install checks that they agree. The shared library's soname
 # carries its ABI version, from cpp/abi-version, which cpp/Makefile reads
 # too and which is not the package's version: see cpp/Makefile for when it
-# changes. tcs-ccsds has a version of its own.
+# changes. tcsccsds has a version of its own.
 VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
 RUST_VERSION := $(shell sed -n '1,/^version/s/^version = "\(.*\)"/\1/p' \
                         rust/Cargo.toml)
@@ -557,7 +557,7 @@ tcs-helpers:
 # straight into include; the shared library under its soname,
 # with its development name linked to it, and the static one; pkg-config
 # files naming the real prefix; the Python packages tcsxtce, tcs_xtce and
-# tcs_ccsds; and the documents and examples. The Rust crates are not
+# tcsccsds; and the documents and examples. The Rust crates are not
 # installed, a Rust program taking them through cargo. The HTML is
 # installed as committed, not remade, so that installing needs no
 # rst2html; `make html` before a commit keeps it current. An example that
@@ -596,12 +596,12 @@ install-files: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' \
 		packaging/tcsxtce.pc.in > $(PCDIR)/tcsxtce.pc
 	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(CCSDS_VERSION)|' \
-		packaging/tcs-ccsds.pc.in > $(PCDIR)/tcs-ccsds.pc
-	chmod 644 $(PCDIR)/tcs-xtce.pc $(PCDIR)/tcsxtce.pc $(PCDIR)/tcs-ccsds.pc
+		packaging/tcsccsds.pc.in > $(PCDIR)/tcsccsds.pc
+	chmod 644 $(PCDIR)/tcs-xtce.pc $(PCDIR)/tcsxtce.pc $(PCDIR)/tcsccsds.pc
 	$(call pyinstall,tcs_xtce,$(VERSION),pyproject.toml README.md \
 		LICENSE-APACHE LICENSE-MIT python)
-	$(call pyinstall,tcs_ccsds,$(CCSDS_VERSION), \
-		ccsds/python/pyproject.toml ccsds/python/tcs_ccsds)
+	$(call pyinstall,tcsccsds,$(CCSDS_VERSION), \
+		ccsds/python/pyproject.toml ccsds/python/tcsccsds)
 	install -D -m 644 -t $(DOCDIR) $(DOCS)
 	install -D -m 644 -t $(DOCDIR)/shots $(SHOTS)
 	$(THIRD_PARTY_NOTICES) editor $(DOCDIR)/THIRD-PARTY-NOTICES tcs-xtce
@@ -642,11 +642,11 @@ uninstall-files:
 	rm -f $(addprefix $(INCDIR)/,$(notdir $(HEADERS)))
 	rm -f $(LIBDIR)/$(SONAME) $(LIBDIR)/libtcs-xtce.so \
 		$(LIBDIR)/libtcs-xtce.a $(PCDIR)/tcs-xtce.pc \
-		$(PCDIR)/tcsxtce.pc $(PCDIR)/tcs-ccsds.pc
+		$(PCDIR)/tcsxtce.pc $(PCDIR)/tcsccsds.pc
 	rm -rf $(DESTDIR)$(PYDIR)/tcsxtce $(DESTDIR)$(PYDIR)/tcs_xtce \
 		$(DESTDIR)$(PYDIR)/tcs_xtce-$(VERSION).dist-info \
-		$(DESTDIR)$(PYDIR)/tcs_ccsds \
-		$(DESTDIR)$(PYDIR)/tcs_ccsds-$(CCSDS_VERSION).dist-info
+		$(DESTDIR)$(PYDIR)/tcsccsds \
+		$(DESTDIR)$(PYDIR)/tcsccsds-$(CCSDS_VERSION).dist-info
 	rm -rf $(DOCDIR) $(EXDIR)
 	if [ "$(HOOKS)" = 1 ]; then \
 	    rm -f $(LDCONF) $(PROFILE) $(PTH); \
@@ -662,7 +662,7 @@ LINKDIR ?= /usr/local/bin
 # packaging.mk's, shared by the TCS projects; see it for what each does.
 # This repository has the one package, built from packaging/deb/tcs-xtce and
 # packaging/rpm/tcs-xtce.spec, which is also given the library's ABI
-# version, tcs-ccsds's version and where the RPM's Python looks for
+# version, tcsccsds's version and where the RPM's Python looks for
 # packages. Without a tcs-helpers checkout new enough to have
 # install-packages.sh, which came with the install target in 0.4.0, there
 # is nothing to include that has every target here, and the targets stop
@@ -674,7 +674,7 @@ PACKAGES    := tcs-xtce
 # README).
 RELEASE_ATTRIBUTION := slint
 RPM_DEFINES  = --define "tcs_abi $(ABI)" \
-               --define "tcs_ccsds_version $(CCSDS_VERSION)" \
+               --define "tcsccsds_version $(CCSDS_VERSION)" \
                --define "tcs_pysite $$($(PYTHON) -c 'import sysconfig; \
                    print(sysconfig.get_path("purelib", "posix_prefix", \
                    vars={"base": "/usr"}))')" \

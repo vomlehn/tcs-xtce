@@ -1,5 +1,5 @@
 //! CCSDS standards for flight software: part of tcs-xtce, with matching C,
-//! C++ (`ccsds/include/ccsds-time.h`) and Python (`tcs_ccsds`) libraries
+//! C++ (`ccsds/include/tcsccsds-time.h`) and Python (`tcsccsds`) libraries
 //! that give the same results.  It allocates nothing and needs nothing but
 //! `core`.
 //!

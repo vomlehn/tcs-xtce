@@ -1192,12 +1192,12 @@ different sizes widen both to one more byte than the larger, so that
 either sign fits.
 
 
-CCSDS standards (tcs-ccsds)
-===========================
+CCSDS standards (tcsccsds)
+==========================
 
 Knowledge of CCSDS standards, such as what a CUC P-field means, is kept out
 of tcs-xtce: XTCE doesn't define it, and a document reaches it only through
-algorithms the application supplies. tcs-ccsds holds it, as functions over
+algorithms the application supplies. tcsccsds holds it, as functions over
 bytes shaped like tcs-xtce's hooks but depending on nothing, so an
 application wires one into the other and anyone can use either alone. It
 lives in this repository, released separately, for the shared tooling and

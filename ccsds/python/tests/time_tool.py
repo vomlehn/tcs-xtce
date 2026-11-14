@@ -8,10 +8,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tcs_ccsds.calendar import (  # noqa: E402
+from tcsccsds.calendar import (  # noqa: E402
     AsciiForm, CalendarTime, Ccs, decode_ccs, format_ascii, parse_ascii)
-from tcs_ccsds.utc import TaiTime, tai_to_utc, utc_to_tai  # noqa: E402
-from tcs_ccsds.time import (  # noqa: E402
+from tcsccsds.utc import TaiTime, tai_to_utc, utc_to_tai  # noqa: E402
+from tcsccsds.time import (  # noqa: E402
     Cds, CdsTime, Cuc, CucTime, Epoch, SubMs, decode_cds, decode_cds_exact,
     decode_cuc, decode_cuc_exact)
 

@@ -1,7 +1,7 @@
 /* The binary time codes of CCSDS 301.0-B-4, Time Code Formats: CUC, the
  * CCSDS Unsegmented time Code, and CDS, the CCSDS Day Segmented time code.
- * Part of tcs-ccsds, with the Rust crate tcs-ccsds and the Python package
- * tcs_ccsds, which give the same results.
+ * Part of tcsccsds, with the Rust crate tcsccsds and the Python package
+ * tcsccsds, which give the same results.
  *
  * A time code is an optional P-field (preamble), which says which code it is
  * and how it is laid out, then a T-field holding the time.  A time is given
@@ -34,8 +34,8 @@
  * against it.  Feedback is welcome, even at this stage: open an issue at
  * https://github.com/vomlehn/tcs-xtce/issues.
  */
-#ifndef CCSDS_TIME_H
-#define CCSDS_TIME_H
+#ifndef TCSCCSDS_TIME_H
+#define TCSCCSDS_TIME_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -1355,4 +1355,4 @@ static inline bool ccsds_tai_to_utc(const ccsds_tai_time* tai,
 }
 #endif
 
-#endif /* CCSDS_TIME_H */
+#endif /* TCSCCSDS_TIME_H */

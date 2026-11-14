@@ -1,4 +1,4 @@
-# Builds tcs-ccsds: the Rust crate and its time tool, and the C/C++ time tool
+# Builds tcsccsds: the Rust crate and its time tool, and the C/C++ time tool
 # from the header-only library in include/.  The top-level Makefile runs the
 # cross-language check, tests/ccsds_check.sh.
 

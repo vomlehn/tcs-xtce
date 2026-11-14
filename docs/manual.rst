@@ -29,7 +29,7 @@ manual of its own:
     and Python 3, all writing the same bit-packed bytes. Its code can be
     written without dynamic memory allocation, for flight software. The
     manual also covers installing tcs-xtce, its runtimes, the integers of
-    any size, the CCSDS time codes of tcs-ccsds, ``xtce-digest``, which
+    any size, the CCSDS time codes of tcsccsds, ``xtce-digest``, which
     tells whether two programs use the same document, the examples and the
     tests.
 

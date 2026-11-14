@@ -1,10 +1,10 @@
-# tcs-ccsds
+# tcsccsds
 
 CCSDS standards for flight software, the same in Rust, C, C++ and Python. So
 far: the time codes of CCSDS 301.0-B-4, *Time Code Formats*, and TAI and UTC
 with their leap seconds.
 
-> **Warning:** tcs-ccsds is an alpha release. It is not fully tested, it
+> **Warning:** tcsccsds is an alpha release. It is not fully tested, it
 > is not feature complete, and it is subject to rapid change. Until 1.0,
 > any change to its API changes the minor version number (0.1 to 0.2), so
 > a release that changes only the patch number never breaks code built
@@ -61,27 +61,27 @@ refused rather than guessed at.
   a mission database can only say a time is made by an algorithm. The
   decoders and encoders have the shapes of
   [tcs-xtce](https://github.com/vomlehn/tcs-xtce)'s time hooks, so a
-  packet codec it generates can use them directly. tcs-ccsds does not
+  packet codec it generates can use them directly. tcsccsds does not
   depend on tcs-xtce, and any program can use it alone.
 
 ## Getting it
 
 | Language | How | Where in this repository |
 |----------|-----|--------------------------|
-| Rust | `cargo add tcs-ccsds` | `ccsds/rust/` |
-| C and C++ | `#include "ccsds-time.h"`; header only | `ccsds/include/` |
-| Python | the `tcs_ccsds` package | `ccsds/python/` |
+| Rust | `cargo add tcsccsds` | `ccsds/rust/` |
+| C and C++ | `#include "tcsccsds-time.h"`; header only | `ccsds/include/` |
+| Python | the `tcsccsds` package | `ccsds/python/` |
 
 tcs-xtce's packages and `make install` install the header (with
-`tcs-ccsds.pc` for `pkg-config`) and the Python package. The Rust crate
-comes from [crates.io](https://crates.io/crates/tcs-ccsds).
+`tcsccsds.pc` for `pkg-config`) and the Python package. The Rust crate
+comes from [crates.io](https://crates.io/crates/tcsccsds).
 
 ## Examples
 
 Decoding a CUC time that starts with its P-field, in Rust:
 
 ```rust
-use tcs_ccsds::time::{decode_cuc, decode_cuc_exact};
+use tcsccsds::time::{decode_cuc, decode_cuc_exact};
 
 // P-field 0x1e: the CCSDS epoch, four coarse and two fine octets.
 let data = [0x1e, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00];
@@ -96,7 +96,7 @@ assert_eq!((t.seconds, t.fraction >> 72), (1, 0x80));
 Encoding a CDS time to the picosecond, in C:
 
 ```c
-#include "ccsds-time.h"
+#include "tcsccsds-time.h"
 
 ccsds_cds layout = {true, CCSDS_SUB_PICO, CCSDS_EPOCH_AGENCY};
 ccsds_cds_time t = {0x123456, 86399999, 999999999};
@@ -108,7 +108,7 @@ size_t n = ccsds_cds_encode_exact(&layout, &t, out, sizeof out);
 And in Python:
 
 ```python
-from tcs_ccsds.time import Cds, CdsTime, Epoch, SubMs, decode_cds_exact
+from tcsccsds.time import Cds, CdsTime, Epoch, SubMs, decode_cds_exact
 
 layout = Cds(True, SubMs.PICO, Epoch.AGENCY)
 octets = layout.encode_exact(CdsTime(0x123456, 86399999, 999999999))
@@ -119,9 +119,9 @@ assert decode_cds_exact(octets) == (12, CdsTime(0x123456, 86399999,
 ## Documentation and tests
 
 The **CCSDS time codes** chapter of the
-[tcs-xtce manual](https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html#ccsds-time-codes-tcs-ccsds)
+[tcs-xtce manual](https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html#ccsds-time-codes-tcsccsds)
 describes the whole API in each language; the
-[crate's documentation](https://docs.rs/tcs-ccsds) describes the Rust.
+[crate's documentation](https://docs.rs/tcsccsds) describes the Rust.
 
 From the top of the tcs-xtce repository, `make ccsds` builds the Rust crate
 and the C and C++ test tools, and `make ccsds-check` checks that Rust, C,

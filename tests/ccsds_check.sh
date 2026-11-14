@@ -1,5 +1,5 @@
 #!/bin/sh
-# Checks that tcs-ccsds's time codes give the same results in Rust, C, C++
+# Checks that tcsccsds's time codes give the same results in Rust, C, C++
 # and Python: for the cases in tests/ccsds/known.txt, worked out from the
 # formats of CCSDS 301.0-B-4, and for random cases from
 # tests/ccsds_cases.py, on which they must agree with each other.

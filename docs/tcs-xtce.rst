@@ -266,15 +266,15 @@ Everything installs under ``/opt/tcs``, the tree the TCS packages share
    * - ``sbin/tcs-xtce-links``
      - Links those three into ``/usr/local/bin``, or removes the links
    * - ``include/tcs-xtce.h``, ``include/xtce-*.h``, ``include/xtce-*.hpp``,
-       ``include/ccsds-time.h``
+       ``include/tcsccsds-time.h``
      - The C and C++ headers
    * - ``lib/libtcs-xtce.so.N``, ``lib/libtcs-xtce.so``, ``lib/libtcs-xtce.a``
      - The C/C++ library, shared and static
-   * - ``lib/pkgconfig/tcs-xtce.pc``, ``lib/pkgconfig/tcs-ccsds.pc``
-     - For ``pkg-config``; tcs-ccsds is header only, so its file gives
+   * - ``lib/pkgconfig/tcs-xtce.pc``, ``lib/pkgconfig/tcsccsds.pc``
+     - For ``pkg-config``; tcsccsds is header only, so its file gives
        only ``-I``
    * - ``lib/python3/site-packages/``
-     - The Python packages ``tcs_xtce`` and ``tcs_ccsds``, for any
+     - The Python packages ``tcs_xtce`` and ``tcsccsds``, for any
        Python 3.10 or later
    * - ``share/doc/tcs-xtce/``, ``share/examples/tcs-xtce/``
      - This manual, the design, the README and licences; the examples'
@@ -358,7 +358,7 @@ but nothing outside ``PREFIX`` unless ``HOOKS=1`` is given too, which
 needs ``PREFIX=/opt/tcs``. ``make uninstall-files``, with the same
 variables, removes them. ``make install`` takes neither ``PREFIX`` nor
 ``DESTDIR``, and stops if given one. The Rust crates, ``tcs-xtce`` and
-``tcs-ccsds``, come from crates.io and are not installed.
+``tcsccsds``, come from crates.io and are not installed.
 
 ``install-files``, stage and so the packages strip the libraries:
 ``libtcs-xtce.so`` with ``strip --strip-unneeded``, of all only a debugger
@@ -401,13 +401,13 @@ The shared library's soname is ``libtcs-xtce.so.N``. N is its ABI version,
 kept in ``cpp/abi-version``, not the package's version: it is raised by
 one only when a change breaks programs already linked against the library
 (a function of ``tcs-xtce.h`` removed or changed in its parameters or meaning,
-or a C++ type in ``xtce-*.hpp`` changed in size or layout), and not when
+or a C++ type in ``tcs-xtce-*.hpp`` changed in size or layout), and not when
 functions are added.
 
 The headers are straight in the include directory, each named with its
-library's prefix. They used to be in ``xtce/`` and
-``ccsds/``: ``xtce/tcs-xtce.h`` is now ``tcs-xtce.h``, ``ccsds/time.h`` is
-``ccsds-time.h``, and each other ``xtce/NAME`` is ``xtce-NAME``.
+library's prefix: ``tcsxtce-`` for the runtime, ``tcs-xtce`` for the rest
+of tcs-xtce, and ``tcsccsds-`` for the CCSDS time codes. The README's
+Incompatible changes say what each was called before.
 
 Installing the Python package
 -----------------------------
@@ -2931,19 +2931,19 @@ value doesn't fit (``I8::from_le_slice(&[0x05, 0xff])`` is ``Some(5)``,
 though the bytes are -251), where the library gives none.
 
 
-CCSDS time codes (tcs-ccsds)
-============================
+CCSDS time codes (tcsccsds)
+===========================
 
 .. warning::
 
-   tcs-ccsds is an alpha release. It is not fully tested, it is not
+   tcsccsds is an alpha release. It is not fully tested, it is not
    feature complete, and it is subject to rapid change. Until 1.0, any
    change to its API changes the minor version number (0.1 to 0.2), so a
    release that changes only the patch number never breaks code built
    against it. Feedback is welcome, even at this stage: open an issue at
    https://github.com/vomlehn/tcs-xtce/issues.
 
-tcs-ccsds is a second library, in ``ccsds/``, for CCSDS standards that XTCE
+tcsccsds is a second library, in ``ccsds/``, for CCSDS standards that XTCE
 knows nothing about. It doesn't depend on tcs-xtce: it is plain functions
 over bytes, which a packet codec can use as hooks, or any program can use
 by itself. It has the binary time codes of CCSDS 301.0-B-4, *Time Code
@@ -2974,13 +2974,13 @@ milliseconds may reach a leap second's.
      - Library
      - Decode a time with its P-field
    * - Rust
-     - crate ``tcs-ccsds``, ``tcs_ccsds::time``
+     - crate ``tcsccsds``, ``tcsccsds::time``
      - ``decode_cuc(&data) -> Option<(usize, f64)>``
    * - C/C++
-     - ``ccsds/include/ccsds-time.h``, ``ccsds_`` names
+     - ``ccsds/include/tcsccsds-time.h``, ``ccsds_`` names
      - ``bool ccsds_decode_cuc(data, n, &k, &s)``
    * - Python
-     - package ``tcs_ccsds``, ``tcs_ccsds.time``
+     - package ``tcsccsds``, ``tcsccsds.time``
      - ``decode_cuc(data) -> (k, s) or None``
 
 The layouts are ``Cuc`` and ``Cds`` (``ccsds_cuc`` and ``ccsds_cds``),
@@ -3030,7 +3030,7 @@ exact time to a double: the double decoders are the exact ones followed by
 it, except that a CDS microsecond layout divides microseconds rather than
 picoseconds, as it always has.
 
-**Calendar time codes.** ``calendar`` (``tcs_ccsds.calendar`` in Python,
+**Calendar time codes.** ``calendar`` (``tcsccsds.calendar`` in Python,
 the ``ccsds_calendar``, ``ccsds_ccs`` and ASCII functions in C) has the
 codes that give a date and a time of day, usually UTC, held exactly as a
 ``CalendarTime`` (``ccsds_calendar_time``): year 1 to 9999, month, day,
@@ -3058,7 +3058,7 @@ to the unit asked for, halves up, carrying through the calendar; a carry
 out of second 59 goes to the next minute, because the codes do not know
 which days had leap seconds.
 
-**TAI and UTC.** ``utc`` (``tcs_ccsds.utc``; ``ccsds_utc_to_tai`` and
+**TAI and UTC.** ``utc`` (``tcsccsds.utc``; ``ccsds_utc_to_tai`` and
 ``ccsds_tai_to_utc`` in C) converts between a ``CalendarTime`` of UTC and a
 ``TaiTime`` (``ccsds_tai_time``): seconds since the CCSDS epoch,
 1958-01-01T00:00:00 TAI, and picoseconds, exactly, with ``to_seconds`` for
@@ -3607,9 +3607,9 @@ Testing
   ``tests/float/known.txt`` (MIL-STD-1750A's own examples among them),
   and the same results as each other for random values from
   ``tests/float_cases.py``.
-* ``tests/ccsds_check.sh``: tcs-ccsds's time codes give the known results
+* ``tests/ccsds_check.sh``: tcsccsds's time codes give the known results
   and the same results in Rust, C, C++ and Python (see `CCSDS time codes
-  (tcs-ccsds)`_).
+  (tcsccsds)`_).
 * ``tests/bnum_check.sh``: the C functions of ``tcsxtce-bnum.h`` (built as
   C and as C++) and the C++ class of ``tcsxtce-bnum.hpp`` give the same
   results as the bnum crate for random cases from

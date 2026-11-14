@@ -8,7 +8,7 @@ document of its own, as it has a manual of its own:
 `The tcs-xtce design <tcs-xtce-design.html>`__
     The code generator and its runtimes: the XML binding, managed buffers,
     the packet codecs and how they are generated, integers of any size, the
-    CCSDS time codes of tcs-ccsds, ``xtce-digest``, the testing strategy,
+    CCSDS time codes of tcsccsds, ``xtce-digest``, the testing strategy,
     and the limitations and the work still to do.
 
 `The tcs-xtcee design <tcs-xtcee-design.html>`__

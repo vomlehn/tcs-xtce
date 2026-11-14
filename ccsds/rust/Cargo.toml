@@ -1,6 +1,6 @@
 [package]
-name = "tcs-ccsds"
-version = "0.2.0"
+name = "tcsccsds"
+version = "0.3.0"
 edition = "2021"
 description = """\
     Flight software: CCSDS standards, such as the CCSDS time codes, without \
@@ -8,7 +8,7 @@ description = """\
 """
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vomlehn/tcs-xtce"
-documentation = "https://docs.rs/tcs-ccsds"
+documentation = "https://docs.rs/tcsccsds"
 readme = "../README.md"
 keywords = ["ccsds", "cuc", "cds", "spacecraft", "telemetry"]
 categories = ["aerospace::space-protocols", "encoding", "no-std"]

@@ -408,7 +408,7 @@ ul.auto-toc {
 </ul>
 </li>
 <li><a class="reference internal" href="#integers-of-any-size" id="toc-entry-31">Integers of any size</a></li>
-<li><a class="reference internal" href="#ccsds-time-codes-tcs-ccsds" id="toc-entry-32">CCSDS time codes (tcs-ccsds)</a></li>
+<li><a class="reference internal" href="#ccsds-time-codes-tcsccsds" id="toc-entry-32">CCSDS time codes (tcsccsds)</a></li>
 <li><a class="reference internal" href="#xtce-digest" id="toc-entry-33">xtce-digest</a></li>
 <li><a class="reference internal" href="#examples" id="toc-entry-34">Examples</a><ul>
 <li><a class="reference internal" href="#housekeeping" id="toc-entry-35"><tt class="docutils literal">housekeeping</tt></a></li>
@@ -677,18 +677,18 @@ the package the same way</td>
 <td>Links those three into <tt class="docutils literal">/usr/local/bin</tt>, or removes the links</td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">include/tcs-xtce.h</span></tt>, <tt class="docutils literal"><span class="pre">include/xtce-*.h</span></tt>, <tt class="docutils literal"><span class="pre">include/xtce-*.hpp</span></tt>,
-<tt class="docutils literal"><span class="pre">include/ccsds-time.h</span></tt></td>
+<tt class="docutils literal"><span class="pre">include/tcsccsds-time.h</span></tt></td>
 <td>The C and C++ headers</td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">lib/libtcs-xtce.so.N</span></tt>, <tt class="docutils literal"><span class="pre">lib/libtcs-xtce.so</span></tt>, <tt class="docutils literal"><span class="pre">lib/libtcs-xtce.a</span></tt></td>
 <td>The C/C++ library, shared and static</td>
 </tr>
-<tr><td><tt class="docutils literal"><span class="pre">lib/pkgconfig/tcs-xtce.pc</span></tt>, <tt class="docutils literal"><span class="pre">lib/pkgconfig/tcs-ccsds.pc</span></tt></td>
-<td>For <tt class="docutils literal"><span class="pre">pkg-config</span></tt>; tcs-ccsds is header only, so its file gives
+<tr><td><tt class="docutils literal"><span class="pre">lib/pkgconfig/tcs-xtce.pc</span></tt>, <tt class="docutils literal">lib/pkgconfig/tcsccsds.pc</tt></td>
+<td>For <tt class="docutils literal"><span class="pre">pkg-config</span></tt>; tcsccsds is header only, so its file gives
 only <tt class="docutils literal"><span class="pre">-I</span></tt></td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">lib/python3/site-packages/</span></tt></td>
-<td>The Python packages <tt class="docutils literal">tcs_xtce</tt> and <tt class="docutils literal">tcs_ccsds</tt>, for any
+<td>The Python packages <tt class="docutils literal">tcs_xtce</tt> and <tt class="docutils literal">tcsccsds</tt>, for any
 Python 3.10 or later</td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">share/doc/tcs-xtce/</span></tt>, <tt class="docutils literal"><span class="pre">share/examples/tcs-xtce/</span></tt></td>
@@ -767,7 +767,7 @@ but nothing outside <tt class="docutils literal">PREFIX</tt> unless <tt class="d
 needs <tt class="docutils literal"><span class="pre">PREFIX=/opt/tcs</span></tt>. <tt class="docutils literal">make <span class="pre">uninstall-files</span></tt>, with the same
 variables, removes them. <tt class="docutils literal">make install</tt> takes neither <tt class="docutils literal">PREFIX</tt> nor
 <tt class="docutils literal">DESTDIR</tt>, and stops if given one. The Rust crates, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> and
-<tt class="docutils literal"><span class="pre">tcs-ccsds</span></tt>, come from crates.io and are not installed.</p>
+<tt class="docutils literal">tcsccsds</tt>, come from crates.io and are not installed.</p>
 <p><tt class="docutils literal"><span class="pre">install-files</span></tt>, stage and so the packages strip the libraries:
 <tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt> with <tt class="docutils literal">strip <span class="pre">--strip-unneeded</span></tt>, of all only a debugger
 needs, and
@@ -804,12 +804,12 @@ cc<span class="whitespace">  </span>prog.c<span class="whitespace">   </span><sp
 kept in <tt class="docutils literal"><span class="pre">cpp/abi-version</span></tt>, not the package's version: it is raised by
 one only when a change breaks programs already linked against the library
 (a function of <tt class="docutils literal"><span class="pre">tcs-xtce.h</span></tt> removed or changed in its parameters or meaning,
-or a C++ type in <tt class="docutils literal"><span class="pre">xtce-*.hpp</span></tt> changed in size or layout), and not when
+or a C++ type in <tt class="docutils literal"><span class="pre">tcs-xtce-*.hpp</span></tt> changed in size or layout), and not when
 functions are added.</p>
 <p>The headers are straight in the include directory, each named with its
-library's prefix. They used to be in <tt class="docutils literal">xtce/</tt> and
-<tt class="docutils literal">ccsds/</tt>: <tt class="docutils literal"><span class="pre">xtce/tcs-xtce.h</span></tt> is now <tt class="docutils literal"><span class="pre">tcs-xtce.h</span></tt>, <tt class="docutils literal">ccsds/time.h</tt> is
-<tt class="docutils literal"><span class="pre">ccsds-time.h</span></tt>, and each other <tt class="docutils literal">xtce/NAME</tt> is <tt class="docutils literal"><span class="pre">xtce-NAME</span></tt>.</p>
+library's prefix: <tt class="docutils literal">tcsxtce-</tt> for the runtime, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> for the rest
+of tcs-xtce, and <tt class="docutils literal">tcsccsds-</tt> for the CCSDS time codes. The README's
+Incompatible changes say what each was called before.</p>
 </div>
 <div class="section" id="installing-the-python-package">
 <h2><a class="toc-backref" href="#toc-entry-7">Installing the Python package</a></h2>
@@ -3338,18 +3338,18 @@ signed integer the truncated bytes of a longer negative slice whose
 value doesn't fit (<tt class="docutils literal"><span class="pre">I8::from_le_slice(&amp;[0x05,</span> 0xff])</tt> is <tt class="docutils literal">Some(5)</tt>,
 though the bytes are -251), where the library gives none.</p>
 </div>
-<div class="section" id="ccsds-time-codes-tcs-ccsds">
-<h1><a class="toc-backref" href="#toc-entry-32">CCSDS time codes (tcs-ccsds)</a></h1>
+<div class="section" id="ccsds-time-codes-tcsccsds">
+<h1><a class="toc-backref" href="#toc-entry-32">CCSDS time codes (tcsccsds)</a></h1>
 <div class="admonition warning">
 <p class="first admonition-title">Warning</p>
-<p class="last">tcs-ccsds is an alpha release. It is not fully tested, it is not
+<p class="last">tcsccsds is an alpha release. It is not fully tested, it is not
 feature complete, and it is subject to rapid change. Until 1.0, any
 change to its API changes the minor version number (0.1 to 0.2), so a
 release that changes only the patch number never breaks code built
 against it. Feedback is welcome, even at this stage: open an issue at
 <a class="reference external" href="https://github.com/vomlehn/tcs-xtce/issues">https://github.com/vomlehn/tcs-xtce/issues</a>.</p>
 </div>
-<p>tcs-ccsds is a second library, in <tt class="docutils literal">ccsds/</tt>, for CCSDS standards that XTCE
+<p>tcsccsds is a second library, in <tt class="docutils literal">ccsds/</tt>, for CCSDS standards that XTCE
 knows nothing about. It doesn't depend on tcs-xtce: it is plain functions
 over bytes, which a packet codec can use as hooks, or any program can use
 by itself. It has the binary time codes of CCSDS 301.0-B-4, <em>Time Code
@@ -3379,15 +3379,15 @@ milliseconds may reach a leap second's.</p>
 </thead>
 <tbody valign="top">
 <tr><td>Rust</td>
-<td>crate <tt class="docutils literal"><span class="pre">tcs-ccsds</span></tt>, <tt class="docutils literal"><span class="pre">tcs_ccsds::time</span></tt></td>
+<td>crate <tt class="docutils literal">tcsccsds</tt>, <tt class="docutils literal"><span class="pre">tcsccsds::time</span></tt></td>
 <td><tt class="docutils literal"><span class="pre">decode_cuc(&amp;data)</span> <span class="pre">-&gt;</span> <span class="pre">Option&lt;(usize,</span> f64)&gt;</tt></td>
 </tr>
 <tr><td>C/C++</td>
-<td><tt class="docutils literal"><span class="pre">ccsds/include/ccsds-time.h</span></tt>, <tt class="docutils literal">ccsds_</tt> names</td>
+<td><tt class="docutils literal"><span class="pre">ccsds/include/tcsccsds-time.h</span></tt>, <tt class="docutils literal">ccsds_</tt> names</td>
 <td><tt class="docutils literal">bool ccsds_decode_cuc(data, n, &amp;k, &amp;s)</tt></td>
 </tr>
 <tr><td>Python</td>
-<td>package <tt class="docutils literal">tcs_ccsds</tt>, <tt class="docutils literal">tcs_ccsds.time</tt></td>
+<td>package <tt class="docutils literal">tcsccsds</tt>, <tt class="docutils literal">tcsccsds.time</tt></td>
 <td><tt class="docutils literal">decode_cuc(data) <span class="pre">-&gt;</span> (k, s) or None</tt></td>
 </tr>
 </tbody>
@@ -3440,7 +3440,7 @@ can't hold once rounded, gives nothing. <tt class="docutils literal">to_seconds<
 exact time to a double: the double decoders are the exact ones followed by
 it, except that a CDS microsecond layout divides microseconds rather than
 picoseconds, as it always has.</p>
-<p><strong>Calendar time codes.</strong> <tt class="docutils literal">calendar</tt> (<tt class="docutils literal">tcs_ccsds.calendar</tt> in Python,
+<p><strong>Calendar time codes.</strong> <tt class="docutils literal">calendar</tt> (<tt class="docutils literal">tcsccsds.calendar</tt> in Python,
 the <tt class="docutils literal">ccsds_calendar</tt>, <tt class="docutils literal">ccsds_ccs</tt> and ASCII functions in C) has the
 codes that give a date and a time of day, usually UTC, held exactly as a
 <tt class="docutils literal">CalendarTime</tt> (<tt class="docutils literal">ccsds_calendar_time</tt>): year 1 to 9999, month, day,
@@ -3466,7 +3466,7 @@ second of 60 only at 23:59. Encoding and formatting round the picoseconds
 to the unit asked for, halves up, carrying through the calendar; a carry
 out of second 59 goes to the next minute, because the codes do not know
 which days had leap seconds.</p>
-<p><strong>TAI and UTC.</strong> <tt class="docutils literal">utc</tt> (<tt class="docutils literal">tcs_ccsds.utc</tt>; <tt class="docutils literal">ccsds_utc_to_tai</tt> and
+<p><strong>TAI and UTC.</strong> <tt class="docutils literal">utc</tt> (<tt class="docutils literal">tcsccsds.utc</tt>; <tt class="docutils literal">ccsds_utc_to_tai</tt> and
 <tt class="docutils literal">ccsds_tai_to_utc</tt> in C) converts between a <tt class="docutils literal">CalendarTime</tt> of UTC and a
 <tt class="docutils literal">TaiTime</tt> (<tt class="docutils literal">ccsds_tai_time</tt>): seconds since the CCSDS epoch,
 1958-01-01T00:00:00 TAI, and picoseconds, exactly, with <tt class="docutils literal">to_seconds</tt> for
@@ -3962,9 +3962,9 @@ formats' standards give for the conversions in
 <tt class="docutils literal">tests/float/known.txt</tt> (MIL-STD-1750A's own examples among them),
 and the same results as each other for random values from
 <tt class="docutils literal">tests/float_cases.py</tt>.</li>
-<li><tt class="docutils literal">tests/ccsds_check.sh</tt>: tcs-ccsds's time codes give the known results
-and the same results in Rust, C, C++ and Python (see <a class="reference internal" href="#ccsds-time-codes-tcs-ccsds">CCSDS time codes
-(tcs-ccsds)</a>).</li>
+<li><tt class="docutils literal">tests/ccsds_check.sh</tt>: tcsccsds's time codes give the known results
+and the same results in Rust, C, C++ and Python (see <a class="reference internal" href="#ccsds-time-codes-tcsccsds">CCSDS time codes
+(tcsccsds)</a>).</li>
 <li><tt class="docutils literal">tests/bnum_check.sh</tt>: the C functions of <tt class="docutils literal"><span class="pre">tcsxtce-bnum.h</span></tt> (built as
 C and as C++) and the C++ class of <tt class="docutils literal"><span class="pre">tcsxtce-bnum.hpp</span></tt> give the same
 results as the bnum crate for random cases from
