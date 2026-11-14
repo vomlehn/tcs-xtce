@@ -64,6 +64,7 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | `tests/`      | The demo mission, packet vectors and the cross-language checks; `make` generates the schema-coverage samples into `tests/samples/` |
 | `editor/`     | `tcs-xtcee`, a graphical XTCE editor that keeps a document valid for its XTCE version (1.1, 1.2 or 1.3), its comments and layout as written, and converts between versions |
 | `docs/`       | The manuals, `manual.rst`, `tcs-xtce.rst` and `tcs-xtcee.rst`, and the designs, `design.rst`, `tcs-xtce-design.rst` and `tcs-xtcee-design.rst` |
+| `bin/`        | `install-tools`, which `make install-tools` runs: it installs what building, testing and packaging need, with apt-get or dnf |
 | `examples/`   | Example XTCE files and a program per language that uses the code generated from them (start with `simple-string`) |
 
 ## Building
