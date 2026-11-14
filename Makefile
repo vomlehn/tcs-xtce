@@ -28,6 +28,9 @@
 #                        verify it
 #   make python-dist     build the Python package's wheel and sdist into
 #                        dist/ and try them
+#   make install-tools   install the tools building, testing and packaging
+#                        need, with apt-get or dnf; DRY_RUN=1 shows what it
+#                        would do, PACKAGING=0 leaves out the packaging tools
 #   make install         build the packages and install them with apt-get,
 #                        dnf or zypper, under sudo; DRY_RUN=1 shows what
 #                        it would do, PACKAGE_FORMAT=deb|rpm and
@@ -548,6 +551,16 @@ tcs-helpers:
 	    exit 1; \
 	fi
 	@"$(TCS_HELPERS)/bin/tcs-helpers" --require $(TCS_HELPERS_REQUIRED)
+
+# Install the tools building, testing, checking, documenting and packaging
+# this project need, with the system's own package manager, under sudo:
+# see bin/install-tools, which a container can run as root too. DRY_RUN=1
+# shows the commands and runs none; PACKAGING=0 leaves out what only make
+# packages and make lint-packages need.
+.PHONY: install-tools
+install-tools:
+	bin/install-tools $(if $(filter 1,$(DRY_RUN)),--dry-run) \
+		$(if $(filter 0,$(PACKAGING)),--no-packaging)
 
 # Copy everything into place under $(DESTDIR)$(PREFIX): what `make
 # install` once did, kept for development and for `make stage`, which

@@ -23,9 +23,11 @@ useful.
 
 ## Building and testing
 
-You need `curl`, `xmllint`, Python 3.10 or later, a Rust toolchain with
-`rustfmt`, a C11 compiler and a C++20 compiler. `rst2html` (from docutils)
-is only needed to rebuild the documentation.
+You need `curl`, `xmllint`, Python 3.11 or later, a Rust toolchain with
+`rustfmt`, a C11 compiler, a C++20 compiler, fontconfig's headers,
+`rst2html` (from docutils), which `make test` rebuilds the pages with, and
+a checkout of tcs-helpers beside this one. `make install-tools` installs all
+but the checkout; see the README's Building.
 
 ```sh
 make          # fetch the XTCE references if missing, generate, build, test

@@ -81,8 +81,15 @@ make fmt-check    # verify Rust and Python formatting (Rust is also checked by
                   # every `make rust`)
 ```
 
-Requirements: `curl`, `xmllint`, Python 3.10+, a Rust toolchain with
-`rustfmt`, and a C++20 compiler.
+Requirements: `curl`, `xmllint`, Python 3.11+ (the Python package itself
+runs on 3.10), a Rust toolchain with `rustfmt`, 1.92 or later for the
+editor, a C11 and C++20 compiler, fontconfig's headers, `rst2html` for the
+pages `make test` checks, and a checkout of
+[tcs-helpers](https://github.com/vomlehn/tcs-helpers) beside this one. `make
+install-tools` installs all but the checkout with apt-get or dnf; `DRY_RUN=1`
+shows the commands and runs none, and `PACKAGING=0` leaves out the packaging
+tools. It is `bin/install-tools`, which a container can run as root too.
+tcs-xtce needs nothing of TCSpecial's, and is used with it or on its own.
 
 `references/Makefile` finds the latest version on the OMG specification page
 (https://www.omg.org/spec/XTCE/) rather than hard-coding it. At the time of
