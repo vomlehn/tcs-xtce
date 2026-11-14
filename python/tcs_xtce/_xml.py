@@ -16,16 +16,9 @@ from typing import Callable, Optional
 from tcsxtce import ManagedBuffer
 from tcsxtce.value import f_double
 
+from ._error import XtceError
+
 XML_NS = "http://www.w3.org/XML/1998/namespace"
-
-
-class XtceError(ValueError):
-    """Raised for malformed or schema-invalid XTCE input or output."""
-
-    def __init__(self, message: str, line: int = 0) -> None:
-        super().__init__(f"{line}: {message}" if line else message)
-        self.message = message
-        self.line = line
 
 
 # -- reading -------------------------------------------------------------------

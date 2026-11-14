@@ -26,7 +26,7 @@ True
 """
 
 from tcsxtce import DEFAULT_CAPACITY, ManagedBuffer
-from ._xml import XtceError
+from ._error import XtceError
 
 # What the package itself gives, beside the XML binding's names.
 _OWN = ["DEFAULT_CAPACITY", "Document", "ManagedBuffer", "XtceError",
@@ -35,8 +35,8 @@ _OWN = ["DEFAULT_CAPACITY", "Document", "ManagedBuffer", "XtceError",
 # The package's modules and subpackages, which an import loads rather than
 # the XML binding: `from tcs_xtce import digest` asks for one of these by
 # name before importing it.
-_MODULES = {"_xml", "binding", "compiler", "digest", "digest_cli", "document",
-            "generated", "__main__"}
+_MODULES = {"_error", "_xml", "binding", "compiler", "digest", "digest_cli",
+            "document", "generated", "__main__"}
 
 
 def __getattr__(name: str):

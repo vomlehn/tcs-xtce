@@ -53,7 +53,7 @@ import xml.parsers.expat
 from pathlib import Path
 from typing import Iterable, Union
 
-from ._xml import XtceError
+from ._error import XtceError
 
 # Elements whose children may appear in any order without changing what the
 # document means: collections of named things that are referred to by name,
