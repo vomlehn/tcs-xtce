@@ -1,0 +1,56 @@
+# tcsxtce, the packet runtime that generated Python code imports, and the
+# digest programs check each other with: operational code, a distribution
+# of its own, so that a mission's programs need only it and not the
+# compiler. Built by `make python-dist` with tcs-xtce's, from the root
+# pyproject.toml, which depends on this one. tcs_xtce beside it here is
+# the root distribution's, not this one's.
+#
+# LICENSE-APACHE and LICENSE-MIT here are links to the repository's, which
+# the sdist and the wheel hold as files. README-pypi.md is this
+# distribution's page on PyPI, with every link absolute.
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tcsxtce"
+# The same as the tcsxtce crate's, in rust/tcsxtce/Cargo.toml, which
+# make python-dist checks.
+version = "0.7.0"
+description = """\
+    The packet runtime that the code tcs-xtce generates from XTCE runs on, \
+    aboard and in the mission operations center, and the XTCE digest\
+"""
+readme = "README-pypi.md"
+requires-python = ">=3.10"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-APACHE", "LICENSE-MIT"]
+authors = [{ name = "David VomLehn" }]
+keywords = ["xtce", "ccsds", "telemetry", "omg", "spacecraft"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Repository = "https://github.com/vomlehn/tcs-xtce"
+Documentation = "https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html"
+"Rust crate" = "https://crates.io/crates/tcsxtce"
+
+[tool.setuptools]
+packages = ["tcsxtce"]
+
+[tool.setuptools.package-data]
+tcsxtce = ["py.typed"]

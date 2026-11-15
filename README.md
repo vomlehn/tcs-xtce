@@ -69,7 +69,7 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 | `references/` | Downloaded XTCE documents: `SpaceSystem.xsd`, `XTCE.pdf`, `VERSION`, plus `xml.xsd` and `catalog.xml` for offline validation |
 | `rust/`       | `tcs-xtce` Rust crate, and in `rust/tcsxtce/` the `tcsxtce` crate, the packet runtime that generated Rust uses |
 | `cpp/`        | C++20 library (`libtcs-xtce.a`, `libtcs-xtce.so`) with a C API (`tcs-xtce.h`), and the header-only C/C++ packet runtime (`tcsxtce-packet.h`) |
-| `python/`     | `tcsxtce` Python package (3.10+, standard library only), the packet runtime that generated Python uses, and `tcs_xtce`: the XML binding, `tcs_xtce.binding` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `tcs_xtce.compiler`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
+| `python/`     | Two Python distributions (3.10+, standard library only), each with a `README-pypi.md` for its PyPI page: `tcsxtce`, the packet runtime that generated Python uses (`python/pyproject.toml`), and `tcs-xtce` (the root `pyproject.toml`), whose `tcs_xtce` package is the XML binding, `tcs_xtce.binding` (generates the XML binding from the XSD), `tcs-xtce` (compiles a mission's XTCE into packet codecs; compiler in `tcs_xtce.compiler`) and `xtce-digest` (an MD5 digest of what an XTCE document means, to spot changes) |
 | `tests/`      | The demo mission, packet vectors and the cross-language checks; `make` generates the schema-coverage samples into `tests/samples/` |
 | `editor/`     | `tcs-xtcee`, a graphical XTCE editor that keeps a document valid for its XTCE version (1.1, 1.2 or 1.3), its comments and layout as written, and converts between versions |
 | `docs/`       | The manuals, `manual.rst`, `tcs-xtce.rst` and `tcs-xtcee.rst`, and the designs, `design.rst`, `tcs-xtce-design.rst` and `tcs-xtcee-design.rst` |
@@ -210,9 +210,14 @@ finding that is not overridden; each override says why it is intended, in
 `packaging/deb/tcs-xtce/lintian-overrides` and
 `packaging/rpm/rpmlint.toml`.
 
-**Python.** `pip install .` from the top of the repository, or the wheel
-`make python-dist` builds in `dist/`, installs `tcs_xtce` and both
-commands.
+**Python.** Three distributions: `tcs-xtce`, the compiler, with both
+commands; `tcsxtce`, the packet runtime it depends on; and `tcsccsds`.
+`make python-dist` builds each as a wheel and an sdist in `dist/`, checks
+them with twine and tries them, and `make python-versions` tries them on
+each Python from 3.10 to 3.14, in containers. `pip install
+--find-links dist dist/tcs_xtce-*.whl` installs the compiler and the
+runtime; `pip install ./python` and `pip install .`, in that order,
+install them from the repository. None is on PyPI yet.
 
 **Rust.** `cargo add tcs-xtce` (and `cargo add tcsccsds`); the crates
 come from crates.io and nothing here installs them.
@@ -343,13 +348,13 @@ python3 -m tcs_xtce mission.xtce mission.h  --lang c        # or --lang c++: sam
 python3 -m tcs_xtce mission.xtce mission.py --lang python
 ```
 
-Or install the Python package, runtime and compiler (see
+Or install the Python distributions, compiler and runtime (see
 [Installing](#installing)), and use the `tcs-xtce` command from anywhere.
-It is not on PyPI yet:
+They are not on PyPI yet:
 
 ```sh
 make python-dist
-pip install dist/tcs_xtce-*.whl
+pip install --find-links dist dist/tcs_xtce-*.whl
 tcs-xtce mission.xtce mission.rs --lang rust
 ```
 

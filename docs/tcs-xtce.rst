@@ -833,7 +833,12 @@ the compiler is the ``tcs-xtce`` command, run from anywhere:
        root SpaceSystem name, of the last document when there are several,
        in snake_case followed by ``_``, such as ``demo_``)
    * - ``--skip-unsupported``
-     - Leave out containers and meta-commands that use unsupported XTCE features, with a warning, instead of failing
+     - Leave out containers and meta-commands that use unsupported XTCE
+       features, with a warning, instead of failing. A loop in the
+       documents is never left out: a type, container or meta-command that
+       inherits from or includes itself, an aggregate that contains itself,
+       or streams that feed one another always fail the run, naming what
+       is in the loop.
    * - ``--dialect yamcs``
      - Read the documents as the ground system named does where XTCE
        leaves a meaning open, unless they say otherwise (see Dialects)
@@ -997,11 +1002,13 @@ is repacked.
 Using the generated code:
 
 * **Rust**: add the file as a module (``mod demo;``) in a crate that
-  depends on ``tcs-xtce``.
+  depends on ``tcsxtce``, the packet runtime.
 * **C and C++**: include the header with ``cpp/include`` on the include
   path. The header and its runtime ``tcsxtce-packet.h`` are self-contained
   and need no library. In C, link with ``-lm``.
-* **Python**: import the module with the ``tcs_xtce`` package on the path.
+* **Python**: import the module with the ``tcsxtce`` package, the packet
+  runtime, on the path: the ``tcsxtce`` package installs it, and in this
+  repository it is in ``python/``.
 
 ``make packets`` regenerates the demo mission
 (``tests/mission/demo.xtce``) into ``rust/tests/mission/demo.rs``,

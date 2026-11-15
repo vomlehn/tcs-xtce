@@ -1,15 +1,18 @@
-# The Python packages: the runtime that generated Python code imports, and
-# the compiler that generates code in every language, installable with pip.
+# tcs-xtce's Python distribution: the compiler that generates code in every
+# language, and the XML binding it reads XTCE with, installable with pip.
+# Software tools; the packet runtime that generated Python code imports,
+# tcsxtce, is operational code and a distribution of its own, in
+# python/pyproject.toml, which this one depends on.
 #
-# Two packages, in python/: tcsxtce, the packet runtime and the digest,
-# which are operational code; and tcs_xtce, a software tool, with the XML
-# binding at its top, the compiler in tcs_xtce.compiler, the XML binding's
-# generator in tcs_xtce.binding and the digest's command line in
-# tcs_xtce.digest_cli. This file is at the repository's root so that the
-# package can carry the README and the license files.
-# python/tcs_xtce/generated.py is not in git -- `make generate` writes it
-# from the XTCE schema -- so build the package with `make python-dist`,
-# which writes it first and checks that the wheel holds it.
+# In python/: tcs_xtce, with the XML binding at its top, the compiler in
+# tcs_xtce.compiler, the XML binding's generator in tcs_xtce.binding and
+# the digest's command line in tcs_xtce.digest_cli. This file is at the
+# repository's root so that the package can carry the license files.
+# README-pypi.md is its page on PyPI, with every link absolute; README.md
+# is the repository's. python/tcs_xtce/generated.py is not in git -- `make
+# generate` writes it from the XTCE schema -- so build the package with
+# `make python-dist`, which writes it first and checks that the wheel
+# holds it.
 
 [build-system]
 requires = ["setuptools>=77"]
@@ -17,17 +20,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tcs-xtce"
-# The same as the Rust crate's, in rust/Cargo.toml.
+# tcs-xtce's version, which the Makefile reads for the .deb and the RPM
+# too, and the same as the tcs-xtce crate's, in rust/Cargo.toml.
 version = "0.7.1"
 description = """\
-    Serialization and deserialization of OMG XTCE documents into managed, \
-    preallocated buffers, a compiler of packet codecs, and tcsxtce, the \
-    packet runtime they fly with\
+    An XTCE compiler: generates the code that packs and unpacks a \
+    mission's XTCE commands and telemetry, in C/C++, Rust and Python\
 """
-readme = "README.md"
+readme = "README-pypi.md"
 requires-python = ">=3.10"
 license = "MIT OR Apache-2.0"
 license-files = ["LICENSE-APACHE", "LICENSE-MIT"]
+# The runtime generated Python code imports, of the same minor version,
+# which is what the compiler generates for.
+dependencies = ["tcsxtce ~= 0.7.0"]
 authors = [{ name = "David VomLehn" }]
 keywords = ["xtce", "ccsds", "telemetry", "omg", "spacecraft"]
 classifiers = [
@@ -36,6 +42,11 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
     "Topic :: Software Development :: Code Generators",
     "Topic :: Software Development :: Libraries",
@@ -44,7 +55,7 @@ classifiers = [
 
 [project.urls]
 Repository = "https://github.com/vomlehn/tcs-xtce"
-Documentation = "https://vomlehn.github.io/tcs-xtce/docs/manual.html"
+Documentation = "https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html"
 "Rust crate" = "https://crates.io/crates/tcs-xtce"
 
 [project.scripts]
@@ -53,12 +64,11 @@ xtce-digest = "tcs_xtce.digest_cli.__main__:main"
 
 [tool.setuptools]
 # The compiler uses tcs_xtce.binding's line wrapping and rustfmt.
-packages = ["tcsxtce", "tcs_xtce", "tcs_xtce.compiler", "tcs_xtce.binding",
+packages = ["tcs_xtce", "tcs_xtce.compiler", "tcs_xtce.binding",
             "tcs_xtce.digest_cli"]
 
 [tool.setuptools.package-dir]
 "" = "python"
 
 [tool.setuptools.package-data]
-tcsxtce = ["py.typed"]
 tcs_xtce = ["py.typed"]

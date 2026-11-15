@@ -28,12 +28,12 @@ Filters = [
 	# Words of the trade that rpmlint's dictionary does not have.
 	" spelling-error \\('(preallocated|config|xtcee|libtcs|tcsxtce)',",
 	" spelling-error \\(\"(ccsds|tcsccsds)'s\",",
-	# The licence texts are shipped with the documents and again in the
+	# The licence texts are shipped with the documents and again in each
 	# Python package's metadata, where pip puts them.
-	' files-duplicate /opt/tcs/share/doc/tcs-xtce/LICENSE-[A-Z]+ ',
-	# Two Python packages, tcs_xtce and tcsccsds, each have the
+	' files-duplicate /opt/tcs/share/doc/tcs-?xtce/LICENSE-[A-Z]+ ',
+	# The Python packages, tcs_xtce, tcsxtce and tcsccsds, each have the
 	# INSTALLER and WHEEL files pip writes, which say the same thing.
-	' files-duplicate \S+/(tcs_xtce|tcsccsds)-[^/]+\.dist-info/(INSTALLER|WHEEL) ',
+	' files-duplicate \S+/(tcs_xtce|tcsxtce|tcsccsds)-[^/]+\.dist-info/(INSTALLER|WHEEL) ',
 	# An example script finds python3 on the path of whoever runs it, so
 	# that it runs as well in a virtual environment as with the system's.
 	' env-script-interpreter /opt/tcs/share/examples/tcs-xtce/',

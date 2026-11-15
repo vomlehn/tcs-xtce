@@ -1,16 +1,49 @@
+# tcsccsds in Python: the CCSDS time codes, the same as the Rust crate and
+# the C and C++ header give them. Operational code, a distribution of its
+# own, built by tcs-xtce's `make python-dist`.
+#
+# LICENSE-APACHE and LICENSE-MIT here are links to the repository's, which
+# the sdist and the wheel hold as files. README-pypi.md is its page on
+# PyPI, with every link absolute.
+
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "tcsccsds"
+# A version of its own, as the crate has: the Python package's, which the
+# Makefile reads for the .deb and the RPM too.
 version = "0.2.0"
 description = """\
-    Flight software: CCSDS standards, such as the CCSDS time codes; part of \
-    tcs-xtce, with matching Rust, C and C++ libraries\
+    CCSDS standards for flight software, such as the CCSDS time codes, the \
+    same in Python as in Rust, C and C++\
 """
+readme = "README-pypi.md"
 requires-python = ">=3.10"
-license = { text = "MIT OR Apache-2.0" }
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-APACHE", "LICENSE-MIT"]
+authors = [{ name = "David VomLehn" }]
+keywords = ["ccsds", "time", "cuc", "cds", "spacecraft"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Repository = "https://github.com/vomlehn/tcs-xtce"
+Documentation = "https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html"
+"Rust crate" = "https://crates.io/crates/tcsccsds"
 
 [tool.setuptools]
 packages = ["tcsccsds"]

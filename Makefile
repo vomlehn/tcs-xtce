@@ -27,8 +27,10 @@
 #   make examples        build and run every example in examples/
 #   make fmt             format Rust and Python code;  make fmt-check
 #                        verify it
-#   make python-dist     build the Python package's wheel and sdist into
-#                        dist/ and try them
+#   make python-dist     build the Python distributions' wheels and sdists
+#                        into dist/, check them with twine, and try them
+#   make python-versions try them on each Python from 3.10 to 3.14, in
+#                        containers (needs podman)
 #   make install-tools   install the tools building, testing and packaging
 #                        need, with apt-get or dnf; DRY_RUN=1 shows what it
 #                        would do, PACKAGING=0 leaves out the packaging tools
@@ -273,23 +275,61 @@ bnum-check: rust cpp
 		cpp/build/bnum_tool cpp/build/bnum_tool_cxx \
 		cpp/build/bnum_tool_hpp
 
-# The Python package -- the runtime and the compiler, with the tcs-xtce and
-# xtce-digest commands -- as a wheel and an sdist in dist/, then installed in a
-# fresh virtual environment and tried: see pyproject.toml and
+# The Python distributions, each as a wheel and an sdist in dist/: tcs-xtce,
+# the compiler, with the tcs-xtce and xtce-digest commands (pyproject.toml);
+# tcsxtce, the packet runtime it depends on (python/pyproject.toml); and
+# tcsccsds (ccsds/python/pyproject.toml). tcsxtce's version must be its
+# crate's. twine checks that PyPI would take them, their pages included,
+# and then they are installed in a fresh virtual environment and tried: see
 # tests/python_dist_check.sh. Built by setuptools in place, without pip's
-# isolated build environment, so nothing is downloaded; setuptools 77 or later
-# has to be installed. Not part of `make test`. Publishing them is not done
-# here. setuptools works in build/lib and build/bdist.*, which are removed
-# before and after; the rest of build/ is the packages', and is left alone.
-SETUPTOOLS_BUILD = build/lib build/bdist.*
+# isolated build environment, so nothing is downloaded; setuptools 77 or
+# later and twine have to be installed, which make install-tools does. Not
+# part of `make test`. Publishing them is not done here. setuptools works in
+# build/lib and build/bdist.* in each distribution's directory, which are
+# removed before and after, with its *.egg-info; the rest of the top build/
+# is the packages', and is left alone.
+PY_DISTS = . python ccsds/python
+SETUPTOOLS_BUILD = build/lib build/bdist.* *.egg-info python/*.egg-info
+RT_PY_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' \
+                         python/pyproject.toml)
+RT_CRATE_VERSION := $(shell sed -n '1,/^version/s/^version = "\(.*\)"/\1/p' \
+                            rust/tcsxtce/Cargo.toml)
 .PHONY: python-dist
 python-dist: $(PY_GEN)
-	rm -rf dist $(SETUPTOOLS_BUILD) python/tcs_xtce.egg-info
-	$(PYTHON) -c 'from setuptools import build_meta as b; \
-		b.build_wheel("dist"); b.build_sdist("dist")'
-	rm -rf $(SETUPTOOLS_BUILD) python/tcs_xtce.egg-info
-	rmdir build 2>/dev/null || true
+	@[ "$(RT_PY_VERSION)" = "$(RT_CRATE_VERSION)" ] || { \
+	    echo "python/pyproject.toml is $(RT_PY_VERSION) and" \
+	        "rust/tcsxtce/Cargo.toml $(RT_CRATE_VERSION); make them" \
+	        "agree" >&2; \
+	    exit 1; \
+	}
+	@$(PYTHON) -m twine --version > /dev/null 2>&1 || { \
+	    echo "python-dist checks the distributions with twine, which is" \
+	        "not installed: make install-tools installs it" >&2; \
+	    exit 1; \
+	}
+	rm -rf dist
+	for d in $(PY_DISTS); do \
+	    (cd $$d && rm -rf $(SETUPTOOLS_BUILD) && \
+	     $(PYTHON) -c 'from setuptools import build_meta as b; \
+		b.build_wheel("$(CURDIR)/dist"); \
+		b.build_sdist("$(CURDIR)/dist")' && \
+	     rm -rf $(SETUPTOOLS_BUILD) && \
+	     { rmdir build 2>/dev/null || true; }) || exit 1; \
+	done
+	$(PYTHON) -m twine check --strict dist/*
 	sh tests/python_dist_check.sh dist
+
+# The distributions python-dist built, installed and tried on each Python
+# 3.10 to 3.14 in a clean container: see tests/python-versions-check.sh.
+# Needs podman, and the network the first time each image is pulled.
+.PHONY: python-versions
+python-versions:
+	@ls dist/tcs_xtce-*.whl > /dev/null 2>&1 || { \
+	    echo "python-versions tries what make python-dist builds: run it" \
+	        "first" >&2; \
+	    exit 1; \
+	}
+	sh tests/python-versions-check.sh dist
 
 # Public XTCE documents, pinned to commits in tests/external/sources.txt and
 # downloaded on demand; not part of `make test`, which needs no network.
@@ -584,10 +624,10 @@ install-tools:
 install-files: $(addprefix install-,$(PACKAGES))
 
 # The operational code: the tcsxtce headers and Python package, tcsccsds's
-# header and Python package, their pkg-config files and a README. The
-# Python package tcsxtce is in the tcs_xtce distribution, whose pip install
-# tcs-xtce's package makes, so it is copied here as it is, without
-# metadata of its own.
+# header and Python package, their pkg-config files and a README. Each
+# Python package is a distribution of its own, installed with pip; the
+# licence files are given as the repository's, which the links beside each
+# pyproject.toml name, since a link would not survive the copy.
 .PHONY: install-tcsxtce
 install-tcsxtce: $(PY_GEN) tcs-helpers
 	@echo "Installing tcsxtce $(VERSION) to $(DESTDIR)$(PREFIX)..."
@@ -599,12 +639,12 @@ install-tcsxtce: $(PY_GEN) tcs-helpers
 		packaging/tcsccsds.pc.in > $(PCDIR)/tcsccsds.pc
 	chmod 644 $(PCDIR)/tcsxtce.pc $(PCDIR)/tcsccsds.pc
 	install -d $(DESTDIR)$(PYDIR)
-	rm -rf $(DESTDIR)$(PYDIR)/tcsxtce
-	cp -R python/tcsxtce $(DESTDIR)$(PYDIR)/
-	find $(DESTDIR)$(PYDIR)/tcsxtce -name __pycache__ -type d -prune \
-		-exec rm -rf {} +
+	$(call pyinstall,tcsxtce,$(RT_PY_VERSION), \
+		python/pyproject.toml python/README-pypi.md LICENSE-APACHE \
+		LICENSE-MIT python/tcsxtce)
 	$(call pyinstall,tcsccsds,$(CCSDS_VERSION), \
-		ccsds/python/pyproject.toml ccsds/python/tcsccsds)
+		ccsds/python/pyproject.toml ccsds/python/README-pypi.md \
+		LICENSE-APACHE LICENSE-MIT ccsds/python/tcsccsds)
 	install -D -m 644 -t $(RT_DOCDIR) README.md LICENSE-APACHE \
 		LICENSE-MIT
 	if [ "$(HOOKS)" = 1 ]; then \
@@ -612,9 +652,7 @@ install-tcsxtce: $(PY_GEN) tcs-helpers
 	    install -D -m 644 packaging/hooks/tcs-xtce.pth $(RT_PTH); \
 	fi
 
-# The software tools. The tcs_xtce distribution's pip install brings
-# tcsxtce too, which is the tcsxtce package's, so it is taken out again,
-# with its lines in RECORD. What is copied is the three commands, and in
+# The software tools. What is copied is the three commands, and in
 # sbin tcs-xtce-links, which links them into /usr/local/bin; the
 # library's headers, straight into include; the shared library under its
 # soname, with its development name linked to it, and the static one; its
@@ -656,11 +694,8 @@ install-tcs-xtce: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
 	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' \
 		packaging/tcs-xtce.pc.in > $(PCDIR)/tcs-xtce.pc
 	chmod 644 $(PCDIR)/tcs-xtce.pc
-	$(call pyinstall,tcs_xtce,$(VERSION),pyproject.toml README.md \
+	$(call pyinstall,tcs_xtce,$(VERSION),pyproject.toml README-pypi.md \
 		LICENSE-APACHE LICENSE-MIT python)
-	rm -rf $(DESTDIR)$(PYDIR)/tcsxtce
-	sed -i '/^tcsxtce\//d' \
-		$(DESTDIR)$(PYDIR)/tcs_xtce-$(VERSION).dist-info/RECORD
 	install -D -m 644 -t $(DOCDIR) $(DOCS)
 	install -D -m 644 -t $(DOCDIR)/shots $(SHOTS)
 	$(THIRD_PARTY_NOTICES) editor $(DOCDIR)/THIRD-PARTY-NOTICES tcs-xtce
@@ -733,7 +768,8 @@ STAGE_TARGET = install-$$package
 # README).
 RELEASE_ATTRIBUTION := slint
 RPM_DEFINES  = --define "tcs_abi $(ABI)" \
-               --define "tcsccsds_version $(CCSDS_VERSION)"
+               --define "tcsccsds_version $(CCSDS_VERSION)" \
+               --define "tcsxtce_py_version $(RT_PY_VERSION)"
 ifneq ($(wildcard $(TCS_HELPERS)/packaging/install-packages.sh),)
 include $(TCS_HELPERS)/packaging/packaging.mk
 else

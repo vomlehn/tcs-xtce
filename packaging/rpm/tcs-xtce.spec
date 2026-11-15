@@ -3,9 +3,10 @@
 # that tree, so the RPM and the .deb hold the same files, built once.
 # The Makefile passes tcs_version, from pyproject.toml; tcs_release, the
 # Debian revision, so that the two are named alike; tcs_abi, from
-# cpp/abi-version; tcsccsds_version, from ccsds/rust/Cargo.toml;
-# tcs_stage; and tcs_date, the date of the commit built, for the
-# %changelog.
+# cpp/abi-version; tcsccsds_version, from ccsds/python/pyproject.toml;
+# tcsxtce_py_version, the tcsxtce Python package's, from
+# python/pyproject.toml; tcs_stage; and tcs_date, the date of the commit
+# built, for the %changelog.
 
 %{!?tcs_version: %{error: tcs_version is not defined: build with make rpm}}
 %{!?tcs_release: %{error: tcs_release is not defined: build with make rpm}}

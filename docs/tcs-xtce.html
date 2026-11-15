@@ -1287,7 +1287,12 @@ root SpaceSystem name, of the last document when there are several,
 in snake_case followed by <tt class="docutils literal">_</tt>, such as <tt class="docutils literal">demo_</tt>)</td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">--skip-unsupported</span></tt></td>
-<td>Leave out containers and meta-commands that use unsupported XTCE features, with a warning, instead of failing</td>
+<td>Leave out containers and meta-commands that use unsupported XTCE
+features, with a warning, instead of failing. A loop in the
+documents is never left out: a type, container or meta-command that
+inherits from or includes itself, an aggregate that contains itself,
+or streams that feed one another always fail the run, naming what
+is in the loop.</td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">--dialect</span> yamcs</tt></td>
 <td>Read the documents as the ground system named does where XTCE
@@ -1449,11 +1454,13 @@ is repacked.</p>
 <p>Using the generated code:</p>
 <ul class="simple">
 <li><strong>Rust</strong>: add the file as a module (<tt class="docutils literal">mod demo;</tt>) in a crate that
-depends on <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt>.</li>
+depends on <tt class="docutils literal">tcsxtce</tt>, the packet runtime.</li>
 <li><strong>C and C++</strong>: include the header with <tt class="docutils literal">cpp/include</tt> on the include
 path. The header and its runtime <tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt> are self-contained
 and need no library. In C, link with <tt class="docutils literal"><span class="pre">-lm</span></tt>.</li>
-<li><strong>Python</strong>: import the module with the <tt class="docutils literal">tcs_xtce</tt> package on the path.</li>
+<li><strong>Python</strong>: import the module with the <tt class="docutils literal">tcsxtce</tt> package, the packet
+runtime, on the path: the <tt class="docutils literal">tcsxtce</tt> package installs it, and in this
+repository it is in <tt class="docutils literal">python/</tt>.</li>
 </ul>
 <p><tt class="docutils literal">make packets</tt> regenerates the demo mission
 (<tt class="docutils literal">tests/mission/demo.xtce</tt>) into <tt class="docutils literal">rust/tests/mission/demo.rs</tt>,

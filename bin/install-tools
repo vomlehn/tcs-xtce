@@ -42,9 +42,11 @@ RUST_COMPONENTS="rustfmt"
 CARGO_TOOLS=""
 PIPX_TOOLS=""
 CHECKOUTS="tcs-helpers"
-# The packaging tools: make packages and make lint-packages.
-APT_PACKAGING="dpkg-dev rpm lintian rpmlint shellcheck gzip"
-DNF_PACKAGING="dpkg dpkg-dev rpm-build lintian rpmlint ShellCheck gzip"
+# The packaging tools: make packages, make lint-packages, and twine for
+# make python-dist's check of what it builds.
+APT_PACKAGING="dpkg-dev rpm lintian rpmlint shellcheck gzip twine"
+DNF_PACKAGING="dpkg dpkg-dev rpm-build lintian rpmlint ShellCheck gzip
+	twine"
 
 # The rest is the same in every TCS project that has this script; only what
 # is above differs.
