@@ -1,19 +1,21 @@
 // The XTCE editor's windows.
 //
 // One window per document, its menus above two tabs.  The Structure tab
-// is the document as one outline: an open element shows, one row deeper,
-// its attributes as fields edited in place, its value, its comments and
-// the elements in it, and what is wrong with a row is written under it;
-// resting the pointer on a name shows what the schema says of it, and an
-// element's or comment's row starts with a grip it is dragged by.  The
-// Source tab shows the document's text, which can be edited and applied
-// as a whole.  Below the tabs are the document's problems, a click on one
-// selecting the element it is about, and the status line.  The other
-// windows are here too: packet layouts, encoding and decoding, a
-// conversion's dialog, text such as a digest, and questions.  Colour
-// never carries a meaning alone: every mark that is coloured also says
-// what it is in words or a symbol, and the colours are the Okabe-Ito
-// palette, which colour-blind readers can tell apart.
+// is the document as one outline.  An element's row is its start tag, its
+// name in an angle bracket and its attributes after it, each value in a
+// box edited in place, wrapped to the width there is; open, it shows, one
+// row deeper, its value, its comments and the elements in it.  What is
+// wrong with a row is written under it; resting the pointer on a name
+// shows what the schema says of it, and an element's or comment's row
+// starts with a grip it is dragged by.  The Source tab shows the
+// document's text, which can be edited and applied as a whole.  Below the
+// tabs are the document's problems, a click on one selecting the element
+// it is about, and the status line.  The other windows are here too:
+// packet layouts, encoding and decoding, a conversion's dialog, text such
+// as a digest, and questions.  Colour never carries a meaning alone:
+// every mark that is coloured also says what it is in words or a symbol,
+// and the colours are the Okabe-Ito palette, which colour-blind readers
+// can tell apart.
 
 import {
     Button, CheckBox, ComboBox, LineEdit, ListView, ScrollView, TabWidget,
@@ -43,8 +45,31 @@ export global Palette {
     out property <color> hint: #6e6e6e;
 }
 
-// One row of the outline: an element, one of its attributes, its value, a
-// comment, or the row that adds an attribute.
+// One attribute of an element, shown in the element's row as the source
+// gives it: its name, then its value in a box.
+export struct Attr {
+    // Its name.
+    name: string,
+    // Its value, to edit.
+    value: string,
+    // The values it may have, if they are a list; empty otherwise.
+    choices: [string],
+    // What the schema says it is, and its default if it has one, shown
+    // when the pointer rests on its name.
+    doc: string,
+    // "error" or "warning", the worse of what is wrong with it, or "" if
+    // nothing is; what is wrong is said under the element's row.
+    problem-severity: string,
+    // Whether the schema requires it.
+    required: bool,
+    // Whether the element gives it.
+    present: bool,
+    // Whether it is a reference, which can be followed.
+    is-ref: bool,
+}
+
+// One row of the outline: an element, with its attributes, its value or a
+// comment; or, for a right click's menu, one of an element's attributes.
 export struct Row {
     // Its place among the rows, which a selection by dragging is made of.
     index: int,
@@ -54,17 +79,21 @@ export struct Row {
     // How deep it is: 0 for the root.  An element's attributes, value and
     // children are one deeper than it.
     depth: int,
-    // "element", "comment", "attr", "value" or "add".
+    // "element", "comment" or "value"; "attr" for an attribute's menu.
     kind: string,
-    // What the row says: the element's name and its name attribute, the
+    // What names the row: the element's name and its name attribute, the
     // attribute's name, or "value".
     label: string,
+    // An element's name, which its row shows in angle brackets.
+    tag: string,
+    // An element's attributes, shown in its row, open or closed.
+    attrs: [Attr],
     // The attribute's, value's or comment's text, to edit.
     value: string,
     // What an empty field says: "(not given)", or a default.
     placeholder: string,
-    // The values it may have, if they are a list; for an element or its
-    // adding row, the attributes that may be added.  Empty otherwise.
+    // The values it may have, if they are a list; for an element, the
+    // attributes that may be added.  Empty otherwise.
     choices: [string],
     // What the schema says it is, shown when the pointer rests on its
     // name.
@@ -172,50 +201,70 @@ component Mark inherits Rectangle {
 }
 
 // A text field one line high that grows a line at a time as its text
-// wraps, so that a short value takes little room and a long one is all in
-// view.  The standard LineEdit is a fixed height with generous padding,
-// which in a list of attributes left more space than text.
+// wraps, so that a short comment takes little room and a long one is all
+// in view.  The standard LineEdit is a fixed height with generous padding,
+// which in a list of attributes left more space than text.  One that fits
+// its text, as a value's does, never wraps it: it is one em wide when
+// empty, grows across with what is typed, however far, and is a line
+// taller only for each line the text itself starts.
 component Field inherits Rectangle {
     // What it holds when shown.
     in property <string> value;
-    // What it says when empty.
+    // What it says when empty, unless it fits its text.
     in property <string> placeholder;
     // Whether Enter sets it, rather than starting a new line; Ctrl+Enter
     // sets either.
     in property <bool> one-line: true;
+    // Whether it is as wide as its text, rather than taking the width
+    // there is.
+    in property <bool> fit;
     // What it holds now, as edited.
     out property <string> text: input.text;
     // Enter was pressed in a one-line field.
     callback accepted(string);
-    min-width: 120px;
-    horizontal-stretch: 1;
+    // The width of its text on one line, or of its longest line, and at
+    // least an em, which an empty field is.
+    property <length> natural: max(1rem, measure.preferred-width);
+    min-width: root.fit ? root.natural + 12px : 120px;
+    preferred-width: root.fit ? root.natural + 12px : 120px;
+    horizontal-stretch: root.fit ? 0 : 1;
     vertical-stretch: 0;
-    height: max(input.preferred-height, hint.preferred-height) + 6px;
     border-width: 1px;
     border-radius: 3px;
     border-color: input.has-focus ? Palette.border-focus : Palette.border;
     background: Palette.window;
     forward-focus: input;
+    // Measures the text, unwrapped; it is never drawn.
+    measure := Text {
+        text: input.text;
+        visible: false;
+        accessible-role: none;
+    }
     hint := Text {
         x: 6px;
         y: 3px;
-        text: input.text == "" ? root.placeholder : "";
+        text: input.text == "" && !root.fit ? root.placeholder : "";
         color: Palette.hint;
     }
-    input := TextInput {
-        x: 6px;
-        y: 3px;
-        width: parent.width - 12px;
-        text: root.value;
-        single-line: false;
-        wrap: word-wrap;
-        key-pressed(e) => {
-            if (e.text == Key.Return
-                    && (root.one-line || e.modifiers.control)) {
-                root.accepted(self.text);
-                return accept;
+    // Its height is its text's at the width it is given, which the
+    // layout works out, so that the outline's rows can wrap it.
+    VerticalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        padding-top: 3px;
+        padding-bottom: 3px;
+        input := TextInput {
+            text: root.value;
+            single-line: false;
+            wrap: root.fit ? no-wrap : word-wrap;
+            key-pressed(e) => {
+                if (e.text == Key.Return
+                        && (root.one-line || e.modifiers.control)) {
+                    root.accepted(self.text);
+                    return accept;
+                }
+                return reject;
             }
-            return reject;
         }
     }
 }
@@ -227,16 +276,28 @@ component Choices inherits Rectangle {
     in property <[string]> model;
     // The value shown.
     in property <string> current;
+    // Whether it is as wide as the value shown, one em when it is empty,
+    // rather than taking the width there is.
+    in property <bool> fit;
     // A value was chosen from the list.
     callback selected(string);
-    min-width: 120px;
-    horizontal-stretch: 1;
+    min-width: root.fit
+        ? max(1rem, measure.preferred-width) + 24px : 120px;
+    preferred-width: root.fit
+        ? max(1rem, measure.preferred-width) + 24px : 120px;
+    horizontal-stretch: root.fit ? 0 : 1;
     vertical-stretch: 0;
     height: shown.preferred-height + 6px;
     border-width: 1px;
     border-radius: 3px;
     border-color: Palette.border;
     background: Palette.window;
+    // Measures the value shown, unwrapped; it is never drawn.
+    measure := Text {
+        text: root.current;
+        visible: false;
+        accessible-role: none;
+    }
     shown := Text {
         x: 6px;
         y: 3px;
@@ -326,6 +387,74 @@ component Small inherits Rectangle {
     }
 }
 
+// One attribute in its element's row, as the source gives it: its name
+// and an equals sign, then its value in a box that fits it, which is a
+// list to choose from if the schema gives its values.  A mark before the
+// name says, by its letter, whether something is wrong with it.
+component AttrBox inherits Rectangle {
+    // The attribute.
+    in property <Attr> attr;
+    // Goes up each time the row's menu asks for its box to be edited.
+    in property <int> edit-ask;
+    // Its value was set.
+    callback set(string);
+    // The pointer rests on, or left, its name: what it says, and where.
+    callback hover(string, length, length);
+    callback unhover();
+    // The right button was pressed on its name, at a place in the window.
+    callback menu(length, length);
+    HorizontalLayout {
+        spacing: 2px;
+        Mark {
+            mark: root.attr.problem-severity;
+            y: 3px;
+        }
+        Rectangle {
+            width: said.preferred-width;
+            said := Text {
+                x: 0px;
+                y: 3px;
+                text: root.attr.name + "=";
+                font-weight: root.attr.present ? 700 : 400;
+            }
+            TouchArea {
+                pointer-event(e) => {
+                    if (e.kind == PointerEventKind.down
+                            && e.button == PointerEventButton.right) {
+                        root.menu(self.absolute-position.x + self.mouse-x,
+                            self.absolute-position.y + self.mouse-y);
+                    }
+                }
+                changed has-hover => {
+                    if (self.has-hover && root.attr.doc != "") {
+                        root.hover(root.attr.doc, self.absolute-position.x,
+                            self.absolute-position.y + self.height);
+                    } else {
+                        root.unhover();
+                    }
+                }
+            }
+        }
+        if root.attr.choices.length > 0: Choices {
+            fit: true;
+            model: root.attr.choices;
+            current: root.attr.value;
+            selected(v) => { root.set(v); }
+        }
+        if root.attr.choices.length == 0: Field {
+            property <int> ask: root.edit-ask;
+            changed ask => {
+                if (self.ask > 0) {
+                    self.focus();
+                }
+            }
+            fit: true;
+            value: root.attr.value;
+            accepted(v) => { root.set(v); }
+        }
+    }
+}
+
 // One row of the outline.  Pressing on its name and dragging selects the
 // rows dragged across, or, on a selected row, opens or closes the
 // selection to a depth; the row reports where the pointer is in the
@@ -353,21 +482,19 @@ component TreeRow inherits Rectangle {
     callback unhover();
     callback toggle(int);
     callback set-attr(int, string, string);
-    callback remove-attr(int, string);
-    callback add-attr(int, string);
-    callback follow(int, string);
     callback set-value(int, string);
     callback set-comment(int, string);
     // The right button was pressed on the row, at a place in the outline,
     // to show its menu.
     callback menu(Row, length, length);
-    // Goes up each time the row's menu asks for its field to be edited,
-    // and is 0 for every other row.
+    // Goes up each time the row's menu asks for its field, or one of its
+    // attributes' boxes, to be edited, and is 0 for every other row.
     in property <int> edit-ask;
+    // The attribute whose box is asked for, or "" for the row's field.
+    in property <string> edit-attr;
     property <bool> is-element: root.item.kind == "element";
     property <bool> is-comment: root.item.kind == "comment";
-    property <bool> has-field: root.item.kind == "attr"
-        || root.item.kind == "value";
+    property <bool> has-field: root.item.kind == "value";
     // Selection is said by the background and, so as not to be colour
     // alone, by a bar at the row's left edge.
     background: root.item.selected || root.item.marked || root.swept
@@ -403,7 +530,7 @@ component TreeRow inherits Rectangle {
                 if root.is-element || root.is-comment: Rectangle {
                     for i in 6: Rectangle {
                         x: mod(i, 2) * 4px + 1px;
-                        y: (parent.height - 10px) / 2 + floor(i / 2) * 4px;
+                        y: 7px + floor(i / 2) * 4px;
                         width: 2px;
                         height: 2px;
                         background: Palette.hint;
@@ -440,29 +567,38 @@ component TreeRow inherits Rectangle {
             Rectangle {
                 width: 16px;
                 Text {
+                    y: 3px;
+                    height: self.preferred-height;
                     text: !root.item.has-kids ? ""
                         : root.item.open ? "▾" : "▸";
-                    vertical-alignment: center;
                 }
                 TouchArea { clicked => { root.toggle(root.item.id); } }
             }
             Mark { mark: root.item.mark; y: 3px; }
             // The name, which is where a selection or a depth is dragged
-            // from and where the schema's description is shown.
+            // from and where the schema's description is shown.  An
+            // element's is in an angle bracket, as its start tag is, which
+            // its attributes, if it has any, close.  It, the grip and the
+            // triangle are at the top of a row its attributes make taller,
+            // level with the first of them.
             name := Rectangle {
-                width: root.is-element || root.is-comment
-                    ? label.preferred-width + 8px : 200px;
+                width: root.is-element ? label.preferred-width + 2px
+                    : root.is-comment ? label.preferred-width + 8px : 200px;
                 horizontal-stretch: 0;
                 label := Text {
                     x: 0px;
-                    text: root.is-comment ? "comment" : root.item.label
-                        + (root.item.required ? " (required)" : "");
-                    font-weight: root.is-element
-                        || (root.item.kind == "attr" && root.item.present)
-                        ? 700 : 400;
+                    text: root.is-comment ? "comment"
+                        : root.is-element ? "<" + root.item.tag
+                            + (root.item.attrs.length == 0 ? ">" : "")
+                        : root.item.label;
+                    // What finds the row: its label, the element's name
+                    // and its name attribute.
+                    accessible-label: root.item.label;
+                    font-weight: root.is-element ? 700 : 400;
                     font-italic: root.is-comment;
                     color: root.is-comment ? Palette.comment : black;
-                    vertical-alignment: center;
+                    y: 3px;
+                    height: self.preferred-height;
                     overflow: elide;
                 }
                 touch := TouchArea {
@@ -504,29 +640,70 @@ component TreeRow inherits Rectangle {
                     }
                 }
             }
-            if root.has-field && root.item.choices.length > 0: Choices {
-                model: root.item.choices;
-                current: root.item.value;
-                selected(v) => {
-                    root.set-attr(root.item.id, root.item.label, v);
+            // An element's attributes, separated by spaces as in the
+            // source, wrapped to the width there is, and the bracket that
+            // ends its start tag.
+            // The flow is given the width its cell is, and the cell the
+            // height the flow takes at that width: a flow left to the row's
+            // layout is given a height for a width it does not have.
+            if root.is-element && root.item.attrs.length > 0: Rectangle {
+                horizontal-stretch: 1;
+                // As wide as its widest attribute, which is never wrapped.
+                min-width: flow.min-width;
+                height: flow.preferred-height;
+                flow := FlexboxLayout {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                spacing-horizontal: 6px;
+                spacing-vertical: 2px;
+                cross-axis-alignment: start;
+                for a in root.item.attrs: AttrBox {
+                    attr: a;
+                    edit-ask: root.edit-attr == a.name ? root.edit-ask : 0;
+                    set(v) => { root.set-attr(root.item.id, a.name, v); }
+                    hover(t, x, y) => { root.hover(t, x, y); }
+                    unhover => { root.unhover(); }
+                    // Its menu is an attribute's, for the element's row.
+                    menu(x, y) => {
+                        root.menu({
+                            index: root.item.index,
+                            id: root.item.id,
+                            depth: root.item.depth + 1,
+                            kind: "attr",
+                            label: a.name,
+                            value: a.value,
+                            choices: a.choices,
+                            doc: a.doc,
+                            required: a.required,
+                            present: a.present,
+                            is-ref: a.is-ref,
+                        }, root.x + x - root.absolute-position.x,
+                            root.y + y - root.absolute-position.y);
+                    }
+                }
+                Rectangle {
+                    width: bracket.preferred-width;
+                    height: bracket.preferred-height + 6px;
+                    bracket := Text {
+                        x: 0px;
+                        y: 3px;
+                        text: ">";
+                        font-weight: 700;
+                    }
+                }
                 }
             }
-            if root.has-field && root.item.choices.length == 0: Field {
+            if root.has-field: Field {
                 property <int> ask: root.edit-ask;
                 changed ask => {
                     if (self.ask > 0) {
                         self.focus();
                     }
                 }
+                fit: true;
                 value: root.item.value;
-                placeholder: root.item.placeholder;
-                accepted(t) => {
-                    if (root.item.kind == "value") {
-                        root.set-value(root.item.id, t);
-                    } else {
-                        root.set-attr(root.item.id, root.item.label, t);
-                    }
-                }
+                accepted(t) => { root.set-value(root.item.id, t); }
             }
             // A comment is lines, so Enter starts one and Ctrl+Enter, or
             // the button, sets it.
@@ -550,33 +727,10 @@ component TreeRow inherits Rectangle {
                     }
                 }
             }
-            if root.item.kind == "add": Choices {
-                model: root.item.choices;
-                current: "add an attribute";
-                selected(v) => { root.add-attr(root.item.id, v); }
-            }
-            if root.item.is-ref && root.item.present: Small {
-                text: "Go to";
-                clicked => { root.follow(root.item.id, root.item.label); }
-            }
-            // An attribute the schema requires cannot be removed, which
-            // its button says when the pointer rests on it.
-            if root.item.kind == "attr": Small {
-                text: "Remove";
-                enabled: !root.item.required;
-                tip: root.item.required
-                    ? "The schema requires " + root.item.label
-                        + ", so it cannot be removed."
-                    : "";
-                clicked => {
-                    root.remove-attr(root.item.id, root.item.label);
-                }
-                hover(t, x, y) => { root.hover(t, x, y); }
-                unhover => { root.unhover(); }
-            }
-            // An element's own row takes what width is left, so that its
-            // fields line up on the right.
-            if root.is-element: Rectangle { horizontal-stretch: 1; }
+            // What width is left is empty, so that a box is as wide as
+            // what is in it.
+            if (root.is-element && root.item.attrs.length == 0)
+                    || root.has-field: Rectangle { horizontal-stretch: 1; }
         }
         // What is wrong, marked E for an error or W for a warning as the
         // rows and the problems are, so the letter says which, not the
@@ -635,9 +789,11 @@ export component DocWindow inherits Window {
     in property <bool> paste-into;
     // The row whose menu a right click opened.
     property <Row> menu-row;
-    // The row whose field the menu's Edit asks to be edited, and how
+    // The row whose field the menu's Edit asks to be edited, the
+    // attribute whose box it is, or "" for the row's own field, and how
     // many times one has been asked, so that each ask is a change.
     property <int> edit-row: -1;
+    property <string> edit-attr;
     property <int> edit-asks: 0;
 
     callback new-doc();
@@ -961,12 +1117,16 @@ export component DocWindow inherits Window {
                         vertical-stretch: 1;
                         content-height: max(tree.preferred-height,
                             self.visible-height);
-                        content-width: self.visible-width;
+                        // Wider than the window only where a value is,
+                        // which then scrolls across rather than wrapping.
+                        content-width: max(tree.min-width + 14px,
+                            self.visible-width);
                         // What a right click on a row offers: for an
                         // element or a comment, the Edit and Insert menus'
                         // commands, and the attributes it may be given;
-                        // for an attribute, a value or a comment, editing
-                        // it.  Shown by the rows at the point pressed,
+                        // for an attribute, editing, removing or following
+                        // it, and for a value or a comment, editing it.
+                        // Shown by the rows at the point pressed,
                         // since they take every press themselves.
                         row-menu := ContextMenuArea {
                             x: 0px;
@@ -998,8 +1158,7 @@ export component DocWindow inherits Window {
                                         }
                                     }
                                 }
-                                if (root.menu-row.kind == "element"
-                                        || root.menu-row.kind == "add")
+                                if root.menu-row.kind == "element"
                                         && root.menu-row.choices.length > 0
                                         : Menu {
                                     title: "Add an attribute";
@@ -1029,6 +1188,9 @@ export component DocWindow inherits Window {
                                         : "Edit " + root.menu-row.label;
                                     activated => {
                                         root.edit-row = root.menu-row.index;
+                                        root.edit-attr =
+                                            root.menu-row.kind == "attr"
+                                            ? root.menu-row.label : "";
                                         root.edit-asks += 1;
                                     }
                                 }
@@ -1140,13 +1302,15 @@ export component DocWindow inherits Window {
                             // Fluent's scroll bar is drawn over what it
                             // scrolls, 14px wide at the right, so the
                             // rows stop short of it.
-                            width: tree-view.visible-width - 14px;
+                            width: max(tree-view.visible-width - 14px,
+                                self.min-width);
                             height: self.preferred-height;
                             alignment: start;
                             for r in root.rows: TreeRow {
                                 item: r;
                                 edit-ask: r.index == root.edit-row
                                     ? root.edit-asks : 0;
+                                edit-attr: root.edit-attr;
                                 // A right click on an element or a comment
                                 // not already selected selects it alone,
                                 // as other programs do, so that the menu
@@ -1173,7 +1337,7 @@ export component DocWindow inherits Window {
                                 // the pointer is over this row: before it
                                 // (0) near its top, after it (1) near its
                                 // bottom, and in it (2) between, or on
-                                // an attribute's row; -1 when not.
+                                // its value's row; -1 when not.
                                 property <int> drop-place:
                                     !self.under || root.drag-mode != 3 ? -1
                                     : r.kind == "comment"
@@ -1300,11 +1464,6 @@ export component DocWindow inherits Window {
                                 set-attr(id, n, v) => {
                                     root.set-attr(id, n, v);
                                 }
-                                remove-attr(id, n) => {
-                                    root.remove-attr(id, n);
-                                }
-                                add-attr(id, n) => { root.add-attr(id, n); }
-                                follow(id, n) => { root.follow(id, n); }
                                 set-value(id, t) => { root.set-value(id, t); }
                                 set-comment(id, t) => {
                                     root.set-comment(id, t);

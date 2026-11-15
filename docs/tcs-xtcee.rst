@@ -88,23 +88,27 @@ the mission.
 
 Each window shows:
 
-* the document as a tree.  An open element shows, one level deeper,
-  its attributes, its value if it holds one, its comments and the
-  elements in it.  Each attribute is a field one line high, which grows
-  as its text wraps: marked *(required)* where the schema requires it, a
-  list where the schema gives the values it may take, and with a **Go
-  to** button where it is a reference.  Only the attributes an element
-  gives, and those it must, are shown; the row *attribute* below them
-  offers the rest, and one chosen there is put in when it is given a
-  value.  An attribute's **Remove** button takes it out; for one the
-  schema requires, the button is greyed and its words slanted, and
-  resting the pointer on it says why.  An element with a problem in it
-  is marked **E** for an error or **W** for a warning, on its row and on
-  every row above it, so a closed row shows that something inside it is
-  wrong, and what is wrong is written under the row of the element or
-  attribute it is in, marked the same way.  Resting the pointer on a
-  name shows what the schema says of it.  Each element's and comment's
-  row starts with a grip, six dots, by which it is dragged
+* the document as a tree.  Each element's row is its start tag, as the
+  source gives it: its name after a ``<``, then its attributes, each its
+  name, ``=`` and its value in a box, separated by spaces, and a ``>``.
+  The attributes wrap to the width of the window, a long row going on
+  under its first attribute.  A box is one em wide when it is empty and
+  grows across with what is typed in it.  A value is never wrapped: a
+  box is a line taller only for each line its text starts, and a value
+  wider than the window makes the outline scroll across.  Where the
+  schema gives the values an attribute may take, the box is a list of
+  them.  Only the attributes an element gives, and
+  those it must, are shown; its right-click menu adds the rest, and one
+  added is put in when it is given a value.  An open element shows, one
+  level deeper, its value if it holds one, its comments and the
+  elements in it.  An element with a problem in it is marked **E** for
+  an error or **W** for a warning, on its row and on every row above
+  it, so a closed row shows that something inside it is wrong, and what
+  is wrong is written under the element's row, marked the same way, and
+  an attribute it is about is marked too.  Resting the pointer on a
+  name shows what the schema says of it; on an attribute's, whether it
+  is required and what it is when not given.  Each element's and
+  comment's row starts with a grip, six dots, by which it is dragged
   (`Dragging rows`_);
 * the problems: every schema error, and, as warnings, every reference
   that names nothing in the open documents and every two definitions of
@@ -120,16 +124,17 @@ this manual are the editor's own windows, opened on the documents in
 .. figure:: shots/tcs-xtcee-open-1.png
    :alt: The editor's window just after tcs-xtcee housekeeping.xtce: the
          menus File, Edit, Insert, Version and Tools; the Structure and
-         Source tabs; an outline whose only open row, SpaceSystem
-         Housekeeping, is selected and shows its name attribute, the row
-         that adds an attribute, and the closed TelemetryMetaData; below
-         it a line of hints, "Problems: 0 error(s), 0 warning(s)", and the
-         status line saying which file was opened.
+         Source tabs; an outline whose only open row, <SpaceSystem
+         name=[Housekeeping] >, is selected, and under it the closed
+         <TelemetryMetaData>; below it a line of hints, "Problems: 0
+         error(s), 0 warning(s)", and the status line saying which file
+         was opened.
 
    ``tcs-xtcee housekeeping.xtce``: the root, SpaceSystem Housekeeping,
-   is open and selected.  Its attribute ``name`` is required; the row
-   *attribute* offers the others it may have.  Below the outline are the
-   problems, none here, and the status line.
+   is open and selected.  Its row is its start tag, with its required
+   attribute ``name`` in a box; its right-click menu adds the others it
+   may have.  Below the outline are the problems, none here, and the
+   status line.
 
 Selecting, opening and closing
 ==============================
@@ -157,13 +162,12 @@ pointer:
   selected, the menu acts on the whole selection;
 * on a comment: the same Edit submenu and Delete, and **Edit the
   comment**, which puts the cursor in its text;
-* on an attribute: **Edit** followed by its name, which puts the cursor
-  in its field, or, where the schema gives the values it may take,
+* on an attribute's name: **Edit** followed by its name, which puts the
+  cursor in its box, or, where the schema gives the values it may take,
   **Set ... to**, listing them; **Remove**, greyed and marked
   *(required)* for one the schema requires; and, for a reference that is
   given, **Go to what it names**;
-* on an element's value: **Edit value**;
-* on the row *attribute*: **Add an attribute**.
+* on an element's value: **Edit value**.
 
 An item that can do nothing is greyed, and says why in its words where
 the reason is not plain: *Insert (nothing more fits)*, *Add an attribute
@@ -214,48 +218,50 @@ of an element, and following a reference to what it names.
    says of it.
 
 .. figure:: shots/tcs-xtcee-browse-2.png
-   :alt: Parameter Temperature selected and open, showing its attributes
-         name, Temperature, and parameterTypeRef, TemperatureType, both
-         marked required, with a Go to button beside parameterTypeRef,
-         and the row that adds an attribute.
+   :alt: Parameter Temperature selected, its row <Parameter
+         name=[Temperature] parameterTypeRef=[TemperatureType] >, and the
+         menu of parameterTypeRef open: Edit parameterTypeRef, Remove
+         parameterTypeRef (required) greyed, and Go to what it names.
 
-   **4.** Parameter Temperature opened with its triangle and selected with a
-   click on its name.  ``parameterTypeRef`` is a reference, so it has a **Go
-   to** button.
+   **4.** Parameter Temperature selected with a click on its name, and
+   its ``parameterTypeRef`` right-clicked.  It is a reference, so its
+   menu offers **Go to what it names**.
 
 .. figure:: shots/tcs-xtcee-browse-3.png
    :alt: ParameterTypeSet open again, and FloatParameterType
          TemperatureType selected in it.
 
-   **5.** **Go to** selects the type the reference names, FloatParameterType
-   TemperatureType, opening the rows above it.
+   **5.** **Go to what it names** selects the type the reference names,
+   FloatParameterType TemperatureType, opening the rows above it.
 
 Editing a value
 ===============
 
-An attribute's field is edited in place, and Enter sets it (Ctrl+Enter in
+An attribute's box is edited in place, and Enter sets it (Ctrl+Enter in
 a comment, whose Enter starts a new line); until then, nothing is
 changed.  Setting it is a change, which is checked as every change is
 (`Changes the version does not allow`_).
 
 .. figure:: shots/tcs-xtcee-edit-1.png
-   :alt: Parameter Temperature open, and the list under its "add an
-         attribute" row dropped down, offering shortDescription and
-         initialValue.
+   :alt: Parameter Temperature selected, and its menu open: Insert, Add
+         an attribute, Edit and Delete.
 
-   **1.** The list on the row *attribute* of Parameter Temperature offers
-   the attributes the schema allows that it does not give.
+   **1.** The menu of Parameter Temperature, right-clicked: **Add an
+   attribute** lists the attributes the schema allows that it does not
+   give.
 
 .. figure:: shots/tcs-xtcee-edit-2.png
-   :alt: A new field for shortDescription, with a Remove button, above
-         the parameter's name, holding the text "The heater plate's
-         temperature" with the text cursor at its end.
+   :alt: The parameter's row with shortDescription before its name, its
+         box holding "The heater plate's temperature" with the text cursor
+         at its end, and parameterTypeRef wrapped onto a second line.
 
-   **2.** ``shortDescription`` chosen: an empty field for it, typed in.
+   **2.** ``shortDescription`` chosen: its box, one em wide when empty,
+   grows as it is typed in, and the attributes after it go on the next
+   line to make room.
 
 .. figure:: shots/tcs-xtcee-edit-3.png
    :alt: The Edit menu open, its first item "Undo set shortDescription";
-         behind it the field holds the text.
+         behind it the box holds the text.
 
    **3.** Enter sets it: the change is taken, and Edit > Undo names it.
    The attribute's name is now in bold, as the names of those the
@@ -273,19 +279,19 @@ with errors can be corrected a change at a time, but no change may make
 it worse.
 
 .. figure:: shots/tcs-xtcee-refuse-1.png
-   :alt: The name field of Parameter Temperature holding "Plate
+   :alt: The name box of Parameter Temperature holding "Plate
          temperature", typed but not yet set.
 
    **1.** A name with a space in it typed into the parameter's ``name``.
 
 .. figure:: shots/tcs-xtcee-refuse-2.png
-   :alt: The whole window after Enter: the name field holds Temperature
+   :alt: The whole window after Enter: the name box holds Temperature
          again, and the status line says "XTCE 1.3 does not allow that,
          so it was not done: line 70: name: "Plate temperature" is not of
          the form NameType", with the pattern NameType requires.
 
    **2.** Enter: XTCE 1.3 does not allow a space in a name, so the change is
-   refused.  The field shows the name as it was, and the status line says
+   refused.  The box shows the name as it was, and the status line says
    why, with the pattern the schema's NameType requires.
 
 So that nothing is ever put in half-made, Insert offers only the
@@ -309,8 +315,8 @@ the abstract container a packet builds on.
    below them the ready-made parts that fit.
 
 .. figure:: shots/tcs-xtcee-insert-2.png
-   :alt: A new row, IntegerParameterType new1, selected at the end of
-         ParameterTypeSet and open, showing its required name, new1; the
+   :alt: A new row, <IntegerParameterType name=[new1] >, selected at the
+         end of ParameterTypeSet, its required name new1; the
          line marking the selection, with its handle, is beside it, and
          ParameterTypeSet is no longer selected.
 
@@ -400,15 +406,15 @@ original is still there.  This holds for rows copied in this editor;
 text from another program is pasted as it is.
 
 .. figure:: shots/tcs-xtcee-copy-1.png
-   :alt: rover.xtce's Parameter battery selected and open, its
-         parameterTypeRef volts, a type of the Rover SpaceSystem.
+   :alt: rover.xtce's Parameter battery selected, its parameterTypeRef
+         volts, a type of the Rover SpaceSystem.
 
    **1.** ``split-mission``'s documents open, and Rover's parameter
    ``battery``, of the type ``volts``, copied with Edit > Copy.
 
 .. figure:: shots/tcs-xtcee-copy-2.png
    :alt: pus.xtce's window: Parameter battery first in its ParameterSet,
-         selected and open, its parameterTypeRef /Rover/volts; no
+         selected, its parameterTypeRef /Rover/volts; no
          problems; the status line "paste Parameter battery before
          Parameter ccsds-version: done; 1 reference(s) written again to
          name what they named".
@@ -469,7 +475,7 @@ written again.
    references to it, written ``/dt/uint16``, are written again.
 
 .. figure:: shots/tcs-xtcee-move-3.png
-   :alt: Rover's Parameter event-data open, its parameterTypeRef now
+   :alt: Rover's Parameter event-data selected, its parameterTypeRef now
          /Rover/uint16.
 
    **3.** ``event-data``'s type is now ``/Rover/uint16``; so are the
@@ -543,12 +549,11 @@ beside them or in them.
    the entry itself stays where it was.
 
 .. figure:: shots/tcs-xtcee-remove-1.png
-   :alt: The Remove button beside the root's name greyed and slanted,
-         and below it a box saying "The schema requires name, so it
-         cannot be removed."
+   :alt: The menu of the root's name attribute: Edit name, and Remove
+         name (required), greyed.
 
-   An attribute the schema requires cannot be removed: its button says
-   why.
+   An attribute the schema requires cannot be removed: its menu's
+   **Remove** is greyed and says why.
 
 Problems in a document
 ======================
@@ -573,12 +578,12 @@ named ``PowrType``, which nothing defines.
 
 .. figure:: shots/tcs-xtcee-problems-2.png
    :alt: After clicking the warning: Parameter HeaterPower, marked W,
-         is selected and open, and under its parameterTypeRef, which
-         holds PowrType, the problem's text is written, marked W.
+         is selected, its parameterTypeRef, which holds PowrType, marked
+         W, and under the row the problem's text, marked W.
 
-   **2.** A click on the warning selects Parameter HeaterPower; opened, it
-   shows the problem under the attribute it is about, marked **W** as a
-   warning, as it is in the list.
+   **2.** A click on the warning selects Parameter HeaterPower.  Its row
+   marks the attribute the problem is about **W**, as a warning, as it
+   is in the list, and says under it what is wrong.
 
 .. figure:: shots/tcs-xtcee-problems-3.png
    :alt: After setting parameterTypeRef to PowerType: no W marks, and the

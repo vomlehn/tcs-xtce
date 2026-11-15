@@ -158,6 +158,50 @@ fn release(w: &slint::Window, place: LogicalPosition) {
     });
 }
 
+/// Presses and lets go of the right button at a place, which opens a
+/// row's menu.
+///
+/// # Arguments
+///
+/// * `w`     - The window.
+/// * `place` - Where.
+fn right_click(w: &slint::Window, place: LogicalPosition) {
+    w.dispatch_event(WindowEvent::PointerMoved { position: place });
+    w.dispatch_event(WindowEvent::PointerPressed {
+        position: place,
+        button: PointerEventButton::Right,
+    });
+    w.dispatch_event(WindowEvent::PointerReleased {
+        position: place,
+        button: PointerEventButton::Right,
+    });
+    slint::platform::update_timers_and_animations();
+}
+
+/// Finds an attribute's box in an element's row: just right of its name
+/// and the equals sign after it.
+///
+/// # Arguments
+///
+/// * `w`    - The window.
+/// * `name` - The attribute's name.
+/// * `row`  - The height, in logical pixels, of the row it is in, or
+///            above it.
+///
+/// # Returns
+///
+/// A place inside the box, near its left edge.
+fn box_of(w: &impl ElementRoot, name: &str, row: f32) -> LogicalPosition {
+    let said = format!("{name}=");
+    let e = all(w, &said)
+        .into_iter()
+        .find(|e| e.absolute_position().y >= row - 12.0)
+        .unwrap_or_else(|| panic!("no attribute {name} below {row}"));
+    let p = e.absolute_position();
+    let s = e.size();
+    LogicalPosition::new(p.x + s.width + 8.0, p.y + s.height / 2.0)
+}
+
 /// Clicks at a place.
 ///
 /// # Arguments
@@ -434,27 +478,28 @@ fn opening(dir: &Path) {
         position: LogicalPosition::new(700.0, 300.0),
     });
 
-    // Opening a parameter, selecting it, and following its type.
+    // Selecting a parameter, and following its type from the menu of
+    // the attribute that names it.
     let temperature = "Parameter  Temperature";
-    toggle(&w, temperature);
     pick(&w, temperature);
-    snap(win, "browse-2", 40, 380);
     let row = at(&w, temperature, 60.0).y;
-    click(win, at(&w, "Go to", row));
+    let reference = at(&w, "parameterTypeRef=", row - 12.0);
+    right_click(win, reference);
+    snap(win, "browse-2", 40, 380);
+    key(win, Key::Escape.into(), false);
+    w.invoke_follow(row_of(&w, temperature).id, "parameterTypeRef".into());
     snap(win, "browse-3", 40, 380);
 
-    // Adding an attribute to the parameter.
+    // Adding an attribute to the parameter, from its menu.
     toggle(&w, "ParameterTypeSet");
     pick(&w, temperature);
     let row = at(&w, temperature, 60.0).y;
-    let adder = at(&w, "add an attribute", row);
-    click(win, adder);
+    right_click(win, at(&w, temperature, row - 12.0));
     snap(win, "edit-1", 40, 380);
-    // The list drops below the field, one line to a value, the first
-    // shortDescription; what is in the list is not found by its words.
-    click(win, LogicalPosition::new(adder.x, adder.y + 23.0));
+    key(win, Key::Escape.into(), false);
+    w.invoke_add_attr(row_of(&w, temperature).id, "shortDescription".into());
     let row = at(&w, temperature, 60.0).y;
-    click(win, at(&w, "(not given)", row));
+    click(win, box_of(&w, "shortDescription", row));
     type_text(win, "The heater plate's temperature");
     snap(win, "edit-2", 40, 400);
     key(win, Key::Return.into(), false);
@@ -465,7 +510,7 @@ fn opening(dir: &Path) {
 
     // A name the version does not allow.
     let row = at(&w, temperature, 60.0).y;
-    click(win, at(&w, "Temperature", row));
+    click(win, at(&w, "Temperature", row - 12.0));
     key(win, "a".into(), true);
     type_text(win, "Plate temperature");
     snap(win, "refuse-1", 40, 400);
@@ -522,7 +567,7 @@ fn problems(dir: &Path) {
     let win = w.window();
     snap(win, "problems-1", 0, HEIGHT);
     // Picking the problem with the reference, a warning, selects its
-    // element, which opened shows the problem under the attribute.
+    // element, whose row marks the attribute and says what is wrong.
     let problem = w
         .get_problems()
         .iter()
@@ -531,12 +576,11 @@ fn problems(dir: &Path) {
     assert_eq!(problem.severity, "warning");
     click(win, at(&w, &format!("Warning: {}", problem.text), 0.0));
     let power = "Parameter  HeaterPower";
-    toggle(&w, power);
     snap(win, "problems-2", 0, HEIGHT);
 
     // Putting it right.
     let row = at(&w, power, 60.0).y;
-    click(win, at(&w, "PowrType", row));
+    click(win, at(&w, "PowrType", row - 12.0));
     key(win, "a".into(), true);
     type_text(win, "PowerType");
     key(win, Key::Return.into(), false);
@@ -671,15 +715,11 @@ fn moving(dir: &Path) {
 fn dragging(dir: &Path) {
     let (_app, w) = open(dir, "housekeeping/housekeeping.xtce", &[]);
     let win = w.window();
-    // The pointer resting on the Remove button of an attribute the schema
-    // requires, which cannot be removed.
-    let remove = at(&w, "Remove", 60.0);
-    win.dispatch_event(WindowEvent::PointerMoved { position: remove });
-    std::thread::sleep(Duration::from_millis(700));
+    // The menu of an attribute the schema requires, which cannot be
+    // removed.
+    right_click(win, at(&w, "name=", 60.0));
     snap(win, "remove-1", 40, 220);
-    win.dispatch_event(WindowEvent::PointerMoved {
-        position: LogicalPosition::new(700.0, 400.0),
-    });
+    key(win, Key::Escape.into(), false);
     w.invoke_depth_to(3, true);
     toggle(&w, "ParameterTypeSet");
     pick(&w, "Parameter  HeaterOn");

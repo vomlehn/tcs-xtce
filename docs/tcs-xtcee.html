@@ -464,23 +464,27 @@ name a definition in another, and File &gt; Open adds another document to
 the mission.</p>
 <p>Each window shows:</p>
 <ul class="simple">
-<li>the document as a tree.  An open element shows, one level deeper,
-its attributes, its value if it holds one, its comments and the
-elements in it.  Each attribute is a field one line high, which grows
-as its text wraps: marked <em>(required)</em> where the schema requires it, a
-list where the schema gives the values it may take, and with a <strong>Go
-to</strong> button where it is a reference.  Only the attributes an element
-gives, and those it must, are shown; the row <em>attribute</em> below them
-offers the rest, and one chosen there is put in when it is given a
-value.  An attribute's <strong>Remove</strong> button takes it out; for one the
-schema requires, the button is greyed and its words slanted, and
-resting the pointer on it says why.  An element with a problem in it
-is marked <strong>E</strong> for an error or <strong>W</strong> for a warning, on its row and on
-every row above it, so a closed row shows that something inside it is
-wrong, and what is wrong is written under the row of the element or
-attribute it is in, marked the same way.  Resting the pointer on a
-name shows what the schema says of it.  Each element's and comment's
-row starts with a grip, six dots, by which it is dragged
+<li>the document as a tree.  Each element's row is its start tag, as the
+source gives it: its name after a <tt class="docutils literal">&lt;</tt>, then its attributes, each its
+name, <tt class="docutils literal">=</tt> and its value in a box, separated by spaces, and a <tt class="docutils literal">&gt;</tt>.
+The attributes wrap to the width of the window, a long row going on
+under its first attribute.  A box is one em wide when it is empty and
+grows across with what is typed in it.  A value is never wrapped: a
+box is a line taller only for each line its text starts, and a value
+wider than the window makes the outline scroll across.  Where the
+schema gives the values an attribute may take, the box is a list of
+them.  Only the attributes an element gives, and
+those it must, are shown; its right-click menu adds the rest, and one
+added is put in when it is given a value.  An open element shows, one
+level deeper, its value if it holds one, its comments and the
+elements in it.  An element with a problem in it is marked <strong>E</strong> for
+an error or <strong>W</strong> for a warning, on its row and on every row above
+it, so a closed row shows that something inside it is wrong, and what
+is wrong is written under the element's row, marked the same way, and
+an attribute it is about is marked too.  Resting the pointer on a
+name shows what the schema says of it; on an attribute's, whether it
+is required and what it is when not given.  Each element's and
+comment's row starts with a grip, six dots, by which it is dragged
 (<a class="reference internal" href="#dragging-rows">Dragging rows</a>);</li>
 <li>the problems: every schema error, and, as warnings, every reference
 that names nothing in the open documents and every two definitions of
@@ -493,11 +497,12 @@ a whole.</li>
 this manual are the editor's own windows, opened on the documents in
 <tt class="docutils literal">examples/</tt> and drawn by <tt class="docutils literal">make screenshots</tt>.</p>
 <div class="figure">
-<img alt="The editor's window just after tcs-xtcee housekeeping.xtce: the menus File, Edit, Insert, Version and Tools; the Structure and Source tabs; an outline whose only open row, SpaceSystem Housekeeping, is selected and shows its name attribute, the row that adds an attribute, and the closed TelemetryMetaData; below it a line of hints, &quot;Problems: 0 error(s), 0 warning(s)&quot;, and the status line saying which file was opened." src="shots/tcs-xtcee-open-1.png" />
+<img alt="The editor's window just after tcs-xtcee housekeeping.xtce: the menus File, Edit, Insert, Version and Tools; the Structure and Source tabs; an outline whose only open row, &lt;SpaceSystem name=[Housekeeping] &gt;, is selected, and under it the closed &lt;TelemetryMetaData&gt;; below it a line of hints, &quot;Problems: 0 error(s), 0 warning(s)&quot;, and the status line saying which file was opened." src="shots/tcs-xtcee-open-1.png" />
 <p class="caption"><tt class="docutils literal"><span class="pre">tcs-xtcee</span> housekeeping.xtce</tt>: the root, SpaceSystem Housekeeping,
-is open and selected.  Its attribute <tt class="docutils literal">name</tt> is required; the row
-<em>attribute</em> offers the others it may have.  Below the outline are the
-problems, none here, and the status line.</p>
+is open and selected.  Its row is its start tag, with its required
+attribute <tt class="docutils literal">name</tt> in a box; its right-click menu adds the others it
+may have.  Below the outline are the problems, none here, and the
+status line.</p>
 </div>
 </div>
 <div class="section" id="selecting-opening-and-closing">
@@ -523,13 +528,12 @@ element that is not selected selects it alone first; on one already
 selected, the menu acts on the whole selection;</li>
 <li>on a comment: the same Edit submenu and Delete, and <strong>Edit the
 comment</strong>, which puts the cursor in its text;</li>
-<li>on an attribute: <strong>Edit</strong> followed by its name, which puts the cursor
-in its field, or, where the schema gives the values it may take,
+<li>on an attribute's name: <strong>Edit</strong> followed by its name, which puts the
+cursor in its box, or, where the schema gives the values it may take,
 <strong>Set ... to</strong>, listing them; <strong>Remove</strong>, greyed and marked
 <em>(required)</em> for one the schema requires; and, for a reference that is
 given, <strong>Go to what it names</strong>;</li>
-<li>on an element's value: <strong>Edit value</strong>;</li>
-<li>on the row <em>attribute</em>: <strong>Add an attribute</strong>.</li>
+<li>on an element's value: <strong>Edit value</strong>.</li>
 </ul>
 <p>An item that can do nothing is greyed, and says why in its words where
 the reason is not plain: <em>Insert (nothing more fits)</em>, <em>Add an attribute
@@ -567,35 +571,38 @@ pointer resting on the name ParameterSet, which shows what the schema
 says of it.</p>
 </div>
 <div class="figure">
-<img alt="Parameter Temperature selected and open, showing its attributes name, Temperature, and parameterTypeRef, TemperatureType, both marked required, with a Go to button beside parameterTypeRef, and the row that adds an attribute." src="shots/tcs-xtcee-browse-2.png" />
-<p class="caption"><strong>4.</strong> Parameter Temperature opened with its triangle and selected with a
-click on its name.  <tt class="docutils literal">parameterTypeRef</tt> is a reference, so it has a <strong>Go
-to</strong> button.</p>
+<img alt="Parameter Temperature selected, its row &lt;Parameter name=[Temperature] parameterTypeRef=[TemperatureType] &gt;, and the menu of parameterTypeRef open: Edit parameterTypeRef, Remove parameterTypeRef (required) greyed, and Go to what it names." src="shots/tcs-xtcee-browse-2.png" />
+<p class="caption"><strong>4.</strong> Parameter Temperature selected with a click on its name, and
+its <tt class="docutils literal">parameterTypeRef</tt> right-clicked.  It is a reference, so its
+menu offers <strong>Go to what it names</strong>.</p>
 </div>
 <div class="figure">
 <img alt="ParameterTypeSet open again, and FloatParameterType TemperatureType selected in it." src="shots/tcs-xtcee-browse-3.png" />
-<p class="caption"><strong>5.</strong> <strong>Go to</strong> selects the type the reference names, FloatParameterType
-TemperatureType, opening the rows above it.</p>
+<p class="caption"><strong>5.</strong> <strong>Go to what it names</strong> selects the type the reference names,
+FloatParameterType TemperatureType, opening the rows above it.</p>
 </div>
 </div>
 </div>
 <div class="section" id="editing-a-value">
 <h1><a class="toc-backref" href="#toc-entry-7">Editing a value</a></h1>
-<p>An attribute's field is edited in place, and Enter sets it (Ctrl+Enter in
+<p>An attribute's box is edited in place, and Enter sets it (Ctrl+Enter in
 a comment, whose Enter starts a new line); until then, nothing is
 changed.  Setting it is a change, which is checked as every change is
 (<a class="reference internal" href="#changes-the-version-does-not-allow">Changes the version does not allow</a>).</p>
 <div class="figure">
-<img alt="Parameter Temperature open, and the list under its &quot;add an attribute&quot; row dropped down, offering shortDescription and initialValue." src="shots/tcs-xtcee-edit-1.png" />
-<p class="caption"><strong>1.</strong> The list on the row <em>attribute</em> of Parameter Temperature offers
-the attributes the schema allows that it does not give.</p>
+<img alt="Parameter Temperature selected, and its menu open: Insert, Add an attribute, Edit and Delete." src="shots/tcs-xtcee-edit-1.png" />
+<p class="caption"><strong>1.</strong> The menu of Parameter Temperature, right-clicked: <strong>Add an
+attribute</strong> lists the attributes the schema allows that it does not
+give.</p>
 </div>
 <div class="figure">
-<img alt="A new field for shortDescription, with a Remove button, above the parameter's name, holding the text &quot;The heater plate's temperature&quot; with the text cursor at its end." src="shots/tcs-xtcee-edit-2.png" />
-<p class="caption"><strong>2.</strong> <tt class="docutils literal">shortDescription</tt> chosen: an empty field for it, typed in.</p>
+<img alt="The parameter's row with shortDescription before its name, its box holding &quot;The heater plate's temperature&quot; with the text cursor at its end, and parameterTypeRef wrapped onto a second line." src="shots/tcs-xtcee-edit-2.png" />
+<p class="caption"><strong>2.</strong> <tt class="docutils literal">shortDescription</tt> chosen: its box, one em wide when empty,
+grows as it is typed in, and the attributes after it go on the next
+line to make room.</p>
 </div>
 <div class="figure">
-<img alt="The Edit menu open, its first item &quot;Undo set shortDescription&quot;; behind it the field holds the text." src="shots/tcs-xtcee-edit-3.png" />
+<img alt="The Edit menu open, its first item &quot;Undo set shortDescription&quot;; behind it the box holds the text." src="shots/tcs-xtcee-edit-3.png" />
 <p class="caption"><strong>3.</strong> Enter sets it: the change is taken, and Edit &gt; Undo names it.
 The attribute's name is now in bold, as the names of those the
 element gives are.</p>
@@ -611,13 +618,13 @@ the status line says why and what the schema wants.  A document opened
 with errors can be corrected a change at a time, but no change may make
 it worse.</p>
 <div class="figure">
-<img alt="The name field of Parameter Temperature holding &quot;Plate temperature&quot;, typed but not yet set." src="shots/tcs-xtcee-refuse-1.png" />
+<img alt="The name box of Parameter Temperature holding &quot;Plate temperature&quot;, typed but not yet set." src="shots/tcs-xtcee-refuse-1.png" />
 <p class="caption"><strong>1.</strong> A name with a space in it typed into the parameter's <tt class="docutils literal">name</tt>.</p>
 </div>
 <div class="figure">
-<img alt="The whole window after Enter: the name field holds Temperature again, and the status line says &quot;XTCE 1.3 does not allow that, so it was not done: line 70: name: &quot;Plate temperature&quot; is not of the form NameType&quot;, with the pattern NameType requires." src="shots/tcs-xtcee-refuse-2.png" />
+<img alt="The whole window after Enter: the name box holds Temperature again, and the status line says &quot;XTCE 1.3 does not allow that, so it was not done: line 70: name: &quot;Plate temperature&quot; is not of the form NameType&quot;, with the pattern NameType requires." src="shots/tcs-xtcee-refuse-2.png" />
 <p class="caption"><strong>2.</strong> Enter: XTCE 1.3 does not allow a space in a name, so the change is
-refused.  The field shows the name as it was, and the status line says
+refused.  The box shows the name as it was, and the status line says
 why, with the pattern the schema's NameType requires.</p>
 </div>
 <p>So that nothing is ever put in half-made, Insert offers only the
@@ -634,7 +641,7 @@ the abstract container a packet builds on.</p>
 below them the ready-made parts that fit.</p>
 </div>
 <div class="figure">
-<img alt="A new row, IntegerParameterType new1, selected at the end of ParameterTypeSet and open, showing its required name, new1; the line marking the selection, with its handle, is beside it, and ParameterTypeSet is no longer selected." src="shots/tcs-xtcee-insert-2.png" />
+<img alt="A new row, &lt;IntegerParameterType name=[new1] &gt;, selected at the end of ParameterTypeSet, its required name new1; the line marking the selection, with its handle, is beside it, and ParameterTypeSet is no longer selected." src="shots/tcs-xtcee-insert-2.png" />
 <p class="caption"><strong>2.</strong> IntegerParameterType chosen: one is put in, complete, its required
 <tt class="docutils literal">name</tt> given a value of the right kind, and selected in place of
 ParameterTypeSet.</p>
@@ -702,12 +709,12 @@ copy names the original.  References elsewhere are not touched: the
 original is still there.  This holds for rows copied in this editor;
 text from another program is pasted as it is.</p>
 <div class="figure">
-<img alt="rover.xtce's Parameter battery selected and open, its parameterTypeRef volts, a type of the Rover SpaceSystem." src="shots/tcs-xtcee-copy-1.png" />
+<img alt="rover.xtce's Parameter battery selected, its parameterTypeRef volts, a type of the Rover SpaceSystem." src="shots/tcs-xtcee-copy-1.png" />
 <p class="caption"><strong>1.</strong> <tt class="docutils literal"><span class="pre">split-mission</span></tt>'s documents open, and Rover's parameter
 <tt class="docutils literal">battery</tt>, of the type <tt class="docutils literal">volts</tt>, copied with Edit &gt; Copy.</p>
 </div>
 <div class="figure">
-<img alt="pus.xtce's window: Parameter battery first in its ParameterSet, selected and open, its parameterTypeRef /Rover/volts; no problems; the status line &quot;paste Parameter battery before Parameter ccsds-version: done; 1 reference(s) written again to name what they named&quot;." src="shots/tcs-xtcee-copy-2.png" />
+<img alt="pus.xtce's window: Parameter battery first in its ParameterSet, selected, its parameterTypeRef /Rover/volts; no problems; the status line &quot;paste Parameter battery before Parameter ccsds-version: done; 1 reference(s) written again to name what they named&quot;." src="shots/tcs-xtcee-copy-2.png" />
 <p class="caption"><strong>2.</strong> Paste before the PUS document's first parameter: <tt class="docutils literal">volts</tt>
 names nothing in PUS, so the copy's reference is written
 <tt class="docutils literal">/Rover/volts</tt>, which names the type it named.</p>
@@ -748,7 +755,7 @@ cut from <tt class="docutils literal">dt.xtce</tt>, and Rover's ParameterTypeSet
 references to it, written <tt class="docutils literal">/dt/uint16</tt>, are written again.</p>
 </div>
 <div class="figure">
-<img alt="Rover's Parameter event-data open, its parameterTypeRef now /Rover/uint16." src="shots/tcs-xtcee-move-3.png" />
+<img alt="Rover's Parameter event-data selected, its parameterTypeRef now /Rover/uint16." src="shots/tcs-xtcee-move-3.png" />
 <p class="caption"><strong>3.</strong> <tt class="docutils literal"><span class="pre">event-data</span></tt>'s type is now <tt class="docutils literal">/Rover/uint16</tt>; so are the
 PUS document's.  One Undo, in any of the three windows, puts it all
 back.</p>
@@ -802,9 +809,9 @@ to the end of the list.  It is not selected, so it is dragged alone.</p>
 the entry itself stays where it was.</p>
 </div>
 <div class="figure">
-<img alt="The Remove button beside the root's name greyed and slanted, and below it a box saying &quot;The schema requires name, so it cannot be removed.&quot;" src="shots/tcs-xtcee-remove-1.png" />
-<p class="caption">An attribute the schema requires cannot be removed: its button says
-why.</p>
+<img alt="The menu of the root's name attribute: Edit name, and Remove name (required), greyed." src="shots/tcs-xtcee-remove-1.png" />
+<p class="caption">An attribute the schema requires cannot be removed: its menu's
+<strong>Remove</strong> is greyed and says why.</p>
 </div>
 </div>
 </div>
@@ -822,10 +829,10 @@ named <tt class="docutils literal">PowrType</tt>, which nothing defines.</p>
 worse mark, closed or not.</p>
 </div>
 <div class="figure">
-<img alt="After clicking the warning: Parameter HeaterPower, marked W, is selected and open, and under its parameterTypeRef, which holds PowrType, the problem's text is written, marked W." src="shots/tcs-xtcee-problems-2.png" />
-<p class="caption"><strong>2.</strong> A click on the warning selects Parameter HeaterPower; opened, it
-shows the problem under the attribute it is about, marked <strong>W</strong> as a
-warning, as it is in the list.</p>
+<img alt="After clicking the warning: Parameter HeaterPower, marked W, is selected, its parameterTypeRef, which holds PowrType, marked W, and under the row the problem's text, marked W." src="shots/tcs-xtcee-problems-2.png" />
+<p class="caption"><strong>2.</strong> A click on the warning selects Parameter HeaterPower.  Its row
+marks the attribute the problem is about <strong>W</strong>, as a warning, as it
+is in the list, and says under it what is wrong.</p>
 </div>
 <div class="figure">
 <img alt="After setting parameterTypeRef to PowerType: no W marks, and the list titled &quot;Problems: 1 error(s), 0 warning(s)&quot; holding only the error on line 44." src="shots/tcs-xtcee-problems-3.png" />

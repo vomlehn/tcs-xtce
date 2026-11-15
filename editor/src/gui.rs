@@ -35,13 +35,8 @@ slint::include_modules!();
 enum RowKey {
     /// An element or a comment, by its id.
     Node(Id),
-    /// An attribute of an element: the element's id and the attribute's
-    /// name.
-    Attr(Id, String),
     /// An element's value.
     Value(Id),
-    /// The row that adds an attribute to an element.
-    Add(Id),
 }
 
 impl RowKey {
@@ -52,10 +47,7 @@ impl RowKey {
     /// Its id.
     fn id(&self) -> Id {
         match self {
-            RowKey::Node(id)
-            | RowKey::Attr(id, _)
-            | RowKey::Value(id)
-            | RowKey::Add(id) => *id,
+            RowKey::Node(id) | RowKey::Value(id) => *id,
         }
     }
 }
@@ -1169,8 +1161,8 @@ impl Shown<'_> {
         }
     }
 
-    /// Makes the rows for an element and, if it is open, its attributes,
-    /// its value and what is in it.
+    /// Makes the rows for an element, with its attributes, and, if it is
+    /// open, its value and what is in it.
     ///
     /// # Arguments
     ///
@@ -1210,11 +1202,9 @@ impl Shown<'_> {
                 TypeRef::Simple(_) => has_value = true,
             }
         }
-        let has_kids = !decl_attrs.is_empty()
-            || has_value
-            || e.attrs
-                .iter()
-                .any(|a| !crate::validate::is_namespace_attr(&a.name))
+        // The attributes are in the element's own row, so opening it shows
+        // only its value and what is in it.
+        let has_kids = has_value
             || e.children
                 .iter()
                 .any(|c| matches!(c, Node::Element(_) | Node::Comment(_)));
@@ -1224,8 +1214,7 @@ impl Shown<'_> {
             None => e.local().to_string(),
         };
         // The attributes not given that may be, unless required or
-        // chosen to be added: offered by the adding row, and by the
-        // element's own menu even while it is closed.
+        // chosen to be added: offered by the element's menu.
         let addable: Vec<SharedString> = decl_attrs
             .iter()
             .filter(|a| {
@@ -1235,6 +1224,89 @@ impl Shown<'_> {
             })
             .map(|a| SharedString::from(a.name.as_str()))
             .collect();
+        let in_cmd = o.doc.ancestry(e.id).iter().any(|a| {
+            o.doc
+                .element(*a)
+                .is_some_and(|x| x.local() == "CommandMetaData")
+        });
+        // The attributes given, those required, and those chosen to be
+        // added, so that an element shows only what it says; then those
+        // the schema does not have, with what is wrong with them, so they
+        // can be taken out.  What is wrong with each is said under the
+        // row, after what is wrong with the element.
+        let mut attrs = Vec::new();
+        let mut problem = self.problem(e.id, None);
+        let mut said = |name: &str, p: &Row| {
+            if p.problem.is_empty() {
+                return;
+            }
+            let line = format!("{name}: {}", p.problem);
+            problem.problem = if problem.problem.is_empty() {
+                line.into()
+            } else {
+                format!("{}; {line}", problem.problem).into()
+            };
+            if problem.problem_severity != "error" {
+                problem.problem_severity = p.problem_severity.clone();
+            }
+        };
+        for a in decl_attrs {
+            if addable.iter().any(|n| n.as_str() == a.name) {
+                continue;
+            }
+            let present = e.get(&a.name);
+            let p = self.problem(e.id, Some(&a.name));
+            said(&a.name, &p);
+            // What the schema says of it, then whether it is required
+            // and what it is when not given, which its box has no room
+            // to say.
+            let mut about = a.doc.clone();
+            let mut more = |s: String| {
+                if !about.is_empty() {
+                    about.push_str("\n\n");
+                }
+                about.push_str(&s);
+            };
+            if a.required {
+                more("Required.".to_string());
+            }
+            if let Some(d) = &a.default {
+                more(format!("When not given: {d}."));
+            }
+            attrs.push(Attr {
+                name: a.name.clone().into(),
+                value: present.clone().unwrap_or_default().into(),
+                choices: ModelRc::new(VecModel::from(
+                    schema
+                        .map(|s| s.enumeration(a.ty))
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(SharedString::from)
+                        .collect::<Vec<_>>(),
+                )),
+                doc: about.into(),
+                problem_severity: p.problem_severity,
+                required: a.required,
+                present: present.is_some(),
+                is_ref: Kind::of_attr(&a.name, e.local(), in_cmd).is_some(),
+            });
+        }
+        for a in &e.attrs {
+            if crate::validate::is_namespace_attr(&a.name)
+                || decl_attrs.iter().any(|d| d.name == a.name)
+            {
+                continue;
+            }
+            let p = self.problem(e.id, Some(&a.name));
+            said(&a.name, &p);
+            attrs.push(Attr {
+                name: a.name.clone().into(),
+                value: a.value().into(),
+                problem_severity: p.problem_severity,
+                present: true,
+                ..Attr::default()
+            });
+        }
         self.push(
             rows,
             keys,
@@ -1244,102 +1316,22 @@ impl Shown<'_> {
                 id: e.id as i32,
                 kind: "element".into(),
                 label: label.into(),
+                tag: e.local().into(),
+                attrs: ModelRc::new(VecModel::from(attrs)),
                 doc: doc.into(),
                 open,
                 has_kids,
-                choices: ModelRc::new(VecModel::from(addable.clone())),
+                choices: ModelRc::new(VecModel::from(addable)),
                 mark: match self.worst.get(&e.id) {
                     Some(Severity::Error) => "error".into(),
                     Some(Severity::Warning) => "warning".into(),
                     None => "".into(),
                 },
-                ..self.problem(e.id, None)
+                ..problem
             },
         );
         if !open {
             return;
-        }
-        let in_cmd = o.doc.ancestry(e.id).iter().any(|a| {
-            o.doc
-                .element(*a)
-                .is_some_and(|x| x.local() == "CommandMetaData")
-        });
-        // The attributes given, those required, and those chosen to be
-        // added; the rest are offered by the adding row, so that an
-        // element shows only what it says.
-        for a in decl_attrs {
-            let present = e.get(&a.name);
-            if addable.iter().any(|n| n.as_str() == a.name) {
-                continue;
-            }
-            self.push(
-                rows,
-                keys,
-                RowKey::Attr(e.id, a.name.clone()),
-                depth + 1,
-                Row {
-                    id: e.id as i32,
-                    kind: "attr".into(),
-                    label: a.name.clone().into(),
-                    value: present.clone().unwrap_or_default().into(),
-                    placeholder: match &a.default {
-                        Some(d) => format!("(not given: {d})"),
-                        None => "(not given)".to_string(),
-                    }
-                    .into(),
-                    choices: ModelRc::new(VecModel::from(
-                        schema
-                            .map(|s| s.enumeration(a.ty))
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(SharedString::from)
-                            .collect::<Vec<_>>(),
-                    )),
-                    doc: a.doc.clone().into(),
-                    required: a.required,
-                    present: present.is_some(),
-                    is_ref: Kind::of_attr(&a.name, e.local(), in_cmd).is_some(),
-                    ..self.problem(e.id, Some(&a.name))
-                },
-            );
-        }
-        // Attributes the schema does not have are shown too, with what is
-        // wrong with them, so they can be taken out.
-        for a in &e.attrs {
-            if crate::validate::is_namespace_attr(&a.name)
-                || decl_attrs.iter().any(|d| d.name == a.name)
-            {
-                continue;
-            }
-            self.push(
-                rows,
-                keys,
-                RowKey::Attr(e.id, a.name.clone()),
-                depth + 1,
-                Row {
-                    id: e.id as i32,
-                    kind: "attr".into(),
-                    label: a.name.clone().into(),
-                    value: a.value().into(),
-                    present: true,
-                    ..self.problem(e.id, Some(&a.name))
-                },
-            );
-        }
-        if !addable.is_empty() {
-            self.push(
-                rows,
-                keys,
-                RowKey::Add(e.id),
-                depth + 1,
-                Row {
-                    id: e.id as i32,
-                    kind: "add".into(),
-                    label: "attribute".into(),
-                    choices: ModelRc::new(VecModel::from(addable)),
-                    ..Row::default()
-                },
-            );
         }
         if has_value {
             self.push(
@@ -4300,27 +4292,21 @@ mod tests {
         let w = win(&app, 0);
         let root = row(&w, "SpaceSystem");
         select(&w, root);
-        // The attribute rows of the root, by name.
+        // The attributes shown in the root's row, by name.
         let attrs = |w: &DocWindow| -> Vec<String> {
             w.get_rows()
                 .iter()
-                .filter(|r| r.kind == "attr" && r.id == root)
-                .map(|r| r.label.to_string())
+                .find(|r| r.kind == "element" && r.id == root)
+                .expect("the root's row")
+                .attrs
+                .iter()
+                .map(|a| a.name.to_string())
                 .collect()
         };
         let text = |app: &Shared| app.borrow().session.docs[0].doc.write();
+        // The root's row offers the attributes it may be given, for its
+        // right-click menu, and shows those it has.
         let addable: Vec<String> = w
-            .get_rows()
-            .iter()
-            .find(|r| r.kind == "add" && r.id == root)
-            .expect("the root can be given more attributes")
-            .choices
-            .iter()
-            .map(|c| c.to_string())
-            .collect();
-        assert!(addable.contains(&"operationalStatus".into()), "{addable:?}");
-        // The element's own row offers the same, for its right-click menu.
-        let offered: Vec<String> = w
             .get_rows()
             .iter()
             .find(|r| r.kind == "element" && r.id == root)
@@ -4329,7 +4315,9 @@ mod tests {
             .iter()
             .map(|c| c.to_string())
             .collect();
-        assert_eq!(offered, addable);
+        assert!(addable.contains(&"operationalStatus".into()), "{addable:?}");
+        assert!(attrs(&w).contains(&"name".into()), "{:?}", attrs(&w));
+        assert!(!attrs(&w).contains(&"operationalStatus".into()));
 
         // Adding shows a field, and the document changes only once it
         // is given a value.
@@ -4532,10 +4520,11 @@ mod tests {
         let wanted = rover
             .get_rows()
             .iter()
-            .find(|r| {
-                r.kind == "attr" && r.id == p && r.label == "parameterTypeRef"
+            .find(|r| r.kind == "element" && r.id == p)
+            .and_then(|r| {
+                r.attrs.iter().find(|a| a.name == "parameterTypeRef")
             })
-            .map(|r| r.value.to_string())
+            .map(|a| a.value.to_string())
             .unwrap();
         rover.invoke_follow(p, "parameterTypeRef".into());
         // The type is shown selected in the window of the document that
