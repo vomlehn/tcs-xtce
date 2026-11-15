@@ -364,10 +364,18 @@ ul.auto-toc {
 <div class="document" id="tcs-xtcee-design">
 <h1 class="title">tcs-xtcee Design</h1>
 
+<div class="contents local topic" id="contents">
+<p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
+<ul class="simple">
+<li><a class="reference internal" href="#the-editor" id="toc-entry-1">The editor</a></li>
+<li><a class="reference internal" href="#the-windows" id="toc-entry-2">The windows</a></li>
+<li><a class="reference internal" href="#see-also" id="toc-entry-3">See Also</a></li>
+</ul>
+</div>
 <p>How <tt class="docutils literal"><span class="pre">tcs-xtcee</span></tt>, the XTCE editor, works inside, and why. How to use it is
 in the <a class="reference external" href="tcs-xtcee.html">tcs-xtcee manual</a>.</p>
 <div class="section" id="the-editor">
-<h1>The editor</h1>
+<h1><a class="toc-backref" href="#toc-entry-1">The editor</a></h1>
 <p>The editor is a Rust program in <tt class="docutils literal">editor/</tt>, its windows in Slint, as
 the TCS ground programs' are.  Its parts, each a module of the
 <tt class="docutils literal"><span class="pre">tcs-xtcee</span></tt> crate:</p>
@@ -520,7 +528,7 @@ when the compiler is asked about it.  The editor never changes a
 document's version except when asked to convert it.</p>
 </div>
 <div class="section" id="the-windows">
-<h1>The windows</h1>
+<h1><a class="toc-backref" href="#toc-entry-2">The windows</a></h1>
 <p>The windows are Slint, their behaviour in <tt class="docutils literal">gui</tt>.  The clipboard is the
 desktop's, through the <tt class="docutils literal">arboard</tt> crate, which Slint's own text fields
 use; the editor reads it once a second, so that text another program put
@@ -547,7 +555,7 @@ selecting draws the outline again and would end the drag: the editor is
 told which row it is, and drags it alone if it is not selected.</p>
 </div>
 <div class="section" id="see-also">
-<h1>See Also</h1>
+<h1><a class="toc-backref" href="#toc-entry-3">See Also</a></h1>
 <dl class="docutils">
 <dt><a class="reference external" href="design.html">The tcs-xtce design documents</a></dt>
 <dd>What each of tcs-xtce's design documents covers.</dd>

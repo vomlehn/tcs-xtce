@@ -2,6 +2,10 @@
 tcs-xtcee Design
 ================
 
+.. contents:: Contents
+   :depth: 2
+   :local:
+
 How ``tcs-xtcee``, the XTCE editor, works inside, and why. How to use it is
 in the `tcs-xtcee manual <tcs-xtcee.html>`__.
 
