@@ -1223,6 +1223,18 @@ impl Shown<'_> {
             Some(n) => format!("{}  {n}", e.local()),
             None => e.local().to_string(),
         };
+        // The attributes not given that may be, unless required or
+        // chosen to be added: offered by the adding row, and by the
+        // element's own menu even while it is closed.
+        let addable: Vec<SharedString> = decl_attrs
+            .iter()
+            .filter(|a| {
+                e.get(&a.name).is_none()
+                    && !a.required
+                    && !self.w.adding.contains(&(e.id, a.name.clone()))
+            })
+            .map(|a| SharedString::from(a.name.as_str()))
+            .collect();
         self.push(
             rows,
             keys,
@@ -1235,6 +1247,7 @@ impl Shown<'_> {
                 doc: doc.into(),
                 open,
                 has_kids,
+                choices: ModelRc::new(VecModel::from(addable.clone())),
                 mark: match self.worst.get(&e.id) {
                     Some(Severity::Error) => "error".into(),
                     Some(Severity::Warning) => "warning".into(),
@@ -1254,12 +1267,9 @@ impl Shown<'_> {
         // The attributes given, those required, and those chosen to be
         // added; the rest are offered by the adding row, so that an
         // element shows only what it says.
-        let mut addable = Vec::new();
         for a in decl_attrs {
             let present = e.get(&a.name);
-            let adding = self.w.adding.contains(&(e.id, a.name.clone()));
-            if present.is_none() && !a.required && !adding {
-                addable.push(SharedString::from(a.name.as_str()));
+            if addable.iter().any(|n| n.as_str() == a.name) {
                 continue;
             }
             self.push(
@@ -4282,6 +4292,86 @@ mod tests {
         w.invoke_undo();
         assert_eq!(w.get_undo_label(), "");
         assert_eq!(w.get_redo_label(), "set shortDescription");
+    }
+
+    #[test]
+    fn attributes_are_added_edited_and_removed() {
+        let (app, _dir) = editor(&["examples/housekeeping/housekeeping.xtce"]);
+        let w = win(&app, 0);
+        let root = row(&w, "SpaceSystem");
+        select(&w, root);
+        // The attribute rows of the root, by name.
+        let attrs = |w: &DocWindow| -> Vec<String> {
+            w.get_rows()
+                .iter()
+                .filter(|r| r.kind == "attr" && r.id == root)
+                .map(|r| r.label.to_string())
+                .collect()
+        };
+        let text = |app: &Shared| app.borrow().session.docs[0].doc.write();
+        let addable: Vec<String> = w
+            .get_rows()
+            .iter()
+            .find(|r| r.kind == "add" && r.id == root)
+            .expect("the root can be given more attributes")
+            .choices
+            .iter()
+            .map(|c| c.to_string())
+            .collect();
+        assert!(addable.contains(&"operationalStatus".into()), "{addable:?}");
+        // The element's own row offers the same, for its right-click menu.
+        let offered: Vec<String> = w
+            .get_rows()
+            .iter()
+            .find(|r| r.kind == "element" && r.id == root)
+            .expect("the root's row")
+            .choices
+            .iter()
+            .map(|c| c.to_string())
+            .collect();
+        assert_eq!(offered, addable);
+
+        // Adding shows a field, and the document changes only once it
+        // is given a value.
+        w.invoke_add_attr(root, "operationalStatus".into());
+        assert!(attrs(&w).contains(&"operationalStatus".into()));
+        assert!(!text(&app).contains("operationalStatus"));
+        assert_eq!(w.get_undo_label(), "");
+        w.invoke_set_attr(root, "operationalStatus".into(), "test".into());
+        assert!(text(&app).contains("operationalStatus=\"test\""));
+        assert_eq!(w.get_undo_label(), "set operationalStatus");
+
+        // Editing it again changes the value in place.
+        w.invoke_set_attr(root, "operationalStatus".into(), "flight".into());
+        assert!(text(&app).contains("operationalStatus=\"flight\""));
+        assert!(!text(&app).contains("\"test\""));
+
+        // Remove takes it out, and Undo puts it back.
+        w.invoke_remove_attr(root, "operationalStatus".into());
+        assert!(!text(&app).contains("operationalStatus"));
+        assert_eq!(w.get_undo_label(), "remove operationalStatus");
+        w.invoke_undo();
+        assert!(text(&app).contains("operationalStatus=\"flight\""));
+
+        // A required attribute is kept.
+        w.invoke_remove_attr(root, "name".into());
+        assert!(text(&app).contains("<SpaceSystem"), "{}", text(&app));
+        assert!(root_named(&text(&app)), "{}", text(&app));
+    }
+
+    /// Whether a document's root SpaceSystem still has its name.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The document.
+    ///
+    /// # Returns
+    ///
+    /// True if the first SpaceSystem start tag has a name attribute.
+    fn root_named(text: &str) -> bool {
+        let start = text.find("<SpaceSystem").expect("a root");
+        let tag = &text[start..start + text[start..].find('>').unwrap()];
+        tag.contains(" name=")
     }
 
     #[test]

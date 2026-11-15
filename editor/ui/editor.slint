@@ -63,8 +63,8 @@ export struct Row {
     value: string,
     // What an empty field says: "(not given)", or a default.
     placeholder: string,
-    // The values it may have, if they are a list; for the adding row, the
-    // attributes that may be added.  Empty otherwise.
+    // The values it may have, if they are a list; for an element or its
+    // adding row, the attributes that may be added.  Empty otherwise.
     choices: [string],
     // What the schema says it is, shown when the pointer rests on its
     // name.
@@ -358,6 +358,12 @@ component TreeRow inherits Rectangle {
     callback follow(int, string);
     callback set-value(int, string);
     callback set-comment(int, string);
+    // The right button was pressed on the row, at a place in the outline,
+    // to show its menu.
+    callback menu(Row, length, length);
+    // Goes up each time the row's menu asks for its field to be edited,
+    // and is 0 for every other row.
+    in property <int> edit-ask;
     property <bool> is-element: root.item.kind == "element";
     property <bool> is-comment: root.item.kind == "comment";
     property <bool> has-field: root.item.kind == "attr"
@@ -371,6 +377,16 @@ component TreeRow inherits Rectangle {
         x: 0px;
         width: 3px;
         background: black;
+    }
+    // A right press on the row where nothing on it took the press.
+    TouchArea {
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down
+                    && e.button == PointerEventButton.right) {
+                root.menu(root.item, root.x + self.mouse-x,
+                    root.y + self.mouse-y);
+            }
+        }
     }
     VerticalLayout {
         // One level more than its depth, which leaves a gutter at the
@@ -462,6 +478,13 @@ component TreeRow inherits Rectangle {
                         } else if (e.kind == PointerEventKind.up
                                 && e.button == PointerEventButton.left) {
                             root.release();
+                        } else if (e.kind == PointerEventKind.down
+                                && e.button == PointerEventButton.right) {
+                            root.menu(root.item,
+                                root.x + self.absolute-position.x
+                                    - root.absolute-position.x
+                                    + self.mouse-x,
+                                root.y + self.mouse-y);
                         }
                     }
                     moved => {
@@ -489,6 +512,12 @@ component TreeRow inherits Rectangle {
                 }
             }
             if root.has-field && root.item.choices.length == 0: Field {
+                property <int> ask: root.edit-ask;
+                changed ask => {
+                    if (self.ask > 0) {
+                        self.focus();
+                    }
+                }
                 value: root.item.value;
                 placeholder: root.item.placeholder;
                 accepted(t) => {
@@ -504,6 +533,12 @@ component TreeRow inherits Rectangle {
             if root.is-comment: HorizontalLayout {
                 spacing: 4px;
                 comment := Field {
+                    property <int> ask: root.edit-ask;
+                    changed ask => {
+                        if (self.ask > 0) {
+                            self.focus();
+                        }
+                    }
                     value: root.item.value;
                     one-line: false;
                     accepted(t) => { root.set-comment(root.item.id, t); }
@@ -598,6 +633,12 @@ export component DocWindow inherits Window {
     in property <bool> paste-before;
     in property <bool> paste-after;
     in property <bool> paste-into;
+    // The row whose menu a right click opened.
+    property <Row> menu-row;
+    // The row whose field the menu's Edit asks to be edited, and how
+    // many times one has been asked, so that each ask is a change.
+    property <int> edit-row: -1;
+    property <int> edit-asks: 0;
 
     callback new-doc();
     callback open-doc();
@@ -921,6 +962,178 @@ export component DocWindow inherits Window {
                         content-height: max(tree.preferred-height,
                             self.visible-height);
                         content-width: self.visible-width;
+                        // What a right click on a row offers: for an
+                        // element or a comment, the Edit and Insert menus'
+                        // commands, and the attributes it may be given;
+                        // for an attribute, a value or a comment, editing
+                        // it.  Shown by the rows at the point pressed,
+                        // since they take every press themselves.
+                        row-menu := ContextMenuArea {
+                            x: 0px;
+                            y: 0px;
+                            width: tree.width;
+                            height: tree.height;
+                            Menu {
+                                if root.menu-row.kind == "element"
+                                        && root.inserts.length > 0: Menu {
+                                    title: "Insert";
+                                    for c in root.inserts: MenuItem {
+                                        title: c.title;
+                                        activated => { root.insert(c.index); }
+                                    }
+                                }
+                                if root.menu-row.kind == "element"
+                                        && root.inserts.length == 0
+                                        : MenuItem {
+                                    title: "Insert (nothing more fits)";
+                                    enabled: false;
+                                }
+                                if root.menu-row.kind == "element"
+                                        && root.templates.length > 0: Menu {
+                                    title: "Insert ready-made";
+                                    for c in root.templates: MenuItem {
+                                        title: c.title;
+                                        activated => {
+                                            root.insert-template(c.index);
+                                        }
+                                    }
+                                }
+                                if (root.menu-row.kind == "element"
+                                        || root.menu-row.kind == "add")
+                                        && root.menu-row.choices.length > 0
+                                        : Menu {
+                                    title: "Add an attribute";
+                                    for a in root.menu-row.choices: MenuItem {
+                                        title: a;
+                                        activated => {
+                                            root.add-attr(root.menu-row.id,
+                                                a);
+                                        }
+                                    }
+                                }
+                                if root.menu-row.kind == "element"
+                                        && root.menu-row.choices.length == 0
+                                        : MenuItem {
+                                    title: "Add an attribute (none left)";
+                                    enabled: false;
+                                }
+                                // An attribute or a value: edit it in its
+                                // field, or choose from its list.
+                                if (root.menu-row.kind == "attr"
+                                        || root.menu-row.kind == "value"
+                                        || root.menu-row.kind == "comment")
+                                        && root.menu-row.choices.length == 0
+                                        : MenuItem {
+                                    title: root.menu-row.kind == "comment"
+                                        ? "Edit the comment"
+                                        : "Edit " + root.menu-row.label;
+                                    activated => {
+                                        root.edit-row = root.menu-row.index;
+                                        root.edit-asks += 1;
+                                    }
+                                }
+                                if root.menu-row.kind == "attr"
+                                        && root.menu-row.choices.length > 0
+                                        : Menu {
+                                    title: "Set " + root.menu-row.label
+                                        + " to";
+                                    for v in root.menu-row.choices: MenuItem {
+                                        title: v == root.menu-row.value
+                                            ? v + " (as it is)" : v;
+                                        activated => {
+                                            root.set-attr(root.menu-row.id,
+                                                root.menu-row.label, v);
+                                        }
+                                    }
+                                }
+                                if root.menu-row.kind == "attr": MenuItem {
+                                    title: root.menu-row.required
+                                        ? "Remove " + root.menu-row.label
+                                            + " (required)"
+                                        : "Remove " + root.menu-row.label;
+                                    enabled: !root.menu-row.required;
+                                    activated => {
+                                        root.remove-attr(root.menu-row.id,
+                                            root.menu-row.label);
+                                    }
+                                }
+                                if root.menu-row.kind == "attr"
+                                        && root.menu-row.is-ref
+                                        && root.menu-row.present: MenuItem {
+                                    title: "Go to what it names";
+                                    activated => {
+                                        root.follow(root.menu-row.id,
+                                            root.menu-row.label);
+                                    }
+                                }
+                                // The Edit menu's commands, on the
+                                // selection the click made or was in.
+                                if root.menu-row.kind == "element"
+                                        || root.menu-row.kind == "comment"
+                                        : Menu {
+                                    title: "Edit";
+                                    MenuItem {
+                                        title: "Cut";
+                                        enabled: root.can-delete;
+                                        activated => { root.cut(); }
+                                    }
+                                    MenuItem {
+                                        title: "Copy";
+                                        enabled: root.can-copy;
+                                        activated => { root.copy(); }
+                                    }
+                                    MenuItem {
+                                        title: "Paste before";
+                                        enabled: root.paste-before;
+                                        activated => { root.paste(0); }
+                                    }
+                                    MenuItem {
+                                        title: "Paste after";
+                                        enabled: root.paste-after;
+                                        activated => { root.paste(1); }
+                                    }
+                                    MenuItem {
+                                        title: "Paste in, last";
+                                        enabled: root.paste-into;
+                                        activated => { root.paste(2); }
+                                    }
+                                    MenuSeparator { }
+                                    MenuItem {
+                                        title: "Move up";
+                                        enabled: root.can-move;
+                                        activated => { root.move-up(); }
+                                    }
+                                    MenuItem {
+                                        title: "Move down";
+                                        enabled: root.can-move;
+                                        activated => { root.move-down(); }
+                                    }
+                                    MenuItem {
+                                        title: "Add a comment before";
+                                        enabled: root.has-element;
+                                        activated => { root.add-comment(); }
+                                    }
+                                    MenuSeparator { }
+                                    MenuItem {
+                                        title: "Rename everywhere...";
+                                        enabled: root.is-definition;
+                                        activated => { root.rename(); }
+                                    }
+                                    MenuItem {
+                                        title: "Find usages";
+                                        enabled: root.is-definition;
+                                        activated => { root.find-usages(); }
+                                    }
+                                }
+                                if root.menu-row.kind == "element"
+                                        || root.menu-row.kind == "comment"
+                                        : MenuItem {
+                                    title: "Delete";
+                                    enabled: root.can-delete;
+                                    activated => { root.delete-selected(); }
+                                }
+                            }
+                        }
                         tree := VerticalLayout {
                             x: 0px;
                             y: 0px;
@@ -932,6 +1145,23 @@ export component DocWindow inherits Window {
                             alignment: start;
                             for r in root.rows: TreeRow {
                                 item: r;
+                                edit-ask: r.index == root.edit-row
+                                    ? root.edit-asks : 0;
+                                // A right click on an element or a comment
+                                // not already selected selects it alone,
+                                // as other programs do, so that the menu
+                                // acts on what it was opened on.
+                                menu(row, x, y) => {
+                                    root.tip-wanted = false;
+                                    root.tip-on = false;
+                                    root.menu-row = row;
+                                    if ((row.kind == "element"
+                                            || row.kind == "comment")
+                                            && !row.marked) {
+                                        root.pick(row.index, false, false);
+                                    }
+                                    row-menu.show({ x: x, y: y });
+                                }
                                 indent: root.indent;
                                 // Whether the pointer is over this row in
                                 // a drag that selects.

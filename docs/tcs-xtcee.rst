@@ -145,6 +145,30 @@ The rows selected together are what Cut, Copy, Delete and Move up and
 down act on; the row clicked last is the one Insert, Paste and the other
 menu items act on.
 
+Right-clicking a row opens a menu of what can be done to it, at the
+pointer:
+
+* on an element: **Insert**, listing what may go in it as the Insert
+  menu does, and **Insert ready-made**; **Add an attribute**, listing
+  the attributes the schema allows that it does not give yet; an
+  **Edit** submenu holding the Edit menu's Cut, Copy, Paste, Move,
+  comment, Rename and Find usages; and **Delete**.  A right click on an
+  element that is not selected selects it alone first; on one already
+  selected, the menu acts on the whole selection;
+* on a comment: the same Edit submenu and Delete, and **Edit the
+  comment**, which puts the cursor in its text;
+* on an attribute: **Edit** followed by its name, which puts the cursor
+  in its field, or, where the schema gives the values it may take,
+  **Set ... to**, listing them; **Remove**, greyed and marked
+  *(required)* for one the schema requires; and, for a reference that is
+  given, **Go to what it names**;
+* on an element's value: **Edit value**;
+* on the row *attribute*: **Add an attribute**.
+
+An item that can do nothing is greyed, and says why in its words where
+the reason is not plain: *Insert (nothing more fits)*, *Add an attribute
+(none left)*.
+
 The selection is marked by its rows' colour and by a line down the
 column where its topmost element starts, with a ↔ handle at the middle
 of the part of the line in view.  Dragging the handle opens or closes

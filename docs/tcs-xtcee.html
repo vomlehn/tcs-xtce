@@ -511,6 +511,29 @@ faster the further past the pointer goes.</p>
 <p>The rows selected together are what Cut, Copy, Delete and Move up and
 down act on; the row clicked last is the one Insert, Paste and the other
 menu items act on.</p>
+<p>Right-clicking a row opens a menu of what can be done to it, at the
+pointer:</p>
+<ul class="simple">
+<li>on an element: <strong>Insert</strong>, listing what may go in it as the Insert
+menu does, and <strong>Insert ready-made</strong>; <strong>Add an attribute</strong>, listing
+the attributes the schema allows that it does not give yet; an
+<strong>Edit</strong> submenu holding the Edit menu's Cut, Copy, Paste, Move,
+comment, Rename and Find usages; and <strong>Delete</strong>.  A right click on an
+element that is not selected selects it alone first; on one already
+selected, the menu acts on the whole selection;</li>
+<li>on a comment: the same Edit submenu and Delete, and <strong>Edit the
+comment</strong>, which puts the cursor in its text;</li>
+<li>on an attribute: <strong>Edit</strong> followed by its name, which puts the cursor
+in its field, or, where the schema gives the values it may take,
+<strong>Set ... to</strong>, listing them; <strong>Remove</strong>, greyed and marked
+<em>(required)</em> for one the schema requires; and, for a reference that is
+given, <strong>Go to what it names</strong>;</li>
+<li>on an element's value: <strong>Edit value</strong>;</li>
+<li>on the row <em>attribute</em>: <strong>Add an attribute</strong>.</li>
+</ul>
+<p>An item that can do nothing is greyed, and says why in its words where
+the reason is not plain: <em>Insert (nothing more fits)</em>, <em>Add an attribute
+(none left)</em>.</p>
 <p>The selection is marked by its rows' colour and by a line down the
 column where its topmost element starts, with a ↔ handle at the middle
 of the part of the line in view.  Dragging the handle opens or closes
