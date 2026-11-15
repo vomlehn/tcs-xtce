@@ -2,7 +2,7 @@
 
 import unittest
 
-from tests.compiler.test_compile import compile_xml, mission
+from tests.compiler.test_compile import assert_loop, compile_xml, mission
 
 
 def stream_mission(stream: str) -> str:
@@ -123,7 +123,7 @@ class StreamTests(unittest.TestCase):
         self.assertEqual([(k, x.key) for k, x in v.functions()],
                          [("decode", "/Sat/C"), ("invert", "/Sat/S")])
 
-    def test_bad_chains(self):
+    def test_loops(self):
         custom = ('<CustomStream name="C" encodedStreamRef="C" '
                   'decodedStreamRef="{0}"><EncodingAlgorithm name="E"/>'
                   '<DecodingAlgorithm name="D"/></CustomStream>')
@@ -133,11 +133,13 @@ class StreamTests(unittest.TestCase):
                   '<VariableFrameStream name="W"><ContainerRef '
                   'containerRef="F"/><StreamRef streamRef="V"/><SyncStrategy>'
                   '<Flag/></SyncStrategy></VariableFrameStream>')
-        for stream, why in ((custom.format("C"), "decodes into itself"),
-                            (looped, "feed each other in a cycle")):
+        for stream, why in ((custom.format("C"),
+                             "stream /Sat/C: decodes into itself, a loop"),
+                            (looped,
+                             "streams feed one another in a loop: /Sat/V <- "
+                             "/Sat/W <- /Sat/V")):
             with self.subTest(why=why):
-                m = compile_xml(stream_mission(stream), skip_unsupported=True)
-                self.assertIn(why, " ".join(m.skipped))
+                assert_loop(self, stream_mission(stream), why)
 
     def test_unsupported(self):
         for stream, why in ((fixed('pattern="1ACF" patternLengthInBits="16" '

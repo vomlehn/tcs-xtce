@@ -16,6 +16,14 @@ class Unsupported(Exception):
     """An XTCE construct the packet compiler does not handle."""
 
 
+class Cycle(Exception):
+    """A loop in something the compiler follows: a chain of base types,
+    containers or meta-commands that inherits from itself, or streams that
+    feed one another. Always fatal, as in everything in TCS that walks a
+    tree: ``--skip-unsupported`` does not skip it, because a document with
+    a loop in it is wrong, not merely beyond the compiler."""
+
+
 # --- encodings --------------------------------------------------------------
 
 
@@ -745,10 +753,15 @@ class Stream:
 
         Returns:
             This stream, then each feeder in turn, to the one whose input
-            is the raw stream; it stops at a cycle.
+            is the raw stream.
+
+        Raises:
+            Cycle: The streams feed one another in a loop.
         """
         out, st = [], self
-        while st is not None and st not in out:  # a cycle is an error
+        while st is not None:
+            if st in out:
+                raise Cycle(stream_loop(out[out.index(st):]))
             out.append(st)
             st = st.feeder
         return out
@@ -759,6 +772,20 @@ class Stream:
         an InvertAlgorithm)."""
         return ([("decode", s) for s in self.chain() if s.custom]
                 + [("invert", s) for s in self.chain() if s.inverter])
+
+
+def stream_loop(loop: list) -> str:
+    """Says which streams feed one another in a loop.
+
+    Args:
+        loop: The streams in the loop, each fed by the next and the last by
+              the first.
+
+    Returns:
+        The message, naming each stream, with ``<-`` for "is fed by".
+    """
+    names = " <- ".join(st.key for st in loop + loop[:1])
+    return f"streams feed one another in a loop: {names}"
 
 
 # --- containers --------------------------------------------------------------

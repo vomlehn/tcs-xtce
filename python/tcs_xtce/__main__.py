@@ -25,6 +25,10 @@ maximum field size instead.  ``--fatal-warnings`` makes any warning fail
 the run, as GNU ld's does: each is still printed, the output is not
 written, and the exit status is 1.
 
+A loop in the document -- a type, container or meta-command that inherits
+from or includes itself, or streams that feed one another -- is always an
+error, which ``--skip-unsupported`` does not skip.
+
 ``python3 -m tcs_xtce INPUT... [OUTPUT] --size-report`` instead reports, for
 each packet, the bits every field uses on the wire and the bits the document
 says it needs.  OUTPUT may be left out when there is only one INPUT, and the
@@ -42,7 +46,7 @@ from tcs_xtce.binding.__main__ import rustfmt
 from tcs_xtce.binding.wrap import wrap
 from tcs_xtce.compiler import emit_c, emit_python, emit_rust, report
 from tcs_xtce.compiler.compile import DIALECTS, compile_documents
-from tcs_xtce.compiler.model import Unsupported
+from tcs_xtce.compiler.model import Cycle, Unsupported
 
 LANGS = ("c", "c++", "rust", "python")
 
@@ -73,9 +77,9 @@ def main(argv=None) -> int:
               ``sys.argv``'s.
 
     Returns:
-        The exit status: 0 on success, 1 if a document can't be read or
-        uses something unsupported, or there was a warning and
-        --fatal-warnings was given.  Bad arguments exit with status 2.
+        The exit status: 0 on success, 1 if a document can't be read, has
+        a loop in it or uses something unsupported, or there was a warning
+        and --fatal-warnings was given.  Bad arguments exit with status 2.
     """
 
     ap = argparse.ArgumentParser(
@@ -149,7 +153,7 @@ def main(argv=None) -> int:
     try:
         mission = compile_documents(
             roots, args.skip_unsupported or args.size_report, args.dialect)
-    except Unsupported as e:
+    except (Cycle, Unsupported) as e:
         where = f"{inputs[0]}: " if len(inputs) == 1 else ""
         print(f"tcs-xtce: {where}{e}", file=sys.stderr)
         return 1
@@ -159,9 +163,9 @@ def main(argv=None) -> int:
     for msg in warnings:
         print(f"tcs-xtce: warning: {msg}", file=sys.stderr)
     if warnings and args.fatal_warnings:
-        print(f"tcs-xtce: {len(warnings)} warning"
-              f"{'' if len(warnings) == 1 else 's'}, and --fatal-warnings "
-              "was given: nothing written", file=sys.stderr)
+        print(f"tcs-xtce: {len(warnings)} "
+              f"warning{'' if len(warnings) == 1 else 's'}, and "
+              "--fatal-warnings was given: nothing written", file=sys.stderr)
         return 1
     source = args.source_name or ", ".join(Path(n).name for n in inputs)
     if args.size_report:

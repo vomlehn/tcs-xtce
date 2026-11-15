@@ -16,7 +16,7 @@ from tcs_xtce.compiler.compile import (  # noqa: E402
     compile_document, compile_documents, item_bits, member_path, value_range)
 from tcs_xtce.compiler.model import (  # noqa: E402
     MAX_FIELD_BITS, AnyOf, Cond, ContextCal, Fill, Fixed, Index, MathOp, Pad,
-    Require, Seek, Segment, Spline, TailSeek, Unsupported, Value, walk,
+    Cycle, Require, Seek, Segment, Spline, TailSeek, Unsupported, Value, walk,
     LengthEnd, Transform, Verify, XformEnc)
 
 NS = "http://www.omg.org/spec/XTCE/20250214"
@@ -31,6 +31,22 @@ def mission(tm: str = "", tc: str = "") -> str:
 def compile_xml(text: str, **kw):
     return compile_document(tcs_xtce.Document.from_bytes(text.encode()).root,
                             **kw)
+
+
+def assert_loop(test: unittest.TestCase, text: str, message: str) -> None:
+    """Checks that a document with a loop in it fails to compile, with
+    ``--skip-unsupported`` as without it.
+
+    Args:
+        test:    The test case asserting it.
+        text:    The XTCE document.
+        message: What the error must say.
+    """
+    for skip in (False, True):
+        with test.subTest(skip_unsupported=skip):
+            with test.assertRaises(Cycle) as cm:
+                compile_xml(text, skip_unsupported=skip)
+            test.assertIn(message, str(cm.exception))
 
 
 def command(name: str, args: str = "", entries: str = "",
@@ -98,22 +114,41 @@ U8_ARG = """
 
 
 class ErrorTests(unittest.TestCase):
-    """Bad documents are reported as Unsupported, never as a crash."""
+    """Bad documents are reported as Unsupported, or as Cycle for a loop,
+    never as a crash."""
 
     def unsupported(self, text: str) -> str:
         with self.assertRaises(Unsupported) as cm:
             compile_xml(text)
         return str(cm.exception)
 
-    def test_meta_command_inheritance_cycle(self):
+    def test_container_loops(self):
+        def tm(*containers):
+            """A mission whose telemetry is ``containers``' XML."""
+            return mission(tm="<ContainerSet>" + "".join(containers)
+                           + "</ContainerSet>")
+
+        def container(name, entries="", base=""):
+            """A SequenceContainer ``name`` with ``entries``, extending
+            ``base`` if one is given."""
+            base = (f'<BaseContainer containerRef="{base}"/>' if base else "")
+            return (f'<SequenceContainer name="{name}"><EntryList>{entries}'
+                    f'</EntryList>{base}</SequenceContainer>')
+
+        assert_loop(self,
+                    tm(container("P", '<ContainerRefEntry containerRef="P"/>')),
+                    "container includes itself, a loop")
+        assert_loop(self,
+                    tm(container("P", base="Q"), container("Q", base="P")),
+                    "container inheritance loop through")
+
+    def test_meta_command_inheritance_loop(self):
         text = mission(tc=U8_ARG + "<MetaCommandSet>"
                        + command("A",
                                  '<Argument name="X" argumentTypeRef="U8"/>',
                                  '<ArgumentRefEntry argumentRef="X"/>', "B")
                        + command("B", "", "", "A") + "</MetaCommandSet>")
-        self.assertIn("cycle", self.unsupported(text))
-        # --skip-unsupported leaves both commands out.
-        self.assertEqual(compile_xml(text, skip_unsupported=True).nodes, [])
+        assert_loop(self, text, "meta-command inheritance loop through")
 
 
     def test_malformed_fixed_value(self):
@@ -862,9 +897,7 @@ class AggregateTests(unittest.TestCase):
         self.assertEqual(m.nodes[0].max_bytes, 3)
 
     def test_rejected(self):
-        cases = [(aggregate("A", ("X", "B")) + aggregate("B", ("Y", "A")),
-                  "aggregate contains itself"),
-                 (aggregate("A", ("Bytes", "Blob"))
+        cases = [(aggregate("A", ("Bytes", "Blob"))
                   + '<BinaryParameterType name="Blob"><BinaryDataEncoding>'
                     '<SizeInBits>' + dynamic("N")
                   + "</SizeInBits></BinaryDataEncoding></BinaryParameterType>",
@@ -877,6 +910,11 @@ class AggregateTests(unittest.TestCase):
                                       '<ParameterRefEntry '
                                       'parameterRef="Agg"/>'))
             self.assertIn(message, str(cm.exception))
+
+    def test_loop(self):
+        types = aggregate("A", ("X", "B")) + aggregate("B", ("Y", "A"))
+        assert_loop(self, aggregate_mission(types),
+                    "aggregate contains itself, a loop")
 
     def test_size_from_an_earlier_member(self):
         types = (aggregate("A", ("N", "U8"), ("Data", "Blob"))
@@ -2241,15 +2279,18 @@ class BaseTypeTests(unittest.TestCase):
         cases = [("is another kind of type, FloatParameterType",
                   '<FloatParameterType name="F"/><IntegerParameterType '
                   'name="T" baseType="F"/>'),
-                 ("its baseType chain is a cycle",
-                  '<IntegerParameterType name="T" baseType="T2"/>'
-                  '<IntegerParameterType name="T2" baseType="T"/>'),
                  ("unresolved base type reference 'Nope'",
                   '<IntegerParameterType name="T" baseType="Nope"/>')]
         for msg, types in cases:
             with self.subTest(msg=msg), self.assertRaises(Unsupported) as cm:
                 compile_xml(typed(types))
             self.assertIn(msg, str(cm.exception))
+
+    def test_loop(self):
+        assert_loop(self,
+                    typed('<IntegerParameterType name="T" baseType="T2"/>'
+                          '<IntegerParameterType name="T2" baseType="T"/>'),
+                    "its baseType chain is a loop")
 
 
 class CommandContainerTests(unittest.TestCase):
@@ -3222,14 +3263,17 @@ class CommandContainerSetTests(unittest.TestCase):
         for text, why in (
                 (shared_mission("Body", base_meta=meta),
                  "extends a container other than its BaseMetaCommand's"),
-                (shared_mission("", '<ContainerRefEntry containerRef="CC"/>'),
-                 "the CommandContainer of /Sat/C includes itself"),
                 (shared_mission("", '<ContainerRefEntry containerRef="ZZ"/>'),
                  "unresolved container reference 'ZZ'")):
             with self.subTest(why=why):
                 c = compile_xml(text, skip_unsupported=True)
                 self.assertFalse(any(n.name == "C" for n in c.nodes))
                 self.assertTrue(any(why in m for m in c.skipped), c.skipped)
+
+    def test_loop(self):
+        looped = '<ContainerRefEntry containerRef="CC"/>'
+        assert_loop(self, shared_mission("", looped),
+                    "the CommandContainer of /Sat/C includes itself, a loop")
 
 
 def indirect_mission(selector: str, labels: str = "A") -> str:

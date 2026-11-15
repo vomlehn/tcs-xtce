@@ -139,19 +139,18 @@ class WarningTests(unittest.TestCase):
             # The code is written all the same.
             self.assertTrue(out.exists())
         # Sized by a 32-bit value with no ValidRange.
-        self.assertIn("WideBlobType is binary data with no maximum size",
-                      err)
+        self.assertIn("WideBlobType is binary data with no maximum size", err)
         self.assertIn("give the size a ValidRange", err)
         # The rest of the packet, transformed or not.
-        self.assertIn("type /Demo/RestType: binary data that takes the rest "
+        self.assertIn("type /Demo/RestType: binary data that takes the rest of "
+                      "the packet", err)
+        self.assertIn("type /Demo/StuffedType: binary data that takes the rest "
                       "of the packet", err)
-        self.assertIn("type /Demo/StuffedType: binary data that takes the "
-                      "rest of the packet", err)
         # Each once, however many packets use the type.
         lines = err.splitlines()
         self.assertEqual(len(lines), len(set(lines)))
-        self.assertTrue(all(x.startswith("tcs-xtce: warning: ")
-                            for x in lines), err)
+        self.assertTrue(all(x.startswith("tcs-xtce: warning: ") for x in lines),
+                        err)
 
     def test_fatal_warnings_fail_and_write_nothing(self):
         with tempfile.TemporaryDirectory() as d:

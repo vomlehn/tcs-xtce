@@ -28,10 +28,11 @@ from .model import (
     BinaryEnc, Cond, Criterion, DynSize, EnumLabel, FloatEnc, Fixed, Index,
     IntEnc, Item, Kind, Local, Mark, Member, Mission, Node, Pad, Polynomial,
     Seek, Span, Spline, StringEnc, Term, Unsupported, Value, VType, ref_text,
-    term_locals, walk, MATH_UNARY, Check, ContextCal, EndSeek, MathOp, NextSeek,
-    Require, TailPad, TailSeek, LengthEnd, Transform, ValueRef, needs_binding,
-    Fill, Segment, Verify, Alarm, AlarmDef, Band, LEVELS, Change, Algorithm,
-    Stream, Hook, Custom, term_hooks, input_locals, XformEnc)
+    Cycle, stream_loop, term_locals, walk, MATH_UNARY, Check, ContextCal,
+    EndSeek, MathOp, NextSeek, Require, TailPad, TailSeek, LengthEnd, Transform,
+    ValueRef, needs_binding, Fill, Segment, Verify, Alarm, AlarmDef, Band,
+    LEVELS, Change, Algorithm, Stream, Hook, Custom, term_hooks, input_locals,
+    XformEnc)
 
 Key = tuple  # path of SpaceSystem names followed by the item name
 
@@ -1116,8 +1117,8 @@ class Compiler:
             vt.kind = "binary"
             # Nothing but the end of the packet bounds it; an EmbeddedTc's
             # own packet length does.
-            if (enc.rest if isinstance(enc, BinaryEnc)
-                    else enc.raw is None and not enc.time):
+            if (enc.rest if isinstance(enc, BinaryEnc) else enc.raw is None
+                    and not enc.time):
                 self.warn(f"{where}: binary data that takes the rest of the "
                           "packet, of no maximum size: the generated code's "
                           "buffer is the maximum field size, "
@@ -1157,15 +1158,15 @@ class Compiler:
             The XTCE type, with what it inherits, and no ``baseType``.
 
         Raises:
-            Unsupported: The chain of base types is a cycle, or a base type
-                         is another kind of type.
+            Unsupported: A base type is another kind of type.
+            Cycle:       The chain of base types is a loop.
         """
         path, kind, t = table[key]
         if not getattr(t, "base_type", None):
             return t
         where = f"type {qname(key)}"
         if key in seen:
-            raise Unsupported(f"{where}: its baseType chain is a cycle")
+            raise Cycle(f"{where}: its baseType chain is a loop")
         bkey = self.resolve(t.base_type, path, table, "base type")
         if table[bkey][1] != kind:
             raise Unsupported(f"{where}: its baseType {qname(bkey)} is another "
@@ -1451,12 +1452,13 @@ class Compiler:
             The compiled type, with an AggregateEnc.
 
         Raises:
-            Unsupported: It contains itself or has no members, or a member
-                         takes the rest of the packet or has a size that
-                         isn't from an earlier integer member.
+            Unsupported: It has no members, or a member takes the rest of
+                         the packet or has a size that isn't from an
+                         earlier integer member.
+            Cycle:       It contains itself.
         """
         if cache in self._aggregating:
-            raise Unsupported(f"{where}: aggregate contains itself")
+            raise Cycle(f"{where}: aggregate contains itself, a loop")
         if not t.member_list.member:
             raise Unsupported(f"{where}: aggregate without members")
         self._aggregating.add(cache)
@@ -1481,8 +1483,9 @@ class Compiler:
                     if sib.vtype.kind != "int":
                         raise Unsupported(f"{where}: size or count from "
                                           f"{sib.vtype.kind} member {sib.name}")
-                    mt = self.bound(mt, dataclasses.replace(
-                        d, member=sib.ident), int_bounds(sib.vtype), where)
+                    mt = self.bound(mt,
+                                    dataclasses.replace(d, member=sib.ident),
+                                    int_bounds(sib.vtype), where)
                 if is_rest(mt):
                     raise Unsupported(f"{where}: member {m.name} takes the "
                                       "rest of the packet")
@@ -2364,10 +2367,9 @@ class Compiler:
             given = (f"the value of {b.name}" if b.table is None
                      else "a DiscreteLookupList")
             self.warn(f"{where}: {vt.name} is binary data with no maximum "
-                      f"size: its size, {given}, allows more than the "
-                      f"maximum field size, {cap // 8} bytes, which the "
-                      "generated code's buffer is instead; give the size a "
-                      "ValidRange")
+                      f"size: its size, {given}, allows more than the maximum "
+                      f"field size, {cap // 8} bytes, which the generated "
+                      "code's buffer is instead; give the size a ValidRange")
         return bounded(vt, b, rng, cap)
 
     def warn(self, message: str) -> None:
@@ -2655,7 +2657,7 @@ class Compiler:
                 ckey = self.resolve(e.container_ref, path, self.containers,
                                     "container")
                 if ckey in stack:
-                    raise Unsupported(f"{where}: container includes itself")
+                    raise Cycle(f"{where}: container includes itself, a loop")
                 cpath, inc = self.containers[ckey]
                 if (inc.base_container is not None
                         and e.repeat_entry is not None):
@@ -3161,13 +3163,13 @@ class Compiler:
             (SpaceSystem key, container, key) of each, the root first.
 
         Raises:
-            Unsupported: A container includes itself.
+            Cycle: A container includes itself.
         """
         chain = []
         key = ckey
         while True:
             if key in stack or any(k == key for _, _, k in chain):
-                raise Unsupported(f"{where}: container includes itself")
+                raise Cycle(f"{where}: container includes itself, a loop")
             path, c = self.containers[key]
             chain.append((path, c, key))
             if c.base_container is None:
@@ -3601,10 +3603,9 @@ class Compiler:
             raise Unsupported(f"{what}: size or count from {sib.vtype.kind} "
                               f"entry {sib.name}")
         wide = sib.vtype if sib.vtype.wide else None
-        return self.bound(vt,
-                          dataclasses.replace(d, member=sib.ident,
-                                              wide_type=wide),
-                          int_bounds(sib.vtype), what)
+        return self.bound(
+            vt, dataclasses.replace(d, member=sib.ident, wide_type=wide),
+            int_bounds(sib.vtype), what)
 
     def tm_node(self, key: Key) -> Node:
         """Compiles a SequenceContainer, and its bases, once.
@@ -3617,13 +3618,12 @@ class Compiler:
             why.
 
         Raises:
-            Unsupported: Its inheritance chain is a cycle.
+            Cycle: Its inheritance chain is a loop.
         """
         if key in self.nodes:
             n = self.nodes[key]
             if getattr(n, "_building", False):
-                raise Unsupported("container inheritance cycle through "
-                                  f"{qname(key)}")
+                raise Cycle(f"container inheritance loop through {qname(key)}")
             return n
         path, sc = self.containers[key]
         node = Node("tm", qname(key), sc.name, bool(sc.abstract))
@@ -4248,11 +4248,10 @@ class Compiler:
             Argument); its own replace its bases'.
 
         Raises:
-            Unsupported: The inheritance chain is a cycle.
+            Cycle: The inheritance chain is a loop.
         """
         if key in seen:
-            raise Unsupported("meta-command inheritance cycle through "
-                              f"{qname(key)}")
+            raise Cycle(f"meta-command inheritance loop through {qname(key)}")
         path, mc = self.mcs[key]
         scope = {}
         if mc.base_meta_command is not None:
@@ -4336,13 +4335,13 @@ class Compiler:
             why.
 
         Raises:
-            Unsupported: Its inheritance chain is a cycle.
+            Cycle: Its inheritance chain is a loop.
         """
         if key in self.nodes:
             n = self.nodes[key]
             if getattr(n, "_building", False):
-                raise Unsupported("meta-command inheritance cycle through "
-                                  f"{qname(key)}")
+                raise Cycle("meta-command inheritance loop through "
+                            f"{qname(key)}")
             return n
         path, mc = self.mcs[key]
         node = Node("tc", qname(key), mc.name, bool(mc.abstract))
@@ -4599,9 +4598,9 @@ class Compiler:
             container has transform algorithms.
 
         Raises:
-            Unsupported: A container includes itself, or has
-                         ErrorDetectCorrect, or a base has transform
-                         algorithms.
+            Unsupported: A container has ErrorDetectCorrect, or a base has
+                         transform algorithms.
+            Cycle:       A container includes itself.
         """
         m = self._id()
         items: list[Item] = [Mark(m)]
@@ -4609,8 +4608,8 @@ class Compiler:
         chain, key = [], ckey
         while True:
             if key in stack or key in (k for _, _, k in chain):
-                raise Unsupported(f"{where}: container {qname(key)} includes "
-                                  "itself")
+                raise Cycle(f"{where}: container {qname(key)} includes itself, "
+                            "a loop")
             kpath, c = self.tc_containers[key]
             chain.append((kpath, c, key))
             if c.base_container is None:
@@ -4711,15 +4710,16 @@ class Compiler:
             container has transform algorithms.
 
         Raises:
-            Unsupported: It includes itself, has no CommandContainer or
-                         has ErrorDetectCorrect, its container extends
-                         another than its BaseMetaCommand's, or an
-                         assignment or criterion is invalid.
+            Unsupported: It has no CommandContainer or has
+                         ErrorDetectCorrect, its container extends another
+                         than its BaseMetaCommand's, or an assignment or
+                         criterion is invalid.
+            Cycle:       It includes itself.
         """
         mark = ("meta-command",) + key
         if mark in stack:
-            raise Unsupported(f"{where}: the CommandContainer of {qname(key)} "
-                              "includes itself")
+            raise Cycle(f"{where}: the CommandContainer of {qname(key)} "
+                        "includes itself, a loop")
         stack += (mark,)
         path, mc = self.mcs[key]
         cc = mc.command_container
@@ -5086,6 +5086,10 @@ class Compiler:
 
         Returns:
             The streams kept, each after those that feed it.
+
+        Raises:
+            Cycle: Streams feed one another in a loop, or a CustomStream
+                   decodes into itself.
         """
         by_key = {st.key: st for st in streams}
 
@@ -5122,7 +5126,7 @@ class Compiler:
                                           f"{target.key}, which "
                                           f"{target.feeder.key} feeds")
                     if target is st:
-                        raise Unsupported(f"{where}: decodes into itself")
+                        raise Cycle(f"{where}: decodes into itself, a loop")
                     target.feeder = st
                     source = find(path, encoded, where)
                     if source is not st:
@@ -5133,10 +5137,7 @@ class Compiler:
             seen, s = [], st
             while s is not None:
                 if s in seen:
-                    bad.setdefault(st.key,
-                                   f"stream {st.key}: its streams feed each "
-                                   "other in a cycle")
-                    break
+                    raise Cycle(stream_loop(seen[seen.index(s):]))
                 if s.key in bad and s is not st:
                     bad.setdefault(st.key,
                                    f"stream {st.key}: fed by {s.key}, which is "
@@ -6308,5 +6309,7 @@ def compile_documents(roots: list, skip_unsupported: bool = False,
                       dialect: Optional[str] = None) -> Mission:
     """Compile the mission whose definitions are in several documents:
     ``roots`` is the root SpaceSystem of each, in the order given;
-    ``dialect`` is the dialect of XTCE they follow when they don't say."""
+    ``dialect`` is the dialect of XTCE they follow when they don't say.
+    Raises Unsupported for what can't be compiled, unless
+    ``skip_unsupported``, and Cycle for a loop in the documents, always."""
     return Compiler(roots, skip_unsupported, dialect).compile()
