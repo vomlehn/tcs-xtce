@@ -14,6 +14,7 @@ pub mod refs;
 pub mod save;
 pub mod schema;
 pub mod session;
+pub mod title;
 pub mod tools;
 pub mod transfer;
 pub mod tree;

@@ -535,6 +535,9 @@ fn open_file(app: &Shared, path: PathBuf) -> Result<(), String> {
 /// The window's key.
 fn new_window(app: &Shared, path: Option<PathBuf>) -> u64 {
     let window = DocWindow::new().expect("the window can be made");
+    window.on_titled(|base, path, width| {
+        crate::title::titled(&base, &path, width).into()
+    });
     let key = {
         let mut a = app.borrow_mut();
         a.last_key += 1;
@@ -882,6 +885,7 @@ fn refresh(a: &mut App, key: u64) {
     let Some(d) = d else {
         w.window
             .set_doc_title("No document: use File > Open or New".into());
+        w.window.set_doc_path("".into());
         w.window
             .set_rows(ModelRc::new(VecModel::from(Vec::<Row>::new())));
         return;
@@ -926,6 +930,7 @@ fn refresh(a: &mut App, key: u64) {
             .map_or("?".into(), |n| n.to_string_lossy().to_string())
             .into(),
     );
+    window.set_doc_path(open.path.display().to_string().into());
     let version = open.report.version.unwrap_or(Version::NEWEST);
     window.set_version(version.to_string().into());
     window.set_dirty(open.dirty());
@@ -4521,9 +4526,7 @@ mod tests {
             .get_rows()
             .iter()
             .find(|r| r.kind == "element" && r.id == p)
-            .and_then(|r| {
-                r.attrs.iter().find(|a| a.name == "parameterTypeRef")
-            })
+            .and_then(|r| r.attrs.iter().find(|a| a.name == "parameterTypeRef"))
             .map(|a| a.value.to_string())
             .unwrap();
         rover.invoke_follow(p, "parameterTypeRef".into());

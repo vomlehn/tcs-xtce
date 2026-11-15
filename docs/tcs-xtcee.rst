@@ -116,8 +116,12 @@ Each window shows:
 * a Source tab, where the document's text can be edited and applied as
   a whole.
 
-The window's title names the file and its XTCE version, and starts with
-``*`` while the document has changes that are not saved.  The pictures in
+The window's title says the XTCE version and the file, its path
+shortened the way file managers shorten one -- your home directory as
+``~``, and the directories between the first and the last few left out,
+as ``…``, where the window is too narrow for them -- so that it always
+ends with the file's name; it starts with ``*`` while the document has
+changes that are not saved.  The pictures in
 this manual are the editor's own windows, opened on the documents in
 ``examples/`` and drawn by ``make screenshots``.
 

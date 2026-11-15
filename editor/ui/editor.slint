@@ -754,6 +754,11 @@ component TreeRow inherits Rectangle {
 // A document's window.
 export component DocWindow inherits Window {
     in property <string> doc-title;
+    // The file it is editing, or "" for none.
+    in property <string> doc-path;
+    // What the window and the file come to as a title for a window this
+    // wide: see tcs_xtcee::title::titled.
+    pure callback titled(string, string, float) -> string;
     in property <[Row]> rows;
     // The depth of the topmost selected element, where the line a depth
     // is dragged with starts, or -1 if no element is selected.
@@ -853,8 +858,14 @@ export component DocWindow inherits Window {
     callback spec();
     callback pick-problem(int);
 
-    title: (root.dirty ? "* " : "") + root.doc-title + " - XTCE "
-        + root.version;
+    // Which file it is editing, said after what the window is, the path
+    // shortened to the window's width in Rust -- see tcs_xtcee::title --
+    // so that a narrow window still names the file; a window with no
+    // document says so instead.
+    title: (root.dirty ? "* " : "")
+        + (root.doc-path == "" ? root.doc-title + " - XTCE " + root.version
+            : root.titled("XTCE " + root.version, root.doc-path,
+                root.width / 1px));
     preferred-width: 1200px;
     preferred-height: 800px;
     background: Palette.window;
