@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "tcs-xtce: an XTCE compiler, editor and packet runtime"
+abstract: >-
+  tcs-xtce compiles a mission's XTCE (XML Telemetric and Command
+  Exchange) definitions of commands and telemetry into typed data
+  structures with bit-packed binary encoders and decoders, in C/C++, Rust
+  and Python, which agree with one another byte for byte. Programs check
+  that they were built from the same definition by comparing digests that
+  every language computes the same way, instead of carrying field names
+  or tags in each packet. It includes an XTCE editor and tcsxtce, the
+  runtime the generated code runs on aboard and in the operations center.
+authors:
+  - name: "TCSpecial Team"
+version: 0.7.1
+date-released: 2026-11-15
+license:
+  - MIT
+  - Apache-2.0
+repository-code: "https://github.com/vomlehn/tcs-xtce"
+keywords:
+  - XTCE
+  - telemetry
+  - telecommand
+  - code generation
+  - packet encoding
+  - spacecraft
+  - Rust
