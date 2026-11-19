@@ -104,11 +104,13 @@ wrong. The generators write such a header for every function they emit.
 read. It is not the package's version. Raise it by one, in the same
 change, when a program already linked against the library would stop
 working: a function of `tcs-xtce.h` removed, or given other parameters or
-another meaning, or a C++ type of `xtce-*.hpp` changed in size or layout.
+another meaning, or a C++ type of `tcs-xtce-*.hpp` changed in size or
+layout.
 Adding a function does not raise it.
 
-**C and C++ headers are named with their library's prefix**, `xtce-` or
-`ccsds-`, and live straight in `cpp/include/` or `ccsds/include/`, as they
+**C and C++ headers are named with their library's prefix**, `tcs-xtce-`
+(the library), `tcsxtce-` (the packet runtime) or `tcsccsds-` (the time
+codes), and live straight in `cpp/include/` or `ccsds/include/`, as they
 are installed straight in `/opt/tcs/include`.
 
 **The digest is the same in every runtime.** `python/tcsxtce/digest.py`,

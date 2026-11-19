@@ -6,8 +6,8 @@
 #
 # The HTML is committed beside its source, and GitHub Pages serves it at
 # https://vomlehn.github.io/tcs-xtce/docs/, which the README's See also links.
-# The pre-commit hook (../githooks/pre-commit) remakes it and adds it to a
-# commit that changes a document, and ``make html-check`` in the top
+# The pre-commit hook (tcs-helpers' githooks/pre-commit) remakes it and adds
+# it to a commit that changes a document, and ``make html-check`` in the top
 # directory fails where it is stale.
 #
 # manual.rst is the short page that says what each manual covers;

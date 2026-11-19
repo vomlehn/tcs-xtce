@@ -54,8 +54,8 @@
 #                        libraries and the editor unless STRIP=0 is given
 #   make lint-packages   check the packages and their shell scripts with
 #                        lintian, rpmlint and shellcheck
-#   make editor          build tcs-xtcee, the XTCE editor (fetches the
-#                        schemas of the versions it knows, once)
+#   make editor          build tcs-xtcee, the XTCE editor, generating the
+#                        Rust binding it is built on first
 #   make test-editor     run the editor's tests
 #   make editor-check    hold the editor to xmllint on random documents of
 #                        every version and their conversions
@@ -211,9 +211,29 @@ EDITOR_XSD := $(foreach v,1.1 1.2 1.3,references/xtce-$(v).xsd)
 $(EDITOR_XSD):
 	$(MAKE) -C references editor
 
+# The editor is built on the Rust binding, so the binding is generated
+# first: it is not committed.
 .PHONY: editor
-editor:
+editor: $(RUST_GEN)
 	cd editor && $(CARGO) build --release
+
+# What installing takes the editor from. As root, as under sudo make
+# install-files, the editor is not built, since root's PATH seldom has
+# cargo and the build would leave root's files in editor/target: it is
+# taken as built, and make editor, as yourself, builds it first.
+ifeq ($(shell id -u),0)
+INSTALLED_EDITOR := built-editor
+else
+INSTALLED_EDITOR := editor
+endif
+
+.PHONY: built-editor
+built-editor:
+	@[ -x $(EDITOR_BIN) ] || { \
+	    echo "$(EDITOR_BIN) is not built: run make editor as yourself," \
+	        "then this again" >&2; \
+	    exit 1; \
+	}
 
 .PHONY: test-editor
 test-editor: $(EDITOR_XSD) $(PY_GEN)
@@ -283,7 +303,8 @@ bnum-check: rust cpp
 # and then they are installed in a fresh virtual environment and tried: see
 # tests/python_dist_check.sh. Built by setuptools in place, without pip's
 # isolated build environment, so nothing is downloaded; setuptools 77 or
-# later and twine have to be installed, which make install-tools does. Not
+# later and twine have to be installed: make install-tools installs the
+# system's, and the README says what to do where it is older than 77. Not
 # part of `make test`. Publishing them is not done here. setuptools works in
 # build/lib and build/bdist.* in each distribution's directory, which are
 # removed before and after, with its *.egg-info; the rest of the top build/
@@ -332,7 +353,8 @@ python-versions:
 	sh tests/python-versions-check.sh dist
 
 # Public XTCE documents, pinned to commits in tests/external/sources.txt and
-# downloaded on demand; not part of `make test`, which needs no network.
+# downloaded on demand; not part of `make test`, which needs no network
+# once cargo has its crates and the editor's schemas are fetched.
 EXTERNAL := tests/external/files
 
 .PHONY: samples-check
@@ -667,7 +689,7 @@ install-tcsxtce: $(PY_GEN) tcs-helpers
 # the one Rust program installed, with the licence notices each requires
 # to go with every copy.
 .PHONY: install-tcs-xtce
-install-tcs-xtce: $(PY_GEN) $(CPP_GEN) editor tcs-helpers
+install-tcs-xtce: $(PY_GEN) $(CPP_GEN) $(INSTALLED_EDITOR) tcs-helpers
 	@[ "$(VERSION)" = "$(RUST_VERSION)" ] || { \
 	    echo "pyproject.toml is $(VERSION) and rust/Cargo.toml" \
 	        "$(RUST_VERSION); make them agree" >&2; \

@@ -217,8 +217,11 @@ Batches
 Building and testing
 ====================
 
-Requirements: ``curl``, ``xmllint``, Python 3.10 or later, a Rust
-toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
+Requirements: the README's "Building" lists them all, and ``make
+install-tools`` installs them. In short: ``curl``, ``xmllint``, Python
+3.11 or later (the packages themselves run on 3.10), a Rust toolchain
+1.92 or later with ``rustfmt``, a C11 and a C++20 compiler, fontconfig's
+headers, ``rst2html``, and a checkout of tcs-helpers beside this one.
 
 .. code-block:: sh
 
@@ -227,9 +230,9 @@ toolchain with ``rustfmt``, a C11 compiler, and a C++20 compiler.
    make generate        # regenerate all generated code
    make packets         # regenerate the demo mission's packet codecs
    make rust | cpp | python
-   make test            # every language's tests and both cross-language checks
+   make test            # every language's tests and the cross-language checks
    make samples-check   # check against public XTCE documents (downloads them)
-   make python-dist     # build the Python package into dist/ and try it
+   make python-dist     # build the Python distributions into dist/, try them
    make fmt             # format Rust and Python code
    make fmt-check       # verify it (Rust is also checked by every `make rust`)
    make install         # build the packages, install them (see Installing)

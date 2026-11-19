@@ -80,24 +80,60 @@ The plan, shared with [tcspecial](https://github.com/vomlehn/tcspecial) and
 
 ```sh
 make              # fetch references if missing, generate, build, run all tests
+make rust         # build the Rust crates alone, from the generated binding
+make cpp          # build the C++ library and its tools alone
+make python       # byte-compile the Python packages alone
 make references   # re-check OMG and pull the latest XTCE documents
 make generate     # regenerate the bindings after the schema or generator changes
+make samples      # regenerate the schema-coverage samples in tests/samples/
 make packets      # regenerate the demo mission's packet codecs
-make editor       # build tcs-xtcee, the XTCE editor
-make test         # per-language tests, both cross-language checks, the examples
+make editor       # build tcs-xtcee, the XTCE editor, generating the Rust
+                  # binding it is built on first
+make test         # per-language tests, the seven cross-language checks
+                  # (cross, packet, stream, digest, float, bnum, ccsds), the
+                  # editor's tests, the examples, the page and name checks,
                   # and the 80-column check
 make examples     # build and run the examples in examples/
+make html         # remake the HTML pages from their reStructuredText
+make screenshots  # remake the editor manual's screenshots
 make fmt-check    # verify Rust and Python formatting (Rust is also checked by
                   # every `make rust`)
+make python-dist  # build the Python wheels and sdists into dist/, and try them
+make ccsds        # build tcsccsds, the CCSDS time codes: see ccsds/README.md
 ```
 
-Requirements: `curl`, `xmllint`, Python 3.11+ (the Python package itself
-runs on 3.10), a Rust toolchain with `rustfmt`, 1.92 or later for the
-editor, a C11 and C++20 compiler, fontconfig's headers, `rst2html` for the
-pages `make test` checks, and a checkout of
-[tcs-helpers](https://github.com/vomlehn/tcs-helpers) beside this one. `make
-install-tools` installs all but the checkout with apt-get or dnf; `DRY_RUN=1`
-shows the commands and runs none, and `PACKAGING=0` leaves out the packaging
+Plain `make` also checks the formatting and, in a git checkout, sets up
+the commit hook. The generated bindings are not committed, so a fresh
+clone runs `make` or `make generate` before anything is built from them;
+`make editor` and the language targets do it themselves.
+
+Requirements:
+
+* git, make, `pkg-config` and binutils (`strip`, `ar`);
+* `curl` and `xmllint`;
+* Python 3.11+, with pip and venv (the Python packages themselves run on
+  3.10); setuptools 77 or later and twine for `make python-dist` and for
+  installing and packaging, which build the Python in place, without pip's
+  isolated environment -- where the system's setuptools is older,
+  `python3 -m venv --system-site-packages ~/tcs-venv`,
+  `~/tcs-venv/bin/pip install 'setuptools>=77' twine`, and
+  `PYTHON=~/tcs-venv/bin/python3` on each make line;
+* a Rust toolchain with `rustfmt`, 1.92 or later, which the editor needs
+  (no `rust-toolchain` file pins it: `make install-tools` checks it);
+* a C11 and C++20 compiler, and fontconfig's headers;
+* `rst2html` (python3-docutils) for the pages `make test` checks;
+* a checkout of [tcs-helpers](https://github.com/vomlehn/tcs-helpers),
+  0.11.0 or later, beside this one: `make test`'s page and name checks,
+  installing and packaging all use it;
+* the network, the first time: crates.io for every cargo build, omg.org
+  for the references and the schemas the editor's tests use, and GitHub
+  for the public documents `make samples-check` reads;
+* podman, only for `make python-versions` and `make portable-packages`,
+  and gh, only for `make publish-release`.
+
+`make install-tools` installs all but the checkout, podman and gh with
+apt-get or dnf, and says what it cannot install; `DRY_RUN=1` shows the
+commands and runs none, and `PACKAGING=0` leaves out the packaging
 tools. It is `bin/install-tools`, which a container can run as root too.
 tcs-xtce needs nothing of TCSpecial's, and is used with it or on its own.
 
@@ -131,10 +167,10 @@ on `python3`'s path.
 Installing and packaging use
 [tcs-helpers](https://github.com/vomlehn/tcs-helpers), the packaging scripts
 and make rules the TCS projects share, from a checkout of it beside this
-one, so clone it there first. It is used where it is, never installed;
-`TCS_HELPERS=<path>` names a checkout elsewhere, and `make tcs-helpers`
-checks that it is there and new enough, which installing and packaging do
-first.
+one, so clone it there first (`make test`'s checks use it too). It is used
+where it is, never installed; `TCS_HELPERS=<path>` names a checkout
+elsewhere, and `make tcs-helpers` checks that it is there and new enough,
+0.11.0 or later, which installing and packaging do first.
 
 ```sh
 git clone https://github.com/vomlehn/tcs-helpers.git ../tcs-helpers
@@ -182,8 +218,10 @@ the links from `/usr/local/bin` and `/opt/bin`; installing it never makes
 them. After `make install`, `sudo make links` and `sudo make unlinks` do
 the same (`LINKDIR` gives the directory).
 
-**From the source tree.** `sudo make install-files` copies the same files
-into place without a package, for development, which is what `make
+**From the source tree.** Build as yourself first, `make && make editor`,
+since root's `PATH` seldom has cargo and a build as root would leave root's
+files in the tree; then `sudo make install-files` copies the same files
+into place without a package, taking the editor as built, for development, which is what `make
 install` once did, but nothing outside `/opt/tcs`; `make install-files
 PREFIX=$HOME` installs under your home instead, `DESTDIR` stages it, and
 `make uninstall-files`, with the same variables, removes them. `make

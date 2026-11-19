@@ -628,17 +628,20 @@ more of a larger one than the length can count.</dd>
 </div>
 <div class="section" id="building-and-testing">
 <h1><a class="toc-backref" href="#toc-entry-5">Building and testing</a></h1>
-<p>Requirements: <tt class="docutils literal">curl</tt>, <tt class="docutils literal">xmllint</tt>, Python 3.10 or later, a Rust
-toolchain with <tt class="docutils literal">rustfmt</tt>, a C11 compiler, and a C++20 compiler.</p>
+<p>Requirements: the README's &quot;Building&quot; lists them all, and <tt class="docutils literal">make
+<span class="pre">install-tools</span></tt> installs them. In short: <tt class="docutils literal">curl</tt>, <tt class="docutils literal">xmllint</tt>, Python
+3.11 or later (the packages themselves run on 3.10), a Rust toolchain
+1.92 or later with <tt class="docutils literal">rustfmt</tt>, a C11 and a C++20 compiler, fontconfig's
+headers, <tt class="docutils literal">rst2html</tt>, and a checkout of tcs-helpers beside this one.</p>
 <pre class="code sh literal-block">
 make<span class="whitespace">                 </span><span class="comment single"># fetch references if missing, generate, build, test
 </span>make<span class="whitespace"> </span>references<span class="whitespace">      </span><span class="comment single"># check OMG for the latest XTCE and download it
 </span>make<span class="whitespace"> </span>generate<span class="whitespace">        </span><span class="comment single"># regenerate all generated code
 </span>make<span class="whitespace"> </span>packets<span class="whitespace">         </span><span class="comment single"># regenerate the demo mission's packet codecs
 </span>make<span class="whitespace"> </span>rust<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>cpp<span class="whitespace"> </span><span class="punctuation">|</span><span class="whitespace"> </span>python<span class="whitespace">
-</span>make<span class="whitespace"> </span><span class="name builtin">test</span><span class="whitespace">            </span><span class="comment single"># every language's tests and both cross-language checks
+</span>make<span class="whitespace"> </span><span class="name builtin">test</span><span class="whitespace">            </span><span class="comment single"># every language's tests and the cross-language checks
 </span>make<span class="whitespace"> </span>samples-check<span class="whitespace">   </span><span class="comment single"># check against public XTCE documents (downloads them)
-</span>make<span class="whitespace"> </span>python-dist<span class="whitespace">     </span><span class="comment single"># build the Python package into dist/ and try it
+</span>make<span class="whitespace"> </span>python-dist<span class="whitespace">     </span><span class="comment single"># build the Python distributions into dist/, try them
 </span>make<span class="whitespace"> </span>fmt<span class="whitespace">             </span><span class="comment single"># format Rust and Python code
 </span>make<span class="whitespace"> </span>fmt-check<span class="whitespace">       </span><span class="comment single"># verify it (Rust is also checked by every `make rust`)
 </span>make<span class="whitespace"> </span>install<span class="whitespace">         </span><span class="comment single"># build the packages, install them (see Installing)
