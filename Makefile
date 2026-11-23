@@ -436,12 +436,19 @@ fmt-check:
 # their sources and served by GitHub Pages, so remade before a commit that
 # changes one, and left alone by clean.
 .PHONY: html
-html:
+html: index.html
 	$(MAKE) -C docs html
 	$(MAKE) -C examples html
 
+# The top page, made from README.md: what the project's site gives at its
+# top, which GitHub Pages serves from this directory.
+index.html: README.md
+	pandoc --standalone --shift-heading-level-by=-1 --toc --toc-depth=3 \
+		--metadata toc-title="Table of Contents" \
+		--metadata pagetitle=tcs-xtce README.md -o index.html
+
 # The directories whose make builds the committed pages.
-HTML_DIRS := docs examples
+HTML_DIRS := . docs examples
 
 # Fail where a committed page is behind its source, naming it, having made
 # every page again in place: tcs-helpers' html-pages check.
@@ -527,7 +534,7 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.12.0
+TCS_HELPERS_REQUIRED := 0.13.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include

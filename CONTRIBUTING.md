@@ -47,7 +47,7 @@ them on every build. A change to what the generated code does goes into all
 three emitters (`python/tcs_xtce/compiler/emit_rust.py`, `emit_c.py`,
 `emit_python.py`) and their runtimes, with tests. Every example in
 `examples/` has a Rust, C/C++ and Python version, a `README.rst`, and a
-`Makefile` that runs it and, with `make html`, makes `README.html`.
+`Makefile` that runs it and, with `make html`, makes `index.html`.
 
 **Line width and indentation.** All code, generated and hand-written, in
 every language, keeps its lines within 80 columns; so do Makefiles and

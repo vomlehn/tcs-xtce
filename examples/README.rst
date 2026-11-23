@@ -13,9 +13,9 @@ Each example is a self-contained directory holding:
 * a small program in each language that uses the code ``tcs-xtce``
   generates from it;
 * a ``README.rst`` explaining what the example shows and how to run each
-  program, and the ``README.html`` made from it;
+  program, and the ``index.html`` made from it;
 * a ``Makefile`` that builds and runs the programs and makes
-  ``README.html``.
+  ``index.html``.
 
 The generated code isn't kept in git; building an example generates it.
 
@@ -26,7 +26,7 @@ against the ``--lang c`` header, and as C++, against the ``--lang c++``
 header), and checks that their output is identical.
 
 Run ``make html`` in an example's directory to turn its ``README.rst``
-into ``README.html``. Run ``make`` in this directory to do that for this
+into ``index.html``. Run ``make`` in this directory to do that for this
 file and every example's.
 
 .. list-table::
@@ -35,26 +35,26 @@ file and every example's.
 
    * - Example
      - Shows
-   * - `enum-labels <enum-labels/README.html>`__
+   * - `enum-labels <enum-labels/index.html>`__
      - A status whose mode is an enumeration that its include conditions,
        a derived packet and an alarm all compare by label, so that
        renumbering the modes changes nothing but the bytes
-   * - `housekeeping <housekeeping/README.html>`__
+   * - `housekeeping <housekeeping/index.html>`__
      - Status packets with a packet length field, calibrated values and a
        field present only when the heater is on, stored one after another
        in a stream and split apart again
-   * - `simple-string <simple-string/README.html>`__
+   * - `simple-string <simple-string/index.html>`__
      - A structure holding one string of up to 8 bytes, serialized into
        and deserialized from managed buffers
-   * - `split-mission <split-mission/README.html>`__
+   * - `split-mission <split-mission/index.html>`__
      - A rover's PUS telemetry described in three documents (data types,
        packet headers and the rover's packets), with types derived by
        ``baseType``, recorded after the digest of the set of documents
-   * - `to-from <to-from/README.html>`__
+   * - `to-from <to-from/index.html>`__
      - Words of varying length, with a leading size tag, written by the
        program in one language and read by the program in another, for
        any pair of C, C++, Rust and Python
-   * - `variable-array <variable-array/README.html>`__
+   * - `variable-array <variable-array/index.html>`__
      - Two two-dimensional arrays whose dimensions both vary, the lines
        and words of a paragraph, sent one after the other over one TCP
        connection from one thread to another, each after its length

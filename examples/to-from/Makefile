@@ -7,9 +7,9 @@
 #   make build      generate the code and build every program, so that
 #                   ./to-from TO FROM can run them
 #   make generate   rerun tcs-xtce on to_from.xtce
-#   make html       convert README.rst to README.html
+#   make html       convert README.rst to index.html
 #   make clean      remove build products (keeps the generated code and
-#                   README.html)
+#                   index.html)
 
 TOP     := ../..
 PYTHON  ?= python3
@@ -102,13 +102,13 @@ run: build
 	@echo "to-from: the 4 writers wrote the same bytes, and the 16" \
 		"reader/writer pairs printed the same words"
 
-# README.html is committed beside README.rst, like the other documents.
+# index.html is committed beside README.rst, like the other documents.
 # --halt=warning turns docutils warnings into errors, so a malformed README
 # fails the build instead of producing a damaged page.
 .PHONY: html
-html: README.html
+html: index.html
 
-README.html: README.rst
+index.html: README.rst
 	$(RST2HTML) --halt=warning $< $@
 
 .PHONY: clean

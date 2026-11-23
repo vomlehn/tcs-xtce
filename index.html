@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>tcs-xtce</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">tcs-xtce: an XTCE compiler, editor and packet
+runtime</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<h2 id="toc-title">Table of Contents</h2>
+<ul>
+<li><a href="#building" id="toc-building">Building</a></li>
+<li><a href="#installing" id="toc-installing">Installing</a></li>
+<li><a href="#how-it-works" id="toc-how-it-works">How it works</a>
+<ul>
+<li><a href="#type-mapping" id="toc-type-mapping">Type mapping</a></li>
+<li><a href="#managed-buffers" id="toc-managed-buffers">Managed
+buffers</a></li>
+</ul></li>
+<li><a href="#usage" id="toc-usage">Usage</a></li>
+<li><a href="#packet-codecs" id="toc-packet-codecs">Packet
+codecs</a></li>
+<li><a href="#behaviour-and-limitations"
+id="toc-behaviour-and-limitations">Behaviour and limitations</a></li>
+<li><a href="#see-also" id="toc-see-also">See also</a></li>
+<li><a href="#incompatible-changes"
+id="toc-incompatible-changes">Incompatible changes</a></li>
+<li><a href="#contributing" id="toc-contributing">Contributing</a></li>
+<li><a href="#license" id="toc-license">License</a></li>
+</ul>
+</nav>
+<p>Software tools for XTCE (XML Telemetric and Command Exchange): a
+compiler that turns a mission’s XTCE definitions of commands and
+telemetry into the data structures and code that pack and unpack them,
+in C/C++, Rust and Python; an XTCE editor; and tcsxtce, the operational
+runtime the generated code runs on, aboard and in the mission operations
+center. Made for space applications, and as useful on the ground, such
+as for drones.</p>
+<p>Includes libraries that serialize and deserialize OMG
+<strong>XTCE</strong> (XML Telemetric and Command Exchange) data into
+managed, preallocated buffers, in two layers:</p>
+<ul>
+<li><strong>XML binding</strong>: typed data structures for the whole
+XTCE schema, with code that reads and writes XTCE documents. The code
+for all three languages is generated from the official schema, which is
+downloaded into <code>references/</code>.</li>
+<li><strong>Packet codecs</strong>: <code>tcs-xtce</code> compiles one
+mission’s XTCE document, or the several documents it is split across, as
+Yamcs loads them, into typed telemetry and command structs, with binary
+encoders and decoders for the packets it describes.</li>
+</ul>
+<p>XTCE defines the data structures once, and the code generated for
+each language exchanges them: what one language writes, any other reads,
+byte for byte. The packets are bit-packed, so a field takes only the
+bits its encoding gives, with none of the padding a language’s own
+structures have; the housekeeping example’s status packet is 7 bytes,
+where the C structure is 40. Packets carry no field names or tags.
+Instead, programs check that they were built from the same definition by
+comparing digests, which every language (Rust, C/C++ and Python)
+computes the same way, as does <code>xtce-digest</code>: the sender
+sends its digest first, and the receiver checks it, which guarantees
+that they agree on every field’s type and order. That avoids the
+per-message cost of self-describing formats: the same packet is 77 bytes
+as JSON and 29 as Protocol Buffers.</p>
+<p>What the generated code runs on, the packet runtime, and the digest
+programs check each other with are a library of their own,
+<code>tcsxtce</code>, in each language: the <code>tcsxtce</code> crate,
+the <code>tcsxtce</code> Python package, and the header-only
+<code>tcsxtce-packet.h</code> and <code>tcsxtce-digest.h</code> for C
+and C++. It is operational code, run aboard and in the operations
+center, and is all of tcs-xtce that is, with tcsccsds; the rest – the
+XML binding, the compiler and the editor – is software tools, which make
+what operational code is built from. <code>categories.toml</code> puts
+each directory in its category, as “Code categories” in <a
+href="https://github.com/vomlehn/tcs-helpers#code-categories">tcs-helpers’
+README</a> defines them.</p>
+<p>The full documentation is in <code>docs/</code>: <a
+href="https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtce.rst"><code>docs/tcs-xtce.rst</code></a>
+(the code generator’s manual, including every data structure and
+method), <a
+href="https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtcee.rst"><code>docs/tcs-xtcee.rst</code></a>
+(the editor’s manual), <a
+href="https://github.com/vomlehn/tcs-xtce/blob/main/docs/manual.rst"><code>docs/manual.rst</code></a>
+(what each manual covers), and the design and rationale of each, <a
+href="https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtce-design.rst"><code>docs/tcs-xtce-design.rst</code></a>
+and <a
+href="https://github.com/vomlehn/tcs-xtce/blob/main/docs/tcs-xtcee-design.rst"><code>docs/tcs-xtcee-design.rst</code></a>,
+which <a
+href="https://github.com/vomlehn/tcs-xtce/blob/main/docs/design.rst"><code>docs/design.rst</code></a>
+lists; each is rendered to HTML beside it: see <a href="#see-also">See
+also</a>.</p>
+<p>Work is under way on integrating tcs-xtce with NASA’s core Flight
+System (cFS) and JPL’s F´ (F Prime): generating cFS messages and F´ FPP
+from XTCE, or reading their definitions into it, and dictionaries for
+their ground systems. The plan, shared with <a
+href="https://github.com/vomlehn/tcspecial">tcspecial</a> and <a
+href="https://github.com/vomlehn/tcslog">tcslog</a>, is in tcspecial’s
+<a
+href="https://github.com/vomlehn/tcspecial/blob/main/docs/third-party.rst"><code>docs/third-party.rst</code></a>.</p>
+<blockquote>
+<p><strong>Note:</strong> integration with cFS and F´ is a work in
+progress. None of it is built yet, and the plan may change as it is.</p>
+</blockquote>
+<table>
+<colgroup>
+<col style="width: 60%" />
+<col style="width: 40%" />
+</colgroup>
+<thead>
+<tr>
+<th>Directory</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>references/</code></td>
+<td>Downloaded XTCE documents: <code>SpaceSystem.xsd</code>,
+<code>XTCE.pdf</code>, <code>VERSION</code>, plus <code>xml.xsd</code>
+and <code>catalog.xml</code> for offline validation</td>
+</tr>
+<tr>
+<td><code>rust/</code></td>
+<td><code>tcs-xtce</code> Rust crate, and in <code>rust/tcsxtce/</code>
+the <code>tcsxtce</code> crate, the packet runtime that generated Rust
+uses</td>
+</tr>
+<tr>
+<td><code>cpp/</code></td>
+<td>C++20 library (<code>libtcs-xtce.a</code>,
+<code>libtcs-xtce.so</code>) with a C API (<code>tcs-xtce.h</code>), and
+the header-only C/C++ packet runtime
+(<code>tcsxtce-packet.h</code>)</td>
+</tr>
+<tr>
+<td><code>python/</code></td>
+<td>Two Python distributions (3.10+, standard library only), each with a
+<code>README-pypi.md</code> for its PyPI page: <code>tcsxtce</code>, the
+packet runtime that generated Python uses
+(<code>python/pyproject.toml</code>), and <code>tcs-xtce</code> (the
+root <code>pyproject.toml</code>), whose <code>tcs_xtce</code> package
+is the XML binding, <code>tcs_xtce.binding</code> (generates the XML
+binding from the XSD), <code>tcs-xtce</code> (compiles a mission’s XTCE
+into packet codecs; compiler in <code>tcs_xtce.compiler</code>) and
+<code>xtce-digest</code> (an MD5 digest of what an XTCE document means,
+to spot changes)</td>
+</tr>
+<tr>
+<td><code>tests/</code></td>
+<td>The demo mission, packet vectors and the cross-language checks;
+<code>make</code> generates the schema-coverage samples into
+<code>tests/samples/</code></td>
+</tr>
+<tr>
+<td><code>editor/</code></td>
+<td><code>tcs-xtcee</code>, a graphical XTCE editor that keeps a
+document valid for its XTCE version (1.1, 1.2 or 1.3), its comments and
+layout as written, and converts between versions</td>
+</tr>
+<tr>
+<td><code>docs/</code></td>
+<td>The manuals, <code>manual.rst</code>, <code>tcs-xtce.rst</code> and
+<code>tcs-xtcee.rst</code>, and the designs, <code>design.rst</code>,
+<code>tcs-xtce-design.rst</code> and
+<code>tcs-xtcee-design.rst</code></td>
+</tr>
+<tr>
+<td><code>bin/</code></td>
+<td><code>install-tools</code>, which <code>make install-tools</code>
+runs: it installs what building, testing and packaging need, with
+apt-get or dnf</td>
+</tr>
+<tr>
+<td><code>examples/</code></td>
+<td>Example XTCE files and a program per language that uses the code
+generated from them (start with <code>simple-string</code>)</td>
+</tr>
+</tbody>
+</table>
+<h1 id="building">Building</h1>
+<div class="sourceCode" id="cb1"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span>              <span class="co"># fetch references if missing, generate, build, run all tests</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> rust         <span class="co"># build the Rust crates alone, from the generated binding</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> cpp          <span class="co"># build the C++ library and its tools alone</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> python       <span class="co"># byte-compile the Python packages alone</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> references   <span class="co"># re-check OMG and pull the latest XTCE documents</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> generate     <span class="co"># regenerate the bindings after the schema or generator changes</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> samples      <span class="co"># regenerate the schema-coverage samples in tests/samples/</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> packets      <span class="co"># regenerate the demo mission&#39;s packet codecs</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> editor       <span class="co"># build tcs-xtcee, the XTCE editor, generating the Rust</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>                  <span class="co"># binding it is built on first</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> test         <span class="co"># per-language tests, the seven cross-language checks</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>                  <span class="co"># (cross, packet, stream, digest, float, bnum, ccsds), the</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>                  <span class="co"># editor&#39;s tests, the examples, the page and name checks,</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>                  <span class="co"># and the 80-column check</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> examples     <span class="co"># build and run the examples in examples/</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> html         <span class="co"># remake the HTML pages from their reStructuredText</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> screenshots  <span class="co"># remake the editor manual&#39;s screenshots</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> fmt-check    <span class="co"># verify Rust and Python formatting (Rust is also checked by</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>                  <span class="co"># every `make rust`)</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> python-dist  <span class="co"># build the Python wheels and sdists into dist/, and try them</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> ccsds        <span class="co"># build tcsccsds, the CCSDS time codes: see ccsds/README.md</span></span></code></pre></div>
+<p>Plain <code>make</code> also checks the formatting and, in a git
+checkout, sets up the commit hook. The generated bindings are not
+committed, so a fresh clone runs <code>make</code> or
+<code>make generate</code> before anything is built from them;
+<code>make editor</code> and the language targets do it themselves.</p>
+<p>Requirements:</p>
+<ul>
+<li>git, make, <code>pkg-config</code> and binutils (<code>strip</code>,
+<code>ar</code>);</li>
+<li><code>curl</code> and <code>xmllint</code>;</li>
+<li>Python 3.11+, with pip and venv (the Python packages themselves run
+on 3.10); setuptools 77 or later and twine for
+<code>make python-dist</code> and for installing and packaging, which
+build the Python in place, without pip’s isolated environment – where
+the system’s setuptools is older,
+<code>python3 -m venv --system-site-packages ~/tcs-venv</code>,
+<code>~/tcs-venv/bin/pip install 'setuptools&gt;=77' twine</code>, and
+<code>PYTHON=~/tcs-venv/bin/python3</code> on each make line;</li>
+<li>a Rust toolchain with <code>rustfmt</code>: the newest stable, which
+<code>rust-toolchain.toml</code> asks rustup for and
+<code>make test</code> holds it to, through tcs-helpers’
+<code>rust-current</code> – run <code>rustup update stable</code> where
+it says a newer one is out. The editor needs 1.92 or later, which
+<code>make install-tools</code> checks;</li>
+<li>a C11 and C++20 compiler, and fontconfig’s headers;</li>
+<li><code>rst2html</code> (python3-docutils) for the pages
+<code>make test</code> checks;</li>
+<li>a checkout of <a
+href="https://github.com/vomlehn/tcs-helpers">tcs-helpers</a>, 0.11.0 or
+later, beside this one: <code>make test</code>’s page and name checks,
+installing and packaging all use it;</li>
+<li>the network, the first time: crates.io for every cargo build,
+omg.org for the references and the schemas the editor’s tests use, and
+GitHub for the public documents <code>make samples-check</code>
+reads;</li>
+<li>podman, only for <code>make python-versions</code> and
+<code>make portable-packages</code>, and gh, only for
+<code>make publish-release</code>.</li>
+</ul>
+<p><code>make install-tools</code> installs all but the checkout, podman
+and gh with apt-get or dnf, and says what it cannot install;
+<code>DRY_RUN=1</code> shows the commands and runs none, and
+<code>PACKAGING=0</code> leaves out the packaging tools. It is
+<code>bin/install-tools</code>, which a container can run as root too.
+tcs-xtce needs nothing of TCSpecial’s, and is used with it or on its
+own.</p>
+<p><code>references/Makefile</code> finds the latest version on the OMG
+specification page (https://www.omg.org/spec/XTCE/) rather than
+hard-coding it. At the time of writing that is XTCE 1.3, schema
+namespace <code>http://www.omg.org/spec/XTCE/20250214</code>.</p>
+<h1 id="installing">Installing</h1>
+<p>Everything below installs under <code>/opt/tcs</code>, the tree the
+TCS packages share: the <code>tcs-xtce</code>, <code>xtce-digest</code>
+and <code>tcs-xtcee</code> commands in <code>bin/</code>, the C/C++
+headers in <code>include/</code>, <code>libtcs-xtce.so</code> and
+<code>libtcs-xtce.a</code> with <code>tcs-xtce.pc</code> (and
+<code>tcsccsds.pc</code>, for the header-only time codes) in
+<code>lib/</code>, and the Python packages <code>tcs_xtce</code> and
+<code>tcsccsds</code> in <code>lib/python3/site-packages/</code>.</p>
+<p><strong>Packages.</strong> <code>make deb</code> and
+<code>make rpm</code> (or <code>make packages</code>, both) build two
+packages, version <code>&lt;version&gt;-1</code>, into
+<code>build/packages/</code>, since a package with operational code
+holds nothing else: <code>tcsxtce</code>, the operational code – the
+<code>tcsxtce-*</code> headers, the <code>tcsxtce</code> Python package
+and tcsccsds’s time codes, with <code>tcsxtce.pc</code> and
+<code>tcsccsds.pc</code> – and <code>tcs-xtce</code>, the software tools
+– the commands, <code>libtcs-xtce</code> with its headers and
+<code>tcs-xtce.pc</code>, the <code>tcs_xtce</code> Python package –
+with the documents and examples. <code>tcs-xtce</code> requires the
+<code>tcsxtce</code> built with it, and <code>python3</code> 3.10 or
+later. The packages also put <code>/opt/tcs/bin</code> on
+<code>PATH</code> and <code>/opt/tcs/lib/pkgconfig</code> on
+<code>PKG_CONFIG_PATH</code> for login shells, tell the loader about
+<code>/opt/tcs/lib</code>, and put the Python packages on
+<code>python3</code>’s path.</p>
+<p>Installing and packaging use <a
+href="https://github.com/vomlehn/tcs-helpers">tcs-helpers</a>, the
+packaging scripts and make rules the TCS projects share, from a checkout
+of it beside this one, so clone it there first (<code>make test</code>’s
+checks use it too). It is used where it is, never installed;
+<code>TCS_HELPERS=&lt;path&gt;</code> names a checkout elsewhere, and
+<code>make tcs-helpers</code> checks that it is there and new enough,
+0.11.0 or later, which installing and packaging do first.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/vomlehn/tcs-helpers.git ../tcs-helpers</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> install              <span class="co"># build the packages, install this system&#39;s</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> install DRY_RUN=1    <span class="co"># show what install would do; change nothing</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> uninstall            <span class="co"># remove the package</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> uninstall DRY_RUN=1  <span class="co"># show what uninstall would do</span></span></code></pre></div>
+<p><code>make install</code> builds both packages as you, and then
+installs the one this system takes with its usual installer: the .deb
+with <code>apt-get</code> on Debian and Ubuntu, the RPM with
+<code>dnf</code> (or <code>yum</code>) on Fedora and Red Hat’s, or with
+<code>zypper</code> on SUSE’s, each of which installs what the package
+depends on too. Only that step runs as root, under <code>sudo</code>,
+which asks for your password then; <code>SUDO=&lt;command&gt;</code>
+names another, and none is used when make runs as root.
+<code>make uninstall</code> removes the package with the same installer.
+<code>DRY_RUN=1</code> has the installer show what it would do –
+<code>apt-get -s</code>, <code>dnf --assumeno</code>,
+<code>zypper --dry-run</code> – without sudo, changing nothing.</p>
+<p>The system is known by the <code>ID</code> and <code>ID_LIKE</code>
+of <code>/etc/os-release</code>, not by which tools it has. On one it
+does not know, <code>make install</code> says so and stops; there, or to
+install the other kind, <code>PACKAGE_FORMAT=deb</code> or
+<code>PACKAGE_FORMAT=rpm</code> chooses the kind, and
+<code>INSTALLER=&lt;command&gt;</code> the installer
+(<code>apt-get</code>, <code>apt</code>, <code>dpkg</code>,
+<code>dnf</code>, <code>yum</code>, <code>zypper</code> or
+<code>rpm</code>). If the kind it needs was not built, because
+<code>dpkg-deb</code> or <code>rpmbuild</code> is missing, it says which
+to install; <code>make deb</code> and <code>make rpm</code> themselves
+say so and carry on without the tool, so that <code>make packages</code>
+builds what it can.</p>
+<p><code>/etc/profile.d</code> is read only by login shells, so
+<code>sudo</code>, cron and other minimal environments do not see
+<code>/opt/tcs/bin</code>. To make <code>tcs-xtce</code>,
+<code>xtce-digest</code> and <code>tcs-xtcee</code> available
+everywhere, link them into <code>/usr/local/bin</code>:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> /opt/tcs/sbin/tcs-xtce-links             <span class="co"># make the links</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> /opt/tcs/sbin/tcs-xtce-links <span class="at">--remove</span>    <span class="co"># take them away again</span></span></code></pre></div>
+<p><code>--dir DIR</code> links into another directory, such as
+<code>/opt/bin</code>. Only the package’s own programs are linked, and
+anything already there that is not one of its links is left alone and
+named. Removing the package removes the links from
+<code>/usr/local/bin</code> and <code>/opt/bin</code>; installing it
+never makes them. After <code>make install</code>,
+<code>sudo make links</code> and <code>sudo make unlinks</code> do the
+same (<code>LINKDIR</code> gives the directory).</p>
+<p><strong>From the source tree.</strong> Build as yourself first,
+<code>make &amp;&amp; make editor</code>, since root’s <code>PATH</code>
+seldom has cargo and a build as root would leave root’s files in the
+tree; then <code>sudo make install-files</code> copies the same files
+into place without a package, taking the editor as built, for
+development, which is what <code>make install</code> once did, but
+nothing outside <code>/opt/tcs</code>;
+<code>make install-files PREFIX=$HOME</code> installs under your home
+instead, <code>DESTDIR</code> stages it, and
+<code>make uninstall-files</code>, with the same variables, removes
+them. <code>make install</code> takes neither variable, and stops if
+given one. <code>make stage</code> copies into
+<code>build/stage/&lt;package&gt;/</code>, from which the packages are
+made.</p>
+<p><code>make install-files</code>, <code>make stage</code> and so the
+packages strip the libraries they install: <code>libtcs-xtce.so</code>
+of all a debugger needs (<code>strip --strip-unneeded</code>),
+<code>libtcs-xtce.a</code> of its debugging information
+(<code>strip --strip-debug</code>). Give <code>STRIP=0</code>, as in
+<code>make packages STRIP=0</code>, to keep everything as built.</p>
+<p>The .deb also carries what Debian expects of every package, outside
+<code>/opt/tcs</code> as the hooks are:
+<code>/usr/share/doc/tcs-xtce/copyright</code>, in Debian’s
+machine-readable format, and <code>changelog.Debian.gz</code>, both made
+as the package is built from <code>LICENSE-MIT</code> and the version;
+lintian’s overrides in
+<code>/usr/share/lintian/overrides/tcs-xtce</code>; and a trigger that
+has dpkg run <code>ldconfig</code> once the library is installed or
+removed. The RPM says the same in its own <code>License</code>,
+<code>%changelog</code>, <code>%post</code> and <code>%postun</code>.
+<code>make lint-packages</code> checks the packages that
+<code>make packages</code> built with lintian and rpmlint, and their
+shell scripts with shellcheck. It skips, in a line, any of the three
+that is not installed, and fails on any finding that is not overridden;
+each override says why it is intended, in
+<code>packaging/deb/tcs-xtce/lintian-overrides</code> and
+<code>packaging/rpm/rpmlint.toml</code>.</p>
+<p><strong>Python.</strong> Three distributions: <code>tcs-xtce</code>,
+the compiler, with both commands; <code>tcsxtce</code>, the packet
+runtime it depends on; and <code>tcsccsds</code>.
+<code>make python-dist</code> builds each as a wheel and an sdist in
+<code>dist/</code>, checks them with twine and tries them, and
+<code>make python-versions</code> tries them on each Python from 3.10 to
+3.14, in containers.
+<code>pip install --find-links dist dist/tcs_xtce-*.whl</code> installs
+the compiler and the runtime; <code>pip install ./python</code> and
+<code>pip install .</code>, in that order, install them from the
+repository. None is on PyPI yet.</p>
+<p><strong>Rust.</strong> <code>cargo add tcs-xtce</code> (and
+<code>cargo add tcsccsds</code>); the crates come from crates.io and
+nothing here installs them.</p>
+<p><strong>C and C++.</strong> With <code>/opt/tcs/lib/pkgconfig</code>
+on <code>PKG_CONFIG_PATH</code>:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cc</span>  prog.c   <span class="va">$(</span><span class="ex">pkg-config</span> <span class="at">--cflags</span> <span class="at">--libs</span> tcs-xtce<span class="va">)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">c++</span> prog.cpp <span class="va">$(</span><span class="ex">pkg-config</span> <span class="at">--cflags</span> <span class="at">--libs</span> tcs-xtce<span class="va">)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cc</span>  prog.c   <span class="va">$(</span><span class="ex">pkg-config</span> <span class="at">--cflags</span> <span class="at">--libs</span> <span class="at">--static</span> tcs-xtce<span class="va">)</span>   <span class="co"># libtcs-xtce.a</span></span></code></pre></div>
+<p>The shared library’s soname is <code>libtcs-xtce.so.N</code>, where N
+is the ABI version in <code>cpp/abi-version</code>, which changes only
+when a change breaks programs already linked against it; it is not the
+package’s version.</p>
+<h1 id="how-it-works">How it works</h1>
+<ol type="1">
+<li><strong>Parse.</strong> <code>python/tcs_xtce/binding/xsd.py</code>
+reads <code>SpaceSystem.xsd</code> into a language-neutral model and
+flattens type inheritance (<code>complexContent</code> extensions). XSD
+constructs it does not support raise an error, so schema changes cannot
+silently produce incomplete bindings.</li>
+<li><strong>Bind.</strong> <code>binding.py</code> maps every complex
+type to a record with attribute, text, element and
+<code>&lt;choice&gt;</code> fields. It checks that one element of
+lookahead is enough to decode each content model, boxes fields that
+would otherwise make recursive types infinitely large, orders types by
+dependency, and picks a finite default for every required choice.</li>
+<li><strong>Emit.</strong> <code>emit_rust.py</code>,
+<code>emit_cpp.py</code> and <code>emit_python.py</code> generate the
+types and their readers and writers. Generated Rust is run through
+<code>rustfmt</code>.</li>
+<li><strong>Sample.</strong> <code>sample.py</code> generates documents
+that use every element of every type reachable from
+<code>&lt;SpaceSystem&gt;</code>, and every alternative of every choice
+(see <code>tests/samples/COVERAGE.txt</code>).</li>
+</ol>
+<p>The tests check that:</p>
+<ul>
+<li>every sample validates against the official XSD
+(<code>xmllint</code>);</li>
+<li>each library round-trips every sample (deserialize, serialize,
+deserialize, then compare);</li>
+<li>the Rust, C++ and Python outputs are
+<strong>byte-identical</strong>; and</li>
+<li>the serialized output also validates against the XSD.</li>
+</ul>
+<h2 id="type-mapping">Type mapping</h2>
+<table>
+<colgroup>
+<col style="width: 39%" />
+<col style="width: 18%" />
+<col style="width: 25%" />
+<col style="width: 18%" />
+</colgroup>
+<thead>
+<tr>
+<th>XSD</th>
+<th>Rust</th>
+<th>C++</th>
+<th>Python</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>complex type</td>
+<td><code>struct</code></td>
+<td><code>struct</code></td>
+<td><code>@dataclass</code></td>
+</tr>
+<tr>
+<td><code>&lt;choice&gt;</code></td>
+<td><code>enum</code></td>
+<td><code>struct</code> + <code>std::variant</code></td>
+<td><code>@dataclass</code> (<code>name</code>, <code>value</code>)</td>
+</tr>
+<tr>
+<td>enumeration</td>
+<td><code>enum</code></td>
+<td><code>enum class</code></td>
+<td><code>str</code> <code>Enum</code></td>
+</tr>
+<tr>
+<td>optional element or attribute</td>
+<td><code>Option&lt;T&gt;</code></td>
+<td><code>std::optional&lt;T&gt;</code></td>
+<td><code>Optional[T]</code></td>
+</tr>
+<tr>
+<td>repeated element</td>
+<td><code>Vec&lt;T&gt;</code></td>
+<td><code>std::vector&lt;T&gt;</code></td>
+<td><code>list[T]</code></td>
+</tr>
+<tr>
+<td>recursive field</td>
+<td><code>Box&lt;T&gt;</code></td>
+<td><code>xtce::Box&lt;T&gt;</code></td>
+<td>(plain reference)</td>
+</tr>
+<tr>
+<td><code>string</code>, dates, durations, <code>hexBinary</code>,
+unions</td>
+<td><code>String</code></td>
+<td><code>std::string</code></td>
+<td><code>str</code></td>
+</tr>
+<tr>
+<td><code>boolean</code> / <code>long</code>, <code>integer</code> /
+<code>int</code> / <code>unsignedShort</code> / <code>double</code></td>
+<td><code>bool</code> / <code>i64</code> / <code>i32</code> /
+<code>u16</code> / <code>f64</code></td>
+<td><code>bool</code> / <code>int64_t</code> / <code>int32_t</code> /
+<code>uint16_t</code> / <code>double</code></td>
+<td><code>bool</code> / <code>int</code> / <code>float</code></td>
+</tr>
+</tbody>
+</table>
+<p>Type names match the schema (<code>SpaceSystemType</code>,
+<code>IntegerParameterType</code>, …), and field names are the
+snake_case form of the XML names.</p>
+<h2 id="managed-buffers">Managed buffers</h2>
+<p>Each library has a buffer type (<code>tcs_xtce::Buffer</code> in
+Rust, <code>xtce::Buffer</code> in C++,
+<code>tcs_xtce.ManagedBuffer</code> in Python) that is preallocated (64
+KiB by default) and keeps its allocation between uses. A
+<code>Document</code> owns one input buffer and one output buffer
+alongside the root <code>SpaceSystemType</code>:</p>
+<ul>
+<li><code>load</code> and <code>read_from</code> copy the input into the
+input buffer and parse it in place; the Rust and C++ readers work on
+slices of that buffer and only copy data into the fields they fill;</li>
+<li><code>serialize</code> writes into the output buffer and returns a
+borrowed view of it, without allocating a new buffer;</li>
+<li>both buffers are released when the <code>Document</code> is dropped,
+destroyed or garbage-collected (Python also has <code>close()</code> and
+<code>with</code>).</li>
+</ul>
+<h1 id="usage">Usage</h1>
+<p>Rust:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">tcs_xtce::</span><span class="op">{</span>Document<span class="op">,</span> SpaceSystemType<span class="op">};</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> <span class="kw">mut</span> doc <span class="op">=</span> <span class="pp">Document::</span>from_bytes(<span class="op">&amp;</span><span class="pp">std::fs::</span>read(<span class="st">&quot;sat.xtce&quot;</span>)<span class="op">?</span>)<span class="op">?;</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="pp">println!</span>(<span class="st">&quot;{}&quot;</span><span class="op">,</span> doc<span class="op">.</span>root<span class="op">.</span>name)<span class="op">;</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>doc<span class="op">.</span>root<span class="op">.</span>short_description <span class="op">=</span> <span class="cn">Some</span>(<span class="st">&quot;updated&quot;</span><span class="op">.</span>into())<span class="op">;</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> bytes<span class="op">:</span> <span class="op">&amp;</span>[<span class="dt">u8</span>] <span class="op">=</span> doc<span class="op">.</span>serialize()<span class="op">?;</span>      <span class="co">// view into the managed buffer</span></span></code></pre></div>
+<p>C++:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&quot;tcs-xtce-document.hpp&quot;</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>xtce<span class="op">::</span>Document doc <span class="op">=</span> xtce<span class="op">::</span>Document<span class="op">::</span>from_bytes<span class="op">(</span>bytes<span class="op">);</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>doc<span class="op">.</span>root<span class="op">.</span>short_description <span class="op">=</span> <span class="st">&quot;updated&quot;</span><span class="op">;</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="bu">std::</span>string_view out <span class="op">=</span> doc<span class="op">.</span>serialize<span class="op">();</span>   <span class="co">// view into the managed buffer</span></span></code></pre></div>
+<p>C:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&quot;tcs-xtce.h&quot;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>xtce_document<span class="op">*</span> doc <span class="op">=</span> xtce_document_new<span class="op">(</span><span class="dv">0</span><span class="op">,</span> <span class="dv">0</span><span class="op">);</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span>xtce_document_load<span class="op">(</span>doc<span class="op">,</span> data<span class="op">,</span> len<span class="op">)</span> <span class="op">!=</span> XTCE_OK<span class="op">)</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>        fprintf<span class="op">(</span>stderr<span class="op">,</span> <span class="st">&quot;line </span><span class="sc">%zu</span><span class="st">: </span><span class="sc">%s\n</span><span class="st">&quot;</span><span class="op">,</span> xtce_document_error_line<span class="op">(</span>doc<span class="op">),</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>                xtce_document_error<span class="op">(</span>doc<span class="op">));</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="dt">const</span> <span class="dt">uint8_t</span><span class="op">*</span> out<span class="op">;</span> <span class="dt">size_t</span> n<span class="op">;</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>xtce_document_serialize<span class="op">(</span>doc<span class="op">,</span> <span class="op">&amp;</span>out<span class="op">,</span> <span class="op">&amp;</span>n<span class="op">);</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>xtce_document_free<span class="op">(</span>doc<span class="op">);</span></span></code></pre></div>
+<p>Python:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> tcs_xtce</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>doc <span class="op">=</span> tcs_xtce.Document.from_file(<span class="st">&quot;sat.xtce&quot;</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>doc.root.short_description <span class="op">=</span> <span class="st">&quot;updated&quot;</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> doc.serialize() <span class="im">as</span> view:             <span class="co"># memoryview of the managed buffer</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    sys.stdout.<span class="bu">buffer</span>.write(view)</span></code></pre></div>
+<h1 id="packet-codecs">Packet codecs</h1>
+<div class="sourceCode" id="cb9"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> python</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> tcs_xtce mission.xtce mission.rs <span class="at">--lang</span> rust</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> tcs_xtce mission.xtce mission.h  <span class="at">--lang</span> c        <span class="co"># or --lang c++: same file</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> tcs_xtce mission.xtce mission.py <span class="at">--lang</span> python</span></code></pre></div>
+<p>Or install the Python distributions, compiler and runtime (see <a
+href="#installing">Installing</a>), and use the <code>tcs-xtce</code>
+command from anywhere. They are not on PyPI yet:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> python-dist</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">--find-links</span> dist dist/tcs_xtce-<span class="pp">*</span>.whl</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="ex">tcs-xtce</span> mission.xtce mission.rs <span class="at">--lang</span> rust</span></code></pre></div>
+<p><code>--lang c</code> and <code>--lang c++</code> write the same
+header, which compiles both as C11 and as C++. It is self-contained (it
+includes only <code>tcsxtce-packet.h</code>), allocates nothing, and
+reports errors as return codes.</p>
+<p>For each concrete <code>SequenceContainer</code> and
+<code>MetaCommand</code>, this generates a struct with
+<code>decode</code> and <code>encode</code> functions. Each inheritance
+tree also gets a <code>&lt;Root&gt;Kind</code> type that decodes a
+packet into whichever container or command it matches. Values fixed by
+restriction criteria or argument assignments (such as an APID or opcode)
+are written automatically and are not fields. Packets are encoded into
+managed buffers. A <code>Codec</code> owns an input buffer and an output
+buffer, preallocated to the largest packet size.</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> <span class="kw">mut</span> codec <span class="op">=</span> <span class="pp">Codec::for_packet::</span><span class="op">&lt;</span><span class="pp">demo::</span>CCSDSPacketKind<span class="op">&gt;</span>()<span class="op">;</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>codec<span class="op">.</span>load(<span class="op">&amp;</span>frame)<span class="op">;</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">let</span> <span class="pp">demo::CCSDSPacketKind::</span>Housekeeping(hk) <span class="op">=</span> codec<span class="op">.</span><span class="pp">decode::</span><span class="op">&lt;</span><span class="pp">demo::</span>CCSDSPacketKind<span class="op">&gt;</span>()<span class="op">?</span> <span class="op">{</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="pp">println!</span>(<span class="st">&quot;{} degC&quot;</span><span class="op">,</span> hk<span class="op">.</span>temperature)<span class="op">;</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> wire <span class="op">=</span> codec<span class="op">.</span>encode(<span class="op">&amp;</span><span class="pp">demo::</span>SetMode <span class="op">{</span> mode<span class="op">:</span> <span class="pp">demo::ModeArgType::</span>SCIENCE<span class="op">,</span> <span class="op">..</span><span class="bu">Default</span><span class="pp">::</span><span class="kw">default</span>() <span class="op">}</span>)<span class="op">?;</span></span></code></pre></div>
+<p>Supported features:</p>
+<ul>
+<li>every XTCE data type: integers (any size, every signed encoding and
+BCD; past 64 bits they are held with the bnum crate in Rust and with
+<code>tcsxtce-bnum.h</code>, a C and C++ library that mirrors it),
+floats (IEEE 754 16 to 128 bits, MIL-STD-1750A, DEC, IBM, TI), strings
+in every character set, binary, enumerations, booleans, times, arrays
+and aggregates, in any bit and byte order, with valid ranges checked
+when encoding;</li>
+<li>polynomial, spline, math operation and context calibrators, also in
+aggregate members;</li>
+<li>container inheritance with comparisons and boolean expressions,
+included and repeated containers, locations from either end and from the
+next entry, include conditions, container sizes, parameter segments
+(repeated too), indirect entries, messages, and transform algorithms the
+application supplies;</li>
+<li>packet length fields, also of included containers, sizes and counts
+from other values, and error detection: CRCs, checksums, XOR and
+parity;</li>
+<li>commands, including containers from a
+<code>CommandContainerSet</code> and other meta-commands’ containers,
+even whole commands;</li>
+<li>missions split across several documents, with one digest for the
+set;</li>
+<li>alarms, including the ones that depend on earlier samples, and
+<code>MathAlgorithm</code>s;</li>
+<li>fixed and variable frame streams, with frame synchronization, every
+PCM code including bi-phase, and custom streams that chain into
+them;</li>
+<li>custom algorithms, which the application supplies as functions.</li>
+</ul>
+<p>tcsccsds, in <code>ccsds/</code>, is a separate library of CCSDS
+standards that XTCE doesn’t define, in the same four languages: so far
+the CUC, CDS, CCS and ASCII time codes, and TAI and UTC with their leap
+seconds. See <a href="ccsds/README.md">its README</a>.</p>
+<blockquote>
+<p><strong>Warning:</strong> tcsccsds is an alpha release. It is not
+fully tested, it is not feature complete, and it is subject to rapid
+change. Until 1.0, any change to its API changes the minor version
+number (0.1 to 0.2), so a release that changes only the patch number
+never breaks code built against it. Feedback is welcome, even at this
+stage: open an issue at https://github.com/vomlehn/tcs-xtce/issues.</p>
+</blockquote>
+<p>See the manual for the exact list. <code>tests/packet_check.sh</code>
+checks that Rust, C, C++ and Python produce identical results on
+hand-built and random packets.</p>
+<h1 id="behaviour-and-limitations">Behaviour and limitations</h1>
+<ul>
+<li>The bindings follow XTCE 1.3 strictly. Documents written for older
+versions are rejected wherever the schema changed. For example, 1.3 no
+longer allows the <code>rangeAppliesToCalibrated</code> attribute, and
+<code>FixedValueEntry</code> now requires <code>sizeInBits</code>.
+Errors give the line number.</li>
+<li>Elements are matched by local name; the namespace URI is not
+checked.</li>
+<li>Values that the schema constrains only by patterns, ranges or
+<code>xs:key</code> are stored but not validated. Use
+<code>xmllint</code> with <code>references/catalog.xml</code> for full
+validation.</li>
+<li>Schema default values are not filled in: an attribute that was not
+present stays <code>None</code> / empty, so documents round-trip as
+written. The defaults appear in the generated documentation
+comments.</li>
+<li>Comments, processing instructions and attributes in other namespaces
+(such as <code>xsi:schemaLocation</code>) are not preserved. Doubles are
+written in their shortest round-trip form.</li>
+<li><code>xs:integer</code> is stored as a 64-bit integer.</li>
+</ul>
+<h1 id="see-also">See also</h1>
+<ul>
+<li><a href="https://vomlehn.github.io/tcs-xtce/docs/manual.html">The
+tcs-xtce manuals</a>: what each manual covers.</li>
+<li><a href="https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html">The
+tcs-xtce manual</a>: the code generator, every data structure and
+method, and the packet codecs.</li>
+<li><a href="https://vomlehn.github.io/tcs-xtce/docs/tcs-xtcee.html">The
+tcs-xtcee manual</a>: the XTCE editor.</li>
+<li><a href="https://vomlehn.github.io/tcs-xtce/docs/design.html">The
+tcs-xtce design</a>: the design and its rationale.</li>
+<li><a href="https://vomlehn.github.io/tcs-xtce/examples/index.html">The
+examples</a>: what each example shows, and how to build and run it.</li>
+<li><a href="https://crates.io/crates/tcs-xtce">The Rust crate on
+crates.io</a>: <code>cargo add tcs-xtce</code>.</li>
+</ul>
+<h1 id="incompatible-changes">Incompatible changes</h1>
+<p><strong>tcsccsds 0.3.0: tcs-ccsds is renamed tcsccsds.</strong> Its
+time codes run aboard and in the operations center, so it takes an
+operational name, as tcsxtce did: the crate <code>tcs-ccsds</code> is
+now <code>tcsccsds</code>, the Python package <code>tcs_ccsds</code> is
+<code>tcsccsds</code> (Python package version 0.2.0), the header
+<code>ccsds-time.h</code> is <code>tcsccsds-time.h</code>, and
+<code>tcs-ccsds.pc</code> is <code>tcsccsds.pc</code>. The functions,
+types and macros keep their names, <code>ccsds_</code> in C.</p>
+<p><strong>0.7.0: the packet runtime is a library of its own,
+<code>tcsxtce</code>.</strong> What code that <code>tcs-xtce</code>
+generated runs on – the packet runtime – is operational code, while the
+rest of tcs-xtce is software tools, and the two are now named apart: a
+name that starts <code>tcs</code> and a letter is operational code, one
+that starts <code>tcs-</code> or <code>tcs_</code> is not. Code that
+<code>tcs-xtce</code> generated has to be generated again, and depends
+on the runtime rather than on <code>tcs-xtce</code>.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Was</th>
+<th>Now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rust <code>tcs_xtce::packet</code>, <code>buffer</code>,
+<code>digest</code>, <code>fixed</code>, <code>value</code></td>
+<td>crate <code>tcsxtce</code>: <code>tcsxtce::packet</code> and the
+rest (still re-exported by <code>tcs-xtce</code>)</td>
+</tr>
+<tr>
+<td>Python <code>tcs_xtce.packet</code>,
+<code>tcs_xtce.digest</code></td>
+<td><code>tcsxtce.packet</code>, <code>tcsxtce.digest</code></td>
+</tr>
+<tr>
+<td><code>xtce-packet.h</code></td>
+<td><code>tcsxtce-packet.h</code></td>
+</tr>
+<tr>
+<td><code>xtce-bnum.h</code>, <code>xtce-bnum.hpp</code></td>
+<td><code>tcsxtce-bnum.h</code>, <code>tcsxtce-bnum.hpp</code></td>
+</tr>
+<tr>
+<td><code>xtce.h</code></td>
+<td><code>tcs-xtce.h</code></td>
+</tr>
+<tr>
+<td><code>xtce-digest.h</code></td>
+<td><code>tcsxtce-digest.h</code></td>
+</tr>
+<tr>
+<td><code>xtce-buffer.hpp</code>, <code>xtce-xml.hpp</code>,
+<code>xtce-document.hpp</code>, <code>xtce-generated.hpp</code></td>
+<td><code>tcs-xtce-buffer.hpp</code> and so on</td>
+</tr>
+<tr>
+<td><code>libxtce.a</code>, <code>libxtce.so</code>,
+<code>xtce.pc</code></td>
+<td><code>libtcs-xtce.a</code>, <code>libtcs-xtce.so</code>,
+<code>tcs-xtce.pc</code></td>
+</tr>
+</tbody>
+</table>
+<p>The header-only C/C++ runtime has a pkg-config file of its own,
+<code>tcsxtce.pc</code>, which needs no library. The functions, types
+and macros keep their names.</p>
+<p><strong>0.6.0: OMG’s documentation is no longer copied.</strong> The
+generated code describes each XTCE declaration in a line of its own,
+where it used to carry the schema’s documentation, which is OMG’s and
+may not be redistributed; versions 0.1.0 to 0.5.0 were withdrawn from
+crates.io for that reason. Nothing the generated code does, and no name
+in it, changed, so code using it needs no change.</p>
+<p><strong>0.5.0: wide enumerations hold wide integers.</strong> An
+enumeration whose integer encoding has more than 64 bits now holds its
+value in the type a wide integer of that encoding has, rather than a
+64-bit one, so that raw values no label lists survive decoding and
+re-encoding: in Rust a <code>u128</code>, an <code>i128</code> or a bnum
+integer instead of <code>i64</code>, and in C and C++ the
+<code>xtce-bnum.h</code> integer instead of <code>int64_t</code>, with
+label macros that are <code>XTCE_BN_LIT</code> constants. Code using
+such an enumeration’s value changes with it; code that
+<code>tcs-xtce</code> generated has to be generated again. The Rust
+runtime’s <code>wide_to_i64</code>, which only that code used, is gone.
+Enumerations on encodings of 64 bits or fewer are unchanged.</p>
+<p><strong>0.4.0: the C and C++ headers were renamed.</strong> They are
+no longer in the directories <code>xtce/</code> and <code>ccsds/</code>
+but straight in the include directory, each with its library’s prefix,
+so that installed in a shared <code>include/</code> none is mistaken for
+another library’s, and <code>ccsds-time.h</code> cannot shadow the
+system’s <code>&lt;time.h&gt;</code>. Change each <code>#include</code>
+as below; code that <code>tcs-xtce</code> generated has to be generated
+again.</p>
+<table>
+<thead>
+<tr>
+<th>Was</th>
+<th>Now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>xtce/xtce.h</code></td>
+<td><code>xtce.h</code></td>
+</tr>
+<tr>
+<td><code>xtce/packet.h</code></td>
+<td><code>xtce-packet.h</code></td>
+</tr>
+<tr>
+<td><code>xtce/digest.h</code></td>
+<td><code>xtce-digest.h</code></td>
+</tr>
+<tr>
+<td><code>xtce/bnum.h</code></td>
+<td><code>xtce-bnum.h</code></td>
+</tr>
+<tr>
+<td><code>xtce/bnum.hpp</code></td>
+<td><code>xtce-bnum.hpp</code></td>
+</tr>
+<tr>
+<td><code>xtce/buffer.hpp</code></td>
+<td><code>xtce-buffer.hpp</code></td>
+</tr>
+<tr>
+<td><code>xtce/xml.hpp</code></td>
+<td><code>xtce-xml.hpp</code></td>
+</tr>
+<tr>
+<td><code>xtce/document.hpp</code></td>
+<td><code>xtce-document.hpp</code></td>
+</tr>
+<tr>
+<td><code>xtce/generated.hpp</code></td>
+<td><code>xtce-generated.hpp</code></td>
+</tr>
+<tr>
+<td><code>ccsds/time.h</code></td>
+<td><code>ccsds-time.h</code></td>
+</tr>
+</tbody>
+</table>
+<p>The functions, types and macros in them keep their names.</p>
+<h1 id="contributing">Contributing</h1>
+<p>This is an alpha release: it is not fully tested and not feature
+complete. Comments and collaborators are very welcome. See <a
+href="https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>
+for how to report problems, ask for XTCE features, and build, test and
+send changes.</p>
+<h1 id="license">License</h1>
+<p>Licensed under either of the Apache License, Version 2.0 (<a
+href="https://github.com/vomlehn/tcs-xtce/blob/main/LICENSE-APACHE">LICENSE-APACHE</a>
+or <a href="http://www.apache.org/licenses/LICENSE-2.0"
+class="uri">http://www.apache.org/licenses/LICENSE-2.0</a>) or the MIT
+license (<a
+href="https://github.com/vomlehn/tcs-xtce/blob/main/LICENSE-MIT">LICENSE-MIT</a>
+or <a href="http://opensource.org/licenses/MIT"
+class="uri">http://opensource.org/licenses/MIT</a>), at your option.
+This covers all of it: the generator, the Rust crate, the C/C++ library,
+the Python package and the editor.</p>
+<p>The package lists the Rust crates compiled into tcs-xtcee, with their
+licences and the notices those require, in
+<code>/opt/tcs/share/doc/tcs-xtce/THIRD-PARTY-NOTICES</code>.</p>
+<p>tcs-xtcee, the editor, is built with <a
+href="https://slint.dev">Slint</a>, under its royalty-free licence for
+desktop applications, which asks for this attribution:</p>
+<p><a href="https://slint.dev"><img
+src="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png"
+alt="Made with Slint" /></a></p>
+<p>Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be dual licensed as above, without any additional terms
+or conditions.</p>
+</body>
+</html>

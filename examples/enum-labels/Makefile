@@ -5,9 +5,9 @@
 #   make            generate the code, build and run every program and check
 #                   that they print the same thing
 #   make generate   rerun tcs-xtce on modes.xtce
-#   make html       convert README.rst to README.html
+#   make html       convert README.rst to index.html
 #   make clean      remove build products (keeps the generated code and
-#                   README.html)
+#                   index.html)
 
 TOP     := ../..
 PYTHON  ?= python3
@@ -82,13 +82,13 @@ run: rust c python | $(BUILD)
 $(BUILD):
 	mkdir -p $@
 
-# README.html is committed beside README.rst, like the other documents.
+# index.html is committed beside README.rst, like the other documents.
 # --halt=warning turns docutils warnings into errors, so a malformed README
 # fails the build instead of producing a damaged page.
 .PHONY: html
-html: README.html
+html: index.html
 
-README.html: README.rst
+index.html: README.rst
 	$(RST2HTML) --halt=warning $< $@
 
 .PHONY: clean

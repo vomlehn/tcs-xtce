@@ -3288,32 +3288,32 @@ of its own copy before it reads a packet (see `Exchanging data between
 programs`_).
 
 ``make html`` in an example's directory converts its ``README.rst`` into
-``README.html``. ``make`` in ``examples/`` itself does that for every
+``index.html``. ``make`` in ``examples/`` itself does that for every
 example and for ``examples/README.rst``, the `index of examples
-<../examples/README.html>`__.
+<../examples/index.html>`__.
 
 The examples are:
 
-* `enum-labels <../examples/enum-labels/README.html>`__: a status whose
+* `enum-labels <../examples/enum-labels/index.html>`__: a status whose
   mode is an enumeration that its include conditions, a derived packet
   and an alarm all compare by label, with a label for a range of values
   and a value that no label names.
-* `housekeeping <../examples/housekeeping/README.html>`__: status packets
+* `housekeeping <../examples/housekeeping/index.html>`__: status packets
   with a packet length field, calibrated temperatures, voltages and powers,
   and a field present only when a heater is on, stored one after another
   in a stream and split apart again by their length fields.
-* `simple-string <../examples/simple-string/README.html>`__: a structure
+* `simple-string <../examples/simple-string/index.html>`__: a structure
   holding one string of up to 8 bytes, serialized into and deserialized
   from managed buffers.
-* `split-mission <../examples/split-mission/README.html>`__: a rover's
+* `split-mission <../examples/split-mission/index.html>`__: a rover's
   PUS telemetry described in three documents (data types, packet headers
   and the rover's packets), with types derived by ``baseType``, recorded
   after the digest of the set of documents.
-* `to-from <../examples/to-from/README.html>`__: words of varying
+* `to-from <../examples/to-from/index.html>`__: words of varying
   length, with a leading size tag, written by the program in one language
   and read by the program in another, for any pair of C, C++, Rust and
   Python.
-* `variable-array <../examples/variable-array/README.html>`__: two
+* `variable-array <../examples/variable-array/index.html>`__: two
   two-dimensional arrays whose dimensions both vary, the lines and words of
   a paragraph, sent one after the other over one TCP connection from one
   thread to another, each after its length.
@@ -3360,7 +3360,7 @@ and a wrong ``PacketLength``:
    decode at 28: 7 bytes -> Status{heater_on=true, temperature=-20.0, bus_voltage=26.875, heater_power=12.734375}
    encode Status{heater_on=true, temperature=20.0, bus_voltage=28.0, heater_power=none} -> error:Missing (HeaterPower is required by its include condition)
 
-See the `housekeeping README <../examples/housekeeping/README.html>`__ for
+See the `housekeeping README <../examples/housekeeping/index.html>`__ for
 more.
 
 ``simple-string``
@@ -3407,7 +3407,7 @@ fails with ``TooLong``, and that the buffers were never reallocated:
    serialize "ABCDEFGHI" -> error:TooLong (Text is too long for its encoding)
    buffers reused without reallocation: true
 
-See the `simple-string README <../examples/simple-string/README.html>`__
+See the `simple-string README <../examples/simple-string/index.html>`__
 for more.
 
 ``to-from``
@@ -3455,7 +3455,7 @@ the writer's output to the reader:
 ``make`` in the example's directory checks that the four writers write the
 same bytes, and runs all 16 pairs of reader and writer.
 
-See the `to-from README <../examples/to-from/README.html>`__ for more.
+See the `to-from README <../examples/to-from/index.html>`__ for more.
 
 ``variable-array``
 ------------------
@@ -3526,7 +3526,7 @@ find where each packet ends, since a TCP stream doesn't keep writes apart:
    voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat
    cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
 
-See the `variable-array README <../examples/variable-array/README.html>`__
+See the `variable-array README <../examples/variable-array/index.html>`__
 for more.
 
 ``enum-labels``
@@ -3565,7 +3565,7 @@ decoding keeps:
    decode 000901 -> SafeStatus{battery=9, target=none, station=none, reason=LOW_POWER} | alarms: mode=warning
    decode 2850 -> Status{mode=40, battery=80, target=none, station=none} | alarms: mode=normal
 
-See the `enum-labels README <../examples/enum-labels/README.html>`__ for
+See the `enum-labels README <../examples/enum-labels/index.html>`__ for
 more.
 
 ``split-mission``
@@ -3600,7 +3600,7 @@ documents, records three packets after it, and decodes them again as a
    decode at 39: 14 bytes -> Event{ccsds_version=0, ccsds_apid=100, ccsds_seq_flags=3, ccsds_seq_count=2, pus_version=2, pus_time_ref=0, pus_counter=2, event=OVERHEAT, event_data=85}
    encode Hk{..., left_turns=1001, right_turns=0} -> error:OutOfRange (value of left-turns is outside its valid range or encoding)
 
-See the `split-mission README <../examples/split-mission/README.html>`__
+See the `split-mission README <../examples/split-mission/index.html>`__
 for more.
 
 

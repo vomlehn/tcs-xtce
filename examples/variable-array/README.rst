@@ -342,10 +342,10 @@ Makefile targets
 ``make python``
    Generate the Python module. The Python program needs no building.
 ``make html``
-   Convert this file, ``README.rst``, to ``README.html``.
+   Convert this file, ``README.rst``, to ``index.html``.
 ``make clean``
    Remove ``build/`` and ``rust/target/``. The generated code and
-   ``README.html`` stay.
+   ``index.html`` stay.
 
 Files
 -----
@@ -371,7 +371,7 @@ The generated files aren't kept in git; building generates them.
      - Generated Python module
    * - ``Makefile``
      - Generates, builds, runs and checks; see above
-   * - ``README.rst``, ``README.html``
+   * - ``README.rst``, ``index.html``
      - This document
    * - ``build/``
      - The C and C++ programs and the programs' output

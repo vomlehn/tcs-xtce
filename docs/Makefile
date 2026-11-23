@@ -21,8 +21,13 @@ RST2HTML ?= rst2html
 all: html
 
 .PHONY: html
-html: manual.html tcs-xtce.html tcs-xtcee.html design.html \
+html: index.html manual.html tcs-xtce.html tcs-xtcee.html design.html \
 	tcs-xtce-design.html tcs-xtcee-design.html
+
+# The page the site gives at docs/: what each document here is, made from
+# README.rst, which GitHub shows when the directory is browsed.
+index.html: README.rst
+	$(RST2HTML) --halt=warning $< $@
 
 # --halt=warning turns docutils warnings into errors, so a malformed document
 # fails the build instead of producing a damaged page.

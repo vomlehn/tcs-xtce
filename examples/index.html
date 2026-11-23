@@ -374,9 +374,9 @@ Rust and Python 3. The C and C++ versions share one source file.
 <li>a small program in each language that uses the code <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt>
 generates from it;</li>
 <li>a <tt class="docutils literal">README.rst</tt> explaining what the example shows and how to run each
-program, and the <tt class="docutils literal">README.html</tt> made from it;</li>
+program, and the <tt class="docutils literal">index.html</tt> made from it;</li>
 <li>a <tt class="docutils literal">Makefile</tt> that builds and runs the programs and makes
-<tt class="docutils literal">README.html</tt>.</li>
+<tt class="docutils literal">index.html</tt>.</li>
 </ul>
 <p>The generated code isn't kept in git; building an example generates it.</p>
 <p>Run <tt class="docutils literal">make</tt> in an example's directory, or <tt class="docutils literal">make examples</tt> at the top
@@ -385,7 +385,7 @@ the generator changed, builds and runs the programs (the C one both as C,
 against the <tt class="docutils literal"><span class="pre">--lang</span> c</tt> header, and as C++, against the <tt class="docutils literal"><span class="pre">--lang</span> c++</tt>
 header), and checks that their output is identical.</p>
 <p>Run <tt class="docutils literal">make html</tt> in an example's directory to turn its <tt class="docutils literal">README.rst</tt>
-into <tt class="docutils literal">README.html</tt>. Run <tt class="docutils literal">make</tt> in this directory to do that for this
+into <tt class="docutils literal">index.html</tt>. Run <tt class="docutils literal">make</tt> in this directory to do that for this
 file and every example's.</p>
 <table border="1" class="docutils">
 <thead valign="bottom">
@@ -394,31 +394,31 @@ file and every example's.</p>
 </tr>
 </thead>
 <tbody valign="top">
-<tr><td><a class="reference external" href="enum-labels/README.html">enum-labels</a></td>
+<tr><td><a class="reference external" href="enum-labels/index.html">enum-labels</a></td>
 <td>A status whose mode is an enumeration that its include conditions,
 a derived packet and an alarm all compare by label, so that
 renumbering the modes changes nothing but the bytes</td>
 </tr>
-<tr><td><a class="reference external" href="housekeeping/README.html">housekeeping</a></td>
+<tr><td><a class="reference external" href="housekeeping/index.html">housekeeping</a></td>
 <td>Status packets with a packet length field, calibrated values and a
 field present only when the heater is on, stored one after another
 in a stream and split apart again</td>
 </tr>
-<tr><td><a class="reference external" href="simple-string/README.html">simple-string</a></td>
+<tr><td><a class="reference external" href="simple-string/index.html">simple-string</a></td>
 <td>A structure holding one string of up to 8 bytes, serialized into
 and deserialized from managed buffers</td>
 </tr>
-<tr><td><a class="reference external" href="split-mission/README.html">split-mission</a></td>
+<tr><td><a class="reference external" href="split-mission/index.html">split-mission</a></td>
 <td>A rover's PUS telemetry described in three documents (data types,
 packet headers and the rover's packets), with types derived by
 <tt class="docutils literal">baseType</tt>, recorded after the digest of the set of documents</td>
 </tr>
-<tr><td><a class="reference external" href="to-from/README.html">to-from</a></td>
+<tr><td><a class="reference external" href="to-from/index.html">to-from</a></td>
 <td>Words of varying length, with a leading size tag, written by the
 program in one language and read by the program in another, for
 any pair of C, C++, Rust and Python</td>
 </tr>
-<tr><td><a class="reference external" href="variable-array/README.html">variable-array</a></td>
+<tr><td><a class="reference external" href="variable-array/index.html">variable-array</a></td>
 <td>Two two-dimensional arrays whose dimensions both vary, the lines
 and words of a paragraph, sent one after the other over one TCP
 connection from one thread to another, each after its length</td>
