@@ -174,7 +174,8 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 .PHONY: test
 test: test-rust test-cpp test-python cross-check packet-check \
       stream-check digest-check float-check bnum-check ccsds-check examples \
-      test-editor line-width doc-headers html-check operational-names
+      test-editor line-width doc-headers html-check operational-names \
+      rust-current
 
 # Every non-trivial function, hand-written or generated, has a header that
 # describes it, its parameters and what it returns.  Last, with line-width,
@@ -526,7 +527,7 @@ STRIP   ?= 1
 # TCS_HELPERS names another, used where it is rather than installed.
 # Installing and packaging check it first: see the tcs-helpers target.
 TCS_HELPERS ?= $(abspath $(CURDIR)/../tcs-helpers)
-TCS_HELPERS_REQUIRED := 0.11.0
+TCS_HELPERS_REQUIRED := 0.12.0
 BINDIR  := $(DESTDIR)$(PREFIX)/bin
 SBINDIR := $(DESTDIR)$(PREFIX)/sbin
 INCDIR  := $(DESTDIR)$(PREFIX)/include
@@ -626,6 +627,13 @@ tcs-helpers:
 	    exit 1; \
 	fi
 	@"$(TCS_HELPERS)/bin/tcs-helpers" --require $(TCS_HELPERS_REQUIRED)
+
+# Fail where the Rust this would be built with is not the newest stable:
+# see "The newest stable Rust" in tcs-helpers' README. rust-toolchain.toml
+# keeps the build on the stable channel; this notices a newer release.
+.PHONY: rust-current
+rust-current: tcs-helpers
+	"$(TCS_HELPERS)/bin/rust-current"
 
 # Install the tools building, testing, checking, documenting and packaging
 # this project need, with the system's own package manager, under sudo:

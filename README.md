@@ -118,8 +118,11 @@ Requirements:
   `python3 -m venv --system-site-packages ~/tcs-venv`,
   `~/tcs-venv/bin/pip install 'setuptools>=77' twine`, and
   `PYTHON=~/tcs-venv/bin/python3` on each make line;
-* a Rust toolchain with `rustfmt`, 1.92 or later, which the editor needs
-  (no `rust-toolchain` file pins it: `make install-tools` checks it);
+* a Rust toolchain with `rustfmt`: the newest stable, which
+  `rust-toolchain.toml` asks rustup for and `make test` holds it to,
+  through tcs-helpers' `rust-current` -- run `rustup update stable` where
+  it says a newer one is out. The editor needs 1.92 or later, which `make
+  install-tools` checks;
 * a C11 and C++20 compiler, and fontconfig's headers;
 * `rst2html` (python3-docutils) for the pages `make test` checks;
 * a checkout of [tcs-helpers](https://github.com/vomlehn/tcs-helpers),
