@@ -862,7 +862,10 @@ class PythonEmitter:
             self.line(f"return [y for y in (self._decode(x) for x in {ins}) if "
                       "y]", 2)
         else:
-            self.line(f"return [f for x in {ins} for f in super().push(x)]", 2)
+            # super() with no arguments finds the wrong object inside a
+            # comprehension before Python 3.12, so take the method first.
+            self.line("push = super().push", 2)
+            self.line(f"return [f for x in {ins} for f in push(x)]", 2)
 
     def wrapped(self, items: list, depth: int) -> None:
         """Writes a tuple of items, wrapped to fit 80 columns.
