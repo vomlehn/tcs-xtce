@@ -299,10 +299,10 @@ bnum-check: rust cpp
 # The Python distributions, each as a wheel and an sdist in dist/, all
 # libraries that install no commands: tcs-xtce, the XML binding and the
 # compiler (pyproject.toml); tcsxtce, the packet runtime it depends on
-# (python/pyproject.toml); and
-# tcsccsds (ccsds/python/pyproject.toml). tcsxtce's version must be its
-# crate's. twine checks that PyPI would take them, their pages included,
-# and then they are installed in a fresh virtual environment and tried: see
+# (python/pyproject.toml); and tcsccsds (ccsds/python/pyproject.toml).
+# tcsxtce's and tcsccsds's versions must be their crates'. twine checks
+# that PyPI would take them, their pages included, and then they are
+# installed in a fresh virtual environment and tried: see
 # tests/python_dist_check.sh. Built by setuptools in place, without pip's
 # isolated build environment, so nothing is downloaded; setuptools 77 or
 # later and twine have to be installed: make install-tools installs the
@@ -317,11 +317,20 @@ RT_PY_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' \
                          python/pyproject.toml)
 RT_CRATE_VERSION := $(shell sed -n '1,/^version/s/^version = "\(.*\)"/\1/p' \
                             rust/tcsxtce/Cargo.toml)
+CCSDS_CRATE_VERSION := $(shell sed -n \
+                           '1,/^version/s/^version = "\(.*\)"/\1/p' \
+                           ccsds/rust/Cargo.toml)
 .PHONY: python-dist
 python-dist: $(PY_GEN)
 	@[ "$(RT_PY_VERSION)" = "$(RT_CRATE_VERSION)" ] || { \
 	    echo "python/pyproject.toml is $(RT_PY_VERSION) and" \
 	        "rust/tcsxtce/Cargo.toml $(RT_CRATE_VERSION); make them" \
+	        "agree" >&2; \
+	    exit 1; \
+	}
+	@[ "$(CCSDS_VERSION)" = "$(CCSDS_CRATE_VERSION)" ] || { \
+	    echo "ccsds/python/pyproject.toml is $(CCSDS_VERSION) and" \
+	        "ccsds/rust/Cargo.toml $(CCSDS_CRATE_VERSION); make them" \
 	        "agree" >&2; \
 	    exit 1; \
 	}
@@ -499,7 +508,7 @@ hooks-if-there:
 # by hand; install checks that they agree. The shared library's soname
 # carries its ABI version, from cpp/abi-version, which cpp/Makefile reads
 # too and which is not the package's version: see cpp/Makefile for when it
-# changes. tcsccsds has a version of its own.
+# changes. tcsccsds has a version of its own, its crate's.
 VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
 RUST_VERSION := $(shell sed -n '1,/^version/s/^version = "\(.*\)"/\1/p' \
                         rust/Cargo.toml)

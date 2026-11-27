@@ -12,9 +12,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tcsccsds"
-# A version of its own, as the crate has: the Python package's, which the
-# Makefile reads for the .deb and the RPM too.
-version = "0.2.0"
+# The same as the tcsccsds crate's, in ccsds/rust/Cargo.toml, which make
+# python-dist checks; the Makefile reads it for the .deb and the RPM too.
+version = "0.3.0"
 description = """\
     CCSDS standards for flight software, such as the CCSDS time codes, the \
     same in Python as in Rust, C and C++\

@@ -506,8 +506,9 @@ random packets.
 **tcsccsds 0.3.0: tcs-ccsds is renamed tcsccsds.** Its time codes run
 aboard and in the operations center, so it takes an operational name, as
 tcsxtce did: the crate `tcs-ccsds` is now `tcsccsds`, the Python package
-`tcs_ccsds` is `tcsccsds` (Python package version 0.2.0), the header
-`ccsds-time.h` is `tcsccsds-time.h`, and `tcs-ccsds.pc` is `tcsccsds.pc`.
+`tcs_ccsds` is `tcsccsds` (Python package version 0.3.0, the crate's),
+the header `ccsds-time.h` is `tcsccsds-time.h`, and `tcs-ccsds.pc` is
+`tcsccsds.pc`.
 The functions, types and macros keep their names, `ccsds_` in C.
 
 **0.7.0: the packet runtime is a library of its own, `tcsxtce`.** What
