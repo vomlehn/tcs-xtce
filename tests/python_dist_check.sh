@@ -2,12 +2,14 @@
 # Checks the Python distributions that `make python-dist` builds.
 #
 #   1. tcs-xtce's wheel and sdist hold python/tcs_xtce/generated.py, which
-#      is not in git, and its wheel py.typed; tcsxtce's wheel holds the
-#      packet runtime and its py.typed, and tcs-xtce's does not; each
-#      wheel holds both licence files, as files.
+#      is not in git, its sdist the generated Rust its extension module is
+#      built from, and its wheel the module and py.typed; tcsxtce's wheel
+#      holds the packet runtime and its py.typed, and tcs-xtce's does not;
+#      each wheel holds both licence files, as files.
 #   2. Installed in a fresh virtual environment, with nothing from the
 #      repository on the path, tcs-xtce is a library and installs no
-#      commands; it reads the demo mission and writes it back unchanged;
+#      commands; it reads the demo mission through the tcs-xtce crate, its
+#      extension module, and writes it back unchanged;
 #      its compiler, run as a module, generates the demo mission's Python,
 #      C and Rust, and the Python it generated decodes a packet with the
 #      installed runtime; tcsccsds encodes and decodes a time. Without
@@ -60,6 +62,10 @@ if grep -q '^tcsxtce/' "$work/wheel.txt"; then
 fi
 tar tzf "$sdist" | grep -q 'python/tcs_xtce/generated.py$' ||
     fail "the sdist has no python/tcs_xtce/generated.py"
+tar tzf "$sdist" | grep -q 'rust/tcs-xtce-python/src/generated.rs$' ||
+    fail "the sdist has no rust/tcs-xtce-python/src/generated.rs"
+grep -q 'tcs_xtce/_native\.abi3\.so' "$work/wheel.txt" ||
+    fail "the wheel has no tcs_xtce/_native.abi3.so, its extension module"
 python3 -m zipfile -l "$rt_wheel" > "$work/rt-wheel.txt"
 grep -q 'tcsxtce/packet.py' "$work/rt-wheel.txt" ||
     fail "tcsxtce's wheel has no tcsxtce/packet.py, the packet runtime"
@@ -91,7 +97,10 @@ done
 import sys
 
 from tcs_xtce import Document
+from tcs_xtce.document import BACKEND
 
+# The wheel reads and writes through the tcs-xtce crate, not in Python.
+assert BACKEND == "rust", BACKEND
 doc = Document.from_file(sys.argv[1])
 assert doc.root.name == "Demo", doc.root.name
 assert Document.from_bytes(doc.to_bytes()).root == doc.root

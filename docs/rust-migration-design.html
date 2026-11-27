@@ -560,10 +560,13 @@ the C++ it emits changes only in step 8.</li>
 <li><strong>The Python runtime.</strong> A PyO3 module with the pure-Python
 <tt class="docutils literal">tcsxtce</tt>'s API, on the Rust runtime. Every Python test, and every
 cross-language check with generated Python, must pass unchanged.</li>
-<li><strong>The Python XML binding.</strong> A PyO3 module with the classes and
-<tt class="docutils literal">Document</tt> of today's generated <tt class="docutils literal">tcs_xtce</tt>. The round-trip
-tests, and the byte-identical output across languages, must pass
-unchanged.</li>
+<li><strong>The Python XML binding.</strong> The extension module
+<tt class="docutils literal">tcs_xtce._native</tt>, from the crate <tt class="docutils literal"><span class="pre">tcs-xtce-python</span></tt>, reads and
+writes XML through the Rust binding, and generated conversions turn
+what it reads into today's Python classes and back (see <a class="reference internal" href="#the-python-interfaces">The Python
+interfaces</a>). Every Python test passes with it, and
+<tt class="docutils literal">tests/backend_check.py</tt> checks that it and the Python reader and
+writer read every document alike and write the same bytes.</li>
 <li><strong>The C runtime.</strong> <tt class="docutils literal">tcsxtce</tt> builds without the standard library,
 and <tt class="docutils literal"><span class="pre">tcsxtce-c</span></tt> gives <tt class="docutils literal">libtcsxtce.a</tt> the functions the C headers
 declare. Every C and C++ test, every example and every
@@ -593,12 +596,15 @@ fields.</li>
 <tt class="docutils literal">int</tt>s, bytes are <tt class="docutils literal">bytes</tt> or <tt class="docutils literal">memoryview</tt>s, and the binding's
 records keep their attribute names and their <tt class="docutils literal">Optional</tt> and
 <tt class="docutils literal">list</tt> fields.</li>
-<li><strong>The XML binding's records.</strong> Today they are dataclasses. As PyO3
-classes they keep their attributes, their constructors with keyword
-arguments and their equality, so code that builds or reads them
-doesn't change. Code that relies on their being dataclasses, through
-<tt class="docutils literal">dataclasses.fields()</tt> or <tt class="docutils literal">asdict()</tt>, does notice; the
-interface provides both for these classes, so that it doesn't.</li>
+<li><strong>The XML binding's records</strong> stay the generated dataclasses they are.
+The Rust binding reads and writes the XML, and generated code converts
+between its values and the dataclasses, which the binding generator
+writes from the same model as both bindings. PyO3 classes were the
+other way, but an attribute of one that holds a record gives a copy of
+it, so <tt class="docutils literal">doc.root.header.version = &quot;2&quot;</tt> would change the copy and not
+the document, and code using <tt class="docutils literal">dataclasses.fields()</tt> or <tt class="docutils literal">asdict()</tt>
+would break. With dataclasses, nothing that builds, reads or changes
+them notices.</li>
 <li><strong>Wheels.</strong> The packages become native, so they are built as wheels
 for each platform, with PyO3's stable ABI (<tt class="docutils literal">abi3</tt>) from Python 3.10,
 so that one wheel for each platform serves every Python from 3.10 on.

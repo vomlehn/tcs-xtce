@@ -2,12 +2,68 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, BinaryIO, Optional
 
 from . import _xml as X
+from . import generated
 from tcsxtce import DEFAULT_CAPACITY, ManagedBuffer
 from .generated import (NAMESPACE, READERS, ROOT_ELEMENT, WRITERS,
                         SpaceSystemType)
+
+
+def _backend():
+    """Chooses what reads and writes the XML: the tcs-xtce crate, through
+    the extension module ``tcs_xtce._native``, or this package's own
+    Python, which is kept to compare the two until it is retired.
+
+    ``TCS_XTCE_BACKEND`` chooses: ``rust`` needs the extension module,
+    ``python`` doesn't use it, and anything else, or nothing, uses the
+    module where it is built, as in every wheel, and the Python where it
+    isn't, as in a checkout before ``make`` has built it.
+
+    Returns:
+        The extension module, or None for the Python.
+
+    Raises:
+        ImportError: ``TCS_XTCE_BACKEND`` is ``rust`` and the extension
+                     module isn't built.
+    """
+    choice = os.environ.get("TCS_XTCE_BACKEND", "")
+    if choice == "python":
+        return None
+    try:
+        from . import _native
+    except ImportError:
+        if choice == "rust":
+            raise
+        return None
+    return _native
+
+
+_NATIVE = _backend()
+
+# What reads and writes the XML: "rust" or "python".
+BACKEND = "python" if _NATIVE is None else "rust"
+
+
+def _record_name(value: Any) -> str:
+    """Names the binding class of an object, for the extension module.
+
+    Args:
+        value: The object.
+
+    Returns:
+        Its class's name in :mod:`tcs_xtce.generated`.
+
+    Raises:
+        KeyError: Its class is not one of the binding's records, as the
+                  Python writers' table raises.
+    """
+    cls = type(value)
+    if getattr(generated, cls.__name__, None) is not cls:
+        raise KeyError(cls)
+    return cls.__name__
 
 
 def to_xml(value: Any, tag: str, buf: ManagedBuffer, indent: bool = True,
@@ -21,6 +77,9 @@ def to_xml(value: Any, tag: str, buf: ManagedBuffer, indent: bool = True,
         indent: Whether to indent the XML.
         writer: A writer to reuse, or None to make a new one.
     """
+    if _NATIVE is not None:
+        buf.load(_NATIVE.to_xml(value, _record_name(value), tag, indent))
+        return
     w = writer if writer is not None else X.Writer(indent)
     w.reset()
     w.indent = indent
@@ -44,6 +103,10 @@ def from_xml(data, cls: type, tag: str):
     Raises:
         XtceError: The XML is bad or its root isn't ``tag``.
     """
+    if _NATIVE is not None:
+        if getattr(generated, cls.__name__, None) is not cls:
+            raise KeyError(cls)
+        return _NATIVE.from_xml(bytes(data), cls.__name__, tag)
     root = X.parse(data)
     if root.name != tag:
         raise X.XtceError(f"root element is <{root.name}>, expected <{tag}>",

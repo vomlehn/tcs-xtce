@@ -77,7 +77,8 @@ def _rustfmt(text: str) -> str:
 def main() -> None:
     """Parses the schema named on the command line and writes the
     outputs asked for: the Rust module, the C++ header and source, the
-    Python module and the sample documents.
+    Python module, the conversions between the Rust and Python bindings
+    and the sample documents.
     """
     p = argparse.ArgumentParser(prog="tcs_xtce.binding", description=__doc__)
     p.add_argument("--xsd", required=True, help="path to SpaceSystem.xsd")
@@ -88,6 +89,9 @@ def main() -> None:
                    help="output path of the generated C++ source")
     p.add_argument("--python",
                    help="output path of the generated Python module")
+    p.add_argument("--pyo3",
+                   help="output path of the generated Rust conversions between "
+                        "the Rust and Python bindings")
     p.add_argument("--sample",
                    help="write schema-covering sample documents to this "
                         "directory")
@@ -111,6 +115,10 @@ def main() -> None:
         from . import emit_python
 
         write_if_changed(args.python, wrap(emit_python.emit(b), "python"))
+    if args.pyo3:
+        from . import emit_pyo3
+
+        write_if_changed(args.pyo3, rustfmt(emit_pyo3.emit(b)))
     if args.sample:
         from . import sample
 

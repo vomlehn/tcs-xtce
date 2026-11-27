@@ -78,6 +78,12 @@ GEN_SRC := $(wildcard python/tcs_xtce/binding/*.py)
 RUST_GEN := rust/src/generated.rs
 CPP_GEN  := cpp/include/tcs-xtce-generated.hpp cpp/src/generated.cpp
 PY_GEN   := python/tcs_xtce/generated.py
+# The Rust that converts the XML binding between Rust and Python, for the
+# extension module tcs_xtce._native, which reads and writes XTCE for the
+# Python package; make builds the module in place, where tcs_xtce finds it.
+PYO3_GEN := rust/tcs-xtce-python/src/generated.rs
+NATIVE   := python/tcs_xtce/_native.abi3.so
+NATIVE_LIB := lib_native.$(if $(filter Darwin,$(shell uname -s)),dylib,so)
 SAMPLES  := tests/samples/COVERAGE.txt
 
 RUST_TOOL := rust/target/release/examples/xtce_roundtrip
@@ -120,7 +126,7 @@ $(XSD):
 	$(MAKE) -C references
 
 .PHONY: generate
-generate: $(RUST_GEN) $(CPP_GEN) $(PY_GEN) $(SAMPLES) $(PKT_GEN)
+generate: $(RUST_GEN) $(CPP_GEN) $(PY_GEN) $(PYO3_GEN) $(SAMPLES) $(PKT_GEN)
 
 $(RUST_GEN): $(XSD) $(GEN_SRC)
 	cd python && $(GEN) --rust ../$@
@@ -133,6 +139,18 @@ $(CPP_GEN) &: $(XSD) $(GEN_SRC)
 
 $(PY_GEN): $(XSD) $(GEN_SRC)
 	cd python && $(GEN) --python ../$@
+
+$(PYO3_GEN): $(XSD) $(GEN_SRC)
+	cd python && $(GEN) --pyo3 ../$@
+	@touch $@
+
+# Built by cargo, as maturin builds it for the wheels, and copied where
+# Python looks for it: a shared library is .so to Python on Linux and
+# macOS alike.
+$(NATIVE): $(PYO3_GEN) $(RUST_GEN) $(wildcard rust/tcs-xtce-python/src/*.rs \
+           rust/tcs-xtce-python/Cargo.toml rust/src/*.rs rust/tcsxtce/src/*.rs)
+	cd rust/tcs-xtce-python && $(CARGO) build --release
+	cp rust/tcs-xtce-python/target/release/$(NATIVE_LIB) $@
 	@touch $@
 
 $(SAMPLES): $(XSD) $(GEN_SRC)
@@ -166,7 +184,7 @@ cpp: $(CPP_GEN) $(PKT_CPP)
 	$(MAKE) -C cpp
 
 .PHONY: python
-python: $(PY_GEN) $(PKT_PY)
+python: $(PY_GEN) $(PKT_PY) $(NATIVE)
 	$(PYTHON) -m compileall -q python/tcsxtce python/tcs_xtce
 
 EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
@@ -263,8 +281,15 @@ test-cpp: cpp $(SAMPLES)
 	$(MAKE) -C cpp test
 
 .PHONY: test-python
+# Both ways the package can read and write XML: through the tcs-xtce crate,
+# as the wheels do, and in its own Python, kept until it is retired; then
+# that the two read every document alike and write the same bytes.
 test-python: python $(SAMPLES)
-	cd python && $(PYTHON) -m unittest discover -s tests -t .
+	cd python && TCS_XTCE_BACKEND=rust \
+	    $(PYTHON) -m unittest discover -s tests -t .
+	cd python && TCS_XTCE_BACKEND=python \
+	    $(PYTHON) -m unittest discover -s tests -t .
+	$(PYTHON) -I tests/backend_check.py
 
 .PHONY: cross-check
 cross-check: rust cpp python $(SAMPLES)
@@ -311,7 +336,9 @@ bnum-check: rust cpp
 # build/lib and build/bdist.* in each distribution's directory, which are
 # removed before and after, with its *.egg-info; the rest of the top build/
 # is the packages', and is left alone.
-PY_DISTS = . python ccsds/python
+# tcs-xtce, whose extension module is Rust, is built by maturin; the other
+# two, which are Python alone, by setuptools.
+PY_DISTS = python ccsds/python
 SETUPTOOLS_BUILD = build/lib build/bdist.* *.egg-info python/*.egg-info
 RT_PY_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' \
                          python/pyproject.toml)
@@ -321,7 +348,7 @@ CCSDS_CRATE_VERSION := $(shell sed -n \
                            '1,/^version/s/^version = "\(.*\)"/\1/p' \
                            ccsds/rust/Cargo.toml)
 .PHONY: python-dist
-python-dist: $(PY_GEN)
+python-dist: $(PY_GEN) $(PYO3_GEN)
 	@[ "$(RT_PY_VERSION)" = "$(RT_CRATE_VERSION)" ] || { \
 	    echo "python/pyproject.toml is $(RT_PY_VERSION) and" \
 	        "rust/tcsxtce/Cargo.toml $(RT_CRATE_VERSION); make them" \
@@ -339,7 +366,14 @@ python-dist: $(PY_GEN)
 	        "not installed: make install-tools installs it" >&2; \
 	    exit 1; \
 	}
+	@$(PYTHON) -m maturin --version > /dev/null 2>&1 || { \
+	    echo "python-dist builds tcs-xtce with maturin, which is not" \
+	        "installed: make install-tools installs it" >&2; \
+	    exit 1; \
+	}
 	rm -rf dist
+	$(PYTHON) -m maturin build --release --quiet --out dist
+	$(PYTHON) -m maturin sdist --out dist
 	for d in $(PY_DISTS); do \
 	    (cd $$d && rm -rf $(SETUPTOOLS_BUILD) && \
 	     $(PYTHON) -c 'from setuptools import build_meta as b; \
@@ -425,6 +459,7 @@ fmt:
 	cd rust && $(CARGO) fmt
 	cd editor && $(CARGO) fmt
 	cd ccsds/rust && $(CARGO) fmt
+	cd rust/tcs-xtce-python && $(CARGO) fmt
 	for d in $(EXAMPLES); do \
 	    $(MAKE) -C $$d generate && \
 	        (cd $$d/rust && $(CARGO) fmt) || exit 1; \
@@ -436,6 +471,7 @@ fmt-check:
 	cd rust && $(CARGO) fmt --check
 	cd editor && $(CARGO) fmt --check
 	cd ccsds/rust && $(CARGO) fmt --check
+	cd rust/tcs-xtce-python && $(CARGO) fmt --check
 	for d in $(EXAMPLES); do \
 	    $(MAKE) -C $$d generate && \
 	        (cd $$d/rust && $(CARGO) fmt --check) || exit 1; \
@@ -848,6 +884,8 @@ endif
 clean:
 	cd rust && $(CARGO) clean
 	cd editor && $(CARGO) clean
+	cd rust/tcs-xtce-python && $(CARGO) clean
+	rm -f $(NATIVE)
 	$(MAKE) -C cpp clean
 	$(MAKE) -C ccsds clean
 	for d in $(EXAMPLES); do $(MAKE) -C $$d clean; done

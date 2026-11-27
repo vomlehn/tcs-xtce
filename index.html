@@ -442,13 +442,13 @@ committed, so a fresh clone runs <code>make</code> or
 <code>ar</code>);</li>
 <li><code>curl</code> and <code>xmllint</code>;</li>
 <li>Python 3.11+, with pip and venv (the Python packages themselves run
-on 3.10); setuptools 77 or later and twine for
+on 3.10); setuptools 77 or later, maturin 1.9 or later and twine for
 <code>make python-dist</code> and for installing and packaging, which
 build the Python in place, without pip’s isolated environment – where
-the system’s setuptools is older,
+the system’s are older,
 <code>python3 -m venv --system-site-packages ~/tcs-venv</code>,
-<code>~/tcs-venv/bin/pip install 'setuptools&gt;=77' twine</code>, and
-<code>PYTHON=~/tcs-venv/bin/python3</code> on each make line;</li>
+<code>~/tcs-venv/bin/pip install 'setuptools&gt;=77' 'maturin&gt;=1.9' twine</code>,
+and <code>PYTHON=~/tcs-venv/bin/python3</code> on each make line;</li>
 <li>a Rust toolchain with <code>rustfmt</code>: the newest stable, which
 <code>rust-toolchain.toml</code> asks rustup for and
 <code>make test</code> holds it to, through tcs-helpers’

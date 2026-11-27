@@ -43,11 +43,13 @@ RUST_COMPONENTS="rustfmt"
 CARGO_TOOLS=""
 PIPX_TOOLS=""
 CHECKOUTS="tcs-helpers"
-# The packaging tools: make packages, make lint-packages, and twine for
-# make python-dist's check of what it builds.
-APT_PACKAGING="dpkg-dev rpm lintian rpmlint shellcheck gzip twine"
-DNF_PACKAGING="dpkg dpkg-dev rpm-build lintian rpmlint ShellCheck gzip
+# The packaging tools: make packages, make lint-packages, maturin, which
+# make python-dist builds tcs-xtce's wheel with, and twine for its check
+# of what it builds.
+APT_PACKAGING="dpkg-dev rpm lintian rpmlint shellcheck gzip python3-maturin
 	twine"
+DNF_PACKAGING="dpkg dpkg-dev rpm-build lintian rpmlint ShellCheck gzip
+	maturin twine"
 
 # The rest is the same in every TCS project that has this script; only what
 # is above differs.

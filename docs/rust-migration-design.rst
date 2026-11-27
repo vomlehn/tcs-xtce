@@ -147,10 +147,13 @@ the two compared. A Python piece is removed only at the end.
 5. **The Python runtime.** A PyO3 module with the pure-Python
    ``tcsxtce``'s API, on the Rust runtime. Every Python test, and every
    cross-language check with generated Python, must pass unchanged.
-6. **The Python XML binding.** A PyO3 module with the classes and
-   ``Document`` of today's generated ``tcs_xtce``. The round-trip
-   tests, and the byte-identical output across languages, must pass
-   unchanged.
+6. **The Python XML binding.** The extension module
+   ``tcs_xtce._native``, from the crate ``tcs-xtce-python``, reads and
+   writes XML through the Rust binding, and generated conversions turn
+   what it reads into today's Python classes and back (see `The Python
+   interfaces`_). Every Python test passes with it, and
+   ``tests/backend_check.py`` checks that it and the Python reader and
+   writer read every document alike and write the same bytes.
 7. **The C runtime.** ``tcsxtce`` builds without the standard library,
    and ``tcsxtce-c`` gives ``libtcsxtce.a`` the functions the C headers
    declare. Every C and C++ test, every example and every
@@ -180,12 +183,15 @@ The Python interfaces
   ``int``\s, bytes are ``bytes`` or ``memoryview``\s, and the binding's
   records keep their attribute names and their ``Optional`` and
   ``list`` fields.
-- **The XML binding's records.** Today they are dataclasses. As PyO3
-  classes they keep their attributes, their constructors with keyword
-  arguments and their equality, so code that builds or reads them
-  doesn't change. Code that relies on their being dataclasses, through
-  ``dataclasses.fields()`` or ``asdict()``, does notice; the
-  interface provides both for these classes, so that it doesn't.
+- **The XML binding's records** stay the generated dataclasses they are.
+  The Rust binding reads and writes the XML, and generated code converts
+  between its values and the dataclasses, which the binding generator
+  writes from the same model as both bindings. PyO3 classes were the
+  other way, but an attribute of one that holds a record gives a copy of
+  it, so ``doc.root.header.version = "2"`` would change the copy and not
+  the document, and code using ``dataclasses.fields()`` or ``asdict()``
+  would break. With dataclasses, nothing that builds, reads or changes
+  them notices.
 - **Wheels.** The packages become native, so they are built as wheels
   for each platform, with PyO3's stable ABI (``abi3``) from Python 3.10,
   so that one wheel for each platform serves every Python from 3.10 on.

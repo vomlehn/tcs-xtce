@@ -35,6 +35,9 @@ __pycache__/
 /cpp/include/tcs-xtce-generated.hpp
 /cpp/src/generated.cpp
 /python/tcs_xtce/generated.py
+/rust/tcs-xtce-python/src/generated.rs
+# The extension module make builds in place, from rust/tcs-xtce-python.
+/python/tcs_xtce/_native*.so
 /tests/samples/
 
 # Downloaded by make samples-check

@@ -12,14 +12,20 @@
 # the digest's command line in tcs_xtce.digest_cli. This file is at the
 # repository's root so that the package can carry the license files.
 # README-pypi.md is its page on PyPI, with every link absolute; README.md
-# is the repository's. python/tcs_xtce/generated.py is not in git -- `make
-# generate` writes it from the XTCE schema -- so build the package with
-# `make python-dist`, which writes it first and checks that the wheel
-# holds it.
+# is the repository's. python/tcs_xtce/generated.py and
+# rust/tcs-xtce-python/src/generated.rs are not in git -- `make generate`
+# writes them from the XTCE schema -- so build the package with `make
+# python-dist`, which writes them first and checks that the wheel holds
+# them.
+#
+# It reads and writes XML through the tcs-xtce crate: maturin builds the
+# extension module tcs_xtce._native from rust/tcs-xtce-python, with PyO3's
+# stable ABI from Python 3.10, so each wheel is for one platform and every
+# Python from 3.10 on, and building the sdist needs a Rust toolchain.
 
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
 [project]
 name = "tcs-xtce"
@@ -62,13 +68,19 @@ Repository = "https://github.com/vomlehn/tcs-xtce"
 Documentation = "https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html"
 "Rust crate" = "https://crates.io/crates/tcs-xtce"
 
-[tool.setuptools]
-# The compiler uses tcs_xtce.binding's line wrapping and rustfmt.
-packages = ["tcs_xtce", "tcs_xtce.compiler", "tcs_xtce.binding",
-            "tcs_xtce.digest_cli"]
-
-[tool.setuptools.package-dir]
-"" = "python"
-
-[tool.setuptools.package-data]
-tcs_xtce = ["py.typed"]
+[tool.maturin]
+# The package tcs_xtce in python/, with its subpackages: the compiler uses
+# tcs_xtce.binding's line wrapping and rustfmt.
+python-source = "python"
+module-name = "tcs_xtce._native"
+manifest-path = "rust/tcs-xtce-python/Cargo.toml"
+# Without its symbols, which a user's wheel has no use for.
+strip = true
+# Generated, so not in git, but in the wheel and the sdist.
+include = [
+    { path = "python/tcs_xtce/generated.py", format = ["sdist", "wheel"] },
+    { path = "rust/tcs-xtce-python/src/generated.rs", format = "sdist" },
+]
+# The extension module make builds in place, which the wheel's own build
+# replaces.
+exclude = ["python/tcs_xtce/_native*.so"]

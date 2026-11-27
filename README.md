@@ -112,11 +112,11 @@ Requirements:
 * git, make, `pkg-config` and binutils (`strip`, `ar`);
 * `curl` and `xmllint`;
 * Python 3.11+, with pip and venv (the Python packages themselves run on
-  3.10); setuptools 77 or later and twine for `make python-dist` and for
-  installing and packaging, which build the Python in place, without pip's
-  isolated environment -- where the system's setuptools is older,
-  `python3 -m venv --system-site-packages ~/tcs-venv`,
-  `~/tcs-venv/bin/pip install 'setuptools>=77' twine`, and
+  3.10); setuptools 77 or later, maturin 1.9 or later and twine for
+  `make python-dist` and for installing and packaging, which build the
+  Python in place, without pip's isolated environment -- where the
+  system's are older, `python3 -m venv --system-site-packages ~/tcs-venv`,
+  `~/tcs-venv/bin/pip install 'setuptools>=77' 'maturin>=1.9' twine`, and
   `PYTHON=~/tcs-venv/bin/python3` on each make line;
 * a Rust toolchain with `rustfmt`: the newest stable, which
   `rust-toolchain.toml` asks rustup for and `make test` holds it to,
