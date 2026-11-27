@@ -6,6 +6,13 @@ Python; an XTCE editor; and tcsxtce, the operational runtime the generated
 code runs on, aboard and in the mission operations center. Made for space
 applications, and as useful on the ground, such as for drones.
 
+> **Warning:** tcs-xtce is an alpha release. It is not fully tested, it is
+> not feature complete, and it is subject to rapid change. Comments and
+> contributions are encouraged, even at this stage: open an issue at
+> https://github.com/vomlehn/tcs-xtce/issues, and see
+> [CONTRIBUTING.md](https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md)
+> for how to send changes.
+
 Includes libraries that serialize and deserialize OMG **XTCE** (XML Telemetric and
 Command Exchange) data into managed, preallocated buffers, in two layers:
 

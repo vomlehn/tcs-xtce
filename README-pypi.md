@@ -15,8 +15,11 @@ from the same definitions by comparing a digest of them, which every
 language computes the same way.
 
 > **Warning:** tcs-xtce is an alpha release. It is not fully tested, it is
-> not feature complete, and it is subject to rapid change. Feedback is
-> welcome: open an issue at https://github.com/vomlehn/tcs-xtce/issues.
+> not feature complete, and it is subject to rapid change. Comments and
+> contributions are encouraged, even at this stage: open an issue at
+> https://github.com/vomlehn/tcs-xtce/issues, and see
+> [CONTRIBUTING.md](https://github.com/vomlehn/tcs-xtce/blob/main/CONTRIBUTING.md)
+> for how to send changes.
 
 ## Installing
 
