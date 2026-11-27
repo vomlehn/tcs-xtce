@@ -7,9 +7,10 @@ edit them by hand.  Serialization uses managed buffers that are preallocated
 and reused for as long as their owner (usually a :class:`Document`) lives.
 
 The package also holds the compiler that turns a mission's XTCE into packet
-codecs (:mod:`tcs_xtce.compiler`, run as ``python3 -m tcs_xtce`` or the
-``tcs-xtce`` command) and the ``xtce-digest`` command
-(:mod:`tcs_xtce.digest_cli`).
+codecs (:mod:`tcs_xtce.compiler`, run as ``python3 -m tcs_xtce``) and the
+digest's command line (:mod:`tcs_xtce.digest_cli`).  pip installs them as
+modules only; the ``tcs-xtce`` and ``xtce-digest`` commands come with the
+.deb and the RPM.
 
 The packet runtime that the Python the compiler writes uses, and the digest
 (:mod:`tcsxtce.digest`), are the :mod:`tcsxtce` package, which is

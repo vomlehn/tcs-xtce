@@ -597,9 +597,10 @@ that is not installed, and fails on any finding that is not overridden;
 each override says why it is intended, in
 <code>packaging/deb/tcs-xtce/lintian-overrides</code> and
 <code>packaging/rpm/rpmlint.toml</code>.</p>
-<p><strong>Python.</strong> Three distributions: <code>tcs-xtce</code>,
-the compiler, with both commands; <code>tcsxtce</code>, the packet
-runtime it depends on; and <code>tcsccsds</code>.
+<p><strong>Python.</strong> Three distributions, all libraries, which
+install no commands: <code>tcs-xtce</code>, the XML binding and the
+compiler, run as <code>python3 -m tcs_xtce</code>; <code>tcsxtce</code>,
+the packet runtime it depends on; and <code>tcsccsds</code>.
 <code>make python-dist</code> builds each as a wheel and an sdist in
 <code>dist/</code>, checks them with twine and tries them, and
 <code>make python-versions</code> tries them on each Python from 3.10 to
@@ -783,12 +784,12 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a hr
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> tcs_xtce mission.xtce mission.h  <span class="at">--lang</span> c        <span class="co"># or --lang c++: same file</span></span>
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> tcs_xtce mission.xtce mission.py <span class="at">--lang</span> python</span></code></pre></div>
 <p>Or install the Python distributions, compiler and runtime (see <a
-href="#installing">Installing</a>), and use the <code>tcs-xtce</code>
-command from anywhere. They are not on PyPI yet:</p>
+href="#installing">Installing</a>), and run the compiler as a module
+from anywhere. They are not on PyPI yet:</p>
 <div class="sourceCode" id="cb10"><pre
 class="sourceCode sh"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> python-dist</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">--find-links</span> dist dist/tcs_xtce-<span class="pp">*</span>.whl</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="ex">tcs-xtce</span> mission.xtce mission.rs <span class="at">--lang</span> rust</span></code></pre></div>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> tcs_xtce mission.xtce mission.rs <span class="at">--lang</span> rust</span></code></pre></div>
 <p><code>--lang c</code> and <code>--lang c++</code> write the same
 header, which compiles both as C11 and as C++. It is self-contained (it
 includes only <code>tcsxtce-packet.h</code>), allocates nothing, and

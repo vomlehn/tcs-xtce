@@ -296,9 +296,10 @@ bnum-check: rust cpp
 		cpp/build/bnum_tool cpp/build/bnum_tool_cxx \
 		cpp/build/bnum_tool_hpp
 
-# The Python distributions, each as a wheel and an sdist in dist/: tcs-xtce,
-# the compiler, with the tcs-xtce and xtce-digest commands (pyproject.toml);
-# tcsxtce, the packet runtime it depends on (python/pyproject.toml); and
+# The Python distributions, each as a wheel and an sdist in dist/, all
+# libraries that install no commands: tcs-xtce, the XML binding and the
+# compiler (pyproject.toml); tcsxtce, the packet runtime it depends on
+# (python/pyproject.toml); and
 # tcsccsds (ccsds/python/pyproject.toml). tcsxtce's version must be its
 # crate's. twine checks that PyPI would take them, their pages included,
 # and then they are installed in a fresh virtual environment and tried: see

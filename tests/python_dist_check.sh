@@ -6,11 +6,13 @@
 #      packet runtime and its py.typed, and tcs-xtce's does not; each
 #      wheel holds both licence files, as files.
 #   2. Installed in a fresh virtual environment, with nothing from the
-#      repository on the path, tcs-xtce generates the demo mission's Python,
+#      repository on the path, tcs-xtce is a library and installs no
+#      commands; it reads the demo mission and writes it back unchanged;
+#      its compiler, run as a module, generates the demo mission's Python,
 #      C and Rust, and the Python it generated decodes a packet with the
 #      installed runtime; tcsccsds encodes and decodes a time. Without
 #      rustfmt, generating Rust must fail, saying it needs it.
-#   3. The installed xtce-digest gives the demo mission the digest the
+#   3. The installed digest module gives the demo mission the digest the
 #      repository's own copy does.
 #
 # Nothing is downloaded: the wheels are installed from dist/ alone.
@@ -80,13 +82,31 @@ python3 -m venv "$work/venv"
 # From outside the repository, so that only what was installed is found.
 cd "$work"
 bin=$work/venv/bin
-"$bin/tcs-xtce" "$demo" demo.py --lang python
-"$bin/tcs-xtce" "$demo" demo.h --lang c
+# A library: only modules, nothing on PATH.
+for cmd in tcs-xtce xtce-digest; do
+    [ ! -e "$bin/$cmd" ] ||
+        fail "the wheels install a $cmd command; they are libraries"
+done
+"$bin/python" - "$demo" <<'EOF'
+import sys
+
+from tcs_xtce import Document
+
+doc = Document.from_file(sys.argv[1])
+assert doc.root.name == "Demo", doc.root.name
+assert Document.from_bytes(doc.to_bytes()).root == doc.root
+EOF
+# Runs the installed compiler, as a module.
+compile() {
+    "$bin/python" -m tcs_xtce "$@"
+}
+compile "$demo" demo.py --lang python
+compile "$demo" demo.h --lang c
 # Rust is laid out by rustfmt, which pip cannot install: without it, the
 # compiler must say so and fail, as its PyPI page says.
 if command -v rustfmt > /dev/null; then
-    "$bin/tcs-xtce" "$demo" demo.rs --lang rust
-elif "$bin/tcs-xtce" "$demo" demo.rs --lang rust 2> rustfmt.txt; then
+    compile "$demo" demo.rs --lang rust
+elif compile "$demo" demo.rs --lang rust 2> rustfmt.txt; then
     fail "tcs-xtce generated Rust with no rustfmt to lay it out"
 else
     grep -q 'rustfmt is required' rustfmt.txt ||
@@ -108,10 +128,10 @@ t = CdsTime(0x123456, 86399999, 999999999)
 assert decode_cds_exact(layout.encode_exact(t)) == (12, t)
 EOF
 
-installed=$("$bin/xtce-digest" "$demo")
+installed=$("$bin/python" -m tcs_xtce.digest_cli "$demo")
 ours=$(cd "$top/python" && python3 -m tcs_xtce.digest_cli "$demo")
 [ "$installed" = "$ours" ] ||
-    fail "xtce-digest gives $installed installed and $ours in the repository"
+    fail "the digest is $installed installed and $ours in the repository"
 
 echo "python_dist_check: $(basename "$wheel"), $(basename "$rt_wheel")" \
     "and $(basename "$ccsds_wheel") install, generate, decode and keep" \

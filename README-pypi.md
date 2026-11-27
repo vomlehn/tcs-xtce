@@ -1,10 +1,12 @@
-# tcs-xtce: an XTCE compiler
+# tcs-xtce: an XTCE library
 
-tcs-xtce compiles a mission's OMG **XTCE** (XML Telemetric and Command
-Exchange) definitions of its commands and telemetry into the data
-structures and code that pack and unpack them, in C/C++, Rust and Python.
-It reads one XTCE document, or the several a mission is split across, as
-Yamcs loads them.
+tcs-xtce is a Python library for OMG **XTCE** (XML Telemetric and Command
+Exchange), the XML that describes a mission's commands and telemetry. It
+reads, writes and builds XTCE documents as Python objects, one class for
+each type of the XTCE schema, and its compiler turns a mission's
+documents into the data structures and code that pack and unpack its
+packets, in C/C++, Rust and Python. It reads one XTCE document, or the
+several a mission is split across, as Yamcs loads them.
 
 What one language writes, any other reads, byte for byte. The packets are
 bit-packed, so a field takes only the bits its encoding gives, and they
@@ -22,19 +24,38 @@ language computes the same way.
 pip install tcs-xtce
 ```
 
-This installs the compiler, `tcs-xtce`; `xtce-digest`, which prints an
-XTCE document's digest; and
+This installs the library, `tcs_xtce`, and
 [tcsxtce](https://pypi.org/project/tcsxtce/), the packet runtime that the
-generated Python code imports. It needs Python 3.10 or later and nothing
-else from PyPI.
+generated Python code imports. It installs no commands. It needs Python
+3.10 or later and nothing else from PyPI.
 
 ## Using it
 
-```sh
-tcs-xtce mission.xtce mission.py --lang python
-tcs-xtce mission.xtce mission.h --lang c
-tcs-xtce mission.xtce mission.rs --lang rust
+Reading and writing a document:
+
+```python
+from tcs_xtce import Document
+
+doc = Document.from_file("mission.xtce")
+print(doc.root.name)
+for item in doc.root.telemetry_meta_data.parameter_set.items:
+    if item.name == "Parameter":
+        print(item.value.name, item.value.parameter_type_ref)
+doc.root.short_description = "Edited in Python"
+with open("edited.xtce", "wb") as f:
+    doc.write_to(f)
 ```
+
+Generating code, with the compiler run as a module:
+
+```sh
+python3 -m tcs_xtce mission.xtce mission.py --lang python
+python3 -m tcs_xtce mission.xtce mission.h --lang c
+python3 -m tcs_xtce mission.xtce mission.rs --lang rust
+```
+
+The digest that programs built from the same documents compare is
+`python3 -m tcs_xtce.digest_cli mission.xtce`.
 
 What the generated code needs:
 

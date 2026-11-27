@@ -1,5 +1,8 @@
-# tcs-xtce's Python distribution: the compiler that generates code in every
-# language, and the XML binding it reads XTCE with, installable with pip.
+# tcs-xtce's Python distribution, a library installable with pip: the XML
+# binding that reads and writes XTCE documents, and the compiler that
+# generates code in every language from them. It installs no commands:
+# the compiler runs as `python3 -m tcs_xtce`, and the .deb and the RPM,
+# not pip, install the tcs-xtce and xtce-digest commands.
 # Software tools; the packet runtime that generated Python code imports,
 # tcsxtce, is operational code and a distribution of its own, in
 # python/pyproject.toml, which this one depends on.
@@ -24,8 +27,9 @@ name = "tcs-xtce"
 # too, and the same as the tcs-xtce crate's, in rust/Cargo.toml.
 version = "0.7.1"
 description = """\
-    An XTCE compiler: generates the code that packs and unpacks a \
-    mission's XTCE commands and telemetry, in C/C++, Rust and Python\
+    An XTCE library: reads, writes and builds OMG XTCE documents, and \
+    generates the code that packs and unpacks a mission's commands and \
+    telemetry, in C/C++, Rust and Python\
 """
 readme = "README-pypi.md"
 requires-python = ">=3.10"
@@ -57,10 +61,6 @@ classifiers = [
 Repository = "https://github.com/vomlehn/tcs-xtce"
 Documentation = "https://vomlehn.github.io/tcs-xtce/docs/tcs-xtce.html"
 "Rust crate" = "https://crates.io/crates/tcs-xtce"
-
-[project.scripts]
-tcs-xtce = "tcs_xtce.__main__:main"
-xtce-digest = "tcs_xtce.digest_cli.__main__:main"
 
 [tool.setuptools]
 # The compiler uses tcs_xtce.binding's line wrapping and rustfmt.

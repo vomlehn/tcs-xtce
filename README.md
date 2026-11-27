@@ -252,8 +252,10 @@ finding that is not overridden; each override says why it is intended, in
 `packaging/deb/tcs-xtce/lintian-overrides` and
 `packaging/rpm/rpmlint.toml`.
 
-**Python.** Three distributions: `tcs-xtce`, the compiler, with both
-commands; `tcsxtce`, the packet runtime it depends on; and `tcsccsds`.
+**Python.** Three distributions, all libraries, which install no
+commands: `tcs-xtce`, the XML binding and the compiler, run as `python3
+-m tcs_xtce`; `tcsxtce`, the packet runtime it depends on; and
+`tcsccsds`.
 `make python-dist` builds each as a wheel and an sdist in `dist/`, checks
 them with twine and tries them, and `make python-versions` tries them on
 each Python from 3.10 to 3.14, in containers. `pip install
@@ -391,13 +393,13 @@ python3 -m tcs_xtce mission.xtce mission.py --lang python
 ```
 
 Or install the Python distributions, compiler and runtime (see
-[Installing](#installing)), and use the `tcs-xtce` command from anywhere.
-They are not on PyPI yet:
+[Installing](#installing)), and run the compiler as a module from
+anywhere. They are not on PyPI yet:
 
 ```sh
 make python-dist
 pip install --find-links dist dist/tcs_xtce-*.whl
-tcs-xtce mission.xtce mission.rs --lang rust
+python3 -m tcs_xtce mission.xtce mission.rs --lang rust
 ```
 
 `--lang c` and `--lang c++` write the same header, which compiles both as C11

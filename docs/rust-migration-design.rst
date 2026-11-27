@@ -194,9 +194,9 @@ The Python interfaces
 Packaging
 =========
 
-- **The ``tcs-xtce`` command** is a Rust program. The Python package
-  installs it as well, as an entry point that calls the compiler in its
-  extension module, so ``pip install`` still gives the command.
+- **The ``tcs-xtce`` command** is a Rust program, which the .deb and the
+  RPM install. The Python packages are libraries and install no
+  commands: the compiler runs as ``python3 -m tcs_xtce``, as now.
 - **``make install-tools``** gains maturin and cbindgen, and loses
   nothing it needs for building C, C++ and Rust. The README's list of
   tools changes with it.
