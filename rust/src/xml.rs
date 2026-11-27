@@ -331,6 +331,27 @@ impl<'a> Tag<'a> {
             rest: self.raw_attrs,
         }
     }
+
+    /// Finds an attribute the tag gives more than once, which XML forbids.
+    /// Names are compared as written, prefix and all.  The search stops at
+    /// a malformed attribute, which reading the attributes reports.
+    ///
+    /// # Returns
+    ///
+    /// The first name given a second time, or `None` if none is.
+    fn duplicate_attr(&self) -> Option<&'a str> {
+        for (i, a) in self.attrs().enumerate() {
+            let Ok((name, _)) = a else { return None };
+            if self
+                .attrs()
+                .take(i)
+                .any(|b| matches!(b, Ok((n, _)) if n == name))
+            {
+                return Some(name);
+            }
+        }
+        None
+    }
 }
 
 fn local_name(name: &str) -> &str {
@@ -561,16 +582,20 @@ impl<'a> Reader<'a> {
                 if name.is_empty() {
                     return Err(self.error_at(start, "missing element name"));
                 }
+                let tag = Tag {
+                    name,
+                    raw_attrs: &inner[name_end..],
+                    empty,
+                    offset: start,
+                };
+                if let Some(dup) = tag.duplicate_attr() {
+                    return Err(self.error_at(
+                        start,
+                        format!("duplicate attribute {dup:?} on <{name}>"),
+                    ));
+                }
                 self.pos = start + close + 1;
-                return Ok((
-                    start,
-                    Token::Start(Tag {
-                        name,
-                        raw_attrs: &inner[name_end..],
-                        empty,
-                        offset: start,
-                    }),
-                ));
+                return Ok((start, Token::Start(tag)));
             }
         }
     }
@@ -1027,5 +1052,18 @@ mod tests {
         assert_eq!(r.peek_child().unwrap(), None);
         r.close().unwrap();
         r.finish().unwrap();
+    }
+
+    #[test]
+    fn reader_refuses_a_repeated_attribute() {
+        let src = b"<A>\n  <B a='1' b='2' a='3'/></A>";
+        let mut r = Reader::new(src).unwrap();
+        r.root().unwrap();
+        let e = r.peek_child().unwrap_err();
+        assert_eq!(e.message, "duplicate attribute \"a\" on <B>");
+        assert_eq!(e.line, 2);
+        // A prefix makes another name, as XML compares them.
+        let mut r = Reader::new(b"<A x:a='1' a='2'/>").unwrap();
+        assert!(r.root().is_ok());
     }
 }

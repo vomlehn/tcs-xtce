@@ -79,6 +79,11 @@ fn reports_errors_with_positions() {
 
     let err = Document::from_bytes(b"<Other name='a'/>").unwrap_err();
     assert!(err.message.contains("root"), "{err}");
+
+    // XML forbids an attribute given twice.
+    let err =
+        Document::from_bytes(b"<SpaceSystem name='a' name='b'/>").unwrap_err();
+    assert_eq!(err.message, "duplicate attribute \"name\" on <SpaceSystem>");
 }
 
 #[test]

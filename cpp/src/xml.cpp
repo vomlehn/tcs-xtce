@@ -358,6 +358,28 @@ bool AttrIter::next(const Reader& r) {
         return true;
 }
 
+/** Finds an attribute a tag gives more than once, which XML forbids.
+ * Names are compared as written, prefix and all.  The search stops at a
+ * malformed attribute, which reading the attributes reports.
+ *
+ * @param r    The reader the tag came from.
+ * @param tag  The start tag.
+ * @return     The first name given a second time, or an empty view if
+ *             none is. */
+static std::string_view duplicate_attr(const Reader& r, const Tag& tag) {
+        try {
+                std::size_t i = 0;
+                for (AttrIter it(tag); it.next(r); ++i) {
+                        AttrIter prev(tag);
+                        for (std::size_t j = 0; j < i && prev.next(r); ++j) {
+                                if (prev.name() == it.name()) return it.name();
+                        }
+                }
+        } catch (const Error&) {
+        }
+        return {};
+}
+
 /** Appends a code point's UTF-8 encoding.
  *
  * @param out  The string to append to.
@@ -564,6 +586,15 @@ Reader::Token Reader::lex() {
                         t.kind = Kind::Start;
                         t.tag = Tag{inner.substr(0, name_end),
                                     inner.substr(name_end), empty, start};
+                        std::string_view dup = duplicate_attr(*this, t.tag);
+                        if (!dup.empty()) {
+                                throw error_at(start,
+                                               "duplicate attribute \"" +
+                                                       std::string(dup) +
+                                                       "\" on <" +
+                                                       std::string(t.tag.name) +
+                                                       ">");
+                        }
                         return t;
                 }
         }

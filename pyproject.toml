@@ -31,7 +31,7 @@ build-backend = "maturin"
 name = "tcs-xtce"
 # tcs-xtce's version, which the Makefile reads for the .deb and the RPM
 # too, and the same as the tcs-xtce crate's, in rust/Cargo.toml.
-version = "0.7.1"
+version = "0.7.2"
 description = """\
     An XTCE library: reads, writes and builds OMG XTCE documents, and \
     generates the code that packs and unpacks a mission's commands and \

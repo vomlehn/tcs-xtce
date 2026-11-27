@@ -126,14 +126,14 @@ checksum = "8c447be3a2abfa84b2d91680c56600bd6b2873866de27b36ec911be705e291da"
 
 [[package]]
 name = "tcs-xtce"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "tcsxtce",
 ]
 
 [[package]]
 name = "tcs-xtce-python"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "pyo3",
  "tcs-xtce",

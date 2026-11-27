@@ -86,6 +86,14 @@ void errors_have_positions() {
         } catch (const xtce::Error& e) {
                 CHECK(e.message().find("name") != std::string::npos);
         }
+        // XML forbids an attribute given twice.
+        try {
+                xtce::Document::from_bytes("<SpaceSystem name='a' name='b'/>");
+                CHECK(false);
+        } catch (const xtce::Error& e) {
+                CHECK(e.message() ==
+                      "duplicate attribute \"name\" on <SpaceSystem>");
+        }
 }
 
 /** Checks that a document built in code serializes and decodes back to
