@@ -372,19 +372,20 @@ ul.auto-toc {
 <li><a class="reference internal" href="#goals" id="toc-entry-2">Goals</a></li>
 <li><a class="reference internal" href="#the-crates" id="toc-entry-3">The crates</a></li>
 <li><a class="reference internal" href="#the-order-of-work" id="toc-entry-4">The order of work</a></li>
-<li><a class="reference internal" href="#the-python-interfaces" id="toc-entry-5">The Python interfaces</a></li>
-<li><a class="reference internal" href="#packaging" id="toc-entry-6">Packaging</a><ul>
-<li><a class="reference internal" href="#wheel-platforms" id="toc-entry-7">Wheel platforms</a></li>
+<li><a class="reference internal" href="#porting-the-model" id="toc-entry-5">Porting the model</a></li>
+<li><a class="reference internal" href="#the-python-interfaces" id="toc-entry-6">The Python interfaces</a></li>
+<li><a class="reference internal" href="#packaging" id="toc-entry-7">Packaging</a><ul>
+<li><a class="reference internal" href="#wheel-platforms" id="toc-entry-8">Wheel platforms</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#c-and-c" id="toc-entry-8">C and C++</a><ul>
-<li><a class="reference internal" href="#the-c-packet-runtime" id="toc-entry-9">The C packet runtime</a></li>
-<li><a class="reference internal" href="#the-c-c-xml-binding" id="toc-entry-10">The C/C++ XML binding</a></li>
+<li><a class="reference internal" href="#c-and-c" id="toc-entry-9">C and C++</a><ul>
+<li><a class="reference internal" href="#the-c-packet-runtime" id="toc-entry-10">The C packet runtime</a></li>
+<li><a class="reference internal" href="#the-c-c-xml-binding" id="toc-entry-11">The C/C++ XML binding</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing" id="toc-entry-11">Testing</a></li>
-<li><a class="reference internal" href="#settled-in-review" id="toc-entry-12">Settled in review</a></li>
-<li><a class="reference internal" href="#questions-for-review" id="toc-entry-13">Questions for review</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-12">Testing</a></li>
+<li><a class="reference internal" href="#settled-in-review" id="toc-entry-13">Settled in review</a></li>
+<li><a class="reference internal" href="#questions-for-review" id="toc-entry-14">Questions for review</a></li>
 </ul>
 </div>
 <div class="section" id="what-changes">
@@ -545,7 +546,9 @@ the two compared. A Python piece is removed only at the end.</p>
 stage. The Python compiler gains <tt class="docutils literal"><span class="pre">--dump-model</span></tt>, which writes the
 resolved model in a canonical text form, and the Rust model writes
 the same form. The two must be identical for the demo mission, the
-examples and the schema-coverage samples.</li>
+examples and the schema-coverage samples; <tt class="docutils literal">make <span class="pre">model-check</span></tt>
+compares them, and <tt class="docutils literal">make <span class="pre">samples-check</span></tt> the public documents it
+downloads too. See <a class="reference internal" href="#porting-the-model">Porting the model</a> for the stages.</li>
 <li><strong>The emitters.</strong> Port the three emitters and the size report to
 <tt class="docutils literal"><span class="pre">tcs-xtce-compiler</span></tt>. Its output must be byte-identical to the
 Python compiler's for every mission the tests compile, in every
@@ -583,11 +586,58 @@ runtime's headers, the C++ in <tt class="docutils literal">cpp/src/</tt>, and th
 tested the Rust against them. The tests that remain test the Rust
 and its interfaces.</li>
 </ol>
-<p>Steps 1 to 3 are what expectb needs. Steps 4 to 9 can follow at their
-own pace, since nothing in them blocks the run-time codec.</p>
+<p>Steps 1 and 3 are what expectb needs, so step 3 comes before step 2:
+the run-time codec needs only the model, and the emitters follow it.
+Steps 4 to 9 can follow at their own pace, since nothing in them blocks
+the run-time codec.</p>
+</div>
+<div class="section" id="porting-the-model">
+<h1><a class="toc-backref" href="#toc-entry-5">Porting the model</a></h1>
+<p>The model is ported a stage at a time, each a part of what <tt class="docutils literal">compile.py</tt>
+does, and each compared on every mission before the next is begun:</p>
+<ol class="arabic simple">
+<li><strong>Types</strong> (done). Indexing the documents, resolving names, and each
+parameter and argument type: its encoding, calibrators, sizes, array
+dimensions, aggregate members, valid ranges and alarms. The Python
+compiler's <tt class="docutils literal"><span class="pre">--dump-types</span></tt> writes every type of the documents, each
+resolved alone, or the error it gives, and the warnings; the Rust
+model's <tt class="docutils literal">model_dump <span class="pre">--types</span></tt> writes the same. They agree on the 28
+missions here and the 67 public documents and missions that can be
+read.</li>
+<li><strong>Containers.</strong> Telemetry containers and their entries: locations,
+repeats, include conditions, segments, length and checksum fields,
+transforms; the nodes and their inheritance.</li>
+<li><strong>Commands.</strong> Meta-commands, their arguments, argument assignments
+and command containers; messages.</li>
+<li><strong>The mission.</strong> Streams, algorithms, alarms bound to each packet,
+hooks and kinds: the whole of <tt class="docutils literal"><span class="pre">--dump-model</span></tt>.</li>
+</ol>
+<p>The canonical text is the same for both, with two rules that let the Rust
+hold the model as Rust holds data:</p>
+<ul class="simple">
+<li>Only records that the Python model compares by identity (its
+dataclasses with <tt class="docutils literal">eq=False</tt>: nodes, locals, hooks, criteria and the
+like) are numbered when they are reached more than once. Every other
+record is a value, written in full wherever it is reached: whether two
+Python values are one object is an accident of how they were copied,
+which the Rust need not repeat. A value reached again inside itself,
+as a repeated container's aggregate is through the value standing for
+it, is written there as its class name and <tt class="docutils literal">^</tt>.</li>
+<li>An element of the document that the model keeps until a packet binds
+it (a calibrator's ParameterInstanceRef, an alarm's ContextMatch) is
+written as <tt class="docutils literal">xtce</tt> and its class name: what it says is the document's.</li>
+</ul>
+<p>Errors are the Rust's from the first: where the Python's messages quote
+Python's own machinery, the Rust says the same thing its own way. The one
+case so far is a string alarm's <tt class="docutils literal">matchPattern</tt>, which the Rust parses
+with the <tt class="docutils literal"><span class="pre">regex-syntax</span></tt> crate rather than Python's <tt class="docutils literal">re</tt>: the
+patterns both accept the same way give the same automaton, but a pattern
+one of them refuses gets that one's message. <tt class="docutils literal"><span class="pre">(?i)[^a]</span></tt> matches any
+character but <tt class="docutils literal">a</tt> and <tt class="docutils literal">A</tt> in the Rust; the Python's automaton lets
+either through.</p>
 </div>
 <div class="section" id="the-python-interfaces">
-<h1><a class="toc-backref" href="#toc-entry-5">The Python interfaces</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-6">The Python interfaces</a></h1>
 <ul class="simple">
 <li><strong>The same names, the same behaviour.</strong> Classes, functions,
 exceptions and defaults are what the pure-Python packages have now, so
@@ -616,7 +666,7 @@ so that one wheel for each platform serves every Python from 3.10 on.
 </ul>
 </div>
 <div class="section" id="packaging">
-<h1><a class="toc-backref" href="#toc-entry-6">Packaging</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-7">Packaging</a></h1>
 <ul class="simple">
 <li><strong>The ``tcs-xtce`` command</strong> is a Rust program, which the .deb and the
 RPM install. The Python packages are libraries and install no
@@ -633,7 +683,7 @@ change generated code, so it doesn't by itself change any runtime's
 API.</li>
 </ul>
 <div class="section" id="wheel-platforms">
-<h2><a class="toc-backref" href="#toc-entry-7">Wheel platforms</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-8">Wheel platforms</a></h2>
 <p>The Python packages <tt class="docutils literal">tcsxtce</tt> and <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> each have a wheel for
 every platform below, all <tt class="docutils literal">abi3</tt> from Python 3.10, so that one wheel
 for each platform serves every Python from 3.10 on:</p>
@@ -702,11 +752,11 @@ toolchain. A platform joins the table when someone needs its wheel.</li>
 </div>
 </div>
 <div class="section" id="c-and-c">
-<h1><a class="toc-backref" href="#toc-entry-8">C and C++</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-9">C and C++</a></h1>
 <p>The C and C++ pieces become interfaces to the Rust, as the Python ones
 do, so that every language runs the one implementation.</p>
 <div class="section" id="the-c-packet-runtime">
-<h2><a class="toc-backref" href="#toc-entry-9">The C packet runtime</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-10">The C packet runtime</a></h2>
 <ul class="simple">
 <li><strong>The headers stay.</strong> <tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt>, <tt class="docutils literal"><span class="pre">tcsxtce-bnum.h</span></tt> and
 <tt class="docutils literal"><span class="pre">tcsxtce-digest.h</span></tt> keep every declaration they have -- functions,
@@ -733,7 +783,7 @@ examples both ways, and the size report compares them.</li>
 </ul>
 </div>
 <div class="section" id="the-c-c-xml-binding">
-<h2><a class="toc-backref" href="#toc-entry-10">The C/C++ XML binding</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-11">The C/C++ XML binding</a></h2>
 <ul class="simple">
 <li><strong>The C API stays.</strong> <tt class="docutils literal"><span class="pre">tcs-xtce.h</span></tt> keeps its functions, handles,
 status codes and buffer rules, defined now by <tt class="docutils literal"><span class="pre">tcs-xtce-c</span></tt> over the
@@ -750,7 +800,7 @@ are new even where its declarations are the same.</li>
 </div>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-11">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-12">Testing</a></h1>
 <ul class="simple">
 <li><strong>Byte-identical output</strong> is the test for every port that generates
 something: the model dump, the emitters and the binding generator.
@@ -771,7 +821,7 @@ the HTML being current -- apply to the new Rust as to the old Python.</li>
 </ul>
 </div>
 <div class="section" id="settled-in-review">
-<h1><a class="toc-backref" href="#toc-entry-12">Settled in review</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-13">Settled in review</a></h1>
 <ul class="simple">
 <li>The compiler, its emitters and the binding generator move to Rust.</li>
 <li>The Python packet runtime and the Python XML binding become
@@ -793,7 +843,7 @@ that uses it is built for a Rust target.</li>
 </ul>
 </div>
 <div class="section" id="questions-for-review">
-<h1><a class="toc-backref" href="#toc-entry-13">Questions for review</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-14">Questions for review</a></h1>
 <p>None remain.</p>
 </div>
 </div>

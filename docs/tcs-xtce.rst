@@ -830,11 +830,13 @@ the compiler is the ``tcs-xtce`` command, run from anywhere:
        (see `Missions in several documents`_)
    * - ``OUTPUT``
      - The file to write, always the last name; ``-`` writes to standard
-       output. It may be left out with ``--size-report`` or
-       ``--dump-model`` and one ``INPUT``. A name ending in ``.xtce`` or ``.xml`` is refused, so
-       that leaving ``OUTPUT`` out can't overwrite the last document
+       output. It may be left out with ``--size-report``,
+       ``--dump-model`` or ``--dump-types`` and one ``INPUT``. A name
+       ending in ``.xtce`` or ``.xml`` is refused, so that leaving
+       ``OUTPUT`` out can't overwrite the last document
    * - ``--lang LANG``
-     - Required, except with ``--size-report`` and ``--dump-model``.
+     - Required, except with ``--size-report``, ``--dump-model`` and
+       ``--dump-types``.
        ``rust`` writes a Rust module, formatted with ``rustfmt``
        (which must be installed). ``python`` writes a Python module.
        ``c`` and ``c++`` write the same file: a header that compiles both
@@ -863,6 +865,11 @@ the compiler is the ``tcs-xtce`` command, run from anywhere:
        it (see `tcs-xtce in Rust <rust-migration-design.html>`__); its
        form is described in ``python/tcs_xtce/compiler/dump.py`` and may
        change with the model
+   * - ``--dump-types``
+     - Write every parameter and argument type of the documents instead,
+       each resolved alone, or the error it gives, as the same canonical
+       text: the first stage of the model the two compilers are compared
+       on. The documents need not compile
    * - ``--dynamic-allocations true|false``
      - Whether the generated code may allocate heap memory at any time
        (``true``, the default) or only during initialization (``false``).

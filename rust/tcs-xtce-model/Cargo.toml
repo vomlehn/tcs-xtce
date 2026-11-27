@@ -1,0 +1,25 @@
+[package]
+name = "tcs-xtce-model"
+version = "0.1.0"
+edition = "2021"
+description = """\
+    A software tool: the tcs-xtce compiler's analysis of OMG XTCE documents, \
+    from the tcs-xtce binding's tree to the resolved model of a mission's \
+    packets\
+"""
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vomlehn/tcs-xtce"
+# Not on crates.io until the Rust compiler is ready to replace the Python
+# one (see docs/rust-migration-design.rst).
+publish = false
+
+[dependencies]
+tcs-xtce = { path = "..", version = "=0.8.0" }
+# Integers of any size, as the Python compiler's are.
+num-bigint = "0.4"
+num-traits = "0.2"
+# The parser of a string alarm's matchPattern.
+regex-syntax = { version = "0.8", default-features = false, features = ["std"] }
+
+[lib]
+path = "src/lib.rs"

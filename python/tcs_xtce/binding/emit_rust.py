@@ -238,6 +238,53 @@ class RustEmitter:
         self.read_fn(r)
         self.w("}")
         self.w("")
+        if any(a.xml == "baseType" for a in r.attrs):
+            self.inherit_fn(r)
+
+    def inherit_fn(self, r: Record) -> None:
+        """Writes the ``inherit`` method of a type with a ``baseType``,
+        which gives it what it leaves out from its base type.
+
+        Args:
+            r: The complex type's record, which has a ``baseType``.
+        """
+        self.w(f"impl {r.name} {{")
+        self.w("    /// Fills in what this type leaves out from its base type, "
+               "as")
+        self.w("    /// XTCE's `baseType` does: each attribute and optional "
+               "element it")
+        self.w("    /// gives is its own, and each it leaves out is the "
+               "base's; the")
+        self.w("    /// elements it must give, and its lists, are its own.")
+        self.w("    ///")
+        self.w("    /// # Arguments")
+        self.w("    ///")
+        self.w("    /// * `base` - The base type, its own inheritance filled "
+               "in.")
+        self.w("    ///")
+        self.w("    /// # Returns")
+        self.w("    ///")
+        self.w("    /// The type with its inheritance filled in, and no "
+               "`baseType`.")
+        self.w("    pub fn inherit(&self, base: &Self) -> Self {")
+        self.w("        Self {")
+        fields = [(ident(a.ident), not a.required and a.xml != "baseType")
+                  for a in r.attrs]
+        if r.text is not None:
+            fields.append((ident(r.text.ident), False))
+        fields += [(ident(f.ident), f.card == OPT) for f in r.content]
+        for name, opt in fields:
+            if name == "base_type":
+                self.w("            base_type: None,")
+            elif opt:
+                self.w(f"            {name}: self.{name}.clone().or_else(|| "
+                       f"base.{name}.clone()),")
+            else:
+                self.w(f"            {name}: self.{name}.clone(),")
+        self.w("        }")
+        self.w("    }")
+        self.w("}")
+        self.w("")
 
     def write_value(self, xml: str, t: TypeRef, expr: str, ind: str) -> None:
         """Writes the statement that writes one child element.

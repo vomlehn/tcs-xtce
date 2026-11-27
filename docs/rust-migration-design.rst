@@ -132,7 +132,9 @@ the two compared. A Python piece is removed only at the end.
    stage. The Python compiler gains ``--dump-model``, which writes the
    resolved model in a canonical text form, and the Rust model writes
    the same form. The two must be identical for the demo mission, the
-   examples and the schema-coverage samples.
+   examples and the schema-coverage samples; ``make model-check``
+   compares them, and ``make samples-check`` the public documents it
+   downloads too. See `Porting the model`_ for the stages.
 2. **The emitters.** Port the three emitters and the size report to
    ``tcs-xtce-compiler``. Its output must be byte-identical to the
    Python compiler's for every mission the tests compile, in every
@@ -170,8 +172,56 @@ the two compared. A Python piece is removed only at the end.
    tested the Rust against them. The tests that remain test the Rust
    and its interfaces.
 
-Steps 1 to 3 are what expectb needs. Steps 4 to 9 can follow at their
-own pace, since nothing in them blocks the run-time codec.
+Steps 1 and 3 are what expectb needs, so step 3 comes before step 2:
+the run-time codec needs only the model, and the emitters follow it.
+Steps 4 to 9 can follow at their own pace, since nothing in them blocks
+the run-time codec.
+
+Porting the model
+=================
+
+The model is ported a stage at a time, each a part of what ``compile.py``
+does, and each compared on every mission before the next is begun:
+
+1. **Types** (done). Indexing the documents, resolving names, and each
+   parameter and argument type: its encoding, calibrators, sizes, array
+   dimensions, aggregate members, valid ranges and alarms. The Python
+   compiler's ``--dump-types`` writes every type of the documents, each
+   resolved alone, or the error it gives, and the warnings; the Rust
+   model's ``model_dump --types`` writes the same. They agree on the 28
+   missions here and the 67 public documents and missions that can be
+   read.
+2. **Containers.** Telemetry containers and their entries: locations,
+   repeats, include conditions, segments, length and checksum fields,
+   transforms; the nodes and their inheritance.
+3. **Commands.** Meta-commands, their arguments, argument assignments
+   and command containers; messages.
+4. **The mission.** Streams, algorithms, alarms bound to each packet,
+   hooks and kinds: the whole of ``--dump-model``.
+
+The canonical text is the same for both, with two rules that let the Rust
+hold the model as Rust holds data:
+
+- Only records that the Python model compares by identity (its
+  dataclasses with ``eq=False``: nodes, locals, hooks, criteria and the
+  like) are numbered when they are reached more than once. Every other
+  record is a value, written in full wherever it is reached: whether two
+  Python values are one object is an accident of how they were copied,
+  which the Rust need not repeat. A value reached again inside itself,
+  as a repeated container's aggregate is through the value standing for
+  it, is written there as its class name and ``^``.
+- An element of the document that the model keeps until a packet binds
+  it (a calibrator's ParameterInstanceRef, an alarm's ContextMatch) is
+  written as ``xtce`` and its class name: what it says is the document's.
+
+Errors are the Rust's from the first: where the Python's messages quote
+Python's own machinery, the Rust says the same thing its own way. The one
+case so far is a string alarm's ``matchPattern``, which the Rust parses
+with the ``regex-syntax`` crate rather than Python's ``re``: the
+patterns both accept the same way give the same automaton, but a pattern
+one of them refuses gets that one's message. ``(?i)[^a]`` matches any
+character but ``a`` and ``A`` in the Rust; the Python's automaton lets
+either through.
 
 The Python interfaces
 =====================

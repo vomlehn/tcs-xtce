@@ -25,6 +25,8 @@
 #   make samples-check   check tcs-xtce against public XTCE documents
 #                        (downloads them)
 #   make examples        build and run every example in examples/
+#   make model-check     compare the Rust model, being ported from the
+#                        Python compiler, with the Python's
 #   make fmt             format Rust and Python code;  make fmt-check
 #                        verify it
 #   make python-dist     build the Python distributions' wheels and sdists
@@ -194,8 +196,8 @@ EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 .PHONY: test
 test: test-rust test-cpp test-python cross-check packet-check \
       stream-check digest-check float-check bnum-check ccsds-check examples \
-      test-editor line-width doc-headers html-check operational-names \
-      rust-current
+      model-check test-editor line-width doc-headers html-check \
+      operational-names rust-current
 
 # Every non-trivial function, hand-written or generated, has a header that
 # describes it, its parameters and what it returns.  Last, with line-width,
@@ -219,6 +221,21 @@ test-generator: $(PY_GEN)
 .PHONY: test-rust
 test-rust: rust $(SAMPLES)
 	cd rust && $(CARGO) test --release
+	cd rust && $(CARGO) test --release -p tcs-xtce-model
+
+# The Rust model, which is being ported from the Python compiler a stage at
+# a time, against the Python's, as canonical text, on every mission the
+# tests compile: see tests/model_check.py. samples-check does the same for
+# the public documents it downloads.
+MODEL_DUMP := rust/target/release/examples/model_dump
+
+.PHONY: model-dump
+model-dump: $(RUST_GEN)
+	cd rust && $(CARGO) build --release -p tcs-xtce-model --examples
+
+.PHONY: model-check
+model-check: model-dump $(PY_GEN) $(NATIVE)
+	$(PYTHON) -I tests/model_check.py $(MODEL_DUMP)
 
 # The XTCE editor, tcs-xtcee.  It carries none of OMG's files, which OMG
 # does not allow to be redistributed: it reads each version's schema when
@@ -429,7 +446,7 @@ python-versions:
 EXTERNAL := tests/external/files
 
 .PHONY: samples-check
-samples-check: rust cpp $(PY_GEN) $(NATIVE)
+samples-check: rust cpp model-dump $(PY_GEN) $(NATIVE)
 	@mkdir -p $(EXTERNAL)
 	@grep -v '^#' tests/external/sources.txt | \
 	while read -r name sha url; do \
@@ -441,6 +458,7 @@ samples-check: rust cpp $(PY_GEN) $(NATIVE)
 	        mv $(EXTERNAL)/$$name.tmp $(EXTERNAL)/$$name || exit 1; \
 	done
 	$(PYTHON) -I tests/samples_check.py
+	$(PYTHON) -I tests/model_check.py $(MODEL_DUMP) --external
 
 # Each example regenerates its code if needed, builds and runs it in Rust,
 # C, C++ and Python, and checks that the outputs match.

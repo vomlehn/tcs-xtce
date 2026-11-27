@@ -16,9 +16,19 @@ The text has one value to a line, indented two spaces for each level:
 - A list or tuple is ``[``, each element, then ``]``; ``[]`` when empty.
 - A dictionary is ``{``, each entry as ``key => value`` in its order, then
   ``}``; ``{}`` when empty.
-- A record reached more than once is numbered where it is first written,
-  ``Node #3 {``, and written as ``Node #3`` wherever it is reached again,
-  so that sharing is shown and the links between nodes don't loop.
+- A record that compares by identity (a dataclass with ``eq=False``, such
+  as Node, Local and Hook) and is reached more than once is numbered where
+  it is first written, ``Node #3 {``, and written as ``Node #3`` wherever
+  it is reached again, so that sharing is shown and the links between
+  nodes don't loop. Any other record is a value, written in full wherever
+  it is reached: whether two values are one object is an accident of how
+  they were copied, which the Rust model need not repeat. A value record
+  reached again while it is being written, through records inside it, is
+  written there as its class name and ``^``, ``VType ^``: the one above.
+- An element of the XTCE document, which the model keeps where it is
+  bound only later (a ParameterInstanceRef in a type's calibrator, say),
+  is ``xtce`` and its class name: what it says is the document's, not the
+  compiler's.
 
 Numbers are given in the order records are first written, walking the
 mission's fields in order and each record's fields depth first.
@@ -29,7 +39,7 @@ from __future__ import annotations
 import dataclasses
 import math
 
-from tcs_xtce.compiler.model import Mission
+from tcs_xtce.compiler.model import Cycle, Mission, Unsupported
 
 
 def string(s: str) -> str:
@@ -89,21 +99,49 @@ def scalar(v) -> str | None:
     return None
 
 
+def identity(v) -> bool:
+    """Says whether a value is a record that compares by identity.
+
+    Args:
+        v: The value.
+
+    Returns:
+        True for an instance of a dataclass declared with ``eq=False``.
+    """
+    return (dataclasses.is_dataclass(v) and not isinstance(v, type)
+            and not type(v).__dataclass_params__.eq)
+
+
+def element(v) -> bool:
+    """Says whether a value is an element of an XTCE document.
+
+    Args:
+        v: The value.
+
+    Returns:
+        True for an instance of a class of the XML binding.
+    """
+    return type(v).__module__ == "tcs_xtce.generated"
+
+
 class Dumper:
     """Writes a mission's model as canonical text.
 
     Attributes:
-        seen:   How many times each record is reached, by its id(), from
-                the first pass.
-        number: The number given to each shared record written so far,
-                by its id().
-        lines:  The text so far, one line to an element.
+        seen:    How many times each record that compares by identity
+                 is reached, by its id(), from the first pass.
+        number:  The number given to each shared record written so far,
+                 by its id().
+        writing: The ids of the records being written, so that a value
+                 record reached again inside itself is written as one.
+        lines:   The text so far, one line to an element.
     """
 
     def __init__(self) -> None:
         """Makes a dumper with nothing counted or written yet."""
         self.seen: dict[int, int] = {}
         self.number: dict[int, int] = {}
+        self.writing: set[int] = set()
         self.lines: list[str] = []
 
     def count(self, v) -> None:
@@ -112,13 +150,20 @@ class Dumper:
         Args:
             v: The value, walked as dumping walks it.
         """
+        if element(v):
+            return
         if dataclasses.is_dataclass(v) and not isinstance(v, type):
-            n = self.seen.get(id(v), 0)
-            self.seen[id(v)] = n + 1
-            if n:
+            if identity(v):
+                n = self.seen.get(id(v), 0)
+                self.seen[id(v)] = n + 1
+                if n:
+                    return
+            elif id(v) in self.writing:
                 return
+            self.writing.add(id(v))
             for f in dataclasses.fields(v):
                 self.count(getattr(v, f.name))
+            self.writing.discard(id(v))
         elif isinstance(v, (list, tuple)):
             for x in v:
                 self.count(x)
@@ -145,17 +190,25 @@ class Dumper:
         if s is not None:
             self.lines.append(f"{pad}{head}{s}")
             return
+        if element(v):
+            self.lines.append(f"{pad}{head}xtce {type(v).__name__}")
+            return
         if dataclasses.is_dataclass(v) and not isinstance(v, type):
             name = type(v).__name__
             if id(v) in self.number:
                 self.lines.append(f"{pad}{head}{name} #{self.number[id(v)]}")
                 return
+            if not identity(v) and id(v) in self.writing:
+                self.lines.append(f"{pad}{head}{name} ^")
+                return
             if self.seen.get(id(v), 0) > 1:
                 self.number[id(v)] = len(self.number) + 1
                 name += f" #{self.number[id(v)]}"
             self.lines.append(f"{pad}{head}{name} {{")
+            self.writing.add(id(v))
             for f in dataclasses.fields(v):
                 self.put(depth + 1, f"{f.name}: ", getattr(v, f.name))
+            self.writing.discard(id(v))
             self.lines.append(f"{pad}}}")
         elif isinstance(v, (list, tuple)):
             if not v:
@@ -213,4 +266,73 @@ def dump(mission: Mission) -> str:
     d = Dumper()
     d.count(mission)
     d.put(0, "", mission)
+    return "\n".join(d.lines) + "\n"
+
+
+@dataclasses.dataclass
+class Failed:
+    """A type that does not resolve, as ``dump_types`` writes it.
+
+    Attributes:
+        error:   ``Unsupported`` or ``Cycle``, the exception's class.
+        message: What it says.
+    """
+
+    error: str
+    message: str
+
+
+@dataclasses.dataclass
+class Types:
+    """Every type of a mission, each resolved alone, as ``dump_types``
+    writes them.
+
+    Attributes:
+        parameter: Each parameter type's resolved type, or why it fails,
+                   by qualified name, in the documents' order.
+        argument:  Each argument type's, likewise.
+        warnings:  The warnings resolving them gave, in order.
+    """
+
+    parameter: dict
+    argument: dict
+    warnings: list
+
+
+def dump_types(compiler) -> str:
+    """Writes every parameter and argument type of a mission, each
+    resolved alone, as canonical text: the first stage of the model, which
+    the Rust model is compared on before its containers are.
+
+    Args:
+        compiler: The Compiler, with the mission's documents indexed and
+                  nothing compiled yet.
+
+    Returns:
+        The text of a Types, ending in a newline.
+    """
+    from tcs_xtce.compiler.compile import qname
+
+    def each(table: dict) -> dict:
+        """Resolves each type of a table, in its order.
+
+        Args:
+            table: ``ptypes`` or ``atypes``.
+
+        Returns:
+            Each type's VType, or Failed, by qualified name.
+        """
+        out = {}
+        for key in table:
+            try:
+                out[qname(key)] = compiler.vtype(key, table)
+            except (Unsupported, Cycle) as e:
+                out[qname(key)] = Failed(type(e).__name__, str(e))
+        return out
+
+    types = Types(each(compiler.ptypes), each(compiler.atypes), [])
+    types.warnings = list(compiler.warnings)
+    d = Dumper()
+    d.count(types)
+    d.put(0, "", types)
     return "\n".join(d.lines) + "\n"

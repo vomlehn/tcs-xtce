@@ -38,6 +38,9 @@ report goes to standard output.
 resolved model the code would be generated from, as the canonical text
 :mod:`tcs_xtce.compiler.dump` describes, for comparing the Python compiler
 with the Rust one.  OUTPUT may be left out, as for ``--size-report``.
+``--dump-types`` writes each parameter and argument type alone instead,
+resolved whether or not the rest of the mission compiles: the first stage
+the two compilers are compared on.
 """
 
 from __future__ import annotations
@@ -50,7 +53,7 @@ import tcs_xtce
 from tcs_xtce.binding.__main__ import rustfmt
 from tcs_xtce.binding.wrap import wrap
 from tcs_xtce.compiler import dump, emit_c, emit_python, emit_rust, report
-from tcs_xtce.compiler.compile import DIALECTS, compile_documents
+from tcs_xtce.compiler.compile import DIALECTS, Compiler, compile_documents
 from tcs_xtce.compiler.model import Cycle, Unsupported
 
 LANGS = ("c", "c++", "rust", "python")
@@ -113,6 +116,9 @@ def main(argv=None) -> int:
     ap.add_argument("--dump-model", action="store_true",
                     help="instead of code, write the resolved model as "
                          "canonical text, for comparing compilers")
+    ap.add_argument("--dump-types", action="store_true",
+                    help="instead of code, write each parameter and argument "
+                         "type, resolved alone, as canonical text")
     ap.add_argument(
         "--dynamic-allocations", choices=("true", "false"), default="true",
         help="whether the generated code may allocate heap memory at any time "
@@ -126,14 +132,18 @@ def main(argv=None) -> int:
     # Before Python 3.13, parse_args() can't place the optional OUTPUT when an
     # option separates it from INPUT.
     args = ap.parse_intermixed_args(argv)
-    if args.size_report and args.dump_model:
-        ap.error("give --size-report or --dump-model, not both")
-    no_code = args.size_report or args.dump_model
+    chosen = [o
+              for o, on in (("--size-report", args.size_report),
+                            ("--dump-model", args.dump_model),
+                            ("--dump-types", args.dump_types)) if on]
+    if len(chosen) > 1:
+        ap.error(f"give one of {', '.join(chosen)}, not more")
+    no_code = bool(chosen)
     if no_code and len(args.files) == 1:
         inputs, output = args.files, None
     elif len(args.files) < 2:
-        ap.error("OUTPUT is required unless --size-report or --dump-model is "
-                 "given")
+        ap.error("OUTPUT is required unless --size-report, --dump-model or "
+                 "--dump-types is given")
     else:
         inputs, output = args.files[:-1], args.files[-1]
     if output == "-":
@@ -144,11 +154,11 @@ def main(argv=None) -> int:
                  "to write after the INPUT documents")
     if no_code:
         if args.lang is not None or args.prefix is not None:
-            what = "--size-report" if args.size_report else "--dump-model"
-            ap.error(f"{what} writes no code; leave out --lang and --prefix")
+            ap.error(f"{chosen[0]} writes no code; leave out --lang and "
+                     "--prefix")
     elif args.lang is None:
-        ap.error("--lang is required unless --size-report or --dump-model is "
-                 "given")
+        ap.error("--lang is required unless --size-report, --dump-model or "
+                 "--dump-types is given")
     if args.prefix is not None and args.lang not in ("c", "c++"):
         ap.error("--prefix only applies to --lang c and --lang c++")
     alloc = args.dynamic_allocations == "true"
@@ -163,6 +173,15 @@ def main(argv=None) -> int:
         except (OSError, tcs_xtce.XtceError) as e:
             print(f"tcs-xtce: {name}: {e}", file=sys.stderr)
             return 1
+    if args.dump_types:
+        try:
+            compiler = Compiler(roots, args.skip_unsupported, args.dialect)
+        except (Cycle, Unsupported) as e:
+            where = f"{inputs[0]}: " if len(inputs) == 1 else ""
+            print(f"tcs-xtce: {where}{e}", file=sys.stderr)
+            return 1
+        write(output, dump.dump_types(compiler))
+        return 0
     try:
         mission = compile_documents(
             roots, args.skip_unsupported or args.size_report, args.dialect)

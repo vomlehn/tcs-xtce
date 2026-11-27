@@ -63,6 +63,17 @@ class Branch:
     more: dict = field(default_factory=dict)
 
 
+@dataclass(eq=False)
+class Knot:
+    """A record that compares by identity, which may hold itself.
+
+    Attributes:
+        next: Any value.
+    """
+
+    next: object
+
+
 def text(v) -> str:
     """Writes any value as the dump does.
 
@@ -111,12 +122,35 @@ class Records(unittest.TestCase):
                                     "  right: Leaf #1", "  more: {",
                                     "    Leaf #1 => Leaf #2", "  }", "}"]))
 
+    def test_shared_values_are_written_in_full(self):
+        v = Branch(1, 2)
+        self.assertEqual(text([v, v]),
+                         "\n".join(["[", "  Branch {", "    left: 1",
+                                    "    right: 2", "    more: {}", "  }",
+                                    "  Branch {", "    left: 1", "    right: 2",
+                                    "    more: {}", "  }", "]"]))
+
     def test_loops_end_at_a_number(self):
+        k = Knot(None)
+        k.next = Branch(k, None)
+        self.assertEqual(text(k),
+                         "\n".join(["Knot #1 {", "  next: Branch {",
+                                    "    left: Knot #1", "    right: none",
+                                    "    more: {}", "  }", "}"]))
+
+    def test_a_value_inside_itself_points_above(self):
         b = Branch(None, None)
-        b.left = b
+        b.left = [b]
         self.assertEqual(text(b),
-                         "Branch #1 {\n  left: Branch #1\n"
+                         "Branch {\n  left: [\n    Branch ^\n  ]\n"
                          "  right: none\n  more: {}\n}")
+
+    def test_document_elements_are_named(self):
+        self.assertEqual(
+            text(Branch(tcs_xtce.ParameterInstanceRefType(parameter_ref="P"),
+                        None)),
+            "Branch {\n  left: xtce ParameterInstanceRefType\n"
+            "  right: none\n  more: {}\n}")
 
     def test_unknown_values_are_refused(self):
         with self.assertRaises(TypeError):
