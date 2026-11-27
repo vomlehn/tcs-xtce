@@ -208,6 +208,43 @@ Packaging
   change generated code, so it doesn't by itself change any runtime's
   API.
 
+Wheel platforms
+---------------
+
+The Python packages ``tcsxtce`` and ``tcs-xtce`` each have a wheel for
+every platform below, all ``abi3`` from Python 3.10, so that one wheel
+for each platform serves every Python from 3.10 on:
+
+==========================  ==============================  ============
+Platform                    Wheel tag                       Built on
+==========================  ==============================  ============
+Linux, x86-64, glibc        ``manylinux_2_28_x86_64``       Linux x86-64
+Linux, ARM64, glibc         ``manylinux_2_28_aarch64``      Linux ARM64
+Linux, x86-64, musl         ``musllinux_1_2_x86_64``        Linux x86-64
+Linux, ARM64, musl          ``musllinux_1_2_aarch64``       Linux ARM64
+macOS, Apple silicon        ``macosx_11_0_arm64``           macOS ARM64
+macOS, Intel                ``macosx_10_12_x86_64``         macOS ARM64
+Windows, x86-64             ``win_amd64``                   Windows
+==========================  ==============================  ============
+
+- **Each wheel is tested where it runs.** CI installs every wheel built
+  on a machine of its own architecture and runs the Python tests
+  against it. The Intel macOS wheel is cross-compiled on Apple silicon
+  and tested there under Rosetta.
+- **glibc 2.28** is the oldest the Linux wheels need, the
+  ``manylinux_2_28`` images' own: RHEL 8, Debian 10 and Ubuntu 20.04
+  have it. musl wheels serve Alpine and other musl systems.
+- **macOS 11 and 10.12** are the oldest each macOS wheel runs on: the
+  first macOS on Apple silicon, and the oldest the Rust toolchain
+  supports on Intel.
+- **Built with maturin** in CI on GitHub's runners, Linux ones in the
+  ``manylinux`` and ``musllinux`` containers so that each wheel links
+  only what its tag allows; ``make python-dist`` builds the wheel for
+  the machine it runs on, and the source package.
+- **Anywhere else** -- 32-bit systems, Windows on ARM, FreeBSD, other
+  processors -- pip builds from the source package, which needs a Rust
+  toolchain. A platform joins the table when someone needs its wheel.
+
 C and C++
 =========
 

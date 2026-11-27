@@ -373,15 +373,18 @@ ul.auto-toc {
 <li><a class="reference internal" href="#the-crates" id="toc-entry-3">The crates</a></li>
 <li><a class="reference internal" href="#the-order-of-work" id="toc-entry-4">The order of work</a></li>
 <li><a class="reference internal" href="#the-python-interfaces" id="toc-entry-5">The Python interfaces</a></li>
-<li><a class="reference internal" href="#packaging" id="toc-entry-6">Packaging</a></li>
-<li><a class="reference internal" href="#c-and-c" id="toc-entry-7">C and C++</a><ul>
-<li><a class="reference internal" href="#the-c-packet-runtime" id="toc-entry-8">The C packet runtime</a></li>
-<li><a class="reference internal" href="#the-c-c-xml-binding" id="toc-entry-9">The C/C++ XML binding</a></li>
+<li><a class="reference internal" href="#packaging" id="toc-entry-6">Packaging</a><ul>
+<li><a class="reference internal" href="#wheel-platforms" id="toc-entry-7">Wheel platforms</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#testing" id="toc-entry-10">Testing</a></li>
-<li><a class="reference internal" href="#settled-in-review" id="toc-entry-11">Settled in review</a></li>
-<li><a class="reference internal" href="#questions-for-review" id="toc-entry-12">Questions for review</a></li>
+<li><a class="reference internal" href="#c-and-c" id="toc-entry-8">C and C++</a><ul>
+<li><a class="reference internal" href="#the-c-packet-runtime" id="toc-entry-9">The C packet runtime</a></li>
+<li><a class="reference internal" href="#the-c-c-xml-binding" id="toc-entry-10">The C/C++ XML binding</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#testing" id="toc-entry-11">Testing</a></li>
+<li><a class="reference internal" href="#settled-in-review" id="toc-entry-12">Settled in review</a></li>
+<li><a class="reference internal" href="#questions-for-review" id="toc-entry-13">Questions for review</a></li>
 </ul>
 </div>
 <div class="section" id="what-changes">
@@ -619,13 +622,81 @@ version when its API changes, as now. The compiler's move doesn't
 change generated code, so it doesn't by itself change any runtime's
 API.</li>
 </ul>
+<div class="section" id="wheel-platforms">
+<h2><a class="toc-backref" href="#toc-entry-7">Wheel platforms</a></h2>
+<p>The Python packages <tt class="docutils literal">tcsxtce</tt> and <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> each have a wheel for
+every platform below, all <tt class="docutils literal">abi3</tt> from Python 3.10, so that one wheel
+for each platform serves every Python from 3.10 on:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="38%" />
+<col width="44%" />
+<col width="18%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">Platform</th>
+<th class="head">Wheel tag</th>
+<th class="head">Built on</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Linux, x86-64, glibc</td>
+<td><tt class="docutils literal">manylinux_2_28_x86_64</tt></td>
+<td>Linux x86-64</td>
+</tr>
+<tr><td>Linux, ARM64, glibc</td>
+<td><tt class="docutils literal">manylinux_2_28_aarch64</tt></td>
+<td>Linux ARM64</td>
+</tr>
+<tr><td>Linux, x86-64, musl</td>
+<td><tt class="docutils literal">musllinux_1_2_x86_64</tt></td>
+<td>Linux x86-64</td>
+</tr>
+<tr><td>Linux, ARM64, musl</td>
+<td><tt class="docutils literal">musllinux_1_2_aarch64</tt></td>
+<td>Linux ARM64</td>
+</tr>
+<tr><td>macOS, Apple silicon</td>
+<td><tt class="docutils literal">macosx_11_0_arm64</tt></td>
+<td>macOS ARM64</td>
+</tr>
+<tr><td>macOS, Intel</td>
+<td><tt class="docutils literal">macosx_10_12_x86_64</tt></td>
+<td>macOS ARM64</td>
+</tr>
+<tr><td>Windows, x86-64</td>
+<td><tt class="docutils literal">win_amd64</tt></td>
+<td>Windows</td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><strong>Each wheel is tested where it runs.</strong> CI installs every wheel built
+on a machine of its own architecture and runs the Python tests
+against it. The Intel macOS wheel is cross-compiled on Apple silicon
+and tested there under Rosetta.</li>
+<li><strong>glibc 2.28</strong> is the oldest the Linux wheels need, the
+<tt class="docutils literal">manylinux_2_28</tt> images' own: RHEL 8, Debian 10 and Ubuntu 20.04
+have it. musl wheels serve Alpine and other musl systems.</li>
+<li><strong>macOS 11 and 10.12</strong> are the oldest each macOS wheel runs on: the
+first macOS on Apple silicon, and the oldest the Rust toolchain
+supports on Intel.</li>
+<li><strong>Built with maturin</strong> in CI on GitHub's runners, Linux ones in the
+<tt class="docutils literal">manylinux</tt> and <tt class="docutils literal">musllinux</tt> containers so that each wheel links
+only what its tag allows; <tt class="docutils literal">make <span class="pre">python-dist</span></tt> builds the wheel for
+the machine it runs on, and the source package.</li>
+<li><strong>Anywhere else</strong> -- 32-bit systems, Windows on ARM, FreeBSD, other
+processors -- pip builds from the source package, which needs a Rust
+toolchain. A platform joins the table when someone needs its wheel.</li>
+</ul>
+</div>
 </div>
 <div class="section" id="c-and-c">
-<h1><a class="toc-backref" href="#toc-entry-7">C and C++</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-8">C and C++</a></h1>
 <p>The C and C++ pieces become interfaces to the Rust, as the Python ones
 do, so that every language runs the one implementation.</p>
 <div class="section" id="the-c-packet-runtime">
-<h2><a class="toc-backref" href="#toc-entry-8">The C packet runtime</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-9">The C packet runtime</a></h2>
 <ul class="simple">
 <li><strong>The headers stay.</strong> <tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt>, <tt class="docutils literal"><span class="pre">tcsxtce-bnum.h</span></tt> and
 <tt class="docutils literal"><span class="pre">tcsxtce-digest.h</span></tt> keep every declaration they have -- functions,
@@ -652,7 +723,7 @@ examples both ways, and the size report compares them.</li>
 </ul>
 </div>
 <div class="section" id="the-c-c-xml-binding">
-<h2><a class="toc-backref" href="#toc-entry-9">The C/C++ XML binding</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-10">The C/C++ XML binding</a></h2>
 <ul class="simple">
 <li><strong>The C API stays.</strong> <tt class="docutils literal"><span class="pre">tcs-xtce.h</span></tt> keeps its functions, handles,
 status codes and buffer rules, defined now by <tt class="docutils literal"><span class="pre">tcs-xtce-c</span></tt> over the
@@ -669,7 +740,7 @@ are new even where its declarations are the same.</li>
 </div>
 </div>
 <div class="section" id="testing">
-<h1><a class="toc-backref" href="#toc-entry-10">Testing</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-11">Testing</a></h1>
 <ul class="simple">
 <li><strong>Byte-identical output</strong> is the test for every port that generates
 something: the model dump, the emitters and the binding generator.
@@ -690,7 +761,7 @@ the HTML being current -- apply to the new Rust as to the old Python.</li>
 </ul>
 </div>
 <div class="section" id="settled-in-review">
-<h1><a class="toc-backref" href="#toc-entry-11">Settled in review</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-12">Settled in review</a></h1>
 <ul class="simple">
 <li>The compiler, its emitters and the binding generator move to Rust.</li>
 <li>The Python packet runtime and the Python XML binding become
@@ -709,7 +780,7 @@ that uses it is built for a Rust target.</li>
 </ul>
 </div>
 <div class="section" id="questions-for-review">
-<h1><a class="toc-backref" href="#toc-entry-12">Questions for review</a></h1>
+<h1><a class="toc-backref" href="#toc-entry-13">Questions for review</a></h1>
 <p>None remain.</p>
 </div>
 </div>
