@@ -41,8 +41,10 @@ Goals
    support yet makes resolving the mission fail, naming the construct
    and its line, as the compiler does with ``Unsupported``.
 5. **Change nothing for generated code.** The compiler, the emitters,
-   the generated code and the ``tcsxtce`` runtime keep their behaviour
-   and their APIs.
+   the generated code and the ``tcsxtce`` runtime keep their behaviour.
+   The one change to an API is ``tcsxtce``'s, where two of its types
+   gain a lifetime that generated code fills with ``'static``; see
+   `Freeing what was read`_.
 
 Where it fits
 =============
@@ -251,6 +253,9 @@ The interface
         pub fn get(&self, slot: SlotId) -> Option<Datum<'_>>;
         pub fn set(&mut self, slot: SlotId, value: Datum<'_>)
                   -> Result<(), PacketError>;
+        pub fn get_raw(&self, slot: SlotId) -> Option<Datum<'_>>;
+        pub fn set_raw(&mut self, slot: SlotId, value: Datum<'_>)
+                      -> Result<(), PacketError>;
         pub fn commit(&mut self, scratch: &Scratch);
     }
 
@@ -406,9 +411,9 @@ Versions
 ========
 
 The new crate starts at 0.8.0, the version the rest of tcs-xtce moves
-to. ``ByteOrder`` and ``StringSpec`` gaining a lifetime
-changes tcsxtce's API, so tcsxtce is released as 0.8.0 too, as any
-change to its API changes its minor version.
+to. ``ByteOrder`` and ``StringSpec`` gaining a lifetime changes
+tcsxtce's API, so tcsxtce moves to 0.8.0 too, as any change to its API
+changes its minor version.
 
 Settled in review
 =================

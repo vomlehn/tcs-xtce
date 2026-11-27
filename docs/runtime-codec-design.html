@@ -426,8 +426,10 @@ then allocate nothing, as the codecs generated with
 support yet makes resolving the mission fail, naming the construct
 and its line, as the compiler does with <tt class="docutils literal">Unsupported</tt>.</li>
 <li><strong>Change nothing for generated code.</strong> The compiler, the emitters,
-the generated code and the <tt class="docutils literal">tcsxtce</tt> runtime keep their behaviour
-and their APIs.</li>
+the generated code and the <tt class="docutils literal">tcsxtce</tt> runtime keep their behaviour.
+The one change to an API is <tt class="docutils literal">tcsxtce</tt>'s, where two of its types
+gain a lifetime that generated code fills with <tt class="docutils literal">'static</tt>; see
+<a class="reference internal" href="#freeing-what-was-read">Freeing what was read</a>.</li>
 </ol>
 </div>
 <div class="section" id="where-it-fits">
@@ -626,6 +628,9 @@ impl Store {
     pub fn get(&amp;self, slot: SlotId) -&gt; Option&lt;Datum&lt;'_&gt;&gt;;
     pub fn set(&amp;mut self, slot: SlotId, value: Datum&lt;'_&gt;)
               -&gt; Result&lt;(), PacketError&gt;;
+    pub fn get_raw(&amp;self, slot: SlotId) -&gt; Option&lt;Datum&lt;'_&gt;&gt;;
+    pub fn set_raw(&amp;mut self, slot: SlotId, value: Datum&lt;'_&gt;)
+                  -&gt; Result&lt;(), PacketError&gt;;
     pub fn commit(&amp;mut self, scratch: &amp;Scratch);
 }
 </pre>
@@ -778,9 +783,9 @@ all three of them, with tests in each.</p>
 <div class="section" id="versions">
 <h1><a class="toc-backref" href="#toc-entry-15">Versions</a></h1>
 <p>The new crate starts at 0.8.0, the version the rest of tcs-xtce moves
-to. <tt class="docutils literal">ByteOrder</tt> and <tt class="docutils literal">StringSpec</tt> gaining a lifetime
-changes tcsxtce's API, so tcsxtce is released as 0.8.0 too, as any
-change to its API changes its minor version.</p>
+to. <tt class="docutils literal">ByteOrder</tt> and <tt class="docutils literal">StringSpec</tt> gaining a lifetime changes
+tcsxtce's API, so tcsxtce moves to 0.8.0 too, as any change to its API
+changes its minor version.</p>
 </div>
 <div class="section" id="settled-in-review">
 <h1><a class="toc-backref" href="#toc-entry-16">Settled in review</a></h1>
