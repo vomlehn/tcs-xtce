@@ -845,7 +845,11 @@ impl Mission {
             .iter()
             .any(|&i| self.slots[i].steps.starts_with(steps));
         Err(fail(if inside {
-            format!("{}{at} is an aggregate or array: name one of its members or elements", owner.key)
+            format!(
+                "{}{at} is an aggregate or array: name one of its members \
+                 or elements",
+                owner.key
+            )
         } else {
             format!("{} has no member or element {at}", owner.key)
         }))
