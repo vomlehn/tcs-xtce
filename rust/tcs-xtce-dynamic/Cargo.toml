@@ -1,0 +1,21 @@
+[package]
+name = "tcs-xtce-dynamic"
+version = "0.1.0"
+edition = "2021"
+description = """\
+    A software tool: the tcs-xtce run-time codec, which reads OMG XTCE \
+    documents while a program runs and packs and unpacks their packets, \
+    with values held dynamically\
+"""
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vomlehn/tcs-xtce"
+# Not on crates.io until it packs and unpacks (see
+# docs/runtime-codec-design.rst).
+publish = false
+
+[dependencies]
+tcs-xtce = { path = "..", version = "=0.8.0" }
+tcs-xtce-model = { path = "../tcs-xtce-model" }
+
+[lib]
+path = "src/lib.rs"

@@ -2,7 +2,11 @@
 tcs-xtce Run-time Codec Design
 ==============================
 
-Status: proposed, for review. Nothing here is implemented yet.
+Status: being implemented. The crate ``tcs-xtce-dynamic`` reads and
+resolves a mission and looks its names up, as `Looking names up`_
+describes; its values, storage, packing and unpacking are still to
+come.
+
 
 .. contents:: Contents
    :depth: 2

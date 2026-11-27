@@ -57,6 +57,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tcs-xtce-dynamic"
+version = "0.1.0"
+dependencies = [
+ "tcs-xtce",
+ "tcs-xtce-model",
+]
+
+[[package]]
 name = "tcs-xtce-model"
 version = "0.1.0"
 dependencies = [

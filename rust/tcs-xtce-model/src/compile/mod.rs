@@ -52,6 +52,58 @@ pub const CCSDS_MAX_BYTES: i64 = 65542;
 /// names when its LeadingSize or TerminationChar alone gives the size.
 pub const YAMCS_IGNORE: &str = "_yamcs_ignore";
 
+/// Lists the keys a reference may name, in the order they are tried:
+/// an absolute path names one; an unqualified name is looked for in the
+/// SpaceSystem it is written in, then in each one that encloses it; a
+/// path starting with `.` or `..` is taken from that SpaceSystem only;
+/// and any other relative path is looked for from it, then from each
+/// one that encloses it, up to the top.
+///
+/// # Arguments
+///
+/// * `r`   - The reference, trimmed.
+/// * `cur` - The key of the SpaceSystem it is written in.
+///
+/// # Returns
+///
+/// The keys, the first to try first.
+pub fn candidates(r: &str, cur: &[String]) -> Vec<Key> {
+    let parts: Vec<&str> = r.split('/').collect();
+    let mut out = Vec::new();
+    if r.starts_with('/') {
+        out.push(
+            parts[1..]
+                .iter()
+                .filter(|p| !p.is_empty())
+                .map(|p| p.to_string())
+                .collect(),
+        );
+    } else if parts.len() == 1 {
+        for i in (1..=cur.len()).rev() {
+            out.push(child(&cur[..i], r));
+        }
+    } else {
+        let starts: Vec<&[String]> = if matches!(parts[0], "." | "..") {
+            vec![cur]
+        } else {
+            (0..=cur.len()).rev().map(|i| &cur[..i]).collect()
+        };
+        for start in starts {
+            let mut base: Vec<String> = start.to_vec();
+            for p in &parts[..parts.len() - 1] {
+                if *p == ".." {
+                    base.pop();
+                } else if !p.is_empty() && *p != "." {
+                    base.push(p.to_string());
+                }
+            }
+            base.push(parts[parts.len() - 1].to_string());
+            out.push(base);
+        }
+    }
+    out
+}
+
 /// Writes a key as a qualified name.
 ///
 /// # Arguments
@@ -701,42 +753,9 @@ impl<'a> Compiler<'a> {
         what: &str,
     ) -> Result<Key> {
         let r = ref_.trim();
-        let parts: Vec<&str> = r.split('/').collect();
-        if r.starts_with('/') {
-            let key: Key = parts[1..]
-                .iter()
-                .filter(|p| !p.is_empty())
-                .map(|p| p.to_string())
-                .collect();
+        for key in candidates(r, cur) {
             if has(&key) {
                 return Ok(key);
-            }
-        } else if parts.len() == 1 {
-            for i in (1..=cur.len()).rev() {
-                let key = child(&cur[..i], r);
-                if has(&key) {
-                    return Ok(key);
-                }
-            }
-        } else {
-            let starts: Vec<&[String]> = if matches!(parts[0], "." | "..") {
-                vec![cur]
-            } else {
-                (0..=cur.len()).rev().map(|i| &cur[..i]).collect()
-            };
-            for start in starts {
-                let mut base: Vec<String> = start.to_vec();
-                for p in &parts[..parts.len() - 1] {
-                    if *p == ".." {
-                        base.pop();
-                    } else if !p.is_empty() && *p != "." {
-                        base.push(p.to_string());
-                    }
-                }
-                base.push(parts[parts.len() - 1].to_string());
-                if has(&base) {
-                    return Ok(base);
-                }
             }
         }
         unsupported(format!(

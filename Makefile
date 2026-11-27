@@ -222,6 +222,8 @@ test-generator: $(PY_GEN)
 test-rust: rust $(SAMPLES)
 	cd rust && $(CARGO) test --release
 	cd rust && $(CARGO) test --release -p tcs-xtce-model
+	cd rust && $(CARGO) test --release -p tcs-xtce-dynamic
+
 
 # The Rust model, which is being ported from the Python compiler a stage at
 # a time, against the Python's, as canonical text, on every mission the
