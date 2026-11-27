@@ -124,7 +124,8 @@ Requirements:
   it says a newer one is out. The editor needs 1.92 or later, which `make
   install-tools` checks;
 * a C11 and C++20 compiler, and fontconfig's headers;
-* `rst2html` (python3-docutils) for the pages `make test` checks;
+* `rst2html` (python3-docutils) and `pandoc` for the pages `make test`
+  checks;
 * a checkout of [tcs-helpers](https://github.com/vomlehn/tcs-helpers),
   0.11.0 or later, beside this one: `make test`'s page and name checks,
   installing and packaging all use it;

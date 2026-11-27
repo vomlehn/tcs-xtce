@@ -24,18 +24,19 @@ set -eu
 
 # What tcs-xtce needs. Building: C and C++ compilers, and fontconfig's
 # headers for the editor's windows. make test: Python, xmllint, curl for
-# the XTCE references, rst2html for the pages html-check rebuilds, and git.
+# the XTCE references, rst2html and pandoc for the pages html-check
+# rebuilds, and git.
 # The editor needs Rust 1.92, Slint's. Python 3.11 because tcs-helpers'
 # operational-names, which make test runs, reads TOML with tomllib.
 PROJECT=tcs-xtce
 RUST_MIN=1.92
 PYTHON_MIN=3.11
 APT_BUILD="build-essential binutils pkg-config libfontconfig-dev python3
-	python3-venv python3-pip python3-setuptools python3-docutils
+	python3-venv python3-pip python3-setuptools python3-docutils pandoc
 	libxml2-utils curl ca-certificates git"
 DNF_BUILD="gcc gcc-c++ make binutils pkgconf-pkg-config fontconfig-devel
-	python3 python3-pip python3-setuptools python3-docutils libxml2 curl
-	ca-certificates git"
+	python3 python3-pip python3-setuptools python3-docutils pandoc libxml2
+	curl ca-certificates git"
 APT_RUST="rustup"
 DNF_RUST="cargo rust rustfmt"
 RUST_COMPONENTS="rustfmt"
