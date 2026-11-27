@@ -605,6 +605,47 @@ a stand-alone element.
 Errors are ``tcs_xtce::Error { message, line, column }``. ``line`` is 1-based,
 or 0 when the error is not tied to a position in the input.
 
+Reading with callbacks
+~~~~~~~~~~~~~~~~~~~~~~
+
+In Rust the reader is driven by a handler, so a program can build whatever
+structure it wants from a document instead of the binding's structs.
+``tcs_xtce::handler::parse(bytes, &mut h)`` reads a document, checks it
+against the schema, and calls the handler ``h`` once for each element it
+reads, bottom-up: it reads an element's attributes and children, calling
+the handler for each child first, then calls the handler for the element.
+
+.. list-table::
+   :widths: auto
+
+   * - ``trait Handler``
+     - One associated type and one callback for each element type a
+       document can hold: ``type ParameterType;`` and ``fn
+       parameter_type(&mut self, parts: ParameterTypeParts<Self>) ->
+       Result<Self::ParameterType>``, and so on. The associated type is
+       what the handler makes of such an element; the callback makes it.
+   * - ``ParameterTypeParts<H>``, …
+     - What a callback gets: the element's attributes as values, its
+       text, and what the handler made of each child element (a choice
+       among children is a ``…ChoiceParts<H>`` enum). Parts of elements
+       with no complex children aren't generic.
+   * - ``Tree``
+     - The handler that makes the binding's structs. ``Document`` and
+       ``from_xml`` read with it, so ``parse(bytes, &mut Tree)`` gives
+       the same ``SpaceSystemType`` as ``Document::from_bytes``.
+   * - ``trait Observer``, ``Observing(observer)``
+     - Callbacks that see each element as ``Tree`` makes it, each doing
+       nothing unless overridden. ``Observing`` is the handler that
+       builds the tree and calls them; an observer's error stops reading.
+   * - ``tree_parameter_type(parts)``, …, ``trait TreeTypes``
+     - The conversions ``Tree`` and ``Observing`` share, from parts to the
+       binding's structs, for any handler whose types are those structs.
+
+A handler gives a type for every element type, since Rust has no defaults
+for associated types; the generated ``Tree`` implementation is a template
+to start from, and an element type a handler has no use for can be ``()``.
+An error a callback returns stops reading, and ``parse`` returns it.
+
 C++ (``xtce::Document``, ``#include "tcs-xtce-document.hpp"``):
 
 .. list-table::

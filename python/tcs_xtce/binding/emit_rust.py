@@ -7,7 +7,8 @@ from .binding import (MANY, ONE, OPT, Binding, ChoiceField, ChoiceType,
                       ElemField, Record)
 from .model import (BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED,
                     ComplexRef, EnumRef, ScalarRef, TypeRef)
-from .binding import pascal_ident
+from .binding import pascal_ident, snake
+from .emit_rust_handler import HandlerEmitter
 
 SCALARS = {STRING: "String", BOOL: "bool", INT: "i32", LONG: "i64",
            USHORT: "u16", DOUBLE: "f64"}
@@ -86,6 +87,8 @@ class RustEmitter:
         self.out: list[str] = []
         # The types whose writers can fail, and why.
         self.fails = docs.write_failures(b, False)
+        # The callback interface; the structs are read through it.
+        self.handler = HandlerEmitter(b, ident, base_type)
 
     def w(self, line: str = "") -> None:
         """Appends one line to the module."""
@@ -126,6 +129,7 @@ class RustEmitter:
             self.record(self.b.records[name])
         for name in sorted(self.b.choices):
             self.choice(self.b.choices[name])
+        self.out += self.handler.emit()
         return "\n".join(self.out) + "\n"
 
     # -- enumerations -------------------------------------------------------
@@ -235,7 +239,15 @@ class RustEmitter:
         self.w(f"impl XmlElement for {r.name} {{")
         self.write_fn(r)
         self.w("")
-        self.read_fn(r)
+        if r.name in self.handler.records:
+            self.w("    fn read_xml<'a>(r: &mut Reader<'a>, tag: &Tag<'a>) -> "
+                   "Result<Self> {")
+            self.w(f"        handler::read_{snake(r.name)}(r, tag, &mut "
+                   "handler::Tree)")
+            self.w("    }")
+        else:
+            # An abstract base type, which no document holds as it is.
+            self.read_fn(r)
         self.w("}")
         self.w("")
         if any(a.xml == "baseType" for a in r.attrs):
@@ -554,6 +566,13 @@ class RustEmitter:
             "element is invalid (see the `read_xml` of its type) or if the "
             "XML is malformed.", indent=ind)
         self.w("    pub fn read_xml(r: &mut Reader<'_>) -> Result<Self> {")
+        if c.name in self.handler.choices:
+            self.w(f"        Ok(Self::from(handler::read_{snake(c.name)}(r, "
+                   "&mut handler::Tree)?))")
+            self.w("    }")
+            self.w("}")
+            self.w("")
+            return
         self.w("        Ok(match r.peek_child()? {")
         for v in c.variants:
             self.w(f"            Some({lit(v.xml)}) => "

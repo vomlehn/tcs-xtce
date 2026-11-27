@@ -1032,6 +1032,49 @@ buffer and an output buffer.</p>
 a stand-alone element.</p>
 <p>Errors are <tt class="docutils literal"><span class="pre">tcs_xtce::Error</span> { message, line, column }</tt>. <tt class="docutils literal">line</tt> is 1-based,
 or 0 when the error is not tied to a position in the input.</p>
+<div class="section" id="reading-with-callbacks">
+<h3>Reading with callbacks</h3>
+<p>In Rust the reader is driven by a handler, so a program can build whatever
+structure it wants from a document instead of the binding's structs.
+<tt class="docutils literal"><span class="pre">tcs_xtce::handler::parse(bytes,</span> &amp;mut h)</tt> reads a document, checks it
+against the schema, and calls the handler <tt class="docutils literal">h</tt> once for each element it
+reads, bottom-up: it reads an element's attributes and children, calling
+the handler for each child first, then calls the handler for the element.</p>
+<table border="1" class="docutils">
+<tbody valign="top">
+<tr><td><tt class="docutils literal">trait Handler</tt></td>
+<td>One associated type and one callback for each element type a
+document can hold: <tt class="docutils literal">type ParameterType;</tt> and <tt class="docutils literal">fn
+<span class="pre">parameter_type(&amp;mut</span> self, parts: ParameterTypeParts&lt;Self&gt;) <span class="pre">-&gt;</span>
+<span class="pre">Result&lt;Self::ParameterType&gt;</span></tt>, and so on. The associated type is
+what the handler makes of such an element; the callback makes it.</td>
+</tr>
+<tr><td><tt class="docutils literal">ParameterTypeParts&lt;H&gt;</tt>, …</td>
+<td>What a callback gets: the element's attributes as values, its
+text, and what the handler made of each child element (a choice
+among children is a <tt class="docutils literal">…ChoiceParts&lt;H&gt;</tt> enum). Parts of elements
+with no complex children aren't generic.</td>
+</tr>
+<tr><td><tt class="docutils literal">Tree</tt></td>
+<td>The handler that makes the binding's structs. <tt class="docutils literal">Document</tt> and
+<tt class="docutils literal">from_xml</tt> read with it, so <tt class="docutils literal">parse(bytes, &amp;mut Tree)</tt> gives
+the same <tt class="docutils literal">SpaceSystemType</tt> as <tt class="docutils literal"><span class="pre">Document::from_bytes</span></tt>.</td>
+</tr>
+<tr><td><tt class="docutils literal">trait Observer</tt>, <tt class="docutils literal">Observing(observer)</tt></td>
+<td>Callbacks that see each element as <tt class="docutils literal">Tree</tt> makes it, each doing
+nothing unless overridden. <tt class="docutils literal">Observing</tt> is the handler that
+builds the tree and calls them; an observer's error stops reading.</td>
+</tr>
+<tr><td><tt class="docutils literal">tree_parameter_type(parts)</tt>, …, <tt class="docutils literal">trait TreeTypes</tt></td>
+<td>The conversions <tt class="docutils literal">Tree</tt> and <tt class="docutils literal">Observing</tt> share, from parts to the
+binding's structs, for any handler whose types are those structs.</td>
+</tr>
+</tbody>
+</table>
+<p>A handler gives a type for every element type, since Rust has no defaults
+for associated types; the generated <tt class="docutils literal">Tree</tt> implementation is a template
+to start from, and an element type a handler has no use for can be <tt class="docutils literal">()</tt>.
+An error a callback returns stops reading, and <tt class="docutils literal">parse</tt> returns it.</p>
 <p>C++ (<tt class="docutils literal"><span class="pre">xtce::Document</span></tt>, <tt class="docutils literal">#include <span class="pre">&quot;tcs-xtce-document.hpp&quot;</span></tt>):</p>
 <table border="1" class="docutils">
 <tbody valign="top">
@@ -1128,6 +1171,7 @@ runtime):</p>
 <p><tt class="docutils literal">xtce.to_xml</tt> and <tt class="docutils literal">xtce.from_xml</tt> work like their Rust
 counterparts. Errors are raised as <tt class="docutils literal">tcs_xtce.XtceError</tt> (a <tt class="docutils literal">ValueError</tt>)
 with <tt class="docutils literal">message</tt> and <tt class="docutils literal">line</tt> attributes.</p>
+</div>
 </div>
 <div class="section" id="generated-data-structures">
 <h2><a class="toc-backref" href="#toc-entry-14">Generated data structures</a></h2>
