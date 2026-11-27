@@ -375,6 +375,16 @@ and the limitations and the work still to do.</dd>
 <dt><a class="reference external" href="tcs-xtcee-design.html">The tcs-xtcee design</a></dt>
 <dd>The XTCE editor: how it holds a document to its version's schema and
 keeps the rest of the file as it was written.</dd>
+<dt><a class="reference external" href="rust-migration-design.html">tcs-xtce in Rust</a></dt>
+<dd>Proposed: moving the compiler, its emitters, the binding generator
+and the Python, C and C++ runtimes and bindings to Rust, with
+interfaces to it in each language, and proving each step by
+identical output.</dd>
+<dt><a class="reference external" href="runtime-codec-design.html">The run-time codec design</a></dt>
+<dd>Proposed: a codec that reads XTCE while a program runs, resolves it
+as the compiler does, and packs and unpacks its containers and
+meta-commands with dynamic values, for tools such as expectb that
+are given their XTCE when they run.</dd>
 </dl>
 <p>How to use each is in its manual: see <a class="reference external" href="manual.html">the tcs-xtce manuals</a>.</p>
 </div>

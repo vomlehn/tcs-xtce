@@ -15,5 +15,17 @@ document of its own, as it has a manual of its own:
     The XTCE editor: how it holds a document to its version's schema and
     keeps the rest of the file as it was written.
 
+`tcs-xtce in Rust <rust-migration-design.html>`__
+    Proposed: moving the compiler, its emitters, the binding generator
+    and the Python, C and C++ runtimes and bindings to Rust, with
+    interfaces to it in each language, and proving each step by
+    identical output.
+
+`The run-time codec design <runtime-codec-design.html>`__
+    Proposed: a codec that reads XTCE while a program runs, resolves it
+    as the compiler does, and packs and unpacks its containers and
+    meta-commands with dynamic values, for tools such as expectb that
+    are given their XTCE when they run.
+
 How to use each is in its manual: see `the tcs-xtce manuals
 <manual.html>`__.

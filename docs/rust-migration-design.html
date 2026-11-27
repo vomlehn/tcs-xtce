@@ -1,0 +1,717 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.22.4: https://docutils.sourceforge.io/" />
+<title>tcs-xtce in Rust: Design</title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 9511 2024-01-13 09:50:07Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+Despite the name, some widely supported CSS2 features are used.
+
+See https://docutils.sourceforge.io/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+.subscript {
+  vertical-align: sub;
+  font-size: smaller }
+
+.superscript {
+  vertical-align: super;
+  font-size: smaller }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
+}
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left, table.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right, table.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+table.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+.align-top    {
+  vertical-align: top }
+
+.align-middle {
+  vertical-align: middle }
+
+.align-bottom {
+  vertical-align: bottom }
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: gray; } /* line numbers */
+pre.code, code { background-color: #eeeeee }
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic, pre.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+</style>
+</head>
+<body>
+<div class="document" id="tcs-xtce-in-rust-design">
+<h1 class="title">tcs-xtce in Rust: Design</h1>
+
+<p>Status: proposed, for review. Nothing here is implemented yet.</p>
+<div class="contents local topic" id="contents">
+<p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
+<ul class="simple">
+<li><a class="reference internal" href="#what-changes" id="toc-entry-1">What changes</a></li>
+<li><a class="reference internal" href="#goals" id="toc-entry-2">Goals</a></li>
+<li><a class="reference internal" href="#the-crates" id="toc-entry-3">The crates</a></li>
+<li><a class="reference internal" href="#the-order-of-work" id="toc-entry-4">The order of work</a></li>
+<li><a class="reference internal" href="#the-python-interfaces" id="toc-entry-5">The Python interfaces</a></li>
+<li><a class="reference internal" href="#packaging" id="toc-entry-6">Packaging</a></li>
+<li><a class="reference internal" href="#c-and-c" id="toc-entry-7">C and C++</a><ul>
+<li><a class="reference internal" href="#the-c-packet-runtime" id="toc-entry-8">The C packet runtime</a></li>
+<li><a class="reference internal" href="#the-c-c-xml-binding" id="toc-entry-9">The C/C++ XML binding</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#testing" id="toc-entry-10">Testing</a></li>
+<li><a class="reference internal" href="#settled-in-review" id="toc-entry-11">Settled in review</a></li>
+<li><a class="reference internal" href="#questions-for-review" id="toc-entry-12">Questions for review</a></li>
+</ul>
+</div>
+<div class="section" id="what-changes">
+<h1><a class="toc-backref" href="#toc-entry-1">What changes</a></h1>
+<p>Today most of tcs-xtce is Python: the compiler, its emitters, the
+generator of the XML binding, the Python XML binding and the Python
+packet runtime. The C packet runtime and the C/C++ XML binding are
+written separately again, in C and C++. This design moves all of it to
+Rust, so that each piece is written once, in Rust, and Python, C and
+C++ reach it through interfaces:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="39%" />
+<col width="29%" />
+<col width="32%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">Piece</th>
+<th class="head">Today</th>
+<th class="head">After</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Compiler: analysis and model</td>
+<td>Python, <tt class="docutils literal">compiler/</tt></td>
+<td>Rust crate, shared</td>
+</tr>
+<tr><td>Emitters (Rust, C/C++, Python)</td>
+<td>Python, <tt class="docutils literal">compiler/</tt></td>
+<td>Rust, in the compiler</td>
+</tr>
+<tr><td>Binding generator (XSD)</td>
+<td>Python, <tt class="docutils literal">binding/</tt></td>
+<td>Rust</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">xtce-digest</span></tt>, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt></td>
+<td>Python</td>
+<td>Rust programs</td>
+</tr>
+<tr><td>Python runtime <tt class="docutils literal">tcsxtce</tt></td>
+<td>pure Python</td>
+<td>Python interface</td>
+</tr>
+<tr><td>Python binding <tt class="docutils literal">tcs_xtce</tt></td>
+<td>generated Python</td>
+<td>Python interface</td>
+</tr>
+<tr><td>C runtime <tt class="docutils literal"><span class="pre">tcsxtce-*.h</span></tt></td>
+<td>header-only C</td>
+<td>C interface</td>
+</tr>
+<tr><td>C/C++ binding <tt class="docutils literal"><span class="pre">libtcs-xtce</span></tt></td>
+<td>generated C++</td>
+<td>C and C++ interfaces</td>
+</tr>
+<tr><td>Run-time codec</td>
+<td>(new)</td>
+<td>Rust, on the model</td>
+</tr>
+</tbody>
+</table>
+<p>Two things motivate it:</p>
+<ul class="simple">
+<li><strong>One analysis.</strong> The run-time codec needs the compiler's analysis
+in Rust. With the compiler in Rust too, there is one analysis and one
+model, not a Python one and a Rust one kept in step by tests.</li>
+<li><strong>One language to maintain.</strong> The editor is already Rust, and the
+Rust runtime is already the reference the other languages are checked
+against.</li>
+</ul>
+<p>What doesn't change:</p>
+<ul class="simple">
+<li><strong>What is generated.</strong> The Rust compiler generates the same code, in
+every language, byte for byte, as the Python compiler does, and the
+Rust binding generator the same bindings. A mission's generated code
+doesn't change when it is rebuilt with the new compiler.</li>
+<li><strong>The Python APIs.</strong> <tt class="docutils literal">import tcsxtce</tt> and <tt class="docutils literal">import tcs_xtce</tt> give
+the same classes and functions, with the same behaviour, so
+generated Python code and programs that use the binding run
+unchanged.</li>
+<li><strong>The C and C++ APIs.</strong> <tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt>, <tt class="docutils literal"><span class="pre">tcsxtce-bnum.h</span></tt>,
+<tt class="docutils literal"><span class="pre">tcsxtce-digest.h</span></tt>, <tt class="docutils literal"><span class="pre">tcs-xtce.h</span></tt> and the <tt class="docutils literal"><span class="pre">tcs-xtce-*.hpp</span></tt>
+headers declare the same functions, types and classes, with the same
+behaviour, so generated C and C++ and programs that use the binding
+compile unchanged. What changes is how they are built: see <a class="reference internal" href="#c-and-c">C and
+C++</a>.</li>
+<li><strong>The digest.</strong> Every language computes the same digest as before.</li>
+</ul>
+</div>
+<div class="section" id="goals">
+<h1><a class="toc-backref" href="#toc-entry-2">Goals</a></h1>
+<ol class="arabic simple">
+<li>Every piece above is written in Rust, and Python, C and C++ use it
+through interfaces, not through ports.</li>
+<li>The change is invisible in what tcs-xtce produces: the generated
+code, the bindings, the digests and the packets are the same.</li>
+<li>Each step is proved before the next: a Rust piece replaces a Python
+one only when it gives identical results on everything the tests
+cover.</li>
+<li>The Python packages may now depend on the Rust runtime. They no
+longer need only the standard library.</li>
+<li>C and C++ programs, flight software among them, link a library
+built from the Rust. They no longer need only a C compiler and the
+headers.</li>
+</ol>
+</div>
+<div class="section" id="the-crates">
+<h1><a class="toc-backref" href="#toc-entry-3">The crates</a></h1>
+<p>The Rust workspace in <tt class="docutils literal">rust/</tt> grows from two crates to seven:</p>
+<dl class="docutils">
+<dt><tt class="docutils literal">tcsxtce</tt></dt>
+<dd>The packet runtime, as now: operational code, what flies.</dd>
+<dt><tt class="docutils literal"><span class="pre">tcs-xtce</span></tt></dt>
+<dd>The XML binding and <tt class="docutils literal">Document</tt>, as now.</dd>
+<dt><tt class="docutils literal"><span class="pre">tcs-xtce-model</span></tt></dt>
+<dd>New: the compiler's analysis, from the binding's tree to the
+resolved model, as <tt class="docutils literal">compile.py</tt> and <tt class="docutils literal">model.py</tt> do now.</dd>
+<dt><tt class="docutils literal"><span class="pre">tcs-xtce-compiler</span></tt></dt>
+<dd>New: the emitters, the size report and the <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> program,
+which reads XTCE and writes code, as <tt class="docutils literal">python <span class="pre">-m</span> tcs_xtce</tt> does now.</dd>
+<dt><tt class="docutils literal"><span class="pre">tcs-xtce-dynamic</span></tt></dt>
+<dd>New: the run-time codec, on the model; see <a class="reference external" href="runtime-codec-design.html">the run-time codec
+design</a>.</dd>
+<dt><tt class="docutils literal"><span class="pre">tcsxtce-c</span></tt></dt>
+<dd>New: the C interface to <tt class="docutils literal">tcsxtce</tt>, built as the static library
+<tt class="docutils literal">libtcsxtce.a</tt>: operational code, what flies in C flight software.</dd>
+<dt><tt class="docutils literal"><span class="pre">tcs-xtce-c</span></tt></dt>
+<dd>New: the C interface to <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt>, built as <tt class="docutils literal"><span class="pre">libtcs-xtce.a</span></tt> and
+<tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt>, which the C++ classes are built on.</dd>
+</dl>
+<p>Each depends only on those above it, except that the two C interfaces
+depend only on the crate each one wraps. <tt class="docutils literal"><span class="pre">tcs-xtce-model</span></tt> is the piece
+everything new rests on, and the one ported first.</p>
+<p>The Python interfaces are built with PyO3, as extension modules
+compiled from Rust:</p>
+<dl class="docutils">
+<dt><tt class="docutils literal">tcsxtce</tt> (Python)</dt>
+<dd>The packet runtime's API, as the pure-Python <tt class="docutils literal">tcsxtce</tt> has it now,
+implemented by the Rust runtime.</dd>
+<dt><tt class="docutils literal">tcs_xtce</tt> (Python)</dt>
+<dd>The XML binding's classes and <tt class="docutils literal">Document</tt>, implemented by the Rust
+binding; and the compiler, so that <tt class="docutils literal">python <span class="pre">-m</span> tcs_xtce</tt> and the
+<tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> command keep working; and the run-time codec.</dd>
+</dl>
+<p>PyO3 rather than <tt class="docutils literal">ctypes</tt>: generated Python calls the runtime once or
+more for every field of every packet, and a call through <tt class="docutils literal">ctypes</tt>
+costs far more than one into a PyO3 module. With the packages no longer
+limited to the standard library, there is no reason left for
+<tt class="docutils literal">ctypes</tt>. The run-time codec's Python interface is built the same
+way, which supersedes the <tt class="docutils literal">ctypes</tt> interface its design proposed.</p>
+</div>
+<div class="section" id="the-order-of-work">
+<h1><a class="toc-backref" href="#toc-entry-4">The order of work</a></h1>
+<p>Each step ends with the Python piece it replaces still in place, and
+the two compared. A Python piece is removed only at the end.</p>
+<ol class="arabic simple">
+<li><strong>The model.</strong> Port the analysis to <tt class="docutils literal"><span class="pre">tcs-xtce-model</span></tt>, stage by
+stage. The Python compiler gains <tt class="docutils literal"><span class="pre">--dump-model</span></tt>, which writes the
+resolved model in a canonical text form, and the Rust model writes
+the same form. The two must be identical for the demo mission, the
+examples and the schema-coverage samples.</li>
+<li><strong>The emitters.</strong> Port the three emitters and the size report to
+<tt class="docutils literal"><span class="pre">tcs-xtce-compiler</span></tt>. Its output must be byte-identical to the
+Python compiler's for every mission the tests compile, in every
+language and with <tt class="docutils literal"><span class="pre">--dynamic-allocations</span></tt> both ways.</li>
+<li><strong>The run-time codec,</strong> on the model, tested against the generated
+codecs; see its design.</li>
+<li><strong>The binding generator.</strong> Port <tt class="docutils literal">binding/</tt> -- reading the XSD,
+binding its types, emitting Rust, C++ and Python, the samples and
+the documentation -- to a Rust program. Its output must be
+byte-identical to today's, for the XSD versions the project builds;
+the C++ it emits changes only in step 8.</li>
+<li><strong>The Python runtime.</strong> A PyO3 module with the pure-Python
+<tt class="docutils literal">tcsxtce</tt>'s API, on the Rust runtime. Every Python test, and every
+cross-language check with generated Python, must pass unchanged.</li>
+<li><strong>The Python XML binding.</strong> A PyO3 module with the classes and
+<tt class="docutils literal">Document</tt> of today's generated <tt class="docutils literal">tcs_xtce</tt>. The round-trip
+tests, and the byte-identical output across languages, must pass
+unchanged.</li>
+<li><strong>The C runtime.</strong> <tt class="docutils literal">tcsxtce</tt> builds without the standard library,
+and <tt class="docutils literal"><span class="pre">tcsxtce-c</span></tt> gives <tt class="docutils literal">libtcsxtce.a</tt> the functions the C headers
+declare. Every C and C++ test, every example and every
+cross-language check with generated C and C++ must pass unchanged,
+built against the library.</li>
+<li><strong>The C/C++ XML binding.</strong> <tt class="docutils literal"><span class="pre">tcs-xtce-c</span></tt> gives the functions of
+<tt class="docutils literal"><span class="pre">tcs-xtce.h</span></tt>, and the C++ classes are rebuilt on them. The
+round-trip tests and <tt class="docutils literal">c_api_test</tt> must pass unchanged.</li>
+<li><strong>Retire the old code.</strong> Remove the Python compiler, emitters,
+binding generator, runtime and binding, the C definitions in the
+runtime's headers, the C++ in <tt class="docutils literal">cpp/src/</tt>, and the comparisons that
+tested the Rust against them. The tests that remain test the Rust
+and its interfaces.</li>
+</ol>
+<p>Steps 1 to 3 are what expectb needs. Steps 4 to 9 can follow at their
+own pace, since nothing in them blocks the run-time codec.</p>
+</div>
+<div class="section" id="the-python-interfaces">
+<h1><a class="toc-backref" href="#toc-entry-5">The Python interfaces</a></h1>
+<ul class="simple">
+<li><strong>The same names, the same behaviour.</strong> Classes, functions,
+exceptions, defaults and error messages are what the pure-Python
+packages have now, so that existing code doesn't notice the change.
+<tt class="docutils literal">PacketError</tt> stays a subclass of <tt class="docutils literal">ValueError</tt>, with the same
+fields.</li>
+<li><strong>Python's own types at the edges.</strong> Integers of any size are Python
+<tt class="docutils literal">int</tt>s, bytes are <tt class="docutils literal">bytes</tt> or <tt class="docutils literal">memoryview</tt>s, and the binding's
+records keep their attribute names and their <tt class="docutils literal">Optional</tt> and
+<tt class="docutils literal">list</tt> fields.</li>
+<li><strong>The XML binding's records.</strong> Today they are dataclasses. As PyO3
+classes they keep their attributes, their constructors with keyword
+arguments and their equality, so code that builds or reads them
+doesn't change. Code that relies on their being dataclasses, through
+<tt class="docutils literal">dataclasses.fields()</tt> or <tt class="docutils literal">asdict()</tt>, does notice; the
+interface provides both for these classes, so that it doesn't.</li>
+<li><strong>Wheels.</strong> The packages become native, so they are built as wheels
+for each platform, with PyO3's stable ABI (<tt class="docutils literal">abi3</tt>) from Python 3.10,
+so that one wheel for each platform serves every Python from 3.10 on.
+<tt class="docutils literal">make <span class="pre">python-dist</span></tt> builds them with maturin.</li>
+</ul>
+</div>
+<div class="section" id="packaging">
+<h1><a class="toc-backref" href="#toc-entry-6">Packaging</a></h1>
+<ul class="simple">
+<li><strong>The ``tcs-xtce`` command</strong> is a Rust program. The Python package
+installs it as well, as an entry point that calls the compiler in its
+extension module, so <tt class="docutils literal">pip install</tt> still gives the command.</li>
+<li><strong>``make install-tools``</strong> gains maturin and cbindgen, and loses
+nothing it needs for building C, C++ and Rust. The README's list of
+tools changes with it.</li>
+<li><strong>The C runtime's package</strong> ships <tt class="docutils literal">libtcsxtce.a</tt> beside the
+headers, built for each target it supports, and the C/C++ binding's
+package ships its libraries built from the Rust.</li>
+<li><strong>Versions.</strong> Each crate and each Python package changes its minor
+version when its API changes, as now. The compiler's move doesn't
+change generated code, so it doesn't by itself change any runtime's
+API.</li>
+</ul>
+</div>
+<div class="section" id="c-and-c">
+<h1><a class="toc-backref" href="#toc-entry-7">C and C++</a></h1>
+<p>The C and C++ pieces become interfaces to the Rust, as the Python ones
+do, so that every language runs the one implementation.</p>
+<div class="section" id="the-c-packet-runtime">
+<h2><a class="toc-backref" href="#toc-entry-8">The C packet runtime</a></h2>
+<ul class="simple">
+<li><strong>The headers stay.</strong> <tt class="docutils literal"><span class="pre">tcsxtce-packet.h</span></tt>, <tt class="docutils literal"><span class="pre">tcsxtce-bnum.h</span></tt> and
+<tt class="docutils literal"><span class="pre">tcsxtce-digest.h</span></tt> keep every declaration they have -- functions,
+types, constants and macros -- so generated C and C++ compile
+unchanged and the emitters' output doesn't change.</li>
+<li><strong>The definitions move to Rust.</strong> The functions the headers now
+define, <tt class="docutils literal">static inline</tt>, become declarations of functions with C
+linkage that <tt class="docutils literal"><span class="pre">tcsxtce-c</span></tt> defines, in <tt class="docutils literal">libtcsxtce.a</tt>. A type that
+C code lays out itself, such as a bit reader or writer, is
+<tt class="docutils literal">#[repr(C)]</tt> in Rust, with the same layout. The headers are written
+by hand, not by cbindgen, so they stay as readable as they are, and a
+test checks them against what cbindgen would give.</li>
+<li><strong>Flight software links the library.</strong> A C mission now links
+<tt class="docutils literal">libtcsxtce.a</tt>, built by Rust for its target, as well as including
+the headers. <tt class="docutils literal">tcsxtce</tt> and <tt class="docutils literal"><span class="pre">tcsxtce-c</span></tt> build with <tt class="docutils literal"><span class="pre">#![no_std]</span></tt>
+and without <tt class="docutils literal">alloc</tt>, so the library needs no operating system and
+allocates nothing; reading files, which tools use, moves behind a
+<tt class="docutils literal">std</tt> feature, off by default for the C library.</li>
+<li><strong>Inlining.</strong> The runtime's small helpers are no longer inlined into
+generated code by the C compiler alone. With clang, cross-language
+link-time optimization (<tt class="docutils literal"><span class="pre">-flto</span></tt> with Rust's
+<tt class="docutils literal"><span class="pre">-Clinker-plugin-lto</span></tt>) inlines them again; <tt class="docutils literal">make</tt> builds the
+examples both ways, and the size report compares them.</li>
+</ul>
+</div>
+<div class="section" id="the-c-c-xml-binding">
+<h2><a class="toc-backref" href="#toc-entry-9">The C/C++ XML binding</a></h2>
+<ul class="simple">
+<li><strong>The C API stays.</strong> <tt class="docutils literal"><span class="pre">tcs-xtce.h</span></tt> keeps its functions, handles,
+status codes and buffer rules, defined now by <tt class="docutils literal"><span class="pre">tcs-xtce-c</span></tt> over the
+Rust <tt class="docutils literal">Document</tt>. <tt class="docutils literal"><span class="pre">libtcs-xtce.a</span></tt> and <tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt> are built
+from it.</li>
+<li><strong>The C++ classes stay.</strong> <tt class="docutils literal"><span class="pre">tcs-xtce-document.hpp</span></tt> and the other
+headers keep their classes and members. The binding generator emits
+them, and the C functions that fill them from the Rust tree and read
+them back, in place of the C++ parser and writer in <tt class="docutils literal">cpp/src/</tt>.</li>
+<li><strong>ABI.</strong> The shared library's soname changes, from
+<tt class="docutils literal"><span class="pre">libtcs-xtce.so.1</span></tt> to <tt class="docutils literal"><span class="pre">libtcs-xtce.so.2</span></tt>, since its definitions
+are new even where its declarations are the same.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="testing">
+<h1><a class="toc-backref" href="#toc-entry-10">Testing</a></h1>
+<ul class="simple">
+<li><strong>Byte-identical output</strong> is the test for every port that generates
+something: the model dump, the emitters and the binding generator.
+Any difference, even in a comment, is a failure.</li>
+<li><strong>The existing tests stay.</strong> <tt class="docutils literal">tests/packet_check.sh</tt>,
+<tt class="docutils literal">cross_check.sh</tt>, <tt class="docutils literal">digest_check.sh</tt>, the round-trip and sample
+tests, the C and C++ tests in <tt class="docutils literal">cpp/tests/</tt>, the examples and the
+Python tests all run against the new pieces unchanged.</li>
+<li><strong>Allocation.</strong> The rule that the fixed codecs allocate nothing while
+decoding, encoding or describing a packet applies to generated code
+as now, in C linked with <tt class="docutils literal">libtcsxtce.a</tt> too, which a build without
+<tt class="docutils literal">alloc</tt> guarantees. The Python interfaces allocate as Python does.</li>
+<li><strong>Flight targets.</strong> <tt class="docutils literal">libtcsxtce.a</tt> is built and its tests run for
+each target the C runtime's package supports, under an emulator
+where the host can't run it.</li>
+<li><strong>The documentation's checks</strong> -- function headers, line width and
+the HTML being current -- apply to the new Rust as to the old Python.</li>
+</ul>
+</div>
+<div class="section" id="settled-in-review">
+<h1><a class="toc-backref" href="#toc-entry-11">Settled in review</a></h1>
+<ul class="simple">
+<li>The compiler, its emitters and the binding generator move to Rust.</li>
+<li>The Python packet runtime and the Python XML binding become
+interfaces to the Rust, and may depend on it.</li>
+<li>The Python packages are native wheels with PyO3's <tt class="docutils literal">abi3</tt>, from
+Python 3.10.</li>
+<li>The C packet runtime and the C/C++ XML binding become interfaces to
+the Rust too, keeping their headers' declarations. C flight software
+links <tt class="docutils literal">libtcsxtce.a</tt>, built from the Rust without <tt class="docutils literal">std</tt> or
+<tt class="docutils literal">alloc</tt>.</li>
+<li>Step 9 follows step 8 directly: the old code is removed once the Rust
+passes every test, without waiting for a version of the Rust pieces
+to have been in use.</li>
+<li>The processors Rust supports are enough for the C runtime: a mission
+that uses it is built for a Rust target.</li>
+</ul>
+</div>
+<div class="section" id="questions-for-review">
+<h1><a class="toc-backref" href="#toc-entry-12">Questions for review</a></h1>
+<p>None remain.</p>
+</div>
+</div>
+</body>
+</html>

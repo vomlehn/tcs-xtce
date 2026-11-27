@@ -1,0 +1,808 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.22.4: https://docutils.sourceforge.io/" />
+<title>tcs-xtce Run-time Codec Design</title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 9511 2024-01-13 09:50:07Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+Despite the name, some widely supported CSS2 features are used.
+
+See https://docutils.sourceforge.io/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+.subscript {
+  vertical-align: sub;
+  font-size: smaller }
+
+.superscript {
+  vertical-align: super;
+  font-size: smaller }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
+}
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left, table.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right, table.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+table.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+.align-top    {
+  vertical-align: top }
+
+.align-middle {
+  vertical-align: middle }
+
+.align-bottom {
+  vertical-align: bottom }
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: gray; } /* line numbers */
+pre.code, code { background-color: #eeeeee }
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic, pre.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+</style>
+</head>
+<body>
+<div class="document" id="tcs-xtce-run-time-codec-design">
+<h1 class="title">tcs-xtce Run-time Codec Design</h1>
+
+<p>Status: proposed, for review. Nothing here is implemented yet.</p>
+<div class="contents local topic" id="contents">
+<p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
+<ul class="simple">
+<li><a class="reference internal" href="#what-it-is-for" id="toc-entry-1">What it is for</a></li>
+<li><a class="reference internal" href="#goals" id="toc-entry-2">Goals</a></li>
+<li><a class="reference internal" href="#where-it-fits" id="toc-entry-3">Where it fits</a></li>
+<li><a class="reference internal" href="#resolving" id="toc-entry-4">Resolving</a><ul>
+<li><a class="reference internal" href="#looking-names-up" id="toc-entry-5">Looking names up</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#interpreting" id="toc-entry-6">Interpreting</a></li>
+<li><a class="reference internal" href="#values" id="toc-entry-7">Values</a><ul>
+<li><a class="reference internal" href="#storage" id="toc-entry-8">Storage</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-interface" id="toc-entry-9">The interface</a><ul>
+<li><a class="reference internal" href="#freeing-what-was-read" id="toc-entry-10">Freeing what was read</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#phases" id="toc-entry-11">Phases</a></li>
+<li><a class="reference internal" href="#testing" id="toc-entry-12">Testing</a></li>
+<li><a class="reference internal" href="#the-interpretation-question" id="toc-entry-13">The interpretation question</a><ul>
+<li><a class="reference internal" href="#interfaces-to-other-languages" id="toc-entry-14">Interfaces to other languages</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#versions" id="toc-entry-15">Versions</a></li>
+<li><a class="reference internal" href="#settled-in-review" id="toc-entry-16">Settled in review</a></li>
+<li><a class="reference internal" href="#questions-for-review" id="toc-entry-17">Questions for review</a></li>
+</ul>
+</div>
+<div class="section" id="what-it-is-for">
+<h1><a class="toc-backref" href="#toc-entry-1">What it is for</a></h1>
+<p>tcs-xtce's packet codecs are generated: the compiler reads a mission's
+XTCE once and writes typed code for it. That suits flight and ground
+software, which is built for one mission. It doesn't suit a tool that
+is given its XTCE when it runs, such as a protocol tester that is
+handed a mission's documents and a script that names their containers.
+expectb is the first such tool: its design for XTCE types is in its
+<tt class="docutils literal">docs/xtce.md</tt>.</p>
+<p>The run-time codec reads XTCE documents when a program runs, resolves
+them, and packs and unpacks their containers and meta-commands, with
+values held dynamically instead of in generated structs.</p>
+</div>
+<div class="section" id="goals">
+<h1><a class="toc-backref" href="#toc-entry-2">Goals</a></h1>
+<ol class="arabic simple">
+<li><strong>Read XTCE while running.</strong> A program passes the documents as
+anything that implements <tt class="docutils literal"><span class="pre">std::io::Read</span></tt> -- a file, a string or a
+buffer -- and gets a resolved mission it can look names up in.</li>
+<li><strong>Give the same answers as the generated codecs.</strong> Packing the same
+values gives the same bytes, and unpacking the same bytes gives the
+same values, byte for byte and bit for bit, so that a tool built on
+the run-time codec and a program built from generated code agree.</li>
+<li><strong>Allocate nothing per packet.</strong> Everything is allocated when the
+mission is resolved and its storage is made; packing and unpacking
+then allocate nothing, as the codecs generated with
+<tt class="docutils literal"><span class="pre">--dynamic-allocations</span> false</tt> don't.</li>
+<li><strong>Never be silently wrong.</strong> A construct the run-time codec doesn't
+support yet makes resolving the mission fail, naming the construct
+and its line, as the compiler does with <tt class="docutils literal">Unsupported</tt>.</li>
+<li><strong>Change nothing for generated code.</strong> The compiler, the emitters,
+the generated code and the <tt class="docutils literal">tcsxtce</tt> runtime keep their behaviour
+and their APIs.</li>
+</ol>
+</div>
+<div class="section" id="where-it-fits">
+<h1><a class="toc-backref" href="#toc-entry-3">Where it fits</a></h1>
+<p>The run-time codec is a crate of its own, <tt class="docutils literal"><span class="pre">tcs-xtce-dynamic</span></tt>, one of
+those that <a class="reference external" href="rust-migration-design.html">tcs-xtce in Rust</a> adds. It
+reads XML, so it is a software tool, in the sense of
+<tt class="docutils literal">categories.toml</tt>, and not operational code like <tt class="docutils literal">tcsxtce</tt>. Flight
+software still uses generated codecs, and still doesn't parse XML while
+it runs.</p>
+<p>It is built from three parts:</p>
+<ul class="simple">
+<li>the <strong>model</strong>, <tt class="docutils literal"><span class="pre">tcs-xtce-model</span></tt>, the compiler's analysis in Rust,
+which the Rust compiler uses too;</li>
+<li>the <strong>XML binding</strong>, whose <tt class="docutils literal"><span class="pre">Document::read_from</span></tt> reads each
+document into a <tt class="docutils literal">SpaceSystemType</tt> tree;</li>
+<li>the <strong>tcsxtce runtime</strong>, whose <tt class="docutils literal">BitReader</tt>, <tt class="docutils literal">BitWriter</tt> and
+helpers -- integer and float encodings, strings and binary,
+calibrators, checksums and CRCs, sizes -- do the work at the bit
+level, exactly as they do for generated code.</li>
+</ul>
+<p>What is new in this crate is the interpreter that runs the model, and
+the storage and interfaces around it.</p>
+</div>
+<div class="section" id="resolving">
+<h1><a class="toc-backref" href="#toc-entry-4">Resolving</a></h1>
+<p>Resolving is the model's: <tt class="docutils literal"><span class="pre">tcs-xtce-model</span></tt> turns the binding's tree
+into the resolved model, in which &quot;references point at objects,
+defaults are filled in and sizes are in bits&quot;, as <tt class="docutils literal">compile.py</tt> and
+<tt class="docutils literal">model.py</tt> do today, stage for stage:</p>
+<ol class="arabic simple">
+<li><strong>Index</strong> every SpaceSystem into tables keyed by path: parameter
+types, parameters, argument types, containers, command containers,
+meta-commands, messages, algorithms and streams.</li>
+<li><strong>Resolve references</strong> with the compiler's rules: absolute paths from
+a document root, unqualified names from the current SpaceSystem
+outwards, <tt class="docutils literal">.</tt> and <tt class="docutils literal">..</tt>, and other relative paths from each
+ancestor, as Yamcs does. Parameter and argument types stay separate
+namespaces.</li>
+<li><strong>Build types</strong>: encodings, byte orders, calibrators, enumerations,
+arrays and aggregates, and types that inherit from a base type.</li>
+<li><strong>Build containers and meta-commands</strong> into the model's <tt class="docutils literal">Node</tt> and
+its list of items.</li>
+<li><strong>Finish the mission</strong>: the inheritance trees and their Kinds, fixed
+values, derived sizes, and each node's maximum size in bytes.</li>
+</ol>
+<p>The compiler is built on the same model, so the model covers all of
+XTCE that the compiler does, from the start: a mission resolves for the
+run-time codec exactly when it compiles. The run-time codec adds the
+same lookup by path for programs, described in <a class="reference internal" href="#looking-names-up">Looking names up</a>.</p>
+<div class="section" id="looking-names-up">
+<h2><a class="toc-backref" href="#toc-entry-5">Looking names up</a></h2>
+<p>A program names a SpaceSystem with a <tt class="docutils literal">SpaceSystemId</tt>, a handle the
+mission gives out, and passes one as the base of every lookup:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">Mission::top</span></tt> gives the top, the SpaceSystem above every
+document's root. A relative path from the top means what the same
+path means as an absolute one, so <tt class="docutils literal">SC/Tlm/Temp</tt> from the top names
+<tt class="docutils literal">/SC/Tlm/Temp</tt>.</li>
+<li><tt class="docutils literal"><span class="pre">Mission::space_system</span></tt> looks a SpaceSystem up from a base and
+gives its handle, so a program reaches <tt class="docutils literal">/SC/Tlm</tt> either as
+<tt class="docutils literal">/SC/Tlm</tt> from any base or as <tt class="docutils literal">Tlm</tt> from <tt class="docutils literal">/SC</tt>.</li>
+<li><tt class="docutils literal"><span class="pre">Mission::container</span></tt>, <tt class="docutils literal">meta_command</tt> and <tt class="docutils literal">parameter</tt> resolve a
+path from a base with the compiler's rules: an absolute path ignores
+the base; an unqualified name is looked for in the base, then in each
+SpaceSystem that encloses it; a path starting with <tt class="docutils literal">.</tt> or <tt class="docutils literal">..</tt> is
+taken from the base only; and any other relative path is looked for
+from the base, then from each SpaceSystem that encloses it.</li>
+<li>A lookup that finds nothing returns a <tt class="docutils literal">LookupError</tt> naming the path
+and each SpaceSystem it was looked for in, in the order they were
+searched, so a program can say exactly why a name wasn't found.</li>
+<li><tt class="docutils literal"><span class="pre">Mission::path_of_node</span></tt>, <tt class="docutils literal">path_of_slot</tt> and
+<tt class="docutils literal">path_of_space_system</tt> give the absolute path of what a lookup
+found, for a program's traces and error messages.</li>
+</ul>
+<p>The rules are in the model, which the compiler uses for references in
+the documents, so a path means to a program what it would mean written
+in a document at the base, and no program has to repeat the rules. A
+program with nested scopes, such as expectb's <tt class="docutils literal">space_system</tt> blocks,
+keeps a stack of handles: it looks each block's SpaceSystem up from the
+handle of the block around it, and passes the innermost handle to every
+lookup in the block.</p>
+<p>A <tt class="docutils literal">SpaceSystemId</tt> belongs to the mission that gave it out, as a
+<tt class="docutils literal">NodeId</tt> and a <tt class="docutils literal">SlotId</tt> do. Given to another mission, it makes a
+lookup fail with a <tt class="docutils literal">LookupError</tt>, not find the wrong thing.</p>
+</div>
+</div>
+<div class="section" id="interpreting">
+<h1><a class="toc-backref" href="#toc-entry-6">Interpreting</a></h1>
+<p>The resolved model is close to an intermediate representation: a node
+is a list of items -- seeks, values, pads, fixed values, conditions,
+checks, length ends -- that the generated code runs as straight-line
+code. The interpreter runs the same list:</p>
+<ul class="simple">
+<li><strong>Unpacking</strong> a node walks its items with a <tt class="docutils literal">BitReader</tt>, as the
+generated <tt class="docutils literal">decode_prefix</tt> does, calling the same helpers with the
+same arguments, and writes each value into its slot of the storage.</li>
+<li><strong>Packing</strong> walks them with a <tt class="docutils literal">BitWriter</tt>, as <tt class="docutils literal">encode_into</tt>
+does, including patching length fields and checksums at the end.</li>
+<li><strong>Classifying</strong> a packet against an inheritance tree decodes the
+root's items once, then tests each child's criteria in document
+order, the first match winning, as the generated <tt class="docutils literal">Kind</tt> does.</li>
+</ul>
+<p>Because both run the same items through the same runtime, the
+interpreter and the generated code can only differ where the
+interpreter is wrong, which is what the tests look for.</p>
+</div>
+<div class="section" id="values">
+<h1><a class="toc-backref" href="#toc-entry-7">Values</a></h1>
+<p>A decoded value is held in a <tt class="docutils literal">Datum</tt>, a closed enum:</p>
+<pre class="literal-block">
+pub enum Datum&lt;'s&gt; {
+    Int(i128),          // integers of up to 128 bits
+    Float(f64),
+    Enum(i128),         // the raw value; its label is in the type
+    Bool(bool),
+    Str(&amp;'s str),       // borrowed from the storage
+    Binary(&amp;'s [u8]),   // borrowed from the storage
+    Time(f64),          // seconds, as the compiler represents times
+}
+</pre>
+<p>Aggregates and arrays aren't <tt class="docutils literal">Datum</tt>s: each member and element is a
+slot of its own, named by its path, <tt class="docutils literal">Attitude.q[2]</tt>, so a program
+reaches every scalar the same way.</p>
+<div class="section" id="storage">
+<h2><a class="toc-backref" href="#toc-entry-8">Storage</a></h2>
+<p><tt class="docutils literal">Store</tt> holds the current value of every parameter, as a ground
+system's table of current values does:</p>
+<ul class="simple">
+<li>one slot for each scalar parameter, member and element, which
+records whether it has a value;</li>
+<li>one arena for every string and binary value, each given the room its
+encoding's maximum allows, with the compiler's rules for those
+maximums (<tt class="docutils literal">wire_cap</tt>, <tt class="docutils literal">str_cap</tt>, <tt class="docutils literal">binary_cap</tt>);</li>
+<li>arrays with a dynamic size get room for their largest size.</li>
+</ul>
+<p><tt class="docutils literal"><span class="pre">Mission::store</span></tt> allocates it, once. A string, binary value or array
+with no maximum size can't be given room in advance; for those, the
+mission reports which parameters they are, and <tt class="docutils literal"><span class="pre">Mission::store</span></tt> gives
+them room that grows, so a program that must not allocate can refuse
+the mission before it starts.</p>
+<p>Unpacking is transactional: a packet is decoded into a <tt class="docutils literal">Scratch</tt>, the
+size of the largest node, and only copied into the <tt class="docutils literal">Store</tt> when it
+decodes completely. A packet that fails a check, or a try that loses,
+leaves every current value as it was.</p>
+</div>
+</div>
+<div class="section" id="the-interface">
+<h1><a class="toc-backref" href="#toc-entry-9">The interface</a></h1>
+<pre class="literal-block">
+impl Mission {
+    // Read and resolve one or more documents
+    pub fn read_from&lt;I, R&gt;(readers: I) -&gt; Result&lt;Mission, Error&gt;
+    where I: IntoIterator&lt;Item = R&gt;, R: std::io::Read;
+    pub fn from_documents(docs: &amp;[Document]) -&gt; Result&lt;Mission, Error&gt;;
+
+    // Look up, by XTCE path from a base SpaceSystem
+    pub fn top(&amp;self) -&gt; SpaceSystemId;
+    pub fn space_system(&amp;self, base: SpaceSystemId, path: &amp;str)
+                        -&gt; Result&lt;SpaceSystemId, LookupError&gt;;
+    pub fn container(&amp;self, base: SpaceSystemId, path: &amp;str)
+                     -&gt; Result&lt;NodeId, LookupError&gt;;
+    pub fn meta_command(&amp;self, base: SpaceSystemId, path: &amp;str)
+                        -&gt; Result&lt;NodeId, LookupError&gt;;
+    pub fn parameter(&amp;self, base: SpaceSystemId, path: &amp;str)
+                     -&gt; Result&lt;SlotId, LookupError&gt;;
+    pub fn argument(&amp;self, cmd: NodeId, name: &amp;str)
+                    -&gt; Result&lt;SlotId, LookupError&gt;;
+    pub fn entry(&amp;self, node: NodeId, name: &amp;str)
+                 -&gt; Result&lt;SlotId, LookupError&gt;;
+
+    // Name what was found, by its absolute path
+    pub fn path_of_space_system(&amp;self, ss: SpaceSystemId) -&gt; &amp;str;
+    pub fn path_of_node(&amp;self, node: NodeId) -&gt; &amp;str;
+    pub fn path_of_slot(&amp;self, slot: SlotId) -&gt; &amp;str;
+
+    // Describe
+    pub fn slot_type(&amp;self, slot: SlotId) -&gt; &amp;Type;
+    pub fn max_bytes(&amp;self, node: NodeId) -&gt; Option&lt;usize&gt;;
+    pub fn is_abstract(&amp;self, node: NodeId) -&gt; bool;
+    pub fn unbounded(&amp;self) -&gt; &amp;[SlotId];
+    pub fn digest(&amp;self) -&gt; [u8; 16];
+
+    // Make storage
+    pub fn store(&amp;self) -&gt; Store;
+    pub fn scratch(&amp;self) -&gt; Scratch;
+
+    // Run
+    pub fn unpack(&amp;self, node: NodeId, bytes: &amp;[u8],
+                  scratch: &amp;mut Scratch) -&gt; Result&lt;NodeId, PacketError&gt;;
+    pub fn pack&lt;'b&gt;(&amp;self, node: NodeId, values: &amp;Store,
+                    out: &amp;'b mut Buffer) -&gt; Result&lt;&amp;'b [u8], PacketError&gt;;
+}
+
+impl Store {
+    pub fn get(&amp;self, slot: SlotId) -&gt; Option&lt;Datum&lt;'_&gt;&gt;;
+    pub fn set(&amp;mut self, slot: SlotId, value: Datum&lt;'_&gt;)
+              -&gt; Result&lt;(), PacketError&gt;;
+    pub fn commit(&amp;mut self, scratch: &amp;Scratch);
+}
+</pre>
+<ul class="simple">
+<li><tt class="docutils literal">SpaceSystemId</tt>, <tt class="docutils literal">NodeId</tt> and <tt class="docutils literal">SlotId</tt> are small copyable
+handles, valid only with the mission that gave them out; see
+<a class="reference internal" href="#looking-names-up">Looking names up</a>.</li>
+<li><tt class="docutils literal">unpack</tt> of an abstract node classifies the packet and returns the
+concrete node it matched.</li>
+<li><tt class="docutils literal">set</tt> checks a value against its type -- range, enumeration
+labels, string and binary sizes -- as encoding does, so a bad value
+is caught where it is given.</li>
+<li><tt class="docutils literal">Type</tt> says what a program needs to check values before running:
+the kind, the valid range, the enumeration labels, the maximum size
+and the calibrator, if any. expectb uses it to check a script's
+literals when it parses the script.</li>
+<li>Values are engineering values, after calibration. <tt class="docutils literal"><span class="pre">Store::get_raw</span></tt>
+and <tt class="docutils literal"><span class="pre">Store::set_raw</span></tt> give and take raw values.</li>
+<li><tt class="docutils literal">digest</tt> is the digest <tt class="docutils literal"><span class="pre">xtce-digest</span></tt> computes for the same
+documents.</li>
+</ul>
+<div class="section" id="freeing-what-was-read">
+<h2><a class="toc-backref" href="#toc-entry-10">Freeing what was read</a></h2>
+<p>Both the XML tree and the resolved mission can be freed:</p>
+<ul class="simple">
+<li><strong>The XML tree.</strong> Resolving copies what the mission needs out of each
+<tt class="docutils literal">Document</tt>, and the mission keeps no reference into them, so a
+program can drop its documents as soon as <tt class="docutils literal"><span class="pre">Mission::from_documents</span></tt>
+returns. <tt class="docutils literal"><span class="pre">Mission::read_from</span></tt> never keeps them at all.</li>
+<li><strong>The mission.</strong> A <tt class="docutils literal">Mission</tt> owns everything it holds, names
+included, so dropping it frees all of it. Nothing is leaked, so a
+program can resolve many missions in turn.</li>
+</ul>
+<p>The tcsxtce runtime names fields with <tt class="docutils literal">&amp;'static str</tt>, in its helpers'
+arguments and in every <tt class="docutils literal">PacketError</tt>, and takes two pieces of
+encoding data as <tt class="docutils literal">'static</tt>: <tt class="docutils literal"><span class="pre">ByteOrder::List</span></tt> and a string's
+terminator. Generated code has all of these as constants. The run-time
+codec deals with them so:</p>
+<ul class="simple">
+<li><strong>Field names.</strong> The interpreter passes the helpers a fixed
+placeholder name. When a helper returns a <tt class="docutils literal">PacketError</tt>, the
+interpreter knows which item it was running, so it returns an error
+of its own that names the field from the mission. tcsxtce and
+generated code are unchanged by this.</li>
+<li><strong>Encoding data.</strong> <tt class="docutils literal">ByteOrder</tt> and <tt class="docutils literal">StringSpec</tt> gain a lifetime,
+<tt class="docutils literal"><span class="pre">ByteOrder&lt;'a&gt;</span></tt> and <tt class="docutils literal"><span class="pre">StringSpec&lt;'a&gt;</span></tt>, so that they can borrow
+from the mission. Generated code passes <tt class="docutils literal">'static</tt> constants, which
+still fit, and the emitters write <tt class="docutils literal">&lt;'static&gt;</tt> where a constant
+names the type. This changes tcsxtce's API, so tcsxtce's minor
+version changes, and tcs-xtce's with it.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="phases">
+<h1><a class="toc-backref" href="#toc-entry-11">Phases</a></h1>
+<p>The model is complete from the start; what comes in phases is what the
+interpreter can run. Each phase is a set of XTCE constructs. A mission
+that uses one from a later phase fails when it is loaded into the
+run-time codec, naming the construct and its line.</p>
+<ol class="arabic simple">
+<li><strong>Packets of fixed shape.</strong> Integer, float (every format), boolean,
+enumeration, string and binary types, of up to 128 bits for
+integers, in every byte and bit order; polynomial and spline
+calibrators; containers with inheritance and restriction criteria,
+comparisons and boolean expressions; includes; locations; fixed
+repeats; aggregates, and arrays of a fixed size; meta-commands with
+argument assignments and fixed values; missions split across
+documents.</li>
+<li><strong>Packets that size themselves.</strong> Sizes and counts taken from other
+values, packet length fields, error detection (CRCs, checksums, XOR,
+parity), entries included under a condition, arrays whose size comes
+from another value, segments, and time types.</li>
+<li><strong>The rest of what the generated codecs support.</strong> Indirect entries,
+messages, math operation and context calibrators, integers of more
+than 128 bits, command containers from other meta-commands, streams
+with frame synchronization, alarms and <tt class="docutils literal">MathAlgorithm</tt>s.</li>
+</ol>
+<p>Transform algorithms and custom algorithms are supplied by the
+application to generated code. The run-time codec would take them as
+functions registered with the mission before it resolves; until then,
+a mission that uses one fails to resolve.</p>
+</div>
+<div class="section" id="testing">
+<h1><a class="toc-backref" href="#toc-entry-12">Testing</a></h1>
+<p>The generated codecs are the reference. The demo mission
+(<tt class="docutils literal">tests/mission/demo.xtce</tt>) and its packet vectors already exercise
+every construct the compiler supports, so:</p>
+<ul class="simple">
+<li><strong>The model</strong> is tested where it is ported, by comparing its
+canonical text with the Python compiler's (see <a class="reference external" href="rust-migration-design.html">tcs-xtce in Rust</a>).</li>
+<li><strong>Packets.</strong> For every vector, the run-time codec must unpack the
+same values as the generated Rust codec, printed in the canonical text
+form generated code's <tt class="docutils literal">Display</tt> already writes in every language,
+and pack the same values into the same bytes. This joins the
+cross-language checks in <tt class="docutils literal">tests/packet_check.sh</tt>.</li>
+<li><strong>No allocation.</strong> As for the codecs generated with
+<tt class="docutils literal"><span class="pre">--dynamic-allocations</span> false</tt>, the check fails if <tt class="docutils literal">unpack</tt>,
+<tt class="docutils literal">pack</tt>, <tt class="docutils literal"><span class="pre">Store::set</span></tt> or <tt class="docutils literal"><span class="pre">Store::commit</span></tt> allocates.</li>
+<li><strong>Unsupported constructs.</strong> Each one, in each phase, makes resolving
+fail with its name and line.</li>
+</ul>
+</div>
+<div class="section" id="the-interpretation-question">
+<h1><a class="toc-backref" href="#toc-entry-13">The interpretation question</a></h1>
+<p>The tcs-xtce design chose to compile rather than interpret, for three
+reasons: the analysis would be needed in three languages, users want
+typed structs rather than names mapped to dynamic values, and flight
+software shouldn't parse XML while it runs. None of these changes for
+the programs that choice was made for. The run-time codec is for a
+different kind of program, one that is given its XTCE when it runs, and:</p>
+<ul class="simple">
+<li>it is written once, in Rust, and other languages use it through
+interfaces (see <a class="reference internal" href="#interfaces-to-other-languages">Interfaces to other languages</a>);</li>
+<li>dynamic values are what such a program wants, since it doesn't know
+the mission when it is built;</li>
+<li>it is a software tool, never flown.</li>
+</ul>
+<p>So the section of the tcs-xtce design, &quot;Code generation or
+interpretation&quot;, gains a paragraph saying that the generated codecs
+remain the codecs for flight and for programs built for one mission,
+and that the run-time codec exists for tools that read XTCE while they
+run, with a link here.</p>
+<div class="section" id="interfaces-to-other-languages">
+<h2><a class="toc-backref" href="#toc-entry-14">Interfaces to other languages</a></h2>
+<p>The run-time codec is written once, in Rust, and other languages reach
+it through interfaces to that one implementation, not through ports of
+it:</p>
+<ul class="simple">
+<li><strong>C</strong>: functions with C linkage over opaque handles, such as
+<tt class="docutils literal">xtce_mission</tt>, <tt class="docutils literal">xtce_store</tt> and <tt class="docutils literal">xtce_scratch</tt>, in the style of
+the C API of the XML binding: return codes, an error message and the
+line it is about, and a function to free each handle.
+<tt class="docutils literal">SpaceSystemId</tt>, <tt class="docutils literal">NodeId</tt> and <tt class="docutils literal">SlotId</tt> are passed as plain
+integer handles, and every lookup takes a base SpaceSystem, as in
+Rust. The header is generated from the Rust with cbindgen.</li>
+<li><strong>C++</strong>: a header-only wrapper over the C API, with classes that free
+their handles when destroyed, as <tt class="docutils literal"><span class="pre">tcs-xtce-document.hpp</span></tt> wraps the
+document.</li>
+<li><strong>Python</strong>: a PyO3 extension module, part of the <tt class="docutils literal">tcs_xtce</tt> Python
+package, as <a class="reference external" href="rust-migration-design.html">tcs-xtce in Rust</a>
+proposes for all of tcs-xtce's Python. It calls the Rust directly,
+not through the C API.</li>
+</ul>
+<p>Every language gets the same operations, and its answers are the Rust
+codec's. CONTRIBUTING.md's rule that Rust, C/C++ and Python stay in
+step is kept by the interfaces: a change to the run-time codec changes
+all three of them, with tests in each.</p>
+</div>
+</div>
+<div class="section" id="versions">
+<h1><a class="toc-backref" href="#toc-entry-15">Versions</a></h1>
+<p>The new crate starts at 0.8.0, the version the rest of tcs-xtce moves
+to. <tt class="docutils literal">ByteOrder</tt> and <tt class="docutils literal">StringSpec</tt> gaining a lifetime
+changes tcsxtce's API, so tcsxtce is released as 0.8.0 too, as any
+change to its API changes its minor version.</p>
+</div>
+<div class="section" id="settled-in-review">
+<h1><a class="toc-backref" href="#toc-entry-16">Settled in review</a></h1>
+<ul class="simple">
+<li>The run-time codec is written only in Rust, with interfaces to C and
+C++ over one C API, and to Python through PyO3.</li>
+<li>It is built on <tt class="docutils literal"><span class="pre">tcs-xtce-model</span></tt>, the compiler's analysis moved to
+Rust and shared with the Rust compiler, not on a port of its own.</li>
+<li>Aggregates and arrays of a fixed size are in the first phase.</li>
+<li>The XML tree and the resolved mission can both be freed. Nothing is
+leaked; field names are mapped in the interpreter's errors, and
+<tt class="docutils literal">ByteOrder</tt> and <tt class="docutils literal">StringSpec</tt> gain a lifetime.</li>
+<li><tt class="docutils literal">Mission</tt> resolves relative paths, with XTCE's rules, from a base
+the program gives as a <tt class="docutils literal">SpaceSystemId</tt> handle; programs don't build
+absolute paths themselves. A failed lookup names every SpaceSystem
+it searched.</li>
+</ul>
+</div>
+<div class="section" id="questions-for-review">
+<h1><a class="toc-backref" href="#toc-entry-17">Questions for review</a></h1>
+<p>None remain.</p>
+</div>
+</div>
+</body>
+</html>

@@ -22,7 +22,8 @@ all: html
 
 .PHONY: html
 html: index.html manual.html tcs-xtce.html tcs-xtcee.html design.html \
-	tcs-xtce-design.html tcs-xtcee-design.html
+	tcs-xtce-design.html tcs-xtcee-design.html runtime-codec-design.html \
+	rust-migration-design.html
 
 # The page the site gives at docs/: what each document here is, made from
 # README.rst, which GitHub shows when the directory is browsed.
@@ -54,7 +55,14 @@ tcs-xtce-design.html: tcs-xtce-design.rst
 tcs-xtcee-design.html: tcs-xtcee-design.rst
 	$(RST2HTML) --halt=warning $< $@
 
+runtime-codec-design.html: runtime-codec-design.rst
+	$(RST2HTML) --halt=warning $< $@
+
+rust-migration-design.html: rust-migration-design.rst
+	$(RST2HTML) --halt=warning $< $@
+
 .PHONY: clean
 clean:
 	rm -f manual.html tcs-xtce.html tcs-xtcee.html design.html \
-		tcs-xtce-design.html tcs-xtcee-design.html
+		tcs-xtce-design.html tcs-xtcee-design.html \
+		runtime-codec-design.html rust-migration-design.html
