@@ -13,7 +13,7 @@ which for each document checks that
 3. the packet compiler, the size report and the three emitters never crash:
    they either produce output or report an unsupported construct;
 4. the generated code compiles: the C header as C11 and as C++, the Rust
-   module against the tcs-xtce crate, and the Python module;
+   module against the tcsxtce crate, and the Python module;
 5. the Rust, C, C++ and Python runtimes give it the same XTCE digest;
 
 Documents from Yamcs projects are compiled in the Yamcs dialect.
@@ -31,7 +31,9 @@ Usage: python3 -I tests/samples_check.py [--update]
 
 from __future__ import annotations
 
+import functools
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -56,7 +58,6 @@ CATALOG = TOP / "references" / "catalog.xml"
 NS13 = b"http://www.omg.org/spec/XTCE/20250214"
 OLD_NS = re.compile(rb"https?://www\.omg\.org/(space/xtce|spec/XTCE/\d{8})"
                     rb"(/SpaceSystem\.xsd)?")
-RLIB = TOP / "rust" / "target" / "release" / "libtcs_xtce.rlib"
 # The digest tools of the other runtimes, which print one digest per file,
 # or with --set, the digest of the set.
 DIGEST_TOOLS = [TOP / "rust" / "target" / "release" / "examples"
@@ -149,9 +150,47 @@ def run(cmd: list[str]) -> str:
     return lines[0].strip() if lines else f"exit {r.returncode}"
 
 
+@functools.cache
+def runtime_externs() -> tuple[str, ...]:
+    """Builds the packet runtime, the one crate generated Rust uses, and
+    gives the rustc arguments that compile a module against it.
+
+    Cargo keeps each crate it builds in a directory of its own, whose
+    layout changes between its versions, so this asks cargo where it put
+    the runtime and each crate the runtime depends on.
+
+    Returns:
+        ``--extern tcsxtce=`` the runtime's rlib, then ``-L dependency=``
+        each directory holding a crate it depends on.
+
+    Raises:
+        subprocess.CalledProcessError: cargo couldn't build the runtime.
+    """
+    r = subprocess.run(
+        [os.environ.get("CARGO", "cargo"), "build", "--release", "-p",
+         "tcsxtce", "--message-format=json"], cwd=TOP / "rust",
+        capture_output=True, text=True, check=True)
+    runtime, dirs = None, []
+    for line in r.stdout.splitlines():
+        m = json.loads(line)
+        if (m.get("reason") != "compiler-artifact"
+                or "lib" not in m["target"]["kind"]):
+            continue
+        if m["target"]["name"] == "tcsxtce":
+            runtime = next(f for f in m["filenames"] if f.endswith(".rlib"))
+        for f in m["filenames"]:
+            d = str(Path(f).parent)
+            if d not in dirs:
+                dirs.append(d)
+    args = ["--extern", f"tcsxtce={runtime}"]
+    for d in dirs:
+        args += ["-L", f"dependency={d}"]
+    return tuple(args)
+
+
 def build(mission, stem: str, out: Path) -> list[str]:
     """Generates code in every language and compiles it: the C header as
-    C11 and as C++20, the Rust module against the tcs-xtce crate, and the
+    C11 and as C++20, the Rust module against the tcsxtce crate, and the
     Python module.
 
     Args:
@@ -178,8 +217,7 @@ def build(mission, stem: str, out: Path) -> list[str]:
     module.write_text(rustfmt(emit_rust.emit(mission, stem)))
     cmd = ["rustc", "--edition", "2021", "--crate-type", "lib", "--crate-name",
            "sample", "-D", "warnings"]
-    cmd += ["--extern", f"tcs_xtce={RLIB}", "-L",
-            f"dependency={RLIB.parent / 'deps'}"]
+    cmd += list(runtime_externs())
     cmd += ["--emit", "metadata", "-o", str(out / f"lib{stem}.rmeta"),
             str(module)]
     err = run(cmd)
@@ -346,7 +384,7 @@ def main() -> int:
         also when a tool is missing or a document's SHA-256 is wrong.
     """
     update = sys.argv[1:] == ["--update"]
-    for need in [RLIB] + DIGEST_TOOLS:
+    for need in DIGEST_TOOLS:
         if not need.exists():
             print(f"samples_check: {need} is missing; run make rust cpp",
                   file=sys.stderr)
