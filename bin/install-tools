@@ -184,6 +184,9 @@ if [ "$use_rustup" = 1 ]; then
 		|| ! rustup default > /dev/null 2>&1; then
 		run rustup default stable
 	fi
+	# Every TCS project builds with the newest stable Rust, which
+	# make rust-current checks: a stable installed earlier is updated.
+	run rustup update stable
 	# shellcheck disable=SC2086 # a list of words, split on purpose
 	run rustup component add $RUST_COMPONENTS
 fi
