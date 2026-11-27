@@ -3,8 +3,11 @@ whose compiler, binding and editor are software tools.
 
 The data classes in :mod:`tcs_xtce.generated` are produced from the XTCE
 schema (``references/SpaceSystem.xsd``) by :mod:`tcs_xtce.binding`; do not
-edit them by hand.  Serialization uses managed buffers that are preallocated
-and reused for as long as their owner (usually a :class:`Document`) lives.
+edit them by hand.  The tcs-xtce crate reads and writes the XML, through
+the extension module ``tcs_xtce._native``, and gives what it reads as
+objects of these classes.  Serialization uses managed buffers that are
+preallocated and reused for as long as their owner (usually a
+:class:`Document`) lives.
 
 The package also holds the compiler that turns a mission's XTCE into packet
 codecs (:mod:`tcs_xtce.compiler`, run as ``python3 -m tcs_xtce``) and the
@@ -17,8 +20,8 @@ The packet runtime that the Python the compiler writes uses, and the digest
 operational code; this one is a software tool.
 
 The XML binding is loaded the first time one of its names is used, so that
-the generators need neither its 1.4 MB nor, before
-``make generate`` has written it, its being there.
+the generators need neither it nor, before ``make generate`` has written
+it and ``make python`` built the extension module, its being there.
 
 >>> from tcs_xtce import Document, SpaceSystemType
 >>> doc = Document(SpaceSystemType(name="Demo"))
@@ -37,7 +40,7 @@ _OWN = ["DEFAULT_CAPACITY", "Document", "ManagedBuffer", "XtceError",
 # The package's modules and subpackages, which an import loads rather than
 # the XML binding: `from tcsxtce import digest` asks for one of these by
 # name before importing it.
-_MODULES = {"_xml", "binding", "compiler", "digest_cli", "document",
+_MODULES = {"_native", "binding", "compiler", "digest_cli", "document",
             "generated", "__main__"}
 
 
@@ -55,7 +58,9 @@ def __getattr__(name: str):
     Raises:
         AttributeError: The package has no such name, or the name is one of
                         its modules, not yet imported.
-        ImportError:    The binding has not been generated.
+        ImportError:    The binding has not been generated, or the
+                        extension module that reads and writes it not
+                        built.
     """
     if name in _MODULES or name.startswith("__") and name != "__all__":
         raise AttributeError(f"module 'tcs_xtce' has no attribute {name!r}")

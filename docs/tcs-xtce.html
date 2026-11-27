@@ -561,8 +561,10 @@ reads each field from where the document says it is.</p>
 <td>The C++20 library (<tt class="docutils literal"><span class="pre">libtcs-xtce.a</span></tt>, <tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt>) and its C API</td>
 </tr>
 <tr><td><tt class="docutils literal">python/tcs_xtce/</tt></td>
-<td>The <tt class="docutils literal">tcs_xtce</tt> Python package (3.10+, standard library only): the
-Python runtime, with the three above inside it</td>
+<td>The <tt class="docutils literal">tcs_xtce</tt> Python package (3.10+): the Python binding's
+classes, the compiler, the binding generator and the digest's
+command line, reading and writing XML through the Rust crate with
+its extension module, <tt class="docutils literal">tcs_xtce._native</tt></td>
 </tr>
 <tr><td><tt class="docutils literal">tests/</tt></td>
 <td>Schema-coverage samples, the demo mission, packet vectors, the cross-language checks, and the list of public XTCE documents for <tt class="docutils literal">make <span class="pre">samples-check</span></tt></td>

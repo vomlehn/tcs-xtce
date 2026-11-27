@@ -151,9 +151,11 @@ the two compared. A Python piece is removed only at the end.
    ``tcs_xtce._native``, from the crate ``tcs-xtce-python``, reads and
    writes XML through the Rust binding, and generated conversions turn
    what it reads into today's Python classes and back (see `The Python
-   interfaces`_). Every Python test passes with it, and
-   ``tests/backend_check.py`` checks that it and the Python reader and
-   writer read every document alike and write the same bytes.
+   interfaces`_). Every Python test passed with it, and it and the
+   Python reader and writer read the 90 documents here alike and wrote
+   the same bytes. Then, ahead of step 9, the Python reader and writer
+   were removed, so that Python's errors are Rust's: Python now reads
+   and writes XTCE only through the Rust.
 7. **The C runtime.** ``tcsxtce`` builds without the standard library,
    and ``tcsxtce-c`` gives ``libtcsxtce.a`` the functions the C headers
    declare. Every C and C++ test, every example and every
@@ -175,8 +177,10 @@ The Python interfaces
 =====================
 
 - **The same names, the same behaviour.** Classes, functions,
-  exceptions, defaults and error messages are what the pure-Python
-  packages have now, so that existing code doesn't notice the change.
+  exceptions and defaults are what the pure-Python packages have now, so
+  that existing code doesn't notice the change. Error messages are
+  Rust's, which are the standard in every language: the XML binding's
+  are already, and the C and C++ ones become Rust's in step 8.
   ``PacketError`` stays a subclass of ``ValueError``, with the same
   fields.
 - **Python's own types at the edges.** Integers of any size are Python
@@ -330,6 +334,9 @@ Settled in review
   the Rust too, keeping their headers' declarations. C flight software
   links ``libtcsxtce.a``, built from the Rust without ``std`` or
   ``alloc``.
+- Rust's error messages are the standard in every language. The Python
+  XML binding's reader and writer are removed ahead of step 9, so that
+  Python's are Rust's; the C and C++ ones become Rust's in step 8.
 
 - Step 9 follows step 8 directly: the old code is removed once the Rust
   passes every test, without waiting for a version of the Rust pieces

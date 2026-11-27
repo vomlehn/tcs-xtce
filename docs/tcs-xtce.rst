@@ -149,8 +149,10 @@ reads each field from where the document says it is.
    * - ``cpp/``
      - The C++20 library (``libtcs-xtce.a``, ``libtcs-xtce.so``) and its C API
    * - ``python/tcs_xtce/``
-     - The ``tcs_xtce`` Python package (3.10+, standard library only): the
-       Python runtime, with the three above inside it
+     - The ``tcs_xtce`` Python package (3.10+): the Python binding's
+       classes, the compiler, the binding generator and the digest's
+       command line, reading and writing XML through the Rust crate with
+       its extension module, ``tcs_xtce._native``
    * - ``tests/``
      - Schema-coverage samples, the demo mission, packet vectors, the cross-language checks, and the list of public XTCE documents for ``make samples-check``
    * - ``docs/``

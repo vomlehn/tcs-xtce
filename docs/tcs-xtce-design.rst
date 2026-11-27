@@ -155,9 +155,10 @@ Reading and writing
   and text are slices of that buffer, so data is only copied when it is
   stored in a field. Entities are decoded only when a value contains
   them.
-* **Python** uses the standard library's expat parser to build a light
-  node tree, read through a cursor that follows the same protocol as the
-  Rust and C++ readers.
+* **Python** reads and writes through the Rust: its extension module,
+  ``tcs_xtce._native``, runs the Rust reader and writer and converts
+  between the Rust values and the Python binding's classes, so Python
+  reports the same errors, at the same lines, as Rust.
 * **Writers** append directly to the output buffer. Attribute and text
   escaping is the same in every language.
 

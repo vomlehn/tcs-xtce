@@ -1,21 +1,22 @@
-"""Emit Python dataclasses and (de)serialization functions."""
+"""Emit the Python binding's dataclasses and enumerations.
+
+The tcs-xtce crate reads and writes the XML, through the extension module
+``tcs_xtce._native``; this module only defines the classes the objects it
+reads are of (see ``emit_pyo3``).
+"""
 
 from __future__ import annotations
 
-from . import docs, header_lines
+from . import header_lines
 import keyword
 
 from .binding import (MANY, ONE, OPT, Binding, ChoiceType, ElemField, Record,
                       pascal_ident, snake)
-from .model import (BOOL, DOUBLE, INT, LONG, STRING, USHORT, UNBOUNDED,
-                    ComplexRef, EnumRef, ScalarRef, TypeRef)
+from .model import (BOOL, DOUBLE, INT, LONG, STRING, USHORT, ComplexRef,
+                    EnumRef, ScalarRef, TypeRef)
 
 PY_TYPES = {STRING: "str", BOOL: "bool", INT: "int", LONG: "int", USHORT: "int",
             DOUBLE: "float"}
-PARSE = {STRING: "X.p_str", BOOL: "X.p_bool", INT: "X.p_i32", LONG: "X.p_i64",
-         USHORT: "X.p_u16", DOUBLE: "X.p_double"}
-FORMAT = {STRING: "", BOOL: "X.f_bool", INT: "X.f_int", LONG: "X.f_int",
-          USHORT: "X.f_int", DOUBLE: "X.f_double"}
 ZERO = {STRING: '""', BOOL: "False", INT: "0", LONG: "0", USHORT: "0",
         DOUBLE: "0.0"}
 
@@ -53,30 +54,6 @@ def py_type(t: TypeRef) -> str:
     return PY_TYPES[t.kind] if isinstance(t, ScalarRef) else t.name
 
 
-def parse_fn(t: TypeRef) -> str:
-    """The function that parses the text of a value of simple type ``t``.
-    """
-    if isinstance(t, ScalarRef):
-        return PARSE[t.kind]
-    return f"_p_{t.name}"
-
-
-def fmt(t: TypeRef, expr: str) -> str:
-    """Formats a value as XML text.
-
-    Args:
-        t:    The value's simple type.
-        expr: The Python expression for the value.
-
-    Returns:
-        The expression for its XML lexical form.
-    """
-    if isinstance(t, EnumRef):
-        return f"{expr}.value"
-    f = FORMAT[t.kind]
-    return f"{f}({expr})" if f else expr
-
-
 def member_names(values: list[str]) -> list[str]:
     """Names the members of an enumerated type.
 
@@ -112,13 +89,6 @@ class PythonEmitter:
         self.out: list[str] = []
         self.enum_members = {n: member_names(e.values)
                              for n, e in b.schema.enums.items()}
-        # The types whose writers can fail because of a repeated element,
-        # and those that hold a choice, whose writer fails if it names an
-        # alternative it doesn't have.
-        self.fails = docs.write_failures(b, False)
-        self.choice_fails = docs.write_failures(b, True, counts=False)
-        # The element names the schema gives each complex type.
-        self.names = docs.element_names(b)
 
     def w(self, line: str = "") -> None:
         """Appends one line to the module."""
@@ -143,8 +113,6 @@ class PythonEmitter:
         self.w("from dataclasses import dataclass, field")
         self.w("from typing import Any, ClassVar, Optional")
         self.w("")
-        self.w("from . import _xml as X")
-        self.w("")
         self.w(f"NAMESPACE = {s.namespace!r}")
         self.w(f"SCHEMA_VERSION = {s.version!r}")
         self.w(f"ROOT_ELEMENT = {root_tag!r}")
@@ -156,33 +124,10 @@ class PythonEmitter:
             self.record(self.b.records[name])
         for name in sorted(self.b.choices):
             self.choice(self.b.choices[name])
-        self.w("")
-        self.w("# -- deserialization " + "-" * 58)
-        for name in sorted(self.b.records):
-            self.reader(self.b.records[name])
-        for name in sorted(self.b.choices):
-            self.choice_reader(self.b.choices[name])
-        self.w("")
-        self.w("# -- serialization " + "-" * 60)
-        for name in sorted(self.b.records):
-            self.writer(self.b.records[name])
-        for name in sorted(self.b.choices):
-            self.choice_writer(self.b.choices[name])
-        self.w("")
-        self.w("READERS = {")
-        for name in sorted(self.b.records):
-            self.w(f"    {name}: _r_{name},")
-        self.w("}")
-        self.w("WRITERS = {")
-        for name in sorted(self.b.records):
-            self.w(f"    {name}: _w_{name},")
-        self.w("}")
-        self.w("")
         names = (sorted(s.enums) + sorted(self.b.records)
                  + sorted(self.b.choices))
         self.w("__all__ = [")
-        fixed = ["NAMESPACE", "SCHEMA_VERSION", "ROOT_ELEMENT", "READERS",
-                 "WRITERS"]
+        fixed = ["NAMESPACE", "SCHEMA_VERSION", "ROOT_ELEMENT"]
         for n in fixed + names:
             self.w(f"    {n!r},")
         self.w("]")
@@ -191,7 +136,7 @@ class PythonEmitter:
     # -- types --------------------------------------------------------------
 
     def enum(self, name: str) -> None:
-        """Writes the Enum for an enumerated simple type and its parser.
+        """Writes the Enum for an enumerated simple type.
 
         Args:
             name: The simple type's name.
@@ -204,23 +149,6 @@ class PythonEmitter:
         self.w("")
         for m, v in zip(self.enum_members[name], e.values):
             self.w(f"    {m} = {v!r}")
-        self.w("")
-        self.w("")
-        self.w(f"_E_{name} = {{m.value.strip(): m for m in {name}}}")
-        self.w("")
-        self.w("")
-        self.w(f"def _p_{name}(s: str) -> {name}:")
-        self.out += docs.google(
-            f"Parses the XML lexical value of a {code(name)}.",
-            [("s", "The text; leading and trailing whitespace is ignored.")],
-            f"The member whose value is ``s``.",
-            [("ValueError",
-              "If ``s`` is none of "
-              f"{docs.series([code(v) for v in e.values])}.")], indent="    ")
-        self.w("    try:")
-        self.w(f"        return _E_{name}[s.strip()]")
-        self.w("    except KeyError:")
-        self.w(f'        raise ValueError(f"invalid {name} {{s!r}}") from None')
 
     def default(self, t: TypeRef, card: str) -> str:
         """Gives a dataclass field's default.
@@ -339,298 +267,6 @@ class PythonEmitter:
             self.w(f"    def {m}(cls, value: {py_type(v.type)}) -> {c.name}:")
             self.w(f'        """Builds the ``{v.xml}`` alternative."""')
             self.w(f"        return cls({v.xml!r}, value)")
-
-    # -- readers ------------------------------------------------------------
-
-    def read_expr(self, t: TypeRef, node: str) -> str:
-        """Gives the expression that reads a child element.
-
-        Args:
-            t:    The element's type.
-            node: The expression for the element's node.
-
-        Returns:
-            The expression for the element's value.
-        """
-        if isinstance(t, ComplexRef):
-            return f"_r_{t.name}({node})"
-        return f"X.leaf({node}, {parse_fn(t)})"
-
-    def reader(self, r: Record) -> None:
-        """Writes a record's reader, ``_r_`` and the record's name: its
-        attributes, then its text or its child elements, checked against
-        the content model.
-
-        Args:
-            r: The record.
-        """
-        self.w("")
-        self.w("")
-        self.w(f"_A_{r.name} = "
-               f"frozenset({{{', '.join(repr(a.xml) for a in r.attrs)}}})")
-        self.w("")
-        self.w("")
-        self.w(f"def _r_{r.name}(n: X.Node) -> {r.name}:")
-        what = docs.type_phrase(self.b, r, self.names[r.name], code)
-        self.out += docs.google(f"Reads an XML element of {what}.",
-                                [("n", "The element's parsed node.")],
-                                f"The element's value, a new {code(r.name)}.",
-                                [("X.XtceError",
-                                  docs.sentence(docs.read_error(self.b, r, code,
-                                                                False)))],
-                                indent="    ")
-        self.w(f"    X.check_attrs(n, _A_{r.name})")
-        self.w(f"    v = {r.name}.__new__({r.name})")
-        for a in r.attrs:
-            fn = "req_attr" if a.required else "opt_attr"
-            self.w(f"    v.{ident(a.ident)} = X.{fn}(n, {a.xml!r}, "
-                   f"{parse_fn(a.type)})")
-        if r.text is not None:
-            self.w(f"    v.{ident(r.text.ident)} = X.value(n, X.text_of(n), "
-                   f"{parse_fn(r.text.type)})")
-            self.w("    return v")
-            return
-        self.w("    c = X.Cursor(n)")
-        for f in r.content:
-            name = ident(f.ident)
-            if isinstance(f, ElemField):
-                x = repr(f.xml)
-                if f.card == ONE:
-                    self.w(f"    if c.peek() != {x}:")
-                    self.w(f"        raise c.expected({x})")
-                    self.w(f"    v.{name} = "
-                           f"{self.read_expr(f.type, 'c.take()')}")
-                elif f.card == OPT:
-                    self.w(f"    v.{name} = "
-                           f"{self.read_expr(f.type, 'c.take()')} if c.peek() "
-                           f"== {x} else None")
-                else:
-                    cond = f"c.peek() == {x}"
-                    if f.max != UNBOUNDED:
-                        cond = f"len(items) < {f.max} and {cond}"
-                    self.w("    items = []")
-                    self.w(f"    while {cond}:")
-                    self.w("        items.append("
-                           f"{self.read_expr(f.type, 'c.take()')})")
-                    if f.min > 0:
-                        self.w(f"    if len(items) < {f.min}:")
-                        self.w(f"        raise c.too_few({x}, {f.min}, "
-                               "len(items))")
-                    self.w(f"    v.{name} = items")
-            else:
-                cn = f.choice.name
-                if f.card == ONE:
-                    self.w(f"    v.{name} = _r_{cn}(c)")
-                elif f.card == OPT:
-                    self.w(f"    v.{name} = _r_{cn}(c) if c.peek() in "
-                           f"{cn}.NAMES else None")
-                else:
-                    cond = f"c.peek() in {cn}.NAMES"
-                    if f.max != UNBOUNDED:
-                        cond = f"len(items) < {f.max} and {cond}"
-                    self.w("    items = []")
-                    self.w(f"    while {cond}:")
-                    self.w(f"        items.append(_r_{cn}(c))")
-                    if f.min > 0:
-                        what = repr("|".join(v.xml for v in f.choice.variants))
-                        self.w(f"    if len(items) < {f.min}:")
-                        self.w(f"        raise c.too_few({what}, {f.min}, "
-                               "len(items))")
-                    self.w(f"    v.{name} = items")
-        self.w("    c.end()")
-        self.w("    return v")
-
-    def choice_reader(self, c: ChoiceType) -> None:
-        """Writes a choice's reader, ``_r_`` and the choice's name, and the
-        table of its alternatives' readers.
-
-        Args:
-            c: The choice.
-        """
-        self.w("")
-        self.w("")
-        self.w(f"_RC_{c.name} = {{")
-        for v in c.variants:
-            if isinstance(v.type, ComplexRef):
-                self.w(f"    {v.xml!r}: _r_{v.type.name},")
-            else:
-                self.w(f"    {v.xml!r}: lambda n: X.leaf(n, "
-                       f"{parse_fn(v.type)}),")
-        self.w("}")
-        self.w("")
-        self.w("")
-        self.w(f"def _r_{c.name}(c: X.Cursor) -> {c.name}:")
-        names = docs.choice_names(c, code)
-        self.out += docs.google("Reads the alternative of the ``<choice>`` in "
-                                f"{code(c.owner)} that the cursor's next child "
-                                f"element starts, which must be {names}.",
-                                [("c",
-                                  "The cursor over the parent's children; it "
-                                  "moves past the child read.")],
-                                f"The alternative read, a new {code(c.name)}.",
-                                [("X.XtceError",
-                                  "If there is no next child or it is none of "
-                                  f"{docs.choice_names(c, code, 'and')}, or if "
-                                  "the alternative's element is invalid (see "
-                                  "the reader of its type).")], indent="    ")
-        self.w("    k = c.peek()")
-        self.w(f"    fn = _RC_{c.name}.get(k)")
-        self.w("    if fn is None:")
-        self.w("        raise "
-               f"c.expected({'|'.join(v.xml for v in c.variants)!r})")
-        self.w(f"    return {c.name}(k, fn(c.take()))")
-
-    # -- writers ------------------------------------------------------------
-
-    def write_stmt(self, t: TypeRef, xml: str, expr: str, ind: str) -> None:
-        """Writes the statement that writes one child element.
-
-        Args:
-            t:    The element's type.
-            xml:  Its name.
-            expr: The Python expression for its value.
-            ind:  The statement's indentation.
-        """
-        if isinstance(t, ComplexRef):
-            self.w(f"{ind}_w_{t.name}(w, {expr}, {xml!r})")
-        else:
-            self.w(f"{ind}w.leaf({xml!r}, {fmt(t, expr)})")
-
-    def count_check(self, r: Record, f, what: str) -> None:
-        """Writes the check that a repeated field holds as many items as
-        the schema allows, unless it allows any number.
-
-        Args:
-            r:    The record.
-            f:    The repeated field, an ElemField or a ChoiceField.
-            what: What the error message calls the field's items.
-        """
-        if f.min == 0 and f.max == UNBOUNDED:
-            return
-        self.w(f"    X.check_count(len(v.{ident(f.ident)}), {f.min}, {f.max}, "
-               f"{r.name + '.' + what!r})")
-
-    def write_raises(self, name: str, what: str) -> list[tuple[str, str]]:
-        """Says how writing a record or choice fails.
-
-        Args:
-            name: The record's or choice's name.
-            what: What the text calls the value being written.
-
-        Returns:
-            The Raises entries: none if writing it can't fail.
-        """
-        whys = []
-        how = self.fails.get(name)
-        if how:
-            whys.append(docs.write_error(how, what))
-        if name in self.b.choices:
-            whys.append(f"if {what} names an alternative the choice doesn't "
-                        "have")
-        if name in self.b.records:
-            inner = [f.type.name if isinstance(f, ElemField) else f.choice.name
-                     for f in self.b.records[name].content
-                     if not isinstance(f, ElemField)
-                     or isinstance(f.type, ComplexRef)]
-        else:
-            inner = [v.type.name for v in self.b.choices[name].variants
-                     if isinstance(v.type, ComplexRef)]
-        if any(i in self.choice_fails for i in inner):
-            whys.append(f"if a choice nested in {what} names an alternative it "
-                        "doesn't have")
-        if not whys:
-            return []
-        return [("X.XtceError", docs.sentence("; or ".join(whys)))]
-
-    def writer(self, r: Record) -> None:
-        """Writes a record's writer, ``_w_`` and the record's name: its
-        attributes, its text and its child elements in schema order.
-
-        Args:
-            r: The record.
-        """
-        self.w("")
-        self.w("")
-        self.w(f"def _w_{r.name}(w: X.Writer, v: {r.name}, tag: str) -> None:")
-        names = self.names[r.name]
-        what = docs.type_phrase(self.b, r, names, code)
-        self.out += docs.google(
-            f"Writes a value of {what} as an XML element: its attributes, then "
-            "its "
-            + ("text" if r.text is not None
-               else "child elements in schema order") + ".",
-            [("w", "The writer that receives the XML."), ("v", "The value."),
-             ("tag", docs.tag_param(names, code))],
-            raises=self.write_raises(r.name, "``v``"), indent="    ")
-        self.w("    w.start(tag)")
-        for a in r.attrs:
-            f = ident(a.ident)
-            if a.required:
-                self.w(f"    w.attr({a.xml!r}, {fmt(a.type, 'v.' + f)})")
-            else:
-                self.w(f"    if v.{f} is not None:")
-                self.w(f"        w.attr({a.xml!r}, {fmt(a.type, 'v.' + f)})")
-        if r.text is not None:
-            self.w("    "
-                   f"w.text({fmt(r.text.type, 'v.' + ident(r.text.ident))})")
-        for f in r.content:
-            name = ident(f.ident)
-            if isinstance(f, ElemField):
-                if f.card == ONE:
-                    self.write_stmt(f.type, f.xml, f"v.{name}", "    ")
-                elif f.card == OPT:
-                    self.w(f"    if v.{name} is not None:")
-                    self.write_stmt(f.type, f.xml, f"v.{name}", "        ")
-                else:
-                    self.count_check(r, f, f.xml)
-                    self.w(f"    for e in v.{name}:")
-                    self.write_stmt(f.type, f.xml, "e", "        ")
-            else:
-                cn = f.choice.name
-                if f.card == ONE:
-                    self.w(f"    _w_{cn}(w, v.{name})")
-                elif f.card == OPT:
-                    self.w(f"    if v.{name} is not None:")
-                    self.w(f"        _w_{cn}(w, v.{name})")
-                else:
-                    self.count_check(r, f, cn)
-                    self.w(f"    for e in v.{name}:")
-                    self.w(f"        _w_{cn}(w, e)")
-        self.w("    w.end(tag)")
-
-    def choice_writer(self, c: ChoiceType) -> None:
-        """Writes a choice's writer, ``_w_`` and the choice's name, and the
-        table of its alternatives' writers.
-
-        Args:
-            c: The choice.
-        """
-        self.w("")
-        self.w("")
-        self.w(f"_WC_{c.name} = {{")
-        for v in c.variants:
-            if isinstance(v.type, ComplexRef):
-                self.w(f"    {v.xml!r}: _w_{v.type.name},")
-            else:
-                self.w(f"    {v.xml!r}: lambda w, x, t: w.leaf(t, "
-                       f"{fmt(v.type, 'x')}),")
-        self.w("}")
-        self.w("")
-        self.w("")
-        self.w(f"def _w_{c.name}(w: X.Writer, v: {c.name}) -> None:")
-        self.out += docs.google(
-            "Writes the alternative a value of the ``<choice>`` in "
-            f"{code(c.owner)} holds as its element, "
-            f"{docs.choice_names(c, code)}.",
-            [("w", "The writer that receives the XML."),
-             ("v", "The value; ``v.name`` names the alternative.")],
-            raises=self.write_raises(c.name, "``v``"), indent="    ")
-        self.w(f"    fn = _WC_{c.name}.get(v.name)")
-        self.w("    if fn is None:")
-        self.w(f'        raise X.XtceError(f"{c.name}: unknown alternative '
-               '{v.name!r}")')
-        self.w("    fn(w, v.value, v.name)")
-
 
 def emit(b: Binding) -> str:
     """The Python module for binding ``b``, before it is wrapped."""

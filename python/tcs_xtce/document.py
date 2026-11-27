@@ -2,72 +2,40 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any, BinaryIO, Optional
 
-from . import _xml as X
 from . import generated
 from tcsxtce import DEFAULT_CAPACITY, ManagedBuffer
-from .generated import (NAMESPACE, READERS, ROOT_ELEMENT, WRITERS,
-                        SpaceSystemType)
+from .generated import ROOT_ELEMENT, SpaceSystemType
+
+try:
+    from . import _native
+except ImportError as e:
+    raise ImportError("tcs_xtce reads and writes XTCE with its extension "
+                      "module, tcs_xtce._native, which is not built: in a "
+                      "tcs-xtce checkout, run make python; a wheel always has "
+                      "it", name=__name__) from e
 
 
-def _backend():
-    """Chooses what reads and writes the XML: the tcs-xtce crate, through
-    the extension module ``tcs_xtce._native``, or this package's own
-    Python, which is kept to compare the two until it is retired.
-
-    ``TCS_XTCE_BACKEND`` chooses: ``rust`` needs the extension module,
-    ``python`` doesn't use it, and anything else, or nothing, uses the
-    module where it is built, as in every wheel, and the Python where it
-    isn't, as in a checkout before ``make`` has built it.
-
-    Returns:
-        The extension module, or None for the Python.
-
-    Raises:
-        ImportError: ``TCS_XTCE_BACKEND`` is ``rust`` and the extension
-                     module isn't built.
-    """
-    choice = os.environ.get("TCS_XTCE_BACKEND", "")
-    if choice == "python":
-        return None
-    try:
-        from . import _native
-    except ImportError:
-        if choice == "rust":
-            raise
-        return None
-    return _native
-
-
-_NATIVE = _backend()
-
-# What reads and writes the XML: "rust" or "python".
-BACKEND = "python" if _NATIVE is None else "rust"
-
-
-def _record_name(value: Any) -> str:
-    """Names the binding class of an object, for the extension module.
+def _record_name(cls: type) -> str:
+    """Names a class of the XML binding, for the extension module.
 
     Args:
-        value: The object.
+        cls: The class.
 
     Returns:
-        Its class's name in :mod:`tcs_xtce.generated`.
+        Its name in :mod:`tcs_xtce.generated`.
 
     Raises:
-        KeyError: Its class is not one of the binding's records, as the
-                  Python writers' table raises.
+        KeyError: The class is not one of the binding's records.
     """
-    cls = type(value)
     if getattr(generated, cls.__name__, None) is not cls:
         raise KeyError(cls)
     return cls.__name__
 
 
-def to_xml(value: Any, tag: str, buf: ManagedBuffer, indent: bool = True,
-           writer: Optional[X.Writer] = None) -> None:
+def to_xml(value: Any, tag: str, buf: ManagedBuffer,
+           indent: bool = True) -> None:
     """Serializes ``value`` as the element ``tag`` into ``buf``, replacing it.
 
     Args:
@@ -75,18 +43,12 @@ def to_xml(value: Any, tag: str, buf: ManagedBuffer, indent: bool = True,
         tag:    The name of its element.
         buf:    The buffer the XML goes into.
         indent: Whether to indent the XML.
-        writer: A writer to reuse, or None to make a new one.
+
+    Raises:
+        XtceError: The object can't be written as XML.
+        KeyError:  Its class is not one of the binding's records.
     """
-    if _NATIVE is not None:
-        buf.load(_NATIVE.to_xml(value, _record_name(value), tag, indent))
-        return
-    w = writer if writer is not None else X.Writer(indent)
-    w.reset()
-    w.indent = indent
-    w.declaration()
-    w.root_ns = NAMESPACE
-    WRITERS[type(value)](w, value, tag)
-    w.flush(buf)
+    buf.load(_native.to_xml(value, _record_name(type(value)), tag, indent))
 
 
 def from_xml(data, cls: type, tag: str):
@@ -102,16 +64,9 @@ def from_xml(data, cls: type, tag: str):
 
     Raises:
         XtceError: The XML is bad or its root isn't ``tag``.
+        KeyError:  ``cls`` is not one of the binding's records.
     """
-    if _NATIVE is not None:
-        if getattr(generated, cls.__name__, None) is not cls:
-            raise KeyError(cls)
-        return _NATIVE.from_xml(bytes(data), cls.__name__, tag)
-    root = X.parse(data)
-    if root.name != tag:
-        raise X.XtceError(f"root element is <{root.name}>, expected <{tag}>",
-                          root.line)
-    return READERS[cls](root)
+    return _native.from_xml(bytes(data), _record_name(cls), tag)
 
 
 class Document:
@@ -136,7 +91,6 @@ class Document:
         self.indent = indent
         self._input = ManagedBuffer(input_capacity)
         self._output = ManagedBuffer(output_capacity)
-        self._writer = X.Writer(indent)
 
     @classmethod
     def from_bytes(cls, data) -> "Document":
@@ -189,7 +143,7 @@ class Document:
         The view is valid until the next serialization; release it before
         serializing again if the output may need to grow.
         """
-        to_xml(self.root, ROOT_ELEMENT, self._output, self.indent, self._writer)
+        to_xml(self.root, ROOT_ELEMENT, self._output, self.indent)
         return self._output.view()
 
     def to_bytes(self) -> bytes:

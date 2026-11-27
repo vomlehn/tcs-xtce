@@ -2,7 +2,7 @@
 name = "tcs-xtce-python"
 # The tcs-xtce Python distribution's version, in pyproject.toml, which is
 # the tcs-xtce crate's too.
-version = "0.7.2"
+version = "0.8.0"
 edition = "2021"
 description = """\
     The Python interface to the tcs-xtce crate: the extension module \
@@ -23,7 +23,7 @@ crate-type = ["cdylib"]
 [dependencies]
 # abi3 from Python 3.10, so one wheel serves every Python from 3.10 on.
 pyo3 = { version = "0.30", features = ["extension-module", "abi3-py310"] }
-tcs-xtce = { path = "..", version = "=0.7.2" }
+tcs-xtce = { path = "..", version = "=0.8.0" }
 
 # A workspace of its own: maturin builds it for Python, apart from the
 # crates in rust/, and its tests are the Python ones.

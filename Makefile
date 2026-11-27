@@ -281,15 +281,8 @@ test-cpp: cpp $(SAMPLES)
 	$(MAKE) -C cpp test
 
 .PHONY: test-python
-# Both ways the package can read and write XML: through the tcs-xtce crate,
-# as the wheels do, and in its own Python, kept until it is retired; then
-# that the two read every document alike and write the same bytes.
 test-python: python $(SAMPLES)
-	cd python && TCS_XTCE_BACKEND=rust \
-	    $(PYTHON) -m unittest discover -s tests -t .
-	cd python && TCS_XTCE_BACKEND=python \
-	    $(PYTHON) -m unittest discover -s tests -t .
-	$(PYTHON) -I tests/backend_check.py
+	cd python && $(PYTHON) -m unittest discover -s tests -t .
 
 .PHONY: cross-check
 cross-check: rust cpp python $(SAMPLES)

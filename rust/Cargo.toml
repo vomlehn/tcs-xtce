@@ -1,6 +1,6 @@
 [package]
 name = "tcs-xtce"
-version = "0.7.2"
+version = "0.8.0"
 edition = "2021"
 description = """\
     A software tool: serialization and deserialization of OMG XTCE documents \

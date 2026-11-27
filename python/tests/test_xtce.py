@@ -10,7 +10,6 @@ import unittest
 
 import tcs_xtce
 from tcs_xtce import Document, ManagedBuffer, SpaceSystemType, XtceError
-from tcs_xtce import _xml as X
 
 SAMPLES = sorted(glob.glob(os.path.join(os.path.dirname(__file__), "..", "..",
                                         "tests", "samples", "*.xtce")))
@@ -117,24 +116,6 @@ class Errors(unittest.TestCase):
     def test_malformed(self):
         with self.assertRaises(XtceError):
             Document.from_bytes(b"<SpaceSystem name='a'>")
-
-
-class Scalars(unittest.TestCase):
-    def test_doubles_match_other_languages(self):
-        cases = {1.0: "1.0", 1.5: "1.5", 0.0001: "0.0001", 0.00001: "1e-05",
-                 1e16: "1e+16", float("inf"): "INF"}
-        for v, s in cases.items():
-            self.assertEqual(X.f_double(v), s)
-            self.assertEqual(X.p_double(s), v)
-
-    def test_rejects_non_xml_numbers(self):
-        for bad in ("inf", "nan", "1_000", ""):
-            with self.assertRaises(ValueError):
-                X.p_double(bad)
-        with self.assertRaises(ValueError):
-            X.p_i64("1_0")
-        with self.assertRaises(ValueError):
-            X.p_u16("-1")
 
 
 def load_tests(loader, tests, ignore):

@@ -97,10 +97,7 @@ done
 import sys
 
 from tcs_xtce import Document
-from tcs_xtce.document import BACKEND
 
-# The wheel reads and writes through the tcs-xtce crate, not in Python.
-assert BACKEND == "rust", BACKEND
 doc = Document.from_file(sys.argv[1])
 assert doc.root.name == "Demo", doc.root.name
 assert Document.from_bytes(doc.to_bytes()).root == doc.root

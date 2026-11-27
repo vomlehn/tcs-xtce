@@ -366,7 +366,10 @@ the header-only C/C++ packet runtime
 </tr>
 <tr>
 <td><code>python/</code></td>
-<td>Two Python distributions (3.10+, standard library only), each with a
+<td>Two Python distributions (3.10+; <code>tcsxtce</code> needs only the
+standard library, and <code>tcs-xtce</code> reads and writes XML through
+the Rust crate with its extension module <code>tcs_xtce._native</code>,
+from <code>rust/tcs-xtce-python</code>), each with a
 <code>README-pypi.md</code> for its PyPI page: <code>tcsxtce</code>, the
 packet runtime that generated Python uses
 (<code>python/pyproject.toml</code>), and <code>tcs-xtce</code> (the
