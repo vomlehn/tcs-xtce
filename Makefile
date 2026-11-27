@@ -160,9 +160,9 @@ $(SAMPLES): $(XSD) $(GEN_SRC)
 .PHONY: samples
 samples: $(SAMPLES)
 
-# tcs-xtce reads the mission with the generated Python binding and writes one
-# language per run.
-$(PKT_GEN) &: $(MISSION) $(PKT_SRC) $(PY_GEN)
+# tcs-xtce reads the mission with the generated Python binding, through the
+# extension module, and writes one language per run.
+$(PKT_GEN) &: $(MISSION) $(PKT_SRC) $(PY_GEN) $(NATIVE)
 	cd python && $(PKT) ../rust/tests/mission/demo.rs --lang rust
 	cd python && $(PKT) ../rust/tests/mission/demo_fixed.rs --lang rust \
 		--dynamic-allocations false
@@ -396,7 +396,7 @@ python-versions:
 EXTERNAL := tests/external/files
 
 .PHONY: samples-check
-samples-check: rust cpp $(PY_GEN)
+samples-check: rust cpp $(PY_GEN) $(NATIVE)
 	@mkdir -p $(EXTERNAL)
 	@grep -v '^#' tests/external/sources.txt | \
 	while read -r name sha url; do \
@@ -448,7 +448,7 @@ ccsds-check: ccsds
 		ccsds/build/time_tool ccsds/build/time_tool_cxx
 
 .PHONY: fmt
-fmt:
+fmt: $(NATIVE)
 	cd rust && $(CARGO) fmt
 	cd editor && $(CARGO) fmt
 	cd ccsds/rust && $(CARGO) fmt
@@ -459,8 +459,10 @@ fmt:
 	done
 	cd python && $(PYTHON) -m tcs_xtce.binding.pyalign $(PY_FILES)
 
+# It runs the compiler, through the extension module, to regenerate the
+# examples' code, as fmt does.
 .PHONY: fmt-check
-fmt-check:
+fmt-check: $(NATIVE)
 	cd rust && $(CARGO) fmt --check
 	cd editor && $(CARGO) fmt --check
 	cd ccsds/rust && $(CARGO) fmt --check
