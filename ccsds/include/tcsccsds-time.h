@@ -16,6 +16,14 @@
  * versions do the same way.  Encoding rounds to the nearest unit of the
  * layout, halves up, carrying into the seconds or days.
  *
+ * Doing it the same way means rounding each product before it is added
+ * to: a fused multiply-add, which C compilers may make of a * b + c on a
+ * processor that has one, rounds once and can give a different time.  So
+ * the header turns that contraction off for its own code, with GCC's and
+ * clang's pragmas, and puts it back as it was at its end.  Clang ignores
+ * its pragma when -ffp-contract=fast is given, so don't build code that
+ * includes this header with that option.
+ *
  * A double holds about a quarter of a microsecond at today's times, which
  * is coarser than a CUC time of more than three fine octets or a CDS time
  * of microseconds or picoseconds.  So each code also has an exact form, in
@@ -41,6 +49,15 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
+/* No fused multiply-adds in this header's code: see the top. */
+#if defined(__clang__)
+#pragma float_control(push)
+#pragma clang fp contract(off)
+#elif defined(__GNUC__)
+#pragma GCC push_options
+#pragma GCC optimize("fp-contract=off")
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -1353,6 +1370,12 @@ static inline bool ccsds_tai_to_utc(const ccsds_tai_time* tai,
 
 #ifdef __cplusplus
 }
+#endif
+
+#if defined(__clang__)
+#pragma float_control(pop)
+#elif defined(__GNUC__)
+#pragma GCC pop_options
 #endif
 
 #endif /* TCSCCSDS_TIME_H */

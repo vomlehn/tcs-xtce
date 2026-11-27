@@ -1429,6 +1429,8 @@ class CEmitter:
         self.line()
         self.line('#include "tcsxtce-packet.h"')
         self.line()
+        self.fp_contract(True)
+        self.line()
         self.line("#ifdef __cplusplus")
         self.line('extern "C" {')
         self.line("#endif")
@@ -1456,8 +1458,39 @@ class CEmitter:
         self.line("}")
         self.line("#endif")
         self.line()
+        self.fp_contract(False)
+        self.line()
         self.line(f"#endif /* {guard} */")
         return "\n".join(self.out) + "\n"
+
+    def fp_contract(self, start: bool) -> None:
+        """Writes the pragmas that keep fused multiply-adds out of the code.
+
+        A fused multiply-add rounds a * b + c once, where Rust and Python
+        round the product first, so the generated code could give other
+        values on a processor that has one. The pragmas are GCC's and
+        clang's, as tcsxtce-packet.h has them.
+
+        Args:
+            start: True for the pragmas that turn contraction off, before
+                   the code; False for those that put it back, after it.
+        """
+        if start:
+            self.line("/* No fused multiply-adds in this code, so that it "
+                      "rounds as Rust and")
+            self.line(" * Python do: see tcsxtce-packet.h. */")
+        self.line("#if defined(__clang__)")
+        self.line("#pragma float_control(push)" if start
+                  else "#pragma float_control(pop)")
+        if start:
+            self.line("#pragma clang fp contract(off)")
+        self.line("#elif defined(__GNUC__)")
+        if start:
+            self.line("#pragma GCC push_options")
+            self.line('#pragma GCC optimize("fp-contract=off")')
+        else:
+            self.line("#pragma GCC pop_options")
+        self.line("#endif")
 
     def enum_type(self, vt: VType) -> None:
         """Writes an enumeration's typedef, its labels' macros and its

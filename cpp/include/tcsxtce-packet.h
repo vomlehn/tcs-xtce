@@ -14,6 +14,15 @@
  *
  * Every fallible function returns 0 (XTCE_PK_OK) on success or an error code,
  * and fills in the xtce_pk_error it was given (which may be NULL).
+ *
+ * Giving the same values as Rust and Python means rounding each product
+ * before it is added to: a fused multiply-add, which C compilers may make
+ * of a * b + c on a processor that has one, rounds once and can give a
+ * different value.  So the header turns that contraction off for its own
+ * code, with GCC's and clang's pragmas, and puts it back as it was at its
+ * end; generated headers do the same.  Clang ignores its pragma when
+ * -ffp-contract=fast is given, so don't build code that includes this
+ * header with that option.
  */
 #ifndef TCSXTCE_PACKET_H
 #define TCSXTCE_PACKET_H
@@ -29,6 +38,15 @@
 #include <string.h>
 
 #include "tcsxtce-bnum.h"
+
+/* No fused multiply-adds in this header's code: see the top. */
+#if defined(__clang__)
+#pragma float_control(push)
+#pragma clang fp contract(off)
+#elif defined(__GNUC__)
+#pragma GCC push_options
+#pragma GCC optimize("fp-contract=off")
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -5030,6 +5048,12 @@ static inline int xtce_pk_batch_finish(const xtce_pk_batch* b,
 
 #ifdef __cplusplus
 }
+#endif
+
+#if defined(__clang__)
+#pragma float_control(pop)
+#elif defined(__GNUC__)
+#pragma GCC pop_options
 #endif
 
 #endif /* TCSXTCE_PACKET_H */

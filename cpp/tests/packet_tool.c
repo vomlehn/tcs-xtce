@@ -14,6 +14,14 @@
 #define DEMO_HOOKS
 #include "mission/demo.h"
 
+/* No fused multiply-adds in the transforms here either, so that they round
+ * as the Rust and Python ones do: see tcsxtce-packet.h. */
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#elif defined(__GNUC__)
+#pragma GCC optimize("fp-contract=off")
+#endif
+
 /* Buffers for the largest packet and description, allocated once. */
 static uint8_t input[4096];
 /* Room for any packet, a transformed one's work space included. */
