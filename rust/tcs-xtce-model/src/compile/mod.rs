@@ -14,6 +14,8 @@ pub mod commands;
 pub mod containers;
 pub mod criteria;
 pub mod layout;
+pub mod mission;
+pub mod streams;
 pub mod types;
 pub mod xtype;
 
@@ -294,7 +296,7 @@ pub struct Compiler<'a> {
     /// The most bits a field whose size another value gives may take.
     pub max_field_bits: i64,
     /// The nodes compiled so far, by key (a message's after `message`).
-    pub nodes: HashMap<Key, Shared<Node>>,
+    pub nodes: Table<Shared<Node>>,
     /// The nodes in the order they were finished.
     pub order: Vec<Shared<Node>>,
     /// The ids of the Locals `check_rest` has seen.
@@ -387,7 +389,7 @@ impl<'a> Compiler<'a> {
             ids: 0,
             aggregating: HashSet::new(),
             max_field_bits: 0,
-            nodes: HashMap::new(),
+            nodes: Table::default(),
             order: Vec::new(),
             tailed: HashSet::new(),
             ctypes: HashMap::new(),

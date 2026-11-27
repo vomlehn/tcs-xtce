@@ -9,7 +9,7 @@ use super::{child, qname, Compiler};
 use crate::dump::Elem;
 use crate::model::{
     unsupported, Alarm, AlarmContext, AlarmCriteria, AlarmDef, Band, Change,
-    Error, Key, Num, Result, VType, LEVELS,
+    CustomAlarm, Error, Key, Num, Result, VType, LEVELS,
 };
 use crate::pyfmt::repr;
 use crate::regex::compile_pattern;
@@ -205,7 +205,7 @@ impl Compiler<'_> {
         if let Some(c) = a.custom {
             let alg = &c.input_algorithm;
             let h = self.hook("alarm", &qname(&child(path, &alg.name)), 0);
-            d.custom = Some((
+            d.custom = Some(CustomAlarm::Unbound(
                 h,
                 Elem {
                     value: alg.clone(),

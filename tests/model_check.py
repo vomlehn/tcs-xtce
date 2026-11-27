@@ -14,6 +14,9 @@ The stages compared so far:
   ``tm_node`` compiles it, before the mission is finished.
 - ``--dump-commands``: every meta-command and message, each compiled as
   ``tc_node`` and ``msg_node`` compile it, after the containers.
+- The mission: the whole model, as ``compile`` makes it, or why it fails,
+  without and with ``--skip-unsupported``.
+
 
 The missions are the demo mission, the examples (the split mission's three
 documents together) and the schema-coverage samples; with ``--external``,
@@ -36,7 +39,8 @@ sys.path.insert(0, str(TOP / "python"))
 import tcs_xtce  # noqa: E402
 from tcs_xtce.compiler.compile import Compiler  # noqa: E402
 from tcs_xtce.compiler.dump import (  # noqa: E402
-    dump_commands, dump_containers, dump_types)
+    dump_commands, dump_containers, dump_mission, dump_mission_skipping,
+    dump_types)
 from tcs_xtce.compiler.model import Cycle, Unsupported  # noqa: E402
 
 EXTERNAL = TOP / "tests" / "external"
@@ -107,7 +111,9 @@ def external() -> list[tuple[list[str], str | None]]:
 # it and the model_dump option that does.
 STAGES = [("types", dump_types, "--types"),
           ("containers", dump_containers, "--containers"),
-          ("commands", dump_commands, "--commands")]
+          ("commands", dump_commands, "--commands"),
+          ("mission", dump_mission, "--mission"),
+          ("mission skipping", dump_mission_skipping, "--mission-skipping")]
 
 
 

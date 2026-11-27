@@ -620,8 +620,15 @@ messages. The Python compiler's <tt class="docutils literal"><span class="pre">-
 meta-command and message as <tt class="docutils literal">tc_node</tt> and <tt class="docutils literal">msg_node</tt> compile them
 after the telemetry containers, and <tt class="docutils literal">model_dump <span class="pre">--commands</span></tt> the
 same; they agree on the same 28 missions and 67 public ones.</li>
-<li><strong>The mission.</strong> Streams, algorithms, alarms bound to each packet,
-hooks and kinds: the whole of <tt class="docutils literal"><span class="pre">--dump-model</span></tt>.</li>
+<li><strong>The mission</strong> (done). Streams and the chains in which one feeds
+another, the values each packet's inheritance fixes, the sizes derived
+from other values, fields, alarms and algorithms bound to each
+packet, hooks, kinds, and the names the generated code gives each
+node, type, stream and hook: the whole of <tt class="docutils literal"><span class="pre">--dump-model</span></tt>.
+<tt class="docutils literal">model_dump <span class="pre">--mission</span></tt> writes the mission <tt class="docutils literal">compile</tt> makes, or why
+it fails, and <tt class="docutils literal"><span class="pre">--mission-skipping</span></tt> the one it makes with
+<tt class="docutils literal"><span class="pre">--skip-unsupported</span></tt>; both agree with the Python's on the same 28
+missions and 67 public ones. The model is ported.</li>
 </ol>
 <p>The canonical text is the same for both, with two rules that let the Rust
 hold the model as Rust holds data:</p>

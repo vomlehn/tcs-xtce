@@ -134,8 +134,20 @@ pub enum InputRef<'b> {
 ///
 /// Its inputs, in order.
 pub fn inputs_of(alg: &x::InputAlgorithmType) -> Vec<InputRef<'_>> {
-    alg.input_set
-        .iter()
+    set_inputs(alg.input_set.as_ref())
+}
+
+/// Lists the inputs of a telemetry InputSet.
+///
+/// # Arguments
+///
+/// * `set` - The InputSet, if any.
+///
+/// # Returns
+///
+/// Its inputs, in order; none without one.
+pub fn set_inputs(set: Option<&x::InputSetType>) -> Vec<InputRef<'_>> {
+    set.into_iter()
         .flat_map(|s| s.items.iter())
         .map(|ch| match ch {
             x::InputSetChoice::Constant(c) => InputRef::Const(c),

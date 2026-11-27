@@ -1,7 +1,9 @@
 //! Writes the model of a mission as canonical text, for comparing with the
 //! Python compiler's: `model_dump --types INPUT...` writes what
 //! `python3 -m tcs_xtce INPUT... --dump-types` does, `--containers` what
-//! `--dump-containers` does, and `--commands` what `--dump-commands` does.
+//! `--dump-containers` does, `--commands` what `--dump-commands` does, and
+//! `--mission` and `--mission-skipping` the whole mission, as compiled
+//! without and with `--skip-unsupported`.
 //! It exits with 3 if a
 //! document can't be read, and 1 if the documents don't index.
 
@@ -31,11 +33,14 @@ fn main() -> ExitCode {
         "--types" => Some("types"),
         "--containers" => Some("containers"),
         "--commands" => Some("commands"),
+        "--mission" => Some("mission"),
+        "--mission-skipping" => Some("skipping"),
         _ => None,
     });
     let Some(stage) = stage.filter(|_| !files.is_empty()) else {
         eprintln!(
-            "usage: model_dump --types|--containers|--commands \
+            "usage: model_dump \
+             --types|--containers|--commands|--mission|--mission-skipping \
              [--dialect=D] INPUT..."
         );
         return ExitCode::from(2);
@@ -69,7 +74,9 @@ fn main() -> ExitCode {
     match stage {
         "types" => print!("{}", tcs_xtce_model::dump_types(&mut c)),
         "containers" => print!("{}", tcs_xtce_model::dump_containers(&mut c)),
-        _ => print!("{}", tcs_xtce_model::dump_commands(&mut c)),
+        "commands" => print!("{}", tcs_xtce_model::dump_commands(&mut c)),
+        "mission" => print!("{}", tcs_xtce_model::dump_mission(&mut c, false)),
+        _ => print!("{}", tcs_xtce_model::dump_mission(&mut c, true)),
     }
     ExitCode::SUCCESS
 }

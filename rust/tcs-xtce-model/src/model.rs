@@ -852,8 +852,9 @@ pub struct VType {
     pub one_string: String,
     /// A boolean's string for false.
     pub zero_string: String,
-    /// The generated type name of an enumeration or aggregate.
-    pub ident: String,
+    /// The generated type name of an enumeration or aggregate, which the
+    /// mission gives once it knows which types the code uses.
+    pub ident: std::cell::RefCell<String>,
     /// More for its generated documentation.
     pub doc: String,
     /// An integer's smallest and largest valid values.
@@ -912,7 +913,7 @@ impl VType {
             labels: Vec::new(),
             one_string: "True".into(),
             zero_string: "False".into(),
-            ident: String::new(),
+            ident: std::cell::RefCell::new(String::new()),
             doc: String::new(),
             valid_range: None,
             eng: None,
@@ -1071,8 +1072,32 @@ pub struct AlarmDef {
     pub min_conformance: i64,
     /// Its change ranges.
     pub change: Option<Change>,
-    /// A CustomAlarm: its hook and its InputAlgorithm.
-    pub custom: Option<(Shared<Hook>, Elem<x::InputAlgorithmType>)>,
+    /// A CustomAlarm: its hook and its InputAlgorithm, or in a packet's
+    /// alarms the inputs bound.
+    pub custom: Option<CustomAlarm>,
+}
+
+/// A CustomAlarm: its hook, with its InputAlgorithm or, bound to a
+/// packet's values, its inputs; written as the Python's pair.
+#[derive(Debug, Clone)]
+pub enum CustomAlarm {
+    /// In a type: the hook and the document's InputAlgorithm.
+    Unbound(Shared<Hook>, Elem<x::InputAlgorithmType>),
+    /// In a packet's alarms: the hook and the inputs, as Custom's.
+    Bound(Shared<Hook>, Vec<Input>),
+}
+
+impl ToTree for CustomAlarm {
+    fn tree(&self, cx: &mut Cx) -> Tree {
+        match self {
+            CustomAlarm::Unbound(h, e) => {
+                Tree::List(vec![h.tree(cx), e.tree(cx)])
+            }
+            CustomAlarm::Bound(h, i) => {
+                Tree::List(vec![h.tree(cx), i.tree(cx)])
+            }
+        }
+    }
 }
 value_record!(
     AlarmDef,
@@ -1995,3 +2020,186 @@ impl Shared<Node> {
             .collect()
     }
 }
+
+/// How to find a FixedFrameStream's or VariableFrameStream's frames in a
+/// stream of bits, and the container each frame is; or a CustomStream.
+#[derive(Debug, Clone, Default)]
+pub struct Stream {
+    /// Its qualified name.
+    pub key: String,
+    /// Its generated type name.
+    pub ident: String,
+    /// The qualified name of each frame's container, or of its service.
+    pub container: String,
+    /// Whether its frames are of a fixed length.
+    pub fixed: bool,
+    /// Its PCM type.
+    pub pcm: String,
+    /// Whether its bits are inverted.
+    pub inverted: bool,
+    /// A fixed stream's frame length.
+    pub frame_bits: i64,
+    /// The sync pattern.
+    pub pattern: Int,
+    /// Where the pattern is compared.
+    pub mask: Int,
+    /// The pattern's length.
+    pub pattern_bits: i64,
+    /// The pattern's bit location in each frame.
+    pub location: i64,
+    /// The most bits of the pattern that may be wrong.
+    pub max_errors: i64,
+    /// How far the next frame's pattern may slip either way.
+    pub aperture: i64,
+    /// The frames with good patterns in a row it takes to lock.
+    pub verify: i64,
+    /// The frames it takes to lock again after a missed pattern.
+    pub check: i64,
+    /// The bits searched in vain after which the bits are inverted.
+    pub invert_after: i64,
+    /// A variable stream's flag length.
+    pub flag_bits: i64,
+    /// Whether its flags are ones.
+    pub flag_ones: bool,
+    /// The most bits a variable stream's frame holds.
+    pub max_bits: i64,
+    /// The qualified names of a service's containers.
+    pub service: Vec<String>,
+    /// Whether it is a CustomStream.
+    pub custom: bool,
+    /// A CustomStream's DecodingAlgorithm.
+    pub decoder: String,
+    /// The stream whose output is its input, if any.
+    pub feeder: Option<Mut<Stream>>,
+    /// An InvertAlgorithm's name.
+    pub inverter: String,
+}
+value_record!(
+    Stream,
+    "Stream",
+    [
+        key,
+        ident,
+        container,
+        fixed,
+        pcm,
+        inverted,
+        frame_bits,
+        pattern,
+        mask,
+        pattern_bits,
+        location,
+        max_errors,
+        aperture,
+        verify,
+        check,
+        invert_after,
+        flag_bits,
+        flag_ones,
+        max_bits,
+        service,
+        custom,
+        decoder,
+        feeder,
+        inverter
+    ]
+);
+
+/// Says which streams feed one another in a loop.
+///
+/// # Arguments
+///
+/// * `lp` - The streams in the loop, each fed by the next and the last by the
+///          first.
+///
+/// # Returns
+///
+/// The message, naming each stream, with `<-` for "is fed by".
+pub fn stream_loop(lp: &[Mut<Stream>]) -> String {
+    let names: Vec<String> = lp
+        .iter()
+        .chain(lp.first())
+        .map(|s| s.get().key.clone())
+        .collect();
+    format!("streams feed one another in a loop: {}", names.join(" <- "))
+}
+
+/// Lists a stream and the streams that feed it.
+///
+/// # Arguments
+///
+/// * `st` - The stream.
+///
+/// # Returns
+///
+/// The stream, then each feeder in turn.
+///
+/// # Errors
+///
+/// Cycle, if the streams feed one another in a loop.
+pub fn stream_chain(st: &Mut<Stream>) -> Result<Vec<Mut<Stream>>> {
+    let mut out: Vec<Mut<Stream>> = Vec::new();
+    let mut s = Some(st.clone());
+    while let Some(x) = s {
+        if let Some(i) = out.iter().position(|o| o.same(&x)) {
+            return Err(Error::Cycle(stream_loop(&out[i..])));
+        }
+        s = x.get().feeder.clone();
+        out.push(x);
+    }
+    Ok(out)
+}
+
+/// Dispatch over every concrete node in one inheritance tree.
+#[derive(Debug, Clone)]
+pub struct Kind {
+    /// Its generated type name.
+    pub ident: String,
+    /// The tree's root.
+    pub root: Shared<Node>,
+    /// Its concrete nodes.
+    pub members: Vec<Shared<Node>>,
+    /// The largest packet of any of them.
+    pub max_bytes: i64,
+}
+shared_record!(Kind, "Kind", [ident, root, members, max_bytes]);
+
+/// A mission's resolved model, which the code is generated from.
+#[derive(Debug, Clone)]
+pub struct Mission {
+    /// The mission's name: its last document's root SpaceSystem's.
+    pub name: String,
+    /// The root SpaceSystem of each document, in the order given.
+    pub spaces: Vec<String>,
+    /// The documents, as the generated header names them.
+    pub source: String,
+    /// The enumerations the generated code uses.
+    pub types: Vec<Rc<VType>>,
+    /// The aggregates the generated code uses, inner ones first.
+    pub aggregates: Vec<Rc<VType>>,
+    /// The supported concrete nodes, in document order.
+    pub nodes: Vec<Shared<Node>>,
+    /// The dispatch over each inheritance tree.
+    pub kinds: Vec<Shared<Kind>>,
+    /// The roots of the trees behind `kinds`.
+    pub roots: Vec<Shared<Node>>,
+    /// What was left out, and why.
+    pub skipped: Vec<String>,
+    /// What the documents allow that generated code can only guess at.
+    pub warnings: Vec<String>,
+    /// The parameters whose alarms depend on earlier samples: each one's
+    /// qualified name, field name and samples of history.
+    pub monitored: Vec<(String, String, i64)>,
+    /// The streams.
+    pub streams: Vec<Mut<Stream>>,
+    /// The hooks, in the order made.
+    pub hooks: Vec<Shared<Hook>>,
+}
+value_record!(
+    Mission,
+    "Mission",
+    [
+        name, spaces, source, types, aggregates, nodes, kinds, roots, skipped,
+        warnings, monitored, streams, hooks
+    ]
+);

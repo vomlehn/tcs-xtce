@@ -2075,7 +2075,11 @@ impl Compiler<'_> {
                 }))
             }
             x::CalibratorChoice::MathOperationCalibrator(m) => {
-                Ok(Calibrator::Math(self.math_operation(m, path, where_)?))
+                Ok(Calibrator::Math(self.math_operation(
+                    &calibrator_items(m),
+                    path,
+                    where_,
+                )?))
             }
         }
     }
@@ -2085,7 +2089,8 @@ impl Compiler<'_> {
     ///
     /// # Arguments
     ///
-    /// * `mc`     - The XTCE MathOperationCalibrator.
+    /// * `items`  - The items of the XTCE MathOperationCalibrator, or of a
+    ///              MathAlgorithm's MathOperation.
     /// * `path`   - The key of the SpaceSystem it is written in.
     /// * `where_` - What it belongs to, for error messages.
     ///
@@ -2099,7 +2104,7 @@ impl Compiler<'_> {
     /// operands, or more or fewer than one value is left.
     pub fn math_operation(
         &mut self,
-        mc: &x::MathOperationCalibratorType,
+        items: &[MItem<'_>],
         path: &Key,
         where_: &str,
     ) -> Result<MathOp> {
@@ -2115,9 +2120,9 @@ impl Compiler<'_> {
                 }
                 Ok(stack.split_off(stack.len() - n))
             };
-        for item in &mc.items {
-            match item {
-                M::ValueOperand(v) => match crate::pyparse::float(v) {
+        for item in items {
+            match *item {
+                MItem::Value(v) => match crate::pyparse::float(v) {
                     Some(f) => stack.push(Expr::Const(f)),
                     None => {
                         return unsupported(format!(
@@ -2126,8 +2131,8 @@ impl Compiler<'_> {
                         ))
                     }
                 },
-                M::ThisParameterOperand(_) => stack.push(Expr::Raw),
-                M::ParameterInstanceRefOperand(v) => {
+                MItem::This => stack.push(Expr::Raw),
+                MItem::Ref(v) => {
                     stack.push(Expr::Value(Shared::new(ValueRef {
                         ref_: Elem {
                             value: v.clone(),
@@ -2139,42 +2144,39 @@ impl Compiler<'_> {
                         vtype: None,
                     })))
                 }
-                M::Operator(o) => {
-                    let op = o.as_str();
-                    match op {
-                        "swap" => {
-                            let mut ab = pop(&mut stack, 2, op)?;
-                            let b = ab.pop().unwrap();
-                            let a = ab.pop().unwrap();
-                            stack.push(b);
-                            stack.push(a);
-                        }
-                        "drop" => {
-                            pop(&mut stack, 1, op)?;
-                        }
-                        "dup" => {
-                            let a = pop(&mut stack, 1, op)?.pop().unwrap();
-                            stack.push(a.clone());
-                            stack.push(a);
-                        }
-                        "over" => {
-                            let mut ab = pop(&mut stack, 2, op)?;
-                            let b = ab.pop().unwrap();
-                            let a = ab.pop().unwrap();
-                            stack.push(a.clone());
-                            stack.push(b);
-                            stack.push(a);
-                        }
-                        _ if MATH_UNARY.contains(&op) => {
-                            let args = pop(&mut stack, 1, op)?;
-                            stack.push(Expr::Op(op.into(), args));
-                        }
-                        _ => {
-                            let args = pop(&mut stack, 2, op)?;
-                            stack.push(Expr::Op(op.into(), args));
-                        }
+                MItem::Op(op) => match op {
+                    "swap" => {
+                        let mut ab = pop(&mut stack, 2, op)?;
+                        let b = ab.pop().unwrap();
+                        let a = ab.pop().unwrap();
+                        stack.push(b);
+                        stack.push(a);
                     }
-                }
+                    "drop" => {
+                        pop(&mut stack, 1, op)?;
+                    }
+                    "dup" => {
+                        let a = pop(&mut stack, 1, op)?.pop().unwrap();
+                        stack.push(a.clone());
+                        stack.push(a);
+                    }
+                    "over" => {
+                        let mut ab = pop(&mut stack, 2, op)?;
+                        let b = ab.pop().unwrap();
+                        let a = ab.pop().unwrap();
+                        stack.push(a.clone());
+                        stack.push(b);
+                        stack.push(a);
+                    }
+                    _ if MATH_UNARY.contains(&op) => {
+                        let args = pop(&mut stack, 1, op)?;
+                        stack.push(Expr::Op(op.into(), args));
+                    }
+                    _ => {
+                        let args = pop(&mut stack, 2, op)?;
+                        stack.push(Expr::Op(op.into(), args));
+                    }
+                },
             }
         }
         if stack.len() != 1 {
@@ -2633,4 +2635,61 @@ fn check_bool_strings(vt: &VType, where_: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// One item of a MathOperation's postfix expression, of a calibrator or
+/// of a MathAlgorithm.
+#[derive(Debug, Clone, Copy)]
+pub enum MItem<'b> {
+    /// A ValueOperand.
+    Value(&'b str),
+    /// A ThisParameterOperand.
+    This,
+    /// An Operator.
+    Op(&'static str),
+    /// A ParameterInstanceRefOperand.
+    Ref(&'b x::ParameterInstanceRefType),
+}
+
+/// Lists the items of a MathOperationCalibrator.
+///
+/// # Arguments
+///
+/// * `mc` - The calibrator.
+///
+/// # Returns
+///
+/// Its items, in order.
+pub fn calibrator_items(mc: &x::MathOperationCalibratorType) -> Vec<MItem<'_>> {
+    mc.items
+        .iter()
+        .map(|i| match i {
+            M::ValueOperand(v) => MItem::Value(v),
+            M::ThisParameterOperand(_) => MItem::This,
+            M::Operator(o) => MItem::Op(o.as_str()),
+            M::ParameterInstanceRefOperand(r) => MItem::Ref(r),
+        })
+        .collect()
+}
+
+/// Lists the items of a MathAlgorithm's MathOperation.
+///
+/// # Arguments
+///
+/// * `mo` - The MathOperation.
+///
+/// # Returns
+///
+/// Its items, in order.
+pub fn triggered_items(mo: &x::TriggeredMathOperationType) -> Vec<MItem<'_>> {
+    use x::TriggeredMathOperationChoice as T;
+    mo.items
+        .iter()
+        .map(|i| match i {
+            T::ValueOperand(v) => MItem::Value(v),
+            T::ThisParameterOperand(_) => MItem::This,
+            T::Operator(o) => MItem::Op(o.as_str()),
+            T::ParameterInstanceRefOperand(r) => MItem::Ref(r),
+        })
+        .collect()
 }

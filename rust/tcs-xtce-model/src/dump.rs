@@ -331,6 +331,12 @@ impl ToTree for Vec<u8> {
     }
 }
 
+impl<T: ToTree> ToTree for std::cell::RefCell<T> {
+    fn tree(&self, cx: &mut Cx) -> Tree {
+        self.borrow().tree(cx)
+    }
+}
+
 impl<T: ToTree> ToTree for Option<T> {
     fn tree(&self, cx: &mut Cx) -> Tree {
         match self {

@@ -9,7 +9,8 @@
 //! `docs/rust-migration-design.rst`). The first stage is the parameter and
 //! argument types, which [`dump_types`] writes; the second the telemetry
 //! containers, which [`dump_containers`] writes; the third the
-//! meta-commands and messages, which [`dump_commands`] writes.
+//! meta-commands and messages, which [`dump_commands`] writes; and the
+//! fourth the whole mission, which [`dump_mission`] writes.
 
 pub mod compile;
 pub mod dump;
@@ -244,6 +245,50 @@ pub fn dump_commands(compiler: &mut Compiler<'_>) -> String {
         command,
         message,
         warnings: compiler.warnings.clone(),
+    };
+    dump::dump(&c)
+}
+
+/// The mission, or why it fails, as [`dump_mission`] writes it.
+#[derive(Debug, Clone)]
+enum Compiled {
+    /// The mission.
+    Mission(model::Mission),
+    /// Why it fails.
+    Failed(Failed),
+}
+
+impl ToTree for Compiled {
+    fn tree(&self, cx: &mut Cx) -> Tree {
+        match self {
+            Compiled::Mission(m) => m.tree(cx),
+            Compiled::Failed(f) => f.tree(cx),
+        }
+    }
+}
+
+/// Writes the mission as `compile` makes it, or why it fails, as
+/// canonical text, as the Python compiler's stage dump does: the whole
+/// of the model.
+///
+/// # Arguments
+///
+/// * `compiler` - The compiler, with the documents indexed and nothing compiled
+///                yet.
+/// * `skip`     - Whether to leave out what can't be compiled, as
+///                `--skip-unsupported` does.
+///
+/// # Returns
+///
+/// The text of the `Mission`, or of a `Failed`, ending in a newline.
+pub fn dump_mission(compiler: &mut Compiler<'_>, skip: bool) -> String {
+    compiler.skip_unsupported = skip;
+    let c = match compiler.compile() {
+        Ok(m) => Compiled::Mission(m),
+        Err(e) => Compiled::Failed(Failed {
+            error: e.class().into(),
+            message: e.message().into(),
+        }),
     };
     dump::dump(&c)
 }

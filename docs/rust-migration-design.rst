@@ -208,8 +208,16 @@ does, and each compared on every mission before the next is begun:
    after the telemetry containers, and ``model_dump --commands`` the
    same; they agree on the same 28 missions and 67 public ones.
 
-4. **The mission.** Streams, algorithms, alarms bound to each packet,
-   hooks and kinds: the whole of ``--dump-model``.
+4. **The mission** (done). Streams and the chains in which one feeds
+   another, the values each packet's inheritance fixes, the sizes derived
+   from other values, fields, alarms and algorithms bound to each
+   packet, hooks, kinds, and the names the generated code gives each
+   node, type, stream and hook: the whole of ``--dump-model``.
+   ``model_dump --mission`` writes the mission ``compile`` makes, or why
+   it fails, and ``--mission-skipping`` the one it makes with
+   ``--skip-unsupported``; both agree with the Python's on the same 28
+   missions and 67 public ones. The model is ported.
+
 
 The canonical text is the same for both, with two rules that let the Rust
 hold the model as Rust holds data:

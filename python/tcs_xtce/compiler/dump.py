@@ -447,3 +447,39 @@ def dump_commands(compiler) -> str:
     d.count(c)
     d.put(0, "", c)
     return "\n".join(d.lines) + "\n"
+
+
+def dump_mission(compiler) -> str:
+    """Writes the mission as ``compile`` makes it, or why it fails, as
+    canonical text: the fourth stage of the model, the whole of it.
+
+    Args:
+        compiler: The Compiler, with the mission's documents indexed and
+                  nothing compiled yet.
+
+    Returns:
+        The text of the Mission, or of a Failed, ending in a newline.
+    """
+    try:
+        mission = compiler.compile()
+    except (Unsupported, Cycle) as e:
+        mission = Failed(type(e).__name__, str(e))
+    d = Dumper()
+    d.count(mission)
+    d.put(0, "", mission)
+    return "\n".join(d.lines) + "\n"
+
+
+def dump_mission_skipping(compiler) -> str:
+    """Writes the mission as ``compile`` makes it when it leaves out what
+    it can't compile, or why it fails, as ``dump_mission`` does.
+
+    Args:
+        compiler: The Compiler, with the mission's documents indexed and
+                  nothing compiled yet.
+
+    Returns:
+        The text of the Mission, or of a Failed, ending in a newline.
+    """
+    compiler.skip_unsupported = True
+    return dump_mission(compiler)

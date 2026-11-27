@@ -10,7 +10,9 @@ from pathlib import Path
 import tcs_xtce
 from tcs_xtce.compiler.compile import Compiler, compile_documents
 from tcs_xtce.compiler.dump import (Dumper, dump, dump_commands,
-                                    dump_containers, dump_types, string)
+                                    dump_containers, dump_mission,
+                                    dump_mission_skipping, dump_types, string)
+
 
 TOP = Path(__file__).resolve().parents[3]
 
@@ -181,6 +183,11 @@ class Missions(unittest.TestCase):
                 commands = dump_commands(Compiler(roots))
                 self.assertTrue(commands.startswith("Commands {\n"),
                                 commands[:40])
+                mission = dump_mission_skipping(Compiler(roots))
+                self.assertTrue(mission.startswith("Mission {\n"), mission[:40])
+                strict = dump_mission(Compiler(roots))
+                self.assertTrue(strict.startswith(("Mission {\n",
+                                                   "Failed {\n")), strict[:40])
 
 
     def test_the_text_does_not_depend_on_hashing(self):
