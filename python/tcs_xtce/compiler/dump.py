@@ -379,3 +379,71 @@ def dump_containers(compiler) -> str:
     d.count(c)
     d.put(0, "", c)
     return "\n".join(d.lines) + "\n"
+
+
+@dataclasses.dataclass
+class Commands:
+    """Every meta-command and message of a mission, each compiled as
+    ``tc_node`` and ``msg_node`` compile it, as ``dump_commands`` writes
+    them.
+
+    Attributes:
+        command:  Each meta-command's Node, or Failed, by qualified name, in
+                  the documents' order.
+        message:  Each message's, likewise.
+        warnings: The warnings compiling the containers, meta-commands and
+                  messages gave, in order.
+    """
+
+    command: dict
+    message: dict
+    warnings: list
+
+
+def dump_commands(compiler) -> str:
+    """Writes every meta-command and message of a mission, each compiled
+    as ``tc_node`` and ``msg_node`` compile it after the telemetry
+    containers, before the mission is finished, as canonical text: the
+    third stage of the model, which the Rust model is compared on before
+    the whole mission is.
+
+    Args:
+        compiler: The Compiler, with the mission's documents indexed and
+                  nothing compiled yet.
+
+    Returns:
+        The text of a Commands, ending in a newline.
+    """
+    from tcs_xtce.compiler.compile import qname
+
+    def each(table: dict, build) -> dict:
+        """Compiles each entry of a table, in its order.
+
+        Args:
+            table: ``mcs`` or ``messages``.
+            build: ``tc_node`` or ``msg_node``.
+
+        Returns:
+            Each one's Node, or Failed, by qualified name.
+        """
+        out = {}
+        for key in table:
+            try:
+                out[qname(key)] = build(key)
+            except (Unsupported, Cycle) as e:
+                out[qname(key)] = Failed(type(e).__name__, str(e))
+        return out
+
+    # As compile does: the containers first, which messages derive from.
+    for key in compiler.containers:
+        try:
+            compiler.tm_node(key)
+        except (Unsupported, Cycle):
+            pass
+    command = each(compiler.mcs, compiler.tc_node)
+    message = each(compiler.messages, compiler.msg_node)
+    c = Commands(command, message, list(compiler.warnings))
+    d = Dumper()
+    d.count(c)
+    d.put(0, "", c)
+    return "\n".join(d.lines) + "\n"

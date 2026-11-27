@@ -915,6 +915,11 @@ the compiler is the ``tcs-xtce`` command, run from anywhere:
      - Write every telemetry container instead, each compiled alone as
        the compiler compiles it before it finishes the mission, as the
        same canonical text: the second stage they are compared on
+   * - ``--dump-commands``
+     - Write every meta-command and message instead, each compiled as the
+       compiler compiles it after the telemetry containers, as the same
+       canonical text: the third stage they are compared on
+
    * - ``--dynamic-allocations true|false``
      - Whether the generated code may allocate heap memory at any time
        (``true``, the default) or only during initialization (``false``).

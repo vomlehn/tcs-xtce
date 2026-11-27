@@ -9,7 +9,8 @@ use tcs_xtce::generated as x;
 use super::bind::plain_order;
 use super::layout::{conds, fixed_bits, max_bits, tail_bits};
 use super::types::{hex_bytes, is_rest};
-use super::{child, qname, Compiler};
+use super::{child, qname, Bin, Compiler};
+
 use crate::dump::{Mut, Shared};
 use crate::model::{
     unsupported, walk, Check, Encoding, Item, Key, Local, Mark, Node, Result,
@@ -22,18 +23,15 @@ use crate::model::{
 ///
 /// # Arguments
 ///
-/// * `sc` - The container, or `None`.
+/// * `be` - The container's BinaryEncoding, or `None`.
 ///
 /// # Returns
 ///
 /// Each, with its element name.
 pub fn edc_items(
-    sc: Option<&x::SequenceContainerType>,
+    be: Bin<'_>,
 ) -> Vec<(&'static str, &x::ErrorDetectCorrectChoice)> {
-    let Some(edc) = sc
-        .and_then(|c| c.binary_encoding.as_ref())
-        .and_then(|b| b.error_detect_correct.as_ref())
-    else {
+    let Some(edc) = be.and_then(|b| b.error_detect_correct.as_ref()) else {
         return Vec::new();
     };
     edc.items
@@ -265,7 +263,7 @@ impl<'a> Compiler<'a> {
         for (k, n) in chain.iter().enumerate() {
             let edc = self.node_edc.get(&n.addr()).cloned().flatten();
             let (sc, path) = match &edc {
-                Some((sc, p)) => (Some(*sc), p.clone()),
+                Some((be, p)) => (*be, p.clone()),
                 None => (None, Key::new()),
             };
             // A check's field is in its container or one derived from it,
@@ -292,7 +290,7 @@ impl<'a> Compiler<'a> {
                 .cloned()
                 .unwrap_or_default();
             for i in inc {
-                for (name, v) in edc_items(Some(i.container)) {
+                for (name, v) in edc_items(i.container) {
                     out.push(self.check(
                         name,
                         v,

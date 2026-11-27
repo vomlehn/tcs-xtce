@@ -199,8 +199,15 @@ does, and each compared on every mission before the next is begun:
    container as ``tm_node`` compiles it, before the mission is finished,
    and ``model_dump --containers`` the same; they agree on the same 28
    missions and 67 public ones.
-3. **Commands.** Meta-commands, their arguments, argument assignments
-   and command containers; messages.
+3. **Commands** (done). Meta-commands, their arguments, argument
+   assignments and command containers, with argument criteria, argument
+   locations, sizes and lookups, fixed-value entries, and the containers
+   and other meta-commands' CommandContainers they include or repeat;
+   messages. The Python compiler's ``--dump-commands`` writes every
+   meta-command and message as ``tc_node`` and ``msg_node`` compile them
+   after the telemetry containers, and ``model_dump --commands`` the
+   same; they agree on the same 28 missions and 67 public ones.
+
 4. **The mission.** Streams, algorithms, alarms bound to each packet,
    hooks and kinds: the whole of ``--dump-model``.
 

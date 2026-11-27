@@ -145,7 +145,61 @@ pub fn expr_refs(e: &Expr, out: &mut Vec<Shared<ValueRef>>) {
 }
 
 /// A LocationInContainerInBits, of a parameter's entry.
-pub type LocRef<'b> = Option<&'b x::LocationInContainerInBitsType>;
+#[derive(Debug, Clone, Copy)]
+pub enum LocRef<'b> {
+    /// A telemetry entry's.
+    P(&'b x::LocationInContainerInBitsType),
+    /// A command entry's.
+    A(&'b x::ArgumentLocationInContainerInBitsType),
+}
+
+/// Lists the bounds of each dimension of a parameter entry's
+/// DimensionList.
+///
+/// # Arguments
+///
+/// * `dl` - The DimensionList.
+///
+/// # Returns
+///
+/// The starting and ending index of each dimension.
+pub fn dims_p(
+    dl: &x::DimensionListType,
+) -> Vec<(IntValueRef<'_>, IntValueRef<'_>)> {
+    dl.dimension
+        .iter()
+        .map(|d| {
+            (
+                IntValueRef::P(&d.starting_index),
+                IntValueRef::P(&d.ending_index),
+            )
+        })
+        .collect()
+}
+
+/// Lists the bounds of each dimension of an argument entry's
+/// DimensionList.
+///
+/// # Arguments
+///
+/// * `dl` - The DimensionList.
+///
+/// # Returns
+///
+/// The starting and ending index of each dimension.
+pub fn dims_a(
+    dl: &x::ArgumentDimensionListType,
+) -> Vec<(IntValueRef<'_>, IntValueRef<'_>)> {
+    dl.dimension
+        .iter()
+        .map(|d| {
+            (
+                IntValueRef::A(&d.starting_index),
+                IntValueRef::A(&d.ending_index),
+            )
+        })
+        .collect()
+}
 
 impl Compiler<'_> {
     /// Makes a new value.
@@ -202,7 +256,7 @@ impl Compiler<'_> {
     /// values.
     pub fn location(
         &mut self,
-        loc: LocRef<'_>,
+        loc: Option<LocRef<'_>>,
         start: i64,
         path: &Key,
         scope: &[Shared<Local>],
@@ -212,30 +266,59 @@ impl Compiler<'_> {
         let Some(loc) = loc else {
             return Ok(Vec::new());
         };
-        let reference = loc
-            .reference_location
-            .map(|r| r.as_str())
-            .unwrap_or("previousEntry");
-        let off = match &loc.choice {
-            x::LocationInContainerInBitsChoice::FixedValue(n) => Count::Int(*n),
-            x::LocationInContainerInBitsChoice::DynamicValue(d) => {
-                let d = self.dyn_size(
-                    super::types::DynRef::P(d),
-                    path,
-                    "location",
-                    where_,
-                )?;
+        use x::ArgumentLocationInContainerInBitsChoice as AL;
+        /// The forms of a location's offset.
+        enum Off<'c> {
+            /// A FixedValue.
+            Fixed(i64),
+            /// A DynamicValue.
+            Dyn(super::types::DynRef<'c>),
+            /// A DiscreteLookupList.
+            Lookup(LookupList),
+        }
+        let (reference, off) = match loc {
+            LocRef::P(l) => (
+                l.reference_location,
+                match &l.choice {
+                    x::LocationInContainerInBitsChoice::FixedValue(n) => {
+                        Off::Fixed(*n)
+                    }
+                    x::LocationInContainerInBitsChoice::DynamicValue(d) => {
+                        Off::Dyn(super::types::DynRef::P(d))
+                    }
+                    x::LocationInContainerInBitsChoice::DiscreteLookupList(
+                        l,
+                    ) => Off::Lookup(LookupList::Param(Elem {
+                        value: l.clone(),
+                        class: "DiscreteLookupListType",
+                    })),
+                },
+            ),
+            LocRef::A(l) => (
+                l.reference_location,
+                match &l.choice {
+                    AL::FixedValue(n) => Off::Fixed(*n),
+                    AL::DynamicValue(d) => Off::Dyn(super::types::DynRef::A(d)),
+                    AL::DiscreteLookupList(l) => {
+                        Off::Lookup(LookupList::Arg(Elem {
+                            value: l.clone(),
+                            class: "ArgumentDiscreteLookupListType",
+                        }))
+                    }
+                },
+            ),
+        };
+        let reference =
+            reference.map(|r| r.as_str()).unwrap_or("previousEntry");
+        let off = match off {
+            Off::Fixed(n) => Count::Int(n),
+            Off::Dyn(d) => {
+                let d = self.dyn_size(d, path, "location", where_)?;
                 self.bound_location(d, scope, where_, arg_key)?
             }
-            x::LocationInContainerInBitsChoice::DiscreteLookupList(l) => {
+            Off::Lookup(t) => {
                 let d = DynSize {
-                    table: Some((
-                        path.clone(),
-                        LookupList::Param(Elem {
-                            value: l.clone(),
-                            class: "DiscreteLookupListType",
-                        }),
-                    )),
+                    table: Some((path.clone(), t)),
                     ..DynSize::default()
                 };
                 self.bound_location(d, scope, where_, arg_key)?
@@ -407,7 +490,7 @@ impl Compiler<'_> {
     pub fn subset(
         &mut self,
         local: Shared<Local>,
-        dl: Option<&x::DimensionListType>,
+        dl: Option<Vec<(IntValueRef<'_>, IntValueRef<'_>)>>,
         path: &Key,
         where_: &str,
     ) -> Result<Shared<Local>> {
@@ -422,17 +505,7 @@ impl Compiler<'_> {
                 vt.kind
             ));
         };
-        let dims: Vec<(IntValueRef<'_>, IntValueRef<'_>)> = dl
-            .dimension
-            .iter()
-            .map(|d| {
-                (
-                    IntValueRef::P(&d.starting_index),
-                    IntValueRef::P(&d.ending_index),
-                )
-            })
-            .collect();
-        let enc = self.dimensions(full.elem.clone(), &dims, path, where_)?;
+        let enc = self.dimensions(full.elem.clone(), &dl, path, where_)?;
         if enc.dims != full.dims {
             return unsupported(format!(
                 "{where_}: {} dimensions for {}-dimensional {name}",
@@ -825,19 +898,28 @@ impl Compiler<'_> {
         arg_key: ArgKey<'_>,
     ) -> Result<(DynSize, (BigInt, BigInt))> {
         if let Some((path, table)) = &d.table {
-            let LookupList::Param(t) = table else {
-                return self.bind_arg_lookup(d, scope, where_, arg_key);
+            let (crits, default): (Vec<(CritRef<'_>, i64)>, i64) = match table {
+                LookupList::Param(t) => (
+                    t.value
+                        .discrete_lookup
+                        .iter()
+                        .map(|lk| (CritRef::lookup(lk), lk.value))
+                        .collect(),
+                    t.value.default_value,
+                ),
+                LookupList::Arg(t) => (
+                    t.value
+                        .discrete_lookup
+                        .iter()
+                        .map(|lk| (CritRef::arg_lookup(lk), lk.value))
+                        .collect(),
+                    t.value.default_value,
+                ),
             };
             let mut lookup = Vec::new();
-            for lk in &t.value.discrete_lookup {
-                let terms = self.match_(
-                    CritRef::lookup(lk),
-                    path,
-                    scope,
-                    where_,
-                    arg_key,
-                )?;
-                lookup.push((terms, lk.value));
+            for (c, value) in crits {
+                let terms = self.match_(c, path, scope, where_, arg_key)?;
+                lookup.push((terms, value));
             }
             for (crit, _) in &lookup {
                 for lc in crit.iter().flat_map(|c| c.locals()) {
@@ -850,7 +932,6 @@ impl Compiler<'_> {
                     }
                 }
             }
-            let default = t.value.default_value;
             let values: Vec<i64> = lookup
                 .iter()
                 .map(|l| l.1)
@@ -926,36 +1007,6 @@ impl Compiler<'_> {
                 ..d.clone()
             },
             rng,
-        ))
-    }
-
-    /// Binds a DynSize whose DiscreteLookupList is an argument's: commands
-    /// are compiled in a later stage of the port.
-    ///
-    /// # Arguments
-    ///
-    /// * `d`       - The DynSize.
-    /// * `scope`   - The Locals decoded before the value it sizes.
-    /// * `where_`  - What it is in, for error messages.
-    /// * `arg_key` - In a command, gives the key of an argument.
-    ///
-    /// # Returns
-    ///
-    /// Nothing yet.
-    ///
-    /// # Errors
-    ///
-    /// Unsupported, always, until commands are ported.
-    fn bind_arg_lookup(
-        &mut self,
-        _d: &DynSize,
-        _scope: &[Shared<Local>],
-        where_: &str,
-        _arg_key: ArgKey<'_>,
-    ) -> Result<(DynSize, (BigInt, BigInt))> {
-        unsupported(format!(
-            "{where_}: an argument's DiscreteLookupList, which the Rust model \
-             doesn't compile yet"
         ))
     }
 
@@ -1139,6 +1190,22 @@ impl<'b> RepeatRef<'b> {
         r.map(|r| RepeatRef {
             count: IntValueRef::P(&r.count),
             offset: r.offset.as_ref().map(IntValueRef::P),
+        })
+    }
+
+    /// Views a command entry's RepeatEntry.
+    ///
+    /// # Arguments
+    ///
+    /// * `r` - The RepeatEntry, if any.
+    ///
+    /// # Returns
+    ///
+    /// The view, if there is one.
+    pub fn arg(r: Option<&'b x::ArgumentRepeatType>) -> Option<Self> {
+        r.map(|r| RepeatRef {
+            count: IntValueRef::A(&r.count),
+            offset: r.offset.as_ref().map(IntValueRef::A),
         })
     }
 }

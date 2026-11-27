@@ -10,6 +10,7 @@
 mod alarms;
 pub mod bind;
 pub mod checks;
+pub mod commands;
 pub mod containers;
 pub mod criteria;
 pub mod layout;
@@ -240,7 +241,12 @@ pub fn ancillary_int(
     }
 }
 
+/// A container's BinaryEncoding, if it has one: all that the checks,
+/// sizes and transforms of a container, of telemetry or a command, need.
+pub type Bin<'b> = Option<&'b x::ContainerBinaryDataEncodingType>;
+
 /// The compiler: the definitions of a mission's documents, indexed by
+
 /// key, and what compiling them has made so far.
 pub struct Compiler<'a> {
     /// The root SpaceSystem of each document.
@@ -301,7 +307,7 @@ pub struct Compiler<'a> {
     /// Each node's own container and its SpaceSystem, whose checks cover
     /// the packet, by the node's address; `None` for one whose checks are
     /// in its Transform.
-    pub node_edc: HashMap<usize, Option<(&'a x::SequenceContainerType, Key)>>,
+    pub node_edc: HashMap<usize, Option<(Bin<'a>, Key)>>,
     /// The ErrorDetectCorrect of the containers each node includes, by
     /// the node's address.
     pub node_included: HashMap<usize, Vec<Included<'a>>>,
@@ -311,8 +317,8 @@ pub struct Compiler<'a> {
 /// packet is known.
 #[derive(Clone)]
 pub struct Included<'a> {
-    /// The container.
-    pub container: &'a x::SequenceContainerType,
+    /// The container's BinaryEncoding.
+    pub container: Bin<'a>,
     /// The SpaceSystem it is defined in.
     pub path: Key,
     /// The Mark at its start.

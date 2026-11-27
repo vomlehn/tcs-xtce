@@ -9,8 +9,8 @@ from pathlib import Path
 
 import tcs_xtce
 from tcs_xtce.compiler.compile import Compiler, compile_documents
-from tcs_xtce.compiler.dump import (Dumper, dump, dump_containers, dump_types,
-                                    string)
+from tcs_xtce.compiler.dump import (Dumper, dump, dump_commands,
+                                    dump_containers, dump_types, string)
 
 TOP = Path(__file__).resolve().parents[3]
 
@@ -178,6 +178,10 @@ class Missions(unittest.TestCase):
                 containers = dump_containers(Compiler(roots))
                 self.assertTrue(containers.startswith("Containers {\n"),
                                 containers[:40])
+                commands = dump_commands(Compiler(roots))
+                self.assertTrue(commands.startswith("Commands {\n"),
+                                commands[:40])
+
 
     def test_the_text_does_not_depend_on_hashing(self):
         # Python hashes strings differently in each process, so a set the

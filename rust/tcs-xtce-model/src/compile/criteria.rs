@@ -91,6 +91,81 @@ impl XRef {
             calibrated: r.use_calibrated_value,
         }
     }
+
+    /// Makes the reference of an ArgumentComparison.
+    ///
+    /// # Arguments
+    ///
+    /// * `c` - The XTCE comparison.
+    ///
+    /// # Returns
+    ///
+    /// The reference: to a parameter or an argument.
+    pub fn arg_comparison(c: &x::ArgumentComparisonType) -> Self {
+        match &c.choice {
+            x::ArgumentComparisonChoice::ParameterInstanceRef(p) => {
+                XRef::param(p)
+            }
+            x::ArgumentComparisonChoice::ArgumentInstanceRef(a) => {
+                XRef::argument(a)
+            }
+        }
+    }
+}
+
+/// An input of a custom algorithm, of either kind of InputSet.
+#[derive(Debug, Clone, Copy)]
+pub enum InputRef<'b> {
+    /// A Constant.
+    Const(&'b x::ConstantType),
+    /// An InputParameterInstanceRef.
+    Param(&'b x::InputParameterInstanceRefType),
+    /// An InputArgumentInstanceRef.
+    Arg(&'b x::ArgumentInstanceRefType),
+}
+
+/// Lists the inputs of a custom algorithm of telemetry.
+///
+/// # Arguments
+///
+/// * `alg` - The algorithm.
+///
+/// # Returns
+///
+/// Its inputs, in order.
+pub fn inputs_of(alg: &x::InputAlgorithmType) -> Vec<InputRef<'_>> {
+    alg.input_set
+        .iter()
+        .flat_map(|s| s.items.iter())
+        .map(|ch| match ch {
+            x::InputSetChoice::Constant(c) => InputRef::Const(c),
+            x::InputSetChoice::InputParameterInstanceRef(p) => {
+                InputRef::Param(p)
+            }
+        })
+        .collect()
+}
+
+/// Lists the inputs of a custom algorithm of a command.
+///
+/// # Arguments
+///
+/// * `alg` - The algorithm.
+///
+/// # Returns
+///
+/// Its inputs, in order.
+pub fn arg_inputs_of(alg: &x::ArgumentInputAlgorithmType) -> Vec<InputRef<'_>> {
+    use x::ArgumentInputSetChoice as I;
+    alg.input_set
+        .iter()
+        .flat_map(|s| s.items.iter())
+        .map(|ch| match ch {
+            I::Constant(c) => InputRef::Const(c),
+            I::InputParameterInstanceRef(p) => InputRef::Param(p),
+            I::InputArgumentInstanceRef(a) => InputRef::Arg(a),
+        })
+        .collect()
 }
 
 /// Match criteria of any of the forms XTCE gives them.
@@ -104,6 +179,14 @@ pub enum CritRef<'b> {
     Boolean(&'b x::BooleanExpressionType),
     /// A CustomAlgorithm.
     Custom(&'b x::InputAlgorithmType),
+    /// An ArgumentComparison.
+    AComparison(&'b x::ArgumentComparisonType),
+    /// An ArgumentComparisonList.
+    AList(&'b x::ArgumentComparisonListType),
+    /// An ArgumentBooleanExpression.
+    ABoolean(&'b x::ArgumentBooleanExpressionType),
+    /// A command's CustomAlgorithm.
+    ACustom(&'b x::ArgumentInputAlgorithmType),
 }
 
 impl<'b> CritRef<'b> {
@@ -181,6 +264,44 @@ impl<'b> CritRef<'b> {
             D::CustomAlgorithm(c) => CritRef::Custom(c),
         }
     }
+
+    /// Views a command's MatchCriteria.
+    ///
+    /// # Arguments
+    ///
+    /// * `m` - The criteria.
+    ///
+    /// # Returns
+    ///
+    /// The view.
+    pub fn arg_match(m: &'b x::ArgumentMatchCriteriaType) -> Self {
+        use x::ArgumentMatchCriteriaChoice as A;
+        match &m.choice {
+            A::Comparison(c) => CritRef::AComparison(c),
+            A::ComparisonList(c) => CritRef::AList(c),
+            A::BooleanExpression(c) => CritRef::ABoolean(c),
+            A::CustomAlgorithm(c) => CritRef::ACustom(c),
+        }
+    }
+
+    /// Views an argument's DiscreteLookup's criteria.
+    ///
+    /// # Arguments
+    ///
+    /// * `m` - The lookup.
+    ///
+    /// # Returns
+    ///
+    /// The view.
+    pub fn arg_lookup(m: &'b x::ArgumentDiscreteLookupType) -> Self {
+        use x::ArgumentDiscreteLookupChoice as A;
+        match &m.choice {
+            A::Comparison(c) => CritRef::AComparison(c),
+            A::ComparisonList(c) => CritRef::AList(c),
+            A::BooleanExpression(c) => CritRef::ABoolean(c),
+            A::CustomAlgorithm(c) => CritRef::ACustom(c),
+        }
+    }
 }
 
 /// One alternative of a BooleanExpression, or of its ANDedConditions or
@@ -193,6 +314,12 @@ pub enum BoolRef<'b> {
     And(&'b x::ANDedConditionsType),
     /// ORedConditions.
     Or(&'b x::ORedConditionsType),
+    /// A command's Condition.
+    ACondition(&'b x::ArgumentComparisonCheckType),
+    /// A command's ANDedConditions.
+    AAnd(&'b x::ArgumentANDedConditionsType),
+    /// A command's ORedConditions.
+    AOr(&'b x::ArgumentORedConditionsType),
 }
 
 /// Follows member and index steps through a type.
@@ -507,45 +634,79 @@ impl Compiler<'_> {
         where_: &str,
         arg_key: ArgKey<'_>,
     ) -> Result<Vec<Term>> {
-        let comps: Vec<&x::ComparisonType> = match mc {
+        use x::ArgumentBooleanExpressionChoice as AB;
+        use x::BooleanExpressionChoice as B;
+        /// A comparison: what it compares, its operator and the value.
+        type Cmp<'c> = (XRef, Option<x::ComparisonOperatorsType>, &'c str);
+        let (name, inputs) = match mc {
+            CritRef::Custom(alg) => (&alg.name, inputs_of(alg)),
+            CritRef::ACustom(alg) => (&alg.name, arg_inputs_of(alg)),
+            _ => (&String::new(), Vec::new()),
+        };
+        let comps: Vec<Cmp<'_>> = match mc {
             CritRef::Boolean(b) => {
                 let c = match &b.choice {
-                    x::BooleanExpressionChoice::Condition(c) => {
-                        BoolRef::Condition(c)
-                    }
-                    x::BooleanExpressionChoice::ANDedConditions(c) => {
-                        BoolRef::And(c)
-                    }
-                    x::BooleanExpressionChoice::ORedConditions(c) => {
-                        BoolRef::Or(c)
-                    }
+                    B::Condition(c) => BoolRef::Condition(c),
+                    B::ANDedConditions(c) => BoolRef::And(c),
+                    B::ORedConditions(c) => BoolRef::Or(c),
                 };
                 return Ok(
                     vec![self.boolean(c, path, scope, where_, arg_key)?],
                 );
             }
-            CritRef::Custom(alg) => {
+            CritRef::ABoolean(b) => {
+                let c = match &b.choice {
+                    AB::Condition(c) => BoolRef::ACondition(c),
+                    AB::ANDedConditions(c) => BoolRef::AAnd(c),
+                    AB::ORedConditions(c) => BoolRef::AOr(c),
+                };
+                return Ok(
+                    vec![self.boolean(c, path, scope, where_, arg_key)?],
+                );
+            }
+            CritRef::Custom(_) | CritRef::ACustom(_) => {
                 let hook =
-                    self.hook("criterion", &qname(&child(path, &alg.name)), 0);
+                    self.hook("criterion", &qname(&child(path, name)), 0);
                 let inputs =
-                    self.hook_inputs(alg, path, scope, where_, arg_key)?;
+                    self.hook_inputs(&inputs, path, scope, where_, arg_key)?;
                 return Ok(vec![Term::Custom(Shared::new(Custom {
                     hook,
                     inputs,
-                    text: format!("{}(...)", alg.name),
+                    text: format!("{name}(...)"),
                 }))]);
             }
-            CritRef::Comparison(c) => vec![c],
-            CritRef::List(l) => l.comparison.iter().collect(),
+            CritRef::Comparison(c) => {
+                vec![(XRef::comparison(c), c.comparison_operator, &c.value)]
+            }
+            CritRef::List(l) => l
+                .comparison
+                .iter()
+                .map(|c| {
+                    (XRef::comparison(c), c.comparison_operator, &c.value[..])
+                })
+                .collect(),
+            CritRef::AComparison(c) => {
+                vec![(XRef::arg_comparison(c), c.comparison_operator, &c.value)]
+            }
+            CritRef::AList(l) => l
+                .comparison
+                .iter()
+                .map(|c| {
+                    (
+                        XRef::arg_comparison(c),
+                        c.comparison_operator,
+                        &c.value[..],
+                    )
+                })
+                .collect(),
         };
         let mut out = Vec::new();
-        for cmp in comps {
-            let op =
-                cmp.comparison_operator.map(|o| o.as_str()).unwrap_or("==");
+        for (r, op, value) in comps {
+            let op = op.map(|o| o.as_str()).unwrap_or("==");
             out.push(self.comparison(
-                &XRef::comparison(cmp),
+                &r,
                 op,
-                Some(&cmp.value),
+                Some(value),
                 path,
                 scope,
                 where_,
@@ -634,6 +795,60 @@ impl Compiler<'_> {
                         }
                         x::ORedConditionsChoice::ANDedConditions(a) => {
                             BoolRef::And(a)
+                        }
+                    })
+                    .collect(),
+            ),
+            BoolRef::ACondition(cc) => {
+                use x::ArgumentComparisonCheckChoice1 as L;
+                use x::ArgumentComparisonCheckChoice2 as R;
+                let lhs = match &cc.choice1 {
+                    L::ParameterInstanceRef(p) => XRef::param(p),
+                    L::ArgumentInstanceRef(a) => XRef::argument(a),
+                };
+                let op = cc.comparison_operator.as_str();
+                let (text, other) = match &cc.choice2 {
+                    R::Value(v) => (Some(&v[..]), None),
+                    R::ParameterInstanceRef(p) => (None, Some(XRef::param(p))),
+                    R::ArgumentInstanceRef(a) => {
+                        (None, Some(XRef::argument(a)))
+                    }
+                };
+                return self.comparison(
+                    &lhs,
+                    op,
+                    text,
+                    path,
+                    scope,
+                    where_,
+                    arg_key,
+                    other.as_ref(),
+                );
+            }
+            BoolRef::AAnd(a) => (
+                true,
+                a.items
+                    .iter()
+                    .map(|i| match i {
+                        x::ArgumentANDedConditionsChoice::Condition(c) => {
+                            BoolRef::ACondition(c)
+                        }
+                        x::ArgumentANDedConditionsChoice::ORedConditions(o) => {
+                            BoolRef::AOr(o)
+                        }
+                    })
+                    .collect(),
+            ),
+            BoolRef::AOr(o) => (
+                false,
+                o.items
+                    .iter()
+                    .map(|i| match i {
+                        x::ArgumentORedConditionsChoice::Condition(c) => {
+                            BoolRef::ACondition(c)
+                        }
+                        x::ArgumentORedConditionsChoice::ANDedConditions(a) => {
+                            BoolRef::AAnd(a)
                         }
                     })
                     .collect(),
@@ -839,7 +1054,7 @@ impl Compiler<'_> {
     ///
     /// # Arguments
     ///
-    /// * `alg`     - The XTCE algorithm, with an InputSet.
+    /// * `inputs`  - The XTCE algorithm's inputs, from its InputSet.
     /// * `path`    - The key of the SpaceSystem it is defined in.
     /// * `scope`   - The values of the packet decoded before it is used.
     /// * `where_`  - What uses it, for error messages.
@@ -856,24 +1071,22 @@ impl Compiler<'_> {
     /// value is optional, not a number, or raw but calibrated.
     pub fn hook_inputs(
         &self,
-        alg: &x::InputAlgorithmType,
+        inputs: &[InputRef<'_>],
         path: &Key,
         scope: &[Shared<Local>],
         where_: &str,
         arg_key: ArgKey<'_>,
     ) -> Result<Vec<Input>> {
-        let items: &[x::InputSetChoice] =
-            alg.input_set.as_ref().map(|s| &s.items[..]).unwrap_or(&[]);
-        if items.len() > MAX_HOOK_INPUTS {
+        if inputs.len() > MAX_HOOK_INPUTS {
             return unsupported(format!(
                 "{where_}: a custom algorithm with more than \
                  {MAX_HOOK_INPUTS} inputs"
             ));
         }
         let mut out = Vec::new();
-        for ch in items {
-            match ch {
-                x::InputSetChoice::Constant(v) => {
+        for ch in inputs {
+            let r = match ch {
+                InputRef::Const(v) => {
                     match crate::pyparse::float(&v.value) {
                         Some(f) => out.push(Input::Const(Lit::Float(f))),
                         None => {
@@ -884,42 +1097,36 @@ impl Compiler<'_> {
                             ))
                         }
                     }
+                    continue;
                 }
-                x::InputSetChoice::InputParameterInstanceRef(v) => {
-                    let r = XRef {
-                        arg: false,
-                        name: v.parameter_ref.clone(),
-                        instance: v.instance.unwrap_or(0),
-                        calibrated: v.use_calibrated_value,
-                    };
-                    let (local, member, vt, name) =
-                        self.value_ref(&r, path, scope, where_, arg_key)?;
-                    if local.get().optional {
-                        return unsupported(format!(
-                            "{where_}: custom algorithm input {name} has an \
-                             IncludeCondition"
-                        ));
-                    }
-                    if !matches!(
-                        vt.kind.as_str(),
-                        "int" | "float" | "enum" | "bool"
-                    ) {
-                        return unsupported(format!(
-                            "{where_}: custom algorithm input {name} is a {} \
-                             value",
-                            vt.kind
-                        ));
-                    }
-                    if v.use_calibrated_value == Some(false)
-                        && vt.calibrator.is_some()
-                    {
-                        return unsupported(format!(
-                            "{where_}: the raw value of calibrated {name}"
-                        ));
-                    }
-                    out.push(Input::Value(local, member, vt));
-                }
+                InputRef::Param(v) => XRef {
+                    arg: false,
+                    name: v.parameter_ref.clone(),
+                    instance: v.instance.unwrap_or(0),
+                    calibrated: v.use_calibrated_value,
+                },
+                InputRef::Arg(a) => XRef::argument(a),
+            };
+            let (local, member, vt, name) =
+                self.value_ref(&r, path, scope, where_, arg_key)?;
+            if local.get().optional {
+                return unsupported(format!(
+                    "{where_}: custom algorithm input {name} has an \
+                     IncludeCondition"
+                ));
             }
+            if !matches!(vt.kind.as_str(), "int" | "float" | "enum" | "bool") {
+                return unsupported(format!(
+                    "{where_}: custom algorithm input {name} is a {} value",
+                    vt.kind
+                ));
+            }
+            if r.calibrated == Some(false) && vt.calibrator.is_some() {
+                return unsupported(format!(
+                    "{where_}: the raw value of calibrated {name}"
+                ));
+            }
+            out.push(Input::Value(local, member, vt));
         }
         Ok(out)
     }

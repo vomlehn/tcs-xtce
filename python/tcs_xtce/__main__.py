@@ -41,7 +41,9 @@ with the Rust one.  OUTPUT may be left out, as for ``--size-report``.
 ``--dump-types`` writes each parameter and argument type alone instead,
 resolved whether or not the rest of the mission compiles: the first stage
 the two compilers are compared on; ``--dump-containers`` writes each
-telemetry container as it is compiled alone, the second.
+telemetry container as it is compiled alone, the second; and
+``--dump-commands`` each meta-command and message, compiled after the
+containers, the third.
 """
 
 from __future__ import annotations
@@ -123,6 +125,10 @@ def main(argv=None) -> int:
     ap.add_argument("--dump-containers", action="store_true",
                     help="instead of code, write each telemetry container, "
                          "compiled alone, as canonical text")
+    ap.add_argument("--dump-commands", action="store_true",
+                    help="instead of code, write each meta-command and "
+                         "message, compiled after the containers, as canonical "
+                         "text")
     ap.add_argument(
         "--dynamic-allocations", choices=("true", "false"), default="true",
         help="whether the generated code may allocate heap memory at any time "
@@ -140,7 +146,8 @@ def main(argv=None) -> int:
               for o, on in (("--size-report", args.size_report),
                             ("--dump-model", args.dump_model),
                             ("--dump-types", args.dump_types),
-                            ("--dump-containers", args.dump_containers)) if on]
+                            ("--dump-containers", args.dump_containers),
+                            ("--dump-commands", args.dump_commands)) if on]
     if len(chosen) > 1:
         ap.error(f"give one of {', '.join(chosen)}, not more")
     no_code = bool(chosen)
@@ -178,16 +185,17 @@ def main(argv=None) -> int:
         except (OSError, tcs_xtce.XtceError) as e:
             print(f"tcs-xtce: {name}: {e}", file=sys.stderr)
             return 1
-    if args.dump_types or args.dump_containers:
+    if args.dump_types or args.dump_containers or args.dump_commands:
         try:
             compiler = Compiler(roots, args.skip_unsupported, args.dialect)
         except (Cycle, Unsupported) as e:
             where = f"{inputs[0]}: " if len(inputs) == 1 else ""
             print(f"tcs-xtce: {where}{e}", file=sys.stderr)
             return 1
-        write(output,
-              dump.dump_types(compiler) if args.dump_types
-              else dump.dump_containers(compiler))
+        stage = (dump.dump_types if args.dump_types else dump.dump_containers
+                 if args.dump_containers else dump.dump_commands)
+        write(output, stage(compiler))
+
         return 0
     try:
         mission = compile_documents(

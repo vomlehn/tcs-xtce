@@ -612,8 +612,14 @@ Python compiler's <tt class="docutils literal"><span class="pre">--dump-containe
 container as <tt class="docutils literal">tm_node</tt> compiles it, before the mission is finished,
 and <tt class="docutils literal">model_dump <span class="pre">--containers</span></tt> the same; they agree on the same 28
 missions and 67 public ones.</li>
-<li><strong>Commands.</strong> Meta-commands, their arguments, argument assignments
-and command containers; messages.</li>
+<li><strong>Commands</strong> (done). Meta-commands, their arguments, argument
+assignments and command containers, with argument criteria, argument
+locations, sizes and lookups, fixed-value entries, and the containers
+and other meta-commands' CommandContainers they include or repeat;
+messages. The Python compiler's <tt class="docutils literal"><span class="pre">--dump-commands</span></tt> writes every
+meta-command and message as <tt class="docutils literal">tc_node</tt> and <tt class="docutils literal">msg_node</tt> compile them
+after the telemetry containers, and <tt class="docutils literal">model_dump <span class="pre">--commands</span></tt> the
+same; they agree on the same 28 missions and 67 public ones.</li>
 <li><strong>The mission.</strong> Streams, algorithms, alarms bound to each packet,
 hooks and kinds: the whole of <tt class="docutils literal"><span class="pre">--dump-model</span></tt>.</li>
 </ol>

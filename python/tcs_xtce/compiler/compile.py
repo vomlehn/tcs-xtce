@@ -5206,8 +5206,12 @@ class Compiler:
                     raise Unsupported(f"{where}: constant {v.constant_name} "
                                       f"{v.value!r} is not a number") from None
                 continue
-            local, member, vt, name = self.value_ref(
-                "ParameterInstanceRef", v, path, scope, where, arg_key)
+            kind = ("ArgumentInstanceRef"
+                    if ch.name == "InputArgumentInstanceRef"
+                    else "ParameterInstanceRef")
+            local, member, vt, name = self.value_ref(kind, v, path, scope,
+                                                     where, arg_key)
+
             if local.optional:
                 raise Unsupported(f"{where}: custom algorithm input {name} has "
                                   "an IncludeCondition")

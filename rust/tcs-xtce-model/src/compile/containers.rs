@@ -8,12 +8,12 @@ use std::rc::Rc;
 
 use tcs_xtce::generated as x;
 
-use super::bind::RepeatRef;
+use super::bind::{dims_p, LocRef, RepeatRef};
 use super::checks::{check_length, edc_items};
 use super::criteria::{ArgKey, CritRef, XRef};
 use super::layout::{check_aligned, fixed_bits, max_bits, span_of, static_end};
 use super::types::{dyn_units, int_bounds, is_rest, IntValue, IntValueRef};
-use super::{qname, Compiler, Included};
+use super::{qname, Bin, Compiler, Included};
 use crate::dump::{Mut, Shared};
 use crate::model::{
     unsupported, walk, AggregateEnc, AnyOf, BinaryEnc, Cond, Count, Criterion,
@@ -70,15 +70,13 @@ pub fn container_transform(
 ///
 /// # Arguments
 ///
-/// * `sc` - The container.
+/// * `be` - The container's BinaryEncoding.
 ///
 /// # Returns
 ///
 /// Whether it has.
-pub fn has_transform(sc: &x::SequenceContainerType) -> bool {
-    sc.binary_encoding
-        .as_ref()
-        .is_some_and(|b| container_transform(b).is_some())
+pub fn has_transform(be: Bin<'_>) -> bool {
+    be.is_some_and(|b| container_transform(b).is_some())
 }
 
 /// Finds the value of a repeated segment entry whose size varies, for a
@@ -92,7 +90,10 @@ pub fn has_transform(sc: &x::SequenceContainerType) -> bool {
 /// # Returns
 ///
 /// The repeated segments' Local, or `None` when the size is `bits`.
-fn varying_segment(items: &[Item], bits: Option<i64>) -> Option<Shared<Local>> {
+pub fn varying_segment(
+    items: &[Item],
+    bits: Option<i64>,
+) -> Option<Shared<Local>> {
     if bits.is_some() {
         return None;
     }
@@ -111,9 +112,15 @@ pub enum SegRef<'b> {
     Container(&'b x::ContainerSegmentRefEntryType),
     /// A StreamSegmentEntry.
     Stream(&'b x::StreamSegmentEntryType),
+    /// A command's ParameterSegmentRefEntry.
+    AParam(&'b x::ArgumentParameterSegmentRefEntryType),
+    /// A command's ContainerSegmentRefEntry.
+    AContainer(&'b x::ArgumentContainerSegmentRefEntryType),
+    /// A command's StreamSegmentEntry.
+    AStream(&'b x::ArgumentStreamSegmentEntryType),
 }
 
-impl SegRef<'_> {
+impl<'b> SegRef<'b> {
     /// Gives the entry's sizeInBits.
     ///
     /// # Returns
@@ -124,6 +131,9 @@ impl SegRef<'_> {
             SegRef::Param(e) => e.size_in_bits,
             SegRef::Container(e) => e.size_in_bits,
             SegRef::Stream(e) => e.size_in_bits,
+            SegRef::AParam(e) => e.size_in_bits,
+            SegRef::AContainer(e) => e.size_in_bits,
+            SegRef::AStream(e) => e.size_in_bits,
         }
     }
 
@@ -137,6 +147,9 @@ impl SegRef<'_> {
             SegRef::Param(e) => e.order,
             SegRef::Container(e) => e.order,
             SegRef::Stream(e) => e.order,
+            SegRef::AParam(e) => e.order,
+            SegRef::AContainer(e) => e.order,
+            SegRef::AStream(e) => e.order,
         }
     }
 
@@ -145,14 +158,36 @@ impl SegRef<'_> {
     /// # Returns
     ///
     /// It, if given.
-    fn repeat(&self) -> Option<&x::RepeatType> {
-        match self {
-            SegRef::Param(e) => e.repeat_entry.as_ref(),
-            SegRef::Container(e) => e.repeat_entry.as_ref(),
-            SegRef::Stream(e) => e.repeat_entry.as_ref(),
+    fn repeat(&self) -> Option<RepeatRef<'b>> {
+        match *self {
+            SegRef::Param(e) => RepeatRef::of(e.repeat_entry.as_ref()),
+            SegRef::Container(e) => RepeatRef::of(e.repeat_entry.as_ref()),
+            SegRef::Stream(e) => RepeatRef::of(e.repeat_entry.as_ref()),
+            SegRef::AParam(e) => RepeatRef::arg(e.repeat_entry.as_ref()),
+            SegRef::AContainer(e) => RepeatRef::arg(e.repeat_entry.as_ref()),
+            SegRef::AStream(e) => RepeatRef::arg(e.repeat_entry.as_ref()),
+        }
+    }
+
+    /// Gives the parameter a parameter segment is of.
+    ///
+    /// # Returns
+    ///
+    /// Its reference, or `None` for a container or stream segment.
+    fn parameter_ref(&self) -> Option<&'b str> {
+        match *self {
+            SegRef::Param(e) => Some(&e.parameter_ref),
+            SegRef::AParam(e) => Some(&e.parameter_ref),
+            _ => None,
         }
     }
 }
+
+/// An IndirectParameterRefEntry, of telemetry or a command: its
+/// aliasNameSpace, whether it has a RepeatEntry, and its
+/// ParameterInstance.
+pub type Indirect<'b> =
+    (Option<&'b str>, bool, &'b x::ParameterInstanceRefType);
 
 /// What every kind of entry has.
 struct Entry<'b> {
@@ -269,8 +304,14 @@ impl<'a> Compiler<'a> {
                 )?),
                 None => None,
             };
-            let loc =
-                self.location(en.loc, start, path, scope, &where_, None)?;
+            let loc = self.location(
+                en.loc.map(LocRef::P),
+                start,
+                path,
+                scope,
+                &where_,
+                None,
+            )?;
             let mut out = Self::next_seek(&mut items, loc, &where_)?;
             match ch {
                 E::ParameterSegmentRefEntry(_)
@@ -301,7 +342,7 @@ impl<'a> Compiler<'a> {
                         let bits = self.segment_bits(seg, path, &where_)?;
                         let (s, a) = self.end_seek(
                             &es,
-                            sc,
+                            sc.binary_encoding.as_ref(),
                             varying_segment(&got, bits),
                             &where_,
                             bits.unwrap_or(0),
@@ -316,7 +357,12 @@ impl<'a> Compiler<'a> {
                     out.extend(after);
                 }
                 E::IndirectParameterRefEntry(e) => {
-                    let got = self.indirect(e, path, scope, &where_, None)?;
+                    let ind = (
+                        e.alias_name_space.as_deref(),
+                        e.repeat_entry.is_some(),
+                        &e.parameter_instance,
+                    );
+                    let got = self.indirect(ind, path, scope, &where_, None)?;
                     out.extend(got);
                 }
                 E::ParameterRefEntry(_) | E::ArrayParameterRefEntry(_) => {
@@ -332,7 +378,8 @@ impl<'a> Compiler<'a> {
                         _ => unreachable!("a parameter entry"),
                     };
                     let local = self.param_local(pref, path)?;
-                    let local = self.subset(local, dl, path, &where_)?;
+                    let local =
+                        self.subset(local, dl.map(dims_p), path, &where_)?;
                     let local =
                         self.repeat(local, RepeatRef::of(rp), path, &where_)?;
                     let local = self.bind(local, scope, &where_, None)?;
@@ -341,7 +388,7 @@ impl<'a> Compiler<'a> {
                         let es = es.clone();
                         let (s, a) = self.end_seek(
                             &es,
-                            sc,
+                            sc.binary_encoding.as_ref(),
                             Some(local.clone()),
                             &where_,
                             0,
@@ -436,7 +483,7 @@ impl<'a> Compiler<'a> {
         }
         let mut out = Vec::new();
         if e.repeat_entry.is_some() {
-            let vt = self.container_type(&ckey, stack, where_)?;
+            let vt = self.container_type(&ckey, stack, where_, false)?;
             let local = self.local(&inc.name, &qname(&ckey), vt);
             let local = self.repeat(
                 local,
@@ -481,10 +528,11 @@ impl<'a> Compiler<'a> {
                 }));
             }
         }
-        let pad = self.size_pad(inc, &inner, m, where_, Some(scope), &cpath)?;
+        let be = inc.binary_encoding.as_ref();
+        let pad = self.size_pad(be, &inner, m, where_, Some(scope), &cpath)?;
         inner.extend(pad);
         let wrapped = self.wrap_transform(
-            inc,
+            be,
             inner,
             m,
             where_,
@@ -493,12 +541,12 @@ impl<'a> Compiler<'a> {
             false,
         )?;
         out.extend(measure(wrapped, where_)?);
-        if !edc_items(Some(inc)).is_empty() && !has_transform(inc) {
+        if !edc_items(be).is_empty() && !has_transform(be) {
             let end = self.next_id();
             out.push(Item::Mark(Mark { id: end }));
             if conditional {
                 // Checked where the container ends, when it is there.
-                for (name, v) in edc_items(Some(inc)) {
+                for (name, v) in edc_items(be) {
                     let c = self.check(
                         name,
                         v,
@@ -513,7 +561,7 @@ impl<'a> Compiler<'a> {
                 }
             } else {
                 self.included_checks.push(Included {
-                    container: inc,
+                    container: be,
                     path: cpath.clone(),
                     start: m,
                     end,
@@ -570,19 +618,12 @@ impl<'a> Compiler<'a> {
                 e.order(),
             );
         };
-        let count = self.int_value(
-            IntValueRef::P(&rp.count),
-            path,
-            "RepeatEntry Count",
-            where_,
-        )?;
-        let gap = match &rp.offset {
-            Some(o) => Some(self.int_value(
-                IntValueRef::P(o),
-                path,
-                "RepeatEntry Offset",
-                where_,
-            )?),
+        let count =
+            self.int_value(rp.count, path, "RepeatEntry Count", where_)?;
+        let gap = match rp.offset {
+            Some(o) => {
+                Some(self.int_value(o, path, "RepeatEntry Offset", where_)?)
+            }
             None => None,
         };
         let no_gap = matches!(gap, None | Some(IntValue::Int(0)));
@@ -608,7 +649,7 @@ impl<'a> Compiler<'a> {
         segs.counts.insert(r.clone(), k0 + 1);
         let k = e.order().unwrap_or(k0);
         let lc = self.raw_segment(&r, k, e.size_in_bits(), where_)?;
-        let lc = self.repeat(lc, RepeatRef::of(Some(rp)), path, where_)?;
+        let lc = self.repeat(lc, Some(rp), path, where_)?;
         let lc = self.bind(lc, scope, where_, arg_key)?;
         scope.push(lc.clone());
         Ok(vec![Item::Value(Value {
@@ -642,19 +683,10 @@ impl<'a> Compiler<'a> {
         let Some(rp) = e.repeat() else {
             return Ok(Some(e.size_in_bits()));
         };
-        let count = self.int_value(
-            IntValueRef::P(&rp.count),
-            path,
-            "RepeatEntry Count",
-            where_,
-        )?;
-        let gap = match &rp.offset {
-            Some(o) => self.int_value(
-                IntValueRef::P(o),
-                path,
-                "RepeatEntry Offset",
-                where_,
-            )?,
+        let count =
+            self.int_value(rp.count, path, "RepeatEntry Count", where_)?;
+        let gap = match rp.offset {
+            Some(o) => self.int_value(o, path, "RepeatEntry Offset", where_)?,
             None => IntValue::Int(0),
         };
         let (IntValue::Int(c), IntValue::Int(g)) = (count, gap) else {
@@ -684,20 +716,22 @@ impl<'a> Compiler<'a> {
     ///
     /// Unsupported, if a reference doesn't resolve.
     pub fn segment_ref(&self, e: SegRef<'_>, path: &Key) -> Result<String> {
+        let has = |k: &[String]| self.params.contains(k);
         match e {
-            SegRef::Param(p) => {
-                let has = |k: &[String]| self.params.contains(k);
-                Ok(qname(&Self::resolve(
-                    &p.parameter_ref,
-                    path,
-                    &has,
-                    "parameter",
-                )?))
-            }
+            SegRef::Param(_) | SegRef::AParam(_) => Ok(qname(&Self::resolve(
+                e.parameter_ref().unwrap(),
+                path,
+                &has,
+                "parameter",
+            )?)),
             SegRef::Container(c) => {
                 Ok(qname(&self.container_key(&c.container_ref, path)?))
             }
+            SegRef::AContainer(c) => {
+                Ok(qname(&self.container_key(&c.container_ref, path)?))
+            }
             SegRef::Stream(s) => Ok(s.stream_ref.clone()),
+            SegRef::AStream(s) => Ok(s.stream_ref.clone()),
         }
     }
 
@@ -741,11 +775,11 @@ impl<'a> Compiler<'a> {
         let k0 = *segs.counts.get(&r).unwrap_or(&0);
         segs.counts.insert(r.clone(), k0 + 1);
         let k = order.unwrap_or(k0);
-        if let (SegRef::Param(p), false) = (e, cond) {
+        if let (Some(pref), false) = (e.parameter_ref(), cond) {
             let gi = match segs.groups.iter().position(|g| g.0 == r) {
                 Some(i) => i,
                 None => {
-                    let local = self.param_local(&p.parameter_ref, path)?;
+                    let local = self.param_local(pref, path)?;
                     local.get_mut().length = None;
                     let total = fixed_bits(&local.get().vt());
                     segs.groups.push((r.clone(), local, total, Vec::new()));
@@ -864,7 +898,7 @@ impl<'a> Compiler<'a> {
     /// # Errors
     ///
     /// Unsupported, if a segment can't be a raw field.
-    fn raw_segments(
+    pub fn raw_segments(
         &mut self,
         items: &mut [Item],
         segs: Segs,
@@ -896,7 +930,8 @@ impl<'a> Compiler<'a> {
     ///
     /// # Arguments
     ///
-    /// * `e`       - The entry.
+    /// * `e`       - The entry's aliasNameSpace, whether it has a
+    ///               RepeatEntry, and its ParameterInstance.
     /// * `path`    - The key of the SpaceSystem it is in.
     /// * `scope`   - The values read so far; grows by the parameters it can
     ///               select.
@@ -915,21 +950,22 @@ impl<'a> Compiler<'a> {
     /// read here.
     pub fn indirect(
         &mut self,
-        e: &x::IndirectParameterRefEntryType,
+        e: Indirect<'_>,
         path: &Key,
         scope: &mut Vec<Shared<Local>>,
         where_: &str,
         arg_key: ArgKey<'_>,
     ) -> Result<Vec<Item>> {
-        if e.repeat_entry.is_some() {
+        let (alias, repeated, instance) = e;
+        if repeated {
             return unsupported(format!(
                 "{where_}: a repeated IndirectParameterRefEntry"
             ));
         }
-        let sel = XRef::param(&e.parameter_instance);
+        let sel = XRef::param(instance);
         let (_, _, vt, pkey) =
             self.value_ref(&sel, path, scope, where_, arg_key)?;
-        let aliases = e.alias_name_space.as_deref().map(|s| self.aliases(s));
+        let aliases = alias.map(|s| self.aliases(s));
         let has = |k: &[String]| self.params.contains(k);
         let choices: Vec<(Vec<String>, Key)> = if vt.kind == "enum" {
             let mut out = Vec::new();
@@ -1253,7 +1289,7 @@ impl<'a> Compiler<'a> {
     /// # Arguments
     ///
     /// * `es`      - The entry's EndSeek.
-    /// * `sc`      - The XTCE container.
+    /// * `be`      - The XTCE container's BinaryEncoding.
     /// * `local`   - The entry's value, or `None` for a segment.
     /// * `where_`  - What the container is, for error messages.
     /// * `bits`    - A segment's size in bits.
@@ -1275,7 +1311,7 @@ impl<'a> Compiler<'a> {
     pub fn end_seek(
         &mut self,
         es: &EndSeek,
-        sc: &x::SequenceContainerType,
+        be: Bin<'_>,
         local: Option<Shared<Local>>,
         where_: &str,
         mut bits: i64,
@@ -1300,7 +1336,7 @@ impl<'a> Compiler<'a> {
             }
             bits = fb.unwrap_or(0);
         }
-        if has_transform(sc) {
+        if has_transform(be) {
             // Its end is that of its bytes before the transform.
             return Ok((
                 Item::TailSeek(TailSeek {
@@ -1310,11 +1346,7 @@ impl<'a> Compiler<'a> {
                 vec![Item::TailPad(TailPad { bits: es.offset })],
             ));
         }
-        let size = match sc
-            .binary_encoding
-            .as_ref()
-            .and_then(|b| b.size_in_bits.as_ref())
-        {
+        let size = match be.and_then(|b| b.size_in_bits.as_ref()) {
             Some(s) => Some(self.int_value(
                 IntValueRef::P(s),
                 path,
@@ -1372,7 +1404,7 @@ impl<'a> Compiler<'a> {
     ///
     /// # Arguments
     ///
-    /// * `sc`     - The XTCE container.
+    /// * `be`     - The XTCE container's BinaryEncoding.
     /// * `items`  - Its entries' items.
     /// * `start`  - The id of the Mark at its start.
     /// * `where_` - What it is, for error messages.
@@ -1390,14 +1422,14 @@ impl<'a> Compiler<'a> {
     /// a repeated container's size or entries vary.
     pub fn size_pad(
         &mut self,
-        sc: &x::SequenceContainerType,
+        be: Bin<'_>,
         items: &[Item],
         start: i64,
         where_: &str,
         scope: Option<&[Shared<Local>]>,
         path: &Key,
     ) -> Result<Vec<Item>> {
-        let Some(be) = &sc.binary_encoding else {
+        let Some(be) = be else {
             return Ok(Vec::new());
         };
         if be.from_binary_transform_algorithm.is_some()
@@ -1478,6 +1510,8 @@ impl<'a> Compiler<'a> {
     /// * `ckey`   - The container's key.
     /// * `stack`  - The keys of the containers being compiled.
     /// * `where_` - What repeats it, for error messages.
+    /// * `tc`     - Whether the container is one a command may include, in
+    ///              `tc_containers`, rather than telemetry's.
     ///
     /// # Returns
     ///
@@ -1491,11 +1525,17 @@ impl<'a> Compiler<'a> {
         ckey: &Key,
         stack: &[Key],
         where_: &str,
+        tc: bool,
     ) -> Result<Rc<VType>> {
         if let Some(t) = self.ctypes.get(ckey) {
             return Ok(t.clone());
         }
-        let (cpath, inc) = self.containers.get(ckey).unwrap().clone();
+        let table = if tc {
+            &self.tc_containers
+        } else {
+            &self.containers
+        };
+        let (cpath, inc) = table.get(ckey).unwrap().clone();
         let what = format!("{where_}: repeated container {}", qname(ckey));
         let m = self.next_id();
         // Its entries are values of each copy, so sizes can't come from
@@ -1505,10 +1545,11 @@ impl<'a> Compiler<'a> {
         let mut scope = Vec::new();
         let mut items =
             self.tm_items(inc, &cpath, &st, m, &mut scope, false)?;
-        let xf = self.copy_transform(inc, &items, &what, &cpath)?;
+        let be = inc.binary_encoding.as_ref();
+        let xf = self.copy_transform(be, &items, &what, &cpath)?;
         if xf.is_none() {
             let pad =
-                self.size_pad(inc, &items, m, where_, None, &Key::new())?;
+                self.size_pad(be, &items, m, where_, None, &Key::new())?;
             items.extend(pad);
         }
         let vt = self.aggregate_of(
@@ -1529,7 +1570,7 @@ impl<'a> Compiler<'a> {
     ///
     /// # Arguments
     ///
-    /// * `sc`    - The XTCE container.
+    /// * `bin`   - The XTCE container's BinaryEncoding.
     /// * `items` - Its entries' items.
     /// * `what`  - What it is, for error messages.
     /// * `path`  - The key of the SpaceSystem it is defined in.
@@ -1544,18 +1585,18 @@ impl<'a> Compiler<'a> {
     /// of whole bytes.
     fn copy_transform(
         &mut self,
-        sc: &x::SequenceContainerType,
+        bin: Bin<'_>,
         items: &[Item],
         what: &str,
         path: &Key,
     ) -> Result<Option<XformEnc>> {
-        let Some(be) = &sc.binary_encoding else {
+        let Some(be) = bin else {
             return Ok(None);
         };
         let Some((fa, ta)) = container_transform(be) else {
             return Ok(None);
         };
-        if !edc_items(Some(sc)).is_empty() {
+        if !edc_items(bin).is_empty() {
             return unsupported(format!(
                 "{what} has ErrorDetectCorrect and transform algorithms"
             ));
@@ -1936,7 +1977,7 @@ impl<'a> Compiler<'a> {
     ///
     /// # Arguments
     ///
-    /// * `sc`     - The XTCE container.
+    /// * `bin`    - The XTCE container's BinaryEncoding.
     /// * `items`  - Its compiled items.
     /// * `start`  - The id of the Mark at its start.
     /// * `where_` - What it is, for error messages.
@@ -1957,7 +1998,7 @@ impl<'a> Compiler<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn wrap_transform(
         &mut self,
-        sc: &'a x::SequenceContainerType,
+        bin: Bin<'a>,
         items: Vec<Item>,
         start: i64,
         where_: &str,
@@ -1965,7 +2006,7 @@ impl<'a> Compiler<'a> {
         name: &str,
         packet: bool,
     ) -> Result<Vec<Item>> {
-        let Some(be) = &sc.binary_encoding else {
+        let Some(be) = bin else {
             return Ok(items);
         };
         let Some((fa, ta)) = container_transform(be) else {
@@ -2008,7 +2049,7 @@ impl<'a> Compiler<'a> {
         self.included_checks = rest;
         let mut checks = Vec::new();
         for inc in &inside {
-            for (n, v) in edc_items(Some(inc.container)) {
+            for (n, v) in edc_items(inc.container) {
                 let c = self.check(
                     n,
                     v,
@@ -2022,7 +2063,7 @@ impl<'a> Compiler<'a> {
                 checks.push(Item::Verify(Verify { check: c }));
             }
         }
-        if !edc_items(Some(sc)).is_empty() {
+        if !edc_items(bin).is_empty() {
             let end = self.next_id();
             let scope: Vec<Shared<Local>> = walk(&items, true)
                 .into_iter()
@@ -2033,7 +2074,7 @@ impl<'a> Compiler<'a> {
                 .collect();
             let mut own = vec![Item::Mark(Mark { id: end })];
             own.extend(checks);
-            for (n, v) in edc_items(Some(sc)) {
+            for (n, v) in edc_items(bin) {
                 let c = self.check(
                     n,
                     v,
@@ -2191,9 +2232,10 @@ impl<'a> Compiler<'a> {
             }
             base = Some(b);
         }
-        self.node_edc.insert(node.addr(), Some((sc, path.clone())));
+        let be = sc.binary_encoding.as_ref();
+        self.node_edc.insert(node.addr(), Some((be, path.clone())));
         self.included_checks = Vec::new();
-        if has_transform(sc) {
+        if has_transform(be) {
             // Its checks are in its Transform.
             self.node_edc.insert(node.addr(), None);
             // Its own entries are transformed: they start at the start of
@@ -2209,7 +2251,7 @@ impl<'a> Compiler<'a> {
                 false,
             )?);
             let wrapped =
-                self.wrap_transform(sc, items, m, &where_, path, &nkey, true)?;
+                self.wrap_transform(be, items, m, &where_, path, &nkey, true)?;
             node.get_mut().items = wrapped;
         } else {
             let items =
@@ -2218,7 +2260,8 @@ impl<'a> Compiler<'a> {
             // A size covers the whole packet, base containers' entries too.
             let all = node.all_items();
             let pad =
-                self.size_pad(sc, &all, 0, &where_, Some(&scope), path)?;
+                self.size_pad(be, &all, 0, &where_, Some(&scope), path)?;
+
             node.get_mut().items.extend(pad);
         }
         let inc = std::mem::take(&mut self.included_checks);

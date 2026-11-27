@@ -8,7 +8,8 @@
 //! canonical text ([`dump`]), which must be identical line for line (see
 //! `docs/rust-migration-design.rst`). The first stage is the parameter and
 //! argument types, which [`dump_types`] writes; the second the telemetry
-//! containers, which [`dump_containers`] writes.
+//! containers, which [`dump_containers`] writes; the third the
+//! meta-commands and messages, which [`dump_commands`] writes.
 
 pub mod compile;
 pub mod dump;
@@ -171,6 +172,77 @@ pub fn dump_containers(compiler: &mut Compiler<'_>) -> String {
     }
     let c = Containers {
         container,
+        warnings: compiler.warnings.clone(),
+    };
+    dump::dump(&c)
+}
+
+/// Every meta-command and message of a mission, each compiled as
+/// `tc_node` and `msg_node` compile it.
+#[derive(Debug, Clone)]
+pub struct Commands {
+    /// Each meta-command's node, or why it fails, by qualified name, in
+    /// the documents' order.
+    pub command: Dict<String, Built>,
+    /// Each message's, likewise.
+    pub message: Dict<String, Built>,
+    /// The warnings compiling the containers, meta-commands and messages
+    /// gave, in order.
+    pub warnings: Vec<String>,
+}
+
+value_record!(Commands, "Commands", [command, message, warnings]);
+
+/// Gives a node, or why it fails, as [`dump_commands`] writes it.
+///
+/// # Arguments
+///
+/// * `r` - What compiling it gave.
+///
+/// # Returns
+///
+/// The node, or the error as a `Failed`.
+fn built(r: model::Result<dump::Shared<model::Node>>) -> Built {
+    match r {
+        Ok(n) => Built::Node(n),
+        Err(e) => Built::Failed(Failed {
+            error: e.class().into(),
+            message: e.message().into(),
+        }),
+    }
+}
+
+/// Writes every meta-command and message of a mission, each compiled as
+/// `tc_node` and `msg_node` compile it after the telemetry containers,
+/// before the mission is finished, as canonical text, as the Python
+/// compiler's `--dump-commands` does.
+///
+/// # Arguments
+///
+/// * `compiler` - The compiler, with the documents indexed and nothing compiled
+///                yet.
+///
+/// # Returns
+///
+/// The text of a `Commands`, ending in a newline.
+pub fn dump_commands(compiler: &mut Compiler<'_>) -> String {
+    // As compile does: the containers first, which messages derive from.
+    for key in compiler.containers.keys().to_vec() {
+        let _ = compiler.tm_node(&key);
+    }
+    let mut command = Dict::default();
+    for key in compiler.mcs.keys().to_vec() {
+        let b = built(compiler.tc_node(&key));
+        command.0.push((qname(&key), b));
+    }
+    let mut message = Dict::default();
+    for key in compiler.messages.keys().to_vec() {
+        let b = built(compiler.msg_node(&key));
+        message.0.push((qname(&key), b));
+    }
+    let c = Commands {
+        command,
+        message,
         warnings: compiler.warnings.clone(),
     };
     dump::dump(&c)

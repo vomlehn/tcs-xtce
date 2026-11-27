@@ -12,6 +12,8 @@ The stages compared so far:
   each resolved alone, or the error it gives.
 - ``--dump-containers``: every telemetry container, each compiled as
   ``tm_node`` compiles it, before the mission is finished.
+- ``--dump-commands``: every meta-command and message, each compiled as
+  ``tc_node`` and ``msg_node`` compile it, after the containers.
 
 The missions are the demo mission, the examples (the split mission's three
 documents together) and the schema-coverage samples; with ``--external``,
@@ -33,7 +35,8 @@ sys.path.insert(0, str(TOP / "python"))
 
 import tcs_xtce  # noqa: E402
 from tcs_xtce.compiler.compile import Compiler  # noqa: E402
-from tcs_xtce.compiler.dump import dump_containers, dump_types  # noqa: E402
+from tcs_xtce.compiler.dump import (  # noqa: E402
+    dump_commands, dump_containers, dump_types)
 from tcs_xtce.compiler.model import Cycle, Unsupported  # noqa: E402
 
 EXTERNAL = TOP / "tests" / "external"
@@ -103,7 +106,9 @@ def external() -> list[tuple[list[str], str | None]]:
 # The stages compared: each one's name, the Python function that writes
 # it and the model_dump option that does.
 STAGES = [("types", dump_types, "--types"),
-          ("containers", dump_containers, "--containers")]
+          ("containers", dump_containers, "--containers"),
+          ("commands", dump_commands, "--commands")]
+
 
 
 def python_dump(docs: list[str], dialect: str | None, write) -> str | None:
