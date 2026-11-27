@@ -191,9 +191,14 @@ does, and each compared on every mission before the next is begun:
    model's ``model_dump --types`` writes the same. They agree on the 28
    missions here and the 67 public documents and missions that can be
    read.
-2. **Containers.** Telemetry containers and their entries: locations,
-   repeats, include conditions, segments, length and checksum fields,
-   transforms; the nodes and their inheritance.
+2. **Containers** (done). Telemetry containers and their entries:
+   locations, repeats, include conditions and other criteria, segments,
+   indirect entries, included and repeated containers, length and
+   checksum fields, transforms; the nodes and their inheritance. The
+   Python compiler's ``--dump-containers`` writes every telemetry
+   container as ``tm_node`` compiles it, before the mission is finished,
+   and ``model_dump --containers`` the same; they agree on the same 28
+   missions and 67 public ones.
 3. **Commands.** Meta-commands, their arguments, argument assignments
    and command containers; messages.
 4. **The mission.** Streams, algorithms, alarms bound to each packet,

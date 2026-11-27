@@ -40,7 +40,8 @@ resolved model the code would be generated from, as the canonical text
 with the Rust one.  OUTPUT may be left out, as for ``--size-report``.
 ``--dump-types`` writes each parameter and argument type alone instead,
 resolved whether or not the rest of the mission compiles: the first stage
-the two compilers are compared on.
+the two compilers are compared on; ``--dump-containers`` writes each
+telemetry container as it is compiled alone, the second.
 """
 
 from __future__ import annotations
@@ -119,6 +120,9 @@ def main(argv=None) -> int:
     ap.add_argument("--dump-types", action="store_true",
                     help="instead of code, write each parameter and argument "
                          "type, resolved alone, as canonical text")
+    ap.add_argument("--dump-containers", action="store_true",
+                    help="instead of code, write each telemetry container, "
+                         "compiled alone, as canonical text")
     ap.add_argument(
         "--dynamic-allocations", choices=("true", "false"), default="true",
         help="whether the generated code may allocate heap memory at any time "
@@ -135,15 +139,16 @@ def main(argv=None) -> int:
     chosen = [o
               for o, on in (("--size-report", args.size_report),
                             ("--dump-model", args.dump_model),
-                            ("--dump-types", args.dump_types)) if on]
+                            ("--dump-types", args.dump_types),
+                            ("--dump-containers", args.dump_containers)) if on]
     if len(chosen) > 1:
         ap.error(f"give one of {', '.join(chosen)}, not more")
     no_code = bool(chosen)
     if no_code and len(args.files) == 1:
         inputs, output = args.files, None
     elif len(args.files) < 2:
-        ap.error("OUTPUT is required unless --size-report, --dump-model or "
-                 "--dump-types is given")
+        ap.error("OUTPUT is required unless --size-report or a --dump-* option "
+                 "is given")
     else:
         inputs, output = args.files[:-1], args.files[-1]
     if output == "-":
@@ -157,8 +162,8 @@ def main(argv=None) -> int:
             ap.error(f"{chosen[0]} writes no code; leave out --lang and "
                      "--prefix")
     elif args.lang is None:
-        ap.error("--lang is required unless --size-report, --dump-model or "
-                 "--dump-types is given")
+        ap.error("--lang is required unless --size-report or a --dump-* option "
+                 "is given")
     if args.prefix is not None and args.lang not in ("c", "c++"):
         ap.error("--prefix only applies to --lang c and --lang c++")
     alloc = args.dynamic_allocations == "true"
@@ -173,14 +178,16 @@ def main(argv=None) -> int:
         except (OSError, tcs_xtce.XtceError) as e:
             print(f"tcs-xtce: {name}: {e}", file=sys.stderr)
             return 1
-    if args.dump_types:
+    if args.dump_types or args.dump_containers:
         try:
             compiler = Compiler(roots, args.skip_unsupported, args.dialect)
         except (Cycle, Unsupported) as e:
             where = f"{inputs[0]}: " if len(inputs) == 1 else ""
             print(f"tcs-xtce: {where}{e}", file=sys.stderr)
             return 1
-        write(output, dump.dump_types(compiler))
+        write(output,
+              dump.dump_types(compiler) if args.dump_types
+              else dump.dump_containers(compiler))
         return 0
     try:
         mission = compile_documents(

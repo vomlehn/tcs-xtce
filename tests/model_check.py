@@ -10,6 +10,8 @@ The stages compared so far:
 
 - ``--dump-types``: every parameter and argument type of the mission,
   each resolved alone, or the error it gives.
+- ``--dump-containers``: every telemetry container, each compiled as
+  ``tm_node`` compiles it, before the mission is finished.
 
 The missions are the demo mission, the examples (the split mission's three
 documents together) and the schema-coverage samples; with ``--external``,
@@ -31,7 +33,7 @@ sys.path.insert(0, str(TOP / "python"))
 
 import tcs_xtce  # noqa: E402
 from tcs_xtce.compiler.compile import Compiler  # noqa: E402
-from tcs_xtce.compiler.dump import dump_types  # noqa: E402
+from tcs_xtce.compiler.dump import dump_containers, dump_types  # noqa: E402
 from tcs_xtce.compiler.model import Cycle, Unsupported  # noqa: E402
 
 EXTERNAL = TOP / "tests" / "external"
@@ -98,12 +100,19 @@ def external() -> list[tuple[list[str], str | None]]:
     return out
 
 
-def python_types(docs: list[str], dialect: str | None) -> str | None:
-    """Writes a mission's types with the Python compiler.
+# The stages compared: each one's name, the Python function that writes
+# it and the model_dump option that does.
+STAGES = [("types", dump_types, "--types"),
+          ("containers", dump_containers, "--containers")]
+
+
+def python_dump(docs: list[str], dialect: str | None, write) -> str | None:
+    """Writes one stage of a mission's model with the Python compiler.
 
     Args:
         docs:    The documents, relative to the top of the repository.
         dialect: The dialect to read them in, or None.
+        write:   The function that writes the stage from a Compiler.
 
     Returns:
         The canonical text, an ``error:`` line if the documents don't
@@ -119,22 +128,24 @@ def python_types(docs: list[str], dialect: str | None) -> str | None:
         compiler = Compiler(roots, False, dialect)
     except (Unsupported, Cycle) as e:
         return f"error: {e}\n"
-    return dump_types(compiler)
+    return write(compiler)
 
 
-def rust_types(tool: str, docs: list[str], dialect: str | None) -> str | None:
-    """Writes a mission's types with the Rust model.
+def rust_dump(tool: str, docs: list[str], dialect: str | None,
+              option: str) -> str | None:
+    """Writes one stage of a mission's model with the Rust model.
 
     Args:
         tool:    The ``model_dump`` example.
         docs:    The documents, relative to the top of the repository.
         dialect: The dialect to read them in, or None.
+        option:  The option that names the stage.
 
     Returns:
         The canonical text, an ``error:`` line if the documents don't
         index, or None if the binding rejects one.
     """
-    args = [tool, "--types"] + ([f"--dialect={dialect}"] if dialect else [])
+    args = [tool, option] + ([f"--dialect={dialect}"] if dialect else [])
     r = subprocess.run(args + [str(TOP / d) for d in docs], capture_output=True,
                        text=True)
     if r.returncode == 0:
@@ -147,7 +158,7 @@ def rust_types(tool: str, docs: list[str], dialect: str | None) -> str | None:
 
 
 def main() -> int:
-    """Compares the two models on every mission.
+    """Compares the two models on every mission, stage by stage.
 
     Returns:
         0 if they agree on all of them, 1 otherwise.
@@ -164,25 +175,28 @@ def main() -> int:
     failed = []
     for docs, dialect in missions:
         name = " ".join(docs) + (f" ({dialect})" if dialect else "")
-        py = python_types(docs, dialect)
-        rs = rust_types(tool, docs, dialect)
-        if py is None and rs is None:
-            rejected += 1
-            continue
-        compared += 1
-        if py == rs:
-            continue
-        failed.append(name)
-        diff = difflib.unified_diff((py or "rejected\n").splitlines(True),
-                                    (rs or "rejected\n").splitlines(True),
-                                    "python", "rust", n=2)
-        print(f"model_check: {name}: the types differ", file=sys.stderr)
-        sys.stderr.writelines(list(diff)[:40])
+        for stage, write, option in STAGES:
+            py = python_dump(docs, dialect, write)
+            rs = rust_dump(tool, docs, dialect, option)
+            if py is None and rs is None:
+                rejected += stage == STAGES[0][0]
+                break
+            compared += stage == STAGES[0][0]
+            if py == rs:
+                continue
+            failed.append(f"{name} {stage}")
+            diff = difflib.unified_diff((py or "rejected\n").splitlines(True),
+                                        (rs or "rejected\n").splitlines(True),
+                                        "python", "rust", n=2)
+            print(f"model_check: {name}: the {stage} differ", file=sys.stderr)
+            sys.stderr.writelines(list(diff)[:40])
     if failed:
-        print(f"model_check: {len(failed)} of {compared} missions differ",
-              file=sys.stderr)
+        print(f"model_check: {len(failed)} stages of {compared} missions "
+              "differ", file=sys.stderr)
         return 1
-    print(f"model_check: the Python and Rust types agree on {compared} missions"
+    stages = " and ".join(s for s, _, _ in STAGES)
+    print(f"model_check: the Python and Rust {stages} agree on {compared} "
+          "missions"
           + (f"; {rejected} the binding rejects" if rejected else ""))
     return 0
 

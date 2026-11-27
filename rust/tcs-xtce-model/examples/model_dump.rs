@@ -1,6 +1,7 @@
 //! Writes the model of a mission as canonical text, for comparing with the
 //! Python compiler's: `model_dump --types INPUT...` writes what
-//! `python3 -m tcs_xtce INPUT... --dump-types` does. It exits with 3 if a
+//! `python3 -m tcs_xtce INPUT... --dump-types` does, and `--containers`
+//! what `--dump-containers` does. It exits with 3 if a
 //! document can't be read, and 1 if the documents don't index.
 
 use std::process::ExitCode;
@@ -25,10 +26,17 @@ fn main() -> ExitCode {
         .iter()
         .find_map(|o| o.strip_prefix("--dialect="))
         .map(String::from);
-    if !opts.iter().any(|o| *o == "--types") || files.is_empty() {
-        eprintln!("usage: model_dump --types [--dialect=D] INPUT...");
+    let stage = opts.iter().find_map(|o| match o.as_str() {
+        "--types" => Some("types"),
+        "--containers" => Some("containers"),
+        _ => None,
+    });
+    let Some(stage) = stage.filter(|_| !files.is_empty()) else {
+        eprintln!(
+            "usage: model_dump --types|--containers [--dialect=D] INPUT..."
+        );
         return ExitCode::from(2);
-    }
+    };
     let mut docs = Vec::new();
     for f in &files {
         let read = std::fs::read(f).map_err(|e| e.to_string());
@@ -55,6 +63,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    print!("{}", tcs_xtce_model::dump_types(&mut c));
+    match stage {
+        "types" => print!("{}", tcs_xtce_model::dump_types(&mut c)),
+        _ => print!("{}", tcs_xtce_model::dump_containers(&mut c)),
+    }
     ExitCode::SUCCESS
 }

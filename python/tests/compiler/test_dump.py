@@ -8,8 +8,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import tcs_xtce
-from tcs_xtce.compiler.compile import compile_documents
-from tcs_xtce.compiler.dump import Dumper, dump, string
+from tcs_xtce.compiler.compile import Compiler, compile_documents
+from tcs_xtce.compiler.dump import (Dumper, dump, dump_containers, dump_types,
+                                    string)
 
 TOP = Path(__file__).resolve().parents[3]
 
@@ -166,6 +167,17 @@ class Missions(unittest.TestCase):
                 out = model_text(names)
                 self.assertTrue(out.startswith("Mission {\n"), out[:40])
                 self.assertTrue(out.endswith("}\n"))
+
+    def test_every_mission_dumps_its_stages(self):
+        for names in MISSIONS:
+            with self.subTest(names=names):
+                roots = [tcs_xtce.Document.from_file(str(TOP / n)).root
+                         for n in names]
+                types = dump_types(Compiler(roots))
+                self.assertTrue(types.startswith("Types {\n"), types[:40])
+                containers = dump_containers(Compiler(roots))
+                self.assertTrue(containers.startswith("Containers {\n"),
+                                containers[:40])
 
     def test_the_text_does_not_depend_on_hashing(self):
         # Python hashes strings differently in each process, so a set the

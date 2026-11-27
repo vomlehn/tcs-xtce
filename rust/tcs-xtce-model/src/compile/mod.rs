@@ -8,7 +8,12 @@
 //! defined in another whose root SpaceSystem is `PUS`.
 
 mod alarms;
-mod types;
+pub mod bind;
+pub mod checks;
+pub mod containers;
+pub mod criteria;
+pub mod layout;
+pub mod types;
 pub mod xtype;
 
 use std::collections::{HashMap, HashSet};
@@ -18,7 +23,7 @@ use tcs_xtce::generated as x;
 
 use crate::dump::Shared;
 use crate::model::{
-    unsupported, Error, Hook, Key, Result, VType, MAX_FIELD_BITS,
+    unsupported, Error, Hook, Key, Node, Result, VType, MAX_FIELD_BITS,
     MAX_FIELD_BYTES_LIMIT,
 };
 use crate::pyfmt::repr;
@@ -282,6 +287,42 @@ pub struct Compiler<'a> {
     pub aggregating: HashSet<(TypeTable, Key)>,
     /// The most bits a field whose size another value gives may take.
     pub max_field_bits: i64,
+    /// The nodes compiled so far, by key (a message's after `message`).
+    pub nodes: HashMap<Key, Shared<Node>>,
+    /// The nodes in the order they were finished.
+    pub order: Vec<Shared<Node>>,
+    /// The ids of the Locals `check_rest` has seen.
+    pub tailed: HashSet<i64>,
+    /// The aggregate of each repeated container compiled so far.
+    pub ctypes: HashMap<Key, Rc<VType>>,
+    /// The ErrorDetectCorrect of the containers included in the node being
+    /// compiled.
+    pub included_checks: Vec<Included<'a>>,
+    /// Each node's own container and its SpaceSystem, whose checks cover
+    /// the packet, by the node's address; `None` for one whose checks are
+    /// in its Transform.
+    pub node_edc: HashMap<usize, Option<(&'a x::SequenceContainerType, Key)>>,
+    /// The ErrorDetectCorrect of the containers each node includes, by
+    /// the node's address.
+    pub node_included: HashMap<usize, Vec<Included<'a>>>,
+}
+
+/// The ErrorDetectCorrect of an included container, to compile once the
+/// packet is known.
+#[derive(Clone)]
+pub struct Included<'a> {
+    /// The container.
+    pub container: &'a x::SequenceContainerType,
+    /// The SpaceSystem it is defined in.
+    pub path: Key,
+    /// The Mark at its start.
+    pub start: i64,
+    /// The Mark at its end.
+    pub end: i64,
+    /// The values decoded by its end.
+    pub scope: Vec<Shared<crate::model::Local>>,
+    /// Its qualified name.
+    pub key: String,
 }
 
 impl<'a> Compiler<'a> {
@@ -340,6 +381,13 @@ impl<'a> Compiler<'a> {
             ids: 0,
             aggregating: HashSet::new(),
             max_field_bits: 0,
+            nodes: HashMap::new(),
+            order: Vec::new(),
+            tailed: HashSet::new(),
+            ctypes: HashMap::new(),
+            included_checks: Vec::new(),
+            node_edc: HashMap::new(),
+            node_included: HashMap::new(),
         };
         let mut seen = HashSet::new();
         for root in c.roots.clone() {

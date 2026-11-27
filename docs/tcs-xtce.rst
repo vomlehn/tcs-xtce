@@ -830,13 +830,13 @@ the compiler is the ``tcs-xtce`` command, run from anywhere:
        (see `Missions in several documents`_)
    * - ``OUTPUT``
      - The file to write, always the last name; ``-`` writes to standard
-       output. It may be left out with ``--size-report``,
-       ``--dump-model`` or ``--dump-types`` and one ``INPUT``. A name
+       output. It may be left out with ``--size-report`` or a
+       ``--dump-*`` option and one ``INPUT``. A name
        ending in ``.xtce`` or ``.xml`` is refused, so that leaving
        ``OUTPUT`` out can't overwrite the last document
    * - ``--lang LANG``
-     - Required, except with ``--size-report``, ``--dump-model`` and
-       ``--dump-types``.
+     - Required, except with ``--size-report`` and the ``--dump-*``
+       options.
        ``rust`` writes a Rust module, formatted with ``rustfmt``
        (which must be installed). ``python`` writes a Python module.
        ``c`` and ``c++`` write the same file: a header that compiles both
@@ -870,6 +870,10 @@ the compiler is the ``tcs-xtce`` command, run from anywhere:
        each resolved alone, or the error it gives, as the same canonical
        text: the first stage of the model the two compilers are compared
        on. The documents need not compile
+   * - ``--dump-containers``
+     - Write every telemetry container instead, each compiled alone as
+       the compiler compiles it before it finishes the mission, as the
+       same canonical text: the second stage they are compared on
    * - ``--dynamic-allocations true|false``
      - Whether the generated code may allocate heap memory at any time
        (``true``, the default) or only during initialization (``false``).

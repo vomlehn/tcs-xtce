@@ -604,9 +604,14 @@ resolved alone, or the error it gives, and the warnings; the Rust
 model's <tt class="docutils literal">model_dump <span class="pre">--types</span></tt> writes the same. They agree on the 28
 missions here and the 67 public documents and missions that can be
 read.</li>
-<li><strong>Containers.</strong> Telemetry containers and their entries: locations,
-repeats, include conditions, segments, length and checksum fields,
-transforms; the nodes and their inheritance.</li>
+<li><strong>Containers</strong> (done). Telemetry containers and their entries:
+locations, repeats, include conditions and other criteria, segments,
+indirect entries, included and repeated containers, length and
+checksum fields, transforms; the nodes and their inheritance. The
+Python compiler's <tt class="docutils literal"><span class="pre">--dump-containers</span></tt> writes every telemetry
+container as <tt class="docutils literal">tm_node</tt> compiles it, before the mission is finished,
+and <tt class="docutils literal">model_dump <span class="pre">--containers</span></tt> the same; they agree on the same 28
+missions and 67 public ones.</li>
 <li><strong>Commands.</strong> Meta-commands, their arguments, argument assignments
 and command containers; messages.</li>
 <li><strong>The mission.</strong> Streams, algorithms, alarms bound to each packet,

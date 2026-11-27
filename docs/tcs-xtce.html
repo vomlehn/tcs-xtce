@@ -1281,14 +1281,14 @@ usually one, or several when the mission is split across documents
 </tr>
 <tr><td><tt class="docutils literal">OUTPUT</tt></td>
 <td>The file to write, always the last name; <tt class="docutils literal">-</tt> writes to standard
-output. It may be left out with <tt class="docutils literal"><span class="pre">--size-report</span></tt>,
-<tt class="docutils literal"><span class="pre">--dump-model</span></tt> or <tt class="docutils literal"><span class="pre">--dump-types</span></tt> and one <tt class="docutils literal">INPUT</tt>. A name
+output. It may be left out with <tt class="docutils literal"><span class="pre">--size-report</span></tt> or a
+<tt class="docutils literal"><span class="pre">--dump-*</span></tt> option and one <tt class="docutils literal">INPUT</tt>. A name
 ending in <tt class="docutils literal">.xtce</tt> or <tt class="docutils literal">.xml</tt> is refused, so that leaving
 <tt class="docutils literal">OUTPUT</tt> out can't overwrite the last document</td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">--lang</span> LANG</tt></td>
-<td>Required, except with <tt class="docutils literal"><span class="pre">--size-report</span></tt>, <tt class="docutils literal"><span class="pre">--dump-model</span></tt> and
-<tt class="docutils literal"><span class="pre">--dump-types</span></tt>.
+<td>Required, except with <tt class="docutils literal"><span class="pre">--size-report</span></tt> and the <tt class="docutils literal"><span class="pre">--dump-*</span></tt>
+options.
 <tt class="docutils literal">rust</tt> writes a Rust module, formatted with <tt class="docutils literal">rustfmt</tt>
 (which must be installed). <tt class="docutils literal">python</tt> writes a Python module.
 <tt class="docutils literal">c</tt> and <tt class="docutils literal">c++</tt> write the same file: a header that compiles both
@@ -1328,6 +1328,11 @@ change with the model</td>
 each resolved alone, or the error it gives, as the same canonical
 text: the first stage of the model the two compilers are compared
 on. The documents need not compile</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">--dump-containers</span></tt></td>
+<td>Write every telemetry container instead, each compiled alone as
+the compiler compiles it before it finishes the mission, as the
+same canonical text: the second stage they are compared on</td>
 </tr>
 <tr><td><tt class="docutils literal"><span class="pre">--dynamic-allocations</span> true|false</tt></td>
 <td>Whether the generated code may allocate heap memory at any time

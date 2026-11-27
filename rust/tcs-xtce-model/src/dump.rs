@@ -111,6 +111,70 @@ impl<T> Shared<T> {
     }
 }
 
+/// A value record that the compiler changes after placing it, so that
+/// what holds it sees the change: written as a value, in full, wherever
+/// it is reached.
+#[derive(Debug, Default)]
+pub struct Mut<T>(pub Rc<RefCell<T>>);
+
+impl<T> Clone for Mut<T> {
+    fn clone(&self) -> Self {
+        Mut(Rc::clone(&self.0))
+    }
+}
+
+impl<T> Mut<T> {
+    /// Makes a value record shareable.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The record.
+    ///
+    /// # Returns
+    ///
+    /// The one reference to it so far.
+    pub fn new(value: T) -> Self {
+        Mut(Rc::new(RefCell::new(value)))
+    }
+
+    /// Borrows the record.
+    ///
+    /// # Returns
+    ///
+    /// A reference to it, until the guard is dropped.
+    pub fn get(&self) -> std::cell::Ref<'_, T> {
+        self.0.borrow()
+    }
+
+    /// Borrows the record to change it.
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to it, until the guard is dropped.
+    pub fn get_mut(&self) -> std::cell::RefMut<'_, T> {
+        self.0.borrow_mut()
+    }
+
+    /// Says whether two references are to the one record.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other reference.
+    ///
+    /// # Returns
+    ///
+    /// Whether they are.
+    pub fn same(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl<T: ToTree> ToTree for Mut<T> {
+    fn tree(&self, cx: &mut Cx) -> Tree {
+        self.0.borrow().tree(cx)
+    }
+}
+
 /// An element of an XTCE document, kept in the model where it is bound to
 /// a packet's values only later: the text gives its class name alone.
 #[derive(Debug, Clone)]

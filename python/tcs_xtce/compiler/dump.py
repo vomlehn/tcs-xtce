@@ -336,3 +336,46 @@ def dump_types(compiler) -> str:
     d.count(types)
     d.put(0, "", types)
     return "\n".join(d.lines) + "\n"
+
+
+@dataclasses.dataclass
+class Containers:
+    """Every telemetry container of a mission, each compiled as
+    ``tm_node`` compiles it, as ``dump_containers`` writes them.
+
+    Attributes:
+        container: Each container's Node, or Failed, by qualified name, in
+                   the documents' order.
+        warnings:  The warnings compiling them gave, in order.
+    """
+
+    container: dict
+    warnings: list
+
+
+def dump_containers(compiler) -> str:
+    """Writes every telemetry container of a mission, each compiled as
+    ``tm_node`` compiles it, before the mission is finished, as canonical
+    text: the second stage of the model, which the Rust model is compared
+    on before its commands are.
+
+    Args:
+        compiler: The Compiler, with the mission's documents indexed and
+                  nothing compiled yet.
+
+    Returns:
+        The text of a Containers, ending in a newline.
+    """
+    from tcs_xtce.compiler.compile import qname
+
+    out = {}
+    for key in compiler.containers:
+        try:
+            out[qname(key)] = compiler.tm_node(key)
+        except (Unsupported, Cycle) as e:
+            out[qname(key)] = Failed(type(e).__name__, str(e))
+    c = Containers(out, list(compiler.warnings))
+    d = Dumper()
+    d.count(c)
+    d.put(0, "", c)
+    return "\n".join(d.lines) + "\n"

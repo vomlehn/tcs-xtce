@@ -12,7 +12,7 @@ use std::rc::Rc;
 use num_bigint::BigInt;
 use tcs_xtce::generated as x;
 
-use crate::dump::{Cx, Elem, Shared, ToTree, Tree};
+use crate::dump::{Cx, Dict, Elem, Mut, Shared, ToTree, Tree};
 use crate::{shared_record, value_record};
 
 /// The path of SpaceSystem names to a definition, followed by its name.
@@ -515,7 +515,7 @@ pub struct AggregateEnc {
     /// The bits after them.
     pub pad: i64,
     /// Requires on the aggregate's own members, on `this`.
-    pub checks: Vec<Term>,
+    pub checks: Vec<Require>,
     /// The aggregate value itself, which the checks are on.
     pub this: Option<Shared<Local>>,
     /// A repeated container's transform algorithms.
@@ -1201,8 +1201,9 @@ pub struct Criterion {
     pub local: Shared<Local>,
     /// The comparison operator.
     pub op: String,
-    /// The engineering value it is compared with.
-    pub value: Lit,
+    /// The engineering value it is compared with, `None` for a
+    /// comparison of two values.
+    pub value: Option<Lit>,
     /// As written in the document, for error messages.
     pub text: String,
     /// The path into `local`.
@@ -1310,5 +1311,687 @@ impl ToTree for Term {
             Term::AllOf(t) => t.tree(cx),
             Term::AnyOf(t) => t.tree(cx),
         }
+    }
+}
+
+// --- containers ---------------------------------------------------------
+
+/// The bits of an entry located from an end whose size values decoded
+/// before it give: `count` pieces of `each` bits, `gap` bits between each
+/// two.
+#[derive(Debug, Clone)]
+pub struct Span {
+    /// How many pieces.
+    pub count: Count,
+    /// The bits of each.
+    pub each: i64,
+    /// The bits between each two.
+    pub gap: Count,
+}
+value_record!(Span, "Span", [count, each, gap]);
+
+/// Move the bit position before the next entry.
+#[derive(Debug, Clone)]
+pub struct Seek {
+    /// The Mark it moves from, or `None` for the previous entry's end.
+    pub from_start: Option<i64>,
+    /// The bits it moves.
+    pub offset: Count,
+    /// The bits it goes back.
+    pub back: i64,
+    /// Whether a position before the current one fails.
+    pub ahead: bool,
+    /// The bits of an entry whose size values give, which it goes back.
+    pub span: Option<Span>,
+}
+value_record!(Seek, "Seek", [from_start, offset, back, ahead, span]);
+
+impl Seek {
+    /// Makes a Seek of a number of bits from a Mark or the last entry.
+    ///
+    /// # Arguments
+    ///
+    /// * `from_start` - The Mark, or `None`.
+    /// * `offset`     - The bits.
+    ///
+    /// # Returns
+    ///
+    /// The Seek.
+    pub fn new(from_start: Option<i64>, offset: Count) -> Self {
+        Seek {
+            from_start,
+            offset,
+            back: 0,
+            ahead: false,
+            span: None,
+        }
+    }
+
+    /// Says whether where it moves to depends on the data.
+    ///
+    /// # Returns
+    ///
+    /// True if its offset or span is given by other values.
+    pub fn varies(&self) -> bool {
+        matches!(self.offset, Count::Dyn(_)) || self.span.is_some()
+    }
+}
+
+/// While compiling: an entry whose end is `offset` bits before the end of
+/// the container that starts at Mark `start`.
+#[derive(Debug, Clone)]
+pub struct EndSeek {
+    /// The container's Mark.
+    pub start: i64,
+    /// The bits before its end.
+    pub offset: i64,
+}
+value_record!(EndSeek, "EndSeek", [start, offset]);
+
+/// Where the last entry of a packet whose size varies goes, when it is
+/// located from the packet's end.
+#[derive(Debug, Clone)]
+pub struct TailSeek {
+    /// The bits before the end.
+    pub back: i64,
+    /// The bits of the entry, when values give them.
+    pub span: Option<Span>,
+}
+value_record!(TailSeek, "TailSeek", [back, span]);
+
+/// The zero bits encoding writes after an entry placed by a TailSeek.
+#[derive(Debug, Clone)]
+pub struct TailPad {
+    /// The bits.
+    pub bits: i64,
+}
+value_record!(TailPad, "TailPad", [bits]);
+
+/// Items whose bits are transformed on the wire.
+#[derive(Debug, Clone)]
+pub struct Transform {
+    /// The items.
+    pub items: Vec<Item>,
+    /// The decoding algorithm.
+    pub decode: Option<Shared<Hook>>,
+    /// The encoding algorithm.
+    pub encode: Option<Shared<Hook>>,
+    /// The bytes on the wire, or `None` for the rest of the packet.
+    pub raw: Option<i64>,
+    /// The most bytes of the items.
+    pub cap: i64,
+    /// The most bytes the encoding algorithm gives.
+    pub out_cap: i64,
+    /// The container's name.
+    pub name: String,
+    /// The Mark it starts at.
+    pub start: i64,
+    /// A packet length field among its items.
+    pub length: Option<Shared<Local>>,
+    /// Checks of bits outside it whose fields are in it.
+    pub patches: Vec<Shared<Check>>,
+    /// Whether encoding keeps its bytes before the transform.
+    pub keeps: bool,
+}
+value_record!(
+    Transform,
+    "Transform",
+    [
+        items, decode, encode, raw, cap, out_cap, name, start, length, patches,
+        keeps
+    ]
+);
+
+impl Transform {
+    /// Gives the most bits it takes on the wire.
+    ///
+    /// # Returns
+    ///
+    /// 8 times `raw`, or `out_cap` when `raw` is not given.
+    pub fn bits(&self) -> i64 {
+        8 * self.raw.unwrap_or(self.out_cap)
+    }
+}
+
+/// Where the included container that a length field measures ends.
+#[derive(Debug, Clone)]
+pub struct LengthEnd {
+    /// The length field.
+    pub local: Shared<Local>,
+}
+value_record!(LengthEnd, "LengthEnd", [local]);
+
+/// While compiling: an entry whose end is `offset` bits before the start
+/// of the entry after it.
+#[derive(Debug, Clone)]
+pub struct NextSeek {
+    /// The bits.
+    pub offset: i64,
+}
+value_record!(NextSeek, "NextSeek", [offset]);
+
+/// Remember the current position as the start of an included container.
+#[derive(Debug, Clone)]
+pub struct Mark {
+    /// Its number.
+    pub id: i64,
+}
+value_record!(Mark, "Mark", [id]);
+
+/// A value on the wire.
+#[derive(Debug, Clone)]
+pub struct Value {
+    /// The value.
+    pub local: Shared<Local>,
+    /// For a value read from its segments, the bits of its encoding.
+    pub assembled: i64,
+}
+value_record!(Value, "Value", [local, assembled]);
+
+/// Some bits of a value's encoding (a ParameterSegmentRefEntry).
+#[derive(Debug, Clone)]
+pub struct Segment {
+    /// The value.
+    pub local: Shared<Local>,
+    /// The bits of this segment.
+    pub bits: i64,
+    /// The bits of the whole encoding.
+    pub total: i64,
+    /// How far above the end of the encoding this one lies.
+    pub shift: i64,
+    /// Whether it is the first in the document.
+    pub first: bool,
+}
+value_record!(Segment, "Segment", [local, bits, total, shift, first]);
+
+/// Zero bits, ignored when decoding but required to be there.
+#[derive(Debug, Clone)]
+pub struct Pad {
+    /// The bits.
+    pub bits: i64,
+}
+value_record!(Pad, "Pad", [bits]);
+
+/// A constant bit pattern (a FixedValueEntry).
+#[derive(Debug, Clone)]
+pub struct Fixed {
+    /// Its bits.
+    pub bits: i64,
+    /// Its value.
+    pub value: Int,
+}
+value_record!(Fixed, "Fixed", [bits, value]);
+
+/// Entries present only when all of some criteria hold.
+#[derive(Debug, Clone)]
+pub struct Cond {
+    /// The criteria.
+    pub criteria: Vec<Term>,
+    /// The entries.
+    pub items: Vec<Item>,
+    /// A nonzero group for alternatives, of which at most one holds.
+    pub group: i64,
+}
+value_record!(Cond, "Cond", [criteria, items, group]);
+
+/// An ErrorDetectCorrect algorithm, as the runtimes take it.
+#[derive(Debug, Clone)]
+pub enum Spec {
+    /// `("crc", width, polynomial, init, final xor, reflect data,
+    /// reflect remainder)`.
+    Crc(i64, u64, u64, u64, bool, bool),
+    /// `("custom", hook)`.
+    Custom(Shared<Hook>),
+    /// A named checksum: `(name, bits)`, or `(name,)` without bits.
+    Named(String, Option<i64>),
+    /// `("xor", bits)`.
+    Xor(i64),
+    /// `("parity", odd)`.
+    Parity(bool),
+}
+
+impl ToTree for Spec {
+    fn tree(&self, cx: &mut Cx) -> Tree {
+        let s = |t: &str| Tree::Str(t.into());
+        Tree::List(match self {
+            Spec::Crc(w, p, i, x, rd, rr) => vec![
+                s("crc"),
+                w.tree(cx),
+                Tree::Int(p.to_string()),
+                Tree::Int(i.to_string()),
+                Tree::Int(x.to_string()),
+                rd.tree(cx),
+                rr.tree(cx),
+            ],
+            Spec::Custom(h) => vec![s("custom"), h.tree(cx)],
+            Spec::Named(n, Some(b)) => vec![s(n), b.tree(cx)],
+            Spec::Named(n, None) => vec![s(n)],
+            Spec::Xor(b) => vec![s("xor"), b.tree(cx)],
+            Spec::Parity(o) => vec![s("parity"), o.tree(cx)],
+        })
+    }
+}
+
+/// An ErrorDetectCorrect algorithm of a container.
+#[derive(Debug)]
+pub struct Check {
+    /// The algorithm.
+    pub spec: Spec,
+    /// The field that holds the value.
+    pub local: Shared<Local>,
+    /// The Mark at the start of what it covers, 0 for the packet's.
+    pub start: i64,
+    /// The Mark at the end, or `None` for the packet's end.
+    pub end: Option<i64>,
+    /// The bits skipped from the reference point.
+    pub skip: i64,
+    /// Whether it covers to the end, skipping `skip` bits before it.
+    pub from_end: bool,
+    /// The container it belongs to.
+    pub container: String,
+    /// The Mark where the outermost transformed container holding the
+    /// field starts, when the bits end before it.
+    pub stop: Option<i64>,
+    /// The bits before that Mark the bits end.
+    pub stop_back: i64,
+    /// The transformed container it is computed after, when it is late.
+    pub late: Option<Mut<Transform>>,
+    /// Whether it is a Verify's.
+    pub verified: bool,
+}
+shared_record!(
+    Check,
+    "Check",
+    [
+        spec, local, start, end, skip, from_end, container, stop, stop_back,
+        late, verified
+    ]
+);
+
+/// A Check of a container included only when its condition holds.
+#[derive(Debug, Clone)]
+pub struct Verify {
+    /// The check.
+    pub check: Shared<Check>,
+}
+value_record!(Verify, "Verify", [check]);
+
+/// Criteria that must hold where it stands.
+#[derive(Debug, Clone)]
+pub struct Require {
+    /// The criteria.
+    pub criteria: Vec<Term>,
+    /// The container, for the message.
+    pub container: String,
+    /// The criteria as written.
+    pub text: String,
+    /// Whether the values they assign are fixed.
+    pub fixes: bool,
+}
+value_record!(Require, "Require", [criteria, container, text, fixes]);
+
+/// Padding up to a size after a Mark, where a container with a size
+/// ends.
+#[derive(Debug, Clone)]
+pub struct Fill {
+    /// The Mark.
+    pub start: i64,
+    /// The size.
+    pub size: Count,
+    /// The container, for the message.
+    pub container: String,
+}
+value_record!(Fill, "Fill", [start, size, container]);
+
+impl Fill {
+    /// Gives the most the size can be.
+    ///
+    /// # Returns
+    ///
+    /// It.
+    pub fn max_size(&self) -> i64 {
+        self.size.max_total()
+    }
+}
+
+/// One item of a packet's layout.
+#[derive(Debug, Clone)]
+pub enum Item {
+    /// A move.
+    Seek(Seek),
+    /// A Mark.
+    Mark(Mark),
+    /// A value.
+    Value(Value),
+    /// A segment of a value, which it shares while it is assembled.
+    Segment(Mut<Segment>),
+    /// A constant.
+    Fixed(Fixed),
+    /// Padding.
+    Pad(Pad),
+    /// Conditional entries.
+    Cond(Cond),
+    /// Criteria that must hold.
+    Require(Require),
+    /// Padding to a size.
+    Fill(Fill),
+    /// A check computed where its container ends.
+    Verify(Verify),
+    /// Transformed items, which checks may point at.
+    Transform(Mut<Transform>),
+    /// The end of a measured container.
+    LengthEnd(LengthEnd),
+    /// While compiling: a place from the container's end.
+    EndSeek(EndSeek),
+    /// While compiling: a place from the next entry.
+    NextSeek(NextSeek),
+    /// The last entry, placed from the packet's end.
+    TailSeek(TailSeek),
+    /// The bits after it.
+    TailPad(TailPad),
+}
+
+impl ToTree for Item {
+    fn tree(&self, cx: &mut Cx) -> Tree {
+        match self {
+            Item::Seek(i) => i.tree(cx),
+            Item::Mark(i) => i.tree(cx),
+            Item::Value(i) => i.tree(cx),
+            Item::Segment(i) => i.tree(cx),
+            Item::Fixed(i) => i.tree(cx),
+            Item::Pad(i) => i.tree(cx),
+            Item::Cond(i) => i.tree(cx),
+            Item::Require(i) => i.tree(cx),
+            Item::Fill(i) => i.tree(cx),
+            Item::Verify(i) => i.tree(cx),
+            Item::Transform(i) => i.tree(cx),
+            Item::LengthEnd(i) => i.tree(cx),
+            Item::EndSeek(i) => i.tree(cx),
+            Item::NextSeek(i) => i.tree(cx),
+            Item::TailSeek(i) => i.tree(cx),
+            Item::TailPad(i) => i.tree(cx),
+        }
+    }
+}
+
+/// A MathAlgorithm or CustomAlgorithm output a packet evaluates.
+#[derive(Debug, Clone)]
+pub struct Algorithm {
+    /// Its output parameter's qualified name.
+    pub key: String,
+    /// Its output's name.
+    pub name: String,
+    /// A MathAlgorithm's expression, bound to the packet's values.
+    pub expr: Option<Expr>,
+    /// A CustomAlgorithm's hook.
+    pub hook: Option<Shared<Hook>>,
+    /// Its inputs.
+    pub inputs: Vec<Input>,
+    /// Which of the hook's outputs this is.
+    pub index: i64,
+}
+value_record!(
+    Algorithm,
+    "Algorithm",
+    [key, name, expr, hook, inputs, index]
+);
+
+/// A sequence container or meta-command, with its inheritance links.
+#[derive(Debug, Default)]
+pub struct Node {
+    /// `tm` or `tc`.
+    pub kind: String,
+    /// Its qualified name.
+    pub key: String,
+    /// Its name.
+    pub name: String,
+    /// Whether it is abstract.
+    pub abstract_: bool,
+    /// Its base.
+    pub base: Option<Shared<Node>>,
+    /// Its restriction criteria, or a meta-command's assignments.
+    pub criteria: Vec<Term>,
+    /// Its own items.
+    pub items: Vec<Item>,
+    /// The nodes that inherit from it.
+    pub children: Vec<Shared<Node>>,
+    /// Its generated struct's name.
+    pub ident: String,
+    /// A concrete node's fields: (field name, value).
+    pub fields: Vec<(String, Shared<Local>)>,
+    /// The values fixed by assignments.
+    pub fixed: Dict<Shared<Local>, Lit>,
+    /// The values that only give another's size or count.
+    pub derived: Dict<Shared<Local>, (Shared<Local>, DynSize)>,
+    /// Its checks, in the order they are computed.
+    pub checks: Vec<Shared<Check>>,
+    /// The container that must follow it in a stream.
+    pub next_container: Option<String>,
+    /// The most bytes it takes.
+    pub max_bytes: i64,
+    /// Why it can't be compiled, if it can't.
+    pub error: Option<String>,
+    /// Each field with an alarm: (field name, value, bound alarm).
+    pub alarms: Vec<(String, Shared<Local>, Alarm)>,
+    /// Why other alarms were left out.
+    pub alarm_notes: Vec<String>,
+    /// The algorithms it triggers and can evaluate.
+    pub algorithms: Vec<Algorithm>,
+    /// Why others can't be.
+    pub algorithm_notes: Vec<String>,
+    /// The hooks decoding or encoding it calls.
+    pub hooks: Vec<Shared<Hook>>,
+    /// While compiling: whether it is being built, to find loops.
+    pub building: bool,
+}
+shared_record!(
+    Node,
+    "Node",
+    [
+        kind,
+        key,
+        name,
+        abstract_ as "abstract",
+        base,
+        criteria,
+        items,
+        children,
+        ident,
+        fields,
+        fixed,
+        derived,
+        checks,
+        next_container,
+        max_bytes,
+        error,
+        alarms,
+        alarm_notes,
+        algorithms,
+        algorithm_notes,
+        hooks
+    ]
+);
+
+/// Writes a reference as XTCE does.
+///
+/// # Arguments
+///
+/// * `name`  - The value's name.
+/// * `steps` - The steps into it.
+///
+/// # Returns
+///
+/// `name` followed by a `.member` or `[index]` for each step.
+pub fn ref_text(name: &str, steps: &[Step]) -> String {
+    let mut out = name.to_string();
+    for s in steps {
+        match s {
+            Step::Name(n) => {
+                out.push('.');
+                out.push_str(n);
+            }
+            Step::Index(i) => out.push_str(&format!("[{i}]")),
+        }
+    }
+    out
+}
+
+/// Flattens a list of items.
+///
+/// # Arguments
+///
+/// * `items` - The items.
+/// * `inner` - Whether to put the contents of each Transform after it; false
+///             for finding where items are on the wire.
+///
+/// # Returns
+///
+/// The items, with the contents of conditional blocks spliced in,
+/// recursively; each shares what the item it copies shares.
+pub fn walk(items: &[Item], inner: bool) -> Vec<Item> {
+    let mut out = Vec::new();
+    for it in items {
+        match it {
+            Item::Cond(c) => out.extend(walk(&c.items, inner)),
+            Item::Transform(t) => {
+                out.push(it.clone());
+                if inner {
+                    out.extend(walk(&t.get().items, inner));
+                }
+            }
+            _ => out.push(it.clone()),
+        }
+    }
+    out
+}
+
+impl Term {
+    /// Gives the term as written, for messages.
+    ///
+    /// # Returns
+    ///
+    /// Its text.
+    pub fn text(&self) -> String {
+        match self {
+            Term::Criterion(t) => t.get().text.clone(),
+            Term::Custom(t) => t.get().text.clone(),
+            Term::AllOf(t) => t.get().text.clone(),
+            Term::AnyOf(t) => t.get().text.clone(),
+        }
+    }
+
+    /// Finds the values the term reads.
+    ///
+    /// # Returns
+    ///
+    /// The Locals, in the term's order, repeats included.
+    pub fn locals(&self) -> Vec<Shared<Local>> {
+        match self {
+            Term::Criterion(t) => {
+                let c = t.get();
+                let mut out = vec![c.local.clone()];
+                out.extend(c.other.clone());
+                out
+            }
+            Term::Custom(t) => t
+                .get()
+                .inputs
+                .iter()
+                .filter_map(|i| match i {
+                    Input::Value(l, _, _) => Some(l.clone()),
+                    Input::Const(_) => None,
+                })
+                .collect(),
+            Term::AllOf(t) => {
+                t.get().terms.iter().flat_map(|x| x.locals()).collect()
+            }
+            Term::AnyOf(t) => {
+                t.get().terms.iter().flat_map(|x| x.locals()).collect()
+            }
+        }
+    }
+}
+
+impl Local {
+    /// Says whether generated code computes the value: it is not a field
+    /// of the generated struct.
+    ///
+    /// # Returns
+    ///
+    /// True for a packet length or checksum field.
+    pub fn computed(&self) -> bool {
+        self.length.is_some() || self.checksum
+    }
+
+    /// Gives the value's type.
+    ///
+    /// # Returns
+    ///
+    /// It.
+    ///
+    /// # Panics
+    ///
+    /// For a value with none yet, which only an aggregate's own value is
+    /// while it is made.
+    pub fn vt(&self) -> Rc<VType> {
+        self.vtype.clone().expect("a value with a type")
+    }
+}
+
+impl Shared<Node> {
+    /// Lists this node and its bases.
+    ///
+    /// # Returns
+    ///
+    /// The nodes, the root of the inheritance first and this one last.
+    pub fn chain(&self) -> Vec<Shared<Node>> {
+        let mut out = vec![self.clone()];
+        let mut n = self.get().base.clone();
+        while let Some(b) = n {
+            n = b.get().base.clone();
+            out.push(b);
+        }
+        out.reverse();
+        out
+    }
+
+    /// Lists the items of this node and its bases.
+    ///
+    /// # Returns
+    ///
+    /// The items, the root's first.
+    pub fn all_items(&self) -> Vec<Item> {
+        self.chain()
+            .iter()
+            .flat_map(|n| n.get().items.clone())
+            .collect()
+    }
+
+    /// Lists the criteria of this node and its bases.
+    ///
+    /// # Returns
+    ///
+    /// The terms, the root's first.
+    pub fn all_criteria(&self) -> Vec<Term> {
+        self.chain()
+            .iter()
+            .flat_map(|n| n.get().criteria.clone())
+            .collect()
+    }
+
+    /// Lists the values of this node and its bases, which what follows
+    /// them may use.
+    ///
+    /// # Returns
+    ///
+    /// The Locals of their Values, in order.
+    pub fn scope(&self) -> Vec<Shared<Local>> {
+        walk(&self.all_items(), true)
+            .into_iter()
+            .filter_map(|i| match i {
+                Item::Value(v) => Some(v.local),
+                _ => None,
+            })
+            .collect()
     }
 }

@@ -7,7 +7,8 @@
 //! Python's on every mission the tests compile: both write it as the same
 //! canonical text ([`dump`]), which must be identical line for line (see
 //! `docs/rust-migration-design.rst`). The first stage is the parameter and
-//! argument types, which [`dump_types`] writes.
+//! argument types, which [`dump_types`] writes; the second the telemetry
+//! containers, which [`dump_containers`] writes.
 
 pub mod compile;
 pub mod dump;
@@ -111,4 +112,66 @@ pub fn dump_types(compiler: &mut Compiler<'_>) -> String {
 /// Its message.
 pub fn describe(e: &Error) -> String {
     e.message().to_string()
+}
+
+/// A container's node, or why it fails, as [`dump_containers`] writes it.
+#[derive(Debug, Clone)]
+pub enum Built {
+    /// The node.
+    Node(dump::Shared<model::Node>),
+    /// Why it fails.
+    Failed(Failed),
+}
+
+impl ToTree for Built {
+    fn tree(&self, cx: &mut Cx) -> Tree {
+        match self {
+            Built::Node(n) => n.tree(cx),
+            Built::Failed(f) => f.tree(cx),
+        }
+    }
+}
+
+/// Every telemetry container of a mission, each compiled as `tm_node`
+/// compiles it.
+#[derive(Debug, Clone)]
+pub struct Containers {
+    /// Each container's node, or why it fails, by qualified name, in the
+    /// documents' order.
+    pub container: Dict<String, Built>,
+    /// The warnings compiling them gave, in order.
+    pub warnings: Vec<String>,
+}
+value_record!(Containers, "Containers", [container, warnings]);
+
+/// Writes every telemetry container of a mission, each compiled as
+/// `tm_node` compiles it, before the mission is finished, as canonical
+/// text, as the Python compiler's `--dump-containers` does.
+///
+/// # Arguments
+///
+/// * `compiler` - The compiler, with the documents indexed and nothing compiled
+///                yet.
+///
+/// # Returns
+///
+/// The text of a `Containers`, ending in a newline.
+pub fn dump_containers(compiler: &mut Compiler<'_>) -> String {
+    let keys = compiler.containers.keys().to_vec();
+    let mut container = Dict::default();
+    for key in keys {
+        let b = match compiler.tm_node(&key) {
+            Ok(n) => Built::Node(n),
+            Err(e) => Built::Failed(Failed {
+                error: e.class().into(),
+                message: e.message().into(),
+            }),
+        };
+        container.0.push((qname(&key), b));
+    }
+    let c = Containers {
+        container,
+        warnings: compiler.warnings.clone(),
+    };
+    dump::dump(&c)
 }
