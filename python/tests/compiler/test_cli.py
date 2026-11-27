@@ -125,6 +125,21 @@ class InputTests(unittest.TestCase):
                                            "--size-report")[:2], (0, ""))
             self.assertEqual(report.read_text(), out)
 
+    def test_dump_model_output(self):
+        status, out, _ = self.run_main(DEMO, "--dump-model")
+        self.assertEqual(status, 0)
+        self.assertTrue(out.startswith('Mission {\n  name: "Demo"\n'), out[:80])
+        with tempfile.TemporaryDirectory() as d:
+            model = Path(d) / "demo.model"
+            self.assertEqual(self.run_main(DEMO, str(model),
+                                           "--dump-model")[:2], (0, ""))
+            self.assertEqual(model.read_text(), out)
+        # It writes no code, and is not a size report too.
+        with self.assertRaises(SystemExit):
+            self.run_main(DEMO, "--dump-model", "--lang", "c")
+        with self.assertRaises(SystemExit):
+            self.run_main(DEMO, "--dump-model", "--size-report")
+
 
 class WarningTests(unittest.TestCase):
     """Binary data with no maximum size, and --fatal-warnings."""

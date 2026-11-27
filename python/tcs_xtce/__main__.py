@@ -33,6 +33,11 @@ error, which ``--skip-unsupported`` does not skip.
 each packet, the bits every field uses on the wire and the bits the document
 says it needs.  OUTPUT may be left out when there is only one INPUT, and the
 report goes to standard output.
+
+``python3 -m tcs_xtce INPUT... [OUTPUT] --dump-model`` instead writes the
+resolved model the code would be generated from, as the canonical text
+:mod:`tcs_xtce.compiler.dump` describes, for comparing the Python compiler
+with the Rust one.  OUTPUT may be left out, as for ``--size-report``.
 """
 
 from __future__ import annotations
@@ -44,7 +49,7 @@ from pathlib import Path
 import tcs_xtce
 from tcs_xtce.binding.__main__ import rustfmt
 from tcs_xtce.binding.wrap import wrap
-from tcs_xtce.compiler import emit_c, emit_python, emit_rust, report
+from tcs_xtce.compiler import dump, emit_c, emit_python, emit_rust, report
 from tcs_xtce.compiler.compile import DIALECTS, compile_documents
 from tcs_xtce.compiler.model import Cycle, Unsupported
 
@@ -105,6 +110,9 @@ def main(argv=None) -> int:
     ap.add_argument("--size-report", action="store_true",
                     help="instead of code, report the bits each packet field "
                          "uses and the bits the document says it needs")
+    ap.add_argument("--dump-model", action="store_true",
+                    help="instead of code, write the resolved model as "
+                         "canonical text, for comparing compilers")
     ap.add_argument(
         "--dynamic-allocations", choices=("true", "false"), default="true",
         help="whether the generated code may allocate heap memory at any time "
@@ -118,10 +126,14 @@ def main(argv=None) -> int:
     # Before Python 3.13, parse_args() can't place the optional OUTPUT when an
     # option separates it from INPUT.
     args = ap.parse_intermixed_args(argv)
-    if args.size_report and len(args.files) == 1:
+    if args.size_report and args.dump_model:
+        ap.error("give --size-report or --dump-model, not both")
+    no_code = args.size_report or args.dump_model
+    if no_code and len(args.files) == 1:
         inputs, output = args.files, None
     elif len(args.files) < 2:
-        ap.error("OUTPUT is required unless --size-report is given")
+        ap.error("OUTPUT is required unless --size-report or --dump-model is "
+                 "given")
     else:
         inputs, output = args.files[:-1], args.files[-1]
     if output == "-":
@@ -130,12 +142,13 @@ def main(argv=None) -> int:
     if output is not None and Path(output).suffix.lower() in (".xtce", ".xml"):
         ap.error(f"OUTPUT {output} looks like an XTCE document; give the file "
                  "to write after the INPUT documents")
-    if args.size_report:
+    if no_code:
         if args.lang is not None or args.prefix is not None:
-            ap.error("--size-report writes no code; leave out --lang and "
-                     "--prefix")
+            what = "--size-report" if args.size_report else "--dump-model"
+            ap.error(f"{what} writes no code; leave out --lang and --prefix")
     elif args.lang is None:
-        ap.error("--lang is required unless --size-report is given")
+        ap.error("--lang is required unless --size-report or --dump-model is "
+                 "given")
     if args.prefix is not None and args.lang not in ("c", "c++"):
         ap.error("--prefix only applies to --lang c and --lang c++")
     alloc = args.dynamic_allocations == "true"
@@ -170,6 +183,9 @@ def main(argv=None) -> int:
     source = args.source_name or ", ".join(Path(n).name for n in inputs)
     if args.size_report:
         write(output, report.report(mission))
+        return 0
+    if args.dump_model:
+        write(output, dump.dump(mission))
         return 0
     if args.lang == "rust":
         # Generated Rust must follow standard formatting, like all Rust here.
