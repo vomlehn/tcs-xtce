@@ -99,6 +99,7 @@ make screenshots  # remake the editor manual's screenshots
 make fmt-check    # verify Rust and Python formatting (Rust is also checked by
                   # every `make rust`)
 make python-dist  # build the Python wheels and sdists into dist/, and try them
+make wheel        # build tcs-xtce's wheel into build/wheel, for installing
 make ccsds        # build tcsccsds, the CCSDS time codes: see ccsds/README.md
 ```
 
@@ -113,8 +114,8 @@ Requirements:
 * `curl` and `xmllint`;
 * Python 3.11+, with pip and venv (the Python packages themselves run on
   3.10); setuptools 77 or later, maturin 1.9 or later and twine for
-  `make python-dist` and for installing and packaging, which build the
-  Python in place, without pip's isolated environment -- where the
+  `make python-dist`, `make wheel` and installing and packaging, which
+  build the Python without pip's isolated environment -- where the
   system's are older, `python3 -m venv --system-site-packages ~/tcs-venv`,
   `~/tcs-venv/bin/pip install 'setuptools>=77' 'maturin>=1.9' twine`, and
   `PYTHON=~/tcs-venv/bin/python3` on each make line;
@@ -222,11 +223,11 @@ the links from `/usr/local/bin` and `/opt/bin`; installing it never makes
 them. After `make install`, `sudo make links` and `sudo make unlinks` do
 the same (`LINKDIR` gives the directory).
 
-**From the source tree.** Build as yourself first, `make && make editor`,
-since root's `PATH` seldom has cargo and a build as root would leave root's
-files in the tree; then `sudo make install-files` copies the same files
-into place without a package, taking the editor as built, for development, which is what `make
-install` once did, but nothing outside `/opt/tcs`; `make install-files
+**From the source tree.** Build as yourself first, `make && make editor &&
+make wheel`, since root's `PATH` seldom has cargo and a build as root would
+leave root's files in the tree; then `sudo make install-files` copies the
+same files into place without a package, taking the editor and the wheel
+as built, for development, which is what `make install` once did, but nothing outside `/opt/tcs`; `make install-files
 PREFIX=$HOME` installs under your home instead, `DESTDIR` stages it, and
 `make uninstall-files`, with the same variables, removes them. `make
 install` takes neither variable, and stops if given one. `make stage`

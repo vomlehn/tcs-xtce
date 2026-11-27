@@ -377,7 +377,12 @@ once did: under ``PREFIX`` (``/opt/tcs`` unless given) and ``DESTDIR``,
 but nothing outside ``PREFIX`` unless ``HOOKS=1`` is given too, which
 needs ``PREFIX=/opt/tcs``. ``make uninstall-files``, with the same
 variables, removes them. ``make install`` takes neither ``PREFIX`` nor
-``DESTDIR``, and stops if given one. The Rust crates, ``tcs-xtce`` and
+``DESTDIR``, and stops if given one. The Python package ``tcs_xtce`` is
+installed from its wheel, which ``make wheel`` builds into
+``build/wheel`` with maturin, its Rust extension module included, so that
+installing compiles no Rust; as root, as under ``sudo make
+install-files``, the wheel is taken as built, and ``make wheel``, as
+yourself, comes first. The Rust crates, ``tcs-xtce`` and
 ``tcsccsds``, come from crates.io and are not installed.
 
 ``install-files``, stage and so the packages strip the libraries:

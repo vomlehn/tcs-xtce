@@ -433,7 +433,8 @@ generated from them (start with <code>simple-string</code>)</td>
 <span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> fmt-check    <span class="co"># verify Rust and Python formatting (Rust is also checked by</span></span>
 <span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>                  <span class="co"># every `make rust`)</span></span>
 <span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> python-dist  <span class="co"># build the Python wheels and sdists into dist/, and try them</span></span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> ccsds        <span class="co"># build tcsccsds, the CCSDS time codes: see ccsds/README.md</span></span></code></pre></div>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> wheel        <span class="co"># build tcs-xtce&#39;s wheel into build/wheel, for installing</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> ccsds        <span class="co"># build tcsccsds, the CCSDS time codes: see ccsds/README.md</span></span></code></pre></div>
 <p>Plain <code>make</code> also checks the formatting and, in a git
 checkout, sets up the commit hook. The generated bindings are not
 committed, so a fresh clone runs <code>make</code> or
@@ -446,9 +447,9 @@ committed, so a fresh clone runs <code>make</code> or
 <li><code>curl</code> and <code>xmllint</code>;</li>
 <li>Python 3.11+, with pip and venv (the Python packages themselves run
 on 3.10); setuptools 77 or later, maturin 1.9 or later and twine for
-<code>make python-dist</code> and for installing and packaging, which
-build the Python in place, without pip’s isolated environment – where
-the system’s are older,
+<code>make python-dist</code>, <code>make wheel</code> and installing
+and packaging, which build the Python without pip’s isolated environment
+– where the system’s are older,
 <code>python3 -m venv --system-site-packages ~/tcs-venv</code>,
 <code>~/tcs-venv/bin/pip install 'setuptools&gt;=77' 'maturin&gt;=1.9' twine</code>,
 and <code>PYTHON=~/tcs-venv/bin/python3</code> on each make line;</li>
@@ -564,10 +565,11 @@ never makes them. After <code>make install</code>,
 <code>sudo make links</code> and <code>sudo make unlinks</code> do the
 same (<code>LINKDIR</code> gives the directory).</p>
 <p><strong>From the source tree.</strong> Build as yourself first,
-<code>make &amp;&amp; make editor</code>, since root’s <code>PATH</code>
-seldom has cargo and a build as root would leave root’s files in the
-tree; then <code>sudo make install-files</code> copies the same files
-into place without a package, taking the editor as built, for
+<code>make &amp;&amp; make editor &amp;&amp; make wheel</code>, since
+root’s <code>PATH</code> seldom has cargo and a build as root would
+leave root’s files in the tree; then
+<code>sudo make install-files</code> copies the same files into place
+without a package, taking the editor and the wheel as built, for
 development, which is what <code>make install</code> once did, but
 nothing outside <code>/opt/tcs</code>;
 <code>make install-files PREFIX=$HOME</code> installs under your home

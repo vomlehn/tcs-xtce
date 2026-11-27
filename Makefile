@@ -31,6 +31,8 @@
 #                        into dist/, check them with twine, and try them
 #   make python-versions try them on each Python from 3.10 to 3.14, in
 #                        containers (needs podman)
+#   make wheel           build tcs-xtce's wheel into build/wheel, which
+#                        installing and the packages take tcs_xtce from
 #   make install-tools   install the tools building, testing and packaging
 #                        need, with apt-get or dnf; DRY_RUN=1 shows what it
 #                        would do, PACKAGING=0 leaves out the packaging tools
@@ -251,6 +253,37 @@ built-editor:
 	@[ -x $(EDITOR_BIN) ] || { \
 	    echo "$(EDITOR_BIN) is not built: run make editor as yourself," \
 	        "then this again" >&2; \
+	    exit 1; \
+	}
+
+# The wheel installing takes tcs_xtce from, built by maturin into
+# build/wheel: the wheel PyPI would have, its Rust extension module
+# included, so that pip, given it, builds nothing. As root it is taken as
+# built, as the editor is, and make wheel, as yourself, builds it first.
+WHEEL_DIR := build/wheel
+# A pattern, for the shell to expand: the platform's tag ends the name.
+WHEEL      = $(WHEEL_DIR)/tcs_xtce-$(VERSION)-*.whl
+ifeq ($(shell id -u),0)
+INSTALLED_WHEEL := built-wheel
+else
+INSTALLED_WHEEL := wheel
+endif
+
+.PHONY: wheel
+wheel: $(PY_GEN) $(PYO3_GEN)
+	@$(PYTHON) -m maturin --version > /dev/null 2>&1 || { \
+	    echo "make wheel builds tcs-xtce with maturin, which is not" \
+	        "installed: make install-tools installs it" >&2; \
+	    exit 1; \
+	}
+	rm -f $(WHEEL_DIR)/tcs_xtce-*.whl
+	$(PYTHON) -m maturin build --release --quiet --out $(WHEEL_DIR)
+
+.PHONY: built-wheel
+built-wheel:
+	@ls $(WHEEL) > /dev/null 2>&1 || { \
+	    echo "$(WHEEL_DIR) has no tcs_xtce $(VERSION) wheel: run make" \
+	        "wheel as yourself, then this again" >&2; \
 	    exit 1; \
 	}
 
@@ -653,10 +686,17 @@ define pyinstall
 	trap 'rm -rf "$$tmp"' EXIT; \
 	cp -R $(3) $$tmp/; \
 	find $$tmp -name __pycache__ -type d -prune -exec rm -rf {} +; \
+	$(call pip_target,$(1),$(2),$$tmp)
+endef
+
+# Installs a distribution, a directory of its sources or its wheel, into
+# $(DESTDIR)$(PYDIR) with pip, as pyinstall says. Called with the
+# distribution's name and version, then what to install.
+define pip_target
 	$(PYTHON) -m pip install --quiet --no-deps --no-build-isolation \
 		--no-index --no-cache-dir --no-compile --upgrade \
 		--root-user-action=ignore \
-		--target $(DESTDIR)$(PYDIR) $$tmp; \
+		--target $(DESTDIR)$(PYDIR) $(3); \
 	dist=$(DESTDIR)$(PYDIR)/$(1)-$(2).dist-info; \
 	rm -f $$dist/direct_url.json; \
 	sed -i -e '/^$(1)-[^/]*\.dist-info\/direct_url\.json,/d' \
@@ -734,8 +774,9 @@ install-tcsxtce: $(PY_GEN) tcs-helpers
 # sbin tcs-xtce-links, which links them into /usr/local/bin; the
 # library's headers, straight into include; the shared library under its
 # soname, with its development name linked to it, and the static one; its
-# pkg-config file naming the real prefix; the Python package tcs_xtce;
-# and the documents and examples. The Rust crates are not
+# pkg-config file naming the real prefix; the Python package tcs_xtce,
+# from the wheel make wheel builds, extension module and all; and the
+# documents and examples. The Rust crates are not
 # installed, a Rust program taking them through cargo. The HTML is
 # installed as committed, not remade, so that installing needs no
 # rst2html; `make html` before a commit keeps it current. An example that
@@ -745,7 +786,8 @@ install-tcsxtce: $(PY_GEN) tcs-helpers
 # the one Rust program installed, with the licence notices each requires
 # to go with every copy.
 .PHONY: install-tcs-xtce
-install-tcs-xtce: $(PY_GEN) $(CPP_GEN) $(INSTALLED_EDITOR) tcs-helpers
+install-tcs-xtce: $(PY_GEN) $(CPP_GEN) $(INSTALLED_EDITOR) \
+                  $(INSTALLED_WHEEL) tcs-helpers
 	@[ "$(VERSION)" = "$(RUST_VERSION)" ] || { \
 	    echo "pyproject.toml is $(VERSION) and rust/Cargo.toml" \
 	        "$(RUST_VERSION); make them agree" >&2; \
@@ -772,8 +814,7 @@ install-tcs-xtce: $(PY_GEN) $(CPP_GEN) $(INSTALLED_EDITOR) tcs-helpers
 	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' \
 		packaging/tcs-xtce.pc.in > $(PCDIR)/tcs-xtce.pc
 	chmod 644 $(PCDIR)/tcs-xtce.pc
-	$(call pyinstall,tcs_xtce,$(VERSION),pyproject.toml README-pypi.md \
-		LICENSE-APACHE LICENSE-MIT python)
+	set -e; $(call pip_target,tcs_xtce,$(VERSION),$(WHEEL))
 	install -D -m 644 -t $(DOCDIR) $(DOCS)
 	install -D -m 644 -t $(DOCDIR)/shots $(SHOTS)
 	$(THIRD_PARTY_NOTICES) editor $(DOCDIR)/THIRD-PARTY-NOTICES tcs-xtce

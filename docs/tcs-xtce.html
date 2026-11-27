@@ -786,7 +786,12 @@ once did: under <tt class="docutils literal">PREFIX</tt> (<tt class="docutils li
 but nothing outside <tt class="docutils literal">PREFIX</tt> unless <tt class="docutils literal">HOOKS=1</tt> is given too, which
 needs <tt class="docutils literal"><span class="pre">PREFIX=/opt/tcs</span></tt>. <tt class="docutils literal">make <span class="pre">uninstall-files</span></tt>, with the same
 variables, removes them. <tt class="docutils literal">make install</tt> takes neither <tt class="docutils literal">PREFIX</tt> nor
-<tt class="docutils literal">DESTDIR</tt>, and stops if given one. The Rust crates, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> and
+<tt class="docutils literal">DESTDIR</tt>, and stops if given one. The Python package <tt class="docutils literal">tcs_xtce</tt> is
+installed from its wheel, which <tt class="docutils literal">make wheel</tt> builds into
+<tt class="docutils literal">build/wheel</tt> with maturin, its Rust extension module included, so that
+installing compiles no Rust; as root, as under <tt class="docutils literal">sudo make
+<span class="pre">install-files</span></tt>, the wheel is taken as built, and <tt class="docutils literal">make wheel</tt>, as
+yourself, comes first. The Rust crates, <tt class="docutils literal"><span class="pre">tcs-xtce</span></tt> and
 <tt class="docutils literal">tcsccsds</tt>, come from crates.io and are not installed.</p>
 <p><tt class="docutils literal"><span class="pre">install-files</span></tt>, stage and so the packages strip the libraries:
 <tt class="docutils literal"><span class="pre">libtcs-xtce.so</span></tt> with <tt class="docutils literal">strip <span class="pre">--strip-unneeded</span></tt>, of all only a debugger
