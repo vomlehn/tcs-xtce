@@ -4,8 +4,19 @@ tcs-xtce Run-time Codec Design
 
 Status: being implemented. The crate ``tcs-xtce-dynamic`` reads and
 resolves a mission and looks its names up, as `Looking names up`_
-describes; its values, storage, packing and unpacking are still to
-come.
+describes. Its interpreter (``interp``) decodes, classifies, encodes
+and describes packets by running their items through the tcsxtce
+helpers, as `Interpreting`_ describes, for what it supports so far, and
+names the first construct of a packet it doesn't support; on the demo
+mission's vectors it agrees with the generated codecs on every packet
+it runs. Math and context calibrators, checksums, transforms, segments,
+locations from the end and from other entries, and integers of more
+than 64 bits are still to come, as are the values, storage and
+interface of `Values`_ and `The interface`_. Until ``StringSpec`` and
+``ByteOrder`` gain a lifetime (see `Freeing what was read`_), the
+interpreter keeps each distinct string terminator and byte order list
+it is given for the rest of the program, once.
+
 
 
 .. contents:: Contents

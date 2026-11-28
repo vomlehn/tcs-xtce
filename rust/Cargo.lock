@@ -60,6 +60,8 @@ dependencies = [
 name = "tcs-xtce-dynamic"
 version = "0.1.0"
 dependencies = [
+ "num-bigint",
+ "num-traits",
  "tcs-xtce",
  "tcs-xtce-model",
 ]

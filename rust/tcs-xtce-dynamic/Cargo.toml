@@ -16,6 +16,9 @@ publish = false
 [dependencies]
 tcs-xtce = { path = "..", version = "=0.8.0" }
 tcs-xtce-model = { path = "../tcs-xtce-model" }
+# The model's integers of any size.
+num-bigint = "0.4"
+num-traits = "0.2"
 
 [lib]
 path = "src/lib.rs"

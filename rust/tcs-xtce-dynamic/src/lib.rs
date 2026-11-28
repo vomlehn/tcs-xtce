@@ -9,6 +9,8 @@
 //! arguments, and the members and elements of aggregates and arrays,
 //! by the rules XTCE documents use for their own references.
 
+pub mod interp;
+
 use std::fmt;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
