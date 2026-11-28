@@ -227,3 +227,32 @@ fn the_digest_is_xtce_digest_s() {
     let want = tcs_xtce::digest::digest_file_bytes(&path).unwrap();
     assert_eq!(demo().digest(), want);
 }
+
+#[test]
+fn a_whole_value_is_read_slot_by_slot() {
+    let m = demo();
+    let root = m.container(m.top(), "/Demo/CCSDSPacket").unwrap();
+    let mut scratch = m.scratch();
+    m.unpack(root, &bytes("095ec02a0005123520abcd77"), &mut scratch)
+        .unwrap();
+    let mut store = m.store();
+    store.commit(&scratch).unwrap();
+    let probes = m.parameter_slots(m.top(), "/Demo/Probes").unwrap();
+    let mut got = Vec::new();
+    store.each(probes, |s, v| {
+        got.push((m.path_of_slot(s).to_string(), v.map(|d| format!("{d:?}"))))
+    });
+    let want = [
+        ("/Demo/Probes[0].Id", "Int(1)"),
+        ("/Demo/Probes[0].Gains[0]", "Int(2)"),
+        ("/Demo/Probes[0].Gains[1]", "Int(3)"),
+        ("/Demo/Probes[1].Id", "Int(5)"),
+        ("/Demo/Probes[1].Gains[0]", "Int(2)"),
+        ("/Demo/Probes[1].Gains[1]", "Int(0)"),
+    ];
+    let want: Vec<_> = want
+        .iter()
+        .map(|(p, v)| (p.to_string(), Some(v.to_string())))
+        .collect();
+    assert_eq!(got, want);
+}

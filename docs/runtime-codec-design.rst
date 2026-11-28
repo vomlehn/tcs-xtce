@@ -41,6 +41,10 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
   the outputs of the MathAlgorithms and CustomAlgorithms the packet
   triggers, as ``algorithms()`` does. Each calls a function with every
   result rather than returning a list, so that none of them allocates.
+- A whole aggregate or array, or a member or element of one, is a
+  ``Slots``: the run of slots that hold it, which
+  ``Mission::parameter_slots``, ``argument_slots`` and ``entry_slots``
+  look up and ``Store::each`` reads, slot by slot.
 - ``Mission::unbounded`` is still to come.
 
 

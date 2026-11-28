@@ -117,3 +117,34 @@ fn a_document_that_is_not_xtce_is_refused() {
     let e = Mission::read_from([&b"<NotXtce/>"[..]]).unwrap_err();
     assert!(matches!(e, Error::Read { document: 0, .. }), "{e:?}");
 }
+
+#[test]
+fn whole_values_are_runs_of_slots() {
+    let m = demo();
+    let demo = m.space_system(m.top(), "Demo").unwrap();
+    let all = m.parameter_slots(demo, "Probes").unwrap();
+    let paths: Vec<&str> = all.iter().map(|s| m.path_of_slot(s)).collect();
+    assert_eq!(
+        paths,
+        [
+            "/Demo/Probes[0].Id",
+            "/Demo/Probes[0].Gains[0]",
+            "/Demo/Probes[0].Gains[1]",
+            "/Demo/Probes[1].Id",
+            "/Demo/Probes[1].Gains[0]",
+            "/Demo/Probes[1].Gains[1]",
+        ]
+    );
+    let one = m.parameter_slots(demo, "Probes[1]").unwrap();
+    assert_eq!(one.len(), 3);
+    assert_eq!(one.get(0), Some(m.parameter(demo, "Probes[1].Id").unwrap()));
+    let gains = m.parameter_slots(demo, "Probes[1].Gains").unwrap();
+    assert_eq!(gains.len(), 2);
+    // A scalar is a run of one.
+    let id = m.parameter_slots(demo, "Probes[1].Id").unwrap();
+    assert_eq!(id.len(), 1);
+    let e = m.parameter_slots(demo, "Probes[2]").unwrap_err();
+    assert!(e.to_string().contains("no member or element"), "{e}");
+    let probe = m.container(demo, "ProbeOne").unwrap();
+    assert_eq!(m.entry_slots(probe, "Probes").unwrap(), all);
+}

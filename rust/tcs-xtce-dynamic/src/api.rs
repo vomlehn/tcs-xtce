@@ -27,7 +27,7 @@ use tcs_xtce_model::dump::Shared;
 use tcs_xtce_model::model::{Count, Encoding, Node, VType};
 
 use crate::interp::{self, CodecError, Look, Val, Values, Workspace};
-use crate::{alarms, AlarmLevel, Mission, Monitor, NodeId, SlotId};
+use crate::{alarms, AlarmLevel, Mission, Monitor, NodeId, SlotId, Slots};
 
 /// A value of a slot, as a program gives and reads it: an engineering
 /// value, after calibration.
@@ -450,6 +450,28 @@ impl Store {
             return None;
         }
         self.values.val(slot.index as i64).map(to_datum)
+    }
+
+    /// Gives the current value of each slot of a whole value, such as an
+    /// aggregate or array.
+    ///
+    /// # Arguments
+    ///
+    /// * `slots` - The slots, which must be this store's mission's.
+    /// * `f`     - Called with each slot, in order, and its value: `None`
+    ///             if nothing has set it, such as an element past an
+    ///             array's count.
+    pub fn each(
+        &self,
+        slots: Slots,
+        mut f: impl FnMut(SlotId, Option<Datum<'_>>),
+    ) {
+        if slots.mission != self.mission {
+            return;
+        }
+        for s in slots.iter() {
+            f(s, self.get(s));
+        }
     }
 
     /// Gives a slot a value, checked against its type as encoding checks

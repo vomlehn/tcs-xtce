@@ -403,6 +403,10 @@ does, and <tt class="docutils literal"><span class="pre">Mission::monitor_alarms
 the outputs of the MathAlgorithms and CustomAlgorithms the packet
 triggers, as <tt class="docutils literal">algorithms()</tt> does. Each calls a function with every
 result rather than returning a list, so that none of them allocates.</li>
+<li>A whole aggregate or array, or a member or element of one, is a
+<tt class="docutils literal">Slots</tt>: the run of slots that hold it, which
+<tt class="docutils literal"><span class="pre">Mission::parameter_slots</span></tt>, <tt class="docutils literal">argument_slots</tt> and <tt class="docutils literal">entry_slots</tt>
+look up and <tt class="docutils literal"><span class="pre">Store::each</span></tt> reads, slot by slot.</li>
 <li><tt class="docutils literal"><span class="pre">Mission::unbounded</span></tt> is still to come.</li>
 </ul>
 <p>Until <tt class="docutils literal">StringSpec</tt> and <tt class="docutils literal">ByteOrder</tt> gain a lifetime (see <a class="reference internal" href="#freeing-what-was-read">Freeing

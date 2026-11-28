@@ -135,6 +135,64 @@ pub struct SlotId {
     index: usize,
 }
 
+/// The slots of a whole value: a parameter or argument, or a member or
+/// element of one, scalar or not. An aggregate's are its members' in
+/// order, an array's its elements', the last index fastest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Slots {
+    /// The mission's number.
+    mission: u64,
+    /// The first slot's place in the mission's list.
+    first: usize,
+    /// How many slots.
+    count: usize,
+}
+
+impl Slots {
+    /// Gives how many slots the value has.
+    ///
+    /// # Returns
+    ///
+    /// The number.
+    pub fn len(&self) -> usize {
+        self.count
+    }
+
+    /// Says whether the value has no slots.
+    ///
+    /// # Returns
+    ///
+    /// Whether it has none.
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    /// Gives one of the slots.
+    ///
+    /// # Arguments
+    ///
+    /// * `i` - Its place, from 0.
+    ///
+    /// # Returns
+    ///
+    /// Its handle, or `None` past the last.
+    pub fn get(&self, i: usize) -> Option<SlotId> {
+        (i < self.count).then_some(SlotId {
+            mission: self.mission,
+            index: self.first + i,
+        })
+    }
+
+    /// Gives the slots in order.
+    ///
+    /// # Returns
+    ///
+    /// Their handles.
+    pub fn iter(&self) -> impl Iterator<Item = SlotId> + '_ {
+        (0..self.count).filter_map(|i| self.get(i))
+    }
+}
+
 /// The type of a slot: what a program needs to check a value before it
 /// gives one.
 #[derive(Debug, Clone)]
@@ -1004,12 +1062,276 @@ impl Mission {
         Err(fail(if inside {
             format!(
                 "{}{at} is an aggregate or array: name one of its members \
-                 or elements",
+                 or elements, or look its slots up",
                 owner.key
             )
         } else {
             format!("{} has no member or element {at}", owner.key)
         }))
+    }
+
+    /// Finds the slots of a parameter or argument, or of a member or
+    /// element of one, at some steps.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - The parameter or argument.
+    /// * `steps` - The member and index steps into it.
+    /// * `what`  - What is looked for, for the error.
+    /// * `path`  - The path given, for the error.
+    ///
+    /// # Returns
+    ///
+    /// The slots.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if it has no slots, or none at the steps.
+    fn slots_at(
+        &self,
+        owner: &Owner,
+        steps: &[Step],
+        what: &'static str,
+        path: &str,
+    ) -> Result<Slots, LookupError> {
+        let fail = |reason: String| LookupError {
+            what,
+            path: path.to_string(),
+            tried: Vec::new(),
+            reason: Some(reason),
+        };
+        let slots = owner.slots.as_ref().map_err(|e| fail(e.clone()))?;
+        let mut inside = slots
+            .iter()
+            .copied()
+            .filter(|&i| self.slots[i].steps.starts_with(steps));
+        let Some(first) = inside.next() else {
+            let at: String = steps.iter().map(step_text).collect();
+            return Err(fail(format!(
+                "{} has no member or element {at}",
+                owner.key
+            )));
+        };
+        // Depth first, so a value's slots are together.
+        let last = inside.last().unwrap_or(first);
+        Ok(Slots {
+            mission: self.id,
+            first,
+            count: last + 1 - first,
+        })
+    }
+
+    /// Finds the parameter a path names from a base, and the member and
+    /// index steps into it.
+    ///
+    /// # Arguments
+    ///
+    /// * `base` - The SpaceSystem the path is relative to.
+    /// * `path` - The path.
+    ///
+    /// # Returns
+    ///
+    /// The parameter and the steps.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if no parameter has the path.
+    fn parameter_owner(
+        &self,
+        base: SpaceSystemId,
+        path: &str,
+    ) -> Result<(&Owner, Vec<Step>), LookupError> {
+        let b = self.base(base, "parameter", path)?;
+        let (head, steps) = member_path(path).map_err(|e| LookupError {
+            what: "parameter",
+            path: path.to_string(),
+            tried: Vec::new(),
+            reason: Some(e.message().to_string()),
+        })?;
+        let owner = Self::find(b, &head, "parameter", |k| {
+            let key = qname(k);
+            self.params.iter().find(|p| p.key == key)
+        })
+        .map_err(|e| LookupError {
+            path: path.to_string(),
+            ..e
+        })?;
+        Ok((owner, steps))
+    }
+
+    /// Looks the slots of a parameter, or of a member or element of one,
+    /// up from a base: a scalar's one, or all of an aggregate's or
+    /// array's.
+    ///
+    /// # Arguments
+    ///
+    /// * `base` - The SpaceSystem the path is relative to.
+    /// * `path` - The path, which may end in member and index steps, such as
+    ///            `Attitude` or `Probes[1]`.
+    ///
+    /// # Returns
+    ///
+    /// The slots.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if no parameter has the path, or it has no such
+    /// member or element.
+    pub fn parameter_slots(
+        &self,
+        base: SpaceSystemId,
+        path: &str,
+    ) -> Result<Slots, LookupError> {
+        let (owner, steps) = self.parameter_owner(base, path)?;
+        self.slots_at(owner, &steps, "parameter", path)
+    }
+
+    /// Finds the argument of a meta-command a name gives, and the member
+    /// and index steps into it.
+    ///
+    /// # Arguments
+    ///
+    /// * `cmd`  - The meta-command.
+    /// * `name` - The name.
+    ///
+    /// # Returns
+    ///
+    /// The argument and the steps.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if the meta-command has no such argument.
+    fn argument_owner(
+        &self,
+        cmd: NodeId,
+        name: &str,
+    ) -> Result<(&Owner, Vec<Step>), LookupError> {
+        let n = self.node_entry(cmd, "argument", name)?;
+        let fail = |reason: String| LookupError {
+            what: "argument",
+            path: name.to_string(),
+            tried: Vec::new(),
+            reason: Some(reason),
+        };
+        if !n.command {
+            return Err(fail(format!(
+                "{} is a container, not a meta-command",
+                n.path
+            )));
+        }
+        let (head, steps) =
+            member_path(name).map_err(|e| fail(e.message().to_string()))?;
+        let Some((_, akey)) = n.args.iter().find(|a| a.0 == head) else {
+            return Err(fail(format!("{} has no argument {head}", n.path)));
+        };
+        let owner = self.args.iter().find(|o| &o.key == akey).unwrap();
+        Ok((owner, steps))
+    }
+
+    /// Looks the slots of an argument of a meta-command, or of a member or
+    /// element of one, up, as [`Mission::argument`] does.
+    ///
+    /// # Arguments
+    ///
+    /// * `cmd`  - The meta-command.
+    /// * `name` - The argument's name, which may end in member and index
+    ///            steps.
+    ///
+    /// # Returns
+    ///
+    /// The slots.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if the meta-command has no such argument, member or
+    /// element.
+    pub fn argument_slots(
+        &self,
+        cmd: NodeId,
+        name: &str,
+    ) -> Result<Slots, LookupError> {
+        let (owner, steps) = self.argument_owner(cmd, name)?;
+        self.slots_at(owner, &steps, "argument", name)
+    }
+
+    /// Finds the parameter or argument an entry name of a node gives, and
+    /// the member and index steps into it.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The container or meta-command.
+    /// * `name` - The name.
+    ///
+    /// # Returns
+    ///
+    /// The parameter or argument and the steps, or `None` for a
+    /// meta-command's argument, which [`Mission::argument_owner`] finds.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if the node holds no such value.
+    fn entry_owner(
+        &self,
+        node: NodeId,
+        name: &str,
+    ) -> Result<Option<(&Owner, Vec<Step>)>, LookupError> {
+        let n = self.node_entry(node, "entry", name)?;
+        let fail = |reason: String| LookupError {
+            what: "entry",
+            path: name.to_string(),
+            tried: Vec::new(),
+            reason: Some(reason),
+        };
+        let (head, steps) =
+            member_path(name).map_err(|e| fail(e.message().to_string()))?;
+        let held = n
+            .node
+            .scope()
+            .into_iter()
+            .rev()
+            .find(|l| l.get().name == head)
+            .map(|l| l.get().key.clone());
+        let owner = match held {
+            Some(k) => self
+                .params
+                .iter()
+                .chain(self.args.iter())
+                .find(|o| o.key == k),
+            None => None,
+        };
+        match owner {
+            Some(o) => Ok(Some((o, steps))),
+            None if n.command => Ok(None),
+            None => Err(fail(format!("{} holds no {head}", n.path))),
+        }
+    }
+
+    /// Looks the slots of an entry of a container or meta-command, or of a
+    /// member or element of one, up, as [`Mission::entry`] does.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The container or meta-command.
+    /// * `name` - The name, which may end in member and index steps.
+    ///
+    /// # Returns
+    ///
+    /// The slots.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if the node holds no such value, member or element.
+    pub fn entry_slots(
+        &self,
+        node: NodeId,
+        name: &str,
+    ) -> Result<Slots, LookupError> {
+        match self.entry_owner(node, name)? {
+            Some((o, steps)) => self.slots_at(o, &steps, "entry", name),
+            None => self
+                .argument_slots(node, name)
+                .map_err(|e| LookupError { what: "entry", ..e }),
+        }
     }
 
     /// Looks a parameter, or a member or element of one, up from a base.
@@ -1034,21 +1356,7 @@ impl Mission {
         base: SpaceSystemId,
         path: &str,
     ) -> Result<SlotId, LookupError> {
-        let b = self.base(base, "parameter", path)?;
-        let (head, steps) = member_path(path).map_err(|e| LookupError {
-            what: "parameter",
-            path: path.to_string(),
-            tried: Vec::new(),
-            reason: Some(e.message().to_string()),
-        })?;
-        let owner = Self::find(b, &head, "parameter", |k| {
-            let key = qname(k);
-            self.params.iter().find(|p| p.key == key)
-        })
-        .map_err(|e| LookupError {
-            path: path.to_string(),
-            ..e
-        })?;
+        let (owner, steps) = self.parameter_owner(base, path)?;
         self.slot(owner, &steps, "parameter", path)
     }
 
@@ -1106,25 +1414,7 @@ impl Mission {
         cmd: NodeId,
         name: &str,
     ) -> Result<SlotId, LookupError> {
-        let n = self.node_entry(cmd, "argument", name)?;
-        let fail = |reason: String| LookupError {
-            what: "argument",
-            path: name.to_string(),
-            tried: Vec::new(),
-            reason: Some(reason),
-        };
-        if !n.command {
-            return Err(fail(format!(
-                "{} is a container, not a meta-command",
-                n.path
-            )));
-        }
-        let (head, steps) =
-            member_path(name).map_err(|e| fail(e.message().to_string()))?;
-        let Some((_, akey)) = n.args.iter().find(|a| a.0 == head) else {
-            return Err(fail(format!("{} has no argument {head}", n.path)));
-        };
-        let owner = self.args.iter().find(|o| &o.key == akey).unwrap();
+        let (owner, steps) = self.argument_owner(cmd, name)?;
         self.slot(owner, &steps, "argument", name)
     }
 
@@ -1151,36 +1441,11 @@ impl Mission {
         node: NodeId,
         name: &str,
     ) -> Result<SlotId, LookupError> {
-        let n = self.node_entry(node, "entry", name)?;
-        let fail = |reason: String| LookupError {
-            what: "entry",
-            path: name.to_string(),
-            tried: Vec::new(),
-            reason: Some(reason),
-        };
-        let (head, steps) =
-            member_path(name).map_err(|e| fail(e.message().to_string()))?;
-        let held = n
-            .node
-            .scope()
-            .into_iter()
-            .rev()
-            .find(|l| l.get().name == head)
-            .map(|l| l.get().key.clone());
-        let owner = match held {
-            Some(k) => self
-                .params
-                .iter()
-                .chain(self.args.iter())
-                .find(|o| o.key == k),
-            None => None,
-        };
-        match owner {
-            Some(o) => self.slot(o, &steps, "entry", name),
-            None if n.command => self
+        match self.entry_owner(node, name)? {
+            Some((o, steps)) => self.slot(o, &steps, "entry", name),
+            None => self
                 .argument(node, name)
                 .map_err(|e| LookupError { what: "entry", ..e }),
-            None => Err(fail(format!("{} holds no {head}", n.path))),
         }
     }
 
