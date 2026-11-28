@@ -188,13 +188,13 @@ macro_rules! at_width {
 
 /// How a wide integer is encoded.
 #[derive(Debug, Clone, Copy)]
-pub struct Wide {
+pub struct Wide<'a> {
     /// Its bits.
     pub bits: u32,
     /// Whether its bits are least significant first.
     pub lsb: bool,
     /// Its byte order.
-    pub order: ByteOrder,
+    pub order: ByteOrder<'a>,
     /// Its integer encoding.
     pub enc: IntEncoding,
     /// Whether it is BCD, and if so packed.

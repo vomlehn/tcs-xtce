@@ -67,9 +67,9 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
 
 
 
-Until ``StringSpec`` and ``ByteOrder`` gain a lifetime (see `Freeing
-what was read`_), the interpreter keeps each distinct string terminator
-and byte order list it is given for the rest of the program, once.
+Dropping a ``Mission`` gives back all the memory it took (see `Freeing
+what was read`_): ``tests/freeing.rs`` reads, runs and drops the demo
+mission again and again and checks that nothing is kept.
 
 
 
@@ -355,8 +355,12 @@ Both the XML tree and the resolved mission can be freed:
   program can drop its documents as soon as ``Mission::from_documents``
   returns. ``Mission::read_from`` never keeps them at all.
 - **The mission.** A ``Mission`` owns everything it holds, names
-  included, so dropping it frees all of it. Nothing is leaked, so a
-  program can resolve many missions in turn.
+  included, so dropping it frees all of it. The model shares much of
+  what it holds through reference counts, some of them in cycles (a node
+  and its children, a value and the types bound to it), which no count
+  would free; dropping the mission calls the model's ``release``, which
+  breaks them. Nothing is leaked, so a program can resolve many missions
+  in turn.
 
 The tcsxtce runtime names fields with ``&'static str``, in its helpers'
 arguments and in every ``PacketError``, and takes two pieces of
@@ -369,12 +373,15 @@ codec deals with them so:
   interpreter knows which item it was running, so it returns an error
   of its own that names the field from the mission. tcsxtce and
   generated code are unchanged by this.
-- **Encoding data.** ``ByteOrder`` and ``StringSpec`` gain a lifetime,
-  ``ByteOrder<'a>`` and ``StringSpec<'a>``, so that they can borrow
-  from the mission. Generated code passes ``'static`` constants, which
-  still fit, and the emitters write ``<'static>`` where a constant
-  names the type. This changes tcsxtce's API, so tcsxtce's minor
-  version changes, and tcs-xtce's with it.
+- **Encoding data.** ``ByteOrder``, ``StringSpec``, ``FrameSpec`` and
+  ``FrameSync`` have a lifetime, ``ByteOrder<'a>`` and so on, so that
+  they can borrow: the codec's string terminators from the model, its
+  byte order lists from a buffer on the stack, and its streams' sync
+  patterns from the mission, so a ``Deframer`` borrows its ``Mission``.
+  Generated code passes ``'static`` constants, which still fit, and the
+  Rust emitter writes ``<'static>`` where a constant or field names the
+  type. This changes tcsxtce's API, so tcsxtce's minor version changes,
+  and tcs-xtce's with it, when they are next uploaded.
 
 Phases
 ======

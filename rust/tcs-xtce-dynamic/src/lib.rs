@@ -343,6 +343,10 @@ pub struct Mission {
     hooks: Vec<(String, String, String)>,
     /// The parameters whose alarms an alarm monitor keeps.
     monitored: alarms::Monitored,
+    /// The sync patterns and masks its streams' deframers borrow.
+    patterns: streams::Patterns,
+    /// Every node the model made, which dropping the mission releases.
+    all_nodes: Vec<Shared<Node>>,
     /// The string and binary slots with no maximum size of their own.
     unbounded: Vec<SlotId>,
     /// The first slot of each parameter and argument, and how many it
@@ -507,6 +511,14 @@ fn expand(
     }
 }
 
+impl Drop for Mission {
+    fn drop(&mut self) {
+        // The model's nodes share what they hold in cycles of reference
+        // counts, which only this frees.
+        tcs_xtce_model::model::release(&self.all_nodes);
+    }
+}
+
 impl Mission {
     /// Reads and resolves a mission from its documents.
     ///
@@ -590,6 +602,7 @@ impl Mission {
         let mut c = Compiler::new(roots, false, dialect)?;
         let model = c.compile()?;
         let monitored = alarms::Monitored::new(&model.monitored);
+        let patterns = streams::Patterns::new(&model.streams);
         let mut slots = Vec::new();
         let mut params = Vec::new();
         for key in c.params.keys().to_vec() {
@@ -787,6 +800,8 @@ impl Mission {
             owner_slots,
             hooks,
             monitored,
+            patterns,
+            all_nodes: all,
             unbounded,
         })
     }
@@ -1716,17 +1731,19 @@ impl Mission {
     ///
     /// A LookupError, if the mission has no such stream, a function it
     /// needs isn't set, or its synchronizer is too large to run.
-    pub fn stream(&self, path: &str) -> Result<Deframer, LookupError> {
+    pub fn stream(&self, path: &str) -> Result<Deframer<'_>, LookupError> {
         let st = self.find_stream(path)?;
         let fns = |name: &str, kind: &str| {
             self.plan.hook(&format!("stream {kind} {name}"))
         };
         let st = st.get();
-        streams::deframer(&st, &fns).map_err(|reason| LookupError {
-            what: "stream",
-            path: path.to_string(),
-            tried: Vec::new(),
-            reason: Some(reason),
+        streams::deframer(&st, &self.patterns, &fns).map_err(|reason| {
+            LookupError {
+                what: "stream",
+                path: path.to_string(),
+                tried: Vec::new(),
+                reason: Some(reason),
+            }
         })
     }
 

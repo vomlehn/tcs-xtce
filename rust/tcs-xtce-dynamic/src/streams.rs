@@ -21,7 +21,7 @@ trait Push: fmt::Debug + Send {
     fn push(&mut self, data: &[u8], f: &mut dyn FnMut(&[u8]));
 }
 
-impl<const B: usize, const Y: usize> Push for FrameSync<B, Y> {
+impl<const B: usize, const Y: usize> Push for FrameSync<'_, B, Y> {
     fn push(&mut self, data: &[u8], f: &mut dyn FnMut(&[u8])) {
         FrameSync::push(self, data, f)
     }
@@ -34,14 +34,14 @@ impl<const B: usize, const Y: usize> Push for FlagSync<B, Y> {
 }
 
 /// What a stream's frames come from.
-enum Inner {
+enum Inner<'m> {
     /// A synchronizer.
-    Sync(Box<dyn Push>),
+    Sync(Box<dyn Push + 'm>),
     /// A CustomStream's DecodingAlgorithm.
     Custom(StreamDecode),
 }
 
-impl fmt::Debug for Inner {
+impl fmt::Debug for Inner<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Inner::Sync(s) => s.fmt(f),
@@ -52,16 +52,16 @@ impl fmt::Debug for Inner {
 
 /// A stream of a mission, which takes the stream's bytes as they arrive
 /// and gives each frame they complete, as the generated code's stream
-/// types do.
+/// types do. It borrows its sync pattern from the mission.
 #[derive(Debug)]
-pub struct Deframer {
+pub struct Deframer<'m> {
     /// What its frames come from.
-    inner: Inner,
+    inner: Inner<'m>,
     /// The stream its input comes from, if any.
-    feeder: Option<Box<Deframer>>,
+    feeder: Option<Box<Deframer<'m>>>,
 }
 
-impl Deframer {
+impl Deframer<'_> {
     /// Takes the stream's next bytes, and gives `f` each frame they
     /// complete (its bits padded with zeros), or for a CustomStream, the
     /// bytes it decodes.
@@ -117,7 +117,7 @@ fn pcm(pcm: &str) -> Pcm {
 }
 
 /// Gives the bytes of a pattern or mask, most significant first, as the
-/// runtime takes them, kept for the rest of the program.
+/// runtime takes them.
 ///
 /// # Arguments
 ///
@@ -127,12 +127,45 @@ fn pcm(pcm: &str) -> Pcm {
 /// # Returns
 ///
 /// The bytes.
-fn pattern_bytes(v: &num_bigint::BigInt, bits: i64) -> &'static [u8] {
+fn pattern_bytes(v: &num_bigint::BigInt, bits: i64) -> Vec<u8> {
     let n = (bits.max(0) as usize).div_ceil(8);
     let (_, b) = v.to_bytes_be();
     let mut out = vec![0u8; n.saturating_sub(b.len())];
     out.extend_from_slice(&b[b.len().saturating_sub(n)..]);
-    crate::interp::interned(&out)
+    out
+}
+
+/// The sync patterns and masks of a mission's streams, which its
+/// deframers borrow.
+#[derive(Debug, Default)]
+pub(crate) struct Patterns {
+    /// Each FixedFrameStream's pattern and mask, by its qualified name.
+    by_stream: std::collections::HashMap<String, (Vec<u8>, Vec<u8>)>,
+}
+
+impl Patterns {
+    /// Makes the patterns and masks of some streams.
+    ///
+    /// # Arguments
+    ///
+    /// * `streams` - The streams.
+    ///
+    /// # Returns
+    ///
+    /// Their patterns and masks.
+    pub(crate) fn new(streams: &[tcs_xtce_model::dump::Mut<Stream>]) -> Self {
+        let mut p = Patterns::default();
+        for st in streams {
+            let st = st.get();
+            if !st.fixed {
+                continue;
+            }
+            let pat = pattern_bytes(&st.pattern, st.pattern_bits);
+            let mask = pattern_bytes(&st.mask, st.pattern_bits);
+            p.by_stream.insert(st.key.clone(), (pat, mask));
+        }
+        p
+    }
 }
 
 /// Makes a synchronizer whose buffers are of the least size that holds a
@@ -195,38 +228,46 @@ pub(crate) fn capacity(st: &Stream) -> usize {
 /// # Returns
 ///
 /// It, on the heap.
-fn on_big_stack(
+fn on_big_stack<'m>(
     bytes: usize,
-    f: impl FnOnce() -> Box<dyn Push> + Send + 'static,
-) -> Box<dyn Push> {
+    f: impl FnOnce() -> Box<dyn Push + 'm> + Send,
+) -> Box<dyn Push + 'm> {
     if bytes < 1 << 16 {
         return f();
     }
-    std::thread::Builder::new()
-        .stack_size(4 * bytes + (1 << 20))
-        .spawn(f)
-        .expect("a thread to make a stream's synchronizer")
-        .join()
-        .expect("a stream's synchronizer")
+    std::thread::scope(|sc| {
+        std::thread::Builder::new()
+            .stack_size(4 * bytes + (1 << 20))
+            .spawn_scoped(sc, f)
+            .expect("a thread to make a stream's synchronizer")
+            .join()
+            .expect("a stream's synchronizer")
+    })
 }
 
 /// Makes the synchronizer of a FixedFrameStream or VariableFrameStream.
 ///
 /// # Arguments
 ///
-/// * `st`     - The stream.
-/// * `invert` - Its InvertAlgorithm's function, if it has one.
+/// * `st`       - The stream.
+/// * `patterns` - The mission's sync patterns and masks.
+/// * `invert`   - Its InvertAlgorithm's function, if it has one.
 ///
 /// # Returns
 ///
 /// The synchronizer.
-fn synchronizer(st: &Stream, invert: Option<BitInvert>) -> Box<dyn Push> {
+fn synchronizer<'m>(
+    st: &Stream,
+    patterns: &'m Patterns,
+    invert: Option<BitInvert>,
+) -> Box<dyn Push + 'm> {
     let bits = capacity(st);
     if st.fixed {
+        let (pattern, mask) = &patterns.by_stream[&st.key];
         let spec = FrameSpec {
             frame_bits: st.frame_bits.max(0) as usize,
-            pattern: pattern_bytes(&st.pattern, st.pattern_bits),
-            mask: pattern_bytes(&st.mask, st.pattern_bits),
+            pattern,
+            mask,
             pattern_bits: st.pattern_bits as u32,
             location: st.location.max(0) as usize,
             max_errors: st.max_errors as u32,
@@ -272,9 +313,10 @@ fn synchronizer(st: &Stream, invert: Option<BitInvert>) -> Box<dyn Push> {
 ///
 /// # Arguments
 ///
-/// * `st`  - The stream.
-/// * `fns` - Gives the function set for an algorithm: its name and the
-///           kind of function, `stream_decode` or `bit_invert`.
+/// * `st`       - The stream.
+/// * `patterns` - The mission's sync patterns and masks.
+/// * `fns`      - Gives the function set for an algorithm: its name and
+///                the kind of function, `stream_decode` or `bit_invert`.
 ///
 /// # Returns
 ///
@@ -284,12 +326,13 @@ fn synchronizer(st: &Stream, invert: Option<BitInvert>) -> Box<dyn Push> {
 ///
 /// What is missing: the name of an algorithm whose function isn't set,
 /// or why a synchronizer is too large to run.
-pub(crate) fn deframer(
+pub(crate) fn deframer<'m>(
     st: &Stream,
+    patterns: &'m Patterns,
     fns: &dyn Fn(&str, &str) -> Option<crate::Algorithm>,
-) -> Result<Deframer, String> {
+) -> Result<Deframer<'m>, String> {
     let feeder = match &st.feeder {
-        Some(f) => Some(Box::new(deframer(&f.get(), fns)?)),
+        Some(f) => Some(Box::new(deframer(&f.get(), patterns, fns)?)),
         None => None,
     };
     let inner = if st.custom {
@@ -322,7 +365,7 @@ pub(crate) fn deframer(
                 }
             }
         };
-        Inner::Sync(synchronizer(st, invert))
+        Inner::Sync(synchronizer(st, patterns, invert))
     };
     Ok(Deframer { inner, feeder })
 }

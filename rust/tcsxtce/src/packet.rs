@@ -2112,14 +2112,16 @@ fn swap_bytes(v: u64, bits: u32) -> u64 {
 /// How the groups of 8 bits of a field combine (see
 /// [`BitReader::uint_bits`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ByteOrder {
+pub enum ByteOrder<'a> {
     /// The first group is the most significant (big endian).
     Big,
     /// The first group is the least significant (little endian).
     Little,
     /// The significance of each (whole) byte, as an XTCE byte order list
-    /// gives it: 0 for the least significant.
-    List(&'static [u8]),
+    /// gives it: 0 for the least significant. Generated code gives a
+    /// constant; a program that reads a mission when it runs can borrow
+    /// the list from it.
+    List(&'a [u8]),
 }
 
 /// Combines groups of bits into one value.
@@ -4473,18 +4475,18 @@ const WINDOWS_1252: [u16; 32] = [
 /// Layout of a string field.  Exactly one of `terminator` and `size_tag_bits`
 /// is set.
 #[derive(Debug, Clone, Copy)]
-pub struct StringSpec {
+pub struct StringSpec<'a> {
     /// Bits the field always occupies, or `None` for variable-size strings.
     pub fixed_bits: Option<usize>,
     /// Upper bound on the bits the field occupies.
     pub max_bits: usize,
     /// The bytes that end the string, found only where a code unit starts.
-    pub terminator: Option<&'static [u8]>,
+    pub terminator: Option<&'a [u8]>,
     pub size_tag_bits: u32,
     pub charset: Charset,
 }
 
-impl StringSpec {
+impl<'a> StringSpec<'a> {
     /// Makes the spec of a string whose size another field gives.
     ///
     /// # Arguments
@@ -4494,7 +4496,7 @@ impl StringSpec {
     /// # Returns
     ///
     /// This spec, but occupying exactly `bytes` bytes.
-    pub fn sized(&self, bytes: usize) -> StringSpec {
+    pub fn sized(&self, bytes: usize) -> StringSpec<'a> {
         StringSpec {
             fixed_bits: Some(bytes * 8),
             max_bits: bytes * 8,
@@ -5474,12 +5476,12 @@ fn pack_bits(bits: impl Iterator<Item = u8>, out: &mut [u8]) -> usize {
 
 /// The parameters of a FixedFrameStream; see [`FrameSync`].
 #[derive(Debug, Clone, Copy)]
-pub struct FrameSpec {
+pub struct FrameSpec<'a> {
     pub frame_bits: usize,
     /// The sync pattern's `pattern_bits` bits, right-aligned in bytes, most
     /// significant first; and the mask of the bits compared.
-    pub pattern: &'static [u8],
-    pub mask: &'static [u8],
+    pub pattern: &'a [u8],
+    pub mask: &'a [u8],
     pub pattern_bits: u32,
     pub location: usize,
     pub max_errors: u32,
@@ -5507,8 +5509,8 @@ const CHECK: u8 = 3;
 /// up to `BITS` bits and gives frames of `BYTES` bytes; the generated stream
 /// types choose both.
 #[derive(Debug, Clone)]
-pub struct FrameSync<const BITS: usize, const BYTES: usize> {
-    spec: FrameSpec,
+pub struct FrameSync<'a, const BITS: usize, const BYTES: usize> {
+    spec: FrameSpec<'a>,
     line: LineDecoder,
     bits: [u8; BITS],
     len: usize,
@@ -5604,7 +5606,7 @@ pub type BitInvert = fn(u8) -> u8;
 /// the next bytes of the encoded stream, in pieces of any size.
 pub type StreamDecode = fn(&[u8], &mut dyn FnMut(&[u8]));
 
-impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
+impl<'a, const BITS: usize, const BYTES: usize> FrameSync<'a, BITS, BYTES> {
     /// The synchronizer, inverting bits with `f` rather than complementing
     /// them once AutoInvert inverts the stream.
     pub fn with_invert(mut self, f: BitInvert) -> Self {
@@ -5621,7 +5623,7 @@ impl<const BITS: usize, const BYTES: usize> FrameSync<BITS, BYTES> {
     /// # Returns
     ///
     /// The synchronizer, complementing bits when AutoInvert inverts.
-    pub fn new(spec: FrameSpec) -> Self {
+    pub fn new(spec: FrameSpec<'a>) -> Self {
         Self {
             spec,
             line: LineDecoder::new(spec.pcm, spec.inverted),

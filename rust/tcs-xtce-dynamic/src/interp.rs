@@ -563,72 +563,27 @@ fn bcd(enc: &str) -> Option<bool> {
     }
 }
 
-/// Gives bytes that live as long as the program, each distinct value
-/// once: the runtime takes a string's terminator and a byte order list
-/// only as `'static`, which the code generated for a mission has as
-/// constants. Each distinct value is kept once for the whole program,
-/// however many missions use it, so what is kept doesn't grow with the
-/// missions read.
+/// Gives the runtime's byte order of an encoding, a list's bytes put in
+/// a buffer the caller keeps, so that nothing is allocated or kept.
 ///
 /// # Arguments
 ///
-/// * `b` - The bytes.
-///
-/// # Returns
-///
-/// The kept copy.
-pub(crate) fn interned(b: &[u8]) -> &'static [u8] {
-    use std::sync::{Mutex, OnceLock};
-    static KEPT: OnceLock<Mutex<Vec<&'static [u8]>>> = OnceLock::new();
-    let mut kept = KEPT.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
-    if let Some(k) = kept.iter().find(|k| **k == b) {
-        return k;
-    }
-    let k: &'static [u8] = Box::leak(b.to_vec().into_boxed_slice());
-    kept.push(k);
-    k
-}
-
-/// Gives a byte order list that lives as long as the program, as
-/// [`interned`] does, looking for a copy kept before without making one.
-///
-/// # Arguments
-///
-/// * `l` - The significance of each byte.
-///
-/// # Returns
-///
-/// The kept copy.
-fn interned_list(l: &[i64]) -> &'static [u8] {
-    use std::sync::{Mutex, OnceLock};
-    static KEPT: OnceLock<Mutex<Vec<&'static [u8]>>> = OnceLock::new();
-    let mut kept = KEPT.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
-    let same = |k: &[u8]| {
-        k.len() == l.len() && k.iter().zip(l).all(|(a, b)| *a as i64 == *b)
-    };
-    if let Some(k) = kept.iter().find(|k| same(k)) {
-        return k;
-    }
-    let b: Vec<u8> = l.iter().map(|x| *x as u8).collect();
-    let k: &'static [u8] = Box::leak(b.into_boxed_slice());
-    kept.push(k);
-    k
-}
-
-/// Gives the runtime's byte order of an encoding.
-///
-/// # Arguments
-///
-/// * `o` - The order.
+/// * `o`   - The order.
+/// * `buf` - Where a list's bytes go: one for each byte of the field.
 ///
 /// # Returns
 ///
 /// The order.
-fn byte_order(o: &Order) -> ByteOrder {
+fn byte_order<'b>(o: &Order, buf: &'b mut [u8]) -> ByteOrder<'b> {
     match o {
         Order::Be => ByteOrder::Big,
         Order::Le => ByteOrder::Little,
-        Order::List(l) => ByteOrder::List(interned_list(l)),
+        Order::List(l) => {
+            for (d, x) in buf.iter_mut().zip(l) {
+                *d = *x as u8;
+            }
+            ByteOrder::List(&buf[..l.len().min(buf.len())])
+        }
     }
 }
 
@@ -676,7 +631,9 @@ fn raw_read(
     if fast(bits, order, lsb) {
         Ok(r.uint_order(bits as u32, matches!(order, Order::Le), F)? as u128)
     } else {
-        r.uint_bits(bits as u32, lsb, byte_order(order), F)
+        // At most 128 bits.
+        let mut b = [0u8; 16];
+        r.uint_bits(bits as u32, lsb, byte_order(order, &mut b), F)
     }
 }
 
@@ -699,7 +656,8 @@ fn raw_write(
     if fast(bits, order, lsb) {
         w.uint_order(bits as u32, matches!(order, Order::Le), v as u64);
     } else {
-        w.uint_bits(bits as u32, lsb, byte_order(order), v);
+        let mut b = [0u8; 16];
+        w.uint_bits(bits as u32, lsb, byte_order(order, &mut b), v);
     }
 }
 
@@ -1062,7 +1020,7 @@ fn uncalibrate(vt: &VType, y: f64, vals: &dyn Look) -> pk::Result<f64> {
 /// # Returns
 ///
 /// The spec.
-fn spec(e: &tcs_xtce_model::model::StringEnc) -> StringSpec {
+fn spec(e: &tcs_xtce_model::model::StringEnc) -> StringSpec<'_> {
     let charset = match e.charset.as_str() {
         "US-ASCII" => Charset::Ascii,
         "ISO-8859-1" => Charset::Latin1,
@@ -1078,7 +1036,7 @@ fn spec(e: &tcs_xtce_model::model::StringEnc) -> StringSpec {
     StringSpec {
         fixed_bits: e.fixed_bits.map(|b| b as usize),
         max_bits: e.max_bits as usize,
-        terminator: e.terminator.as_deref().map(interned),
+        terminator: e.terminator.as_deref(),
         size_tag_bits: e.size_tag_bits.unwrap_or(0) as u32,
         charset,
     }
@@ -1456,10 +1414,11 @@ fn read_plain(
             Ok(())
         }
         Encoding::Int(e) if e.bits > 64 => {
+            let mut ob = [0u8; crate::wide::MAX_BYTES];
             let w = crate::wide::Wide {
                 bits: e.bits as u32,
                 lsb: e.lsb,
-                order: byte_order(&e.order),
+                order: byte_order(&e.order, &mut ob),
                 enc: int_enc(vt),
                 bcd: bcd(&e.encoding),
                 signed: vt.signed(),
@@ -2489,33 +2448,6 @@ fn each_value(items: &[Item], f: &mut dyn FnMut(&Shared<Local>)) {
     }
 }
 
-/// Keeps, once, the string terminators and byte order lists of a type
-/// and those inside it, so that running packets keeps nothing new.
-///
-/// # Arguments
-///
-/// * `vt` - The type.
-fn intern_type(vt: &VType) {
-    match &vt.enc {
-        Encoding::Int(e) => {
-            byte_order(&e.order);
-        }
-        Encoding::Float(e) => {
-            byte_order(&e.order);
-        }
-        Encoding::String(e) => {
-            spec(e);
-        }
-        Encoding::Aggregate(e) => {
-            for m in &e.members {
-                intern_type(&m.vtype);
-            }
-        }
-        Encoding::Array(e) => intern_type(&e.elem),
-        _ => {}
-    }
-}
-
 impl Plan {
     /// Makes the plan of a mission's nodes.
     ///
@@ -2576,7 +2508,6 @@ impl Plan {
                 let l = l.get();
                 let vt = l.vt();
                 let id = l.id as usize;
-                intern_type(&vt);
                 let (d, c) = xform_nesting(&vt);
                 p.xform_depth = p.xform_depth.max(d);
                 p.xform_cap = p.xform_cap.max(c);
@@ -3496,10 +3427,11 @@ fn write_raw(w: &mut BitWriter<'_>, vt: &VType, v: &Val) -> pk::Result<()> {
     match (&vt.enc, v) {
         (Encoding::Int(e), Val::RawInt(x)) if e.bits > 64 => {
             let enc = int_enc(vt);
+            let mut ob = [0u8; crate::wide::MAX_BYTES];
             let w_ = crate::wide::Wide {
                 bits: e.bits as u32,
                 lsb: e.lsb,
-                order: byte_order(&e.order),
+                order: byte_order(&e.order, &mut ob),
                 enc,
                 bcd: bcd(&e.encoding),
                 signed: enc != IntEncoding::Unsigned,
@@ -3701,10 +3633,11 @@ fn write_plain(
             Ok(())
         }
         (Encoding::Int(e), _) if e.bits > 64 => {
+            let mut ob = [0u8; crate::wide::MAX_BYTES];
             let w_ = crate::wide::Wide {
                 bits: e.bits as u32,
                 lsb: e.lsb,
-                order: byte_order(&e.order),
+                order: byte_order(&e.order, &mut ob),
                 enc: int_enc(vt),
                 bcd: bcd(&e.encoding),
                 signed: vt.signed(),

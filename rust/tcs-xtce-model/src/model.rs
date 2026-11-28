@@ -2203,3 +2203,107 @@ value_record!(
         warnings, monitored, streams, hooks
     ]
 );
+
+/// Frees what a mission's nodes share in cycles: a node and its children,
+/// a check and the transformed container it is computed after, and a
+/// value and the types bound to it. The model holds these as reference
+/// counts, which a cycle keeps from ever reaching zero, so a program that
+/// is done with a mission calls this to give the memory back. The nodes
+/// are emptied: nothing else may use them afterwards.
+///
+/// # Arguments
+///
+/// * `nodes` - Every node of the mission.
+pub fn release(nodes: &[Shared<Node>]) {
+    let free = |l: &Shared<Local>| free_local(l);
+    for n in nodes {
+        let Ok(mut m) = n.0.try_borrow_mut() else {
+            continue;
+        };
+        for it in walk(&m.items, true) {
+            match it {
+                Item::Value(v) => free(&v.local),
+                Item::Transform(t) => {
+                    if let Ok(mut t) = t.0.try_borrow_mut() {
+                        t.patches.clear();
+                        t.length = None;
+                    }
+                }
+                _ => {}
+            }
+        }
+        for c in &m.checks {
+            if let Ok(mut c) = c.0.try_borrow_mut() {
+                c.late = None;
+                free(&c.local);
+            }
+        }
+        for (_, l) in &m.fields {
+            free(l);
+        }
+        for (_, l, _) in &m.alarms {
+            free(l);
+        }
+        for (l, _) in &m.fixed.0 {
+            free(l);
+        }
+        for (l, (c, _)) in &m.derived.0 {
+            free(l);
+            free(c);
+        }
+        m.children.clear();
+        m.base = None;
+        m.items.clear();
+        m.checks.clear();
+        m.fields.clear();
+        m.criteria.clear();
+        m.alarms.clear();
+        m.algorithms.clear();
+        m.hooks.clear();
+    }
+}
+
+/// Takes a value's type away, and the types of the values that type is
+/// bound to, so that no cycle through them remains (see [`release`]).
+///
+/// # Arguments
+///
+/// * `l` - The value.
+fn free_local(l: &Shared<Local>) {
+    let vt = match l.0.try_borrow_mut() {
+        Ok(mut l) => l.vtype.take(),
+        Err(_) => None,
+    };
+    if let Some(vt) = vt {
+        free_type(&vt);
+    }
+}
+
+/// Takes the types away from the values a type is bound to (see
+/// [`release`]).
+///
+/// # Arguments
+///
+/// * `vt` - The type.
+fn free_type(vt: &VType) {
+    if let Some(d) = vt.dyn_size() {
+        if let Some(l) = &d.local {
+            free_local(l);
+        }
+    }
+    match &vt.enc {
+        Encoding::Aggregate(e) => {
+            if let Some(l) = &e.this {
+                free_local(l);
+            }
+            for m in &e.members {
+                free_type(&m.vtype);
+            }
+        }
+        Encoding::Array(e) => free_type(&e.elem),
+        _ => {}
+    }
+    if let Some(o) = &vt.origin {
+        free_type(o);
+    }
+}

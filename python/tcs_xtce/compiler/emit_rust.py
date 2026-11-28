@@ -1351,7 +1351,9 @@ class RustEmitter:
             self.line("decode: pk::StreamDecode,", 1)
         else:
             bits, size = stream_capacity(st)
-            self.line(f"sync: pk::{sync}<{bits}, {size}>,", 1)
+            # A FrameSync borrows its pattern and mask, constants here.
+            life = "'static, " if st.fixed else ""
+            self.line(f"sync: pk::{sync}<{life}{bits}, {size}>,", 1)
         if st.feeder is not None:
             self.line(f"feeder: {st.feeder.ident},", 1)
         self.line("}")
@@ -1369,7 +1371,8 @@ class RustEmitter:
             self.line("pub const CONTAINER: &'static str = "
                       f"{rstr(st.container)};", 1)
             if st.fixed:
-                self.line("pub const SPEC: pk::FrameSpec = pk::FrameSpec {", 1)
+                self.line("pub const SPEC: pk::FrameSpec<'static> = "
+                          "pk::FrameSpec {", 1)
                 fields = (
                     ("frame_bits", st.frame_bits),
                     ("pattern", byte_slice(st.pattern, st.pattern_bits)),

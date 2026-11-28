@@ -427,9 +427,9 @@ a program that must stay small can refuse the mission before it
 starts. An array with no largest count has no slots, and its lookups
 say so.</li>
 </ul>
-<p>Until <tt class="docutils literal">StringSpec</tt> and <tt class="docutils literal">ByteOrder</tt> gain a lifetime (see <a class="reference internal" href="#freeing-what-was-read">Freeing
-what was read</a>), the interpreter keeps each distinct string terminator
-and byte order list it is given for the rest of the program, once.</p>
+<p>Dropping a <tt class="docutils literal">Mission</tt> gives back all the memory it took (see <a class="reference internal" href="#freeing-what-was-read">Freeing
+what was read</a>): <tt class="docutils literal">tests/freeing.rs</tt> reads, runs and drops the demo
+mission again and again and checks that nothing is kept.</p>
 <div class="contents local topic" id="contents">
 <p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
 <ul class="simple">
@@ -726,8 +726,12 @@ documents.</li>
 program can drop its documents as soon as <tt class="docutils literal"><span class="pre">Mission::from_documents</span></tt>
 returns. <tt class="docutils literal"><span class="pre">Mission::read_from</span></tt> never keeps them at all.</li>
 <li><strong>The mission.</strong> A <tt class="docutils literal">Mission</tt> owns everything it holds, names
-included, so dropping it frees all of it. Nothing is leaked, so a
-program can resolve many missions in turn.</li>
+included, so dropping it frees all of it. The model shares much of
+what it holds through reference counts, some of them in cycles (a node
+and its children, a value and the types bound to it), which no count
+would free; dropping the mission calls the model's <tt class="docutils literal">release</tt>, which
+breaks them. Nothing is leaked, so a program can resolve many missions
+in turn.</li>
 </ul>
 <p>The tcsxtce runtime names fields with <tt class="docutils literal">&amp;'static str</tt>, in its helpers'
 arguments and in every <tt class="docutils literal">PacketError</tt>, and takes two pieces of
@@ -740,12 +744,15 @@ placeholder name. When a helper returns a <tt class="docutils literal">PacketErr
 interpreter knows which item it was running, so it returns an error
 of its own that names the field from the mission. tcsxtce and
 generated code are unchanged by this.</li>
-<li><strong>Encoding data.</strong> <tt class="docutils literal">ByteOrder</tt> and <tt class="docutils literal">StringSpec</tt> gain a lifetime,
-<tt class="docutils literal"><span class="pre">ByteOrder&lt;'a&gt;</span></tt> and <tt class="docutils literal"><span class="pre">StringSpec&lt;'a&gt;</span></tt>, so that they can borrow
-from the mission. Generated code passes <tt class="docutils literal">'static</tt> constants, which
-still fit, and the emitters write <tt class="docutils literal">&lt;'static&gt;</tt> where a constant
-names the type. This changes tcsxtce's API, so tcsxtce's minor
-version changes, and tcs-xtce's with it.</li>
+<li><strong>Encoding data.</strong> <tt class="docutils literal">ByteOrder</tt>, <tt class="docutils literal">StringSpec</tt>, <tt class="docutils literal">FrameSpec</tt> and
+<tt class="docutils literal">FrameSync</tt> have a lifetime, <tt class="docutils literal"><span class="pre">ByteOrder&lt;'a&gt;</span></tt> and so on, so that
+they can borrow: the codec's string terminators from the model, its
+byte order lists from a buffer on the stack, and its streams' sync
+patterns from the mission, so a <tt class="docutils literal">Deframer</tt> borrows its <tt class="docutils literal">Mission</tt>.
+Generated code passes <tt class="docutils literal">'static</tt> constants, which still fit, and the
+Rust emitter writes <tt class="docutils literal">&lt;'static&gt;</tt> where a constant or field names the
+type. This changes tcsxtce's API, so tcsxtce's minor version changes,
+and tcs-xtce's with it, when they are next uploaded.</li>
 </ul>
 </div>
 </div>
