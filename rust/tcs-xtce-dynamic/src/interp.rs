@@ -1609,7 +1609,9 @@ pub fn template(vt: &VType) -> Val {
                 e.shape.iter().product::<i64>() as usize
             } else {
                 match &e.count {
-                    Count::Dyn(d) => d.max.max(0) as usize,
+                    // Its other dimensions' sizes multiply the one that
+                    // varies.
+                    Count::Dyn(d) => (d.max.max(0) * d.factor.max(1)) as usize,
                     Count::Int(n) => *n as usize,
                 }
             };

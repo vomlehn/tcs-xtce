@@ -15,7 +15,7 @@ mod funcs;
 pub mod interp;
 mod streams;
 mod wide;
-pub use wide::{from_big, to_big, WideInt};
+pub use wide::{from_big, from_le_bytes, to_big, WideInt};
 
 pub use alarms::Monitor;
 pub use api::{Datum, RunError, Scratch, SetError, Store};
@@ -356,6 +356,11 @@ pub struct Mission {
     /// The first slot of each parameter and argument, and how many it
     /// has, by its key.
     owner_slots: std::collections::HashMap<String, (usize, usize)>,
+    /// The place of the whole value of each field that has no slots, or
+    /// is a second copy of a value in its packet, by its Local's number.
+    whole_by_id: std::collections::HashMap<i64, usize>,
+    /// The storage of each such whole value, as it starts.
+    whole_templates: Vec<interp::Val>,
 }
 
 /// Adds a SpaceSystem and those inside it to a list, each once.
@@ -786,7 +791,7 @@ impl Mission {
                 }
             }
         }
-        Ok(Mission {
+        let mut m = Mission {
             id,
             model,
             spaces,
@@ -802,12 +807,16 @@ impl Mission {
             slot_types: Rc::new(slot_types),
             slot_caps: Rc::new(slot_caps),
             owner_slots,
+            whole_by_id: std::collections::HashMap::new(),
+            whole_templates: Vec::new(),
             hooks,
             monitored,
             patterns,
             all_nodes: all,
             unbounded,
-        })
+        };
+        m.find_wholes();
+        Ok(m)
     }
 
     /// Computes the digest of a mission's documents, as `xtce-digest`
@@ -1672,6 +1681,134 @@ impl Mission {
         assert_eq!(node.mission, self.id, "a NodeId of another mission");
         let n = self.nodes[node.index].node.get();
         (!n.abstract_).then_some(n.max_bytes as usize)
+    }
+
+    /// Gives a handle as numbers, for an interface to another language
+    /// that holds handles as plain data.
+    ///
+    /// # Arguments
+    ///
+    /// * `h` - The handle.
+    ///
+    /// # Returns
+    ///
+    /// Its mission's number and its place.
+    pub fn space_system_raw(h: SpaceSystemId) -> (u64, usize) {
+        (h.mission, h.index)
+    }
+
+    /// Gives a handle as numbers (see [`Mission::space_system_raw`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `h` - The handle.
+    ///
+    /// # Returns
+    ///
+    /// Its mission's number and its place.
+    pub fn node_raw(h: NodeId) -> (u64, usize) {
+        (h.mission, h.index)
+    }
+
+    /// Gives a handle as numbers (see [`Mission::space_system_raw`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `h` - The handle.
+    ///
+    /// # Returns
+    ///
+    /// Its mission's number and its place.
+    pub fn slot_raw(h: SlotId) -> (u64, usize) {
+        (h.mission, h.index)
+    }
+
+    /// Gives a run of slots as numbers (see
+    /// [`Mission::space_system_raw`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `h` - The slots.
+    ///
+    /// # Returns
+    ///
+    /// Their mission's number, the first one's place and how many.
+    pub fn slots_raw(h: Slots) -> (u64, usize, usize) {
+        (h.mission, h.first, h.count)
+    }
+
+    /// Makes a handle of this mission from numbers, checking them.
+    ///
+    /// # Arguments
+    ///
+    /// * `mission` - Its mission's number.
+    /// * `index`   - Its place.
+    ///
+    /// # Returns
+    ///
+    /// The handle, or `None` if the numbers aren't one of this mission's.
+    pub fn space_system_from_raw(
+        &self,
+        mission: u64,
+        index: usize,
+    ) -> Option<SpaceSystemId> {
+        (mission == self.id && index < self.spaces.len())
+            .then_some(SpaceSystemId { mission, index })
+    }
+
+    /// Makes a handle of this mission from numbers, checking them.
+    ///
+    /// # Arguments
+    ///
+    /// * `mission` - Its mission's number.
+    /// * `index`   - Its place.
+    ///
+    /// # Returns
+    ///
+    /// The handle, or `None` if the numbers aren't one of this mission's.
+    pub fn node_from_raw(&self, mission: u64, index: usize) -> Option<NodeId> {
+        (mission == self.id && index < self.nodes.len())
+            .then_some(NodeId { mission, index })
+    }
+
+    /// Makes a handle of this mission from numbers, checking them.
+    ///
+    /// # Arguments
+    ///
+    /// * `mission` - Its mission's number.
+    /// * `index`   - Its place.
+    ///
+    /// # Returns
+    ///
+    /// The handle, or `None` if the numbers aren't one of this mission's.
+    pub fn slot_from_raw(&self, mission: u64, index: usize) -> Option<SlotId> {
+        (mission == self.id && index < self.slots.len())
+            .then_some(SlotId { mission, index })
+    }
+
+    /// Makes a run of this mission's slots from numbers, checking them.
+    ///
+    /// # Arguments
+    ///
+    /// * `mission` - Its mission's number.
+    /// * `first`   - The first slot's place.
+    /// * `count`   - How many.
+    ///
+    /// # Returns
+    ///
+    /// The slots, or `None` if the numbers aren't this mission's.
+    pub fn slots_from_raw(
+        &self,
+        mission: u64,
+        first: usize,
+        count: usize,
+    ) -> Option<Slots> {
+        let end = first.checked_add(count)?;
+        (mission == self.id && end <= self.slots.len()).then_some(Slots {
+            mission,
+            first,
+            count,
+        })
     }
 
     /// Lists the mission's streams.

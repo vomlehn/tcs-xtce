@@ -223,3 +223,63 @@ fn vectors_decode_and_encode_as_the_generated_codecs_do() {
     );
     assert!(matched > 0, "no vector was run");
 }
+
+#[test]
+fn every_vector_packs_again_from_a_store() {
+    let mut m =
+        Mission::read_from([File::open(mission_file("demo.xtce")).unwrap()])
+            .unwrap();
+    common::set_algorithms(&mut m);
+    let top = m.top();
+    let roots = [
+        m.container(top, "/Demo/CCSDSPacket").unwrap(),
+        m.meta_command(top, "/Demo/CCSDSCommand").unwrap(),
+        m.container(top, "/Demo/Housekeeping").unwrap(),
+    ];
+    let vectors = std::fs::read_to_string(mission_file("vectors.txt")).unwrap();
+    let expected =
+        std::fs::read_to_string(mission_file("vectors.expected")).unwrap();
+    let mut scratch = m.scratch();
+    let mut out = Buffer::with_capacity(70_000);
+    let (mut ok, mut wrong) = (0, Vec::new());
+    for (v, want) in vectors.lines().zip(expected.lines()) {
+        let v = v.split('#').next().unwrap_or("");
+        let mut words = v.split_whitespace();
+        let (Some(kind), Some(h)) = (words.next(), words.next()) else {
+            continue;
+        };
+        let data: Vec<u8> = (0..h.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&h[i..i + 2], 16).unwrap())
+            .collect();
+        let root = match kind {
+            "tm" => roots[0],
+            "tc" => roots[1],
+            _ => roots[2],
+        };
+        let again = want.split(" | ").nth(1).unwrap_or("");
+        let got = match m.unpack(root, &data, &mut scratch) {
+            Ok(g) => g,
+            Err(_) if want.starts_with("error:") => {
+                ok += 1;
+                continue;
+            }
+            Err(e) => {
+                wrong.push(format!("{v}: {e}"));
+                continue;
+            }
+        };
+        // A store of its own, so that nothing an earlier packet set is
+        // packed.
+        let mut store = m.store();
+        store.commit(&scratch).unwrap();
+        let packed = m.pack(got, &store, &mut out).map(hex);
+        match packed {
+            Ok(p) if p == again => ok += 1,
+            Err(_) if again.starts_with("error:") => ok += 1,
+            other => wrong.push(format!("{v}: {other:?}, want {again}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    assert!(ok > 290, "only {ok}");
+}

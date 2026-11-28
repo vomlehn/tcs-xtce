@@ -21,7 +21,7 @@ use std::rc::Rc;
 
 use tcs_xtce::buffer::Buffer;
 use tcs_xtce_model::dump::Shared;
-use tcs_xtce_model::model::{Count, Encoding, Node, VType};
+use tcs_xtce_model::model::{Count, Encoding, Local, Node, VType};
 
 use crate::interp::{self, CodecError, Look, Val, Values, Workspace};
 use crate::{
@@ -126,6 +126,9 @@ pub struct Store {
     raw_set: Vec<bool>,
     /// The storage packing reuses.
     work: RefCell<Workspace>,
+    /// The whole value of each field that has no slots, by its place in
+    /// the mission's list of them.
+    wholes: Values,
 }
 
 /// A packet decoded and not yet committed: the values of the slots it
@@ -145,6 +148,10 @@ pub struct Scratch {
     /// The container or meta-command of the packet last unpacked, or
     /// `None` if the last failed.
     last: Option<Shared<Node>>,
+    /// The whole value of each field that has no slots.
+    wholes: Values,
+    /// The whole values the packet sets.
+    touched_wholes: Vec<usize>,
 }
 
 /// Gives the number of slots a value of a type has.
@@ -184,6 +191,33 @@ fn array_len(e: &tcs_xtce_model::model::ArrayEnc) -> usize {
             Count::Dyn(d) => d.max.max(0) as usize,
             Count::Int(n) => *n as usize,
         }
+    }
+}
+
+/// Describes the shape of a value's storage: its kinds, members,
+/// elements and room.
+///
+/// # Arguments
+///
+/// * `v` - The storage.
+///
+/// # Returns
+///
+/// The description, the same for storage of the same shape.
+fn shape(v: &Val) -> String {
+    match v {
+        Val::Agg(ms) => {
+            let inner: Vec<String> = ms.iter().map(shape).collect();
+            format!("{{{}}}", inner.join(","))
+        }
+        Val::Arr(es, _) => {
+            let inner: Vec<String> = es.iter().map(shape).collect();
+            format!("[{}]", inner.join(","))
+        }
+        Val::Str(s) => format!("s{}", s.capacity()),
+        Val::Bytes(b) => format!("b{}", b.capacity()),
+        Val::Big(_) => "w".into(),
+        x => format!("{:?}", std::mem::discriminant(x)),
     }
 }
 
@@ -662,6 +696,17 @@ impl Store {
             }
             self.raw_set[i] = false;
         }
+        for &w in &scratch.touched_wholes {
+            let id = w as i64;
+            match scratch.wholes.val(id) {
+                Some(v) => {
+                    let mut x = self.wholes.take(id);
+                    assign(&mut x, v);
+                    self.wholes.put(id, x);
+                }
+                None => self.wholes.absent(id),
+            }
+        }
         Ok(())
     }
 }
@@ -683,6 +728,7 @@ impl Mission {
             raws: Values::like(&self.slot_raw_templates),
             raw_set: vec![false; self.slots.len()],
             work: RefCell::new(Workspace::new(&self.plan)),
+            wholes: Values::like(&self.whole_templates),
         }
     }
 
@@ -700,6 +746,8 @@ impl Mission {
             raws: Values::like(&self.slot_raw_templates),
             touched: Vec::with_capacity(self.slots.len()),
             last: None,
+            wholes: Values::like(&self.whole_templates),
+            touched_wholes: Vec::with_capacity(self.whole_templates.len()),
         }
     }
 
@@ -771,6 +819,7 @@ impl Mission {
             return Err(RunError::Foreign);
         }
         scratch.touched.clear();
+        scratch.touched_wholes.clear();
         scratch.last = None;
         let n = &self.nodes[node.index].node;
         let d = if n.get().abstract_ {
@@ -788,14 +837,21 @@ impl Mission {
         let dn = d.node.get();
         for (_, l) in &dn.fields {
             let l = l.get();
-            let Some(&(first, count)) = self.owner_slots.get(l.key.as_str())
-            else {
-                continue;
-            };
             let vt = l.vt();
-            if slot_count(&vt) != count {
+            if let Some(w) = self.whole_of(&l) {
+                // A field with no slots keeps its whole value.
+                let Some(v) = scratch.work.vals.val(l.id) else {
+                    continue;
+                };
+                let mut x = scratch.wholes.take(w as i64);
+                assign(&mut x, v);
+                scratch.wholes.put(w as i64, x);
+                scratch.touched_wholes.push(w);
                 continue;
             }
+            let Some((first, count)) = self.slot_run(&l) else {
+                continue;
+            };
             // Absent: it keeps the value it had.
             let Some(v) = scratch.work.vals.val(l.id) else {
                 continue;
@@ -820,6 +876,73 @@ impl Mission {
         drop(dn);
         scratch.last = Some(d.node.clone());
         Ok(self.node_id(&d.node))
+    }
+
+    /// Finds the fields of the mission's packets that have no slots,
+    /// such as arrays with no largest count, the copies of repeated
+    /// containers and values read in segments, and makes storage for
+    /// each one's whole value, so that a packet unpacked into a store
+    /// packs again.
+    pub(crate) fn find_wholes(&mut self) {
+        let mut groups = std::collections::HashMap::new();
+        let mut by_id = std::collections::HashMap::new();
+        let mut templates = Vec::new();
+        for n in &self.nodes {
+            let mut seen = std::collections::HashSet::new();
+            for (_, l) in &n.node.get().fields {
+                let l = l.get();
+                let t = interp::template(&l.vt());
+                if !seen.insert(l.key.clone()) {
+                    // A second copy of the same value in one packet, as a
+                    // container included twice gives, has storage of its
+                    // own.
+                    by_id.insert(l.id, templates.len());
+                    templates.push(t);
+                } else if self.slot_run(&l).is_none() {
+                    // Shared by the packets whose values of it are of the
+                    // same shape.
+                    let w = *groups
+                        .entry((l.key.clone(), shape(&t)))
+                        .or_insert_with(|| {
+                            templates.push(t);
+                            templates.len() - 1
+                        });
+                    by_id.insert(l.id, w);
+                }
+            }
+        }
+        self.whole_by_id = by_id;
+        self.whole_templates = templates;
+    }
+
+    /// Gives where a field keeps its whole value, if it has no slots or
+    /// is a second copy of a value in its packet.
+    ///
+    /// # Arguments
+    ///
+    /// * `l` - The field's Local.
+    ///
+    /// # Returns
+    ///
+    /// Its place in the list of whole values, or `None` if its value is
+    /// spread over its slots.
+    fn whole_of(&self, l: &Local) -> Option<usize> {
+        self.whole_by_id.get(&l.id).copied()
+    }
+
+    /// Gives the slots a field's value is spread over.
+    ///
+    /// # Arguments
+    ///
+    /// * `l` - The field's Local.
+    ///
+    /// # Returns
+    ///
+    /// The first slot and how many, or `None` if the field has no slots,
+    /// or its type has other slots than its parameter's or argument's.
+    pub(crate) fn slot_run(&self, l: &Local) -> Option<(usize, usize)> {
+        let &(first, count) = self.owner_slots.get(l.key.as_str())?;
+        (slot_count(&l.vt()) == count).then_some((first, count))
     }
 
     /// Makes an alarm monitor with no samples, for
@@ -963,14 +1086,19 @@ impl Mission {
         ws.vals.clear();
         for (_, l) in &n.get().fields {
             let l = l.get();
-            let Some(&(first, count)) = self.owner_slots.get(l.key.as_str())
-            else {
-                continue;
-            };
             let vt = l.vt();
-            if slot_count(&vt) != count {
+            if let Some(w) = self.whole_of(&l) {
+                // A field with no slots, from its whole value.
+                if let Some(v) = values.wholes.val(w as i64) {
+                    let mut x = ws.vals.take(l.id);
+                    assign(&mut x, v);
+                    ws.vals.put(l.id, x);
+                }
                 continue;
             }
+            let Some((first, _)) = self.slot_run(&l) else {
+                continue;
+            };
             let mut x = ws.vals.take(l.id);
             let mut at = first;
             if gather(&vt, &mut x, values, &mut at) {

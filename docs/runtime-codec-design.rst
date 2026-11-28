@@ -49,6 +49,12 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
   the outputs of the MathAlgorithms and CustomAlgorithms the packet
   triggers, as ``algorithms()`` does. Each calls a function with every
   result rather than returning a list, so that none of them allocates.
+- A field with no slots -- an array with no largest count, the copies
+  of a repeated container, a value read in segments, or a second copy
+  of a value in its packet, as a container included twice gives -- is
+  kept in the store as a whole value, so that every packet unpacked
+  into a store packs again from it; such values are read only through
+  the packet, not as slots.
 - A whole aggregate or array, or a member or element of one, is a
   ``Slots``: the run of slots that hold it, which
   ``Mission::parameter_slots``, ``argument_slots`` and ``entry_slots``

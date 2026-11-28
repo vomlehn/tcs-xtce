@@ -110,6 +110,33 @@ pub fn from_big(b: &BigInt) -> Option<WideInt> {
     Some(if b.sign() == Sign::Minus { -m } else { m })
 }
 
+/// Gives an integer of two's complement, least significant byte first,
+/// as a wide one, without allocating.
+///
+/// # Arguments
+///
+/// * `b` - The bytes.
+///
+/// # Returns
+///
+/// It, or `None` if a [`WideInt`] doesn't hold it.
+pub fn from_le_bytes(b: &[u8]) -> Option<WideInt> {
+    let negative = b.last().is_some_and(|x| x & 0x80 != 0);
+    let fill = if negative { 0xff } else { 0 };
+    if b.len() > WIDE {
+        // What doesn't fit must be the sign's.
+        if b[WIDE..].iter().any(|&x| x != fill)
+            || (b[WIDE - 1] & 0x80 != 0) != negative
+        {
+            return None;
+        }
+    }
+    let mut out = [fill; WIDE];
+    let n = b.len().min(WIDE);
+    out[..n].copy_from_slice(&b[..n]);
+    Some(WideInt::from_le_bytes(out))
+}
+
 /// Gives a wide integer as a `BigInt`, which allocates.
 ///
 /// # Arguments

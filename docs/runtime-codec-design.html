@@ -411,6 +411,12 @@ does, and <tt class="docutils literal"><span class="pre">Mission::monitor_alarms
 the outputs of the MathAlgorithms and CustomAlgorithms the packet
 triggers, as <tt class="docutils literal">algorithms()</tt> does. Each calls a function with every
 result rather than returning a list, so that none of them allocates.</li>
+<li>A field with no slots -- an array with no largest count, the copies
+of a repeated container, a value read in segments, or a second copy
+of a value in its packet, as a container included twice gives -- is
+kept in the store as a whole value, so that every packet unpacked
+into a store packs again from it; such values are read only through
+the packet, not as slots.</li>
 <li>A whole aggregate or array, or a member or element of one, is a
 <tt class="docutils literal">Slots</tt>: the run of slots that hold it, which
 <tt class="docutils literal"><span class="pre">Mission::parameter_slots</span></tt>, <tt class="docutils literal">argument_slots</tt> and <tt class="docutils literal">entry_slots</tt>
