@@ -371,10 +371,10 @@ and describes packets by running their items through the tcsxtce
 helpers, as <a class="reference internal" href="#interpreting">Interpreting</a> describes, for what it supports so far, and
 names the first construct of a packet it doesn't support; on the demo
 mission's vectors it agrees with the generated codecs on every packet
-it runs. Math and context calibrators, checksums, transforms, segments,
-locations from the end and from other entries, and integers of more
-than 64 bits are still to come, as are the values, storage and
-interface of <a class="reference internal" href="#values">Values</a> and <a class="reference internal" href="#the-interface">The interface</a>. Until <tt class="docutils literal">StringSpec</tt> and
+it runs. Custom algorithms and transforms (which the application
+supplies), locations from the end and from other entries, and integers
+of more than 64 bits are still to come, as are the values, storage and</p>
+<p>interface of <a class="reference internal" href="#values">Values</a> and <a class="reference internal" href="#the-interface">The interface</a>. Until <tt class="docutils literal">StringSpec</tt> and
 <tt class="docutils literal">ByteOrder</tt> gain a lifetime (see <a class="reference internal" href="#freeing-what-was-read">Freeing what was read</a>), the
 interpreter keeps each distinct string terminator and byte order list
 it is given for the rest of the program, once.</p>

@@ -19,8 +19,8 @@ use tcs_xtce::packet::{
 };
 use tcs_xtce_model::dump::Shared;
 use tcs_xtce_model::model::{
-    walk, Calibrator, Count, Criterion, DynSize, Encoding, Item, Lit, Local,
-    Node, Num, Order, PathStep, Term, VType,
+    walk, CalCase, Calibrator, Check, Count, Criterion, DynSize, Encoding,
+    Expr, Item, Lit, Local, Node, Num, Order, PathStep, Spec, Term, VType,
 };
 
 /// The name the interpreter gives the runtime's helpers for a field: the
@@ -107,8 +107,10 @@ fn at(field: &str) -> impl Fn(PacketError) -> CodecError + '_ {
 fn type_unsupported(vt: &VType) -> Option<String> {
     let what = |s: &str| Some(format!("{s} in type {}", vt.key));
     match &vt.calibrator {
-        None | Some(Calibrator::Poly(_)) | Some(Calibrator::Spline(_)) => {}
-        Some(_) => return what("a math or context calibrator"),
+        Some(Calibrator::Context(c)) if !c.bound => {
+            return what("a context calibrator not bound to the packet")
+        }
+        _ => {}
     }
     match &vt.enc {
         Encoding::Int(e) => {
@@ -206,11 +208,7 @@ fn items_unsupported(items: &[Item]) -> Option<String> {
             Item::Fill(_) => None,
             Item::Value(v) => {
                 let l = v.local.get();
-                if v.assembled != 0 {
-                    Some("a value assembled from segments".into())
-                } else if l.checksum {
-                    Some("a checksum".into())
-                } else if l.length.is_some() && l.measures {
+                if l.length.is_some() && l.measures {
                     Some("the length field of an included container".into())
                 } else {
                     type_unsupported(&l.vt())
@@ -223,8 +221,8 @@ fn items_unsupported(items: &[Item]) -> Option<String> {
                 Some("the length field of an included container".into())
             }
             Item::Transform(_) => Some("a transform".into()),
-            Item::Verify(_) => Some("a checksum".into()),
-            Item::Segment(_) => Some("a segment".into()),
+            Item::Verify(v) => check_unsupported(&v.check.get()),
+            Item::Segment(_) => None,
             Item::EndSeek(_) | Item::NextSeek(_) => {
                 Some("a location from another entry".into())
             }
@@ -257,7 +255,12 @@ pub fn unsupported(n: &Shared<Node>) -> Option<String> {
                 .find_map(term_unsupported)
                 .or_else(|| items_unsupported(&m.items))
         })
-        .or_else(|| (!n.get().checks.is_empty()).then(|| "a checksum".into()));
+        .or_else(|| {
+            n.get()
+                .checks
+                .iter()
+                .find_map(|c| check_unsupported(&c.get()))
+        });
     found.map(|w| format!("{}: {w}", n.get().key))
 }
 
@@ -430,13 +433,185 @@ fn raw_write(
 fn terms(c: &tcs_xtce_model::model::Polynomial) -> Vec<(f64, i32)> {
     c.terms.iter().map(|(a, e)| (*a, *e as i32)).collect()
 }
+/// Converts a value of the packet to a float, as a calibrator or
+/// algorithm takes it.
+///
+/// # Arguments
+///
+/// * `v` - The value.
+///
+/// # Returns
+///
+/// It as a float: a boolean is 1 or 0.
+///
+/// # Errors
+///
+/// OutOfRange, if it isn't a number.
+fn math_value(v: &Val) -> pk::Result<f64> {
+    Ok(match v {
+        Val::Int(i) => *i as f64,
+        Val::Float(x) => *x,
+        Val::Enum(i) => *i as f64,
+        Val::Bool(b) => {
+            if *b {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        _ => return Err(PacketError::OutOfRange { field: F }),
+    })
+}
+
+/// Gives the runtime's operator for a MathOperation's.
+///
+/// # Arguments
+///
+/// * `op` - The operator, as XTCE writes it.
+///
+/// # Returns
+///
+/// The runtime's.
+fn math_operator(op: &str) -> pk::MathOperator {
+    use pk::MathOperator as M;
+    match op {
+        "/" => M::Div,
+        "%" => M::Mod,
+        "^" => M::Pow,
+        "y^x" => M::RevPow,
+        "ln" => M::Ln,
+        "log" => M::Log10,
+        "e^x" => M::Exp,
+        "1/x" => M::Inv,
+        "x!" => M::Factorial,
+        "tan" => M::Tan,
+        "cos" => M::Cos,
+        "sin" => M::Sin,
+        "atan" => M::Atan,
+        "atan2" => M::Atan2,
+        "acos" => M::Acos,
+        "asin" => M::Asin,
+        "tanh" => M::Tanh,
+        "cosh" => M::Cosh,
+        "sinh" => M::Sinh,
+        "atanh" => M::Atanh,
+        "acosh" => M::Acosh,
+        "asinh" => M::Asinh,
+        "<<" => M::Shl,
+        ">>" => M::Shr,
+        "&" => M::BitAnd,
+        "|" => M::BitOr,
+        "xor" => M::BitXor,
+        "~" => M::BitNot,
+        "&&" => M::And,
+        "||" => M::Or,
+        "!" => M::Not,
+        "abs" => M::Abs,
+        "div" => M::EuclidDiv,
+        "int" => M::Trunc,
+        ">" => M::Gt,
+        ">=" => M::Ge,
+        "<" => M::Lt,
+        "<=" => M::Le,
+        "==" => M::Eq,
+        "!=" => M::Ne,
+        "min" => M::Min,
+        _ => M::Max,
+    }
+}
+
+/// Evaluates a MathOperation's expression tree.
+///
+/// # Arguments
+///
+/// * `e`    - The tree.
+/// * `x`    - The value being calibrated, which `ThisParameterOperand` stands
+///            for.
+/// * `vals` - The values of the packet, which other operands read.
+///
+/// # Returns
+///
+/// The value.
+///
+/// # Errors
+///
+/// Missing, if a value it reads isn't there; BadSize, if an element it
+/// reads isn't.
+fn math(e: &Expr, x: f64, vals: &Values) -> pk::Result<f64> {
+    Ok(match e {
+        Expr::Const(c) => *c,
+        Expr::Raw => x,
+        Expr::Value(r) => {
+            let r = r.get();
+            let l = r.local.as_ref().expect("a bound ValueRef");
+            let v = vals
+                .get(&l.get().id)
+                .and_then(|v| v.as_ref())
+                .ok_or(PacketError::Missing { field: F })?;
+            let (v, _) = reach(v, &l.get().vt(), &r.member)?;
+            math_value(v)?
+        }
+        Expr::Op(op, args) => {
+            let a = math(&args[0], x, vals)?;
+            let b = match args.get(1) {
+                Some(b) => math(b, x, vals)?,
+                None => 0.0,
+            };
+            match op.as_str() {
+                "+" => a + b,
+                "-" => a - b,
+                "*" => a * b,
+                _ => pk::math(math_operator(op), a, b),
+            }
+        }
+    })
+}
+
+/// Picks the calibrator of a context calibrator: that of the first case
+/// whose criteria hold, or the default.
+///
+/// # Arguments
+///
+/// * `c`    - The context calibrator, bound to the packet.
+/// * `vals` - The values of the packet, which the criteria read.
+///
+/// # Returns
+///
+/// The calibrator, or `None` for none.
+///
+/// # Errors
+///
+/// BadSize, if a criterion reads an element that isn't there.
+fn choose<'c>(
+    c: &'c tcs_xtce_model::model::ContextCal,
+    vals: &Values,
+) -> pk::Result<Option<&'c Calibrator>> {
+    for case in &c.cases {
+        let CalCase::Bound(terms, cal) = case else {
+            unreachable!("a bound context calibrator")
+        };
+        let mut ok = true;
+        for t in terms {
+            if !term(t, vals)? {
+                ok = false;
+                break;
+            }
+        }
+        if ok {
+            return Ok(Some(cal));
+        }
+    }
+    Ok(c.default.as_deref())
+}
 
 /// Calibrates a raw value.
 ///
 /// # Arguments
 ///
-/// * `vt` - The type.
-/// * `x`  - The raw value.
+/// * `cal`  - The calibrator, or `None` for none.
+/// * `x`    - The raw value.
+/// * `vals` - The values of the packet, which a math or context calibrator
+///            reads.
 ///
 /// # Returns
 ///
@@ -444,9 +619,10 @@ fn terms(c: &tcs_xtce_model::model::Polynomial) -> Vec<(f64, i32)> {
 ///
 /// # Errors
 ///
-/// The runtime's, if a spline doesn't cover the value.
-fn calibrate(vt: &VType, x: f64) -> pk::Result<f64> {
-    Ok(match &vt.calibrator {
+/// The runtime's, if a spline doesn't cover the value; Missing, if a value
+/// a calibrator reads isn't there.
+fn apply(cal: Option<&Calibrator>, x: f64, vals: &Values) -> pk::Result<f64> {
+    Ok(match cal {
         None => x,
         Some(Calibrator::Poly(p)) => pk::polynomial(x, &terms(p)),
         Some(Calibrator::Spline(s)) => {
@@ -457,16 +633,19 @@ fn calibrate(vt: &VType, x: f64) -> pk::Result<f64> {
                 pk::spline_orders(x, &s.points, &o, s.extrapolate, F)?
             }
         }
-        Some(_) => unreachable!("a supported calibrator"),
+        Some(Calibrator::Math(m)) => math(&m.expr, x, vals)?,
+        Some(Calibrator::Context(c)) => apply(choose(c, vals)?, x, vals)?,
     })
 }
 
-/// Inverts a type's calibrator.
+/// Inverts a calibrator.
 ///
 /// # Arguments
 ///
-/// * `vt` - The type.
-/// * `y`  - The engineering value.
+/// * `cal`  - The calibrator, or `None` for none.
+/// * `y`    - The engineering value.
+/// * `vals` - The values of the packet, which a context calibrator's
+///            criteria read.
 ///
 /// # Returns
 ///
@@ -476,8 +655,8 @@ fn calibrate(vt: &VType, x: f64) -> pk::Result<f64> {
 ///
 /// NotInvertible, if the calibrator can't be inverted; the runtime's, if
 /// a spline doesn't cover the value.
-fn uncalibrate(vt: &VType, y: f64) -> pk::Result<f64> {
-    match &vt.calibrator {
+fn invert(cal: Option<&Calibrator>, y: f64, vals: &Values) -> pk::Result<f64> {
+    match cal {
         None => Ok(y),
         Some(Calibrator::Poly(p)) => {
             let slope: f64 =
@@ -498,8 +677,49 @@ fn uncalibrate(vt: &VType, y: f64) -> pk::Result<f64> {
             }
             pk::spline_inverse(y, &s.points, s.extrapolate, F)
         }
-        Some(_) => unreachable!("a supported calibrator"),
+        Some(Calibrator::Math(_)) => {
+            Err(PacketError::NotInvertible { field: F })
+        }
+        Some(Calibrator::Context(c)) => invert(choose(c, vals)?, y, vals),
     }
+}
+
+/// Calibrates a raw value of a type.
+///
+/// # Arguments
+///
+/// * `vt`   - The type.
+/// * `x`    - The raw value.
+/// * `vals` - The values of the packet.
+///
+/// # Returns
+///
+/// The engineering value.
+///
+/// # Errors
+///
+/// As [`apply`]'s.
+fn calibrate(vt: &VType, x: f64, vals: &Values) -> pk::Result<f64> {
+    apply(vt.calibrator.as_ref(), x, vals)
+}
+
+/// Inverts a type's calibrator.
+///
+/// # Arguments
+///
+/// * `vt`   - The type.
+/// * `y`    - The engineering value.
+/// * `vals` - The values of the packet.
+///
+/// # Returns
+///
+/// The raw value.
+///
+/// # Errors
+///
+/// As [`invert`]'s.
+fn uncalibrate(vt: &VType, y: f64, vals: &Values) -> pk::Result<f64> {
+    invert(vt.calibrator.as_ref(), y, vals)
 }
 
 /// Gives a string type's StringSpec.
@@ -773,7 +993,8 @@ fn read_plain(
             let enc = int_enc(vt);
             Ok(match vt.kind.as_str() {
                 "int" if vt.calibrator.is_some() => {
-                    let y = calibrate(vt, pk::int_to_f64(raw, bits, enc))?;
+                    let y =
+                        calibrate(vt, pk::int_to_f64(raw, bits, enc), vals)?;
                     let w = vt.width();
                     let (lo, lim) = if vt.signed() {
                         (-(2f64.powi(w as i32 - 1)), 2f64.powi(w as i32 - 1))
@@ -796,7 +1017,11 @@ fn read_plain(
                 }
                 "enum" => Val::Enum(raw as i64),
                 "bool" => Val::Bool(raw != 0),
-                _ => Val::Float(calibrate(vt, pk::int_to_f64(raw, bits, enc))?),
+                _ => Val::Float(calibrate(
+                    vt,
+                    pk::int_to_f64(raw, bits, enc),
+                    vals,
+                )?),
             })
         }
         Encoding::Float(e) => {
@@ -806,7 +1031,7 @@ fn read_plain(
             } else {
                 pk::float_decode(float_format(&e.fmt), e.bits as u32, raw, F)?
             };
-            Ok(Val::Float(calibrate(vt, x)?))
+            Ok(Val::Float(calibrate(vt, x, vals)?))
         }
         Encoding::Binary(e) => {
             let most = (e.bits / 8) as usize;
@@ -1102,6 +1327,104 @@ fn require(
     Ok(())
 }
 
+// --- checksums ---------------------------------------------------------
+
+/// Finds what of a check the interpreter can't run.
+///
+/// # Arguments
+///
+/// * `c` - The check.
+///
+/// # Returns
+///
+/// What it is, or `None` if it can be run.
+fn check_unsupported(c: &Check) -> Option<String> {
+    if matches!(c.spec, Spec::Custom(_)) {
+        Some("a custom checksum".into())
+    } else if c.stop.is_some() || c.late.is_some() {
+        Some("a checksum in transformed data".into())
+    } else {
+        None
+    }
+}
+
+/// Gives the runtime's checksum of a check.
+///
+/// # Arguments
+///
+/// * `spec` - The check's algorithm.
+///
+/// # Returns
+///
+/// The runtime's.
+fn checksum_spec(spec: &Spec) -> pk::Checksum {
+    use pk::Checksum as C;
+    match spec {
+        Spec::Crc(width, poly, init, fin, rd, rr) => C::Crc {
+            width: *width as u32,
+            poly: *poly,
+            init: *init,
+            final_xor: *fin,
+            reflect_data: *rd,
+            reflect_remainder: *rr,
+        },
+        Spec::Xor(bits) => C::Xor(*bits as u32),
+        Spec::Parity(odd) => C::Parity(*odd),
+        Spec::Named(name, bits) => match (name.as_str(), bits) {
+            ("sum", Some(b)) => C::Sum(*b as u32),
+            ("fletcher", Some(b)) => C::Fletcher(*b as u32),
+            ("unix_sum", _) => C::UnixSum,
+            ("adler32", _) => C::Adler32,
+            ("luhn", _) => C::Luhn,
+            ("verhoeff", _) => C::Verhoeff,
+            _ => C::Damm,
+        },
+        Spec::Custom(_) => unreachable!("a supported checksum"),
+    }
+}
+
+/// Gives the bits a check covers, as the generated code works them out.
+///
+/// # Arguments
+///
+/// * `c`     - The check.
+/// * `marks` - The position of each Mark.
+/// * `pos`   - The position of the check's field.
+/// * `end`   - The end of the packet.
+///
+/// # Returns
+///
+/// The start and end of the bits.
+fn region(
+    c: &Check,
+    marks: &HashMap<i64, usize>,
+    pos: usize,
+    end: usize,
+) -> (usize, usize) {
+    let base = if c.start == 0 { 0 } else { marks[&c.start] };
+    let shifted = c.skip != 0 && !c.from_end;
+    let start = if shifted {
+        base + c.skip as usize
+    } else {
+        base
+    };
+    let last = match c.end {
+        Some(m) => marks[&m],
+        None => end,
+    };
+    let last = if c.from_end {
+        last.saturating_sub(c.skip as usize)
+    } else if c.start == 0 && !shifted {
+        // The field always follows the packet's start.
+        pos
+    } else if pos >= start {
+        pos
+    } else {
+        last
+    };
+    (start, last)
+}
+
 /// The state of a decoding.
 struct Dec<'d> {
     /// The reader.
@@ -1110,9 +1433,49 @@ struct Dec<'d> {
     vals: Values,
     /// The position of each Mark.
     marks: HashMap<i64, usize>,
+    /// The position of each checksum field.
+    sums: HashMap<i64, usize>,
+    /// The bits read so far of each value read in segments.
+    segs: HashMap<i64, u64>,
 }
 
 impl Dec<'_> {
+    /// Checks that a check's field holds the checksum of what it covers.
+    ///
+    /// # Arguments
+    ///
+    /// * `c` - The check.
+    ///
+    /// # Errors
+    ///
+    /// BadChecksum, if it doesn't.
+    fn verify(&self, c: &Check) -> CodecResult<()> {
+        let l = c.local.get();
+        let name = l.name.clone();
+        let Encoding::Int(e) = &l.vt().enc else {
+            unreachable!("an integer")
+        };
+        let (start, end) =
+            region(c, &self.marks, self.sums[&l.id], self.r.packet_end());
+        let x = self
+            .r
+            .checksum(&checksum_spec(&c.spec), start, end, F)
+            .map_err(at(&name))?;
+        let value = match self.vals.get(&l.id).cloned().flatten() {
+            Some(Val::Int(v)) => v as u64,
+            _ => 0,
+        };
+        let mask = if e.bits >= 64 {
+            u64::MAX
+        } else {
+            (1u64 << e.bits) - 1
+        };
+        if x & mask != value {
+            return Err(at(&name)(PacketError::BadChecksum { field: F }));
+        }
+        Ok(())
+    }
+
     /// Reads items.
     ///
     /// # Arguments
@@ -1172,11 +1535,39 @@ impl Dec<'_> {
                     let p = e - self.r.position();
                     self.r.pad(p, F).map_err(at(&f.container))?;
                 }
+                Item::Verify(v) => self.verify(&v.check.get())?,
+                Item::Segment(g) => {
+                    let g = g.get();
+                    let l = g.local.get();
+                    let bits =
+                        self.r.uint(g.bits as u32, F).map_err(at(&l.name))?;
+                    let part = bits << g.shift;
+                    let s = if g.first {
+                        part
+                    } else {
+                        self.segs[&l.id] | part
+                    };
+                    self.segs.insert(l.id, s);
+                }
                 Item::Value(v) => {
                     let l = v.local.get();
                     let vt = l.vt();
-                    let x = read_val(&mut self.r, &vt, &self.vals, &[])
-                        .map_err(at(&l.name))?;
+                    if l.checksum {
+                        self.sums.insert(l.id, self.r.position());
+                    }
+                    let x = if v.assembled != 0 {
+                        // Decoded from its segments' bits.
+                        let mut b = [0u8; 8];
+                        let mut r = pk::segment_reader(
+                            &mut b,
+                            self.segs[&l.id],
+                            v.assembled as u32,
+                        );
+                        read_val(&mut r, &vt, &self.vals, &[])
+                    } else {
+                        read_val(&mut self.r, &vt, &self.vals, &[])
+                    }
+                    .map_err(at(&l.name))?;
                     if let (Some(adj), Val::Int(n)) = (l.length, &x) {
                         self.r.limit(*n as u64, adj, F).map_err(at(&l.name))?;
                     }
@@ -1217,6 +1608,9 @@ impl Dec<'_> {
     fn finish(&self, n: &Shared<Node>) -> CodecResult<()> {
         if let Some(l) = length_field(n) {
             self.r.finish(F).map_err(at(&l.get().name))?;
+        }
+        for c in &n.get().checks {
+            self.verify(&c.get())?;
         }
         Ok(())
     }
@@ -1298,6 +1692,8 @@ pub fn decode(n: &Shared<Node>, data: &[u8]) -> CodecResult<Decoded> {
         r: BitReader::new(data),
         vals: Values::new(),
         marks: HashMap::new(),
+        sums: HashMap::new(),
+        segs: HashMap::new(),
     };
     for m in n.chain() {
         let m = m.get();
@@ -1332,6 +1728,8 @@ pub fn classify(root: &Shared<Node>, data: &[u8]) -> Classified {
         r: BitReader::new(data),
         vals: Values::new(),
         marks: HashMap::new(),
+        sums: HashMap::new(),
+        segs: HashMap::new(),
     };
     let key = root.get().key.clone();
     if let Err(e) = d.items(&root.get().items, &key) {
@@ -1358,7 +1756,11 @@ fn node_unsupported(n: &Shared<Node>) -> Option<String> {
         .find_map(term_unsupported)
         .or_else(|| items_unsupported(&m.items))
         .or_else(|| {
-            (!m.abstract_ && !m.checks.is_empty()).then(|| "a checksum".into())
+            if m.abstract_ {
+                None
+            } else {
+                m.checks.iter().find_map(|c| check_unsupported(&c.get()))
+            }
         })
         .map(|w| format!("{}: {w}", m.key))
 }
@@ -1600,7 +2002,7 @@ fn write_plain(
             let enc = int_enc(vt);
             let mut raw = match (vt.kind.as_str(), v) {
                 ("int", Val::Int(x)) if vt.calibrator.is_some() => {
-                    let y = uncalibrate(vt, *x as f64)?;
+                    let y = uncalibrate(vt, *x as f64, vals)?;
                     pk::f64_to_int(y, bits, enc, F)?
                 }
                 ("int", Val::Int(x)) if vt.signed() => {
@@ -1610,7 +2012,7 @@ fn write_plain(
                 ("enum", Val::Enum(x)) => pk::from_signed(*x, bits, enc, F)?,
                 ("bool", Val::Bool(b)) => *b as u64,
                 (_, Val::Float(x)) => {
-                    let y = uncalibrate(vt, *x)?;
+                    let y = uncalibrate(vt, *x, vals)?;
                     pk::f64_to_int(y, bits, enc, F)?
                 }
                 _ => return Err(PacketError::OutOfRange { field: F }),
@@ -1622,7 +2024,7 @@ fn write_plain(
             Ok(())
         }
         (Encoding::Float(e), Val::Float(x)) => {
-            let y = uncalibrate(vt, *x)?;
+            let y = uncalibrate(vt, *x, vals)?;
             let raw = if e.fmt == "IEEE754" && (e.bits == 32 || e.bits == 64) {
                 pk::float_to_raw(y, e.bits as u32) as u128
             } else {
@@ -1696,9 +2098,40 @@ struct Enc<'w, 'b> {
     /// The numbers of the sizes and counts the packet computes from what
     /// they size.
     derived: Vec<i64>,
+    /// The encoding of each value written in segments.
+    segs: HashMap<i64, u64>,
 }
 
 impl Enc<'_, '_> {
+    /// Puts the checksum of what a check covers into its field.
+    ///
+    /// # Arguments
+    ///
+    /// * `c` - The check.
+    ///
+    /// # Errors
+    ///
+    /// The runtime's, if the bits it covers aren't all written.
+    fn patch(&mut self, c: &Check) -> CodecResult<()> {
+        let l = c.local.get();
+        let Encoding::Int(e) = &l.vt().enc else {
+            unreachable!("an integer")
+        };
+        let at_ = self.computed[&l.id];
+        let (start, end) = region(c, &self.marks, at_, self.w.packet_end());
+        self.w
+            .patch_checksum(
+                &checksum_spec(&c.spec),
+                start,
+                end,
+                at_,
+                e.bits as u32,
+                matches!(e.order, Order::Le),
+                F,
+            )
+            .map_err(at(&l.name))
+    }
+
     /// Writes items.
     ///
     /// # Arguments
@@ -1770,6 +2203,38 @@ impl Enc<'_, '_> {
                         self.items(&c.items, where_)?;
                     }
                 }
+                Item::Verify(v) => self.patch(&v.check.get())?,
+                Item::Segment(g) => {
+                    let g = g.get();
+                    let l = g.local.get();
+                    if g.first {
+                        // Encode the whole value, then write each
+                        // segment's bits.
+                        let x = self
+                            .vals
+                            .get(&l.id)
+                            .cloned()
+                            .flatten()
+                            .ok_or_else(|| {
+                                at(&l.name)(PacketError::Missing { field: F })
+                            })?;
+                        let t = self.w.stash(g.total as u32);
+                        write_val(self.w, &l.vt(), &x, &self.vals, &[])
+                            .map_err(at(&l.name))?;
+                        let s = self.w.unstash(t);
+                        self.segs.insert(l.id, s);
+                    }
+                    let mask = if g.bits >= 64 {
+                        u64::MAX
+                    } else {
+                        (1u64 << g.bits) - 1
+                    };
+                    self.w.uint(
+                        g.bits as u32,
+                        (self.segs[&l.id] >> g.shift) & mask,
+                    );
+                }
+                Item::Value(v) if v.assembled != 0 => {}
                 Item::Value(v) => {
                     let l = v.local.get();
                     let vt = l.vt();
@@ -1873,6 +2338,7 @@ pub fn encode<'b>(
             marks: HashMap::new(),
             computed: HashMap::new(),
             derived,
+            segs: HashMap::new(),
         };
         for m in n.chain() {
             let m = m.get();
@@ -1911,6 +2377,9 @@ pub fn encode<'b>(
                 F,
             )
             .map_err(at(&l.name))?;
+        }
+        for c in &n.get().checks {
+            e.patch(&c.get())?;
         }
     }
     drop(w);
