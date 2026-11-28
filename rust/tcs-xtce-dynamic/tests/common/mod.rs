@@ -282,6 +282,35 @@ fn var_to(s: f64, out: &mut [u8]) -> Option<usize> {
     Some(n)
 }
 
+/// XORs each byte with 0x55, the demo's Descramble.
+///
+/// # Arguments
+///
+/// * `data` - The bytes.
+/// * `out`  - Called with the bytes it decodes, in pieces.
+fn descramble(data: &[u8], out: &mut dyn FnMut(&[u8])) {
+    let mut buf = [0u8; 64];
+    for chunk in data.chunks(buf.len()) {
+        for (b, &x) in buf.iter_mut().zip(chunk) {
+            *b = x ^ 0x55;
+        }
+        out(&buf[..chunk.len()]);
+    }
+}
+
+/// Flips a bit, the demo's Invert.
+///
+/// # Arguments
+///
+/// * `bit` - The bit.
+///
+/// # Returns
+///
+/// The other bit.
+fn invert(bit: u8) -> u8 {
+    bit ^ 1
+}
+
 /// Supplies the demo mission's custom algorithms.
 ///
 /// # Arguments
@@ -303,6 +332,8 @@ pub fn set_algorithms(m: &mut Mission) {
         ("MsTo", Algorithm::TimeTo(ms_to)),
         ("VarFrom", Algorithm::TimeFrom(var_from)),
         ("VarTo", Algorithm::TimeTo(var_to)),
+        ("Descramble", Algorithm::StreamDecode(descramble)),
+        ("Invert", Algorithm::BitInvert(invert)),
     ];
     for (name, f) in all {
         m.set_algorithm(name, f).unwrap();

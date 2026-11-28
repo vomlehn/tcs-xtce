@@ -12,12 +12,14 @@
 mod alarms;
 pub mod api;
 pub mod interp;
+mod streams;
 mod wide;
 pub use wide::{from_big, to_big, WideInt};
 
 pub use alarms::Monitor;
 pub use api::{Datum, RunError, Scratch, SetError, Store};
 pub use interp::Algorithm;
+pub use streams::Deframer;
 pub use tcs_xtce::packet::AlarmLevel;
 
 use std::fmt;
@@ -29,7 +31,7 @@ use tcs_xtce_model::compile::types::member_path;
 use tcs_xtce_model::compile::{candidates, qname, Compiler, TypeTable};
 use tcs_xtce_model::dump::Shared;
 use tcs_xtce_model::model::{
-    Count, Encoding, Error as ModelError, Key, Node, Step, VType,
+    Count, Encoding, Error as ModelError, Key, Node, Step, Stream, VType,
 };
 
 /// The number of the next mission made, so that a handle names the
@@ -708,9 +710,9 @@ impl Mission {
             });
         }
         let all: Vec<_> = c.nodes.iter().map(|(_, n)| n.clone()).collect();
-        let plan =
+        let mut plan =
             interp::Plan::new(all.iter(), (c.ids + 1) as usize, &c.hook_order);
-        let hooks: Vec<(String, String, String)> = c
+        let mut hooks: Vec<(String, String, String)> = c
             .hook_order
             .iter()
             .map(|h| {
@@ -718,6 +720,19 @@ impl Mission {
                 (h.name.clone(), h.kind.clone(), h.ident.clone())
             })
             .collect();
+        // The functions streams take.
+        for st in &model.streams {
+            let st = st.get();
+            for (name, kind) in
+                [(&st.decoder, "stream_decode"), (&st.inverter, "bit_invert")]
+            {
+                let ident = format!("stream {kind} {name}");
+                if !name.is_empty() && !hooks.iter().any(|h| h.2 == ident) {
+                    plan.add_hook(&ident);
+                    hooks.push((name.clone(), kind.to_string(), ident));
+                }
+            }
+        }
         let slot_types: Vec<Rc<VType>> =
             slots.iter().map(|s| s.vt.clone()).collect();
         let slot_raw_types: Vec<Rc<VType>> = slot_types
@@ -1638,6 +1653,111 @@ impl Mission {
         assert_eq!(node.mission, self.id, "a NodeId of another mission");
         let n = self.nodes[node.index].node.get();
         (!n.abstract_).then_some(n.max_bytes as usize)
+    }
+
+    /// Lists the mission's streams.
+    ///
+    /// # Returns
+    ///
+    /// Each one's qualified name.
+    pub fn streams(&self) -> Vec<String> {
+        self.model
+            .streams
+            .iter()
+            .map(|s| s.get().key.clone())
+            .collect()
+    }
+
+    /// Finds a stream by its qualified name.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The name.
+    ///
+    /// # Returns
+    ///
+    /// The stream.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if the mission has none of that name.
+    fn find_stream(
+        &self,
+        path: &str,
+    ) -> Result<tcs_xtce_model::dump::Mut<Stream>, LookupError> {
+        self.model
+            .streams
+            .iter()
+            .find(|s| s.get().key == path)
+            .cloned()
+            .ok_or_else(|| LookupError {
+                what: "stream",
+                path: path.to_string(),
+                tried: Vec::new(),
+                reason: None,
+            })
+    }
+
+    /// Makes a stream's frame synchronizer, fed by the streams its input
+    /// comes from, as the generated code's stream types are; the
+    /// functions of a CustomStream's DecodingAlgorithm and of an
+    /// InvertAlgorithm must be set first (see [`Mission::algorithms`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The stream's qualified name, as [`Mission::streams`]
+    ///            lists it.
+    ///
+    /// # Returns
+    ///
+    /// The stream, with nothing pushed to it yet.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if the mission has no such stream, a function it
+    /// needs isn't set, or its synchronizer is too large to run.
+    pub fn stream(&self, path: &str) -> Result<Deframer, LookupError> {
+        let st = self.find_stream(path)?;
+        let fns = |name: &str, kind: &str| {
+            self.plan.hook(&format!("stream {kind} {name}"))
+        };
+        let st = st.get();
+        streams::deframer(&st, &fns).map_err(|reason| LookupError {
+            what: "stream",
+            path: path.to_string(),
+            tried: Vec::new(),
+            reason: Some(reason),
+        })
+    }
+
+    /// Gives the container each frame of a stream is.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The stream's qualified name.
+    ///
+    /// # Returns
+    ///
+    /// The container, or `None` for a CustomStream, whose output is
+    /// another stream's input.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if the mission has no such stream.
+    pub fn stream_container(
+        &self,
+        path: &str,
+    ) -> Result<Option<NodeId>, LookupError> {
+        let st = self.find_stream(path)?;
+        let st = st.get();
+        Ok(self
+            .nodes
+            .iter()
+            .position(|n| !n.command && !n.message && n.path == st.container)
+            .map(|index| NodeId {
+                mission: self.id,
+                index,
+            }))
     }
 
     /// Lists the string and binary slots whose documents give them no

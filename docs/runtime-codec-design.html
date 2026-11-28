@@ -412,6 +412,13 @@ result rather than returning a list, so that none of them allocates.</li>
 <tt class="docutils literal">Slots</tt>: the run of slots that hold it, which
 <tt class="docutils literal"><span class="pre">Mission::parameter_slots</span></tt>, <tt class="docutils literal">argument_slots</tt> and <tt class="docutils literal">entry_slots</tt>
 look up and <tt class="docutils literal"><span class="pre">Store::each</span></tt> reads, slot by slot.</li>
+<li><tt class="docutils literal"><span class="pre">Mission::stream</span></tt> makes a <tt class="docutils literal">Deframer</tt>: a stream's frame
+synchronizer, fed by the streams its input comes from, which the
+runtime's <tt class="docutils literal">FrameSync</tt> and <tt class="docutils literal">FlagSync</tt> run as generated code runs
+them, at the least of a few sizes that holds the stream. A
+CustomStream's DecodingAlgorithm and an InvertAlgorithm are set with
+<tt class="docutils literal">set_algorithm</tt> like any other function. <tt class="docutils literal"><span class="pre">Deframer::push</span></tt> gives
+each frame, whose container <tt class="docutils literal"><span class="pre">Mission::stream_container</span></tt> names.</li>
 <li><tt class="docutils literal"><span class="pre">Mission::unbounded</span></tt> lists the string and binary slots whose
 documents give them no maximum size. Rather than room that grows, each
 gets the room the maximum field size gives, in every store and

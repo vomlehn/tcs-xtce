@@ -52,6 +52,12 @@ pub enum Algorithm {
     TimeFrom(pk::TimeFromFn),
     /// Encodes a time: the bytes it made.
     TimeTo(pk::TimeToFn),
+    /// A CustomStream's DecodingAlgorithm: gives the function the bytes
+    /// it decodes from those it is given.
+    StreamDecode(pk::StreamDecode),
+    /// A stream's InvertAlgorithm: what a bit is once AutoInvert has
+    /// inverted the stream.
+    BitInvert(pk::BitInvert),
 }
 
 impl Algorithm {
@@ -60,7 +66,8 @@ impl Algorithm {
     /// # Returns
     ///
     /// `criterion`, `algorithm`, `alarm`, `checksum`, `binary_from`,
-    /// `binary_to`, `time_from` or `time_to`.
+    /// `binary_to`, `time_from`, `time_to`, `stream_decode` or
+    /// `bit_invert`.
     pub fn kind(&self) -> &'static str {
         match self {
             Algorithm::Criterion(_) => "criterion",
@@ -71,6 +78,8 @@ impl Algorithm {
             Algorithm::BinaryTo(_) => "binary_to",
             Algorithm::TimeFrom(_) => "time_from",
             Algorithm::TimeTo(_) => "time_to",
+            Algorithm::StreamDecode(_) => "stream_decode",
+            Algorithm::BitInvert(_) => "bit_invert",
         }
     }
 }
@@ -568,7 +577,7 @@ fn bcd(enc: &str) -> Option<bool> {
 /// # Returns
 ///
 /// The kept copy.
-fn interned(b: &[u8]) -> &'static [u8] {
+pub(crate) fn interned(b: &[u8]) -> &'static [u8] {
     use std::sync::{Mutex, OnceLock};
     static KEPT: OnceLock<Mutex<Vec<&'static [u8]>>> = OnceLock::new();
     let mut kept = KEPT.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
@@ -2606,6 +2615,32 @@ impl Plan {
     /// The type, or `None` for a Local that isn't calibrated.
     pub fn raw_type(&self, id: i64) -> Option<&Rc<VType>> {
         self.raw_types[id as usize].as_ref()
+    }
+
+    /// Adds a hook that no packet calls, such as a stream's.
+    ///
+    /// # Arguments
+    ///
+    /// * `ident` - Its name.
+    pub fn add_hook(&mut self, ident: &str) {
+        let index = Rc::make_mut(&mut self.hooks.index);
+        if !index.contains_key(ident) {
+            index.insert(ident.to_string(), self.hooks.fns.len());
+            self.hooks.fns.push(None);
+        }
+    }
+
+    /// Gives the function set for a hook.
+    ///
+    /// # Arguments
+    ///
+    /// * `ident` - The hook's name.
+    ///
+    /// # Returns
+    ///
+    /// The function, or `None` if none is set.
+    pub fn hook(&self, ident: &str) -> Option<Algorithm> {
+        self.hooks.index.get(ident).and_then(|&i| self.hooks.fns[i])
     }
 
     /// Sets the function for a hook.

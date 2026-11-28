@@ -50,6 +50,13 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
   ``Slots``: the run of slots that hold it, which
   ``Mission::parameter_slots``, ``argument_slots`` and ``entry_slots``
   look up and ``Store::each`` reads, slot by slot.
+- ``Mission::stream`` makes a ``Deframer``: a stream's frame
+  synchronizer, fed by the streams its input comes from, which the
+  runtime's ``FrameSync`` and ``FlagSync`` run as generated code runs
+  them, at the least of a few sizes that holds the stream. A
+  CustomStream's DecodingAlgorithm and an InvertAlgorithm are set with
+  ``set_algorithm`` like any other function. ``Deframer::push`` gives
+  each frame, whose container ``Mission::stream_container`` names.
 - ``Mission::unbounded`` lists the string and binary slots whose
   documents give them no maximum size. Rather than room that grows, each
   gets the room the maximum field size gives, in every store and
