@@ -44,4 +44,10 @@ path = "src/lib.rs"
 # generated code runs on; both are tested from here, as is the compiler's
 # analysis, tcs-xtce-model, which is being ported from the Python.
 [workspace]
-members = [".", "tcsxtce", "tcs-xtce-model", "tcs-xtce-dynamic"]
+members = [
+	".",
+	"tcsxtce",
+	"tcs-xtce-model",
+	"tcs-xtce-dynamic",
+	"tcs-xtce-dynamic-c",
+]

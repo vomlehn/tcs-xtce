@@ -194,7 +194,8 @@ python: $(PY_GEN) $(PKT_PY) $(NATIVE)
 EXAMPLES := $(patsubst %/Makefile,%,$(wildcard examples/*/Makefile))
 
 .PHONY: test
-test: test-rust test-cpp test-python cross-check packet-check \
+test: test-rust test-cpp test-c-dynamic test-python cross-check \
+      packet-check \
       stream-check digest-check float-check bnum-check ccsds-check examples \
       model-check test-editor line-width doc-headers html-check \
       operational-names rust-current
@@ -224,6 +225,48 @@ test-rust: rust $(SAMPLES)
 	cd rust && $(CARGO) test --release -p tcs-xtce-model
 	cd rust && $(CARGO) test --release -p tcs-xtce-dynamic
 
+
+# The C interface to the run-time codec: rust/tcs-xtce-dynamic-c builds
+# libtcs-xtce-dynamic, whose header cbindgen makes from its source.
+DYN_C       := rust/tcs-xtce-dynamic-c
+DYN_HEADER  := $(DYN_C)/include/tcs-xtce-dynamic.h
+DYN_BUILD   := build/dynamic
+CBINDGEN    ?= cbindgen
+CC          ?= cc
+
+# Makes the C header again, after the C interface's source changes:
+# cbindgen writes it, and doxygen.py puts its comments in Doxygen's form.
+.PHONY: c-header
+c-header:
+	cd $(DYN_C) && $(CBINDGEN) --quiet --config cbindgen.toml \
+		--crate tcs-xtce-dynamic-c --output include/tcs-xtce-dynamic.h
+	$(PYTHON) -I $(DYN_C)/doxygen.py $(DYN_HEADER)
+
+# Builds libtcs-xtce-dynamic.a and .so into build/dynamic.
+.PHONY: c-dynamic
+c-dynamic:
+	cd rust && $(CARGO) build --release -p tcs-xtce-dynamic-c
+	mkdir -p $(DYN_BUILD)
+	cp rust/target/release/libtcs_xtce_dynamic_c.a \
+		$(DYN_BUILD)/libtcs-xtce-dynamic.a
+	cp rust/target/release/libtcs_xtce_dynamic_c.so \
+		$(DYN_BUILD)/libtcs-xtce-dynamic.so
+
+# Checks that the header is the one cbindgen makes, then runs the C test
+# on the demo mission.
+.PHONY: test-c-dynamic
+test-c-dynamic: c-dynamic
+	mkdir -p $(DYN_BUILD)
+	cd $(DYN_C) && $(CBINDGEN) --quiet --config cbindgen.toml \
+		--crate tcs-xtce-dynamic-c --output ../../$(DYN_BUILD)/check.h
+	$(PYTHON) -I $(DYN_C)/doxygen.py $(DYN_BUILD)/check.h
+	cmp -s $(DYN_HEADER) $(DYN_BUILD)/check.h || { \
+		echo "$(DYN_HEADER) is stale: run make c-header" >&2; \
+		exit 1; }
+	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -I$(DYN_C)/include \
+		$(DYN_C)/tests/c_test.c $(DYN_BUILD)/libtcs-xtce-dynamic.a \
+		-lpthread -ldl -lm -o $(DYN_BUILD)/c_test
+	$(DYN_BUILD)/c_test tests/mission
 
 # The Rust model, which is being ported from the Python compiler a stage at
 # a time, against the Python's, as canonical text, on every mission the

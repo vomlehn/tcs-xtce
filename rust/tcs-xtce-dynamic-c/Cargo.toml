@@ -1,0 +1,21 @@
+[package]
+name = "tcs-xtce-dynamic-c"
+version = "0.1.0"
+edition = "2021"
+description = """\
+    A software tool: the C interface to tcs-xtce-dynamic, the run-time \
+    codec, which C and C++ programs link as libtcs-xtce-dynamic\
+"""
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vomlehn/tcs-xtce"
+# It reaches users as a C library, not as a crate.
+publish = false
+
+[lib]
+name = "tcs_xtce_dynamic_c"
+path = "src/lib.rs"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+tcs-xtce = { path = "..", version = "=0.8.0" }
+tcs-xtce-dynamic = { path = "../tcs-xtce-dynamic" }

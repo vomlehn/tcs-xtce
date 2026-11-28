@@ -471,13 +471,22 @@ The run-time codec is written once, in Rust, and other languages reach
 it through interfaces to that one implementation, not through ports of
 it:
 
-- **C**: functions with C linkage over opaque handles, such as
-  ``xtce_mission``, ``xtce_store`` and ``xtce_scratch``, in the style of
-  the C API of the XML binding: return codes, an error message and the
-  line it is about, and a function to free each handle.
-  ``SpaceSystemId``, ``NodeId`` and ``SlotId`` are passed as plain
-  integer handles, and every lookup takes a base SpaceSystem, as in
-  Rust. The header is generated from the Rust with cbindgen.
+- **C**: ``libtcs-xtce-dynamic`` (``make c-dynamic``), built from the
+  crate ``rust/tcs-xtce-dynamic-c``: functions with C linkage over
+  opaque handles -- ``tcs_xd_mission``, ``tcs_xd_store``,
+  ``tcs_xd_scratch``, ``tcs_xd_monitor`` and ``tcs_xd_deframer`` -- each
+  with a function to free it, return codes and ``tcs_xd_last_error``
+  for the message. ``tcs_xd_space``, ``tcs_xd_node``, ``tcs_xd_slot``
+  and ``tcs_xd_slots`` are plain structs, checked against the mission on
+  every call, and every lookup takes a base SpaceSystem, as in Rust. A
+  function the application supplies takes a ``void *`` context and,
+  optionally, a function that frees it. A stream keeps its mission
+  alive, so they may be freed in either order. The header,
+  ``include/tcs-xtce-dynamic.h``, is generated from the Rust with
+  cbindgen (``make c-header``), and ``doxygen.py`` puts its comments in
+  Doxygen's form; ``make test`` checks it is current and runs
+  ``tests/c_test.c``, which packs and unpacks every vector of the demo
+  mission through it.
 - **C++**: a header-only wrapper over the C API, with classes that free
   their handles when destroyed, as ``tcs-xtce-document.hpp`` wraps the
   document.
