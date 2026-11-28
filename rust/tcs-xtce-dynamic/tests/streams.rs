@@ -72,9 +72,9 @@ fn streams_find_the_frames_the_generated_code_finds() {
     // Not set yet: the streams that need them can't be made.
     let e = m.stream("/Demo/Scrambled").unwrap_err();
     assert!(e.to_string().contains("Descramble"), "{e}");
-    m.set_algorithm("Descramble", Algorithm::StreamDecode(descramble))
+    m.set_algorithm("Descramble", Algorithm::stream_decode(descramble))
         .unwrap();
-    m.set_algorithm("Invert", Algorithm::BitInvert(invert))
+    m.set_algorithm("Invert", Algorithm::bit_invert(invert))
         .unwrap();
     let names = [
         "downlink",

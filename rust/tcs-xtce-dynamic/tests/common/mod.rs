@@ -318,22 +318,22 @@ fn invert(bit: u8) -> u8 {
 /// * `m` - The demo mission.
 pub fn set_algorithms(m: &mut Mission) {
     let all = [
-        ("/Demo/IsEven", Algorithm::Criterion(is_even)),
-        ("/Demo/MinMax", Algorithm::Outputs(min_max)),
-        ("/Demo/Bands", Algorithm::Alarm(bands)),
-        ("/Demo/Twice", Algorithm::Checksum(twice)),
-        ("Expand", Algorithm::BinaryTo(expand)),
-        ("Shrink", Algorithm::BinaryFrom(shrink)),
-        ("Mask", Algorithm::BinaryTo(mask)),
-        ("Unmask", Algorithm::BinaryFrom(unmask)),
-        ("Stuff", Algorithm::BinaryTo(stuff)),
-        ("Unstuff", Algorithm::BinaryFrom(unstuff)),
-        ("MsFrom", Algorithm::TimeFrom(ms_from)),
-        ("MsTo", Algorithm::TimeTo(ms_to)),
-        ("VarFrom", Algorithm::TimeFrom(var_from)),
-        ("VarTo", Algorithm::TimeTo(var_to)),
-        ("Descramble", Algorithm::StreamDecode(descramble)),
-        ("Invert", Algorithm::BitInvert(invert)),
+        ("/Demo/IsEven", Algorithm::criterion(is_even)),
+        ("/Demo/MinMax", Algorithm::outputs(min_max)),
+        ("/Demo/Bands", Algorithm::alarm(bands)),
+        ("/Demo/Twice", Algorithm::checksum(twice)),
+        ("Expand", Algorithm::binary_to(expand)),
+        ("Shrink", Algorithm::binary_from(shrink)),
+        ("Mask", Algorithm::binary_to(mask)),
+        ("Unmask", Algorithm::binary_from(unmask)),
+        ("Stuff", Algorithm::binary_to(stuff)),
+        ("Unstuff", Algorithm::binary_from(unstuff)),
+        ("MsFrom", Algorithm::time_from(ms_from)),
+        ("MsTo", Algorithm::time_to(ms_to)),
+        ("VarFrom", Algorithm::time_from(var_from)),
+        ("VarTo", Algorithm::time_to(var_to)),
+        ("Descramble", Algorithm::stream_decode(descramble)),
+        ("Invert", Algorithm::bit_invert(invert)),
     ];
     for (name, f) in all {
         m.set_algorithm(name, f).unwrap();

@@ -11,6 +11,7 @@
 
 mod alarms;
 pub mod api;
+mod funcs;
 pub mod interp;
 mod streams;
 mod wide;
@@ -18,7 +19,10 @@ pub use wide::{from_big, to_big, WideInt};
 
 pub use alarms::Monitor;
 pub use api::{Datum, RunError, Scratch, SetError, Store};
-pub use interp::Algorithm;
+pub use funcs::{
+    AlarmFn, Algorithm, BinaryFromFn, BinaryToFn, BitInvertFn, ChecksumFn,
+    CriterionFn, OutputsFn, StreamDecodeFn, TimeFromFn, TimeToFn,
+};
 pub use streams::Deframer;
 pub use tcs_xtce::packet::AlarmLevel;
 

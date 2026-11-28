@@ -29,60 +29,8 @@ use tcs_xtce_model::model::{
 /// interpreter names the field in its own error instead.
 const F: &str = "field";
 
-/// A function the application supplies for one of a mission's
-/// algorithms, of the kind the algorithm's use needs: the same as the
-/// code generated for the mission takes in its `hooks` module.
-#[derive(Debug, Clone, Copy)]
-pub enum Algorithm {
-    /// A custom algorithm in a criterion: whether it holds, from its
-    /// inputs.
-    Criterion(fn(&[f64]) -> bool),
-    /// A CustomAlgorithm's outputs from its inputs; false if it gives
-    /// none.
-    Outputs(fn(&[f64], &mut [f64]) -> bool),
-    /// An alarm's level from its inputs.
-    Alarm(fn(&[f64]) -> u8),
-    /// A checksum of the bits from `start` to `end` of the data.
-    Checksum(fn(&[u8], usize, usize) -> u64),
-    /// Decodes a value's bytes: the bytes it took and those it made.
-    BinaryFrom(pk::BinaryFromFn),
-    /// Encodes a value's bytes: the bytes it made.
-    BinaryTo(pk::BinaryToFn),
-    /// Decodes a time: the bytes it took and the seconds.
-    TimeFrom(pk::TimeFromFn),
-    /// Encodes a time: the bytes it made.
-    TimeTo(pk::TimeToFn),
-    /// A CustomStream's DecodingAlgorithm: gives the function the bytes
-    /// it decodes from those it is given.
-    StreamDecode(pk::StreamDecode),
-    /// A stream's InvertAlgorithm: what a bit is once AutoInvert has
-    /// inverted the stream.
-    BitInvert(pk::BitInvert),
-}
-
-impl Algorithm {
-    /// Gives the kind of use the function is for, as the model names it.
-    ///
-    /// # Returns
-    ///
-    /// `criterion`, `algorithm`, `alarm`, `checksum`, `binary_from`,
-    /// `binary_to`, `time_from`, `time_to`, `stream_decode` or
-    /// `bit_invert`.
-    pub fn kind(&self) -> &'static str {
-        match self {
-            Algorithm::Criterion(_) => "criterion",
-            Algorithm::Outputs(_) => "algorithm",
-            Algorithm::Alarm(_) => "alarm",
-            Algorithm::Checksum(_) => "checksum",
-            Algorithm::BinaryFrom(_) => "binary_from",
-            Algorithm::BinaryTo(_) => "binary_to",
-            Algorithm::TimeFrom(_) => "time_from",
-            Algorithm::TimeTo(_) => "time_to",
-            Algorithm::StreamDecode(_) => "stream_decode",
-            Algorithm::BitInvert(_) => "bit_invert",
-        }
-    }
-}
+use crate::funcs;
+pub use crate::funcs::Algorithm;
 
 /// The functions an application has supplied for a mission's
 /// algorithms, by the name each has in the generated code.
@@ -111,7 +59,7 @@ impl HookTable {
     pub(crate) fn get(&self, h: &Hook) -> pk::Result<Algorithm> {
         self.index
             .get(h.ident.as_str())
-            .and_then(|&i| self.fns[i])
+            .and_then(|&i| self.fns[i].clone())
             .ok_or(PacketError::NoAlgorithm { name: F })
     }
 
@@ -123,7 +71,7 @@ impl HookTable {
     /// * `o` - The other table.
     fn copy(&mut self, o: &HookTable) {
         if self.fns.len() == o.fns.len() {
-            self.fns.copy_from_slice(&o.fns);
+            self.fns.clone_from_slice(&o.fns);
         } else {
             *self = o.clone();
         }
@@ -215,7 +163,8 @@ fn at(field: &str) -> impl Fn(PacketError) -> CodecError + '_ {
 ///
 /// # Returns
 ///
-/// The function, or `None` for none, which the runtime refuses as
+/// The runtime's plain function, which calls the application's while what
+/// is returned lives, or `None` for none, which the runtime refuses as
 /// NotInvertible.
 ///
 /// # Errors
@@ -224,10 +173,12 @@ fn at(field: &str) -> impl Fn(PacketError) -> CodecError + '_ {
 fn binary_from(
     h: &Option<Shared<Hook>>,
     vals: &dyn Look,
-) -> pk::Result<Option<pk::BinaryFromFn>> {
-    let Some(h) = h else { return Ok(None) };
+) -> pk::Result<funcs::Adapted<pk::BinaryFromFn, funcs::BinaryFromFn>> {
+    let Some(h) = h else {
+        return Ok(funcs::binary_from(None));
+    };
     match vals.hooks().get(&h.get())? {
-        Algorithm::BinaryFrom(f) => Ok(Some(f)),
+        Algorithm::BinaryFrom(f) => Ok(funcs::binary_from(Some(&f))),
         _ => Err(PacketError::NoAlgorithm { name: F }),
     }
 }
@@ -242,7 +193,8 @@ fn binary_from(
 ///
 /// # Returns
 ///
-/// The function, or `None` for none.
+/// The runtime's plain function, which calls the application's while what
+/// is returned lives, or `None` for none.
 ///
 /// # Errors
 ///
@@ -250,10 +202,12 @@ fn binary_from(
 fn binary_to(
     h: &Option<Shared<Hook>>,
     vals: &dyn Look,
-) -> pk::Result<Option<pk::BinaryToFn>> {
-    let Some(h) = h else { return Ok(None) };
+) -> pk::Result<funcs::Adapted<pk::BinaryToFn, funcs::BinaryToFn>> {
+    let Some(h) = h else {
+        return Ok(funcs::binary_to(None));
+    };
     match vals.hooks().get(&h.get())? {
-        Algorithm::BinaryTo(f) => Ok(Some(f)),
+        Algorithm::BinaryTo(f) => Ok(funcs::binary_to(Some(&f))),
         _ => Err(PacketError::NoAlgorithm { name: F }),
     }
 }
@@ -268,7 +222,8 @@ fn binary_to(
 ///
 /// # Returns
 ///
-/// The function, or `None` for none.
+/// The runtime's plain function, which calls the application's while what
+/// is returned lives, or `None` for none.
 ///
 /// # Errors
 ///
@@ -276,10 +231,12 @@ fn binary_to(
 fn time_from(
     h: &Option<Shared<Hook>>,
     vals: &dyn Look,
-) -> pk::Result<Option<pk::TimeFromFn>> {
-    let Some(h) = h else { return Ok(None) };
+) -> pk::Result<funcs::Adapted<pk::TimeFromFn, funcs::TimeFromFn>> {
+    let Some(h) = h else {
+        return Ok(funcs::time_from(None));
+    };
     match vals.hooks().get(&h.get())? {
-        Algorithm::TimeFrom(f) => Ok(Some(f)),
+        Algorithm::TimeFrom(f) => Ok(funcs::time_from(Some(&f))),
         _ => Err(PacketError::NoAlgorithm { name: F }),
     }
 }
@@ -294,7 +251,8 @@ fn time_from(
 ///
 /// # Returns
 ///
-/// The function, or `None` for none.
+/// The runtime's plain function, which calls the application's while what
+/// is returned lives, or `None` for none.
 ///
 /// # Errors
 ///
@@ -302,10 +260,12 @@ fn time_from(
 fn time_to(
     h: &Option<Shared<Hook>>,
     vals: &dyn Look,
-) -> pk::Result<Option<pk::TimeToFn>> {
-    let Some(h) = h else { return Ok(None) };
+) -> pk::Result<funcs::Adapted<pk::TimeToFn, funcs::TimeToFn>> {
+    let Some(h) = h else {
+        return Ok(funcs::time_to(None));
+    };
     match vals.hooks().get(&h.get())? {
-        Algorithm::TimeTo(f) => Ok(Some(f)),
+        Algorithm::TimeTo(f) => Ok(funcs::time_to(Some(&f))),
         _ => Err(PacketError::NoAlgorithm { name: F }),
     }
 }
@@ -1384,7 +1344,7 @@ fn read_plain(
             let got = (|| {
                 let f = binary_from(&x.decode, vals)?;
                 let raw = x.raw.map(|r| r as usize);
-                let n = r.binary_from(f, raw, &mut buf[..], F)?;
+                let n = r.binary_from(f.f, raw, &mut buf[..], F)?;
                 let mut t = BitReader::new(&buf[..n]);
                 read_members(&mut t, e, dst, vals, bufs)
             })();
@@ -1551,7 +1511,7 @@ fn read_plain(
             let raw = e.raw.map(|r| r as usize);
             if e.time {
                 let f = time_from(&e.decode, vals)?;
-                *dst = Val::Float(r.time_from(f, raw, F)?);
+                *dst = Val::Float(r.time_from(f.f, raw, F)?);
                 return Ok(());
             }
             if !matches!(dst, Val::Bytes(_)) {
@@ -1563,7 +1523,7 @@ fn read_plain(
             let f = binary_from(&e.decode, vals)?;
             b.clear();
             b.resize(e.cap.max(0) as usize, 0);
-            match r.binary_from(f, raw, &mut b[..], F) {
+            match r.binary_from(f.f, raw, &mut b[..], F) {
                 Ok(n) => {
                     b.truncate(n);
                     Ok(())
@@ -2127,7 +2087,9 @@ pub(crate) fn term(t: &Term, vals: &dyn Look) -> pk::Result<bool> {
             let c = c.get();
             let f = vals.hooks().get(&c.hook.get())?;
             match f {
-                Algorithm::Criterion(f) => with_inputs(&c.inputs, vals, f),
+                Algorithm::Criterion(f) => {
+                    with_inputs(&c.inputs, vals, |x| f(x))
+                }
                 _ => Err(PacketError::NoAlgorithm { name: F }),
             }
         }
@@ -2236,39 +2198,55 @@ fn require(
 ///
 /// # Returns
 ///
-/// The runtime's.
+/// The runtime's, and for a custom one, what keeps the application's
+/// function installed while it lives.
 ///
 /// # Errors
 ///
 /// NoAlgorithm, for a custom one the application hasn't set.
-fn checksum_spec(spec: &Spec, vals: &dyn Look) -> pk::Result<pk::Checksum> {
+fn checksum_spec(
+    spec: &Spec,
+    vals: &dyn Look,
+) -> pk::Result<(
+    pk::Checksum,
+    Option<funcs::Adapted<CustomSum, funcs::ChecksumFn>>,
+)> {
     use pk::Checksum as C;
-    Ok(match spec {
-        Spec::Crc(width, poly, init, fin, rd, rr) => C::Crc {
-            width: *width as u32,
-            poly: *poly,
-            init: *init,
-            final_xor: *fin,
-            reflect_data: *rd,
-            reflect_remainder: *rr,
+    Ok((
+        match spec {
+            Spec::Crc(width, poly, init, fin, rd, rr) => C::Crc {
+                width: *width as u32,
+                poly: *poly,
+                init: *init,
+                final_xor: *fin,
+                reflect_data: *rd,
+                reflect_remainder: *rr,
+            },
+            Spec::Xor(bits) => C::Xor(*bits as u32),
+            Spec::Parity(odd) => C::Parity(*odd),
+            Spec::Named(name, bits) => match (name.as_str(), bits) {
+                ("sum", Some(b)) => C::Sum(*b as u32),
+                ("fletcher", Some(b)) => C::Fletcher(*b as u32),
+                ("unix_sum", _) => C::UnixSum,
+                ("adler32", _) => C::Adler32,
+                ("luhn", _) => C::Luhn,
+                ("verhoeff", _) => C::Verhoeff,
+                _ => C::Damm,
+            },
+            Spec::Custom(h) => match vals.hooks().get(&h.get())? {
+                Algorithm::Checksum(f) => {
+                    let a = funcs::checksum(Some(&f));
+                    return Ok((C::Custom(a.f.expect("an adapter")), Some(a)));
+                }
+                _ => return Err(PacketError::NoAlgorithm { name: F }),
+            },
         },
-        Spec::Xor(bits) => C::Xor(*bits as u32),
-        Spec::Parity(odd) => C::Parity(*odd),
-        Spec::Named(name, bits) => match (name.as_str(), bits) {
-            ("sum", Some(b)) => C::Sum(*b as u32),
-            ("fletcher", Some(b)) => C::Fletcher(*b as u32),
-            ("unix_sum", _) => C::UnixSum,
-            ("adler32", _) => C::Adler32,
-            ("luhn", _) => C::Luhn,
-            ("verhoeff", _) => C::Verhoeff,
-            _ => C::Damm,
-        },
-        Spec::Custom(h) => match vals.hooks().get(&h.get())? {
-            Algorithm::Checksum(f) => C::Custom(f),
-            _ => return Err(PacketError::NoAlgorithm { name: F }),
-        },
-    })
+        None,
+    ))
 }
+
+/// The plain function the runtime takes for a custom checksum.
+type CustomSum = fn(&[u8], usize, usize) -> u64;
 
 /// Gives the bits a check covers, as the generated code works them out.
 ///
@@ -2571,7 +2549,10 @@ impl Plan {
     ///
     /// The function, or `None` if none is set.
     pub fn hook(&self, ident: &str) -> Option<Algorithm> {
-        self.hooks.index.get(ident).and_then(|&i| self.hooks.fns[i])
+        self.hooks
+            .index
+            .get(ident)
+            .and_then(|&i| self.hooks.fns[i].clone())
     }
 
     /// Sets the function for a hook.
@@ -2759,7 +2740,9 @@ impl Dec<'_, '_> {
         let x = self
             .r
             .checksum(
-                &checksum_spec(&c.spec, &self.ws.vals).map_err(at(&l.name))?,
+                &checksum_spec(&c.spec, &self.ws.vals)
+                    .map_err(at(&l.name))?
+                    .0,
                 start,
                 end,
                 F,
@@ -3024,7 +3007,7 @@ impl Dec<'_, '_> {
     ) -> CodecResult<()> {
         let f = binary_from(&t.decode, &self.ws.vals).map_err(at(&t.name))?;
         let raw = t.raw.map(|r| r as usize);
-        let n = self.r.binary_from(f, raw, buf, F).map_err(at(&t.name))?;
+        let n = self.r.binary_from(f.f, raw, buf, F).map_err(at(&t.name))?;
         let mut d = Dec {
             r: BitReader::new(&buf[..n]),
             ws: &mut *self.ws,
@@ -3601,7 +3584,7 @@ fn write_plain(
             if let Some(x) = &e.transform {
                 let f = binary_to(&x.encode, vals)?;
                 let raw = x.raw.map(|r| r as usize);
-                w.transform(t, f, raw, raw.unwrap_or(x.cap as usize), F)?;
+                w.transform(t, f.f, raw, raw.unwrap_or(x.cap as usize), F)?;
             }
             Ok(())
         }
@@ -3610,10 +3593,12 @@ fn write_plain(
             let cap = raw.unwrap_or(e.cap.max(0) as usize);
             match v {
                 Val::Float(x) if e.time => {
-                    w.time_to(time_to(&e.encode, vals)?, *x, raw, cap, F)
+                    let f = time_to(&e.encode, vals)?;
+                    w.time_to(f.f, *x, raw, cap, F)
                 }
                 Val::Bytes(b) if !e.time => {
-                    w.binary_to(binary_to(&e.encode, vals)?, b, raw, cap, F)
+                    let f = binary_to(&e.encode, vals)?;
+                    w.binary_to(f.f, b, raw, cap, F)
                 }
                 _ => Err(PacketError::OutOfRange { field: F }),
             }
@@ -3804,7 +3789,9 @@ impl Enc<'_, '_> {
         let (start, end) = region(c, &self.ws.marks, at_, self.w.packet_end());
         self.w
             .patch_checksum(
-                &checksum_spec(&c.spec, &self.ws.vals).map_err(at(&l.name))?,
+                &checksum_spec(&c.spec, &self.ws.vals)
+                    .map_err(at(&l.name))?
+                    .0,
                 start,
                 end,
                 at_,
@@ -3836,7 +3823,7 @@ impl Enc<'_, '_> {
         let (start, end) = region(c, &self.ws.marks, at_, self.w.packet_end());
         let t = late.start as usize;
         let ts = self.ws.tstart[t];
-        let spec =
+        let (spec, _sum) =
             checksum_spec(&c.spec, &self.ws.vals).map_err(at(&l.name))?;
         let f = binary_to(&late.encode, &self.ws.vals).map_err(at(&l.name))?;
         let plain = &self.ws.tbufs[t][..self.ws.kept[t]];
@@ -3850,7 +3837,7 @@ impl Enc<'_, '_> {
                 e.bits as u32,
                 matches!(e.order, Order::Le),
                 ts,
-                f,
+                f.f,
                 late.raw.unwrap_or(0) as usize,
                 late.out_cap.max(0) as usize,
                 F,
@@ -3913,7 +3900,7 @@ impl Enc<'_, '_> {
         let f = binary_to(&t.encode, &self.ws.vals).map_err(at(&t.name))?;
         let raw = t.raw.map(|r| r as usize);
         self.w
-            .transform(start, f, raw, t.out_cap.max(0) as usize, F)
+            .transform(start, f.f, raw, t.out_cap.max(0) as usize, F)
             .map_err(at(&t.name))
     }
 

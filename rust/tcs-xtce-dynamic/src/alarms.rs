@@ -422,7 +422,9 @@ fn alarm_def(
         // None while its function isn't set.
         let level = match vals.hooks().get(&h.get()) {
             Ok(Algorithm::Alarm(f)) => {
-                interp::with_inputs(inputs, vals, f).unwrap_or(0).min(5)
+                interp::with_inputs(inputs, vals, |x| f(x))
+                    .unwrap_or(0)
+                    .min(5)
             }
             _ => 0,
         };

@@ -34,8 +34,11 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
 - The functions an application supplies for custom algorithms,
   custom checksums and transforms are set with
   ``Mission::set_algorithm``, by the algorithm's name, as an
-  ``Algorithm`` of the kind its use needs, which is the type the
-  generated code's ``hooks`` module takes; ``Mission::algorithms``
+  ``Algorithm`` of the kind its use needs: any closure of the signature
+  the generated code's ``hooks`` module takes, so that it can carry what
+  it needs, as a C function and its context or a Python callable does.
+  Where the runtime takes a plain function pointer, the codec passes an
+  adapter that calls the closure installed for that one call; ``Mission::algorithms``
   lists them, and a packet that needs one not set fails with
   ``NoAlgorithm``. They are set after the mission is read, not before
   it resolves.

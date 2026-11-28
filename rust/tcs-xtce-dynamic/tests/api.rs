@@ -169,10 +169,10 @@ fn algorithms_are_listed_and_needed_until_supplied() {
     assert_eq!(p.kind(), "NoAlgorithm", "{e:?}");
     // Of another kind, or not of the mission.
     assert!(m
-        .set_algorithm("Unmask", Algorithm::Criterion(|_| true))
+        .set_algorithm("Unmask", Algorithm::criterion(|_| true))
         .is_err());
     assert!(m
-        .set_algorithm("/Demo/Nothing", Algorithm::Criterion(|_| true))
+        .set_algorithm("/Demo/Nothing", Algorithm::criterion(|_| true))
         .is_err());
     common::set_algorithms(&mut m);
     assert!(m.algorithms().iter().all(|a| a.2));
@@ -353,4 +353,37 @@ fn times_are_times() {
     let mut other = m.store();
     other.commit(&scratch).unwrap();
     assert_eq!(other.get(days), Some(Datum::Time(86400.0)));
+}
+
+#[test]
+fn algorithms_may_be_closures_with_state() {
+    let mut m = demo();
+    common::set_algorithms(&mut m);
+    // Unmask with a key it carries, counting its calls.
+    let calls = std::rc::Rc::new(std::cell::Cell::new(0));
+    let (key, seen) = (0x5Au8, calls.clone());
+    m.set_algorithm(
+        "Unmask",
+        Algorithm::binary_from(move |b, out| {
+            seen.set(seen.get() + 1);
+            for (o, &x) in out.iter_mut().zip(b) {
+                *o = x ^ key;
+            }
+            Some((b.len(), b.len()))
+        }),
+    )
+    .unwrap();
+    let root = m.container(m.top(), "/Demo/CCSDSPacket").unwrap();
+    let mut scratch = m.scratch();
+    let got = m.unpack(root, &bytes(XOR), &mut scratch).unwrap();
+    assert_eq!(calls.get(), 1);
+    let mut store = m.store();
+    store.commit(&scratch).unwrap();
+    let blob = m.parameter(m.top(), "/Demo/XorBlob").unwrap();
+    assert_eq!(
+        store.get(blob),
+        Some(Datum::Binary(&[0xaa, 0xbb, 0xcc, 0xdd]))
+    );
+    let mut out = Buffer::with_capacity(256);
+    assert_eq!(m.pack(got, &store, &mut out).unwrap(), &bytes(XOR)[..]);
 }

@@ -5,9 +5,13 @@
 
 use std::fmt;
 
+use std::rc::Rc;
+
 use tcs_xtce::packet::{
-    BitInvert, FlagSpec, FlagSync, FrameSpec, FrameSync, Pcm, StreamDecode,
+    BitInvert, FlagSpec, FlagSync, FrameSpec, FrameSync, Pcm,
 };
+
+use crate::funcs::{BitInvertFn, StreamDecodeFn};
 use tcs_xtce_model::model::Stream;
 
 /// What runs a stream: a synchronizer of some size.
@@ -35,16 +39,17 @@ impl<const B: usize, const Y: usize> Push for FlagSync<B, Y> {
 
 /// What a stream's frames come from.
 enum Inner<'m> {
-    /// A synchronizer.
-    Sync(Box<dyn Push + 'm>),
+    /// A synchronizer, and its InvertAlgorithm's function, which it calls
+    /// through an adapter while it runs.
+    Sync(Box<dyn Push + 'm>, Option<Rc<BitInvertFn>>),
     /// A CustomStream's DecodingAlgorithm.
-    Custom(StreamDecode),
+    Custom(Rc<StreamDecodeFn>),
 }
 
 impl fmt::Debug for Inner<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Inner::Sync(s) => s.fmt(f),
+            Inner::Sync(s, _) => s.fmt(f),
             Inner::Custom(_) => f.write_str("Custom"),
         }
     }
@@ -83,7 +88,10 @@ impl Deframer<'_> {
     fn push_dyn(&mut self, data: &[u8], f: &mut dyn FnMut(&[u8])) {
         let inner = &mut self.inner;
         let mut own = |x: &[u8]| match inner {
-            Inner::Sync(s) => s.push(x, f),
+            Inner::Sync(s, invert) => {
+                let _a = crate::funcs::bit_invert(invert.as_ref());
+                s.push(x, f)
+            }
             Inner::Custom(d) => d(x, f),
         };
         match &mut self.feeder {
@@ -365,7 +373,9 @@ pub(crate) fn deframer<'m>(
                 }
             }
         };
-        Inner::Sync(synchronizer(st, patterns, invert))
+        // The synchronizer calls the application's through the adapter.
+        let adapter = invert.as_ref().map(|_| crate::funcs::BIT_INVERT_ADAPTER);
+        Inner::Sync(synchronizer(st, patterns, adapter), invert)
     };
     Ok(Deframer { inner, feeder })
 }

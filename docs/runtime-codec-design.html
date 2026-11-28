@@ -396,8 +396,11 @@ bits included, except for the message of a packet that fails.</li>
 <li>The functions an application supplies for custom algorithms,
 custom checksums and transforms are set with
 <tt class="docutils literal"><span class="pre">Mission::set_algorithm</span></tt>, by the algorithm's name, as an
-<tt class="docutils literal">Algorithm</tt> of the kind its use needs, which is the type the
-generated code's <tt class="docutils literal">hooks</tt> module takes; <tt class="docutils literal"><span class="pre">Mission::algorithms</span></tt>
+<tt class="docutils literal">Algorithm</tt> of the kind its use needs: any closure of the signature
+the generated code's <tt class="docutils literal">hooks</tt> module takes, so that it can carry what
+it needs, as a C function and its context or a Python callable does.
+Where the runtime takes a plain function pointer, the codec passes an
+adapter that calls the closure installed for that one call; <tt class="docutils literal"><span class="pre">Mission::algorithms</span></tt>
 lists them, and a packet that needs one not set fails with
 <tt class="docutils literal">NoAlgorithm</tt>. They are set after the mission is read, not before
 it resolves.</li>
