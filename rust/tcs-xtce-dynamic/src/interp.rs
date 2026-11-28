@@ -35,6 +35,9 @@ pub enum Val {
     Int(i128),
     /// An integer, or an enumeration's value, of more than 64 bits.
     Big(num_bigint::BigInt),
+    /// A raw value, to be written as it is: not calibrated, and checked
+    /// against its encoding only.
+    Raw(Box<Val>),
     /// A float.
     Float(f64),
     /// An enumeration's value.
@@ -1601,6 +1604,8 @@ struct Dec<'d> {
     /// Where the container each length field of an included container
     /// measures must end, by the field's number.
     spans: HashMap<i64, i128>,
+    /// The raw value of each calibrated value, by its number.
+    raws: HashMap<i64, Val>,
 }
 
 impl Dec<'_> {
@@ -1740,6 +1745,9 @@ impl Dec<'_> {
                     if l.checksum {
                         self.sums.insert(l.id, self.r.position());
                     }
+                    // A calibrated value's raw value too, from the same
+                    // bits.
+                    let mut raw_r = self.r.clone();
                     let x = if v.assembled != 0 {
                         // Decoded from its segments' bits.
                         let mut b = [0u8; 8];
@@ -1753,6 +1761,22 @@ impl Dec<'_> {
                         read_val(&mut self.r, &vt, &self.vals, &[])
                     }
                     .map_err(at(&l.name))?;
+                    if calibrated(&vt) {
+                        let rt = raw_type(&vt);
+                        let raw = if v.assembled != 0 {
+                            let mut b = [0u8; 8];
+                            let mut r = pk::segment_reader(
+                                &mut b,
+                                self.segs[&l.id],
+                                v.assembled as u32,
+                            );
+                            read_val(&mut r, &rt, &self.vals, &[])
+                        } else {
+                            read_val(&mut raw_r, &rt, &self.vals, &[])
+                        }
+                        .map_err(at(&l.name))?;
+                        self.raws.insert(l.id, raw);
+                    }
                     let n = match &x {
                         Val::Int(n) => Some(*n as u64),
                         // A wider field must hold a length a u64 holds.
@@ -1855,6 +1879,9 @@ pub struct Decoded {
     pub node: Shared<Node>,
     /// Each field's value; `None` for one that is absent.
     pub fields: Vec<Option<Val>>,
+    /// Each field's raw value, as its [`raw_type`] reads it, where the
+    /// field's type has a calibrator; `None` elsewhere.
+    pub raws: Vec<Option<Val>>,
     /// The bytes it took.
     pub used: usize,
 }
@@ -1876,9 +1903,16 @@ fn decoded(n: &Shared<Node>, d: &Dec<'_>) -> Decoded {
         .iter()
         .map(|(_, l)| d.vals.get(&l.get().id).cloned().flatten())
         .collect();
+    let raws = n
+        .get()
+        .fields
+        .iter()
+        .map(|(_, l)| d.raws.get(&l.get().id).cloned())
+        .collect();
     Decoded {
         node: n.clone(),
         fields,
+        raws,
         used: d.r.used(),
     }
 }
@@ -1905,6 +1939,7 @@ pub fn decode(n: &Shared<Node>, data: &[u8]) -> CodecResult<Decoded> {
         sums: HashMap::new(),
         segs: HashMap::new(),
         spans: HashMap::new(),
+        raws: HashMap::new(),
     };
     for m in n.chain() {
         let m = m.get();
@@ -1940,6 +1975,7 @@ pub fn classify(root: &Shared<Node>, data: &[u8]) -> Classified {
         sums: HashMap::new(),
         segs: HashMap::new(),
         spans: HashMap::new(),
+        raws: HashMap::new(),
     };
     // The node's bases' entries, then its own, each node's criteria
     // checked first.
@@ -2150,8 +2186,62 @@ fn write_val(
     vals: &Values,
     inner: Inner<'_>,
 ) -> pk::Result<()> {
+    if let Val::Raw(x) = v {
+        // Written as it is, checked against its encoding only.
+        return write_unchecked(w, &raw_type(vt), x, vals, inner);
+    }
     check_valid(vt, v)?;
     write_unchecked(w, vt, v, vals, inner)
+}
+
+/// Says whether a type, or one inside it, has a calibrator.
+///
+/// # Arguments
+///
+/// * `vt` - The type.
+///
+/// # Returns
+///
+/// Whether it has.
+pub fn calibrated(vt: &VType) -> bool {
+    vt.calibrator.is_some()
+        || match &vt.enc {
+            Encoding::Aggregate(e) => {
+                e.members.iter().any(|m| calibrated(&m.vtype))
+            }
+            Encoding::Array(e) => calibrated(&e.elem),
+            _ => false,
+        }
+}
+
+/// Gives the raw type of a type: the type its raw value has, with no
+/// calibrator and no valid ranges, and the kind of its encoding: an
+/// integer for an integer encoding and a float for a float encoding.
+///
+/// # Arguments
+///
+/// * `vt` - The type.
+///
+/// # Returns
+///
+/// The raw type.
+pub fn raw_type(vt: &VType) -> VType {
+    let mut r = vt.clone();
+    r.calibrator = None;
+    r.valid.clear();
+    r.eng = None;
+    match &mut r.enc {
+        Encoding::Int(_) => r.kind = "int".into(),
+        Encoding::Float(_) => r.kind = "float".into(),
+        Encoding::Aggregate(e) => {
+            for m in &mut e.members {
+                m.vtype = Rc::new(raw_type(&m.vtype));
+            }
+        }
+        Encoding::Array(e) => e.elem = Rc::new(raw_type(&e.elem)),
+        _ => {}
+    }
+    r
 }
 
 /// Writes one value without checking it against its type's valid ranges,
@@ -2750,6 +2840,7 @@ pub fn describe(vt: &VType, v: &Val, out: &mut String) {
         (_, Val::Bool(b)) => {
             let _ = write!(out, "{b}");
         }
+        (_, Val::Raw(x)) => describe(&raw_type(vt), x, out),
         _ => out.push('?'),
     }
 }

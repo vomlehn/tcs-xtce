@@ -382,9 +382,11 @@ meta-command, so that a program can refuse the mission before it
 starts.</li>
 <li><tt class="docutils literal">Datum</tt> holds an integer of more than 128 bits as <tt class="docutils literal">Big</tt>, and has
 no <tt class="docutils literal">Time</tt> yet: a time is the float the compiler makes of it.</li>
-<li><tt class="docutils literal"><span class="pre">Store::get_raw</span></tt> and <tt class="docutils literal">set_raw</tt>, <tt class="docutils literal"><span class="pre">Mission::digest</span></tt> and
-<tt class="docutils literal">unbounded</tt>, custom algorithms and transforms, and packing and
-unpacking without allocating are still to come.</li>
+<li><tt class="docutils literal"><span class="pre">Store::set_raw</span></tt> leaves the slot without an engineering value until
+one is set or unpacked: <tt class="docutils literal">get</tt> gives none, and <tt class="docutils literal">get_raw</tt> the raw
+value.</li>
+<li><tt class="docutils literal"><span class="pre">Mission::unbounded</span></tt>, custom algorithms and transforms, and packing
+and unpacking without allocating are still to come.</li>
 </ul>
 <p>Until <tt class="docutils literal">StringSpec</tt> and <tt class="docutils literal">ByteOrder</tt> gain a lifetime (see <a class="reference internal" href="#freeing-what-was-read">Freeing
 what was read</a>), the interpreter keeps each distinct string terminator

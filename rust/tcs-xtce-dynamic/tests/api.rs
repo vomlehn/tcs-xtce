@@ -145,3 +145,48 @@ fn what_is_not_run_yet_is_listed_and_refused() {
     let e = m.pack(abstract_, &m.store(), &mut out).unwrap_err();
     assert!(matches!(e, RunError::Unsupported(_)), "{e:?}");
 }
+
+#[test]
+fn raw_values_are_read_and_packed_as_they_are() {
+    let m = demo();
+    let top = m.top();
+    let root = m.container(top, "/Demo/CCSDSPacket").unwrap();
+    let mut scratch = m.scratch();
+    let hk = m.unpack(root, &bytes(HK), &mut scratch).unwrap();
+    let mut store = m.store();
+    store.commit(&scratch).unwrap();
+    // An 8-bit raw value, calibrated by a spline to degrees C.
+    let temp = m.parameter(top, "/Demo/Temperature").unwrap();
+    assert!(matches!(store.get(temp), Some(Datum::Float(_))));
+    let Some(Datum::Int(raw)) = store.get_raw(temp) else {
+        panic!("no raw value: {:?}", store.get_raw(temp));
+    };
+    // Packing the raw value as it is gives the packet back.
+    store.set_raw(temp, Datum::Int(raw)).unwrap();
+    assert_eq!(store.get(temp), None);
+    let mut out = Buffer::with_capacity(256);
+    assert_eq!(m.pack(hk, &store, &mut out).unwrap(), &bytes(HK)[..]);
+    // Any value the encoding holds can be sent, whatever it calibrates
+    // to; one it doesn't hold can't.
+    store.set_raw(temp, Datum::Int(255)).unwrap();
+    let packed = m.pack(hk, &store, &mut out).unwrap().to_vec();
+    m.unpack(root, &packed, &mut scratch).unwrap();
+    let mut other = m.store();
+    other.commit(&scratch).unwrap();
+    assert_eq!(other.get_raw(temp), Some(Datum::Int(255)));
+    store.set_raw(temp, Datum::Int(256)).unwrap();
+    let e = m.pack(hk, &store, &mut out).unwrap_err();
+    assert!(matches!(e, RunError::Packet(_)), "{e:?}");
+    assert!(matches!(
+        store.set_raw(temp, Datum::Float(1.0)),
+        Err(SetError::Kind { .. })
+    ));
+}
+
+#[test]
+fn the_digest_is_xtce_digest_s() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/mission/demo.xtce");
+    let want = tcs_xtce::digest::digest_file_bytes(&path).unwrap();
+    assert_eq!(demo().digest(), want);
+}

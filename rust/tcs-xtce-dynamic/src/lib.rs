@@ -244,6 +244,8 @@ pub struct Mission {
     args: Vec<Owner>,
     /// The slots.
     slots: Vec<SlotEntry>,
+    /// The digest of the documents.
+    digest: [u8; 16],
 }
 
 /// Adds a SpaceSystem and those inside it to a list, each once.
@@ -436,6 +438,7 @@ impl Mission {
         for r in &roots {
             add_spaces(r, &[], &mut spaces);
         }
+        let digest = Self::digest_of(docs)?;
         let mut c = Compiler::new(roots, false, dialect)?;
         let model = c.compile()?;
         let mut slots = Vec::new();
@@ -548,7 +551,63 @@ impl Mission {
             params,
             args,
             slots,
+            digest,
         })
+    }
+
+    /// Computes the digest of a mission's documents, as `xtce-digest`
+    /// does: the bytes each was read from, or for one made in a program,
+    /// the bytes it is written as.
+    ///
+    /// # Arguments
+    ///
+    /// * `docs` - The documents.
+    ///
+    /// # Returns
+    ///
+    /// The digest.
+    ///
+    /// # Errors
+    ///
+    /// Read, if a document's bytes aren't XML the digest takes, such as
+    /// one with a DOCTYPE.
+    fn digest_of(docs: &[Document]) -> Result<[u8; 16], Error> {
+        let mut texts: Vec<Vec<u8>> = Vec::new();
+        for (i, d) in docs.iter().enumerate() {
+            let read = |e: tcs_xtce::Error| Error::Read {
+                document: i,
+                message: e.to_string(),
+            };
+            if d.input().is_empty() {
+                let mut buf = tcs_xtce::Buffer::new();
+                tcs_xtce::to_xml(
+                    &d.root,
+                    tcs_xtce::ROOT_ELEMENT,
+                    &mut buf,
+                    false,
+                )
+                .map_err(read)?;
+                texts.push(buf.as_bytes().to_vec());
+            } else {
+                texts.push(d.input().as_bytes().to_vec());
+            }
+        }
+        tcs_xtce::digest::digest_set_bytes(&texts).map_err(|e| Error::Read {
+            document: 0,
+            message: e.to_string(),
+        })
+    }
+
+    /// Gives the mission's digest: the MD5 digest of what its documents
+    /// mean, which `xtce-digest` and every language's runtime compute the
+    /// same, so that two programs can check that they were built from the
+    /// same XTCE.
+    ///
+    /// # Returns
+    ///
+    /// The digest.
+    pub fn digest(&self) -> [u8; 16] {
+        self.digest
     }
 
     /// Gives the top: the SpaceSystem above every document's root.

@@ -20,9 +20,12 @@ functions the application supplies. ``Mission::pack`` and ``unpack``,
   starts.
 - ``Datum`` holds an integer of more than 128 bits as ``Big``, and has
   no ``Time`` yet: a time is the float the compiler makes of it.
-- ``Store::get_raw`` and ``set_raw``, ``Mission::digest`` and
-  ``unbounded``, custom algorithms and transforms, and packing and
-  unpacking without allocating are still to come.
+- ``Store::set_raw`` leaves the slot without an engineering value until
+  one is set or unpacked: ``get`` gives none, and ``get_raw`` the raw
+  value.
+- ``Mission::unbounded``, custom algorithms and transforms, and packing
+  and unpacking without allocating are still to come.
+
 
 Until ``StringSpec`` and ``ByteOrder`` gain a lifetime (see `Freeing
 what was read`_), the interpreter keeps each distinct string terminator

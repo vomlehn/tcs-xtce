@@ -106,6 +106,11 @@ pub struct Store {
     types: Rc<Vec<Rc<VType>>>,
     /// Each slot's value, or `None` if it has none.
     values: Vec<Option<Val>>,
+    /// Each slot's raw value, where unpacking or `set_raw` gave one.
+    raws: Vec<Option<Val>>,
+    /// Whether each slot's raw value is to be packed as it is, because
+    /// `set_raw` gave it.
+    raw_set: Vec<bool>,
 }
 
 /// A packet decoded and not yet committed: the values of the slots it
@@ -115,8 +120,9 @@ pub struct Scratch {
     /// The number of the mission it belongs to.
     mission: u64,
     /// The slots set, each with its value, or `None` for one the packet
-    /// leaves without a value.
-    set: Vec<(usize, Option<Val>)>,
+    /// leaves without a value, and its raw value where its type is
+    /// calibrated.
+    set: Vec<(usize, Option<Val>, Option<Val>)>,
 }
 
 /// Gives the number of slots a value of a type has.
@@ -282,6 +288,7 @@ fn to_datum(v: &Val) -> Datum<'_> {
         Val::Bool(b) => Datum::Bool(*b),
         Val::Str(s) => Datum::Str(s),
         Val::Bytes(b) => Datum::Binary(b),
+        Val::Raw(x) => to_datum(x),
         Val::Agg(_) | Val::Arr(_) => unreachable!("a scalar slot"),
     }
 }
@@ -333,6 +340,60 @@ impl Store {
         }
         interp::check_valid(vt, &v).map_err(|_| SetError::OutOfRange)?;
         self.values[slot.index] = Some(v);
+        self.raws[slot.index] = None;
+        self.raw_set[slot.index] = false;
+        Ok(())
+    }
+
+    /// Gives a slot's raw value: what the packet held, before its
+    /// calibrator, for a calibrated slot; its value for any other.
+    ///
+    /// # Arguments
+    ///
+    /// * `slot` - The slot, which must be this store's mission's.
+    ///
+    /// # Returns
+    ///
+    /// The raw value, or `None` if nothing has set it.
+    pub fn get_raw(&self, slot: SlotId) -> Option<Datum<'_>> {
+        if slot.mission != self.mission {
+            return None;
+        }
+        match &self.raws[slot.index] {
+            Some(v) => Some(to_datum(v)),
+            None => self.get(slot),
+        }
+    }
+
+    /// Gives a slot a raw value, which packing writes as it is: it is
+    /// not calibrated, and is checked against its encoding only, not the
+    /// type's valid ranges, so that a test can send a value that no
+    /// engineering value gives. The slot has no engineering value until
+    /// one is set or unpacked.
+    ///
+    /// # Arguments
+    ///
+    /// * `slot`  - The slot.
+    /// * `value` - The raw value: an integer for an integer encoding, a
+    ///             float for a float encoding.
+    ///
+    /// # Errors
+    ///
+    /// Kind, if the value is of another kind than the encoding's;
+    /// Foreign, for another mission's slot.
+    pub fn set_raw(
+        &mut self,
+        slot: SlotId,
+        value: Datum<'_>,
+    ) -> Result<(), SetError> {
+        if slot.mission != self.mission {
+            return Err(SetError::Foreign);
+        }
+        let rt = interp::raw_type(&self.types[slot.index]);
+        let v = to_val(&rt, value)?;
+        self.values[slot.index] = None;
+        self.raws[slot.index] = Some(v);
+        self.raw_set[slot.index] = true;
         Ok(())
     }
 
@@ -344,6 +405,8 @@ impl Store {
     pub fn clear(&mut self, slot: SlotId) {
         if slot.mission == self.mission {
             self.values[slot.index] = None;
+            self.raws[slot.index] = None;
+            self.raw_set[slot.index] = false;
         }
     }
 
@@ -360,8 +423,10 @@ impl Store {
         if scratch.mission != self.mission {
             return Err(SetError::Foreign);
         }
-        for (i, v) in &scratch.set {
+        for (i, v, raw) in &scratch.set {
             self.values[*i] = v.clone();
+            self.raws[*i] = raw.clone();
+            self.raw_set[*i] = false;
         }
         Ok(())
     }
@@ -378,6 +443,8 @@ impl Mission {
             mission: self.id,
             types: Rc::new(self.slots.iter().map(|s| s.vt.clone()).collect()),
             values: vec![None; self.slots.len()],
+            raws: vec![None; self.slots.len()],
+            raw_set: vec![false; self.slots.len()],
         }
     }
 
@@ -493,7 +560,7 @@ impl Mission {
         };
         scratch.set.clear();
         let fields = d.node.get().fields.clone();
-        for ((_, l), v) in fields.iter().zip(&d.fields) {
+        for (((_, l), v), raw) in fields.iter().zip(&d.fields).zip(&d.raws) {
             let l = l.get();
             let Some((first, count)) = self.owner_slots(&l.key) else {
                 continue;
@@ -505,8 +572,16 @@ impl Mission {
             let Some(v) = v else { continue };
             let mut out = Vec::with_capacity(count);
             flatten(&l.vt(), Some(v), &mut out);
-            for (k, x) in out.into_iter().enumerate().take(count) {
-                scratch.set.push((first + k, x));
+            let mut raws = Vec::with_capacity(count);
+            match raw {
+                Some(r) => {
+                    flatten(&interp::raw_type(&l.vt()), Some(r), &mut raws)
+                }
+                None => raws.resize(count, None),
+            }
+            for (k, (x, r)) in out.into_iter().zip(raws).enumerate().take(count)
+            {
+                scratch.set.push((first + k, x, r));
             }
         }
         Ok(self.node_id(&d.node))
@@ -562,7 +637,19 @@ impl Mission {
                 if slot_count(&l.vt()) != count {
                     return None;
                 }
-                gather(&l.vt(), &values.values[first..first + count])
+                // A raw value set for a slot is packed as it is.
+                let slots: Vec<Option<Val>> = (first..first + count)
+                    .map(|i| {
+                        if values.raw_set[i] {
+                            values.raws[i]
+                                .clone()
+                                .map(|x| Val::Raw(Box::new(x)))
+                        } else {
+                            values.values[i].clone()
+                        }
+                    })
+                    .collect();
+                gather(&l.vt(), &slots)
             })
             .collect();
         interp::encode(n, &fields, out).map_err(RunError::Packet)
