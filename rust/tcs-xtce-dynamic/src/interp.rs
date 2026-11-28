@@ -1917,12 +1917,13 @@ pub fn decode(n: &Shared<Node>, data: &[u8]) -> CodecResult<Decoded> {
     Ok(decoded(n, &d))
 }
 
-/// Decodes a packet of an inheritance tree: the root's entries, then the
-/// first child (in document order) whose criteria match, recursively.
+/// Decodes a packet of an inheritance tree: the entries of a node and its
+/// bases, then the first child (in document order) whose criteria match,
+/// recursively.
 ///
 /// # Arguments
 ///
-/// * `root` - The tree's root, each of whose nodes [`unsupported`] accepts.
+/// * `root` - The node to start from: a tree's root, or any node in it.
 /// * `data` - The bytes.
 ///
 /// # Returns
@@ -1932,9 +1933,6 @@ pub fn decode(n: &Shared<Node>, data: &[u8]) -> CodecResult<Decoded> {
 /// runtime's; or, outside both, what the packet leads to that the
 /// interpreter can't run yet.
 pub fn classify(root: &Shared<Node>, data: &[u8]) -> Classified {
-    if let Some(w) = node_unsupported(root) {
-        return Err(w);
-    }
     let mut d = Dec {
         r: BitReader::new(data),
         vals: Values::new(),
@@ -1943,9 +1941,26 @@ pub fn classify(root: &Shared<Node>, data: &[u8]) -> Classified {
         segs: HashMap::new(),
         spans: HashMap::new(),
     };
-    let key = root.get().key.clone();
-    if let Err(e) = d.items(&root.get().items, &key) {
-        return Ok(Err(e));
+    // The node's bases' entries, then its own, each node's criteria
+    // checked first.
+    for m in root.chain() {
+        if let Some(w) = node_unsupported(&m) {
+            return Err(w);
+        }
+        let (key, criteria, items) = {
+            let m = m.get();
+            (m.key.clone(), m.criteria.clone(), m.items.clone())
+        };
+        for c in &criteria {
+            if let Err(e) =
+                require(std::slice::from_ref(c), &d.vals, &key, &c.text())
+            {
+                return Ok(Err(e));
+            }
+        }
+        if let Err(e) = d.items(&items, &key) {
+            return Ok(Err(e));
+        }
     }
     dispatch(root, &mut d)
 }
@@ -2071,7 +2086,7 @@ fn lit_val(vt: &VType, lit: &Lit) -> Val {
 /// # Errors
 ///
 /// OutOfRange, if it lies in none of them.
-fn check_valid(vt: &VType, v: &Val) -> pk::Result<()> {
+pub(crate) fn check_valid(vt: &VType, v: &Val) -> pk::Result<()> {
     if vt.valid.is_empty() || !(vt.kind == "int" || vt.kind == "float") {
         return Ok(());
     }

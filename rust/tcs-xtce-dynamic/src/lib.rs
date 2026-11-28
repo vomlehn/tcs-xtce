@@ -9,8 +9,11 @@
 //! arguments, and the members and elements of aggregates and arrays,
 //! by the rules XTCE documents use for their own references.
 
+pub mod api;
 pub mod interp;
 mod wide;
+
+pub use api::{Datum, RunError, Scratch, SetError, Store};
 
 use std::fmt;
 use std::rc::Rc;

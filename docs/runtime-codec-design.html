@@ -368,16 +368,27 @@ ul.auto-toc {
 resolves a mission and looks its names up, as <a class="reference internal" href="#looking-names-up">Looking names up</a>
 describes. Its interpreter (<tt class="docutils literal">interp</tt>) decodes, classifies, encodes
 and describes packets by running their items through the tcsxtce
-helpers, as <a class="reference internal" href="#interpreting">Interpreting</a> describes, for what it supports so far, and
-names the first construct of a packet it doesn't support; on the demo
-mission's vectors it agrees with the generated codecs on every packet
-it runs, which is every packet but those that use custom algorithms or
-transforms, the functions the application supplies. Those are still to
-come, as are integers of more than 512 bits and the values, storage and</p>
-<p>interface of <a class="reference internal" href="#values">Values</a> and <a class="reference internal" href="#the-interface">The interface</a>. Until <tt class="docutils literal">StringSpec</tt> and
-<tt class="docutils literal">ByteOrder</tt> gain a lifetime (see <a class="reference internal" href="#freeing-what-was-read">Freeing what was read</a>), the
-interpreter keeps each distinct string terminator and byte order list
-it is given for the rest of the program, once.</p>
+helpers, as <a class="reference internal" href="#interpreting">Interpreting</a> describes; on the demo mission's vectors it
+agrees with the generated codecs on every packet it runs, which is
+every packet but those that use custom algorithms or transforms, the
+functions the application supplies. <tt class="docutils literal"><span class="pre">Mission::pack</span></tt> and <tt class="docutils literal">unpack</tt>,
+<tt class="docutils literal">Store</tt>, <tt class="docutils literal">Scratch</tt> and <tt class="docutils literal">Datum</tt> give programs the interface of
+<a class="reference internal" href="#the-interface">The interface</a>, so far with these differences:</p>
+<ul class="simple">
+<li>A mission that uses what the codec doesn't run yet is read all the
+same; <tt class="docutils literal">pack</tt> and <tt class="docutils literal">unpack</tt> refuse such a packet, naming what it
+uses, and <tt class="docutils literal"><span class="pre">Mission::unsupported</span></tt> lists every such container and
+meta-command, so that a program can refuse the mission before it
+starts.</li>
+<li><tt class="docutils literal">Datum</tt> holds an integer of more than 128 bits as <tt class="docutils literal">Big</tt>, and has
+no <tt class="docutils literal">Time</tt> yet: a time is the float the compiler makes of it.</li>
+<li><tt class="docutils literal"><span class="pre">Store::get_raw</span></tt> and <tt class="docutils literal">set_raw</tt>, <tt class="docutils literal"><span class="pre">Mission::digest</span></tt> and
+<tt class="docutils literal">unbounded</tt>, custom algorithms and transforms, and packing and
+unpacking without allocating are still to come.</li>
+</ul>
+<p>Until <tt class="docutils literal">StringSpec</tt> and <tt class="docutils literal">ByteOrder</tt> gain a lifetime (see <a class="reference internal" href="#freeing-what-was-read">Freeing
+what was read</a>), the interpreter keeps each distinct string terminator
+and byte order list it is given for the rest of the program, once.</p>
 <div class="contents local topic" id="contents">
 <p class="topic-title"><a class="reference internal" href="#top">Contents</a></p>
 <ul class="simple">

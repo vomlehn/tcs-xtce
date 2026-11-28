@@ -6,18 +6,27 @@ Status: being implemented. The crate ``tcs-xtce-dynamic`` reads and
 resolves a mission and looks its names up, as `Looking names up`_
 describes. Its interpreter (``interp``) decodes, classifies, encodes
 and describes packets by running their items through the tcsxtce
-helpers, as `Interpreting`_ describes, for what it supports so far, and
-names the first construct of a packet it doesn't support; on the demo
-mission's vectors it agrees with the generated codecs on every packet
-it runs, which is every packet but those that use custom algorithms or
-transforms, the functions the application supplies. Those are still to
-come, as are integers of more than 512 bits and the values, storage and
+helpers, as `Interpreting`_ describes; on the demo mission's vectors it
+agrees with the generated codecs on every packet it runs, which is
+every packet but those that use custom algorithms or transforms, the
+functions the application supplies. ``Mission::pack`` and ``unpack``,
+``Store``, ``Scratch`` and ``Datum`` give programs the interface of
+`The interface`_, so far with these differences:
 
+- A mission that uses what the codec doesn't run yet is read all the
+  same; ``pack`` and ``unpack`` refuse such a packet, naming what it
+  uses, and ``Mission::unsupported`` lists every such container and
+  meta-command, so that a program can refuse the mission before it
+  starts.
+- ``Datum`` holds an integer of more than 128 bits as ``Big``, and has
+  no ``Time`` yet: a time is the float the compiler makes of it.
+- ``Store::get_raw`` and ``set_raw``, ``Mission::digest`` and
+  ``unbounded``, custom algorithms and transforms, and packing and
+  unpacking without allocating are still to come.
 
-interface of `Values`_ and `The interface`_. Until ``StringSpec`` and
-``ByteOrder`` gain a lifetime (see `Freeing what was read`_), the
-interpreter keeps each distinct string terminator and byte order list
-it is given for the rest of the program, once.
+Until ``StringSpec`` and ``ByteOrder`` gain a lifetime (see `Freeing
+what was read`_), the interpreter keeps each distinct string terminator
+and byte order list it is given for the rest of the program, once.
 
 
 
