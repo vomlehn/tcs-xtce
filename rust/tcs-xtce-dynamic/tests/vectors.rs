@@ -7,7 +7,7 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use tcs_xtce::buffer::Buffer;
-use tcs_xtce_dynamic::interp::{self, Decoded};
+use tcs_xtce_dynamic::interp::{self, Decoded, Plan, Workspace};
 use tcs_xtce_dynamic::Mission;
 
 /// Gives a file of the demo mission.
@@ -43,22 +43,29 @@ fn hex(b: &[u8]) -> String {
 ///
 /// # Arguments
 ///
-/// * `d` - What decoding gave.
+/// * `d`    - What decoding gave.
+/// * `plan` - The mission's plan.
+/// * `ws`   - The workspace it decoded into.
 ///
 /// # Returns
 ///
 /// `packet | re-encoded`, with `error:<kind>` in place of either.
-fn line(d: interp::CodecResult<Decoded>) -> String {
+fn line(
+    d: interp::CodecResult<Decoded>,
+    plan: &Plan,
+    ws: &mut Workspace,
+) -> String {
     let d = match d {
         Ok(d) => d,
         Err(e) => return format!("error:{} | -", e.kind()),
     };
+    let text = interp::describe_packet(&d, ws);
     let mut out = Buffer::with_capacity(4096);
-    let again = match interp::encode(&d.node, &d.fields, &mut out) {
+    let again = match interp::encode(&d.node, plan, ws, &mut out) {
         Ok(b) => hex(b),
         Err(e) => format!("error:{}", e.kind()),
     };
-    format!("{} | {again}", interp::describe_packet(&d))
+    format!("{text} | {again}")
 }
 
 #[test]
@@ -67,6 +74,8 @@ fn vectors_decode_and_encode_as_the_generated_codecs_do() {
         Mission::read_from([File::open(mission_file("demo.xtce")).unwrap()])
             .unwrap();
     let model = m.model();
+    let plan = m.plan();
+    let mut ws = Workspace::new(plan);
     let root = |key: &str| {
         model
             .roots
@@ -98,11 +107,11 @@ fn vectors_decode_and_encode_as_the_generated_codecs_do() {
             .map(|i| u8::from_str_radix(&h[i..i + 2], 16).unwrap())
             .collect();
         let got = match kind {
-            "tm" => interp::classify(&tm, &data),
-            "tc" => interp::classify(&tc, &data),
-            _ => match interp::unsupported(&hk) {
-                Some(w) => Err(w),
-                None => Ok(interp::decode(&hk, &data)),
+            "tm" => interp::classify(&tm, &data, plan, &mut ws),
+            "tc" => interp::classify(&tc, &data, plan, &mut ws),
+            _ => match plan.unsupported(&hk) {
+                Some(w) => Err(w.to_string()),
+                None => Ok(interp::decode(&hk, &data, plan, &mut ws)),
             },
         };
         let got = match got {
@@ -122,7 +131,7 @@ fn vectors_decode_and_encode_as_the_generated_codecs_do() {
             .split(" | derived:")
             .next()
             .unwrap();
-        let got = line(got);
+        let got = line(got, plan, &mut ws);
         if got == want {
             matched += 1;
         } else {

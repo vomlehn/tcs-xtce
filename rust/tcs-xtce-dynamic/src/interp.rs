@@ -20,7 +20,8 @@ use tcs_xtce::packet::{
 use tcs_xtce_model::dump::Shared;
 use tcs_xtce_model::model::{
     walk, CalCase, Calibrator, Check, Count, Criterion, DynSize, Encoding,
-    Expr, Item, Lit, Local, Node, Num, Order, PathStep, Spec, Term, VType,
+    Expr, Input, Item, Lit, Local, Member, Node, Num, Order, PathStep, Spec,
+    Term, VType,
 };
 
 /// The name the interpreter gives the runtime's helpers for a field: the
@@ -35,9 +36,11 @@ pub enum Val {
     Int(i128),
     /// An integer, or an enumeration's value, of more than 64 bits.
     Big(num_bigint::BigInt),
-    /// A raw value, to be written as it is: not calibrated, and checked
-    /// against its encoding only.
-    Raw(Box<Val>),
+    /// The raw value of an integer encoding, to be written as it is: not
+    /// calibrated, and checked against its encoding only.
+    RawInt(i128),
+    /// The raw value of a float encoding, to be written as it is.
+    RawFloat(f64),
     /// A float.
     Float(f64),
     /// An enumeration's value.
@@ -50,8 +53,9 @@ pub enum Val {
     Bytes(Vec<u8>),
     /// An aggregate's members, in order.
     Agg(Vec<Val>),
-    /// An array's elements, in order.
-    Arr(Vec<Val>),
+    /// An array's elements, and how many of them it holds: the storage
+    /// past them is kept for a later array with more.
+    Arr(Vec<Val>, usize),
 }
 
 /// Why a packet couldn't be decoded or encoded: the runtime's error,
@@ -319,6 +323,32 @@ fn interned(b: &[u8]) -> &'static [u8] {
     k
 }
 
+/// Gives a byte order list that lives as long as the program, as
+/// [`interned`] does, looking for a copy kept before without making one.
+///
+/// # Arguments
+///
+/// * `l` - The significance of each byte.
+///
+/// # Returns
+///
+/// The kept copy.
+fn interned_list(l: &[i64]) -> &'static [u8] {
+    use std::sync::{Mutex, OnceLock};
+    static KEPT: OnceLock<Mutex<Vec<&'static [u8]>>> = OnceLock::new();
+    let mut kept = KEPT.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
+    let same = |k: &[u8]| {
+        k.len() == l.len() && k.iter().zip(l).all(|(a, b)| *a as i64 == *b)
+    };
+    if let Some(k) = kept.iter().find(|k| same(k)) {
+        return k;
+    }
+    let b: Vec<u8> = l.iter().map(|x| *x as u8).collect();
+    let k: &'static [u8] = Box::leak(b.into_boxed_slice());
+    kept.push(k);
+    k
+}
+
 /// Gives the runtime's byte order of an encoding.
 ///
 /// # Arguments
@@ -332,10 +362,7 @@ fn byte_order(o: &Order) -> ByteOrder {
     match o {
         Order::Be => ByteOrder::Big,
         Order::Le => ByteOrder::Little,
-        Order::List(l) => {
-            let b: Vec<u8> = l.iter().map(|x| *x as u8).collect();
-            ByteOrder::List(interned(&b))
-        }
+        Order::List(l) => ByteOrder::List(interned_list(l)),
     }
 }
 
@@ -410,17 +437,64 @@ fn raw_write(
     }
 }
 
-/// Gives a calibrator's polynomial terms as the runtime takes them.
+/// The most polynomial terms or spline points the interpreter converts
+/// on the stack; a calibrator with more is converted on the heap.
+const ON_STACK: usize = 32;
+
+/// Calibrates a raw value with a polynomial, as the runtime does.
 ///
 /// # Arguments
 ///
-/// * `c` - The calibrator.
+/// * `c` - The polynomial.
+/// * `x` - The raw value.
 ///
 /// # Returns
 ///
-/// The terms.
-fn terms(c: &tcs_xtce_model::model::Polynomial) -> Vec<(f64, i32)> {
-    c.terms.iter().map(|(a, e)| (*a, *e as i32)).collect()
+/// The engineering value.
+fn polynomial(c: &tcs_xtce_model::model::Polynomial, x: f64) -> f64 {
+    if c.terms.len() <= ON_STACK {
+        let mut t = [(0.0, 0i32); ON_STACK];
+        for (d, (a, e)) in t.iter_mut().zip(&c.terms) {
+            *d = (*a, *e as i32);
+        }
+        return pk::polynomial(x, &t[..c.terms.len()]);
+    }
+    let t: Vec<(f64, i32)> =
+        c.terms.iter().map(|(a, e)| (*a, *e as i32)).collect();
+    pk::polynomial(x, &t)
+}
+
+/// Calibrates a raw value with a spline whose segments have orders of
+/// their own, as the runtime does.
+///
+/// # Arguments
+///
+/// * `s` - The spline.
+/// * `x` - The raw value.
+///
+/// # Returns
+///
+/// The engineering value.
+///
+/// # Errors
+///
+/// The runtime's, if the spline doesn't cover the value.
+fn spline_orders(s: &tcs_xtce_model::model::Spline, x: f64) -> pk::Result<f64> {
+    if s.orders.len() <= ON_STACK {
+        let mut o = [0u32; ON_STACK];
+        for (d, v) in o.iter_mut().zip(&s.orders) {
+            *d = *v as u32;
+        }
+        return pk::spline_orders(
+            x,
+            &s.points,
+            &o[..s.orders.len()],
+            s.extrapolate,
+            F,
+        );
+    }
+    let o: Vec<u32> = s.orders.iter().map(|v| *v as u32).collect();
+    pk::spline_orders(x, &s.points, &o, s.extrapolate, F)
 }
 /// Converts a value of the packet to a float, as a calibrator or
 /// algorithm takes it.
@@ -527,7 +601,7 @@ fn math_operator(op: &str) -> pk::MathOperator {
 ///
 /// Missing, if a value it reads isn't there; BadSize, if an element it
 /// reads isn't.
-fn math(e: &Expr, x: f64, vals: &Values) -> pk::Result<f64> {
+fn math(e: &Expr, x: f64, vals: &dyn Look) -> pk::Result<f64> {
     Ok(match e {
         Expr::Const(c) => *c,
         Expr::Raw => x,
@@ -535,8 +609,7 @@ fn math(e: &Expr, x: f64, vals: &Values) -> pk::Result<f64> {
             let r = r.get();
             let l = r.local.as_ref().expect("a bound ValueRef");
             let v = vals
-                .get(&l.get().id)
-                .and_then(|v| v.as_ref())
+                .val(l.get().id)
                 .ok_or(PacketError::Missing { field: F })?;
             let (v, _) = reach(v, &l.get().vt(), &r.member)?;
             math_value(v)?
@@ -574,7 +647,7 @@ fn math(e: &Expr, x: f64, vals: &Values) -> pk::Result<f64> {
 /// BadSize, if a criterion reads an element that isn't there.
 fn choose<'c>(
     c: &'c tcs_xtce_model::model::ContextCal,
-    vals: &Values,
+    vals: &dyn Look,
 ) -> pk::Result<Option<&'c Calibrator>> {
     for case in &c.cases {
         let CalCase::Bound(terms, cal) = case else {
@@ -611,16 +684,15 @@ fn choose<'c>(
 ///
 /// The runtime's, if a spline doesn't cover the value; Missing, if a value
 /// a calibrator reads isn't there.
-fn apply(cal: Option<&Calibrator>, x: f64, vals: &Values) -> pk::Result<f64> {
+fn apply(cal: Option<&Calibrator>, x: f64, vals: &dyn Look) -> pk::Result<f64> {
     Ok(match cal {
         None => x,
-        Some(Calibrator::Poly(p)) => pk::polynomial(x, &terms(p)),
+        Some(Calibrator::Poly(p)) => polynomial(p, x),
         Some(Calibrator::Spline(s)) => {
             if s.orders.is_empty() {
                 pk::spline(x, &s.points, s.order as u32, s.extrapolate, F)?
             } else {
-                let o: Vec<u32> = s.orders.iter().map(|o| *o as u32).collect();
-                pk::spline_orders(x, &s.points, &o, s.extrapolate, F)?
+                spline_orders(s, x)?
             }
         }
         Some(Calibrator::Math(m)) => math(&m.expr, x, vals)?,
@@ -645,7 +717,11 @@ fn apply(cal: Option<&Calibrator>, x: f64, vals: &Values) -> pk::Result<f64> {
 ///
 /// NotInvertible, if the calibrator can't be inverted; the runtime's, if
 /// a spline doesn't cover the value.
-fn invert(cal: Option<&Calibrator>, y: f64, vals: &Values) -> pk::Result<f64> {
+fn invert(
+    cal: Option<&Calibrator>,
+    y: f64,
+    vals: &dyn Look,
+) -> pk::Result<f64> {
     match cal {
         None => Ok(y),
         Some(Calibrator::Poly(p)) => {
@@ -659,9 +735,8 @@ fn invert(cal: Option<&Calibrator>, y: f64, vals: &Values) -> pk::Result<f64> {
             Ok(pk::polynomial_inverse(y, intercept, slope))
         }
         Some(Calibrator::Spline(s)) => {
-            let cal: Vec<f64> = s.points.iter().map(|p| p.1).collect();
-            let inc = cal.windows(2).all(|w| w[0] < w[1]);
-            let dec = cal.windows(2).all(|w| w[0] > w[1]);
+            let inc = s.points.windows(2).all(|w| w[0].1 < w[1].1);
+            let dec = s.points.windows(2).all(|w| w[0].1 > w[1].1);
             if s.order != 1 || !s.orders.is_empty() || !(inc || dec) {
                 return Err(PacketError::NotInvertible { field: F });
             }
@@ -689,7 +764,7 @@ fn invert(cal: Option<&Calibrator>, y: f64, vals: &Values) -> pk::Result<f64> {
 /// # Errors
 ///
 /// As [`apply`]'s.
-fn calibrate(vt: &VType, x: f64, vals: &Values) -> pk::Result<f64> {
+fn calibrate(vt: &VType, x: f64, vals: &dyn Look) -> pk::Result<f64> {
     apply(vt.calibrator.as_ref(), x, vals)
 }
 
@@ -708,7 +783,7 @@ fn calibrate(vt: &VType, x: f64, vals: &Values) -> pk::Result<f64> {
 /// # Errors
 ///
 /// As [`invert`]'s.
-fn uncalibrate(vt: &VType, y: f64, vals: &Values) -> pk::Result<f64> {
+fn uncalibrate(vt: &VType, y: f64, vals: &dyn Look) -> pk::Result<f64> {
     invert(vt.calibrator.as_ref(), y, vals)
 }
 
@@ -800,11 +875,12 @@ fn lsb_bytes(vt: &VType) -> bool {
 /// # Errors
 ///
 /// BadSize, if the value isn't there, or an element it reads isn't.
-fn source(d: &DynSize, vals: &Values, inner: Inner<'_>) -> pk::Result<f64> {
+fn source(d: &DynSize, vals: &dyn Look, inner: Inner<'_>) -> pk::Result<f64> {
     if let Some(m) = &d.member {
         // A member's size from an earlier member of its aggregate.
-        return match inner.iter().find(|x| &x.0 == m) {
-            Some((_, Val::Int(i))) => Ok(*i as f64),
+        let i = inner.0.iter().position(|x| &x.ident == m);
+        return match i.and_then(|i| inner.1.get(i)) {
+            Some(Val::Int(i)) => Ok(*i as f64),
             _ => Err(PacketError::BadSize { field: F }),
         };
     }
@@ -825,8 +901,7 @@ fn source(d: &DynSize, vals: &Values, inner: Inner<'_>) -> pk::Result<f64> {
     }
     let l = d.local.as_ref().expect("a bound DynSize");
     let v = vals
-        .get(&l.get().id)
-        .and_then(|v| v.as_ref())
+        .val(l.get().id)
         .ok_or(PacketError::BadSize { field: F })?;
     let (x, _) = reach(v, &l.get().vt(), &d.path)?;
     Ok(match x {
@@ -855,7 +930,11 @@ fn source(d: &DynSize, vals: &Values, inner: Inner<'_>) -> pk::Result<f64> {
 /// # Errors
 ///
 /// BadSize, if it isn't a size the DynSize allows.
-fn size_of(d: &DynSize, vals: &Values, inner: Inner<'_>) -> pk::Result<usize> {
+fn size_of(
+    d: &DynSize,
+    vals: &dyn Look,
+    inner: Inner<'_>,
+) -> pk::Result<usize> {
     let x = source(d, vals, inner)?;
     let n = pk::dynamic_size(
         x,
@@ -884,7 +963,7 @@ fn size_of(d: &DynSize, vals: &Values, inner: Inner<'_>) -> pk::Result<usize> {
 /// # Errors
 ///
 /// As [`size_of`]'s.
-fn count_of(c: &Count, vals: &Values, inner: Inner<'_>) -> pk::Result<i64> {
+fn count_of(c: &Count, vals: &dyn Look, inner: Inner<'_>) -> pk::Result<i64> {
     match c {
         Count::Int(n) => Ok(*n),
         Count::Dyn(d) => Ok(size_of(d, vals, inner)? as i64),
@@ -905,9 +984,12 @@ fn count_of(c: &Count, vals: &Values, inner: Inner<'_>) -> pk::Result<i64> {
 /// # Errors
 ///
 /// As [`size_of`]'s.
-fn span(sp: &tcs_xtce_model::model::Span, vals: &Values) -> pk::Result<usize> {
-    let count = count_of(&sp.count, vals, &[])? as usize;
-    let gap = count_of(&sp.gap, vals, &[])? as usize;
+fn span(
+    sp: &tcs_xtce_model::model::Span,
+    vals: &dyn Look,
+) -> pk::Result<usize> {
+    let count = count_of(&sp.count, vals, OUTER)? as usize;
+    let gap = count_of(&sp.gap, vals, OUTER)? as usize;
     Ok(pk::span_bits(count, sp.each as usize, gap))
 }
 
@@ -928,9 +1010,9 @@ fn span(sp: &tcs_xtce_model::model::Span, vals: &Values) -> pk::Result<usize> {
 /// As [`size_of`]'s.
 fn seek_offset(
     s: &tcs_xtce_model::model::Seek,
-    vals: &Values,
+    vals: &dyn Look,
 ) -> pk::Result<i64> {
-    let mut off = count_of(&s.offset, vals, &[])? - s.back;
+    let mut off = count_of(&s.offset, vals, OUTER)? - s.back;
     if let Some(sp) = &s.span {
         off -= span(sp, vals)? as i64;
     }
@@ -953,7 +1035,7 @@ fn seek_offset(
 /// As [`size_of`]'s.
 fn tail_back(
     t: &tcs_xtce_model::model::TailSeek,
-    vals: &Values,
+    vals: &dyn Look,
 ) -> pk::Result<usize> {
     let mut back = t.back as usize;
     if let Some(sp) = &t.span {
@@ -994,51 +1076,59 @@ fn round_int(vt: &VType, y: f64) -> pk::Result<i128> {
 
 // --- decoding ----------------------------------------------------------
 
-/// Reads one value.
+/// Storage a decoding reuses: a string's bytes as they are on the wire,
+/// and the text of a boolean encoded as a string.
+#[derive(Debug, Clone, Default)]
+pub struct Bufs {
+    /// A string's bytes as they are on the wire.
+    pub wire: Vec<u8>,
+    /// The text of a boolean encoded as a string.
+    pub text: String,
+}
+
+/// Reads one value into its storage, which keeps the room it has.
 ///
 /// # Arguments
 ///
 /// * `r`     - The reader.
 /// * `vt`    - Its type.
+/// * `dst`   - Its storage: a value of its type, as [`template`] makes it.
 /// * `vals`  - The values of the packet so far, which sizes come from.
 /// * `inner` - The members of the aggregate the value is in, which a member's
 ///             size may come from.
-///
-/// # Returns
-///
-/// The value.
+/// * `bufs`  - Storage the decoding reuses.
 ///
 /// # Errors
 ///
 /// The runtime's.
-fn read_val(
+fn read_into(
     r: &mut BitReader<'_>,
     vt: &VType,
-    vals: &Values,
+    dst: &mut Val,
+    vals: &dyn Look,
     inner: Inner<'_>,
-) -> pk::Result<Val> {
+    bufs: &mut Bufs,
+) -> pk::Result<()> {
     if lsb_bytes(vt) {
         r.set_lsb(true);
-        let v = read_plain(r, vt, vals, inner);
+        let v = read_plain(r, vt, dst, vals, inner, bufs);
         r.set_lsb(false);
         return v;
     }
-    read_plain(r, vt, vals, inner)
+    read_plain(r, vt, dst, vals, inner, bufs)
 }
 
-/// Reads one value, in the reader's usual bit order.
+/// Reads one value into its storage, in the reader's usual bit order.
 ///
 /// # Arguments
 ///
 /// * `r`     - The reader.
 /// * `vt`    - Its type.
+/// * `dst`   - Its storage.
 /// * `vals`  - The values of the packet so far, which sizes come from.
 /// * `inner` - The members of the aggregate the value is in, which a member's
 ///             size may come from.
-///
-/// # Returns
-///
-/// The value.
+/// * `bufs`  - Storage the decoding reuses.
 ///
 /// # Errors
 ///
@@ -1046,37 +1136,60 @@ fn read_val(
 fn read_plain(
     r: &mut BitReader<'_>,
     vt: &VType,
-    vals: &Values,
+    dst: &mut Val,
+    vals: &dyn Look,
     inner: Inner<'_>,
-) -> pk::Result<Val> {
+    bufs: &mut Bufs,
+) -> pk::Result<()> {
     match &vt.enc {
         Encoding::Aggregate(e) => {
+            if !matches!(dst, Val::Agg(_)) {
+                *dst = template(vt);
+            }
+            let Val::Agg(ms) = dst else {
+                unreachable!("an aggregate")
+            };
             // Each member's size may come from those before it.
-            let mut got: Vec<(String, Val)> = Vec::new();
-            for m in &e.members {
+            for (i, m) in e.members.iter().enumerate() {
                 if m.skip != 0 {
                     r.pad(m.skip as usize, F)?;
                 }
-                let x = read_val(r, &m.vtype, vals, &got)?;
-                got.push((m.ident.clone(), x));
+                let (done, rest) = ms.split_at_mut(i);
+                read_into(
+                    r,
+                    &m.vtype,
+                    &mut rest[0],
+                    vals,
+                    (&e.members, done),
+                    bufs,
+                )?;
             }
             if e.pad != 0 {
                 r.pad(e.pad as usize, F)?;
             }
-            let copy = Val::Agg(got.into_iter().map(|g| g.1).collect());
-            copy_checks(e, &copy)?;
-            Ok(copy)
+            copy_checks(e, dst, vals)
         }
         Encoding::Array(e) => {
-            let n = count_of(&e.count, vals, inner)?;
-            let mut out = Vec::new();
-            for i in 0..n {
+            let n = count_of(&e.count, vals, inner)? as usize;
+            if !matches!(dst, Val::Arr(..)) {
+                *dst = template(vt);
+            }
+            let Val::Arr(es, used) = dst else {
+                unreachable!("an array")
+            };
+            // Room for the most elements its count allows was made with the
+            // storage; more is made only if the count is past them.
+            while es.len() < n {
+                es.push(template(&e.elem));
+            }
+            *used = n;
+            for (i, x) in es.iter_mut().take(n).enumerate() {
                 if i > 0 && !matches!(e.gap, Count::Int(0)) {
                     r.skip(count_of(&e.gap, vals, inner)?, F)?;
                 }
-                out.push(read_val(r, &e.elem, vals, inner)?);
+                read_into(r, &e.elem, x, vals, inner, bufs)?;
             }
-            Ok(Val::Arr(out))
+            Ok(())
         }
         Encoding::Int(e) if e.bits > 64 => {
             let w = crate::wide::Wide {
@@ -1087,26 +1200,22 @@ fn read_plain(
                 bcd: bcd(&e.encoding),
                 signed: vt.signed(),
             };
-            if vt.kind == "float" {
+            *dst = if vt.kind == "float" {
                 let x = crate::wide::read_f64(r, w)?;
-                return Ok(Val::Float(calibrate(vt, x, vals)?));
-            }
-            if vt.kind == "int" && vt.calibrator.is_some() {
+                Val::Float(calibrate(vt, x, vals)?)
+            } else if vt.kind == "int" && vt.calibrator.is_some() {
                 let y = calibrate(vt, crate::wide::read_f64(r, w)?, vals)?;
-                return Ok(Val::Int(round_int(vt, y)?));
-            }
-            if vt.kind == "bool" {
+                Val::Int(round_int(vt, y)?)
+            } else if vt.kind == "bool" {
                 // A bit more than the field, so that it stays positive.
                 let n = ((e.bits + 8) / 8) as usize;
                 let w = crate::wide::Wide { signed: false, ..w };
                 let x = crate::wide::read(r, w, n)?;
-                return Ok(Val::Bool(x != num_bigint::BigInt::from(0)));
-            }
-            Ok(Val::Big(crate::wide::read(
-                r,
-                w,
-                (vt.width() / 8) as usize,
-            )?))
+                Val::Bool(x != num_bigint::BigInt::from(0))
+            } else {
+                Val::Big(crate::wide::read(r, w, (vt.width() / 8) as usize)?)
+            };
+            Ok(())
         }
         Encoding::Int(e) => {
             let bits = e.bits as u32;
@@ -1115,7 +1224,7 @@ fn read_plain(
                 raw = pk::bcd_decode(raw, bits, packed, F)?;
             }
             let enc = int_enc(vt);
-            Ok(match vt.kind.as_str() {
+            *dst = match vt.kind.as_str() {
                 "int" if vt.calibrator.is_some() => {
                     let y =
                         calibrate(vt, pk::int_to_f64(raw, bits, enc), vals)?;
@@ -1135,7 +1244,8 @@ fn read_plain(
                     pk::int_to_f64(raw, bits, enc),
                     vals,
                 )?),
-            })
+            };
+            Ok(())
         }
         Encoding::Float(e) => {
             let raw = raw_read(r, e.bits, &e.order, e.lsb)?;
@@ -1144,7 +1254,8 @@ fn read_plain(
             } else {
                 pk::float_decode(float_format(&e.fmt), e.bits as u32, raw, F)?
             };
-            Ok(Val::Float(calibrate(vt, x, vals)?))
+            *dst = Val::Float(calibrate(vt, x, vals)?);
+            Ok(())
         }
         Encoding::Binary(e) => {
             let most = (e.bits / 8) as usize;
@@ -1158,43 +1269,332 @@ fn read_plain(
                     None => most,
                 }
             };
-            let b = r.bytes(n, F)?;
             if vt.kind == "string" {
-                Ok(Val::Str(pk::string_from_bytes(b, F)?))
+                r.bytes_reuse(n, &mut bufs.wire, F)?;
+                let text = std::str::from_utf8(&bufs.wire)
+                    .map_err(|_| PacketError::InvalidString { field: F })?;
+                if !matches!(dst, Val::Str(_)) {
+                    *dst = template(vt);
+                }
+                let Val::Str(s) = dst else {
+                    unreachable!("a string")
+                };
+                s.clear();
+                s.push_str(text);
             } else {
-                Ok(Val::Bytes(b))
+                if !matches!(dst, Val::Bytes(_)) {
+                    *dst = template(vt);
+                }
+                let Val::Bytes(b) = dst else {
+                    unreachable!("binary")
+                };
+                r.bytes_reuse(n, b, F)?;
             }
+            Ok(())
         }
         Encoding::String(e) => {
             let sp = match &e.dyn_ {
                 Some(d) => spec(e).sized(size_of(d, vals, inner)?),
                 None => spec(e),
             };
-            let s = pk::read_string(r, &sp, F)?;
             if vt.kind == "bool" {
-                if s == vt.one_string {
-                    Ok(Val::Bool(true))
-                } else if s == vt.zero_string {
-                    Ok(Val::Bool(false))
+                pk::read_string_into(
+                    r,
+                    &sp,
+                    &mut bufs.wire,
+                    &mut bufs.text,
+                    F,
+                )?;
+                *dst = if bufs.text == vt.one_string {
+                    Val::Bool(true)
+                } else if bufs.text == vt.zero_string {
+                    Val::Bool(false)
                 } else {
-                    Err(PacketError::OutOfRange { field: F })
-                }
-            } else {
-                Ok(Val::Str(s))
+                    return Err(PacketError::OutOfRange { field: F });
+                };
+                return Ok(());
             }
+            if !matches!(dst, Val::Str(_)) {
+                *dst = template(vt);
+            }
+            let Val::Str(s) = dst else {
+                unreachable!("a string")
+            };
+            pk::read_string_into(r, &sp, &mut bufs.wire, s, F)
         }
         Encoding::Xform(_) => unreachable!("a supported type"),
     }
 }
 
-/// The values of a packet being decoded or encoded, by the number of the
-/// Local that holds each; `None` for one that is absent.
-type Values = HashMap<i64, Option<Val>>;
+/// Makes storage for a value of a type, with the room its largest value
+/// needs: a string's or binary value's most bytes, and an array's most
+/// elements.
+///
+/// # Arguments
+///
+/// * `vt` - The type.
+///
+/// # Returns
+///
+/// The storage, holding a value of the type.
+pub fn template(vt: &VType) -> Val {
+    match &vt.enc {
+        Encoding::Aggregate(e) => {
+            Val::Agg(e.members.iter().map(|m| template(&m.vtype)).collect())
+        }
+        Encoding::Array(e) => {
+            let most = if !e.shape.is_empty() {
+                e.shape.iter().product::<i64>() as usize
+            } else {
+                match &e.count {
+                    Count::Dyn(d) => d.max.max(0) as usize,
+                    Count::Int(n) => *n as usize,
+                }
+            };
+            Val::Arr((0..most).map(|_| template(&e.elem)).collect(), 0)
+        }
+        _ => match vt.kind.as_str() {
+            "string" => Val::Str(String::with_capacity(str_cap(vt))),
+            "binary" => Val::Bytes(Vec::with_capacity(bytes_cap(vt))),
+            "float" => Val::Float(0.0),
+            "enum" if vt.wide() => Val::Big(num_bigint::BigInt::from(0)),
+            "enum" => Val::Enum(0),
+            "bool" => Val::Bool(false),
+            _ if vt.wide() => Val::Big(num_bigint::BigInt::from(0)),
+            _ => Val::Int(0),
+        },
+    }
+}
 
-/// The members of the aggregate being decoded or encoded, by identifier,
-/// those decoded so far when decoding: a member's size may come from one
-/// before it.
-type Inner<'a> = &'a [(String, Val)];
+/// Gives the most bytes a binary value of a type holds.
+///
+/// # Arguments
+///
+/// * `vt` - The type.
+///
+/// # Returns
+///
+/// The bytes.
+fn bytes_cap(vt: &VType) -> usize {
+    match &vt.enc {
+        Encoding::Binary(e) => (e.bits / 8).max(0) as usize,
+        _ => 0,
+    }
+}
+
+/// Gives the most bytes of UTF-8 a string field's storage must hold, as
+/// the code generated for a mission gives it room for.
+///
+/// # Arguments
+///
+/// * `vt` - The type of a string field, or of a boolean encoded as a
+///          string, or of a string encoded as binary.
+///
+/// # Returns
+///
+/// The bytes.
+pub fn str_cap(vt: &VType) -> usize {
+    let e = match &vt.enc {
+        Encoding::String(e) => e,
+        Encoding::Binary(e) => return (e.bits / 8).max(0) as usize,
+        _ => return 0,
+    };
+    let wire = (match (e.fixed_bits, &e.dyn_) {
+        (Some(f), None) => f,
+        _ => e.max_bits,
+    } / 8)
+        .max(0) as usize;
+    match e.charset.as_str() {
+        "UTF-8" | "US-ASCII" => {
+            tcs_xtce_model::text::wire_cap(vt).max(0) as usize
+        }
+        "ISO-8859-1" => 2 * wire,
+        "Windows-1252" => 3 * wire,
+        cs if cs.contains("16") => (3 * wire).div_ceil(2),
+        _ => wire,
+    }
+}
+
+/// Gives the values of a packet being decoded or encoded, by the number
+/// of the Local that holds each.
+pub trait Look {
+    /// Gives a value.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The number of its Local.
+    ///
+    /// # Returns
+    ///
+    /// The value, or `None` if it is absent.
+    fn val(&self, id: i64) -> Option<&Val>;
+}
+
+/// The values of a packet being decoded or encoded, by the number of the
+/// Local that holds each, in storage made once for the mission and
+/// reused: each value keeps the room its type's largest value needs.
+#[derive(Debug, Clone)]
+pub struct Values {
+    /// Each Local's value, or what it last held.
+    v: Vec<Val>,
+    /// Whether each Local has a value in this packet.
+    here: Vec<bool>,
+}
+
+/// Copies storage, keeping the room each string, binary value and array
+/// has: a clone keeps only what it holds.
+///
+/// # Arguments
+///
+/// * `v` - The storage.
+///
+/// # Returns
+///
+/// A copy with the same room.
+pub fn fresh(v: &Val) -> Val {
+    match v {
+        Val::Str(s) => {
+            let mut c = String::with_capacity(s.capacity());
+            c.push_str(s);
+            Val::Str(c)
+        }
+        Val::Bytes(b) => {
+            let mut c = Vec::with_capacity(b.capacity());
+            c.extend_from_slice(b);
+            Val::Bytes(c)
+        }
+        Val::Agg(ms) => Val::Agg(ms.iter().map(fresh).collect()),
+        Val::Arr(es, n) => Val::Arr(es.iter().map(fresh).collect(), *n),
+        x => x.clone(),
+    }
+}
+
+impl Values {
+    /// Makes storage for values like some others, with the same room.
+    ///
+    /// # Arguments
+    ///
+    /// * `v` - Each Local's storage as it starts.
+    ///
+    /// # Returns
+    ///
+    /// The storage, every value absent.
+    pub fn like(v: &[Val]) -> Self {
+        Self::new(v.iter().map(fresh).collect())
+    }
+
+    /// Makes storage for values.
+    ///
+    /// # Arguments
+    ///
+    /// * `v` - Each Local's value as it starts: one with the room its type's
+    ///         largest value needs.
+    ///
+    /// # Returns
+    ///
+    /// The storage, every value absent.
+    pub fn new(v: Vec<Val>) -> Self {
+        let here = vec![false; v.len()];
+        Values { v, here }
+    }
+
+    /// Takes a value's storage out, to fill it in place.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The number of its Local.
+    ///
+    /// # Returns
+    ///
+    /// The storage, which [`Values::put`] puts back.
+    pub fn take(&mut self, id: i64) -> Val {
+        std::mem::replace(&mut self.v[id as usize], Val::Bool(false))
+    }
+
+    /// Puts a value back, present.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The number of its Local.
+    /// * `x`  - The value.
+    pub fn put(&mut self, id: i64, x: Val) {
+        self.v[id as usize] = x;
+        self.here[id as usize] = true;
+    }
+
+    /// Puts a value's storage back, absent, after filling it failed.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The number of its Local.
+    /// * `x`  - The storage.
+    pub fn restore(&mut self, id: i64, x: Val) {
+        self.v[id as usize] = x;
+        self.here[id as usize] = false;
+    }
+
+    /// Makes a value absent, keeping its storage.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The number of its Local.
+    pub fn absent(&mut self, id: i64) {
+        self.here[id as usize] = false;
+    }
+
+    /// Makes every value absent, keeping their storage.
+    pub fn clear(&mut self) {
+        self.here.fill(false);
+    }
+
+    /// Gives a value's storage, whether it is present or not.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The number of its Local.
+    ///
+    /// # Returns
+    ///
+    /// The storage.
+    pub fn slot_mut(&mut self, id: i64) -> &mut Val {
+        &mut self.v[id as usize]
+    }
+}
+
+impl Look for Values {
+    fn val(&self, id: i64) -> Option<&Val> {
+        self.here[id as usize].then(|| &self.v[id as usize])
+    }
+}
+
+/// Values with one more: the copy of a repeated container that its own
+/// criteria read.
+struct With<'a> {
+    /// The values.
+    base: &'a dyn Look,
+    /// The number of the copy's Local.
+    id: i64,
+    /// The copy.
+    v: &'a Val,
+}
+
+impl Look for With<'_> {
+    fn val(&self, id: i64) -> Option<&Val> {
+        if id == self.id {
+            Some(self.v)
+        } else {
+            self.base.val(id)
+        }
+    }
+}
+
+/// The members of the aggregate being decoded or encoded, and their
+/// values, those decoded so far when decoding: a member's size may come
+/// from one before it.
+type Inner<'a> = (&'a [Member], &'a [Val]);
+
+/// No aggregate: a value of a packet.
+const OUTER: Inner<'static> = (&[], &[]);
 
 /// Follows member and element steps into a value.
 ///
@@ -1237,9 +1637,10 @@ fn reach<'v>(
                 let Encoding::Array(e) = &vt.enc else {
                     unreachable!("an array")
                 };
-                let Val::Arr(es) = v else {
+                let Val::Arr(all, used) = v else {
                     unreachable!("an array value")
                 };
+                let es = &all[..*used];
                 let bad = PacketError::BadSize { field: F };
                 v = if ix.stride != 0 {
                     // An element of an array whose count varies, in a
@@ -1369,7 +1770,7 @@ fn cmp_vals(a: &Val, b: &Val) -> Option<std::cmp::Ordering> {
 /// # Errors
 ///
 /// BadSize, if it reads an element that isn't there.
-fn term(t: &Term, vals: &Values) -> pk::Result<bool> {
+fn term(t: &Term, vals: &dyn Look) -> pk::Result<bool> {
     match t {
         Term::AllOf(a) => {
             for x in &a.get().terms {
@@ -1406,16 +1807,16 @@ fn term(t: &Term, vals: &Values) -> pk::Result<bool> {
 /// # Errors
 ///
 /// BadSize, if it reads an element that isn't there.
-fn criterion(c: &Criterion, vals: &Values) -> pk::Result<bool> {
+fn criterion(c: &Criterion, vals: &dyn Look) -> pk::Result<bool> {
     let lvt = c.local.get().vt();
-    let Some(v) = vals.get(&c.local.get().id).and_then(|v| v.as_ref()) else {
+    let Some(v) = vals.val(c.local.get().id) else {
         // Absent: less than any value.
         return Ok(matches!(c.op.as_str(), "!=" | "<" | "<="));
     };
     let (x, xvt) = reach(v, &lvt, &c.path)?;
     if let Some(o) = &c.other {
         let ovt = o.get().vt();
-        let Some(w) = vals.get(&o.get().id).and_then(|v| v.as_ref()) else {
+        let Some(w) = vals.val(o.get().id) else {
             return Ok(false);
         };
         let (y, _) = reach(w, &ovt, &c.other_path)?;
@@ -1423,6 +1824,31 @@ fn criterion(c: &Criterion, vals: &Values) -> pk::Result<bool> {
     }
     let lit = c.value.as_ref().expect("a literal");
     Ok(holds(&c.op, cmp_lit(x, &xvt, lit)))
+}
+
+/// Checks that one criterion holds.
+///
+/// # Arguments
+///
+/// * `t`         - The criterion.
+/// * `vals`      - The values of the packet.
+/// * `container` - The container it is of, for the error.
+///
+/// # Errors
+///
+/// Mismatch, if it doesn't hold.
+fn require_term(t: &Term, vals: &dyn Look, container: &str) -> CodecResult<()> {
+    if !term(t, vals).map_err(at(container))? {
+        // Its text is made only when it fails.
+        return Err(CodecError {
+            error: PacketError::Mismatch {
+                container: F,
+                criterion: F,
+            },
+            field: format!("{container}: {}", t.text()),
+        });
+    }
+    Ok(())
 }
 
 /// Checks that criteria hold.
@@ -1439,7 +1865,7 @@ fn criterion(c: &Criterion, vals: &Values) -> pk::Result<bool> {
 /// Mismatch, if one doesn't hold.
 fn require(
     terms: &[Term],
-    vals: &Values,
+    vals: &dyn Look,
     container: &str,
     text: &str,
 ) -> CodecResult<()> {
@@ -1527,11 +1953,15 @@ fn checksum_spec(spec: &Spec) -> pk::Checksum {
 /// The start and end of the bits.
 fn region(
     c: &Check,
-    marks: &HashMap<i64, usize>,
+    marks: &[usize],
     pos: usize,
     end: usize,
 ) -> (usize, usize) {
-    let base = if c.start == 0 { 0 } else { marks[&c.start] };
+    let base = if c.start == 0 {
+        0
+    } else {
+        marks[c.start as usize]
+    };
     let shifted = c.skip != 0 && !c.from_end;
     let start = if shifted {
         base + c.skip as usize
@@ -1539,7 +1969,7 @@ fn region(
         base
     };
     let last = match c.end {
-        Some(m) => marks[&m],
+        Some(m) => marks[m as usize],
         None => end,
     };
     let last = if c.from_end {
@@ -1562,6 +1992,7 @@ fn region(
 ///
 /// * `e`    - The aggregate of the copy, which holds the criteria.
 /// * `copy` - The copy.
+/// * `vals` - The values of the packet.
 ///
 /// # Errors
 ///
@@ -1569,16 +2000,20 @@ fn region(
 fn copy_checks(
     e: &tcs_xtce_model::model::AggregateEnc,
     copy: &Val,
+    vals: &dyn Look,
 ) -> pk::Result<()> {
     if e.checks.is_empty() {
         return Ok(());
     }
     let this = e.this.as_ref().expect("the copy's own Local");
-    let mut vals = Values::new();
-    vals.insert(this.get().id, Some(copy.clone()));
+    let with = With {
+        base: vals,
+        id: this.get().id,
+        v: copy,
+    };
     for r in &e.checks {
         for t in &r.criteria {
-            if !term(t, &vals)? {
+            if !term(t, &with)? {
                 return Err(PacketError::Mismatch {
                     container: F,
                     criterion: F,
@@ -1589,26 +2024,266 @@ fn copy_checks(
     Ok(())
 }
 
-/// The state of a decoding.
-struct Dec<'d> {
-    /// The reader.
-    r: BitReader<'d>,
-    /// The values decoded so far.
-    vals: Values,
-    /// The position of each Mark.
-    marks: HashMap<i64, usize>,
-    /// The position of each checksum field.
-    sums: HashMap<i64, usize>,
-    /// The bits read so far of each value read in segments.
-    segs: HashMap<i64, u64>,
-    /// Where the container each length field of an included container
-    /// measures must end, by the field's number.
-    spans: HashMap<i64, i128>,
-    /// The raw value of each calibrated value, by its number.
-    raws: HashMap<i64, Val>,
+/// What the interpreter knows of a mission before it runs anything, made
+/// once: for each node, what it can't run and its length field; for each
+/// Local, the storage its values need and its raw type.
+#[derive(Debug)]
+pub struct Plan {
+    /// One more than the largest number of a Local or Mark.
+    size: usize,
+    /// Each Local's storage, as it starts.
+    templates: Vec<Val>,
+    /// Each calibrated Local's raw type, by its number.
+    raw_types: Vec<Option<Rc<VType>>>,
+    /// Each calibrated Local's raw storage, as it starts.
+    raw_templates: Vec<Val>,
+    /// What each node is, by its address.
+    nodes: HashMap<usize, NodeInfo>,
 }
 
-impl Dec<'_> {
+/// What the interpreter knows of a node.
+#[derive(Debug, Clone)]
+struct NodeInfo {
+    /// What its own criteria use that the interpreter can't run.
+    crit: Option<String>,
+    /// What its own criteria and items, and if it is concrete its checks,
+    /// use that the interpreter can't run.
+    own: Option<String>,
+    /// What it or its bases use that the interpreter can't run.
+    all: Option<String>,
+    /// Its packet length field, for a concrete node.
+    length: Option<Shared<Local>>,
+}
+
+/// Calls a function on each Value item among some items, those inside
+/// conditions and transforms too.
+///
+/// # Arguments
+///
+/// * `items` - The items.
+/// * `f`     - The function.
+fn each_value(items: &[Item], f: &mut dyn FnMut(&Shared<Local>)) {
+    for it in items {
+        match it {
+            Item::Value(v) => f(&v.local),
+            Item::Cond(c) => each_value(&c.items, f),
+            Item::Transform(t) => each_value(&t.get().items, f),
+            _ => {}
+        }
+    }
+}
+
+/// Keeps, once, the string terminators and byte order lists of a type
+/// and those inside it, so that running packets keeps nothing new.
+///
+/// # Arguments
+///
+/// * `vt` - The type.
+fn intern_type(vt: &VType) {
+    match &vt.enc {
+        Encoding::Int(e) => {
+            byte_order(&e.order);
+        }
+        Encoding::Float(e) => {
+            byte_order(&e.order);
+        }
+        Encoding::String(e) => {
+            spec(e);
+        }
+        Encoding::Aggregate(e) => {
+            for m in &e.members {
+                intern_type(&m.vtype);
+            }
+        }
+        Encoding::Array(e) => intern_type(&e.elem),
+        _ => {}
+    }
+}
+
+impl Plan {
+    /// Makes the plan of a mission's nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodes` - Every node of the mission.
+    /// * `size`  - One more than the largest number of a Local or Mark.
+    ///
+    /// # Returns
+    ///
+    /// The plan.
+    pub fn new<'n>(
+        nodes: impl Iterator<Item = &'n Shared<Node>>,
+        size: usize,
+    ) -> Plan {
+        let mut p = Plan {
+            size,
+            templates: vec![Val::Bool(false); size],
+            raw_types: vec![None; size],
+            raw_templates: vec![Val::Bool(false); size],
+            nodes: HashMap::new(),
+        };
+        for n in nodes {
+            let m = n.get();
+            let info = NodeInfo {
+                crit: m
+                    .criteria
+                    .iter()
+                    .find_map(term_unsupported)
+                    .map(|w| format!("{}: {w}", m.key)),
+                own: node_unsupported(n),
+                all: unsupported(n),
+                length: if m.abstract_ { None } else { length_field(n) },
+            };
+            p.nodes.insert(n.addr(), info);
+            each_value(&m.items, &mut |l| {
+                let l = l.get();
+                let vt = l.vt();
+                let id = l.id as usize;
+                intern_type(&vt);
+                p.templates[id] = template(&vt);
+                if calibrated(&vt) {
+                    let rt = Rc::new(raw_type(&vt));
+                    p.raw_templates[id] = template(&rt);
+                    p.raw_types[id] = Some(rt);
+                }
+            });
+        }
+        p
+    }
+
+    /// Gives what the interpreter knows of a node.
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - The node, one of the plan's.
+    ///
+    /// # Returns
+    ///
+    /// What it knows.
+    fn info(&self, n: &Shared<Node>) -> &NodeInfo {
+        &self.nodes[&n.addr()]
+    }
+
+    /// Gives a calibrated Local's raw type.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The Local's number.
+    ///
+    /// # Returns
+    ///
+    /// The type, or `None` for a Local that isn't calibrated.
+    pub fn raw_type(&self, id: i64) -> Option<&Rc<VType>> {
+        self.raw_types[id as usize].as_ref()
+    }
+
+    /// Says what a packet uses that the interpreter can't run.
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - The node, one of the plan's.
+    ///
+    /// # Returns
+    ///
+    /// What it uses, or `None` if it can be decoded and encoded.
+    pub fn unsupported(&self, n: &Shared<Node>) -> Option<&str> {
+        self.info(n).all.as_deref()
+    }
+}
+
+/// Storage that decoding and encoding reuse, made once from a plan: the
+/// values of a packet and their raw values, the positions of its marks,
+/// checksum fields and computed fields, and buffers for strings.
+#[derive(Debug, Clone)]
+pub struct Workspace {
+    /// The values of the packet, by the number of their Locals.
+    pub vals: Values,
+    /// The raw values of its calibrated values.
+    pub raws: Values,
+    /// The position of each Mark.
+    marks: Vec<usize>,
+    /// The position of each checksum field.
+    sums: Vec<usize>,
+    /// The bits read so far of each value read in segments, or its
+    /// encoding when encoding.
+    segs: Vec<u64>,
+    /// Where the container each length field of an included container
+    /// measures must end.
+    spans: Vec<i128>,
+    /// The position of each computed field, when encoding.
+    computed: Vec<usize>,
+    /// Whether each value is a size or count the packet computes from
+    /// what it sizes, when encoding.
+    derived: Vec<bool>,
+    /// Buffers for strings.
+    bufs: Bufs,
+}
+
+impl Workspace {
+    /// Makes the storage for a plan's packets.
+    ///
+    /// # Arguments
+    ///
+    /// * `p` - The plan.
+    ///
+    /// # Returns
+    ///
+    /// The storage.
+    pub fn new(p: &Plan) -> Workspace {
+        let wire = p
+            .templates
+            .iter()
+            .map(|t| match t {
+                Val::Str(s) => s.capacity(),
+                _ => 0,
+            })
+            .max()
+            .unwrap_or(0);
+        Workspace {
+            vals: Values::like(&p.templates),
+            raws: Values::like(&p.raw_templates),
+            marks: vec![0; p.size],
+            sums: vec![0; p.size],
+            segs: vec![0; p.size],
+            spans: vec![0; p.size],
+            computed: vec![0; p.size],
+            derived: vec![false; p.size],
+            bufs: Bufs {
+                wire: Vec::with_capacity(4 * wire + 8),
+                text: String::with_capacity(4 * wire + 8),
+            },
+        }
+    }
+}
+
+/// The state of a decoding.
+struct Dec<'d, 'w> {
+    /// The reader.
+    r: BitReader<'d>,
+    /// The storage.
+    ws: &'w mut Workspace,
+    /// The plan.
+    plan: &'w Plan,
+}
+
+impl Dec<'_, '_> {
+    /// Gives the position of a Mark.
+    ///
+    /// # Arguments
+    ///
+    /// * `m` - The Mark's number; 0 is the packet's start.
+    ///
+    /// # Returns
+    ///
+    /// The position.
+    fn mark(&self, m: i64) -> usize {
+        if m == 0 {
+            0
+        } else {
+            self.ws.marks[m as usize]
+        }
+    }
+
     /// Checks that a check's field holds the checksum of what it covers.
     ///
     /// # Arguments
@@ -1620,25 +2295,24 @@ impl Dec<'_> {
     /// BadChecksum, if it doesn't.
     fn verify(&self, c: &Check) -> CodecResult<()> {
         let l = c.local.get();
-        let name = l.name.clone();
         let Encoding::Int(e) = &l.vt().enc else {
             unreachable!("an integer")
         };
-        let (start, end) =
-            region(c, &self.marks, self.sums[&l.id], self.r.packet_end());
+        let pos = self.ws.sums[l.id as usize];
+        let (start, end) = region(c, &self.ws.marks, pos, self.r.packet_end());
         let x = self
             .r
             .checksum(&checksum_spec(&c.spec), start, end, F)
-            .map_err(at(&name))?;
-        let value = match self.vals.get(&l.id).cloned().flatten() {
-            Some(Val::Int(v)) => Some(v as u64),
+            .map_err(at(&l.name))?;
+        let value = match self.ws.vals.val(l.id) {
+            Some(Val::Int(v)) => Some(*v as u64),
             // A wider field holds the value with zeros above it.
             Some(Val::Big(v)) => v.to_u64(),
             _ => Some(0),
         };
         if l.vt().wide() {
             if Some(x) != value {
-                return Err(at(&name)(PacketError::BadChecksum { field: F }));
+                return Err(at(&l.name)(PacketError::BadChecksum { field: F }));
             }
             return Ok(());
         }
@@ -1649,7 +2323,100 @@ impl Dec<'_> {
             (1u64 << e.bits) - 1
         };
         if x & mask != value {
-            return Err(at(&name)(PacketError::BadChecksum { field: F }));
+            return Err(at(&l.name)(PacketError::BadChecksum { field: F }));
+        }
+        Ok(())
+    }
+
+    /// Reads one value of the packet into its storage.
+    ///
+    /// # Arguments
+    ///
+    /// * `l`         - Its Local.
+    /// * `assembled` - The bits of its encoding if it is assembled from
+    ///                 segments, or 0.
+    ///
+    /// # Errors
+    ///
+    /// The runtime's.
+    fn value(&mut self, l: &Local, assembled: i64) -> CodecResult<()> {
+        let vt = l.vt();
+        let id = l.id;
+        if l.checksum {
+            self.ws.sums[id as usize] = self.r.position();
+        }
+        // A calibrated value's raw value too, from the same bits.
+        let mut raw_r = self.r.clone();
+        let ws = &mut *self.ws;
+        let mut x = ws.vals.take(id);
+        let got = if assembled != 0 {
+            // Decoded from its segments' bits.
+            let mut b = [0u8; 8];
+            let mut r = pk::segment_reader(
+                &mut b,
+                ws.segs[id as usize],
+                assembled as u32,
+            );
+            read_into(&mut r, &vt, &mut x, &ws.vals, OUTER, &mut ws.bufs)
+        } else {
+            read_into(&mut self.r, &vt, &mut x, &ws.vals, OUTER, &mut ws.bufs)
+        };
+        if let Err(e) = got {
+            ws.vals.restore(id, x);
+            return Err(at(&l.name)(e));
+        }
+        if let Some(rt) = &self.plan.raw_types[id as usize] {
+            let mut raw = ws.raws.take(id);
+            let got = if assembled != 0 {
+                let mut b = [0u8; 8];
+                let mut r = pk::segment_reader(
+                    &mut b,
+                    ws.segs[id as usize],
+                    assembled as u32,
+                );
+                read_into(&mut r, rt, &mut raw, &ws.vals, OUTER, &mut ws.bufs)
+            } else {
+                read_into(
+                    &mut raw_r,
+                    rt,
+                    &mut raw,
+                    &ws.vals,
+                    OUTER,
+                    &mut ws.bufs,
+                )
+            };
+            match got {
+                Ok(()) => ws.raws.put(id, raw),
+                Err(e) => {
+                    ws.raws.restore(id, raw);
+                    ws.vals.restore(id, x);
+                    return Err(at(&l.name)(e));
+                }
+            }
+        }
+        let n = match &x {
+            Val::Int(n) => Some(*n as u64),
+            // A wider field must hold a length a u64 holds.
+            Val::Big(n) => match n.to_u64() {
+                Some(n) => Some(n),
+                None if l.length.is_some() => {
+                    ws.vals.restore(id, x);
+                    return Err(at(&l.name)(PacketError::BadLength {
+                        field: F,
+                    }));
+                }
+                None => None,
+            },
+            _ => None,
+        };
+        ws.vals.put(id, x);
+        if let (Some(adj), Some(n)) = (l.length, n) {
+            if l.measures {
+                let e = self.r.span_end(n, adj, F).map_err(at(&l.name))?;
+                self.ws.spans[id as usize] = e;
+            } else {
+                self.r.limit(n, adj, F).map_err(at(&l.name))?;
+            }
         }
         Ok(())
     }
@@ -1668,11 +2435,12 @@ impl Dec<'_> {
         for it in items {
             match it {
                 Item::Seek(s) => {
-                    let off = seek_offset(s, &self.vals).map_err(at(where_))?;
+                    let off =
+                        seek_offset(s, &self.ws.vals).map_err(at(where_))?;
                     match s.from_start {
                         None => self.r.skip(off, F),
                         Some(m) => {
-                            let at_ = if m == 0 { 0 } else { self.marks[&m] };
+                            let at_ = self.mark(m);
                             if s.ahead {
                                 self.r.seek_ahead(at_, off, F)
                             } else {
@@ -1683,7 +2451,7 @@ impl Dec<'_> {
                     .map_err(at(where_))?;
                 }
                 Item::Mark(m) => {
-                    self.marks.insert(m.id, self.r.position());
+                    self.ws.marks[m.id as usize] = self.r.position()
                 }
                 Item::Pad(p) => {
                     self.r.pad(p.bits as usize, F).map_err(at(where_))?
@@ -1692,17 +2460,12 @@ impl Dec<'_> {
                     self.r.uint(f.bits as u32, F).map_err(at(where_))?;
                 }
                 Item::Require(q) => {
-                    require(&q.criteria, &self.vals, &q.container, &q.text)?
+                    require(&q.criteria, &self.ws.vals, &q.container, &q.text)?
                 }
                 Item::Fill(f) => {
-                    let n = count_of(&f.size, &self.vals, &[])
+                    let n = count_of(&f.size, &self.ws.vals, OUTER)
                         .map_err(at(&f.container))?;
-                    let start = if f.start == 0 {
-                        0
-                    } else {
-                        self.marks[&f.start]
-                    };
-                    let e = start + n as usize;
+                    let e = self.mark(f.start) + n as usize;
                     if self.r.position() > e {
                         return Err(at(&f.container)(PacketError::BadSize {
                             field: F,
@@ -1713,18 +2476,18 @@ impl Dec<'_> {
                 }
                 Item::Verify(v) => self.verify(&v.check.get())?,
                 Item::TailSeek(t) => {
-                    let back = tail_back(t, &self.vals).map_err(at(where_))?;
+                    let back =
+                        tail_back(t, &self.ws.vals).map_err(at(where_))?;
                     self.r.seek_end(back, F).map_err(at(where_))?;
                 }
                 // The packet's last bits, which encoding fills with zeros.
                 Item::TailPad(t) => {
-                    self.r.skip(t.bits, F).map_err(at(where_))?;
+                    self.r.skip(t.bits, F).map_err(at(where_))?
                 }
                 Item::LengthEnd(e) => {
                     let l = e.local.get();
-                    self.r
-                        .check_span(self.spans[&l.id], F)
-                        .map_err(at(&l.name))?;
+                    let end = self.ws.spans[l.id as usize];
+                    self.r.check_span(end, F).map_err(at(&l.name))?;
                 }
                 Item::Segment(g) => {
                     let g = g.get();
@@ -1732,90 +2495,18 @@ impl Dec<'_> {
                     let bits =
                         self.r.uint(g.bits as u32, F).map_err(at(&l.name))?;
                     let part = bits << g.shift;
-                    let s = if g.first {
+                    let i = l.id as usize;
+                    self.ws.segs[i] = if g.first {
                         part
                     } else {
-                        self.segs[&l.id] | part
+                        self.ws.segs[i] | part
                     };
-                    self.segs.insert(l.id, s);
                 }
-                Item::Value(v) => {
-                    let l = v.local.get();
-                    let vt = l.vt();
-                    if l.checksum {
-                        self.sums.insert(l.id, self.r.position());
-                    }
-                    // A calibrated value's raw value too, from the same
-                    // bits.
-                    let mut raw_r = self.r.clone();
-                    let x = if v.assembled != 0 {
-                        // Decoded from its segments' bits.
-                        let mut b = [0u8; 8];
-                        let mut r = pk::segment_reader(
-                            &mut b,
-                            self.segs[&l.id],
-                            v.assembled as u32,
-                        );
-                        read_val(&mut r, &vt, &self.vals, &[])
-                    } else {
-                        read_val(&mut self.r, &vt, &self.vals, &[])
-                    }
-                    .map_err(at(&l.name))?;
-                    if calibrated(&vt) {
-                        let rt = raw_type(&vt);
-                        let raw = if v.assembled != 0 {
-                            let mut b = [0u8; 8];
-                            let mut r = pk::segment_reader(
-                                &mut b,
-                                self.segs[&l.id],
-                                v.assembled as u32,
-                            );
-                            read_val(&mut r, &rt, &self.vals, &[])
-                        } else {
-                            read_val(&mut raw_r, &rt, &self.vals, &[])
-                        }
-                        .map_err(at(&l.name))?;
-                        self.raws.insert(l.id, raw);
-                    }
-                    let n = match &x {
-                        Val::Int(n) => Some(*n as u64),
-                        // A wider field must hold a length a u64 holds.
-                        Val::Big(n) => match n.to_u64() {
-                            Some(n) => Some(n),
-                            None if l.length.is_some() => {
-                                return Err(at(&l.name)(
-                                    PacketError::BadLength { field: F },
-                                ))
-                            }
-                            None => None,
-                        },
-                        _ => None,
-                    };
-                    if let (Some(adj), Some(n)) = (l.length, n) {
-                        let n = &(n as i128);
-                        if l.measures {
-                            let e = self
-                                .r
-                                .span_end(*n as u64, adj, F)
-                                .map_err(at(&l.name))?;
-                            self.spans.insert(l.id, e);
-                        } else {
-                            self.r
-                                .limit(*n as u64, adj, F)
-                                .map_err(at(&l.name))?;
-                        }
-                    }
-                    self.vals.insert(l.id, Some(x));
-                }
+                Item::Value(v) => self.value(&v.local.get(), v.assembled)?,
                 Item::Cond(c) => {
-                    for x in walk(&c.items, true) {
-                        if let Item::Value(v) = x {
-                            self.vals.entry(v.local.get().id).or_insert(None);
-                        }
-                    }
                     let mut ok = true;
                     for t in &c.criteria {
-                        if !term(t, &self.vals).map_err(at(where_))? {
+                        if !term(t, &self.ws.vals).map_err(at(where_))? {
                             ok = false;
                             break;
                         }
@@ -1830,7 +2521,8 @@ impl Dec<'_> {
         Ok(())
     }
 
-    /// Ends the decoding of a concrete packet: its length field's check.
+    /// Ends the decoding of a concrete packet: its length field's check,
+    /// then its checks.
     ///
     /// # Arguments
     ///
@@ -1838,15 +2530,37 @@ impl Dec<'_> {
     ///
     /// # Errors
     ///
-    /// BadLength, if the packet length field disagrees with the packet.
+    /// BadLength, if the packet length field disagrees with the packet;
+    /// BadChecksum, if a check fails.
     fn finish(&self, n: &Shared<Node>) -> CodecResult<()> {
-        if let Some(l) = length_field(n) {
+        if let Some(l) = &self.plan.info(n).length {
             self.r.finish(F).map_err(at(&l.get().name))?;
         }
         for c in &n.get().checks {
             self.verify(&c.get())?;
         }
         Ok(())
+    }
+
+    /// Reads the entries of a node's bases and then its own, each node's
+    /// criteria checked first.
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - The node.
+    ///
+    /// # Errors
+    ///
+    /// The runtime's, or Mismatch if criteria don't hold.
+    fn chain(&mut self, n: &Shared<Node>) -> CodecResult<()> {
+        let m = n.get();
+        if let Some(b) = &m.base {
+            self.chain(b)?;
+        }
+        for c in &m.criteria {
+            require_term(c, &self.ws.vals, &m.key)?;
+        }
+        self.items(&m.items, &m.key)
     }
 }
 
@@ -1871,58 +2585,63 @@ fn length_field(n: &Shared<Node>) -> Option<Shared<Local>> {
         })
 }
 
-/// A decoded packet: its node, and the value of each of its fields, in
-/// the order of the node's `fields`.
+/// A decoded packet: its node and the bytes it took. Its values are in
+/// the workspace it was decoded into.
 #[derive(Debug, Clone)]
 pub struct Decoded {
     /// The concrete packet decoded.
     pub node: Shared<Node>,
-    /// Each field's value; `None` for one that is absent.
-    pub fields: Vec<Option<Val>>,
-    /// Each field's raw value, as its [`raw_type`] reads it, where the
-    /// field's type has a calibrator; `None` elsewhere.
-    pub raws: Vec<Option<Val>>,
     /// The bytes it took.
     pub used: usize,
 }
 
-/// Gives the fields of a decoded packet.
+/// Gives a calibrated Local's raw type.
 ///
 /// # Arguments
 ///
-/// * `n`    - The packet.
-/// * `d`    - The decoding.
+/// * `plan` - The plan.
+/// * `id`   - The Local's number.
 ///
 /// # Returns
 ///
-/// The decoded packet.
-fn decoded(n: &Shared<Node>, d: &Dec<'_>) -> Decoded {
-    let fields = n
-        .get()
-        .fields
-        .iter()
-        .map(|(_, l)| d.vals.get(&l.get().id).cloned().flatten())
-        .collect();
-    let raws = n
-        .get()
-        .fields
-        .iter()
-        .map(|(_, l)| d.raws.get(&l.get().id).cloned())
-        .collect();
-    Decoded {
-        node: n.clone(),
-        fields,
-        raws,
-        used: d.r.used(),
-    }
+/// The type, or `None` for a Local that isn't calibrated.
+pub fn raw_type_of(plan: &Plan, id: i64) -> Option<Rc<VType>> {
+    plan.raw_type(id).cloned()
 }
 
-/// Decodes a concrete packet.
+/// Starts a decoding.
 ///
 /// # Arguments
 ///
-/// * `n`    - The packet, which [`unsupported`] accepts.
+/// * `data` - The bytes.
+/// * `plan` - The plan.
+/// * `ws`   - The storage, whose values are all made absent.
+///
+/// # Returns
+///
+/// The decoding.
+fn start<'d, 'w>(
+    data: &'d [u8],
+    plan: &'w Plan,
+    ws: &'w mut Workspace,
+) -> Dec<'d, 'w> {
+    ws.vals.clear();
+    ws.raws.clear();
+    Dec {
+        r: BitReader::new(data),
+        ws,
+        plan,
+    }
+}
+
+/// Decodes a concrete packet into a workspace.
+///
+/// # Arguments
+///
+/// * `n`    - The packet, which the plan says it can run.
 /// * `data` - Its bytes.
+/// * `plan` - The plan.
+/// * `ws`   - Where its values go.
 ///
 /// # Returns
 ///
@@ -1931,35 +2650,31 @@ fn decoded(n: &Shared<Node>, d: &Dec<'_>) -> Decoded {
 /// # Errors
 ///
 /// The runtime's, or Mismatch if its criteria don't hold.
-pub fn decode(n: &Shared<Node>, data: &[u8]) -> CodecResult<Decoded> {
-    let mut d = Dec {
-        r: BitReader::new(data),
-        vals: Values::new(),
-        marks: HashMap::new(),
-        sums: HashMap::new(),
-        segs: HashMap::new(),
-        spans: HashMap::new(),
-        raws: HashMap::new(),
-    };
-    for m in n.chain() {
-        let m = m.get();
-        for c in &m.criteria {
-            require(std::slice::from_ref(c), &d.vals, &m.key, &c.text())?;
-        }
-        d.items(&m.items, &m.key)?;
-    }
+pub fn decode(
+    n: &Shared<Node>,
+    data: &[u8],
+    plan: &Plan,
+    ws: &mut Workspace,
+) -> CodecResult<Decoded> {
+    let mut d = start(data, plan, ws);
+    d.chain(n)?;
     d.finish(n)?;
-    Ok(decoded(n, &d))
+    Ok(Decoded {
+        node: n.clone(),
+        used: d.r.used(),
+    })
 }
 
-/// Decodes a packet of an inheritance tree: the entries of a node and its
-/// bases, then the first child (in document order) whose criteria match,
-/// recursively.
+/// Decodes a packet of an inheritance tree into a workspace: the entries
+/// of a node and its bases, then the first child (in document order)
+/// whose criteria match, recursively.
 ///
 /// # Arguments
 ///
 /// * `root` - The node to start from: a tree's root, or any node in it.
 /// * `data` - The bytes.
+/// * `plan` - The plan.
+/// * `ws`   - Where its values go.
 ///
 /// # Returns
 ///
@@ -1967,43 +2682,28 @@ pub fn decode(n: &Shared<Node>, data: &[u8]) -> CodecResult<Decoded> {
 /// that decoding gave: NoMatch, if it matches no concrete node, or the
 /// runtime's; or, outside both, what the packet leads to that the
 /// interpreter can't run yet.
-pub fn classify(root: &Shared<Node>, data: &[u8]) -> Classified {
-    let mut d = Dec {
-        r: BitReader::new(data),
-        vals: Values::new(),
-        marks: HashMap::new(),
-        sums: HashMap::new(),
-        segs: HashMap::new(),
-        spans: HashMap::new(),
-        raws: HashMap::new(),
-    };
-    // The node's bases' entries, then its own, each node's criteria
-    // checked first.
-    for m in root.chain() {
-        if let Some(w) = node_unsupported(&m) {
-            return Err(w);
+pub fn classify(
+    root: &Shared<Node>,
+    data: &[u8],
+    plan: &Plan,
+    ws: &mut Workspace,
+) -> Classified {
+    let mut n = Some(root.clone());
+    while let Some(m) = n {
+        if let Some(w) = &plan.info(&m).own {
+            return Err(w.clone());
         }
-        let (key, criteria, items) = {
-            let m = m.get();
-            (m.key.clone(), m.criteria.clone(), m.items.clone())
-        };
-        for c in &criteria {
-            if let Err(e) =
-                require(std::slice::from_ref(c), &d.vals, &key, &c.text())
-            {
-                return Ok(Err(e));
-            }
-        }
-        if let Err(e) = d.items(&items, &key) {
-            return Ok(Err(e));
-        }
+        n = m.get().base.clone();
+    }
+    let mut d = start(data, plan, ws);
+    if let Err(e) = d.chain(root) {
+        return Ok(Err(e));
     }
     dispatch(root, &mut d)
 }
 
 /// Finds the first construct of a node's own criteria and items that the
-/// interpreter can't run, and if it is concrete, of its checks and
-/// derived sizes.
+/// interpreter can't run, and if it is concrete, of its checks.
 ///
 /// # Arguments
 ///
@@ -2039,78 +2739,58 @@ fn node_unsupported(n: &Shared<Node>) -> Option<String> {
 /// # Returns
 ///
 /// As [`classify`]'s.
-fn dispatch(n: &Shared<Node>, d: &mut Dec<'_>) -> Classified {
-    let children = n.get().children.clone();
-    for c in &children {
-        if c.get().error.is_some() {
+fn dispatch(n: &Shared<Node>, d: &mut Dec<'_, '_>) -> Classified {
+    let m = n.get();
+    for c in &m.children {
+        let cm = c.get();
+        if cm.error.is_some() {
             continue;
         }
         // Its criteria are tested if they can be: a packet it doesn't
         // match never needs what else it has.
-        let crit = c.get().criteria.iter().find_map(term_unsupported);
-        if let Some(w) = crit {
-            return Err(format!("{}: {w}", c.get().key));
+        let info = d.plan.info(c);
+        if let Some(w) = &info.crit {
+            return Err(w.clone());
         }
         let mut ok = true;
-        for t in &c.get().criteria {
-            match term(t, &d.vals) {
+        for t in &cm.criteria {
+            match term(t, &d.ws.vals) {
                 Ok(true) => {}
                 Ok(false) => {
                     ok = false;
                     break;
                 }
-                Err(e) => return Ok(Err(at(&c.get().key)(e))),
+                Err(e) => return Ok(Err(at(&cm.key)(e))),
             }
         }
         if ok {
-            if let Some(w) = node_unsupported(c) {
-                return Err(w);
+            if let Some(w) = &info.own {
+                return Err(w.clone());
             }
-            let key = c.get().key.clone();
-            let items = c.get().items.clone();
-            if let Err(e) = d.items(&items, &key) {
+            if let Err(e) = d.items(&cm.items, &cm.key) {
                 return Ok(Err(e));
             }
+            drop(cm);
             return dispatch(c, d);
         }
     }
-    if n.get().abstract_ {
+    if m.abstract_ {
         return Ok(Err(CodecError {
             error: PacketError::NoMatch { container: F },
-            field: n.get().key.clone(),
+            field: m.key.clone(),
         }));
     }
+    drop(m);
     if let Err(e) = d.finish(n) {
         return Ok(Err(e));
     }
-    Ok(Ok(decoded(n, d)))
+    Ok(Ok(Decoded {
+        node: n.clone(),
+        used: d.r.used(),
+    }))
 }
 
 // --- encoding ----------------------------------------------------------
-
-/// Converts a literal of the document to a value of a type.
-///
-/// # Arguments
-///
-/// * `vt`  - The type.
-/// * `lit` - The literal.
-///
-/// # Returns
-///
-/// The value.
-fn lit_val(vt: &VType, lit: &Lit) -> Val {
-    match (vt.kind.as_str(), lit) {
-        ("float", Lit::Int(i)) => Val::Float(i.to_f64().unwrap_or(f64::NAN)),
-        ("float", Lit::Float(x)) => Val::Float(*x),
-        ("int" | "enum", Lit::Int(i)) if vt.wide() => Val::Big(i.clone()),
-        ("enum", Lit::Int(i)) => Val::Enum(i.to_i64().unwrap_or(0)),
-        (_, Lit::Int(i)) => Val::Int(i.to_i128().unwrap_or(0)),
-        (_, Lit::Float(x)) => Val::Float(*x),
-        (_, Lit::Bool(b)) => Val::Bool(*b),
-        (_, Lit::Str(s)) => Val::Str(s.clone()),
-        (_, Lit::Bytes(b)) => Val::Bytes(b.clone()),
-    }
-}
 
 /// Checks a value against its type's valid ranges, as encoding does.
 ///
@@ -2183,15 +2863,86 @@ fn write_val(
     w: &mut BitWriter<'_>,
     vt: &VType,
     v: &Val,
-    vals: &Values,
+    vals: &dyn Look,
     inner: Inner<'_>,
 ) -> pk::Result<()> {
-    if let Val::Raw(x) = v {
+    if let Val::RawInt(_) | Val::RawFloat(_) = v {
         // Written as it is, checked against its encoding only.
-        return write_unchecked(w, &raw_type(vt), x, vals, inner);
+        return write_raw(w, vt, v);
     }
     check_valid(vt, v)?;
     write_unchecked(w, vt, v, vals, inner)
+}
+
+/// Writes a raw value as it is, as its encoding holds it: not
+/// calibrated, and checked against the encoding only.
+///
+/// # Arguments
+///
+/// * `w`  - The writer.
+/// * `vt` - The value's type.
+/// * `v`  - The raw value: `RawInt` for an integer encoding, `RawFloat` for a
+///          float encoding.
+///
+/// # Errors
+///
+/// OutOfRange, if the encoding can't hold it.
+fn write_raw(w: &mut BitWriter<'_>, vt: &VType, v: &Val) -> pk::Result<()> {
+    let bad = PacketError::OutOfRange { field: F };
+    match (&vt.enc, v) {
+        (Encoding::Int(e), Val::RawInt(x)) if e.bits > 64 => {
+            let enc = int_enc(vt);
+            let w_ = crate::wide::Wide {
+                bits: e.bits as u32,
+                lsb: e.lsb,
+                order: byte_order(&e.order),
+                enc,
+                bcd: bcd(&e.encoding),
+                signed: enc != IntEncoding::Unsigned,
+            };
+            let bytes = crate::wide::raw_bytes(e.bits as u32);
+            crate::wide::write(w, w_, bytes, &num_bigint::BigInt::from(*x))
+        }
+        (Encoding::Int(e), Val::RawInt(x)) => {
+            let bits = e.bits as u32;
+            let enc = int_enc(vt);
+            let mut raw = if enc == IntEncoding::Unsigned {
+                pk::from_unsigned(u64::try_from(*x).map_err(|_| bad)?, bits, F)?
+            } else {
+                pk::from_signed(
+                    i64::try_from(*x).map_err(|_| bad)?,
+                    bits,
+                    enc,
+                    F,
+                )?
+            };
+            if let Some(packed) = bcd(&e.encoding) {
+                raw = pk::bcd_encode(raw, bits, packed, F)?;
+            }
+            raw_write(w, e.bits, &e.order, e.lsb, raw as u128);
+            Ok(())
+        }
+        (Encoding::Float(e), Val::RawFloat(x)) => {
+            let raw = if e.fmt == "IEEE754" && (e.bits == 32 || e.bits == 64) {
+                pk::float_to_raw(*x, e.bits as u32) as u128
+            } else {
+                let r = pk::float_encode(
+                    float_format(&e.fmt),
+                    e.bits as u32,
+                    *x,
+                    F,
+                )?;
+                if e.bits > 64 {
+                    r
+                } else {
+                    r as u64 as u128
+                }
+            };
+            raw_write(w, e.bits, &e.order, e.lsb, raw);
+            Ok(())
+        }
+        _ => Err(bad),
+    }
 }
 
 /// Says whether a type, or one inside it, has a calibrator.
@@ -2263,7 +3014,7 @@ fn write_unchecked(
     w: &mut BitWriter<'_>,
     vt: &VType,
     v: &Val,
-    vals: &Values,
+    vals: &dyn Look,
     inner: Inner<'_>,
 ) -> pk::Result<()> {
     if lsb_bytes(vt) {
@@ -2293,31 +3044,26 @@ fn write_plain(
     w: &mut BitWriter<'_>,
     vt: &VType,
     v: &Val,
-    vals: &Values,
+    vals: &dyn Look,
     inner: Inner<'_>,
 ) -> pk::Result<()> {
     let bad = PacketError::BadSize { field: F };
     match (&vt.enc, v) {
         (Encoding::Aggregate(e), Val::Agg(ms)) => {
-            copy_checks(e, v)?;
-            let named: Vec<(String, Val)> = e
-                .members
-                .iter()
-                .zip(ms)
-                .map(|(m, x)| (m.ident.clone(), x.clone()))
-                .collect();
+            copy_checks(e, v, vals)?;
             for (m, x) in e.members.iter().zip(ms) {
                 if m.skip != 0 {
                     w.zeros(m.skip as usize);
                 }
-                write_val(w, &m.vtype, x, vals, &named)?;
+                write_val(w, &m.vtype, x, vals, (&e.members, ms))?;
             }
             if e.pad != 0 {
                 w.zeros(e.pad as usize);
             }
             Ok(())
         }
-        (Encoding::Array(e), Val::Arr(es)) => {
+        (Encoding::Array(e), Val::Arr(all, used)) => {
+            let es = &all[..*used];
             let n = count_of(&e.count, vals, inner)?;
             if es.len() != n as usize {
                 return Err(bad);
@@ -2455,21 +3201,28 @@ fn write_plain(
 struct Enc<'w, 'b> {
     /// The writer.
     w: &'w mut BitWriter<'b>,
-    /// The values of the packet, by the number of the Local that holds
-    /// each, those its inheritance fixes among them.
-    vals: Values,
-    /// The position of each Mark.
-    marks: HashMap<i64, usize>,
-    /// The position of each computed field.
-    computed: HashMap<i64, usize>,
-    /// The numbers of the sizes and counts the packet computes from what
-    /// they size.
-    derived: Vec<i64>,
-    /// The encoding of each value written in segments.
-    segs: HashMap<i64, u64>,
+    /// The storage, holding the packet's values.
+    ws: &'w mut Workspace,
 }
 
 impl Enc<'_, '_> {
+    /// Gives the position of a Mark.
+    ///
+    /// # Arguments
+    ///
+    /// * `m` - The Mark's number; 0 is the packet's start.
+    ///
+    /// # Returns
+    ///
+    /// The position.
+    fn mark(&self, m: i64) -> usize {
+        if m == 0 {
+            0
+        } else {
+            self.ws.marks[m as usize]
+        }
+    }
+
     /// Puts the checksum of what a check covers into its field.
     ///
     /// # Arguments
@@ -2484,8 +3237,8 @@ impl Enc<'_, '_> {
         let Encoding::Int(e) = &l.vt().enc else {
             unreachable!("an integer")
         };
-        let at_ = self.computed[&l.id];
-        let (start, end) = region(c, &self.marks, at_, self.w.packet_end());
+        let at_ = self.ws.computed[l.id as usize];
+        let (start, end) = region(c, &self.ws.marks, at_, self.w.packet_end());
         self.w
             .patch_checksum(
                 &checksum_spec(&c.spec),
@@ -2514,11 +3267,12 @@ impl Enc<'_, '_> {
         for it in items {
             match it {
                 Item::Seek(s) => {
-                    let off = seek_offset(s, &self.vals).map_err(at(where_))?;
+                    let off =
+                        seek_offset(s, &self.ws.vals).map_err(at(where_))?;
                     match s.from_start {
                         None => self.w.skip(off, F),
                         Some(m) => {
-                            let at_ = if m == 0 { 0 } else { self.marks[&m] };
+                            let at_ = self.mark(m);
                             if s.ahead {
                                 self.w.seek_ahead(at_, off, F)
                             } else {
@@ -2529,7 +3283,7 @@ impl Enc<'_, '_> {
                     .map_err(at(where_))?;
                 }
                 Item::Mark(m) => {
-                    self.marks.insert(m.id, self.w.position());
+                    self.ws.marks[m.id as usize] = self.w.position()
                 }
                 Item::Fixed(f) => {
                     let v = f.value.to_u64().unwrap_or(0);
@@ -2537,17 +3291,12 @@ impl Enc<'_, '_> {
                 }
                 Item::Pad(p) => self.w.zeros(p.bits as usize),
                 Item::Require(q) => {
-                    require(&q.criteria, &self.vals, &q.container, &q.text)?
+                    require(&q.criteria, &self.ws.vals, &q.container, &q.text)?
                 }
                 Item::Fill(f) => {
-                    let n = count_of(&f.size, &self.vals, &[])
+                    let n = count_of(&f.size, &self.ws.vals, OUTER)
                         .map_err(at(&f.container))?;
-                    let start = if f.start == 0 {
-                        0
-                    } else {
-                        self.marks[&f.start]
-                    };
-                    let e = start + n as usize;
+                    let e = self.mark(f.start) + n as usize;
                     if self.w.position() > e {
                         return Err(at(&f.container)(PacketError::BadSize {
                             field: F,
@@ -2559,7 +3308,7 @@ impl Enc<'_, '_> {
                 Item::Cond(c) => {
                     let mut ok = true;
                     for t in &c.criteria {
-                        if !term(t, &self.vals).map_err(at(where_))? {
+                        if !term(t, &self.ws.vals).map_err(at(where_))? {
                             ok = false;
                             break;
                         }
@@ -2570,7 +3319,8 @@ impl Enc<'_, '_> {
                 }
                 Item::Verify(v) => self.patch(&v.check.get())?,
                 Item::TailSeek(t) => {
-                    let back = tail_back(t, &self.vals).map_err(at(where_))?;
+                    let back =
+                        tail_back(t, &self.ws.vals).map_err(at(where_))?;
                     self.w.seek_tail(back);
                 }
                 Item::TailPad(t) => self.w.zeros(t.bits as usize),
@@ -2581,7 +3331,7 @@ impl Enc<'_, '_> {
                     };
                     self.w
                         .patch_span(
-                            self.computed[&l.id],
+                            self.ws.computed[l.id as usize],
                             enc.bits as u32,
                             matches!(enc.order, Order::Le),
                             l.length.unwrap(),
@@ -2592,22 +3342,19 @@ impl Enc<'_, '_> {
                 Item::Segment(g) => {
                     let g = g.get();
                     let l = g.local.get();
+                    let i = l.id as usize;
                     if g.first {
                         // Encode the whole value, then write each
                         // segment's bits.
-                        let x = self
-                            .vals
-                            .get(&l.id)
-                            .cloned()
-                            .flatten()
-                            .ok_or_else(|| {
-                                at(&l.name)(PacketError::Missing { field: F })
-                            })?;
+                        let Some(x) = self.ws.vals.val(l.id) else {
+                            return Err(at(&l.name)(PacketError::Missing {
+                                field: F,
+                            }));
+                        };
                         let t = self.w.stash(g.total as u32);
-                        write_val(self.w, &l.vt(), &x, &self.vals, &[])
+                        write_val(self.w, &l.vt(), x, &self.ws.vals, OUTER)
                             .map_err(at(&l.name))?;
-                        let s = self.w.unstash(t);
-                        self.segs.insert(l.id, s);
+                        self.ws.segs[i] = self.w.unstash(t);
                     }
                     let mask = if g.bits >= 64 {
                         u64::MAX
@@ -2616,33 +3363,31 @@ impl Enc<'_, '_> {
                     };
                     self.w.uint(
                         g.bits as u32,
-                        (self.segs[&l.id] >> g.shift) & mask,
+                        (self.ws.segs[i] >> g.shift) & mask,
                     );
                 }
                 Item::Value(v) if v.assembled != 0 => {}
                 Item::Value(v) => {
                     let l = v.local.get();
                     let vt = l.vt();
+                    let i = l.id as usize;
                     if l.computed() {
-                        self.computed.insert(l.id, self.w.position());
+                        self.ws.computed[i] = self.w.position();
                         let Encoding::Int(e) = &vt.enc else {
                             unreachable!("an integer")
                         };
                         self.w.zeros(e.bits as usize);
                         continue;
                     }
-                    let x = match self.vals.get(&l.id).cloned().flatten() {
-                        Some(x) => x,
-                        None => {
-                            return Err(at(&l.name)(PacketError::Missing {
-                                field: F,
-                            }));
-                        }
+                    let Some(x) = self.ws.vals.val(l.id) else {
+                        return Err(at(&l.name)(PacketError::Missing {
+                            field: F,
+                        }));
                     };
-                    let r = if self.derived.contains(&l.id) {
-                        write_unchecked(self.w, &vt, &x, &self.vals, &[])
+                    let r = if self.ws.derived[i] {
+                        write_unchecked(self.w, &vt, x, &self.ws.vals, OUTER)
                     } else {
-                        write_val(self.w, &vt, &x, &self.vals, &[])
+                        write_val(self.w, &vt, x, &self.ws.vals, OUTER)
                     };
                     r.map_err(at(&l.name))?;
                 }
@@ -2651,16 +3396,90 @@ impl Enc<'_, '_> {
         }
         Ok(())
     }
+
+    /// Writes the entries of a node's bases and then its own.
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - The node.
+    ///
+    /// # Errors
+    ///
+    /// As [`Enc::items`]'.
+    fn chain(&mut self, n: &Shared<Node>) -> CodecResult<()> {
+        let m = n.get();
+        if let Some(b) = &m.base {
+            self.chain(b)?;
+        }
+        self.items(&m.items, &m.key)
+    }
 }
 
-/// Encodes a concrete packet.
+/// Says whether a term reads a field of a packet.
 ///
 /// # Arguments
 ///
-/// * `n`      - The packet, which [`unsupported`] accepts.
-/// * `fields` - The value of each of its fields, in the order of its
-///              `fields`; `None` for one that is absent.
-/// * `out`    - The buffer the bytes go to.
+/// * `t` - The term.
+/// * `n` - The packet.
+///
+/// # Returns
+///
+/// Whether it does.
+fn reads_field(t: &Term, n: &Node) -> bool {
+    let field = |l: &Shared<Local>| n.fields.iter().any(|f| f.1.same(l));
+    match t {
+        Term::Criterion(c) => {
+            let c = c.get();
+            field(&c.local) || c.other.as_ref().is_some_and(field)
+        }
+        Term::Custom(c) => c.get().inputs.iter().any(|i| match i {
+            Input::Value(l, _, _) => field(l),
+            Input::Const(_) => false,
+        }),
+        Term::AllOf(a) => a.get().terms.iter().any(|x| reads_field(x, n)),
+        Term::AnyOf(a) => a.get().terms.iter().any(|x| reads_field(x, n)),
+    }
+}
+
+/// Checks the criteria of a node and its bases that read the packet's
+/// fields, before anything is written.
+///
+/// # Arguments
+///
+/// * `m`    - The node, or one of its bases.
+/// * `n`    - The packet.
+/// * `vals` - Its values.
+///
+/// # Errors
+///
+/// Mismatch, if one doesn't hold.
+fn field_criteria(
+    m: &Shared<Node>,
+    n: &Node,
+    vals: &Values,
+) -> CodecResult<()> {
+    let mm = m.get();
+    if let Some(b) = &mm.base {
+        field_criteria(b, n, vals)?;
+    }
+    for c in &mm.criteria {
+        if reads_field(c, n) {
+            require_term(c, vals, &mm.key)?;
+        }
+    }
+    Ok(())
+}
+
+/// Encodes a concrete packet from the values in a workspace: its fields'
+/// values must be there; those its inheritance fixes and the sizes it
+/// computes are put there.
+///
+/// # Arguments
+///
+/// * `n`    - The packet, which the plan says it can run.
+/// * `plan` - The plan.
+/// * `ws`   - The storage, holding the fields' values.
+/// * `out`  - The buffer the bytes go to.
 ///
 /// # Returns
 ///
@@ -2672,23 +3491,23 @@ impl Enc<'_, '_> {
 /// Mismatch if criteria don't hold.
 pub fn encode<'b>(
     n: &Shared<Node>,
-    fields: &[Option<Val>],
+    plan: &Plan,
+    ws: &mut Workspace,
     out: &'b mut Buffer,
 ) -> CodecResult<&'b [u8]> {
-    let mut vals = Values::new();
-    for ((_, l), v) in n.get().fields.iter().zip(fields) {
-        vals.insert(l.get().id, v.clone());
-    }
-    for (l, lit) in &n.get().fixed.0 {
-        let vt = l.get().vt();
-        vals.insert(l.get().id, Some(lit_val(&vt, lit)));
+    let nb = n.get();
+    for (l, lit) in &nb.fixed.0 {
+        let l = l.get();
+        let mut x = ws.vals.take(l.id);
+        lit_assign(&mut x, &l.vt(), lit);
+        ws.vals.put(l.id, x);
     }
     // Sizes and counts come from the lengths of what they size.
-    let mut derived = Vec::new();
-    for (l, (c, d)) in &n.get().derived.0 {
+    ws.derived.fill(false);
+    for (l, (c, d)) in &nb.derived.0 {
         let (l, c) = (l.get(), c.get());
-        let len = match vals.get(&c.id).cloned().flatten() {
-            Some(Val::Arr(a)) => a.len(),
+        let len = match ws.vals.val(c.id) {
+            Some(Val::Arr(_, used)) => *used,
             Some(Val::Bytes(b)) => b.len(),
             Some(Val::Str(s)) => s.len(),
             _ => return Err(at(&c.name)(PacketError::Missing { field: F })),
@@ -2712,63 +3531,67 @@ pub fn encode<'b>(
         if !fits {
             return Err(at(&l.name)(PacketError::OutOfRange { field: F }));
         }
-        vals.insert(l.id, Some(Val::Int(x as i128)));
-        derived.push(l.id);
+        ws.vals.put(l.id, Val::Int(x as i128));
+        ws.derived[l.id as usize] = true;
     }
+    field_criteria(n, &nb, &ws.vals)?;
     let mut w = BitWriter::new(out);
     {
-        let mut e = Enc {
-            w: &mut w,
-            vals,
-            marks: HashMap::new(),
-            computed: HashMap::new(),
-            derived,
-            segs: HashMap::new(),
-        };
-        for m in n.chain() {
-            let m = m.get();
-            for c in &m.criteria {
-                if c.locals()
-                    .iter()
-                    .any(|l| n.get().fields.iter().any(|f| f.1.same(l)))
-                {
-                    require(
-                        std::slice::from_ref(c),
-                        &e.vals,
-                        &m.key,
-                        &c.text(),
-                    )?;
-                }
-            }
-        }
-        for m in n.chain() {
-            let (items, key) = {
-                let m = m.get();
-                (m.items.clone(), m.key.clone())
-            };
-            e.items(&items, &key)?;
-        }
-        if let Some(l) = length_field(n) {
+        let mut e = Enc { w: &mut w, ws };
+        e.chain(n)?;
+        if let Some(l) = &plan.info(n).length {
             let l = l.get();
             let Encoding::Int(enc) = &l.vt().enc else {
                 unreachable!("an integer")
             };
             let le = matches!(enc.order, Order::Le);
-            e.w.patch_length(
-                e.computed[&l.id],
-                enc.bits as u32,
-                le,
-                l.length.unwrap(),
-                F,
-            )
-            .map_err(at(&l.name))?;
+            let at_ = e.ws.computed[l.id as usize];
+            e.w.patch_length(at_, enc.bits as u32, le, l.length.unwrap(), F)
+                .map_err(at(&l.name))?;
         }
-        for c in &n.get().checks {
+        for c in &nb.checks {
             e.patch(&c.get())?;
         }
     }
     drop(w);
     Ok(out.as_bytes())
+}
+
+/// Puts a literal of the document into a value's storage.
+///
+/// # Arguments
+///
+/// * `dst` - The storage.
+/// * `vt`  - The value's type.
+/// * `lit` - The literal.
+pub fn lit_assign(dst: &mut Val, vt: &VType, lit: &Lit) {
+    match (vt.kind.as_str(), lit) {
+        ("float", Lit::Int(i)) => {
+            *dst = Val::Float(i.to_f64().unwrap_or(f64::NAN))
+        }
+        ("float", Lit::Float(x)) => *dst = Val::Float(*x),
+        ("int" | "enum", Lit::Int(i)) if vt.wide() => {
+            *dst = Val::Big(i.clone())
+        }
+        ("enum", Lit::Int(i)) => *dst = Val::Enum(i.to_i64().unwrap_or(0)),
+        (_, Lit::Int(i)) => *dst = Val::Int(i.to_i128().unwrap_or(0)),
+        (_, Lit::Float(x)) => *dst = Val::Float(*x),
+        (_, Lit::Bool(b)) => *dst = Val::Bool(*b),
+        (_, Lit::Str(s)) => match dst {
+            Val::Str(d) => {
+                d.clear();
+                d.push_str(s);
+            }
+            _ => *dst = Val::Str(s.clone()),
+        },
+        (_, Lit::Bytes(b)) => match dst {
+            Val::Bytes(d) => {
+                d.clear();
+                d.extend_from_slice(b);
+            }
+            _ => *dst = Val::Bytes(b.clone()),
+        },
+    }
 }
 
 // --- describing --------------------------------------------------------
@@ -2794,7 +3617,8 @@ pub fn describe(vt: &VType, v: &Val, out: &mut String) {
             }
             out.push('}');
         }
-        (Encoding::Array(e), Val::Arr(es)) => {
+        (Encoding::Array(e), Val::Arr(all, used)) => {
+            let es = &all[..*used];
             out.push('[');
             for (i, x) in es.iter().enumerate() {
                 if i > 0 {
@@ -2840,7 +3664,12 @@ pub fn describe(vt: &VType, v: &Val, out: &mut String) {
         (_, Val::Bool(b)) => {
             let _ = write!(out, "{b}");
         }
-        (_, Val::Raw(x)) => describe(&raw_type(vt), x, out),
+        (_, Val::RawInt(x)) => {
+            let _ = write!(out, "{x}");
+        }
+        (_, Val::RawFloat(x)) => {
+            let _ = pk::describe_f64(*x, out);
+        }
         _ => out.push('?'),
     }
 }
@@ -2850,22 +3679,24 @@ pub fn describe(vt: &VType, v: &Val, out: &mut String) {
 ///
 /// # Arguments
 ///
-/// * `d` - The decoded packet.
+/// * `d`  - The decoded packet.
+/// * `ws` - The workspace it was decoded into.
 ///
 /// # Returns
 ///
 /// The text.
-pub fn describe_packet(d: &Decoded) -> String {
+pub fn describe_packet(d: &Decoded, ws: &Workspace) -> String {
     let n = d.node.get();
     let mut out = format!("{}{{", n.ident);
-    for (i, ((name, l), v)) in n.fields.iter().zip(&d.fields).enumerate() {
+    for (i, (name, l)) in n.fields.iter().enumerate() {
         if i > 0 {
             out.push_str(", ");
         }
         out.push_str(name);
         out.push('=');
-        match v {
-            Some(v) => describe(&l.get().vt(), v, &mut out),
+        let l = l.get();
+        match ws.vals.val(l.id) {
+            Some(v) => describe(&l.vt(), v, &mut out),
             None => out.push_str(pk::DESCRIBE_NONE),
         }
     }

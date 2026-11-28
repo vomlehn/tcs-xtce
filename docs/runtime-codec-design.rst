@@ -23,8 +23,13 @@ functions the application supplies. ``Mission::pack`` and ``unpack``,
 - ``Store::set_raw`` leaves the slot without an engineering value until
   one is set or unpacked: ``get`` gives none, and ``get_raw`` the raw
   value.
-- ``Mission::unbounded``, custom algorithms and transforms, and packing
-  and unpacking without allocating are still to come.
+- Packing, unpacking, ``Store::set`` and ``Store::commit`` allocate
+  nothing once the store and scratch are made, except for integers of
+  more than 64 bits, which the codec holds as ``BigInt``\s, and for the
+  message of a packet that fails.
+- ``Mission::unbounded``, and custom algorithms and transforms, are
+  still to come.
+
 
 
 Until ``StringSpec`` and ``ByteOrder`` gain a lifetime (see `Freeing

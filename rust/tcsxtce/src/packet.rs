@@ -1240,6 +1240,29 @@ impl<'a> BitReader<'a> {
         }
     }
 
+    /// Reads whole bytes, which need not be byte aligned, into storage the
+    /// caller keeps, as [`BitReader::bytes`] does: nothing is allocated
+    /// when the storage has room for them.
+    ///
+    /// # Arguments
+    ///
+    /// * `n`     - How many bytes.
+    /// * `out`   - Where they go; what it held is replaced.
+    /// * `field` - The field's name, for errors.
+    ///
+    /// # Errors
+    ///
+    /// `Truncated` if the packet ends first.
+    pub fn bytes_reuse(
+        &mut self,
+        n: usize,
+        out: &mut Vec<u8>,
+        field: &'static str,
+    ) -> Result<()> {
+        out.clear();
+        self.bytes_into(n, out, field)
+    }
+
     /// Reads whole bytes, which need not be byte aligned, and appends them
     /// to a sink.
     ///
@@ -4518,10 +4541,52 @@ pub fn read_string(
     field: &'static str,
 ) -> Result<String> {
     let mut wire = Vec::new();
-    read_wire(r, spec, &mut wire, field)?;
-    let mut b = Vec::new();
-    decode_text(spec.charset, &wire, &mut b, field)?;
-    String::from_utf8(b).map_err(|_| PacketError::InvalidString { field })
+    let mut out = String::new();
+    read_string_into(r, spec, &mut wire, &mut out, field)?;
+    Ok(out)
+}
+
+/// Reads a string field, as [`read_string`] does, into storage the
+/// caller keeps, which it allocates nothing for when the storage has room
+/// for the field: a program that reads many packets can then read
+/// without allocating.
+///
+/// # Arguments
+///
+/// * `r`     - The reader, at the field.
+/// * `spec`  - How the string is encoded.
+/// * `wire`  - Storage for the field's bytes as they are on the wire; what
+///             it held is replaced.
+/// * `out`   - Where the text goes, as UTF-8; what it held is replaced, and it
+///             is left empty if reading fails.
+/// * `field` - The field's name, for errors.
+///
+/// # Errors
+///
+/// As [`read_string`]'s.
+pub fn read_string_into(
+    r: &mut BitReader<'_>,
+    spec: &StringSpec,
+    wire: &mut Vec<u8>,
+    out: &mut String,
+    field: &'static str,
+) -> Result<()> {
+    wire.clear();
+    let mut b = std::mem::take(out).into_bytes();
+    b.clear();
+    let got = read_wire(r, spec, wire, field)
+        .and_then(|()| decode_text(spec.charset, wire, &mut b, field));
+    let bad = got.is_err() || std::str::from_utf8(&b).is_err();
+    if bad {
+        b.clear();
+    }
+    // The bytes are UTF-8 now, or none, so this keeps their storage.
+    *out = String::from_utf8(b).unwrap_or_default();
+    match got {
+        Err(e) => Err(e),
+        Ok(()) if bad => Err(PacketError::InvalidString { field }),
+        Ok(()) => Ok(()),
+    }
 }
 
 /// Reads a string field, as [`read_string`] does, into a string of at

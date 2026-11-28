@@ -9,7 +9,14 @@
 //! slot for each element it may hold; unpacking leaves those past its
 //! count without a value, and packing takes its elements up to the first
 //! slot without one.
+//!
+//! A store and a scratch get all the storage they need when they are
+//! made, each string, binary value and array the room its largest value
+//! needs, so packing, unpacking, setting and committing allocate nothing,
+//! except for integers of more than 64 bits, which are `BigInt`s, and
+//! for the message of an error.
 
+use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
@@ -19,7 +26,7 @@ use tcs_xtce::buffer::Buffer;
 use tcs_xtce_model::dump::Shared;
 use tcs_xtce_model::model::{Count, Encoding, Node, VType};
 
-use crate::interp::{self, CodecError, Val};
+use crate::interp::{self, CodecError, Look, Val, Values, Workspace};
 use crate::{Mission, NodeId, SlotId};
 
 /// A value of a slot, as a program gives and reads it: an engineering
@@ -75,8 +82,8 @@ pub enum SetError {
         /// The slot's kind.
         want: String,
     },
-    /// The value is outside the type's valid ranges, or isn't one of an
-    /// enumeration's values.
+    /// The value is outside the type's valid ranges, isn't one of an
+    /// enumeration's values, or is longer than the slot holds.
     OutOfRange,
     /// The slot is another mission's.
     Foreign,
@@ -98,31 +105,41 @@ impl std::error::Error for SetError {}
 
 /// The current value of every slot of a mission, as a ground system's
 /// table of current values holds them.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Store {
     /// The number of the mission it belongs to.
     mission: u64,
     /// Each slot's type.
     types: Rc<Vec<Rc<VType>>>,
-    /// Each slot's value, or `None` if it has none.
-    values: Vec<Option<Val>>,
+    /// Each slot's raw type.
+    raw_types: Rc<Vec<Rc<VType>>>,
+    /// The most bytes each string or binary slot holds.
+    caps: Rc<Vec<usize>>,
+    /// Each slot's value.
+    values: Values,
     /// Each slot's raw value, where unpacking or `set_raw` gave one.
-    raws: Vec<Option<Val>>,
+    raws: Values,
     /// Whether each slot's raw value is to be packed as it is, because
     /// `set_raw` gave it.
     raw_set: Vec<bool>,
+    /// The storage packing reuses.
+    work: RefCell<Workspace>,
 }
 
 /// A packet decoded and not yet committed: the values of the slots it
 /// sets.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct Scratch {
     /// The number of the mission it belongs to.
     mission: u64,
-    /// The slots set, each with its value, or `None` for one the packet
-    /// leaves without a value, and its raw value where its type is
-    /// calibrated.
-    set: Vec<(usize, Option<Val>, Option<Val>)>,
+    /// The storage decoding reuses.
+    work: Workspace,
+    /// The value of each slot the packet sets.
+    values: Values,
+    /// The raw value of each such slot.
+    raws: Values,
+    /// The slots the packet sets, in order.
+    touched: Vec<usize>,
 }
 
 /// Gives the number of slots a value of a type has.
@@ -159,112 +176,169 @@ fn array_len(e: &tcs_xtce_model::model::ArrayEnc) -> usize {
         e.shape.iter().product::<i64>() as usize
     } else {
         match &e.count {
-            Count::Dyn(d) => d.max as usize,
+            Count::Dyn(d) => d.max.max(0) as usize,
             Count::Int(n) => *n as usize,
         }
     }
 }
 
-/// Spreads a value over its slots.
+/// Copies a value into storage that has the room for it, keeping the
+/// storage's buffers.
 ///
 /// # Arguments
 ///
-/// * `vt`  - Its type.
-/// * `v`   - The value, or `None` if it is absent.
-/// * `out` - Where each slot's value goes, in order.
-fn flatten(vt: &VType, v: Option<&Val>, out: &mut Vec<Option<Val>>) {
-    match (&vt.enc, v) {
-        (Encoding::Aggregate(e), Some(Val::Agg(ms))) => {
-            for (m, x) in e.members.iter().zip(ms) {
-                flatten(&m.vtype, Some(x), out);
+/// * `dst` - The storage.
+/// * `src` - The value.
+fn assign(dst: &mut Val, src: &Val) {
+    match (dst, src) {
+        (Val::Str(a), Val::Str(b)) => {
+            a.clear();
+            a.push_str(b);
+        }
+        (Val::Bytes(a), Val::Bytes(b)) => {
+            a.clear();
+            a.extend_from_slice(b);
+        }
+        (Val::Big(a), Val::Big(b)) => a.clone_from(b),
+        (Val::Agg(a), Val::Agg(b)) => {
+            for (x, y) in a.iter_mut().zip(b) {
+                assign(x, y);
             }
         }
-        (Encoding::Array(e), Some(Val::Arr(xs))) => {
-            for i in 0..array_len(e) {
-                flatten(&e.elem, xs.get(i), out);
+        (Val::Arr(a, n), Val::Arr(b, m)) => {
+            while a.len() < *m {
+                a.push(b[a.len()].clone());
             }
+            for (x, y) in a.iter_mut().zip(&b[..*m]) {
+                assign(x, y);
+            }
+            *n = *m;
         }
-        (Encoding::Aggregate(_) | Encoding::Array(_), _) => {
-            out.extend(std::iter::repeat_n(None, slot_count(vt)));
-        }
-        (_, v) => out.push(v.cloned()),
+        (d, s) => *d = s.clone(),
     }
 }
 
-/// Builds a value from its slots.
+/// Spreads a value of a packet over its slots.
 ///
 /// # Arguments
 ///
 /// * `vt`    - Its type.
-/// * `slots` - Its slots' values, in order.
-///
-/// # Returns
-///
-/// The value, or `None` if a slot it needs has none.
-fn gather(vt: &VType, slots: &[Option<Val>]) -> Option<Val> {
-    match &vt.enc {
-        Encoding::Aggregate(e) => {
-            let mut out = Vec::new();
-            let mut at = 0;
-            for m in &e.members {
-                let n = slot_count(&m.vtype);
-                out.push(gather(&m.vtype, &slots[at..at + n])?);
-                at += n;
+/// * `v`     - The value, or `None` where it is absent.
+/// * `slots` - The slots' storage.
+/// * `at`    - The next slot to fill; it is moved past the value's.
+fn scatter(vt: &VType, v: Option<&Val>, slots: &mut Values, at: &mut usize) {
+    match (&vt.enc, v) {
+        (Encoding::Aggregate(e), Some(Val::Agg(ms))) => {
+            for (m, x) in e.members.iter().zip(ms) {
+                scatter(&m.vtype, Some(x), slots, at);
             }
-            Some(Val::Agg(out))
         }
-        Encoding::Array(e) => {
-            let n = slot_count(&e.elem);
-            let fixed = matches!(e.count, Count::Int(_));
-            let mut out = Vec::new();
+        (Encoding::Array(e), Some(Val::Arr(xs, used))) => {
             for i in 0..array_len(e) {
-                match gather(&e.elem, &slots[i * n..(i + 1) * n]) {
-                    Some(x) => out.push(x),
-                    // An array whose count varies ends at the first
-                    // element without a value.
-                    None if !fixed => break,
-                    None => return None,
-                }
+                scatter(&e.elem, (i < *used).then(|| &xs[i]), slots, at);
             }
-            Some(Val::Arr(out))
         }
-        _ => slots[0].clone(),
+        (Encoding::Aggregate(_) | Encoding::Array(_), _) => {
+            for _ in 0..slot_count(vt) {
+                slots.absent(*at as i64);
+                *at += 1;
+            }
+        }
+        (_, Some(x)) => {
+            let mut s = slots.take(*at as i64);
+            assign(&mut s, x);
+            slots.put(*at as i64, s);
+            *at += 1;
+        }
+        (_, None) => {
+            slots.absent(*at as i64);
+            *at += 1;
+        }
     }
 }
 
-/// Converts a datum to a value of a type.
+/// Builds a value of a packet from its slots, in its storage.
 ///
 /// # Arguments
 ///
-/// * `vt` - The type.
-/// * `d`  - The datum.
+/// * `vt`    - Its type.
+/// * `dst`   - Its storage.
+/// * `store` - The current values.
+/// * `at`    - The next slot to read; it is moved past the value's.
 ///
 /// # Returns
 ///
-/// The value.
-///
-/// # Errors
-///
-/// Kind, if the datum is of another kind than the type.
-fn to_val(vt: &VType, d: Datum<'_>) -> Result<Val, SetError> {
-    let kind = || SetError::Kind {
-        want: vt.kind.clone(),
-    };
-    Ok(match (vt.kind.as_str(), d) {
-        ("int", Datum::Int(i)) if vt.wide() => Val::Big(BigInt::from(i)),
-        ("int", Datum::Big(b)) if vt.wide() => Val::Big(b.clone()),
-        ("int", Datum::Int(i)) => Val::Int(i),
-        ("enum", Datum::Enum(i)) if vt.wide() => Val::Big(BigInt::from(i)),
-        ("enum", Datum::Enum(i)) => {
-            Val::Enum(i64::try_from(i).map_err(|_| SetError::OutOfRange)?)
+/// Whether every slot it needs has a value.
+fn gather(vt: &VType, dst: &mut Val, store: &Store, at: &mut usize) -> bool {
+    match &vt.enc {
+        Encoding::Aggregate(e) => {
+            let Val::Agg(ms) = dst else {
+                unreachable!("an aggregate")
+            };
+            let mut ok = true;
+            for (m, x) in e.members.iter().zip(ms.iter_mut()) {
+                ok &= gather(&m.vtype, x, store, at);
+            }
+            ok
         }
-        ("float", Datum::Float(x)) => Val::Float(x),
-        ("float", Datum::Int(i)) => Val::Float(i as f64),
-        ("bool", Datum::Bool(b)) => Val::Bool(b),
-        ("string", Datum::Str(s)) => Val::Str(s.to_string()),
-        ("binary", Datum::Binary(b)) => Val::Bytes(b.to_vec()),
-        _ => return Err(kind()),
-    })
+        Encoding::Array(e) => {
+            let Val::Arr(es, used) = dst else {
+                unreachable!("an array")
+            };
+            let n = slot_count(&e.elem);
+            let fixed = matches!(e.count, Count::Int(_));
+            let most = array_len(e);
+            while es.len() < most {
+                es.push(interp::template(&e.elem));
+            }
+            let mut got = 0;
+            let mut ended = false;
+            for x in es.iter_mut().take(most) {
+                if ended {
+                    *at += n;
+                    continue;
+                }
+                let mut k = *at;
+                if gather(&e.elem, x, store, &mut k) {
+                    got += 1;
+                } else if fixed {
+                    *at += n * (most - got);
+                    return false;
+                } else {
+                    // An array whose count varies ends at the first
+                    // element without a value.
+                    ended = true;
+                }
+                *at += n;
+            }
+            *used = got;
+            true
+        }
+        _ => {
+            let i = *at;
+            *at += 1;
+            if store.raw_set[i] {
+                // A raw value set for a slot is packed as it is.
+                match store.raws.val(i as i64) {
+                    Some(Val::Int(x)) => *dst = Val::RawInt(*x),
+                    Some(Val::Float(x)) => *dst = Val::RawFloat(*x),
+                    Some(x) => assign(dst, x),
+                    None => return false,
+                }
+                return true;
+            }
+            match store.values.val(i as i64) {
+                Some(x) => {
+                    if matches!(dst, Val::RawInt(_) | Val::RawFloat(_)) {
+                        *dst = Val::Bool(false);
+                    }
+                    assign(dst, x);
+                    true
+                }
+                None => false,
+            }
+        }
+    }
 }
 
 /// Converts a value to a datum.
@@ -278,19 +352,84 @@ fn to_val(vt: &VType, d: Datum<'_>) -> Result<Val, SetError> {
 /// The datum.
 fn to_datum(v: &Val) -> Datum<'_> {
     match v {
-        Val::Int(i) => Datum::Int(*i),
+        Val::Int(i) | Val::RawInt(i) => Datum::Int(*i),
         Val::Big(b) => match b.to_i128() {
             Some(i) => Datum::Int(i),
             None => Datum::Big(b),
         },
-        Val::Float(x) => Datum::Float(*x),
+        Val::Float(x) | Val::RawFloat(x) => Datum::Float(*x),
         Val::Enum(i) => Datum::Enum(*i as i128),
         Val::Bool(b) => Datum::Bool(*b),
         Val::Str(s) => Datum::Str(s),
         Val::Bytes(b) => Datum::Binary(b),
-        Val::Raw(x) => to_datum(x),
-        Val::Agg(_) | Val::Arr(_) => unreachable!("a scalar slot"),
+        Val::Agg(_) | Val::Arr(..) => unreachable!("a scalar slot"),
     }
+}
+
+/// Puts a datum into a slot's storage, checked against its kind and the
+/// room it has.
+///
+/// # Arguments
+///
+/// * `vt`  - The slot's type.
+/// * `cap` - The most bytes the slot holds, for a string or binary slot.
+/// * `dst` - The slot's storage.
+/// * `d`   - The datum.
+///
+/// # Errors
+///
+/// Kind, if the datum is of another kind than the type; OutOfRange, if it
+/// is longer than the slot holds, or doesn't fit an enumeration.
+fn put_datum(
+    vt: &VType,
+    cap: usize,
+    dst: &mut Val,
+    d: Datum<'_>,
+) -> Result<(), SetError> {
+    let kind = || SetError::Kind {
+        want: vt.kind.clone(),
+    };
+    match (vt.kind.as_str(), d) {
+        ("int", Datum::Int(i)) if vt.wide() => *dst = Val::Big(BigInt::from(i)),
+        ("int", Datum::Big(b)) if vt.wide() => *dst = Val::Big(b.clone()),
+        ("int", Datum::Int(i)) => *dst = Val::Int(i),
+        ("enum", Datum::Enum(i)) if vt.wide() => {
+            *dst = Val::Big(BigInt::from(i))
+        }
+        ("enum", Datum::Enum(i)) => {
+            *dst =
+                Val::Enum(i64::try_from(i).map_err(|_| SetError::OutOfRange)?)
+        }
+        ("float", Datum::Float(x)) => *dst = Val::Float(x),
+        ("float", Datum::Int(i)) => *dst = Val::Float(i as f64),
+        ("bool", Datum::Bool(b)) => *dst = Val::Bool(b),
+        ("string", Datum::Str(s)) => {
+            if s.len() > cap {
+                return Err(SetError::OutOfRange);
+            }
+            match dst {
+                Val::Str(d) => {
+                    d.clear();
+                    d.push_str(s);
+                }
+                _ => *dst = Val::Str(s.to_string()),
+            }
+        }
+        ("binary", Datum::Binary(b)) => {
+            if b.len() > cap {
+                return Err(SetError::OutOfRange);
+            }
+            match dst {
+                Val::Bytes(d) => {
+                    d.clear();
+                    d.extend_from_slice(b);
+                }
+                _ => *dst = Val::Bytes(b.to_vec()),
+            }
+        }
+        _ => return Err(kind()),
+    }
+    Ok(())
 }
 
 impl Store {
@@ -307,7 +446,7 @@ impl Store {
         if slot.mission != self.mission {
             return None;
         }
-        self.values[slot.index].as_ref().map(to_datum)
+        self.values.val(slot.index as i64).map(to_datum)
     }
 
     /// Gives a slot a value, checked against its type as encoding checks
@@ -321,8 +460,9 @@ impl Store {
     /// # Errors
     ///
     /// Kind, if the value is of another kind than the slot's type;
-    /// OutOfRange, if it is outside the type's valid ranges or isn't one
-    /// of an enumeration's values; Foreign, for another mission's slot.
+    /// OutOfRange, if it is outside the type's valid ranges, isn't one of
+    /// an enumeration's values, or is longer than the slot holds;
+    /// Foreign, for another mission's slot.
     pub fn set(
         &mut self,
         slot: SlotId,
@@ -331,18 +471,57 @@ impl Store {
         if slot.mission != self.mission {
             return Err(SetError::Foreign);
         }
-        let vt = &self.types[slot.index];
-        let v = to_val(vt, value)?;
-        if let Val::Enum(x) = &v {
-            if !vt.labels.iter().any(|l| l.value <= *x && *x <= l.max_value) {
-                return Err(SetError::OutOfRange);
+        let i = slot.index;
+        let vt = self.types[i].clone();
+        // Checked before the slot changes.
+        match value {
+            Datum::Enum(x) => {
+                if !vt
+                    .labels
+                    .iter()
+                    .any(|l| (l.value as i128) <= x && x <= l.max_value as i128)
+                {
+                    return Err(SetError::OutOfRange);
+                }
+            }
+            Datum::Int(x) if vt.kind == "int" && !vt.wide() => {
+                interp::check_valid(&vt, &Val::Int(x))
+                    .map_err(|_| SetError::OutOfRange)?;
+            }
+            Datum::Int(x) if vt.kind == "float" => {
+                interp::check_valid(&vt, &Val::Float(x as f64))
+                    .map_err(|_| SetError::OutOfRange)?;
+            }
+            Datum::Float(x) => {
+                interp::check_valid(&vt, &Val::Float(x))
+                    .map_err(|_| SetError::OutOfRange)?;
+            }
+            _ => {}
+        }
+        let mut x = self.values.take(i as i64);
+        match put_datum(&vt, self.caps[i], &mut x, value) {
+            Ok(()) => {
+                if vt.wide() {
+                    if let Err(_) = interp::check_valid(&vt, &x) {
+                        self.values.restore(i as i64, x);
+                        return Err(SetError::OutOfRange);
+                    }
+                }
+                self.values.put(i as i64, x);
+                self.raws.absent(i as i64);
+                self.raw_set[i] = false;
+                Ok(())
+            }
+            Err(e) => {
+                let had = self.values.val(i as i64).is_some();
+                if had {
+                    self.values.put(i as i64, x);
+                } else {
+                    self.values.restore(i as i64, x);
+                }
+                Err(e)
             }
         }
-        interp::check_valid(vt, &v).map_err(|_| SetError::OutOfRange)?;
-        self.values[slot.index] = Some(v);
-        self.raws[slot.index] = None;
-        self.raw_set[slot.index] = false;
-        Ok(())
     }
 
     /// Gives a slot's raw value: what the packet held, before its
@@ -359,7 +538,7 @@ impl Store {
         if slot.mission != self.mission {
             return None;
         }
-        match &self.raws[slot.index] {
+        match self.raws.val(slot.index as i64) {
             Some(v) => Some(to_datum(v)),
             None => self.get(slot),
         }
@@ -380,7 +559,8 @@ impl Store {
     /// # Errors
     ///
     /// Kind, if the value is of another kind than the encoding's;
-    /// Foreign, for another mission's slot.
+    /// OutOfRange, if it is longer than the slot holds; Foreign, for
+    /// another mission's slot.
     pub fn set_raw(
         &mut self,
         slot: SlotId,
@@ -389,11 +569,16 @@ impl Store {
         if slot.mission != self.mission {
             return Err(SetError::Foreign);
         }
-        let rt = interp::raw_type(&self.types[slot.index]);
-        let v = to_val(&rt, value)?;
-        self.values[slot.index] = None;
-        self.raws[slot.index] = Some(v);
-        self.raw_set[slot.index] = true;
+        let i = slot.index;
+        let rt = self.raw_types[i].clone();
+        let mut x = self.raws.take(i as i64);
+        if let Err(e) = put_datum(&rt, self.caps[i], &mut x, value) {
+            self.raws.restore(i as i64, x);
+            return Err(e);
+        }
+        self.raws.put(i as i64, x);
+        self.values.absent(i as i64);
+        self.raw_set[i] = true;
         Ok(())
     }
 
@@ -404,8 +589,8 @@ impl Store {
     /// * `slot` - The slot, which must be this store's mission's.
     pub fn clear(&mut self, slot: SlotId) {
         if slot.mission == self.mission {
-            self.values[slot.index] = None;
-            self.raws[slot.index] = None;
+            self.values.absent(slot.index as i64);
+            self.raws.absent(slot.index as i64);
             self.raw_set[slot.index] = false;
         }
     }
@@ -423,17 +608,30 @@ impl Store {
         if scratch.mission != self.mission {
             return Err(SetError::Foreign);
         }
-        for (i, v, raw) in &scratch.set {
-            self.values[*i] = v.clone();
-            self.raws[*i] = raw.clone();
-            self.raw_set[*i] = false;
+        for &i in &scratch.touched {
+            let id = i as i64;
+            for (dst, src) in [
+                (&mut self.values, &scratch.values),
+                (&mut self.raws, &scratch.raws),
+            ] {
+                match src.val(id) {
+                    Some(v) => {
+                        let mut x = dst.take(id);
+                        assign(&mut x, v);
+                        dst.put(id, x);
+                    }
+                    None => dst.absent(id),
+                }
+            }
+            self.raw_set[i] = false;
         }
         Ok(())
     }
 }
 
 impl Mission {
-    /// Makes a store for the mission's slots, none of them with a value.
+    /// Makes a store for the mission's slots, none of them with a value,
+    /// with all the storage packing them needs.
     ///
     /// # Returns
     ///
@@ -441,14 +639,18 @@ impl Mission {
     pub fn store(&self) -> Store {
         Store {
             mission: self.id,
-            types: Rc::new(self.slots.iter().map(|s| s.vt.clone()).collect()),
-            values: vec![None; self.slots.len()],
-            raws: vec![None; self.slots.len()],
+            types: self.slot_types.clone(),
+            raw_types: self.slot_raw_types.clone(),
+            caps: self.slot_caps.clone(),
+            values: Values::like(&self.slot_templates),
+            raws: Values::like(&self.slot_raw_templates),
             raw_set: vec![false; self.slots.len()],
+            work: RefCell::new(Workspace::new(&self.plan)),
         }
     }
 
-    /// Makes a scratch for unpacking packets into.
+    /// Makes a scratch for unpacking packets into, with all the storage
+    /// unpacking needs.
     ///
     /// # Returns
     ///
@@ -456,7 +658,10 @@ impl Mission {
     pub fn scratch(&self) -> Scratch {
         Scratch {
             mission: self.id,
-            set: Vec::new(),
+            work: Workspace::new(&self.plan),
+            values: Values::like(&self.slot_templates),
+            raws: Values::like(&self.slot_raw_templates),
+            touched: Vec::with_capacity(self.slots.len()),
         }
     }
 
@@ -472,27 +677,8 @@ impl Mission {
         self.nodes
             .iter()
             .filter(|n| !n.node.get().abstract_ && n.node.get().error.is_none())
-            .filter_map(|n| interp::unsupported(&n.node))
+            .filter_map(|n| self.plan.unsupported(&n.node).map(String::from))
             .collect()
-    }
-
-    /// Gives the slots of a parameter or argument.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - Its key.
-    ///
-    /// # Returns
-    ///
-    /// The first of its slots and how many there are, if it has any.
-    fn owner_slots(&self, key: &str) -> Option<(usize, usize)> {
-        let o = self
-            .params
-            .iter()
-            .chain(self.args.iter())
-            .find(|o| o.key == key)?;
-        let s = o.slots.as_ref().ok()?;
-        Some((*s.first()?, s.len()))
     }
 
     /// Finds the handle of a node.
@@ -546,44 +732,53 @@ impl Mission {
         if node.mission != self.id || scratch.mission != self.id {
             return Err(RunError::Foreign);
         }
+        scratch.touched.clear();
         let n = &self.nodes[node.index].node;
         let d = if n.get().abstract_ {
-            match interp::classify(n, bytes) {
+            match interp::classify(n, bytes, &self.plan, &mut scratch.work) {
                 Ok(d) => d.map_err(RunError::Packet)?,
                 Err(w) => return Err(RunError::Unsupported(w)),
             }
         } else {
-            if let Some(w) = interp::unsupported(n) {
-                return Err(RunError::Unsupported(w));
+            if let Some(w) = self.plan.unsupported(n) {
+                return Err(RunError::Unsupported(w.to_string()));
             }
-            interp::decode(n, bytes).map_err(RunError::Packet)?
+            interp::decode(n, bytes, &self.plan, &mut scratch.work)
+                .map_err(RunError::Packet)?
         };
-        scratch.set.clear();
-        let fields = d.node.get().fields.clone();
-        for (((_, l), v), raw) in fields.iter().zip(&d.fields).zip(&d.raws) {
+        let dn = d.node.get();
+        for (_, l) in &dn.fields {
             let l = l.get();
-            let Some((first, count)) = self.owner_slots(&l.key) else {
+            let Some(&(first, count)) = self.owner_slots.get(l.key.as_str())
+            else {
                 continue;
             };
-            if slot_count(&l.vt()) != count {
+            let vt = l.vt();
+            if slot_count(&vt) != count {
                 continue;
             }
             // Absent: it keeps the value it had.
-            let Some(v) = v else { continue };
-            let mut out = Vec::with_capacity(count);
-            flatten(&l.vt(), Some(v), &mut out);
-            let mut raws = Vec::with_capacity(count);
-            match raw {
+            let Some(v) = scratch.work.vals.val(l.id) else {
+                continue;
+            };
+            let mut at = first;
+            scatter(&vt, Some(v), &mut scratch.values, &mut at);
+            let mut at = first;
+            match scratch.work.raws.val(l.id) {
                 Some(r) => {
-                    flatten(&interp::raw_type(&l.vt()), Some(r), &mut raws)
+                    let rt = interp::raw_type_of(&self.plan, l.id)
+                        .expect("a raw type");
+                    scatter(&rt, Some(r), &mut scratch.raws, &mut at);
                 }
-                None => raws.resize(count, None),
+                None => {
+                    for i in first..first + count {
+                        scratch.raws.absent(i as i64);
+                    }
+                }
             }
-            for (k, (x, r)) in out.into_iter().zip(raws).enumerate().take(count)
-            {
-                scratch.set.push((first + k, x, r));
-            }
+            scratch.touched.extend(first..first + count);
         }
+        drop(dn);
         Ok(self.node_id(&d.node))
     }
 
@@ -624,34 +819,29 @@ impl Mission {
                 n.get().key
             )));
         }
-        if let Some(w) = interp::unsupported(n) {
-            return Err(RunError::Unsupported(w));
+        if let Some(w) = self.plan.unsupported(n) {
+            return Err(RunError::Unsupported(w.to_string()));
         }
-        let fields: Vec<Option<Val>> = n
-            .get()
-            .fields
-            .iter()
-            .map(|(_, l)| {
-                let l = l.get();
-                let (first, count) = self.owner_slots(&l.key)?;
-                if slot_count(&l.vt()) != count {
-                    return None;
-                }
-                // A raw value set for a slot is packed as it is.
-                let slots: Vec<Option<Val>> = (first..first + count)
-                    .map(|i| {
-                        if values.raw_set[i] {
-                            values.raws[i]
-                                .clone()
-                                .map(|x| Val::Raw(Box::new(x)))
-                        } else {
-                            values.values[i].clone()
-                        }
-                    })
-                    .collect();
-                gather(&l.vt(), &slots)
-            })
-            .collect();
-        interp::encode(n, &fields, out).map_err(RunError::Packet)
+        let mut ws = values.work.borrow_mut();
+        ws.vals.clear();
+        for (_, l) in &n.get().fields {
+            let l = l.get();
+            let Some(&(first, count)) = self.owner_slots.get(l.key.as_str())
+            else {
+                continue;
+            };
+            let vt = l.vt();
+            if slot_count(&vt) != count {
+                continue;
+            }
+            let mut x = ws.vals.take(l.id);
+            let mut at = first;
+            if gather(&vt, &mut x, values, &mut at) {
+                ws.vals.put(l.id, x);
+            } else {
+                ws.vals.restore(l.id, x);
+            }
+        }
+        interp::encode(n, &self.plan, &mut ws, out).map_err(RunError::Packet)
     }
 }

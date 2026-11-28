@@ -202,6 +202,9 @@ struct NodeEntry {
     node: Shared<Node>,
     /// Whether it is a meta-command.
     command: bool,
+    /// Whether it is a Message, which packets are classified as but
+    /// which a container lookup doesn't find.
+    message: bool,
     /// Its arguments, a meta-command's: each name, with the key of the
     /// meta-command that has it.
     args: Vec<(String, String)>,
@@ -246,6 +249,21 @@ pub struct Mission {
     slots: Vec<SlotEntry>,
     /// The digest of the documents.
     digest: [u8; 16],
+    /// What the interpreter knows of the nodes, made once.
+    plan: interp::Plan,
+    /// Each slot's storage, as it starts.
+    slot_templates: Vec<interp::Val>,
+    /// Each slot's raw type.
+    slot_raw_types: std::rc::Rc<Vec<Rc<VType>>>,
+    /// Each slot's raw storage, as it starts.
+    slot_raw_templates: Vec<interp::Val>,
+    /// Each slot's type.
+    slot_types: std::rc::Rc<Vec<Rc<VType>>>,
+    /// The most bytes each string or binary slot holds.
+    slot_caps: std::rc::Rc<Vec<usize>>,
+    /// The first slot of each parameter and argument, and how many it
+    /// has, by its key.
+    owner_slots: std::collections::HashMap<String, (usize, usize)>,
 }
 
 /// Adds a SpaceSystem and those inside it to a list, each once.
@@ -540,8 +558,56 @@ impl Mission {
                 path: qname(key),
                 node,
                 command,
+                message: false,
                 args: names,
             });
+        }
+        // Messages, which packets are classified as.
+        for key in c.messages.keys().to_vec() {
+            let mut mkey = vec!["message".to_string()];
+            mkey.extend(key.iter().cloned());
+            let Some(node) = c.nodes.get(&mkey).cloned() else {
+                continue;
+            };
+            nodes.push(NodeEntry {
+                key: key.clone(),
+                path: qname(&key),
+                node,
+                command: false,
+                message: true,
+                args: Vec::new(),
+            });
+        }
+        let all: Vec<_> = c.nodes.iter().map(|(_, n)| n.clone()).collect();
+        let plan = interp::Plan::new(all.iter(), (c.ids + 1) as usize);
+        let slot_types: Vec<Rc<VType>> =
+            slots.iter().map(|s| s.vt.clone()).collect();
+        let slot_raw_types: Vec<Rc<VType>> = slot_types
+            .iter()
+            .map(|t| Rc::new(interp::raw_type(t)))
+            .collect();
+        let slot_templates =
+            slot_types.iter().map(|t| interp::template(t)).collect();
+        let slot_raw_templates =
+            slot_raw_types.iter().map(|t| interp::template(t)).collect();
+        let slot_caps = slot_types
+            .iter()
+            .map(|t| match t.kind.as_str() {
+                "string" => interp::str_cap(t),
+                "binary" => match &t.enc {
+                    Encoding::Binary(e) => e.bits.max(0) as usize / 8,
+                    _ => 0,
+                },
+                _ => 0,
+            })
+            .collect();
+        let mut owner_slots = std::collections::HashMap::new();
+        for o in params.iter().chain(args.iter()) {
+            if let Ok(s) = &o.slots {
+                if let Some(first) = s.first() {
+                    owner_slots.insert(o.key.clone(), (*first, s.len()));
+                }
+            }
         }
         Ok(Mission {
             id: NEXT_MISSION.fetch_add(1, Ordering::Relaxed),
@@ -552,6 +618,13 @@ impl Mission {
             args,
             slots,
             digest,
+            plan,
+            slot_templates,
+            slot_raw_types: Rc::new(slot_raw_types),
+            slot_raw_templates,
+            slot_types: Rc::new(slot_types),
+            slot_caps: Rc::new(slot_caps),
+            owner_slots,
         })
     }
 
@@ -803,7 +876,7 @@ impl Mission {
         let index = Self::find(b, path, what, |k| {
             self.nodes
                 .iter()
-                .position(|n| n.command == command && &n.key == k)
+                .position(|n| n.command == command && !n.message && &n.key == k)
         })?;
         if let Some(e) = &self.nodes[index].node.get().error {
             return Err(LookupError {
@@ -1210,6 +1283,15 @@ impl Mission {
         assert_eq!(node.mission, self.id, "a NodeId of another mission");
         let n = self.nodes[node.index].node.get();
         (!n.abstract_).then_some(n.max_bytes as usize)
+    }
+
+    /// Gives what the interpreter knows of the mission's nodes.
+    ///
+    /// # Returns
+    ///
+    /// The plan.
+    pub fn plan(&self) -> &interp::Plan {
+        &self.plan
     }
 
     /// Gives the resolved model the mission was made from.
