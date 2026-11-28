@@ -99,7 +99,7 @@ impl HookTable {
     /// # Errors
     ///
     /// NoAlgorithm, if none is set.
-    fn get(&self, h: &Hook) -> pk::Result<Algorithm> {
+    pub(crate) fn get(&self, h: &Hook) -> pk::Result<Algorithm> {
         self.index
             .get(h.ident.as_str())
             .and_then(|&i| self.fns[i])
@@ -321,7 +321,7 @@ const INPUTS: usize = 32;
 ///
 /// Missing, if a value it reads isn't there; BadSize, if an element it
 /// reads isn't.
-fn with_inputs<T>(
+pub(crate) fn with_inputs<T>(
     inputs: &[Input],
     vals: &dyn Look,
     f: impl FnOnce(&[f64]) -> T,
@@ -767,7 +767,7 @@ fn spline_orders(s: &tcs_xtce_model::model::Spline, x: f64) -> pk::Result<f64> {
 /// # Errors
 ///
 /// OutOfRange, if it isn't a number.
-fn math_value(v: &Val) -> pk::Result<f64> {
+pub(crate) fn math_value(v: &Val) -> pk::Result<f64> {
     Ok(match v {
         Val::Int(i) => *i as f64,
         Val::Big(i) => i.to_f64().unwrap_or(f64::NAN),
@@ -858,7 +858,7 @@ fn math_operator(op: &str) -> pk::MathOperator {
 ///
 /// Missing, if a value it reads isn't there; BadSize, if an element it
 /// reads isn't.
-fn math(e: &Expr, x: f64, vals: &dyn Look) -> pk::Result<f64> {
+pub(crate) fn math(e: &Expr, x: f64, vals: &dyn Look) -> pk::Result<f64> {
     Ok(match e {
         Expr::Const(c) => *c,
         Expr::Raw => x,
@@ -2122,7 +2122,7 @@ fn cmp_vals(a: &Val, b: &Val) -> Option<std::cmp::Ordering> {
 /// # Errors
 ///
 /// BadSize, if it reads an element that isn't there.
-fn term(t: &Term, vals: &dyn Look) -> pk::Result<bool> {
+pub(crate) fn term(t: &Term, vals: &dyn Look) -> pk::Result<bool> {
     match t {
         Term::AllOf(a) => {
             for x in &a.get().terms {

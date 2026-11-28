@@ -34,6 +34,13 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
   lists them, and a packet that needs one not set fails with
   ``NoAlgorithm``. They are set after the mission is read, not before
   it resolves.
+- ``Mission::alarms`` gives the alarm level of each field of the packet
+  last unpacked into a scratch, as the generated code's ``alarms()``
+  does, and ``Mission::monitor_alarms`` counts the earlier samples a
+  ``Monitor`` keeps, as ``monitor()`` does; ``Mission::derived`` gives
+  the outputs of the MathAlgorithms and CustomAlgorithms the packet
+  triggers, as ``algorithms()`` does. Each calls a function with every
+  result rather than returning a list, so that none of them allocates.
 - ``Mission::unbounded`` is still to come.
 
 

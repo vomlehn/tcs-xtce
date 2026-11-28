@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use tcs_xtce::buffer::Buffer;
 use tcs_xtce_dynamic::interp::{self, Decoded, Plan, Workspace};
-use tcs_xtce_dynamic::Mission;
+use tcs_xtce_dynamic::{AlarmLevel, Mission};
 
 /// Gives a file of the demo mission.
 ///
@@ -70,6 +70,64 @@ fn line(
     format!("{text} | {again}")
 }
 
+/// Describes the alarms and derived values of the packet last unpacked,
+/// as `examples/packet_tool.rs` does.
+///
+/// # Arguments
+///
+/// * `m`       - The mission.
+/// * `scratch` - What unpacking gave.
+/// * `mon`     - The alarm monitor kept across the vectors.
+/// * `t`       - The packet's time.
+///
+/// # Returns
+///
+/// ` | alarms: ...`, then ` | monitor: ...` when the monitor's levels
+/// differ, then ` | derived: ...`, each left out when there are none.
+fn alarm_text(
+    m: &Mission,
+    scratch: &tcs_xtce_dynamic::Scratch,
+    mon: &mut tcs_xtce_dynamic::Monitor,
+    t: f64,
+) -> String {
+    let levels = |out: &mut String, n: &str, l: Option<AlarmLevel>| {
+        if !out.is_empty() {
+            out.push_str(", ");
+        }
+        match l {
+            Some(l) => out.push_str(&format!("{n}={l}")),
+            None => out.push_str(&format!("{n}=none")),
+        }
+    };
+    let (mut a, mut mo, mut d) = (String::new(), String::new(), String::new());
+    m.alarms(scratch, |n, l| levels(&mut a, n, l)).unwrap();
+    m.monitor_alarms(scratch, mon, t, |n, l| levels(&mut mo, n, l))
+        .unwrap();
+    m.derived(scratch, |n, v| {
+        if !d.is_empty() {
+            d.push_str(", ");
+        }
+        d.push_str(n);
+        d.push('=');
+        match v {
+            Some(v) => tcs_xtce::packet::describe_f64(v, &mut d).unwrap(),
+            None => d.push_str("none"),
+        }
+    })
+    .unwrap();
+    let mut s = String::new();
+    if !a.is_empty() {
+        s += &format!(" | alarms: {a}");
+        if a != mo {
+            s += &format!(" | monitor: {mo}");
+        }
+    }
+    if !d.is_empty() {
+        s += &format!(" | derived: {d}");
+    }
+    s
+}
+
 #[test]
 fn vectors_decode_and_encode_as_the_generated_codecs_do() {
     let mut m =
@@ -99,6 +157,15 @@ fn vectors_decode_and_encode_as_the_generated_codecs_do() {
     let expected =
         std::fs::read_to_string(mission_file("vectors.expected")).unwrap();
     let (mut matched, mut skipped, mut wrong) = (0, 0, Vec::new());
+    let top = m.top();
+    let handles = [
+        m.container(top, "/Demo/CCSDSPacket").unwrap(),
+        m.meta_command(top, "/Demo/CCSDSCommand").unwrap(),
+        m.container(top, "/Demo/Housekeeping").unwrap(),
+    ];
+    let mut scratch = m.scratch();
+    let mut mon = m.monitor();
+    let mut index = 0u32;
     for (v, want) in vectors.lines().zip(expected.lines()) {
         let v = v.split('#').next().unwrap_or("");
         let mut words = v.split_whitespace();
@@ -109,6 +176,19 @@ fn vectors_decode_and_encode_as_the_generated_codecs_do() {
             .step_by(2)
             .map(|i| u8::from_str_radix(&h[i..i + 2], 16).unwrap())
             .collect();
+        // The alarms, through the interface for programs, each packet at
+        // the time of its index.
+        let t = f64::from(index);
+        index += 1;
+        let node = match kind {
+            "tm" => handles[0],
+            "tc" => handles[1],
+            _ => handles[2],
+        };
+        let extra = match m.unpack(node, &data, &mut scratch) {
+            Ok(_) => alarm_text(&m, &scratch, &mut mon, t),
+            Err(_) => String::new(),
+        };
         let got = match kind {
             "tm" => interp::classify(&tm, &data, plan, &mut ws),
             "tc" => interp::classify(&tc, &data, plan, &mut ws),
@@ -127,14 +207,7 @@ fn vectors_decode_and_encode_as_the_generated_codecs_do() {
                 continue;
             }
         };
-        let want = want
-            .split(" | alarms:")
-            .next()
-            .unwrap()
-            .split(" | derived:")
-            .next()
-            .unwrap();
-        let got = line(got, plan, &mut ws);
+        let got = line(got, plan, &mut ws) + &extra;
         if got == want {
             matched += 1;
         } else {

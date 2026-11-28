@@ -27,7 +27,7 @@ use tcs_xtce_model::dump::Shared;
 use tcs_xtce_model::model::{Count, Encoding, Node, VType};
 
 use crate::interp::{self, CodecError, Look, Val, Values, Workspace};
-use crate::{Mission, NodeId, SlotId};
+use crate::{alarms, AlarmLevel, Mission, Monitor, NodeId, SlotId};
 
 /// A value of a slot, as a program gives and reads it: an engineering
 /// value, after calibration.
@@ -140,6 +140,9 @@ pub struct Scratch {
     raws: Values,
     /// The slots the packet sets, in order.
     touched: Vec<usize>,
+    /// The container or meta-command of the packet last unpacked, or
+    /// `None` if the last failed.
+    last: Option<Shared<Node>>,
 }
 
 /// Gives the number of slots a value of a type has.
@@ -662,6 +665,7 @@ impl Mission {
             values: Values::like(&self.slot_templates),
             raws: Values::like(&self.slot_raw_templates),
             touched: Vec::with_capacity(self.slots.len()),
+            last: None,
         }
     }
 
@@ -733,6 +737,7 @@ impl Mission {
             return Err(RunError::Foreign);
         }
         scratch.touched.clear();
+        scratch.last = None;
         let n = &self.nodes[node.index].node;
         let d = if n.get().abstract_ {
             match interp::classify(n, bytes, &self.plan, &mut scratch.work) {
@@ -779,7 +784,105 @@ impl Mission {
             scratch.touched.extend(first..first + count);
         }
         drop(dn);
+        scratch.last = Some(d.node.clone());
         Ok(self.node_id(&d.node))
+    }
+
+    /// Makes an alarm monitor with no samples, for
+    /// [`Mission::monitor_alarms`].
+    ///
+    /// # Returns
+    ///
+    /// The monitor.
+    pub fn monitor(&self) -> Monitor {
+        self.monitored.monitor(self.id)
+    }
+
+    /// Evaluates the alarms of the fields of the packet last unpacked into
+    /// a scratch, on that packet alone: change ranges, minViolations and
+    /// minConformance count only it (see [`Mission::monitor_alarms`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `scratch` - What unpacking gave.
+    /// * `f`       - Called with the name of each field with an alarm, in
+    ///               order, and its level: `None` when the field is absent.
+    ///               Nothing is called if the last unpacking failed.
+    ///
+    /// # Errors
+    ///
+    /// Foreign, if the scratch is another mission's.
+    pub fn alarms(
+        &self,
+        scratch: &Scratch,
+        mut f: impl FnMut(&str, Option<AlarmLevel>),
+    ) -> Result<(), RunError> {
+        if scratch.mission != self.id {
+            return Err(RunError::Foreign);
+        }
+        if let Some(n) = &scratch.last {
+            alarms::levels(&n.get(), &scratch.work.vals, None, &mut f);
+        }
+        Ok(())
+    }
+
+    /// Evaluates the alarms of the fields of the packet last unpacked into
+    /// a scratch, as [`Mission::alarms`] does but counting the earlier
+    /// samples an alarm monitor keeps, and recording this one there.
+    ///
+    /// # Arguments
+    ///
+    /// * `scratch` - What unpacking gave.
+    /// * `monitor` - The alarm monitor.
+    /// * `t`       - The packet's time, in seconds, for change ranges.
+    /// * `f`       - Called as [`Mission::alarms`] calls it.
+    ///
+    /// # Errors
+    ///
+    /// Foreign, if the scratch or monitor is another mission's.
+    pub fn monitor_alarms(
+        &self,
+        scratch: &Scratch,
+        monitor: &mut Monitor,
+        t: f64,
+        mut f: impl FnMut(&str, Option<AlarmLevel>),
+    ) -> Result<(), RunError> {
+        if scratch.mission != self.id || monitor.mission != self.id {
+            return Err(RunError::Foreign);
+        }
+        if let Some(n) = &scratch.last {
+            let m = Some((monitor, &self.monitored, t));
+            alarms::levels(&n.get(), &scratch.work.vals, m, &mut f);
+        }
+        Ok(())
+    }
+
+    /// Evaluates the MathAlgorithms and CustomAlgorithms the packet last
+    /// unpacked into a scratch triggers, from its values.
+    ///
+    /// # Arguments
+    ///
+    /// * `scratch` - What unpacking gave.
+    /// * `f`       - Called with each output's name and value: `None` when
+    ///               an input is absent, or a custom algorithm's function
+    ///               isn't set or gives none. Nothing is called if the last
+    ///               unpacking failed.
+    ///
+    /// # Errors
+    ///
+    /// Foreign, if the scratch is another mission's.
+    pub fn derived(
+        &self,
+        scratch: &Scratch,
+        mut f: impl FnMut(&str, Option<f64>),
+    ) -> Result<(), RunError> {
+        if scratch.mission != self.id {
+            return Err(RunError::Foreign);
+        }
+        if let Some(n) = &scratch.last {
+            alarms::outputs(&n.get(), &scratch.work.vals, &mut f);
+        }
+        Ok(())
     }
 
     /// Packs a packet of a concrete container or meta-command from the

@@ -396,6 +396,13 @@ generated code's <tt class="docutils literal">hooks</tt> module takes; <tt class
 lists them, and a packet that needs one not set fails with
 <tt class="docutils literal">NoAlgorithm</tt>. They are set after the mission is read, not before
 it resolves.</li>
+<li><tt class="docutils literal"><span class="pre">Mission::alarms</span></tt> gives the alarm level of each field of the packet
+last unpacked into a scratch, as the generated code's <tt class="docutils literal">alarms()</tt>
+does, and <tt class="docutils literal"><span class="pre">Mission::monitor_alarms</span></tt> counts the earlier samples a
+<tt class="docutils literal">Monitor</tt> keeps, as <tt class="docutils literal">monitor()</tt> does; <tt class="docutils literal"><span class="pre">Mission::derived</span></tt> gives
+the outputs of the MathAlgorithms and CustomAlgorithms the packet
+triggers, as <tt class="docutils literal">algorithms()</tt> does. Each calls a function with every
+result rather than returning a list, so that none of them allocates.</li>
 <li><tt class="docutils literal"><span class="pre">Mission::unbounded</span></tt> is still to come.</li>
 </ul>
 <p>Until <tt class="docutils literal">StringSpec</tt> and <tt class="docutils literal">ByteOrder</tt> gain a lifetime (see <a class="reference internal" href="#freeing-what-was-read">Freeing

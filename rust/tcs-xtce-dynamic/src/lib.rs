@@ -9,12 +9,15 @@
 //! arguments, and the members and elements of aggregates and arrays,
 //! by the rules XTCE documents use for their own references.
 
+mod alarms;
 pub mod api;
 pub mod interp;
 mod wide;
 
+pub use alarms::Monitor;
 pub use api::{Datum, RunError, Scratch, SetError, Store};
 pub use interp::Algorithm;
+pub use tcs_xtce::packet::AlarmLevel;
 
 use std::fmt;
 use std::rc::Rc;
@@ -266,6 +269,8 @@ pub struct Mission {
     /// qualified name, its kind and its hook's name in the generated
     /// code.
     hooks: Vec<(String, String, String)>,
+    /// The parameters whose alarms an alarm monitor keeps.
+    monitored: alarms::Monitored,
     /// The first slot of each parameter and argument, and how many it
     /// has, by its key.
     owner_slots: std::collections::HashMap<String, (usize, usize)>,
@@ -464,6 +469,7 @@ impl Mission {
         let digest = Self::digest_of(docs)?;
         let mut c = Compiler::new(roots, false, dialect)?;
         let model = c.compile()?;
+        let monitored = alarms::Monitored::new(&model.monitored);
         let mut slots = Vec::new();
         let mut params = Vec::new();
         for key in c.params.keys().to_vec() {
@@ -637,6 +643,7 @@ impl Mission {
             slot_caps: Rc::new(slot_caps),
             owner_slots,
             hooks,
+            monitored,
         })
     }
 

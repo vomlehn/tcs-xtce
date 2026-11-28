@@ -1,5 +1,6 @@
 //! Checks that unpacking, committing and packing the demo mission's
-//! packets allocates nothing once the store and scratch are made, as the
+//! packets, and evaluating their alarms and derived values, allocates
+//! nothing once the store, scratch and alarm monitor are made, as the
 //! codecs generated with `--dynamic-allocations false` don't: every
 //! string, binary value and array has the room its largest value needs
 //! from the start. Integers of more than 64 bits, which the codec holds
@@ -133,6 +134,8 @@ fn packets_unpack_and_pack_without_allocating() {
     let mut store = m.store();
     let mut scratch = m.scratch();
     let mut out = Buffer::with_capacity(70_000);
+    let mut mon = m.monitor();
+    let mut t = 0.0;
     let (mut clean, mut wide) = (0, 0);
     let mut allocating = Vec::new();
     for (node, data, note) in &packets {
@@ -141,6 +144,13 @@ fn packets_unpack_and_pack_without_allocating() {
             continue;
         };
         store.commit(&scratch).unwrap();
+        t += 1.0;
+        let mut worst = None;
+        m.alarms(&scratch, |_, l| worst = worst.max(l)).unwrap();
+        m.monitor_alarms(&scratch, &mut mon, t, |_, l| worst = worst.max(l))
+            .unwrap();
+        let mut sum = 0.0;
+        m.derived(&scratch, |_, v| sum += v.unwrap_or(0.0)).unwrap();
         if m.pack(got, &store, &mut out).is_err() {
             continue;
         }
