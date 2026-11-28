@@ -329,6 +329,8 @@ pub struct Mission {
     hooks: Vec<(String, String, String)>,
     /// The parameters whose alarms an alarm monitor keeps.
     monitored: alarms::Monitored,
+    /// The string and binary slots with no maximum size of their own.
+    unbounded: Vec<SlotId>,
     /// The first slot of each parameter and argument, and how many it
     /// has, by its key.
     owner_slots: std::collections::HashMap<String, (usize, usize)>,
@@ -366,6 +368,25 @@ fn step_text(s: &Step) -> String {
         Step::Name(n) => format!(".{n}"),
         Step::Index(i) => format!("[{i}]"),
     }
+}
+
+/// Gives the most bytes a string or binary value takes on the wire.
+///
+/// # Arguments
+///
+/// * `vt` - Its type.
+///
+/// # Returns
+///
+/// The bytes, or `None` for a type of another kind.
+fn wire_room(vt: &VType) -> Option<usize> {
+    let bits = match &vt.enc {
+        Encoding::String(e) => e.fixed_bits.unwrap_or(e.max_bits),
+        Encoding::Binary(e) => e.bits,
+        Encoding::Xform(e) if !e.time => 8 * e.raw.unwrap_or(e.cap),
+        _ => return None,
+    };
+    Some((bits / 8).max(0) as usize)
 }
 
 /// Makes the slots of a value: one for a scalar, one for each member of
@@ -676,6 +697,16 @@ impl Mission {
                 _ => 0,
             })
             .collect();
+        let id = NEXT_MISSION.fetch_add(1, Ordering::Relaxed);
+        // Those the documents give no maximum size: the maximum field size
+        // bounds them instead.
+        let field = (c.max_field_bits / 8).max(0) as usize;
+        let unbounded = slot_types
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| wire_room(t).is_some_and(|n| n >= field))
+            .map(|(index, _)| SlotId { mission: id, index })
+            .collect();
         let mut owner_slots = std::collections::HashMap::new();
         for o in params.iter().chain(args.iter()) {
             if let Ok(s) = &o.slots {
@@ -685,7 +716,7 @@ impl Mission {
             }
         }
         Ok(Mission {
-            id: NEXT_MISSION.fetch_add(1, Ordering::Relaxed),
+            id,
             model,
             spaces,
             nodes,
@@ -702,6 +733,7 @@ impl Mission {
             owner_slots,
             hooks,
             monitored,
+            unbounded,
         })
     }
 
@@ -1567,6 +1599,20 @@ impl Mission {
         assert_eq!(node.mission, self.id, "a NodeId of another mission");
         let n = self.nodes[node.index].node.get();
         (!n.abstract_).then_some(n.max_bytes as usize)
+    }
+
+    /// Lists the string and binary slots whose documents give them no
+    /// maximum size, so that the maximum field size bounds them: each
+    /// gets that much room in every store and scratch, so that a program
+    /// that must stay small can refuse the mission before it starts.
+    /// Arrays with no largest count have no slots at all, and their
+    /// lookups say so.
+    ///
+    /// # Returns
+    ///
+    /// The slots.
+    pub fn unbounded(&self) -> &[SlotId] {
+        &self.unbounded
     }
 
     /// Lists the algorithms whose functions the application supplies:

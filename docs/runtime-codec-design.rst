@@ -45,7 +45,13 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
   ``Slots``: the run of slots that hold it, which
   ``Mission::parameter_slots``, ``argument_slots`` and ``entry_slots``
   look up and ``Store::each`` reads, slot by slot.
-- ``Mission::unbounded`` is still to come.
+- ``Mission::unbounded`` lists the string and binary slots whose
+  documents give them no maximum size. Rather than room that grows, each
+  gets the room the maximum field size gives, in every store and
+  scratch, so that packing and unpacking them allocates nothing either;
+  a program that must stay small can refuse the mission before it
+  starts. An array with no largest count has no slots, and its lookups
+  say so.
 
 
 

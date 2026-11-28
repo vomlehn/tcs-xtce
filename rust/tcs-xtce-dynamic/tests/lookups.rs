@@ -148,3 +148,18 @@ fn whole_values_are_runs_of_slots() {
     let probe = m.container(demo, "ProbeOne").unwrap();
     assert_eq!(m.entry_slots(probe, "Probes").unwrap(), all);
 }
+
+#[test]
+fn slots_of_no_maximum_size_are_listed() {
+    let m = demo();
+    let left: Vec<&str> =
+        m.unbounded().iter().map(|&s| m.path_of_slot(s)).collect();
+    // Binary data that takes the rest of the packet.
+    assert!(left.contains(&"/Demo/Rest"), "{left:?}");
+    // A string or binary value, each with the room the maximum field
+    // size gives.
+    for &s in m.unbounded() {
+        let k = m.slot_type(s).kind().to_string();
+        assert!(k == "string" || k == "binary", "{k}");
+    }
+}
