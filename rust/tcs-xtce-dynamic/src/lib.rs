@@ -10,6 +10,7 @@
 //! by the rules XTCE documents use for their own references.
 
 pub mod interp;
+mod wide;
 
 use std::fmt;
 use std::rc::Rc;

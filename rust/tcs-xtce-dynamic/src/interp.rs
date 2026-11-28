@@ -33,6 +33,8 @@ const F: &str = "field";
 pub enum Val {
     /// An integer.
     Int(i128),
+    /// An integer, or an enumeration's value, of more than 64 bits.
+    Big(num_bigint::BigInt),
     /// A float.
     Float(f64),
     /// An enumeration's value.
@@ -115,7 +117,17 @@ fn type_unsupported(vt: &VType) -> Option<String> {
     match &vt.enc {
         Encoding::Int(e) => {
             if e.bits > 64 {
-                return what("an integer of more than 64 bits");
+                let bytes = if vt.kind == "bool" {
+                    (e.bits + 8) / 8
+                } else {
+                    vt.width() / 8
+                };
+                if vt.kind == "int" && vt.calibrator.is_some() && vt.wide() {
+                    return what("a calibrated integer of more than 64 bits");
+                }
+                if bytes as usize > crate::wide::MAX_BYTES {
+                    return what("an integer of more than 512 bits");
+                }
             }
         }
         Encoding::Float(_) => {}
@@ -123,10 +135,13 @@ fn type_unsupported(vt: &VType) -> Option<String> {
         Encoding::Binary(_) => {}
         Encoding::Array(e) => return type_unsupported(&e.elem),
         Encoding::Aggregate(e) => {
-            if e.transform.is_some() || !e.checks.is_empty() {
-                return what(
-                    "a repeated container with a transform or criteria",
-                );
+            if e.transform.is_some() {
+                return what("a repeated container with a transform");
+            }
+            for r in &e.checks {
+                if let Some(w) = r.criteria.iter().find_map(term_unsupported) {
+                    return Some(w);
+                }
             }
             for m in &e.members {
                 if let Some(w) = type_unsupported(&m.vtype) {
@@ -155,22 +170,7 @@ fn term_unsupported(t: &Term) -> Option<String> {
         Term::AnyOf(a) => a.get().terms.iter().find_map(term_unsupported),
         Term::Criterion(c) => {
             let c = c.get();
-            let steps = c.path.iter().chain(c.other_path.iter());
-            for s in steps {
-                if let PathStep::Index(i) = s {
-                    if i.stride != 0 {
-                        return Some(
-                            "a criterion on an element of a varying array"
-                                .into(),
-                        );
-                    }
-                }
-            }
-            if c.local.get().vt().wide() {
-                return Some(
-                    "a criterion on an integer of more than 64 bits".into(),
-                );
-            }
+            let _ = c;
             None
         }
     }
@@ -189,14 +189,8 @@ fn items_unsupported(items: &[Item]) -> Option<String> {
     for it in items {
         let bad = match it {
             Item::Seek(s) => {
-                if s.span.is_some() {
-                    Some(
-                        "a location from the end, past values of varying size"
-                            .to_string(),
-                    )
-                } else {
-                    None
-                }
+                let _ = s;
+                None
             }
             Item::Mark(_) | Item::Pad(_) | Item::Fixed(_) => None,
             Item::Require(r) => r.criteria.iter().find_map(term_unsupported),
@@ -208,18 +202,10 @@ fn items_unsupported(items: &[Item]) -> Option<String> {
             Item::Fill(_) => None,
             Item::Value(v) => {
                 let l = v.local.get();
-                if l.length.is_some() && l.measures {
-                    Some("the length field of an included container".into())
-                } else {
-                    type_unsupported(&l.vt())
-                }
+                type_unsupported(&l.vt())
             }
-            Item::TailSeek(_) | Item::TailPad(_) => {
-                Some("a location from the end".into())
-            }
-            Item::LengthEnd(_) => {
-                Some("the length field of an included container".into())
-            }
+            Item::TailSeek(_) | Item::TailPad(_) => None,
+            Item::LengthEnd(_) => None,
             Item::Transform(_) => Some("a transform".into()),
             Item::Verify(v) => check_unsupported(&v.check.get()),
             Item::Segment(_) => None,
@@ -450,6 +436,7 @@ fn terms(c: &tcs_xtce_model::model::Polynomial) -> Vec<(f64, i32)> {
 fn math_value(v: &Val) -> pk::Result<f64> {
     Ok(match v {
         Val::Int(i) => *i as f64,
+        Val::Big(i) => i.to_f64().unwrap_or(f64::NAN),
         Val::Float(x) => *x,
         Val::Enum(i) => *i as f64,
         Val::Bool(b) => {
@@ -841,6 +828,7 @@ fn source(d: &DynSize, vals: &Values, inner: Inner<'_>) -> pk::Result<f64> {
     let (x, _) = reach(v, &l.get().vt(), &d.path)?;
     Ok(match x {
         Val::Int(i) => *i as f64,
+        Val::Big(i) => i.to_f64().unwrap_or(f64::NAN),
         Val::Enum(i) => *i as f64,
         Val::Float(f) => *f,
         Val::Bool(b) => *b as u8 as f64,
@@ -898,6 +886,107 @@ fn count_of(c: &Count, vals: &Values, inner: Inner<'_>) -> pk::Result<i64> {
         Count::Int(n) => Ok(*n),
         Count::Dyn(d) => Ok(size_of(d, vals, inner)? as i64),
     }
+}
+
+/// Gives the bits a Span covers.
+///
+/// # Arguments
+///
+/// * `sp`   - The span.
+/// * `vals` - The values of the packet so far.
+///
+/// # Returns
+///
+/// The bits.
+///
+/// # Errors
+///
+/// As [`size_of`]'s.
+fn span(sp: &tcs_xtce_model::model::Span, vals: &Values) -> pk::Result<usize> {
+    let count = count_of(&sp.count, vals, &[])? as usize;
+    let gap = count_of(&sp.gap, vals, &[])? as usize;
+    Ok(pk::span_bits(count, sp.each as usize, gap))
+}
+
+/// Gives the offset of a Seek: its bits, less those it backs up and
+/// those of the entry it places from the end.
+///
+/// # Arguments
+///
+/// * `s`    - The Seek.
+/// * `vals` - The values of the packet so far.
+///
+/// # Returns
+///
+/// The offset in bits.
+///
+/// # Errors
+///
+/// As [`size_of`]'s.
+fn seek_offset(
+    s: &tcs_xtce_model::model::Seek,
+    vals: &Values,
+) -> pk::Result<i64> {
+    let mut off = count_of(&s.offset, vals, &[])? - s.back;
+    if let Some(sp) = &s.span {
+        off -= span(sp, vals)? as i64;
+    }
+    Ok(off)
+}
+
+/// Gives the bits a TailSeek goes back from the end.
+///
+/// # Arguments
+///
+/// * `t`    - The TailSeek.
+/// * `vals` - The values of the packet so far.
+///
+/// # Returns
+///
+/// The bits.
+///
+/// # Errors
+///
+/// As [`size_of`]'s.
+fn tail_back(
+    t: &tcs_xtce_model::model::TailSeek,
+    vals: &Values,
+) -> pk::Result<usize> {
+    let mut back = t.back as usize;
+    if let Some(sp) = &t.span {
+        back += span(sp, vals)?;
+    }
+    Ok(back)
+}
+
+/// Rounds a calibrated integer's engineering value to the integer its
+/// generated field holds.
+///
+/// # Arguments
+///
+/// * `vt` - The type.
+/// * `y`  - The engineering value.
+///
+/// # Returns
+///
+/// The integer.
+///
+/// # Errors
+///
+/// OutOfRange, if the field can't hold it.
+fn round_int(vt: &VType, y: f64) -> pk::Result<i128> {
+    let w = vt.width() as i32;
+    let (lo, lim) = if vt.signed() {
+        (-(2f64.powi(w - 1)), 2f64.powi(w - 1))
+    } else {
+        (0.0, 2f64.powi(w))
+    };
+    let v = pk::round_to_int(y, lo, lim, F)?;
+    Ok(if vt.signed() {
+        v as i64 as i128
+    } else {
+        v as u64 as i128
+    })
 }
 
 // --- decoding ----------------------------------------------------------
@@ -971,7 +1060,9 @@ fn read_plain(
             if e.pad != 0 {
                 r.pad(e.pad as usize, F)?;
             }
-            Ok(Val::Agg(got.into_iter().map(|g| g.1).collect()))
+            let copy = Val::Agg(got.into_iter().map(|g| g.1).collect());
+            copy_checks(e, &copy)?;
+            Ok(copy)
         }
         Encoding::Array(e) => {
             let n = count_of(&e.count, vals, inner)?;
@@ -984,6 +1075,36 @@ fn read_plain(
             }
             Ok(Val::Arr(out))
         }
+        Encoding::Int(e) if e.bits > 64 => {
+            let w = crate::wide::Wide {
+                bits: e.bits as u32,
+                lsb: e.lsb,
+                order: byte_order(&e.order),
+                enc: int_enc(vt),
+                bcd: bcd(&e.encoding),
+                signed: vt.signed(),
+            };
+            if vt.kind == "float" {
+                let x = crate::wide::read_f64(r, w)?;
+                return Ok(Val::Float(calibrate(vt, x, vals)?));
+            }
+            if vt.kind == "int" && vt.calibrator.is_some() {
+                let y = calibrate(vt, crate::wide::read_f64(r, w)?, vals)?;
+                return Ok(Val::Int(round_int(vt, y)?));
+            }
+            if vt.kind == "bool" {
+                // A bit more than the field, so that it stays positive.
+                let n = ((e.bits + 8) / 8) as usize;
+                let w = crate::wide::Wide { signed: false, ..w };
+                let x = crate::wide::read(r, w, n)?;
+                return Ok(Val::Bool(x != num_bigint::BigInt::from(0)));
+            }
+            Ok(Val::Big(crate::wide::read(
+                r,
+                w,
+                (vt.width() / 8) as usize,
+            )?))
+        }
         Encoding::Int(e) => {
             let bits = e.bits as u32;
             let mut raw = raw_read(r, e.bits, &e.order, e.lsb)? as u64;
@@ -995,18 +1116,7 @@ fn read_plain(
                 "int" if vt.calibrator.is_some() => {
                     let y =
                         calibrate(vt, pk::int_to_f64(raw, bits, enc), vals)?;
-                    let w = vt.width();
-                    let (lo, lim) = if vt.signed() {
-                        (-(2f64.powi(w as i32 - 1)), 2f64.powi(w as i32 - 1))
-                    } else {
-                        (0.0, 2f64.powi(w as i32))
-                    };
-                    let v = pk::round_to_int(y, lo, lim, F)?;
-                    Val::Int(if vt.signed() {
-                        v as i64 as i128
-                    } else {
-                        v as u64 as i128
-                    })
+                    Val::Int(round_int(vt, y)?)
                 }
                 "int" if vt.signed() => {
                     Val::Int(pk::to_signed(raw, bits, enc) as i128)
@@ -1127,9 +1237,18 @@ fn reach<'v>(
                 let Val::Arr(es) = v else {
                     unreachable!("an array value")
                 };
-                v = es
-                    .get(ix.i as usize)
-                    .ok_or(PacketError::BadSize { field: F })?;
+                let bad = PacketError::BadSize { field: F };
+                v = if ix.stride != 0 {
+                    // An element of an array whose count varies, in a
+                    // dimension of a fixed size.
+                    let d = es.len() / ix.per as usize;
+                    if d < ix.need as usize {
+                        return Err(bad);
+                    }
+                    es.get(ix.i as usize + ix.stride as usize * d).ok_or(bad)?
+                } else {
+                    es.get(ix.i as usize).ok_or(bad)?
+                };
                 let next = e.elem.clone();
                 vt = next;
             }
@@ -1172,6 +1291,7 @@ fn holds(op: &str, o: Option<std::cmp::Ordering>) -> bool {
 /// How the value compares with it.
 fn cmp_lit(v: &Val, vt: &VType, lit: &Lit) -> Option<std::cmp::Ordering> {
     match (v, lit) {
+        (Val::Big(a), Lit::Int(b)) => a.partial_cmp(b),
         (Val::Int(a), Lit::Int(b)) => match b.to_i128() {
             Some(b) => a.partial_cmp(&b),
             // Outside what any value holds: every value is on one side.
@@ -1216,6 +1336,13 @@ fn cmp_lit(v: &Val, vt: &VType, lit: &Lit) -> Option<std::cmp::Ordering> {
 fn cmp_vals(a: &Val, b: &Val) -> Option<std::cmp::Ordering> {
     match (a, b) {
         (Val::Int(x), Val::Int(y)) => x.partial_cmp(y),
+        (Val::Big(x), Val::Big(y)) => x.partial_cmp(y),
+        (Val::Big(x), Val::Int(y)) => {
+            x.partial_cmp(&num_bigint::BigInt::from(*y))
+        }
+        (Val::Int(x), Val::Big(y)) => {
+            num_bigint::BigInt::from(*x).partial_cmp(y)
+        }
         (Val::Enum(x), Val::Enum(y)) => x.partial_cmp(y),
         (Val::Float(x), Val::Float(y)) => x.partial_cmp(y),
         (Val::Bool(x), Val::Bool(y)) => x.partial_cmp(y),
@@ -1425,6 +1552,40 @@ fn region(
     (start, last)
 }
 
+/// Checks that one copy of a repeated container meets the container's
+/// own criteria.
+///
+/// # Arguments
+///
+/// * `e`    - The aggregate of the copy, which holds the criteria.
+/// * `copy` - The copy.
+///
+/// # Errors
+///
+/// Mismatch, if a criterion doesn't hold.
+fn copy_checks(
+    e: &tcs_xtce_model::model::AggregateEnc,
+    copy: &Val,
+) -> pk::Result<()> {
+    if e.checks.is_empty() {
+        return Ok(());
+    }
+    let this = e.this.as_ref().expect("the copy's own Local");
+    let mut vals = Values::new();
+    vals.insert(this.get().id, Some(copy.clone()));
+    for r in &e.checks {
+        for t in &r.criteria {
+            if !term(t, &vals)? {
+                return Err(PacketError::Mismatch {
+                    container: F,
+                    criterion: F,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The state of a decoding.
 struct Dec<'d> {
     /// The reader.
@@ -1437,6 +1598,9 @@ struct Dec<'d> {
     sums: HashMap<i64, usize>,
     /// The bits read so far of each value read in segments.
     segs: HashMap<i64, u64>,
+    /// Where the container each length field of an included container
+    /// measures must end, by the field's number.
+    spans: HashMap<i64, i128>,
 }
 
 impl Dec<'_> {
@@ -1462,9 +1626,18 @@ impl Dec<'_> {
             .checksum(&checksum_spec(&c.spec), start, end, F)
             .map_err(at(&name))?;
         let value = match self.vals.get(&l.id).cloned().flatten() {
-            Some(Val::Int(v)) => v as u64,
-            _ => 0,
+            Some(Val::Int(v)) => Some(v as u64),
+            // A wider field holds the value with zeros above it.
+            Some(Val::Big(v)) => v.to_u64(),
+            _ => Some(0),
         };
+        if l.vt().wide() {
+            if Some(x) != value {
+                return Err(at(&name)(PacketError::BadChecksum { field: F }));
+            }
+            return Ok(());
+        }
+        let value = value.unwrap_or(0);
         let mask = if e.bits >= 64 {
             u64::MAX
         } else {
@@ -1490,9 +1663,7 @@ impl Dec<'_> {
         for it in items {
             match it {
                 Item::Seek(s) => {
-                    let off = count_of(&s.offset, &self.vals, &[])
-                        .map_err(at(where_))?
-                        - s.back;
+                    let off = seek_offset(s, &self.vals).map_err(at(where_))?;
                     match s.from_start {
                         None => self.r.skip(off, F),
                         Some(m) => {
@@ -1536,6 +1707,20 @@ impl Dec<'_> {
                     self.r.pad(p, F).map_err(at(&f.container))?;
                 }
                 Item::Verify(v) => self.verify(&v.check.get())?,
+                Item::TailSeek(t) => {
+                    let back = tail_back(t, &self.vals).map_err(at(where_))?;
+                    self.r.seek_end(back, F).map_err(at(where_))?;
+                }
+                // The packet's last bits, which encoding fills with zeros.
+                Item::TailPad(t) => {
+                    self.r.skip(t.bits, F).map_err(at(where_))?;
+                }
+                Item::LengthEnd(e) => {
+                    let l = e.local.get();
+                    self.r
+                        .check_span(self.spans[&l.id], F)
+                        .map_err(at(&l.name))?;
+                }
                 Item::Segment(g) => {
                     let g = g.get();
                     let l = g.local.get();
@@ -1568,8 +1753,33 @@ impl Dec<'_> {
                         read_val(&mut self.r, &vt, &self.vals, &[])
                     }
                     .map_err(at(&l.name))?;
-                    if let (Some(adj), Val::Int(n)) = (l.length, &x) {
-                        self.r.limit(*n as u64, adj, F).map_err(at(&l.name))?;
+                    let n = match &x {
+                        Val::Int(n) => Some(*n as u64),
+                        // A wider field must hold a length a u64 holds.
+                        Val::Big(n) => match n.to_u64() {
+                            Some(n) => Some(n),
+                            None if l.length.is_some() => {
+                                return Err(at(&l.name)(
+                                    PacketError::BadLength { field: F },
+                                ))
+                            }
+                            None => None,
+                        },
+                        _ => None,
+                    };
+                    if let (Some(adj), Some(n)) = (l.length, n) {
+                        let n = &(n as i128);
+                        if l.measures {
+                            let e = self
+                                .r
+                                .span_end(*n as u64, adj, F)
+                                .map_err(at(&l.name))?;
+                            self.spans.insert(l.id, e);
+                        } else {
+                            self.r
+                                .limit(*n as u64, adj, F)
+                                .map_err(at(&l.name))?;
+                        }
                     }
                     self.vals.insert(l.id, Some(x));
                 }
@@ -1694,6 +1904,7 @@ pub fn decode(n: &Shared<Node>, data: &[u8]) -> CodecResult<Decoded> {
         marks: HashMap::new(),
         sums: HashMap::new(),
         segs: HashMap::new(),
+        spans: HashMap::new(),
     };
     for m in n.chain() {
         let m = m.get();
@@ -1730,6 +1941,7 @@ pub fn classify(root: &Shared<Node>, data: &[u8]) -> Classified {
         marks: HashMap::new(),
         sums: HashMap::new(),
         segs: HashMap::new(),
+        spans: HashMap::new(),
     };
     let key = root.get().key.clone();
     if let Err(e) = d.items(&root.get().items, &key) {
@@ -1782,8 +1994,11 @@ fn dispatch(n: &Shared<Node>, d: &mut Dec<'_>) -> Classified {
         if c.get().error.is_some() {
             continue;
         }
-        if let Some(w) = node_unsupported(c) {
-            return Err(w);
+        // Its criteria are tested if they can be: a packet it doesn't
+        // match never needs what else it has.
+        let crit = c.get().criteria.iter().find_map(term_unsupported);
+        if let Some(w) = crit {
+            return Err(format!("{}: {w}", c.get().key));
         }
         let mut ok = true;
         for t in &c.get().criteria {
@@ -1797,6 +2012,9 @@ fn dispatch(n: &Shared<Node>, d: &mut Dec<'_>) -> Classified {
             }
         }
         if ok {
+            if let Some(w) = node_unsupported(c) {
+                return Err(w);
+            }
             let key = c.get().key.clone();
             let items = c.get().items.clone();
             if let Err(e) = d.items(&items, &key) {
@@ -1833,6 +2051,7 @@ fn lit_val(vt: &VType, lit: &Lit) -> Val {
     match (vt.kind.as_str(), lit) {
         ("float", Lit::Int(i)) => Val::Float(i.to_f64().unwrap_or(f64::NAN)),
         ("float", Lit::Float(x)) => Val::Float(*x),
+        ("int" | "enum", Lit::Int(i)) if vt.wide() => Val::Big(i.clone()),
         ("enum", Lit::Int(i)) => Val::Enum(i.to_i64().unwrap_or(0)),
         (_, Lit::Int(i)) => Val::Int(i.to_i128().unwrap_or(0)),
         (_, Lit::Float(x)) => Val::Float(*x),
@@ -1864,7 +2083,15 @@ fn check_valid(vt: &VType, v: &Val) -> pk::Result<()> {
         Num::Int(i) => i.to_i128().unwrap_or(0),
         Num::Float(x) => *x as i128,
     };
+    let big = |n: &Num| match n {
+        Num::Int(i) => i.clone(),
+        Num::Float(x) => num_bigint::BigInt::from(*x as i128),
+    };
     let ok = vt.valid.iter().any(|b| match v {
+        Val::Big(x) => {
+            b.lo.as_ref().is_none_or(|lo| big(lo) <= *x)
+                && b.hi.as_ref().is_none_or(|hi| *x <= big(hi))
+        }
         Val::Int(x) => {
             b.lo.as_ref().is_none_or(|lo| int(lo) <= *x)
                 && b.hi.as_ref().is_none_or(|hi| *x <= int(hi))
@@ -1967,6 +2194,7 @@ fn write_plain(
     let bad = PacketError::BadSize { field: F };
     match (&vt.enc, v) {
         (Encoding::Aggregate(e), Val::Agg(ms)) => {
+            copy_checks(e, v)?;
             let named: Vec<(String, Val)> = e
                 .members
                 .iter()
@@ -1996,6 +2224,40 @@ fn write_plain(
                 write_val(w, &e.elem, x, vals, inner)?;
             }
             Ok(())
+        }
+        (Encoding::Int(e), _) if e.bits > 64 => {
+            let w_ = crate::wide::Wide {
+                bits: e.bits as u32,
+                lsb: e.lsb,
+                order: byte_order(&e.order),
+                enc: int_enc(vt),
+                bcd: bcd(&e.encoding),
+                signed: vt.signed(),
+            };
+            match v {
+                Val::Float(x) => {
+                    let y = uncalibrate(vt, *x, vals)?;
+                    crate::wide::write_f64(w, w_, y)
+                }
+                Val::Int(x) if vt.calibrator.is_some() => {
+                    let y = uncalibrate(vt, *x as f64, vals)?;
+                    crate::wide::write_f64(w, w_, y)
+                }
+                Val::Bool(b) => {
+                    let n = ((e.bits + 8) / 8) as usize;
+                    let w_ = crate::wide::Wide {
+                        signed: false,
+                        bcd: None,
+                        ..w_
+                    };
+                    let x = num_bigint::BigInt::from(*b as u8);
+                    crate::wide::write(w, w_, n, &x)
+                }
+                Val::Big(x) => {
+                    crate::wide::write(w, w_, (vt.width() / 8) as usize, x)
+                }
+                _ => Err(PacketError::OutOfRange { field: F }),
+            }
         }
         (Encoding::Int(e), _) => {
             let bits = e.bits as u32;
@@ -2147,9 +2409,7 @@ impl Enc<'_, '_> {
         for it in items {
             match it {
                 Item::Seek(s) => {
-                    let off = count_of(&s.offset, &self.vals, &[])
-                        .map_err(at(where_))?
-                        - s.back;
+                    let off = seek_offset(s, &self.vals).map_err(at(where_))?;
                     match s.from_start {
                         None => self.w.skip(off, F),
                         Some(m) => {
@@ -2204,6 +2464,26 @@ impl Enc<'_, '_> {
                     }
                 }
                 Item::Verify(v) => self.patch(&v.check.get())?,
+                Item::TailSeek(t) => {
+                    let back = tail_back(t, &self.vals).map_err(at(where_))?;
+                    self.w.seek_tail(back);
+                }
+                Item::TailPad(t) => self.w.zeros(t.bits as usize),
+                Item::LengthEnd(e) => {
+                    let l = e.local.get();
+                    let Encoding::Int(enc) = &l.vt().enc else {
+                        unreachable!("an integer")
+                    };
+                    self.w
+                        .patch_span(
+                            self.computed[&l.id],
+                            enc.bits as u32,
+                            matches!(enc.order, Order::Le),
+                            l.length.unwrap(),
+                            F,
+                        )
+                        .map_err(at(&l.name))?;
+                }
                 Item::Segment(g) => {
                     let g = g.get();
                     let l = g.local.get();
@@ -2440,6 +2720,17 @@ pub fn describe(vt: &VType, v: &Val, out: &mut String) {
         },
         (_, Val::Int(x)) => {
             let _ = write!(out, "{x}");
+        }
+        (_, Val::Big(x)) => {
+            let label = x.to_i64().and_then(|v| {
+                vt.labels.iter().find(|l| l.value <= v && v <= l.max_value)
+            });
+            match label {
+                Some(l) if vt.kind == "enum" => out.push_str(&l.label),
+                _ => {
+                    let _ = write!(out, "{x}");
+                }
+            }
         }
         (_, Val::Bool(b)) => {
             let _ = write!(out, "{b}");
