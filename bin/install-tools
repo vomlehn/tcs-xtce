@@ -40,7 +40,8 @@ DNF_BUILD="gcc gcc-c++ make binutils pkgconf-pkg-config fontconfig-devel
 APT_RUST="rustup"
 DNF_RUST="cargo rust rustfmt"
 RUST_COMPONENTS="rustfmt"
-CARGO_TOOLS=""
+# cbindgen: make c-header and test-c-dynamic make the C header with it.
+CARGO_TOOLS="cbindgen"
 PIPX_TOOLS=""
 CHECKOUTS="tcs-helpers"
 # The packaging tools: make packages, make lint-packages, maturin, which
