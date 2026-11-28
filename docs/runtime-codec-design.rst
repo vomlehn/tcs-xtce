@@ -494,10 +494,17 @@ it:
   an application supplies are any callable. ``tests/cpp_test.cpp``
   supplies the demo's algorithms as lambdas and packs and unpacks every
   vector through it.
-- **Python**: a PyO3 extension module, part of the ``tcs_xtce`` Python
-  package, as `tcs-xtce in Rust <rust-migration-design.html>`__
-  proposes for all of tcs-xtce's Python. It calls the Rust directly,
-  not through the C API.
+- **Python**: ``tcs_xtce.dynamic``, part of the ``tcs_xtce`` Python
+  package, from the submodule ``dynamic`` of its PyO3 extension module
+  ``tcs_xtce._native`` (``rust/tcs-xtce-python/src/dynamic.rs``), as
+  `tcs-xtce in Rust <rust-migration-design.html>`__ proposes for all of
+  tcs-xtce's Python. It calls the Rust directly, not through the C API.
+  Values are Python's own, the functions a mission's algorithms need are
+  any callable (an exception one raises is raised from the codec's call
+  that called it), and failures are raised as ``LookupError``,
+  ``PacketError``, ``UnsupportedError`` and ``SetError``.
+  ``python/tests/test_dynamic.py`` supplies the demo's algorithms in
+  Python and checks every vector's bytes and alarm levels.
 
 Every language gets the same operations, and its answers are the Rust
 codec's. CONTRIBUTING.md's rule that Rust, C/C++ and Python stay in

@@ -152,7 +152,9 @@ $(PYO3_GEN): $(XSD) $(GEN_SRC)
 # Python looks for it: a shared library is .so to Python on Linux and
 # macOS alike.
 $(NATIVE): $(PYO3_GEN) $(RUST_GEN) $(wildcard rust/tcs-xtce-python/src/*.rs \
-           rust/tcs-xtce-python/Cargo.toml rust/src/*.rs rust/tcsxtce/src/*.rs)
+           rust/tcs-xtce-python/Cargo.toml rust/src/*.rs rust/tcsxtce/src/*.rs \
+           rust/tcs-xtce-dynamic/src/*.rs rust/tcs-xtce-model/src/*.rs \
+           rust/tcs-xtce-model/src/*/*.rs)
 	cd rust/tcs-xtce-python && $(CARGO) build --release
 	cp rust/tcs-xtce-python/target/release/$(NATIVE_LIB) $@
 	@touch $@

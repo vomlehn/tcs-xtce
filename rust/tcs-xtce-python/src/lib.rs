@@ -12,6 +12,7 @@ use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBytes, PyList};
 use pyo3::IntoPyObjectExt;
 
+mod dynamic;
 mod generated;
 
 /// Builds the Python object for a Rust value of the XML binding.
@@ -269,5 +270,6 @@ fn to_xml<'py>(
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_xml, m)?)?;
     m.add_function(wrap_pyfunction!(to_xml, m)?)?;
+    m.add_submodule(&dynamic::module(m.py())?)?;
     Ok(())
 }

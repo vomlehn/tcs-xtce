@@ -862,10 +862,17 @@ document; a failure is thrown as <tt class="docutils literal"><span class="pre">
 an application supplies are any callable. <tt class="docutils literal">tests/cpp_test.cpp</tt>
 supplies the demo's algorithms as lambdas and packs and unpacks every
 vector through it.</li>
-<li><strong>Python</strong>: a PyO3 extension module, part of the <tt class="docutils literal">tcs_xtce</tt> Python
-package, as <a class="reference external" href="rust-migration-design.html">tcs-xtce in Rust</a>
-proposes for all of tcs-xtce's Python. It calls the Rust directly,
-not through the C API.</li>
+<li><strong>Python</strong>: <tt class="docutils literal">tcs_xtce.dynamic</tt>, part of the <tt class="docutils literal">tcs_xtce</tt> Python
+package, from the submodule <tt class="docutils literal">dynamic</tt> of its PyO3 extension module
+<tt class="docutils literal">tcs_xtce._native</tt> (<tt class="docutils literal"><span class="pre">rust/tcs-xtce-python/src/dynamic.rs</span></tt>), as
+<a class="reference external" href="rust-migration-design.html">tcs-xtce in Rust</a> proposes for all of
+tcs-xtce's Python. It calls the Rust directly, not through the C API.
+Values are Python's own, the functions a mission's algorithms need are
+any callable (an exception one raises is raised from the codec's call
+that called it), and failures are raised as <tt class="docutils literal">LookupError</tt>,
+<tt class="docutils literal">PacketError</tt>, <tt class="docutils literal">UnsupportedError</tt> and <tt class="docutils literal">SetError</tt>.
+<tt class="docutils literal">python/tests/test_dynamic.py</tt> supplies the demo's algorithms in
+Python and checks every vector's bytes and alarm levels.</li>
 </ul>
 <p>Every language gets the same operations, and its answers are the Rust
 codec's. CONTRIBUTING.md's rule that Rust, C/C++ and Python stay in

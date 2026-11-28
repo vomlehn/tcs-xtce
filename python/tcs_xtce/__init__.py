@@ -41,7 +41,7 @@ _OWN = ["DEFAULT_CAPACITY", "Document", "ManagedBuffer", "XtceError",
 # the XML binding: `from tcsxtce import digest` asks for one of these by
 # name before importing it.
 _MODULES = {"_native", "binding", "compiler", "digest_cli", "document",
-            "generated", "__main__"}
+            "dynamic", "generated", "__main__"}
 
 
 def __getattr__(name: str):
