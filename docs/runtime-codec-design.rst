@@ -18,8 +18,9 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
   meta-command, so that a program can refuse the mission before it
   starts.
 - ``Datum`` holds an integer of more than 128 bits as ``Big``, a
-  ``WideInt`` (72 bytes of two's complement, which hold any integer of
-  up to 512 bits; ``to_big`` and ``from_big`` convert it), and has no
+  ``WideInt`` (two's complement in 1032 bytes, which hold any integer
+  of up to 8192 bits, the most the codec runs; ``to_big`` and
+  ``from_big`` convert it), and has no
   ``Time`` yet: a time is the float the compiler makes of it.
 - ``Store::set_raw`` leaves the slot without an engineering value until
   one is set or unpacked: ``get`` gives none, and ``get_raw`` the raw

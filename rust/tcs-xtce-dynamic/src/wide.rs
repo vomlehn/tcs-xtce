@@ -1,9 +1,10 @@
 //! Integers of more than 64 bits. The runtime reads and writes them as
 //! integers of a width fixed when the program is compiled, as the code
 //! generated for a mission does; the interpreter learns the width only
-//! when it reads the mission, so it runs the runtime's helpers at each
-//! width from 9 to 64 bytes, and holds the values as [`WideInt`]s, of a
-//! width that holds them all, so that nothing is allocated for them.
+//! when it reads the mission, so it runs the runtime's helpers at a few
+//! widths, each field at the least that holds it, and holds the values
+//! as [`WideInt`]s, of a width that holds them all, so that nothing is
+//! allocated for them.
 
 use std::cmp::Ordering;
 
@@ -14,11 +15,11 @@ use tcs_xtce::packet::{
 };
 
 /// The bytes of a [`WideInt`].
-const WIDE: usize = 72;
+const WIDE: usize = MAX_BYTES + 8;
 
-/// An integer of more than 64 bits, as the codec holds it: 72 bytes of
-/// two's complement, which hold every signed and unsigned integer of up
-/// to 512 bits.
+/// An integer of more than 64 bits, as the codec holds it: two's
+/// complement, in more bytes than [`MAX_BYTES`], so that it holds every
+/// signed and unsigned integer of up to `8 * MAX_BYTES` bits.
 pub type WideInt = pk::Int<WIDE>;
 
 /// Gives an integer as a wide one.
@@ -146,70 +147,41 @@ pub fn cmp_big(w: &WideInt, b: &BigInt) -> Ordering {
 const F: &str = "field";
 
 /// The most bytes a wide integer may take.
-pub const MAX_BYTES: usize = 64;
+pub const MAX_BYTES: usize = 1024;
 
-/// Runs a function generic over a width in bytes, from 9 to 64, at the
-/// width given.
+/// The widths, in bytes, the interpreter runs the runtime's helpers at:
+/// a field is read and written at the least that holds it, the bits
+/// beyond its own ignored.
+const BUCKETS: [usize; 7] = [16, 32, 64, 128, 256, 512, MAX_BYTES];
+
+/// Gives the width the runtime's helpers run at for a field.
+///
+/// # Arguments
+///
+/// * `bytes` - The bytes of the field.
+///
+/// # Returns
+///
+/// The least of [`BUCKETS`] that holds them.
+fn bucket(bytes: usize) -> usize {
+    BUCKETS
+        .into_iter()
+        .find(|&b| bytes <= b)
+        .expect("a width the interpreter supports")
+}
+
+/// Runs a function generic over a width in bytes at the width that holds
+/// a field of some bytes.
 macro_rules! at_width {
     ($n:expr, $f:ident, $($a:expr),*) => {
-        match $n {
-            9 => $f::<9>($($a),*),
-            10 => $f::<10>($($a),*),
-            11 => $f::<11>($($a),*),
-            12 => $f::<12>($($a),*),
-            13 => $f::<13>($($a),*),
-            14 => $f::<14>($($a),*),
-            15 => $f::<15>($($a),*),
+        match bucket($n) {
             16 => $f::<16>($($a),*),
-            17 => $f::<17>($($a),*),
-            18 => $f::<18>($($a),*),
-            19 => $f::<19>($($a),*),
-            20 => $f::<20>($($a),*),
-            21 => $f::<21>($($a),*),
-            22 => $f::<22>($($a),*),
-            23 => $f::<23>($($a),*),
-            24 => $f::<24>($($a),*),
-            25 => $f::<25>($($a),*),
-            26 => $f::<26>($($a),*),
-            27 => $f::<27>($($a),*),
-            28 => $f::<28>($($a),*),
-            29 => $f::<29>($($a),*),
-            30 => $f::<30>($($a),*),
-            31 => $f::<31>($($a),*),
             32 => $f::<32>($($a),*),
-            33 => $f::<33>($($a),*),
-            34 => $f::<34>($($a),*),
-            35 => $f::<35>($($a),*),
-            36 => $f::<36>($($a),*),
-            37 => $f::<37>($($a),*),
-            38 => $f::<38>($($a),*),
-            39 => $f::<39>($($a),*),
-            40 => $f::<40>($($a),*),
-            41 => $f::<41>($($a),*),
-            42 => $f::<42>($($a),*),
-            43 => $f::<43>($($a),*),
-            44 => $f::<44>($($a),*),
-            45 => $f::<45>($($a),*),
-            46 => $f::<46>($($a),*),
-            47 => $f::<47>($($a),*),
-            48 => $f::<48>($($a),*),
-            49 => $f::<49>($($a),*),
-            50 => $f::<50>($($a),*),
-            51 => $f::<51>($($a),*),
-            52 => $f::<52>($($a),*),
-            53 => $f::<53>($($a),*),
-            54 => $f::<54>($($a),*),
-            55 => $f::<55>($($a),*),
-            56 => $f::<56>($($a),*),
-            57 => $f::<57>($($a),*),
-            58 => $f::<58>($($a),*),
-            59 => $f::<59>($($a),*),
-            60 => $f::<60>($($a),*),
-            61 => $f::<61>($($a),*),
-            62 => $f::<62>($($a),*),
-            63 => $f::<63>($($a),*),
             64 => $f::<64>($($a),*),
-            _ => unreachable!("a width the interpreter supports"),
+            128 => $f::<128>($($a),*),
+            256 => $f::<256>($($a),*),
+            512 => $f::<512>($($a),*),
+            _ => $f::<MAX_BYTES>($($a),*),
         }
     };
 }

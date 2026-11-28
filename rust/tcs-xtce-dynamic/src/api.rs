@@ -35,7 +35,7 @@ pub enum Datum<'s> {
     /// An integer of up to 128 bits.
     Int(i128),
     /// An integer of more than 128 bits.
-    Big(WideInt),
+    Big(&'s WideInt),
     /// A float.
     Float(f64),
     /// An enumeration's value; its label is in the type.
@@ -201,7 +201,7 @@ fn assign(dst: &mut Val, src: &Val) {
             a.clear();
             a.extend_from_slice(b);
         }
-        (Val::Big(a), Val::Big(b)) => *a = *b,
+        (Val::Big(a), Val::Big(b)) => **a = **b,
         (Val::Agg(a), Val::Agg(b)) => {
             for (x, y) in a.iter_mut().zip(b) {
                 assign(x, y);
@@ -357,7 +357,7 @@ fn to_datum(v: &Val) -> Datum<'_> {
         Val::Int(i) | Val::RawInt(i) => Datum::Int(*i),
         Val::Big(b) => match crate::wide::to_i128(b) {
             Some(i) => Datum::Int(i),
-            None => Datum::Big(*b),
+            None => Datum::Big(b),
         },
         Val::Float(x) | Val::RawFloat(x) => Datum::Float(*x),
         Val::Enum(i) => Datum::Enum(*i as i128),
@@ -393,12 +393,12 @@ fn put_datum(
     };
     match (vt.kind.as_str(), d) {
         ("int", Datum::Int(i)) if vt.wide() => {
-            *dst = Val::Big(crate::wide::from_i128(i))
+            interp::put_big(dst, crate::wide::from_i128(i))
         }
-        ("int", Datum::Big(b)) if vt.wide() => *dst = Val::Big(b),
+        ("int", Datum::Big(b)) if vt.wide() => interp::put_big(dst, *b),
         ("int", Datum::Int(i)) => *dst = Val::Int(i),
         ("enum", Datum::Enum(i)) if vt.wide() => {
-            *dst = Val::Big(crate::wide::from_i128(i))
+            interp::put_big(dst, crate::wide::from_i128(i))
         }
         ("enum", Datum::Enum(i)) => {
             *dst =

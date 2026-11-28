@@ -256,3 +256,67 @@ fn a_whole_value_is_read_slot_by_slot() {
         .collect();
     assert_eq!(got, want);
 }
+
+/// A mission whose one packet is a signed integer of 1000 bits, then a
+/// byte.
+const HUGE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20250214" name="Huge">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="BigType" signed="true" sizeInBits="1000">
+        <IntegerDataEncoding sizeInBits="1000" encoding="twosComplement"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="U8" signed="false">
+        <IntegerDataEncoding sizeInBits="8"/>
+      </IntegerParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="Big" parameterTypeRef="BigType"/>
+      <Parameter name="Tail" parameterTypeRef="U8"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="Packet">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Big"/>
+          <ParameterRefEntry parameterRef="Tail"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>
+"#;
+
+#[test]
+fn integers_of_more_than_512_bits_unpack_and_pack() {
+    let m = Mission::read_from([HUGE.as_bytes()]).unwrap();
+    assert_eq!(m.unsupported(), Vec::<String>::new());
+    let top = m.top();
+    let packet = m.container(top, "/Huge/Packet").unwrap();
+    // -2, then 7: 125 bytes of all ones but the last bit, then the byte.
+    let mut data = vec![0xffu8; 125];
+    data[124] = 0xfe;
+    data.push(7);
+    let mut scratch = m.scratch();
+    m.unpack(packet, &data, &mut scratch).unwrap();
+    let mut store = m.store();
+    store.commit(&scratch).unwrap();
+    let big = m.parameter(top, "/Huge/Big").unwrap();
+    assert_eq!(store.get(big), Some(Datum::Int(-2)));
+    let mut out = Buffer::with_capacity(256);
+    assert_eq!(m.pack(packet, &store, &mut out).unwrap(), &data[..]);
+    // 2^998 fits 1000 signed bits; 2^999 doesn't.
+    let one = num_bigint::BigInt::from(1);
+    let fits = tcs_xtce_dynamic::from_big(&(&one << 998)).unwrap();
+    store.set(big, Datum::Big(&fits)).unwrap();
+    let packed = m.pack(packet, &store, &mut out).unwrap().to_vec();
+    m.unpack(packet, &packed, &mut scratch).unwrap();
+    let mut other = m.store();
+    other.commit(&scratch).unwrap();
+    let Some(Datum::Big(got)) = other.get(big) else {
+        panic!("{:?}", other.get(big))
+    };
+    assert_eq!(tcs_xtce_dynamic::to_big(got), &one << 998);
+    let over = tcs_xtce_dynamic::from_big(&(&one << 999)).unwrap();
+    store.set(big, Datum::Big(&over)).unwrap();
+    assert!(m.pack(packet, &store, &mut out).is_err());
+}

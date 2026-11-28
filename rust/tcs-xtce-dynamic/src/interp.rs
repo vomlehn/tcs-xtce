@@ -127,7 +127,7 @@ pub enum Val {
     /// An integer.
     Int(i128),
     /// An integer, or an enumeration's value, of more than 64 bits.
-    Big(crate::wide::WideInt),
+    Big(Box<crate::wide::WideInt>),
     /// The raw value of an integer encoding, to be written as it is: not
     /// calibrated, and checked against its encoding only.
     RawInt(i128),
@@ -402,7 +402,7 @@ fn type_unsupported(vt: &VType) -> Option<String> {
                     return what("a calibrated integer of more than 64 bits");
                 }
                 if bytes as usize > crate::wide::MAX_BYTES {
-                    return what("an integer of more than 512 bits");
+                    return what("an integer of more than 8192 bits");
                 }
             }
         }
@@ -1468,7 +1468,9 @@ fn read_plain(
                 let x = crate::wide::read(r, w, n)?;
                 Val::Bool(x != crate::wide::from_i128(0))
             } else {
-                Val::Big(crate::wide::read(r, w, (vt.width() / 8) as usize)?)
+                let x = crate::wide::read(r, w, (vt.width() / 8) as usize)?;
+                put_big(dst, x);
+                return Ok(());
             };
             Ok(())
         }
@@ -1645,6 +1647,19 @@ fn read_members(
     copy_checks(e, dst, vals)
 }
 
+/// Puts a wide integer into a value's storage, in the room it has.
+///
+/// # Arguments
+///
+/// * `dst` - The storage.
+/// * `x`   - The integer.
+pub(crate) fn put_big(dst: &mut Val, x: crate::wide::WideInt) {
+    match dst {
+        Val::Big(b) => **b = x,
+        _ => *dst = Val::Big(Box::new(x)),
+    }
+}
+
 /// Makes storage for a value of a type, with the room its largest value
 /// needs: a string's or binary value's most bytes, and an array's most
 /// elements.
@@ -1676,10 +1691,12 @@ pub fn template(vt: &VType) -> Val {
             "string" => Val::Str(String::with_capacity(str_cap(vt))),
             "binary" => Val::Bytes(Vec::with_capacity(bytes_cap(vt))),
             "float" => Val::Float(0.0),
-            "enum" if vt.wide() => Val::Big(crate::wide::from_i128(0)),
+            "enum" if vt.wide() => {
+                Val::Big(Box::new(crate::wide::from_i128(0)))
+            }
             "enum" => Val::Enum(0),
             "bool" => Val::Bool(false),
-            _ if vt.wide() => Val::Big(crate::wide::from_i128(0)),
+            _ if vt.wide() => Val::Big(Box::new(crate::wide::from_i128(0))),
             _ => Val::Int(0),
         },
     }
@@ -2092,9 +2109,9 @@ fn cmp_lit(v: &Val, vt: &VType, lit: &Lit) -> Option<std::cmp::Ordering> {
 fn cmp_vals(a: &Val, b: &Val) -> Option<std::cmp::Ordering> {
     match (a, b) {
         (Val::Int(x), Val::Int(y)) => x.partial_cmp(y),
-        (Val::Big(x), Val::Big(y)) => x.partial_cmp(y),
+        (Val::Big(x), Val::Big(y)) => (**x).partial_cmp(&**y),
         (Val::Big(x), Val::Int(y)) => {
-            x.partial_cmp(&crate::wide::from_i128(*y))
+            (**x).partial_cmp(&crate::wide::from_i128(*y))
         }
         (Val::Int(x), Val::Big(y)) => crate::wide::from_i128(*x).partial_cmp(y),
         (Val::Enum(x), Val::Enum(y)) => x.partial_cmp(y),
@@ -4254,7 +4271,7 @@ pub fn lit_assign(dst: &mut Val, vt: &VType, lit: &Lit) {
         }
         ("float", Lit::Float(x)) => *dst = Val::Float(*x),
         ("int" | "enum", Lit::Int(i)) if vt.wide() => {
-            *dst = Val::Big(crate::wide::from_big(i).unwrap_or_default())
+            put_big(dst, crate::wide::from_big(i).unwrap_or_default())
         }
         ("enum", Lit::Int(i)) => *dst = Val::Enum(i.to_i64().unwrap_or(0)),
         (_, Lit::Int(i)) => *dst = Val::Int(i.to_i128().unwrap_or(0)),

@@ -380,8 +380,9 @@ uses, and <tt class="docutils literal"><span class="pre">Mission::unsupported</s
 meta-command, so that a program can refuse the mission before it
 starts.</li>
 <li><tt class="docutils literal">Datum</tt> holds an integer of more than 128 bits as <tt class="docutils literal">Big</tt>, a
-<tt class="docutils literal">WideInt</tt> (72 bytes of two's complement, which hold any integer of
-up to 512 bits; <tt class="docutils literal">to_big</tt> and <tt class="docutils literal">from_big</tt> convert it), and has no
+<tt class="docutils literal">WideInt</tt> (two's complement in 1032 bytes, which hold any integer
+of up to 8192 bits, the most the codec runs; <tt class="docutils literal">to_big</tt> and
+<tt class="docutils literal">from_big</tt> convert it), and has no
 <tt class="docutils literal">Time</tt> yet: a time is the float the compiler makes of it.</li>
 <li><tt class="docutils literal"><span class="pre">Store::set_raw</span></tt> leaves the slot without an engineering value until
 one is set or unpacked: <tt class="docutils literal">get</tt> gives none, and <tt class="docutils literal">get_raw</tt> the raw
