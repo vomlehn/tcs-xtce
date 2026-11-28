@@ -855,9 +855,13 @@ cbindgen (<tt class="docutils literal">make <span class="pre">c-header</span></t
 Doxygen's form; <tt class="docutils literal">make test</tt> checks it is current and runs
 <tt class="docutils literal">tests/c_test.c</tt>, which packs and unpacks every vector of the demo
 mission through it.</li>
-<li><strong>C++</strong>: a header-only wrapper over the C API, with classes that free
-their handles when destroyed, as <tt class="docutils literal"><span class="pre">tcs-xtce-document.hpp</span></tt> wraps the
-document.</li>
+<li><strong>C++</strong>: <tt class="docutils literal"><span class="pre">include/tcs-xtce-dynamic.hpp</span></tt>, a header-only wrapper over
+the C API in namespace <tt class="docutils literal"><span class="pre">tcs::xd</span></tt>, with classes that free their
+handles when destroyed, as <tt class="docutils literal"><span class="pre">tcs-xtce-document.hpp</span></tt> wraps the
+document; a failure is thrown as <tt class="docutils literal"><span class="pre">tcs::xd::Error</span></tt>, and the functions
+an application supplies are any callable. <tt class="docutils literal">tests/cpp_test.cpp</tt>
+supplies the demo's algorithms as lambdas and packs and unpacks every
+vector through it.</li>
 <li><strong>Python</strong>: a PyO3 extension module, part of the <tt class="docutils literal">tcs_xtce</tt> Python
 package, as <a class="reference external" href="rust-migration-design.html">tcs-xtce in Rust</a>
 proposes for all of tcs-xtce's Python. It calls the Rust directly,

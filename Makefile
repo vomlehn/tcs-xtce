@@ -252,8 +252,8 @@ c-dynamic:
 	cp rust/target/release/libtcs_xtce_dynamic_c.so \
 		$(DYN_BUILD)/libtcs-xtce-dynamic.so
 
-# Checks that the header is the one cbindgen makes, then runs the C test
-# on the demo mission.
+# Checks that the header is the one cbindgen makes, then runs the C and
+# C++ tests on the demo mission.
 .PHONY: test-c-dynamic
 test-c-dynamic: c-dynamic
 	mkdir -p $(DYN_BUILD)
@@ -267,6 +267,10 @@ test-c-dynamic: c-dynamic
 		$(DYN_C)/tests/c_test.c $(DYN_BUILD)/libtcs-xtce-dynamic.a \
 		-lpthread -ldl -lm -o $(DYN_BUILD)/c_test
 	$(DYN_BUILD)/c_test tests/mission
+	$(CXX) -std=c++20 -Wall -Wextra -Werror -O2 -I$(DYN_C)/include \
+		$(DYN_C)/tests/cpp_test.cpp $(DYN_BUILD)/libtcs-xtce-dynamic.a \
+		-lpthread -ldl -lm -o $(DYN_BUILD)/cpp_test
+	$(DYN_BUILD)/cpp_test tests/mission
 
 # The Rust model, which is being ported from the Python compiler a stage at
 # a time, against the Python's, as canonical text, on every mission the

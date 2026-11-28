@@ -487,9 +487,13 @@ it:
   Doxygen's form; ``make test`` checks it is current and runs
   ``tests/c_test.c``, which packs and unpacks every vector of the demo
   mission through it.
-- **C++**: a header-only wrapper over the C API, with classes that free
-  their handles when destroyed, as ``tcs-xtce-document.hpp`` wraps the
-  document.
+- **C++**: ``include/tcs-xtce-dynamic.hpp``, a header-only wrapper over
+  the C API in namespace ``tcs::xd``, with classes that free their
+  handles when destroyed, as ``tcs-xtce-document.hpp`` wraps the
+  document; a failure is thrown as ``tcs::xd::Error``, and the functions
+  an application supplies are any callable. ``tests/cpp_test.cpp``
+  supplies the demo's algorithms as lambdas and packs and unpacks every
+  vector through it.
 - **Python**: a PyO3 extension module, part of the ``tcs_xtce`` Python
   package, as `tcs-xtce in Rust <rust-migration-design.html>`__
   proposes for all of tcs-xtce's Python. It calls the Rust directly,
