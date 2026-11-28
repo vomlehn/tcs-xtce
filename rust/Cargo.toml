@@ -49,5 +49,5 @@ members = [
 	"tcsxtce",
 	"tcs-xtce-model",
 	"tcs-xtce-dynamic",
-	"tcs-xtce-dynamic-c",
+	"tcs-dynxtce-c",
 ]

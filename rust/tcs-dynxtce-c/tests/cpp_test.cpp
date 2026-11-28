@@ -13,9 +13,9 @@
 #include <string>
 #include <vector>
 
-#include "tcs-xtce-dynamic.hpp"
+#include "tcs-dynxtce.hpp"
 
-namespace xd = tcs::xd;
+namespace xd = tcs::dynxtce;
 
 /** The checks that failed. */
 static int failures;
@@ -299,7 +299,7 @@ int main(int argc, char **argv)
                 try {
                         m.parameter(m.top(), "/Demo/NoSuch");
                 } catch (const xd::Error &e) {
-                        thrown = e.status() == TCS_XD_STATUS_LOOKUP;
+                        thrown = e.status() == TCS_DYNXTCE_STATUS_LOOKUP;
                 }
                 check(thrown, "a missing parameter throws");
                 auto seq = m.parameter(m.top(), "/Demo/SeqCount");

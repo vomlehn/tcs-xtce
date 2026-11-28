@@ -228,10 +228,10 @@ test-rust: rust $(SAMPLES)
 	cd rust && $(CARGO) test --release -p tcs-xtce-dynamic
 
 
-# The C interface to the run-time codec: rust/tcs-xtce-dynamic-c builds
-# libtcs-xtce-dynamic, whose header cbindgen makes from its source.
-DYN_C       := rust/tcs-xtce-dynamic-c
-DYN_HEADER  := $(DYN_C)/include/tcs-xtce-dynamic.h
+# The C interface to the run-time codec: rust/tcs-dynxtce-c builds
+# libtcs-dynxtce, whose header cbindgen makes from its source.
+DYN_C       := rust/tcs-dynxtce-c
+DYN_HEADER  := $(DYN_C)/include/tcs-dynxtce.h
 DYN_BUILD   := build/dynamic
 CBINDGEN    ?= cbindgen
 CC          ?= cc
@@ -241,18 +241,18 @@ CC          ?= cc
 .PHONY: c-header
 c-header:
 	cd $(DYN_C) && $(CBINDGEN) --quiet --config cbindgen.toml \
-		--crate tcs-xtce-dynamic-c --output include/tcs-xtce-dynamic.h
+		--crate tcs-dynxtce-c --output include/tcs-dynxtce.h
 	$(PYTHON) -I $(DYN_C)/doxygen.py $(DYN_HEADER)
 
-# Builds libtcs-xtce-dynamic.a and .so into build/dynamic.
+# Builds libtcs-dynxtce.a and .so into build/dynamic.
 .PHONY: c-dynamic
 c-dynamic:
-	cd rust && $(CARGO) build --release -p tcs-xtce-dynamic-c
+	cd rust && $(CARGO) build --release -p tcs-dynxtce-c
 	mkdir -p $(DYN_BUILD)
-	cp rust/target/release/libtcs_xtce_dynamic_c.a \
-		$(DYN_BUILD)/libtcs-xtce-dynamic.a
-	cp rust/target/release/libtcs_xtce_dynamic_c.so \
-		$(DYN_BUILD)/libtcs-xtce-dynamic.so
+	cp rust/target/release/libtcs_dynxtce_c.a \
+		$(DYN_BUILD)/libtcs-dynxtce.a
+	cp rust/target/release/libtcs_dynxtce_c.so \
+		$(DYN_BUILD)/libtcs-dynxtce.so
 
 # Checks that the header is the one cbindgen makes, then runs the C and
 # C++ tests on the demo mission.
@@ -260,17 +260,17 @@ c-dynamic:
 test-c-dynamic: c-dynamic
 	mkdir -p $(DYN_BUILD)
 	cd $(DYN_C) && $(CBINDGEN) --quiet --config cbindgen.toml \
-		--crate tcs-xtce-dynamic-c --output ../../$(DYN_BUILD)/check.h
+		--crate tcs-dynxtce-c --output ../../$(DYN_BUILD)/check.h
 	$(PYTHON) -I $(DYN_C)/doxygen.py $(DYN_BUILD)/check.h
 	cmp -s $(DYN_HEADER) $(DYN_BUILD)/check.h || { \
 		echo "$(DYN_HEADER) is stale: run make c-header" >&2; \
 		exit 1; }
 	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -I$(DYN_C)/include \
-		$(DYN_C)/tests/c_test.c $(DYN_BUILD)/libtcs-xtce-dynamic.a \
+		$(DYN_C)/tests/c_test.c $(DYN_BUILD)/libtcs-dynxtce.a \
 		-lpthread -ldl -lm -o $(DYN_BUILD)/c_test
 	$(DYN_BUILD)/c_test tests/mission
 	$(CXX) -std=c++20 -Wall -Wextra -Werror -O2 -I$(DYN_C)/include \
-		$(DYN_C)/tests/cpp_test.cpp $(DYN_BUILD)/libtcs-xtce-dynamic.a \
+		$(DYN_C)/tests/cpp_test.cpp $(DYN_BUILD)/libtcs-dynxtce.a \
 		-lpthread -ldl -lm -o $(DYN_BUILD)/cpp_test
 	$(DYN_BUILD)/cpp_test tests/mission
 

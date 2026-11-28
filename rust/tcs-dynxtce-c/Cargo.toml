@@ -1,10 +1,10 @@
 [package]
-name = "tcs-xtce-dynamic-c"
+name = "tcs-dynxtce-c"
 version = "0.1.0"
 edition = "2021"
 description = """\
     A software tool: the C interface to tcs-xtce-dynamic, the run-time \
-    codec, which C and C++ programs link as libtcs-xtce-dynamic\
+    codec, which C and C++ programs link as libtcs-dynxtce\
 """
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vomlehn/tcs-xtce"
@@ -12,7 +12,7 @@ repository = "https://github.com/vomlehn/tcs-xtce"
 publish = false
 
 [lib]
-name = "tcs_xtce_dynamic_c"
+name = "tcs_dynxtce_c"
 path = "src/lib.rs"
 crate-type = ["staticlib", "cdylib", "rlib"]
 

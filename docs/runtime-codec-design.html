@@ -839,26 +839,26 @@ run, with a link here.</p>
 it through interfaces to that one implementation, not through ports of
 it:</p>
 <ul class="simple">
-<li><strong>C</strong>: <tt class="docutils literal"><span class="pre">libtcs-xtce-dynamic</span></tt> (<tt class="docutils literal">make <span class="pre">c-dynamic</span></tt>), built from the
-crate <tt class="docutils literal"><span class="pre">rust/tcs-xtce-dynamic-c</span></tt>: functions with C linkage over
-opaque handles -- <tt class="docutils literal">tcs_xd_mission</tt>, <tt class="docutils literal">tcs_xd_store</tt>,
-<tt class="docutils literal">tcs_xd_scratch</tt>, <tt class="docutils literal">tcs_xd_monitor</tt> and <tt class="docutils literal">tcs_xd_deframer</tt> -- each
-with a function to free it, return codes and <tt class="docutils literal">tcs_xd_last_error</tt>
-for the message. <tt class="docutils literal">tcs_xd_space</tt>, <tt class="docutils literal">tcs_xd_node</tt>, <tt class="docutils literal">tcs_xd_slot</tt>
-and <tt class="docutils literal">tcs_xd_slots</tt> are plain structs, checked against the mission on
+<li><strong>C</strong>: <tt class="docutils literal"><span class="pre">libtcs-dynxtce</span></tt> (<tt class="docutils literal">make <span class="pre">c-dynamic</span></tt>), built from the
+crate <tt class="docutils literal"><span class="pre">rust/tcs-dynxtce-c</span></tt>: functions with C linkage over
+opaque handles -- <tt class="docutils literal">tcs_dynxtce_mission</tt>, <tt class="docutils literal">tcs_dynxtce_store</tt>,
+<tt class="docutils literal">tcs_dynxtce_scratch</tt>, <tt class="docutils literal">tcs_dynxtce_monitor</tt> and <tt class="docutils literal">tcs_dynxtce_deframer</tt> -- each
+with a function to free it, return codes and <tt class="docutils literal">tcs_dynxtce_last_error</tt>
+for the message. <tt class="docutils literal">tcs_dynxtce_space</tt>, <tt class="docutils literal">tcs_dynxtce_node</tt>, <tt class="docutils literal">tcs_dynxtce_slot</tt>
+and <tt class="docutils literal">tcs_dynxtce_slots</tt> are plain structs, checked against the mission on
 every call, and every lookup takes a base SpaceSystem, as in Rust. A
 function the application supplies takes a <tt class="docutils literal">void *</tt> context and,
 optionally, a function that frees it. A stream keeps its mission
 alive, so they may be freed in either order. The header,
-<tt class="docutils literal"><span class="pre">include/tcs-xtce-dynamic.h</span></tt>, is generated from the Rust with
+<tt class="docutils literal"><span class="pre">include/tcs-dynxtce.h</span></tt>, is generated from the Rust with
 cbindgen (<tt class="docutils literal">make <span class="pre">c-header</span></tt>), and <tt class="docutils literal">doxygen.py</tt> puts its comments in
 Doxygen's form; <tt class="docutils literal">make test</tt> checks it is current and runs
 <tt class="docutils literal">tests/c_test.c</tt>, which packs and unpacks every vector of the demo
 mission through it.</li>
-<li><strong>C++</strong>: <tt class="docutils literal"><span class="pre">include/tcs-xtce-dynamic.hpp</span></tt>, a header-only wrapper over
-the C API in namespace <tt class="docutils literal"><span class="pre">tcs::xd</span></tt>, with classes that free their
+<li><strong>C++</strong>: <tt class="docutils literal"><span class="pre">include/tcs-dynxtce.hpp</span></tt>, a header-only wrapper over
+the C API in namespace <tt class="docutils literal"><span class="pre">tcs::dynxtce</span></tt>, with classes that free their
 handles when destroyed, as <tt class="docutils literal"><span class="pre">tcs-xtce-document.hpp</span></tt> wraps the
-document; a failure is thrown as <tt class="docutils literal"><span class="pre">tcs::xd::Error</span></tt>, and the functions
+document; a failure is thrown as <tt class="docutils literal"><span class="pre">tcs::dynxtce::Error</span></tt>, and the functions
 an application supplies are any callable. <tt class="docutils literal">tests/cpp_test.cpp</tt>
 supplies the demo's algorithms as lambdas and packs and unpacks every
 vector through it.</li>

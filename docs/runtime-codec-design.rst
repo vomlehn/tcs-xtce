@@ -471,26 +471,26 @@ The run-time codec is written once, in Rust, and other languages reach
 it through interfaces to that one implementation, not through ports of
 it:
 
-- **C**: ``libtcs-xtce-dynamic`` (``make c-dynamic``), built from the
-  crate ``rust/tcs-xtce-dynamic-c``: functions with C linkage over
-  opaque handles -- ``tcs_xd_mission``, ``tcs_xd_store``,
-  ``tcs_xd_scratch``, ``tcs_xd_monitor`` and ``tcs_xd_deframer`` -- each
-  with a function to free it, return codes and ``tcs_xd_last_error``
-  for the message. ``tcs_xd_space``, ``tcs_xd_node``, ``tcs_xd_slot``
-  and ``tcs_xd_slots`` are plain structs, checked against the mission on
+- **C**: ``libtcs-dynxtce`` (``make c-dynamic``), built from the
+  crate ``rust/tcs-dynxtce-c``: functions with C linkage over
+  opaque handles -- ``tcs_dynxtce_mission``, ``tcs_dynxtce_store``,
+  ``tcs_dynxtce_scratch``, ``tcs_dynxtce_monitor`` and ``tcs_dynxtce_deframer`` -- each
+  with a function to free it, return codes and ``tcs_dynxtce_last_error``
+  for the message. ``tcs_dynxtce_space``, ``tcs_dynxtce_node``, ``tcs_dynxtce_slot``
+  and ``tcs_dynxtce_slots`` are plain structs, checked against the mission on
   every call, and every lookup takes a base SpaceSystem, as in Rust. A
   function the application supplies takes a ``void *`` context and,
   optionally, a function that frees it. A stream keeps its mission
   alive, so they may be freed in either order. The header,
-  ``include/tcs-xtce-dynamic.h``, is generated from the Rust with
+  ``include/tcs-dynxtce.h``, is generated from the Rust with
   cbindgen (``make c-header``), and ``doxygen.py`` puts its comments in
   Doxygen's form; ``make test`` checks it is current and runs
   ``tests/c_test.c``, which packs and unpacks every vector of the demo
   mission through it.
-- **C++**: ``include/tcs-xtce-dynamic.hpp``, a header-only wrapper over
-  the C API in namespace ``tcs::xd``, with classes that free their
+- **C++**: ``include/tcs-dynxtce.hpp``, a header-only wrapper over
+  the C API in namespace ``tcs::dynxtce``, with classes that free their
   handles when destroyed, as ``tcs-xtce-document.hpp`` wraps the
-  document; a failure is thrown as ``tcs::xd::Error``, and the functions
+  document; a failure is thrown as ``tcs::dynxtce::Error``, and the functions
   an application supplies are any callable. ``tests/cpp_test.cpp``
   supplies the demo's algorithms as lambdas and packs and unpacks every
   vector through it.

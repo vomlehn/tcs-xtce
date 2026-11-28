@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "tcs-xtce-dynamic.h"
+#include "tcs-dynxtce.h"
 
 /** The checks that failed. */
 static int failures;
@@ -22,7 +22,8 @@ static int failures;
 static void check(int ok, const char *what)
 {
         if (!ok) {
-                fprintf(stderr, "FAIL: %s: %s\n", what, tcs_xd_last_error());
+                fprintf(stderr, "FAIL: %s: %s\n", what,
+                        tcs_dynxtce_last_error());
                 failures++;
         }
 }
@@ -423,7 +424,7 @@ static bool var_to(void *ctx, double s, uint8_t *out, size_t cap,
  * @param emit      Called with each piece.
  * @param emit_ctx  What it is given first. */
 static void descramble(void *ctx, const uint8_t *b, size_t n,
-                       tcs_xd_emit_fn emit, void *emit_ctx)
+                       tcs_dynxtce_emit_fn emit, void *emit_ctx)
 {
         uint8_t buf[64];
         size_t i, k;
@@ -462,42 +463,42 @@ static void free_ctx(void *ctx)
 /** Supplies the demo mission's custom algorithms.
  *
  * @param m  The mission. */
-static void set_algorithms(tcs_xd_mission *m)
+static void set_algorithms(tcs_dynxtce_mission *m)
 {
-        check(tcs_xd_set_criterion(m, "/Demo/IsEven", is_even, NULL,
-                                   free_ctx) == 0, "IsEven");
-        check(tcs_xd_set_outputs(m, "/Demo/MinMax", min_max, NULL, NULL)
+        check(tcs_dynxtce_set_criterion(m, "/Demo/IsEven", is_even, NULL,
+                                        free_ctx) == 0, "IsEven");
+        check(tcs_dynxtce_set_outputs(m, "/Demo/MinMax", min_max, NULL, NULL)
               == 0, "MinMax");
-        check(tcs_xd_set_alarm(m, "/Demo/Bands", bands, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_alarm(m, "/Demo/Bands", bands, NULL, NULL) == 0,
               "Bands");
-        check(tcs_xd_set_checksum(m, "/Demo/Twice", twice, NULL, NULL) == 0,
-              "Twice");
-        check(tcs_xd_set_binary_to(m, "Expand", expand, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_checksum(m, "/Demo/Twice", twice, NULL, NULL)
+              == 0, "Twice");
+        check(tcs_dynxtce_set_binary_to(m, "Expand", expand, NULL, NULL) == 0,
               "Expand");
-        check(tcs_xd_set_binary_from(m, "Shrink", shrink, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_binary_from(m, "Shrink", shrink, NULL, NULL) == 0,
               "Shrink");
-        check(tcs_xd_set_binary_to(m, "Mask", mask, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_binary_to(m, "Mask", mask, NULL, NULL) == 0,
               "Mask");
-        check(tcs_xd_set_binary_from(m, "Unmask", unmask, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_binary_from(m, "Unmask", unmask, NULL, NULL) == 0,
               "Unmask");
-        check(tcs_xd_set_binary_to(m, "Stuff", stuff, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_binary_to(m, "Stuff", stuff, NULL, NULL) == 0,
               "Stuff");
-        check(tcs_xd_set_binary_from(m, "Unstuff", unstuff, NULL, NULL)
+        check(tcs_dynxtce_set_binary_from(m, "Unstuff", unstuff, NULL, NULL)
               == 0, "Unstuff");
-        check(tcs_xd_set_time_from(m, "MsFrom", ms_from, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_time_from(m, "MsFrom", ms_from, NULL, NULL) == 0,
               "MsFrom");
-        check(tcs_xd_set_time_to(m, "MsTo", ms_to, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_time_to(m, "MsTo", ms_to, NULL, NULL) == 0,
               "MsTo");
-        check(tcs_xd_set_time_from(m, "VarFrom", var_from, NULL, NULL) == 0,
-              "VarFrom");
-        check(tcs_xd_set_time_to(m, "VarTo", var_to, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_time_from(m, "VarFrom", var_from, NULL, NULL)
+              == 0, "VarFrom");
+        check(tcs_dynxtce_set_time_to(m, "VarTo", var_to, NULL, NULL) == 0,
               "VarTo");
-        check(tcs_xd_set_stream_decode(m, "Descramble", descramble, NULL,
-                                       NULL) == 0, "Descramble");
-        check(tcs_xd_set_bit_invert(m, "Invert", invert, NULL, NULL) == 0,
+        check(tcs_dynxtce_set_stream_decode(m, "Descramble", descramble, NULL,
+                                            NULL) == 0, "Descramble");
+        check(tcs_dynxtce_set_bit_invert(m, "Invert", invert, NULL, NULL) == 0,
               "Invert");
-        check(tcs_xd_set_criterion(m, "/Demo/Nothing", is_even, NULL, NULL)
-              == TCS_XD_STATUS_LOOKUP, "an algorithm the mission lacks");
+        check(tcs_dynxtce_set_criterion(m, "/Demo/Nothing", is_even, NULL, NULL)
+              == TCS_DYNXTCE_STATUS_LOOKUP, "an algorithm the mission lacks");
 }
 
 /** Runs every vector: unpacks it, and packs it again to the bytes the
@@ -505,25 +506,25 @@ static void set_algorithms(tcs_xd_mission *m)
  *
  * @param m    The mission.
  * @param dir  The directory of the demo mission's files. */
-static void run_vectors(tcs_xd_mission *m, const char *dir)
+static void run_vectors(tcs_dynxtce_mission *m, const char *dir)
 {
         char path[4096];
         size_t vlen, elen;
         unsigned char *vectors, *expected;
         char *v, *e, *vnext, *enext;
-        tcs_xd_space top = tcs_xd_top(m);
-        tcs_xd_node roots[3];
-        tcs_xd_scratch *scratch = tcs_xd_scratch_new(m);
-        tcs_xd_store *store = tcs_xd_store_new(m);
+        tcs_dynxtce_space top = tcs_dynxtce_top(m);
+        tcs_dynxtce_node roots[3];
+        tcs_dynxtce_scratch *scratch = tcs_dynxtce_scratch_new(m);
+        tcs_dynxtce_store *store = tcs_dynxtce_store_new(m);
         unsigned char data[70000], want[70000];
         int matched = 0;
 
-        check(tcs_xd_container(m, top, "/Demo/CCSDSPacket", &roots[0]) == 0,
-              "the telemetry root");
-        check(tcs_xd_meta_command(m, top, "/Demo/CCSDSCommand", &roots[1])
+        check(tcs_dynxtce_container(m, top, "/Demo/CCSDSPacket", &roots[0])
+              == 0, "the telemetry root");
+        check(tcs_dynxtce_meta_command(m, top, "/Demo/CCSDSCommand", &roots[1])
               == 0, "the command root");
-        check(tcs_xd_container(m, top, "/Demo/Housekeeping", &roots[2]) == 0,
-              "Housekeeping");
+        check(tcs_dynxtce_container(m, top, "/Demo/Housekeeping", &roots[2])
+              == 0, "Housekeeping");
         snprintf(path, sizeof path, "%s/vectors.txt", dir);
         vectors = slurp(path, &vlen);
         snprintf(path, sizeof path, "%s/vectors.expected", dir);
@@ -535,7 +536,7 @@ static void run_vectors(tcs_xd_mission *m, const char *dir)
              v = vnext, e = enext) {
                 char kind[8], *hex, *again;
                 size_t n, wn;
-                tcs_xd_node root, got;
+                tcs_dynxtce_node root, got;
                 const uint8_t *out;
                 size_t olen;
                 int r;
@@ -558,7 +559,7 @@ static void run_vectors(tcs_xd_mission *m, const char *dir)
                 n = unhex(hex, data, sizeof data);
                 again = strstr(e, " | ");
                 again = again != NULL ? again + 3 : e;
-                r = tcs_xd_unpack(m, root, data, n, scratch, &got);
+                r = tcs_dynxtce_unpack(m, root, data, n, scratch, &got);
                 if (strncmp(e, "error:", 6) == 0) {
                         check(r != 0, v);
                         matched += r != 0;
@@ -569,10 +570,10 @@ static void run_vectors(tcs_xd_mission *m, const char *dir)
                         continue;
                 /* A store of its own, so that nothing an earlier packet
                  * set is packed. */
-                tcs_xd_store_free(store);
-                store = tcs_xd_store_new(m);
-                check(tcs_xd_commit(store, scratch) == 0, "commit");
-                r = tcs_xd_pack(m, got, store, &out, &olen);
+                tcs_dynxtce_store_free(store);
+                store = tcs_dynxtce_store_new(m);
+                check(tcs_dynxtce_commit(store, scratch) == 0, "commit");
+                r = tcs_dynxtce_pack(m, got, store, &out, &olen);
                 if (strncmp(again, "error:", 6) == 0) {
                         check(r != 0, v);
                         matched += r != 0;
@@ -587,8 +588,8 @@ static void run_vectors(tcs_xd_mission *m, const char *dir)
         check(matched > 290, "the vectors");
         free(vectors);
         free(expected);
-        tcs_xd_store_free(store);
-        tcs_xd_scratch_free(scratch);
+        tcs_dynxtce_store_free(store);
+        tcs_dynxtce_scratch_free(scratch);
 }
 
 /** Counts alarm levels.
@@ -620,18 +621,18 @@ static void count_frame(void *ctx, const uint8_t *frame, size_t len)
 /** Checks lookups, values, alarms and a stream.
  *
  * @param m  The mission. */
-static void run_interface(tcs_xd_mission *m)
+static void run_interface(tcs_dynxtce_mission *m)
 {
         static const char hk[] =
                 "0864c02a001201a04e2805dc040302013fc00000fffe8050fc";
-        tcs_xd_space top = tcs_xd_top(m);
-        tcs_xd_node root, got;
-        tcs_xd_slot seq, mode;
-        tcs_xd_slots probes;
-        tcs_xd_datum d;
-        tcs_xd_scratch *scratch = tcs_xd_scratch_new(m);
-        tcs_xd_store *store = tcs_xd_store_new(m);
-        tcs_xd_deframer *dl;
+        tcs_dynxtce_space top = tcs_dynxtce_top(m);
+        tcs_dynxtce_node root, got;
+        tcs_dynxtce_slot seq, mode;
+        tcs_dynxtce_slots probes;
+        tcs_dynxtce_datum d;
+        tcs_dynxtce_scratch *scratch = tcs_dynxtce_scratch_new(m);
+        tcs_dynxtce_store *store = tcs_dynxtce_store_new(m);
+        tcs_dynxtce_deframer *dl;
         unsigned char data[64];
         char path[256];
         size_t n = unhex(hk, data, sizeof data);
@@ -643,52 +644,53 @@ static void run_interface(tcs_xd_mission *m)
                 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
         };
 
-        check(tcs_xd_container(m, top, "/Demo/CCSDSPacket", &root) == 0,
+        check(tcs_dynxtce_container(m, top, "/Demo/CCSDSPacket", &root) == 0,
               "root");
-        check(tcs_xd_parameter(m, top, "/Demo/SeqCount", &seq) == 0,
+        check(tcs_dynxtce_parameter(m, top, "/Demo/SeqCount", &seq) == 0,
               "SeqCount");
-        check(tcs_xd_parameter(m, top, "/Demo/Mode", &mode) == 0, "Mode");
-        check(tcs_xd_parameter(m, top, "/Demo/NoSuch", &seq)
-              == TCS_XD_STATUS_LOOKUP, "a missing parameter");
-        check(tcs_xd_parameter(m, top, "/Demo/SeqCount", &seq) == 0,
+        check(tcs_dynxtce_parameter(m, top, "/Demo/Mode", &mode) == 0, "Mode");
+        check(tcs_dynxtce_parameter(m, top, "/Demo/NoSuch", &seq)
+              == TCS_DYNXTCE_STATUS_LOOKUP, "a missing parameter");
+        check(tcs_dynxtce_parameter(m, top, "/Demo/SeqCount", &seq) == 0,
               "SeqCount again");
-        check(tcs_xd_parameter_slots(m, top, "/Demo/Probes", &probes) == 0
+        check(tcs_dynxtce_parameter_slots(m, top, "/Demo/Probes", &probes) == 0
               && probes.count == 6, "Probes");
-        tcs_xd_path_of_slot(m, tcs_xd_slots_get(probes, 4), path,
-                            sizeof path);
+        tcs_dynxtce_path_of_slot(m, tcs_dynxtce_slots_get(probes, 4), path,
+                                 sizeof path);
         check(strcmp(path, "/Demo/Probes[1].Gains[0]") == 0, path);
-        check(tcs_xd_store_get(m, store, seq, &d) == 0, "nothing yet");
-        check(tcs_xd_unpack(m, root, data, n, scratch, &got) == 0, "unpack");
-        tcs_xd_path_of_node(m, got, path, sizeof path);
+        check(tcs_dynxtce_store_get(m, store, seq, &d) == 0, "nothing yet");
+        check(tcs_dynxtce_unpack(m, root, data, n, scratch, &got) == 0,
+              "unpack");
+        tcs_dynxtce_path_of_node(m, got, path, sizeof path);
         check(strcmp(path, "/Demo/Housekeeping") == 0, path);
-        check(tcs_xd_commit(store, scratch) == 0, "commit");
-        check(tcs_xd_store_get(m, store, seq, &d) == 1
-              && d.kind == TCS_XD_KIND_INT && d.i == 42, "SeqCount is 42");
-        d.kind = TCS_XD_KIND_ENUM;
+        check(tcs_dynxtce_commit(store, scratch) == 0, "commit");
+        check(tcs_dynxtce_store_get(m, store, seq, &d) == 1
+              && d.kind == TCS_DYNXTCE_KIND_INT && d.i == 42, "SeqCount is 42");
+        d.kind = TCS_DYNXTCE_KIND_ENUM;
         d.i = 99;
-        check(tcs_xd_store_set(m, store, mode, &d) == TCS_XD_STATUS_SET,
-              "Mode 99 is refused");
-        d.kind = TCS_XD_KIND_INT;
+        check(tcs_dynxtce_store_set(m, store, mode, &d)
+              == TCS_DYNXTCE_STATUS_SET, "Mode 99 is refused");
+        d.kind = TCS_DYNXTCE_KIND_INT;
         d.i = 7;
-        check(tcs_xd_store_set(m, store, seq, &d) == 0, "SeqCount 7");
-        check(tcs_xd_pack(m, got, store, &out, &olen) == 0, "pack");
-        check(tcs_xd_unpack(m, root, out, olen, scratch, &got) == 0
-              && tcs_xd_commit(store, scratch) == 0
-              && tcs_xd_store_get(m, store, seq, &d) == 1 && d.i == 7,
+        check(tcs_dynxtce_store_set(m, store, seq, &d) == 0, "SeqCount 7");
+        check(tcs_dynxtce_pack(m, got, store, &out, &olen) == 0, "pack");
+        check(tcs_dynxtce_unpack(m, root, out, olen, scratch, &got) == 0
+              && tcs_dynxtce_commit(store, scratch) == 0
+              && tcs_dynxtce_store_get(m, store, seq, &d) == 1 && d.i == 7,
               "SeqCount 7 packed");
         /* Housekeeping has no alarms of its own. */
-        check(tcs_xd_alarms(m, scratch, count_level, &count) == 0
+        check(tcs_dynxtce_alarms(m, scratch, count_level, &count) == 0
               && count == 0, "alarms");
-        check(tcs_xd_stream(m, "/Demo/Downlink", &dl) == 0, "Downlink");
+        check(tcs_dynxtce_stream(m, "/Demo/Downlink", &dl) == 0, "Downlink");
         /* The stream keeps the mission while it lives. */
-        tcs_xd_store_free(store);
-        tcs_xd_scratch_free(scratch);
-        tcs_xd_mission_free(m);
-        tcs_xd_deframer_push(dl, frame, sizeof frame, count_frame, &frames);
-        tcs_xd_deframer_push(dl, frame, sizeof frame, count_frame, &frames);
-        tcs_xd_deframer_push(dl, frame, sizeof frame, count_frame, &frames);
+        tcs_dynxtce_store_free(store);
+        tcs_dynxtce_scratch_free(scratch);
+        tcs_dynxtce_mission_free(m);
+        for (int i = 0; i < 3; i++)
+                tcs_dynxtce_deframer_push(dl, frame, sizeof frame, count_frame,
+                                          &frames);
         check(frames > 0, "frames from Downlink");
-        tcs_xd_deframer_free(dl);
+        tcs_dynxtce_deframer_free(dl);
         check(freed == 1, "IsEven's context is freed with the mission");
 }
 
@@ -703,7 +705,7 @@ int main(int argc, char **argv)
         size_t len;
         unsigned char *doc;
         const uint8_t *docs[1];
-        tcs_xd_mission *m;
+        tcs_dynxtce_mission *m;
 
         if (argc != 2) {
                 fprintf(stderr, "usage: c_test MISSION_DIR\n");
@@ -715,7 +717,7 @@ int main(int argc, char **argv)
         if (doc == NULL)
                 return 1;
         docs[0] = doc;
-        check(tcs_xd_mission_read(docs, &len, 1, &m) == 0, "read");
+        check(tcs_dynxtce_mission_read(docs, &len, 1, &m) == 0, "read");
         free(doc);
         set_algorithms(m);
         run_vectors(m, argv[1]);

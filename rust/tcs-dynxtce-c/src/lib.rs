@@ -5,7 +5,7 @@
 //! Conventions:
 //!
 //! - A function that can fail returns an `int`: 0 for success, or a
-//!   negative `tcs_xd_status`; `tcs_xd_last_error` then gives the
+//!   negative `tcs_dynxtce_status`; `tcs_dynxtce_last_error` then gives the
 //!   message, which stays valid until the thread's next call.
 //! - Text the codec gives is copied into a buffer the caller gives, as
 //!   `snprintf` does: the function returns the bytes the whole text
@@ -14,8 +14,8 @@
 //! - A function the application supplies takes a `void *` context first;
 //!   a `free` function given with it, if not NULL, is called with the
 //!   context once the codec no longer needs it.
-//! - Handles (`tcs_xd_space`, `tcs_xd_node`, `tcs_xd_slot`,
-//!   `tcs_xd_slots`) are plain data, checked against the mission on every
+//! - Handles (`tcs_dynxtce_space`, `tcs_dynxtce_node`, `tcs_dynxtce_slot`,
+//!   `tcs_dynxtce_slots`) are plain data, checked against the mission on every
 //!   call.
 //! - Everything is single-threaded: a mission and what is made from it
 //!   are used on the thread that made them.
@@ -37,7 +37,7 @@ use tcs_xtce_dynamic::{
 /// What a function of the interface gives back.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum tcs_xd_status {
+pub enum tcs_dynxtce_status {
     /// It succeeded.
     Ok = 0,
     /// A document couldn't be read, or isn't XTCE the codec resolves.
@@ -59,7 +59,7 @@ pub enum tcs_xd_status {
 /// A SpaceSystem of a mission.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct tcs_xd_space {
+pub struct tcs_dynxtce_space {
     /// The mission's number.
     pub mission: u64,
     /// Its place in the mission's list.
@@ -69,7 +69,7 @@ pub struct tcs_xd_space {
 /// A container or meta-command of a mission.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct tcs_xd_node {
+pub struct tcs_dynxtce_node {
     /// The mission's number.
     pub mission: u64,
     /// Its place in the mission's list.
@@ -79,7 +79,7 @@ pub struct tcs_xd_node {
 /// One scalar value of a mission.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct tcs_xd_slot {
+pub struct tcs_dynxtce_slot {
     /// The mission's number.
     pub mission: u64,
     /// Its place in the mission's list.
@@ -90,7 +90,7 @@ pub struct tcs_xd_slot {
 /// elements, or a scalar's one.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct tcs_xd_slots {
+pub struct tcs_dynxtce_slots {
     /// The mission's number.
     pub mission: u64,
     /// The first slot's place.
@@ -99,10 +99,10 @@ pub struct tcs_xd_slots {
     pub count: usize,
 }
 
-/// The kind of value a `tcs_xd_datum` holds.
+/// The kind of value a `tcs_dynxtce_datum` holds.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum tcs_xd_kind {
+pub enum tcs_dynxtce_kind {
     /// An integer that an `int64_t` holds, in `i`.
     Int = 0,
     /// A wider integer, in `bytes`: two's complement, least significant
@@ -126,9 +126,9 @@ pub enum tcs_xd_kind {
 /// the store's, valid until the store next changes.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct tcs_xd_datum {
+pub struct tcs_dynxtce_datum {
     /// Which of the others holds the value.
-    pub kind: tcs_xd_kind,
+    pub kind: tcs_dynxtce_kind,
     /// An integer or enumeration's value.
     pub i: i64,
     /// A float or time.
@@ -142,35 +142,35 @@ pub struct tcs_xd_datum {
 }
 
 /// A mission, which its streams keep alive while they exist.
-pub struct tcs_xd_mission {
+pub struct tcs_dynxtce_mission {
     /// The mission.
     m: Rc<Mission>,
 }
 
 /// The current value of every slot of a mission.
-pub struct tcs_xd_store {
+pub struct tcs_dynxtce_store {
     /// The store.
     s: Store,
     /// Where packing puts its bytes, kept from one packing to the next.
     out: Buffer,
-    /// A wide integer's bytes, as `tcs_xd_store_get` gives them.
+    /// A wide integer's bytes, as `tcs_dynxtce_store_get` gives them.
     wide: Vec<u8>,
 }
 
 /// A packet decoded and not yet committed.
-pub struct tcs_xd_scratch {
+pub struct tcs_dynxtce_scratch {
     /// The scratch.
     s: Scratch,
 }
 
 /// The alarm state that change ranges and minimum violations count.
-pub struct tcs_xd_monitor {
+pub struct tcs_dynxtce_monitor {
     /// The monitor.
     m: tcs_xtce_dynamic::Monitor,
 }
 
 /// A stream's frame synchronizer.
-pub struct tcs_xd_deframer {
+pub struct tcs_dynxtce_deframer {
     /// The deframer, which borrows the mission below; it is dropped
     /// first.
     d: Deframer<'static>,
@@ -193,7 +193,7 @@ thread_local! {
 /// # Returns
 ///
 /// The status, as an `int`.
-fn fail(status: tcs_xd_status, msg: impl ToString) -> c_int {
+fn fail(status: tcs_dynxtce_status, msg: impl ToString) -> c_int {
     let text = msg.to_string().replace('\0', " ");
     LAST.with(|l| *l.borrow_mut() = CString::new(text).unwrap_or_default());
     status as c_int
@@ -207,10 +207,11 @@ fn fail(status: tcs_xd_status, msg: impl ToString) -> c_int {
 ///
 /// # Returns
 ///
-/// What it returns, or `tcs_xd_status::Internal` if it panics.
+/// What it returns, or `tcs_dynxtce_status::Internal` if it panics.
 fn guard(f: impl FnOnce() -> c_int) -> c_int {
-    catch_unwind(AssertUnwindSafe(f))
-        .unwrap_or_else(|_| fail(tcs_xd_status::Internal, "the codec panicked"))
+    catch_unwind(AssertUnwindSafe(f)).unwrap_or_else(|_| {
+        fail(tcs_dynxtce_status::Internal, "the codec panicked")
+    })
 }
 
 /// Copies text into a caller's buffer, as `snprintf` does.
@@ -287,7 +288,7 @@ unsafe fn bytes<'a>(p: *const u8, n: usize) -> &'a [u8] {
 ///
 /// The message, valid until the thread's next call; empty if none.
 #[no_mangle]
-pub extern "C" fn tcs_xd_last_error() -> *const c_char {
+pub extern "C" fn tcs_dynxtce_last_error() -> *const c_char {
     LAST.with(|l| l.borrow().as_ptr())
 }
 
@@ -300,36 +301,36 @@ pub extern "C" fn tcs_xd_last_error() -> *const c_char {
 /// * `docs` - Each document's text.
 /// * `lens` - Each one's bytes.
 /// * `n`    - How many documents, in the order they build on one another.
-/// * `out`  - Where the mission goes, to free with `tcs_xd_mission_free`.
+/// * `out`  - Where the mission goes, to free with `tcs_dynxtce_mission_free`.
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_READ`.
+/// 0, or `TCS_DYNXTCE_STATUS_READ`.
 ///
 /// # Safety
 ///
 /// `docs` and `lens` hold `n` entries, each document `lens[i]` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_mission_read(
+pub unsafe extern "C" fn tcs_dynxtce_mission_read(
     docs: *const *const u8,
     lens: *const usize,
     n: usize,
-    out: *mut *mut tcs_xd_mission,
+    out: *mut *mut tcs_dynxtce_mission,
 ) -> c_int {
     guard(|| {
         if out.is_null() || (n > 0 && (docs.is_null() || lens.is_null())) {
-            return fail(tcs_xd_status::Argument, "a NULL argument");
+            return fail(tcs_dynxtce_status::Argument, "a NULL argument");
         }
         let readers: Vec<&[u8]> = (0..n)
             .map(|i| unsafe { bytes(*docs.add(i), *lens.add(i)) })
             .collect();
         match Mission::read_from(readers) {
             Ok(m) => {
-                let b = Box::new(tcs_xd_mission { m: Rc::new(m) });
+                let b = Box::new(tcs_dynxtce_mission { m: Rc::new(m) });
                 unsafe { *out = Box::into_raw(b) };
                 0
             }
-            Err(e) => fail(tcs_xd_status::Read, e),
+            Err(e) => fail(tcs_dynxtce_status::Read, e),
         }
     })
 }
@@ -343,9 +344,9 @@ pub unsafe extern "C" fn tcs_xd_mission_read(
 ///
 /// # Safety
 ///
-/// `m` came from `tcs_xd_mission_read` and isn't used again.
+/// `m` came from `tcs_dynxtce_mission_read` and isn't used again.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_mission_free(m: *mut tcs_xd_mission) {
+pub unsafe extern "C" fn tcs_dynxtce_mission_free(m: *mut tcs_dynxtce_mission) {
     if !m.is_null() {
         drop(unsafe { Box::from_raw(m) });
     }
@@ -362,8 +363,8 @@ pub unsafe extern "C" fn tcs_xd_mission_free(m: *mut tcs_xd_mission) {
 ///
 /// `out` has room for 16 bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_mission_digest(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_mission_digest(
+    m: *const tcs_dynxtce_mission,
     out: *mut u8,
 ) {
     let (Some(m), false) = (unsafe { m.as_ref() }, out.is_null()) else {
@@ -387,7 +388,9 @@ pub unsafe extern "C" fn tcs_xd_mission_digest(
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_top(m: *const tcs_xd_mission) -> tcs_xd_space {
+pub unsafe extern "C" fn tcs_dynxtce_top(
+    m: *const tcs_dynxtce_mission,
+) -> tcs_dynxtce_space {
     let m = unsafe { &*m };
     c_space(m.m.top())
 }
@@ -402,7 +405,7 @@ pub unsafe extern "C" fn tcs_xd_top(m: *const tcs_xd_mission) -> tcs_xd_space {
 /// # Returns
 ///
 /// It, or `None` if it isn't the mission's.
-fn space(m: &Mission, h: tcs_xd_space) -> Option<SpaceSystemId> {
+fn space(m: &Mission, h: tcs_dynxtce_space) -> Option<SpaceSystemId> {
     m.space_system_from_raw(h.mission, h.index)
 }
 
@@ -416,7 +419,7 @@ fn space(m: &Mission, h: tcs_xd_space) -> Option<SpaceSystemId> {
 /// # Returns
 ///
 /// It, or `None` if it isn't the mission's.
-fn node(m: &Mission, h: tcs_xd_node) -> Option<NodeId> {
+fn node(m: &Mission, h: tcs_dynxtce_node) -> Option<NodeId> {
     m.node_from_raw(h.mission, h.index)
 }
 
@@ -430,7 +433,7 @@ fn node(m: &Mission, h: tcs_xd_node) -> Option<NodeId> {
 /// # Returns
 ///
 /// It, or `None` if it isn't the mission's.
-fn slot(m: &Mission, h: tcs_xd_slot) -> Option<SlotId> {
+fn slot(m: &Mission, h: tcs_dynxtce_slot) -> Option<SlotId> {
     m.slot_from_raw(h.mission, h.index)
 }
 
@@ -443,9 +446,9 @@ fn slot(m: &Mission, h: tcs_xd_slot) -> Option<SlotId> {
 /// # Returns
 ///
 /// The C handle.
-fn c_node(n: NodeId) -> tcs_xd_node {
+fn c_node(n: NodeId) -> tcs_dynxtce_node {
     let (mission, index) = Mission::node_raw(n);
-    tcs_xd_node { mission, index }
+    tcs_dynxtce_node { mission, index }
 }
 
 /// Gives a slot's C handle.
@@ -457,9 +460,9 @@ fn c_node(n: NodeId) -> tcs_xd_node {
 /// # Returns
 ///
 /// The C handle.
-fn c_slot(s: SlotId) -> tcs_xd_slot {
+fn c_slot(s: SlotId) -> tcs_dynxtce_slot {
     let (mission, index) = Mission::slot_raw(s);
-    tcs_xd_slot { mission, index }
+    tcs_dynxtce_slot { mission, index }
 }
 
 /// Gives a run of slots' C handle.
@@ -471,9 +474,9 @@ fn c_slot(s: SlotId) -> tcs_xd_slot {
 /// # Returns
 ///
 /// The C handle.
-fn c_slots(s: Slots) -> tcs_xd_slots {
+fn c_slots(s: Slots) -> tcs_dynxtce_slots {
     let (mission, first, count) = Mission::slots_raw(s);
-    tcs_xd_slots {
+    tcs_dynxtce_slots {
         mission,
         first,
         count,
@@ -500,14 +503,14 @@ unsafe fn lookup<T>(
 ) -> c_int {
     guard(|| {
         if out.is_null() {
-            return fail(tcs_xd_status::Argument, "a NULL argument");
+            return fail(tcs_dynxtce_status::Argument, "a NULL argument");
         }
         match f() {
             Ok(h) => {
                 unsafe { *out = h };
                 0
             }
-            Err(e) => fail(tcs_xd_status::Lookup, e),
+            Err(e) => fail(tcs_dynxtce_status::Lookup, e),
         }
     })
 }
@@ -524,9 +527,9 @@ const FOREIGN: &str = "a handle of another mission, or not a handle";
 /// # Returns
 ///
 /// The C handle.
-fn c_space(h: SpaceSystemId) -> tcs_xd_space {
+fn c_space(h: SpaceSystemId) -> tcs_dynxtce_space {
     let (mission, index) = Mission::space_system_raw(h);
-    tcs_xd_space { mission, index }
+    tcs_dynxtce_space { mission, index }
 }
 
 /// Looks a SpaceSystem up from a base.
@@ -540,17 +543,17 @@ fn c_space(h: SpaceSystemId) -> tcs_xd_space {
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `path` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_space_system(
-    m: *const tcs_xd_mission,
-    base: tcs_xd_space,
+pub unsafe extern "C" fn tcs_dynxtce_space_system(
+    m: *const tcs_dynxtce_mission,
+    base: tcs_dynxtce_space,
     path: *const c_char,
-    out: *mut tcs_xd_space,
+    out: *mut tcs_dynxtce_space,
 ) -> c_int {
     let m = unsafe { &*m };
     let p = unsafe { text(path) };
@@ -576,17 +579,17 @@ pub unsafe extern "C" fn tcs_xd_space_system(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `path` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_container(
-    m: *const tcs_xd_mission,
-    base: tcs_xd_space,
+pub unsafe extern "C" fn tcs_dynxtce_container(
+    m: *const tcs_dynxtce_mission,
+    base: tcs_dynxtce_space,
     path: *const c_char,
-    out: *mut tcs_xd_node,
+    out: *mut tcs_dynxtce_node,
 ) -> c_int {
     let m = unsafe { &*m };
     let p = unsafe { text(path) };
@@ -610,17 +613,17 @@ pub unsafe extern "C" fn tcs_xd_container(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `path` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_meta_command(
-    m: *const tcs_xd_mission,
-    base: tcs_xd_space,
+pub unsafe extern "C" fn tcs_dynxtce_meta_command(
+    m: *const tcs_dynxtce_mission,
+    base: tcs_dynxtce_space,
     path: *const c_char,
-    out: *mut tcs_xd_node,
+    out: *mut tcs_dynxtce_node,
 ) -> c_int {
     let m = unsafe { &*m };
     let p = unsafe { text(path) };
@@ -647,17 +650,17 @@ pub unsafe extern "C" fn tcs_xd_meta_command(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `path` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_parameter(
-    m: *const tcs_xd_mission,
-    base: tcs_xd_space,
+pub unsafe extern "C" fn tcs_dynxtce_parameter(
+    m: *const tcs_dynxtce_mission,
+    base: tcs_dynxtce_space,
     path: *const c_char,
-    out: *mut tcs_xd_slot,
+    out: *mut tcs_dynxtce_slot,
 ) -> c_int {
     let m = unsafe { &*m };
     let p = unsafe { text(path) };
@@ -682,17 +685,17 @@ pub unsafe extern "C" fn tcs_xd_parameter(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `path` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_parameter_slots(
-    m: *const tcs_xd_mission,
-    base: tcs_xd_space,
+pub unsafe extern "C" fn tcs_dynxtce_parameter_slots(
+    m: *const tcs_dynxtce_mission,
+    base: tcs_dynxtce_space,
     path: *const c_char,
-    out: *mut tcs_xd_slots,
+    out: *mut tcs_dynxtce_slots,
 ) -> c_int {
     let m = unsafe { &*m };
     let p = unsafe { text(path) };
@@ -719,17 +722,17 @@ pub unsafe extern "C" fn tcs_xd_parameter_slots(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `name` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_argument(
-    m: *const tcs_xd_mission,
-    n: tcs_xd_node,
+pub unsafe extern "C" fn tcs_dynxtce_argument(
+    m: *const tcs_dynxtce_mission,
+    n: tcs_dynxtce_node,
     name: *const c_char,
-    out: *mut tcs_xd_slot,
+    out: *mut tcs_dynxtce_slot,
 ) -> c_int {
     let m = unsafe { &*m };
     let p = unsafe { text(name) };
@@ -754,17 +757,17 @@ pub unsafe extern "C" fn tcs_xd_argument(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `name` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_argument_slots(
-    m: *const tcs_xd_mission,
-    n: tcs_xd_node,
+pub unsafe extern "C" fn tcs_dynxtce_argument_slots(
+    m: *const tcs_dynxtce_mission,
+    n: tcs_dynxtce_node,
     name: *const c_char,
-    out: *mut tcs_xd_slots,
+    out: *mut tcs_dynxtce_slots,
 ) -> c_int {
     let m = unsafe { &*m };
     let p = unsafe { text(name) };
@@ -791,17 +794,17 @@ pub unsafe extern "C" fn tcs_xd_argument_slots(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `name` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_entry(
-    m: *const tcs_xd_mission,
-    n: tcs_xd_node,
+pub unsafe extern "C" fn tcs_dynxtce_entry(
+    m: *const tcs_dynxtce_mission,
+    n: tcs_dynxtce_node,
     name: *const c_char,
-    out: *mut tcs_xd_slot,
+    out: *mut tcs_dynxtce_slot,
 ) -> c_int {
     let m = unsafe { &*m };
     let p = unsafe { text(name) };
@@ -825,17 +828,17 @@ pub unsafe extern "C" fn tcs_xd_entry(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `name` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_entry_slots(
-    m: *const tcs_xd_mission,
-    n: tcs_xd_node,
+pub unsafe extern "C" fn tcs_dynxtce_entry_slots(
+    m: *const tcs_dynxtce_mission,
+    n: tcs_dynxtce_node,
     name: *const c_char,
-    out: *mut tcs_xd_slots,
+    out: *mut tcs_dynxtce_slots,
 ) -> c_int {
     let m = unsafe { &*m };
     let p = unsafe { text(name) };
@@ -862,8 +865,11 @@ pub unsafe extern "C" fn tcs_xd_entry_slots(
 ///
 /// Its handle.
 #[no_mangle]
-pub extern "C" fn tcs_xd_slots_get(s: tcs_xd_slots, i: usize) -> tcs_xd_slot {
-    tcs_xd_slot {
+pub extern "C" fn tcs_dynxtce_slots_get(
+    s: tcs_dynxtce_slots,
+    i: usize,
+) -> tcs_dynxtce_slot {
+    tcs_dynxtce_slot {
         mission: s.mission,
         index: s.first + i,
     }
@@ -887,9 +893,9 @@ pub extern "C" fn tcs_xd_slots_get(s: tcs_xd_slots, i: usize) -> tcs_xd_slot {
 ///
 /// `m` is a mission and `buf` has room for `len` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_path_of_space(
-    m: *const tcs_xd_mission,
-    h: tcs_xd_space,
+pub unsafe extern "C" fn tcs_dynxtce_path_of_space(
+    m: *const tcs_dynxtce_mission,
+    h: tcs_dynxtce_space,
     buf: *mut c_char,
     len: usize,
 ) -> usize {
@@ -918,9 +924,9 @@ pub unsafe extern "C" fn tcs_xd_path_of_space(
 ///
 /// `m` is a mission and `buf` has room for `len` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_path_of_node(
-    m: *const tcs_xd_mission,
-    h: tcs_xd_node,
+pub unsafe extern "C" fn tcs_dynxtce_path_of_node(
+    m: *const tcs_dynxtce_mission,
+    h: tcs_dynxtce_node,
     buf: *mut c_char,
     len: usize,
 ) -> usize {
@@ -947,9 +953,9 @@ pub unsafe extern "C" fn tcs_xd_path_of_node(
 ///
 /// `m` is a mission and `buf` has room for `len` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_path_of_slot(
-    m: *const tcs_xd_mission,
-    h: tcs_xd_slot,
+pub unsafe extern "C" fn tcs_dynxtce_path_of_slot(
+    m: *const tcs_dynxtce_mission,
+    h: tcs_dynxtce_slot,
     buf: *mut c_char,
     len: usize,
 ) -> usize {
@@ -977,9 +983,9 @@ pub unsafe extern "C" fn tcs_xd_path_of_slot(
 ///
 /// `m` is a mission and `buf` has room for `len` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_slot_kind(
-    m: *const tcs_xd_mission,
-    h: tcs_xd_slot,
+pub unsafe extern "C" fn tcs_dynxtce_slot_kind(
+    m: *const tcs_dynxtce_mission,
+    h: tcs_dynxtce_slot,
     buf: *mut c_char,
     len: usize,
 ) -> usize {
@@ -1005,9 +1011,9 @@ pub unsafe extern "C" fn tcs_xd_slot_kind(
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_slot_time(
-    m: *const tcs_xd_mission,
-    h: tcs_xd_slot,
+pub unsafe extern "C" fn tcs_dynxtce_slot_time(
+    m: *const tcs_dynxtce_mission,
+    h: tcs_dynxtce_slot,
 ) -> c_int {
     let m = unsafe { &*m };
     match slot(&m.m, h).and_then(|h| m.m.slot_type(h).time()) {
@@ -1033,9 +1039,9 @@ pub unsafe extern "C" fn tcs_xd_slot_time(
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_is_abstract(
-    m: *const tcs_xd_mission,
-    h: tcs_xd_node,
+pub unsafe extern "C" fn tcs_dynxtce_is_abstract(
+    m: *const tcs_dynxtce_mission,
+    h: tcs_dynxtce_node,
 ) -> bool {
     let m = unsafe { &*m };
     node(&m.m, h).is_some_and(|h| m.m.is_abstract(h))
@@ -1056,16 +1062,16 @@ pub unsafe extern "C" fn tcs_xd_is_abstract(
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_max_bytes(
-    m: *const tcs_xd_mission,
-    h: tcs_xd_node,
+pub unsafe extern "C" fn tcs_dynxtce_max_bytes(
+    m: *const tcs_dynxtce_mission,
+    h: tcs_dynxtce_node,
 ) -> usize {
     let m = unsafe { &*m };
     node(&m.m, h).and_then(|h| m.m.max_bytes(h)).unwrap_or(0)
 }
 
 /// Gives how many string and binary slots have no maximum size of their
-/// own (see `tcs_xd_unbounded`).
+/// own (see `tcs_dynxtce_unbounded`).
 ///
 /// # Arguments
 ///
@@ -1079,8 +1085,8 @@ pub unsafe extern "C" fn tcs_xd_max_bytes(
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_unbounded_count(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_unbounded_count(
+    m: *const tcs_dynxtce_mission,
 ) -> usize {
     unsafe { &*m }.m.unbounded().len()
 }
@@ -1091,7 +1097,7 @@ pub unsafe extern "C" fn tcs_xd_unbounded_count(
 /// # Arguments
 ///
 /// * `m` - The mission.
-/// * `i` - Its place, less than `tcs_xd_unbounded_count`.
+/// * `i` - Its place, less than `tcs_dynxtce_unbounded_count`.
 ///
 /// # Returns
 ///
@@ -1101,10 +1107,10 @@ pub unsafe extern "C" fn tcs_xd_unbounded_count(
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_unbounded(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_unbounded(
+    m: *const tcs_dynxtce_mission,
     i: usize,
-) -> tcs_xd_slot {
+) -> tcs_dynxtce_slot {
     c_slot(unsafe { &*m }.m.unbounded()[i])
 }
 
@@ -1126,8 +1132,8 @@ pub unsafe extern "C" fn tcs_xd_unbounded(
 ///
 /// `m` is a mission and `buf` has room for `len` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_unsupported(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_unsupported(
+    m: *const tcs_dynxtce_mission,
     buf: *mut c_char,
     len: usize,
 ) -> usize {
@@ -1156,8 +1162,8 @@ pub unsafe extern "C" fn tcs_xd_unsupported(
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_algorithm_count(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_algorithm_count(
+    m: *const tcs_dynxtce_mission,
 ) -> usize {
     unsafe { &*m }.m.algorithms().len()
 }
@@ -1168,7 +1174,7 @@ pub unsafe extern "C" fn tcs_xd_algorithm_count(
 /// # Arguments
 ///
 /// * `m`        - The mission.
-/// * `i`        - Its place, less than `tcs_xd_algorithm_count`.
+/// * `i`        - Its place, less than `tcs_dynxtce_algorithm_count`.
 /// * `name`     - Where its name goes, or NULL.
 /// * `name_len` - That buffer's size, NUL included.
 /// * `kind`     - Where the kind of function it needs goes, such as
@@ -1177,15 +1183,15 @@ pub unsafe extern "C" fn tcs_xd_algorithm_count(
 ///
 /// # Returns
 ///
-/// 1 if its function is set, 0 if not, or `TCS_XD_STATUS_ARGUMENT` for
+/// 1 if its function is set, 0 if not, or `TCS_DYNXTCE_STATUS_ARGUMENT` for
 /// a place past the last.
 ///
 /// # Safety
 ///
 /// `m` is a mission and the buffers have room for their sizes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_algorithm(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_algorithm(
+    m: *const tcs_dynxtce_mission,
     i: usize,
     name: *mut c_char,
     name_len: usize,
@@ -1194,7 +1200,7 @@ pub unsafe extern "C" fn tcs_xd_algorithm(
 ) -> c_int {
     let all = unsafe { &*m }.m.algorithms();
     let Some(&(n, k, set)) = all.get(i) else {
-        return fail(tcs_xd_status::Argument, "no such algorithm");
+        return fail(tcs_dynxtce_status::Argument, "no such algorithm");
     };
     unsafe {
         copy_out(n, name, name_len);
@@ -1229,15 +1235,15 @@ impl Drop for Context {
 ///
 /// # Returns
 ///
-/// 0, `TCS_XD_STATUS_LOOKUP` if the mission has no such algorithm of that
-/// kind, or `TCS_XD_STATUS_ARGUMENT` if a stream made from the mission
+/// 0, `TCS_DYNXTCE_STATUS_LOOKUP` if the mission has no such algorithm of that
+/// kind, or `TCS_DYNXTCE_STATUS_ARGUMENT` if a stream made from the mission
 /// still exists.
 ///
 /// # Safety
 ///
 /// `m`, if not NULL, is a mission, and `name` a C string.
 unsafe fn set(
-    m: *mut tcs_xd_mission,
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
     f: Algorithm,
 ) -> c_int {
@@ -1245,32 +1251,32 @@ unsafe fn set(
         let (Some(m), Some(name)) =
             (unsafe { m.as_mut() }, unsafe { text(name) })
         else {
-            return fail(tcs_xd_status::Argument, "a NULL argument");
+            return fail(tcs_dynxtce_status::Argument, "a NULL argument");
         };
         let Some(mm) = Rc::get_mut(&mut m.m) else {
             return fail(
-                tcs_xd_status::Argument,
+                tcs_dynxtce_status::Argument,
                 "the mission's streams must be freed before its algorithms \
                  are set",
             );
         };
         match mm.set_algorithm(name, f) {
             Ok(()) => 0,
-            Err(e) => fail(tcs_xd_status::Lookup, e),
+            Err(e) => fail(tcs_dynxtce_status::Lookup, e),
         }
     })
 }
 
 /// A custom algorithm in a criterion: whether it holds, from its `n`
 /// inputs.
-pub type tcs_xd_criterion_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_criterion_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     inputs: *const f64,
     n: usize,
 ) -> bool;
 /// A CustomAlgorithm: its `m` outputs from its `n` inputs; false if it
 /// gives none.
-pub type tcs_xd_outputs_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_outputs_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     inputs: *const f64,
     n: usize,
@@ -1278,10 +1284,10 @@ pub type tcs_xd_outputs_fn = unsafe extern "C" fn(
     m: usize,
 ) -> bool;
 /// A custom alarm: its level, 0 (normal) to 5 (severe), from its inputs.
-pub type tcs_xd_alarm_fn =
+pub type tcs_dynxtce_alarm_fn =
     unsafe extern "C" fn(ctx: *mut c_void, inputs: *const f64, n: usize) -> u8;
 /// A custom checksum of the bits from `start` to `end` of `len` bytes.
-pub type tcs_xd_checksum_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_checksum_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     data: *const u8,
     len: usize,
@@ -1291,7 +1297,7 @@ pub type tcs_xd_checksum_fn = unsafe extern "C" fn(
 /// A transform's decoding: decodes `n` bytes into `cap`, giving the bytes
 /// it took and those it made (or the room it needs); false if they don't
 /// decode.
-pub type tcs_xd_binary_from_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_binary_from_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     data: *const u8,
     n: usize,
@@ -1302,7 +1308,7 @@ pub type tcs_xd_binary_from_fn = unsafe extern "C" fn(
 ) -> bool;
 /// A transform's encoding: encodes `n` bytes into `cap`, giving the bytes
 /// it made (or the room it needs); false if they don't encode.
-pub type tcs_xd_binary_to_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_binary_to_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     data: *const u8,
     n: usize,
@@ -1312,7 +1318,7 @@ pub type tcs_xd_binary_to_fn = unsafe extern "C" fn(
 ) -> bool;
 /// A time's decoding: the bytes it took of `n` and the seconds; false if
 /// they don't decode.
-pub type tcs_xd_time_from_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_time_from_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     data: *const u8,
     n: usize,
@@ -1321,7 +1327,7 @@ pub type tcs_xd_time_from_fn = unsafe extern "C" fn(
 ) -> bool;
 /// A time's encoding: the bytes it made of the seconds in `cap` (or the
 /// room it needs); false if they don't encode.
-pub type tcs_xd_time_to_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_time_to_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     seconds: f64,
     out: *mut u8,
@@ -1330,23 +1336,23 @@ pub type tcs_xd_time_to_fn = unsafe extern "C" fn(
 ) -> bool;
 /// What a CustomStream's decoding calls with each piece of bytes it
 /// decodes.
-pub type tcs_xd_emit_fn =
+pub type tcs_dynxtce_emit_fn =
     unsafe extern "C" fn(emit_ctx: *mut c_void, data: *const u8, n: usize);
 /// A CustomStream's DecodingAlgorithm: decodes `n` bytes, calling `emit`
 /// with `emit_ctx` and each piece it decodes.
-pub type tcs_xd_stream_decode_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_stream_decode_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     data: *const u8,
     n: usize,
-    emit: tcs_xd_emit_fn,
+    emit: tcs_dynxtce_emit_fn,
     emit_ctx: *mut c_void,
 );
 /// A stream's InvertAlgorithm: what a bit is once AutoInvert has inverted
 /// the stream.
-pub type tcs_xd_bit_invert_fn =
+pub type tcs_dynxtce_bit_invert_fn =
     unsafe extern "C" fn(ctx: *mut c_void, bit: u8) -> u8;
 /// Frees a context the codec no longer needs.
-pub type tcs_xd_free_fn = unsafe extern "C" fn(ctx: *mut c_void);
+pub type tcs_dynxtce_free_fn = unsafe extern "C" fn(ctx: *mut c_void);
 
 /// Wraps a context for a closure.
 ///
@@ -1370,7 +1376,7 @@ fn context(
 /// # Arguments
 ///
 /// * `m`    - The mission.
-/// * `name` - The algorithm's name, as `tcs_xd_algorithm` gives it.
+/// * `name` - The algorithm's name, as `tcs_dynxtce_algorithm` gives it.
 /// * `f`    - The function.
 /// * `ctx`  - What it is given first.
 /// * `free` - What frees `ctx` once the codec no longer needs it, or
@@ -1378,17 +1384,17 @@ fn context(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `name` a C string; `f` is safe to call with
 /// `ctx` until `free` is.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_criterion(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_criterion(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_criterion_fn,
+    f: tcs_dynxtce_criterion_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1410,16 +1416,16 @@ pub unsafe extern "C" fn tcs_xd_set_criterion(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_set_criterion`'s.
+/// As `tcs_dynxtce_set_criterion`'s.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_outputs(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_outputs(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_outputs_fn,
+    f: tcs_dynxtce_outputs_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1442,16 +1448,16 @@ pub unsafe extern "C" fn tcs_xd_set_outputs(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_set_criterion`'s.
+/// As `tcs_dynxtce_set_criterion`'s.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_alarm(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_alarm(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_alarm_fn,
+    f: tcs_dynxtce_alarm_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1472,16 +1478,16 @@ pub unsafe extern "C" fn tcs_xd_set_alarm(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_set_criterion`'s.
+/// As `tcs_dynxtce_set_criterion`'s.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_checksum(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_checksum(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_checksum_fn,
+    f: tcs_dynxtce_checksum_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1504,16 +1510,16 @@ pub unsafe extern "C" fn tcs_xd_set_checksum(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_set_criterion`'s.
+/// As `tcs_dynxtce_set_criterion`'s.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_binary_from(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_binary_from(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_binary_from_fn,
+    f: tcs_dynxtce_binary_from_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1548,16 +1554,16 @@ pub unsafe extern "C" fn tcs_xd_set_binary_from(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_set_criterion`'s.
+/// As `tcs_dynxtce_set_criterion`'s.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_binary_to(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_binary_to(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_binary_to_fn,
+    f: tcs_dynxtce_binary_to_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1591,16 +1597,16 @@ pub unsafe extern "C" fn tcs_xd_set_binary_to(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_set_criterion`'s.
+/// As `tcs_dynxtce_set_criterion`'s.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_time_from(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_time_from(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_time_from_fn,
+    f: tcs_dynxtce_time_from_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1625,16 +1631,16 @@ pub unsafe extern "C" fn tcs_xd_set_time_from(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_set_criterion`'s.
+/// As `tcs_dynxtce_set_criterion`'s.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_time_to(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_time_to(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_time_to_fn,
+    f: tcs_dynxtce_time_to_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1676,16 +1682,16 @@ unsafe extern "C" fn emit(emit_ctx: *mut c_void, data: *const u8, n: usize) {
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_set_criterion`'s; `f` calls `emit` only while it runs.
+/// As `tcs_dynxtce_set_criterion`'s; `f` calls `emit` only while it runs.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_stream_decode(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_stream_decode(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_stream_decode_fn,
+    f: tcs_dynxtce_stream_decode_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1710,16 +1716,16 @@ pub unsafe extern "C" fn tcs_xd_set_stream_decode(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_set_criterion`'s.
+/// As `tcs_dynxtce_set_criterion`'s.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_set_bit_invert(
-    m: *mut tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_set_bit_invert(
+    m: *mut tcs_dynxtce_mission,
     name: *const c_char,
-    f: tcs_xd_bit_invert_fn,
+    f: tcs_dynxtce_bit_invert_fn,
     ctx: *mut c_void,
     free: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
@@ -1738,17 +1744,17 @@ pub unsafe extern "C" fn tcs_xd_set_bit_invert(
 ///
 /// # Returns
 ///
-/// The store, to free with `tcs_xd_store_free`.
+/// The store, to free with `tcs_dynxtce_store_free`.
 ///
 /// # Safety
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_store_new(
-    m: *const tcs_xd_mission,
-) -> *mut tcs_xd_store {
+pub unsafe extern "C" fn tcs_dynxtce_store_new(
+    m: *const tcs_dynxtce_mission,
+) -> *mut tcs_dynxtce_store {
     let m = unsafe { &*m };
-    Box::into_raw(Box::new(tcs_xd_store {
+    Box::into_raw(Box::new(tcs_dynxtce_store {
         s: m.m.store(),
         out: Buffer::with_capacity(4096),
         wide: Vec::new(),
@@ -1763,9 +1769,9 @@ pub unsafe extern "C" fn tcs_xd_store_new(
 ///
 /// # Safety
 ///
-/// `s` came from `tcs_xd_store_new` and isn't used again.
+/// `s` came from `tcs_dynxtce_store_new` and isn't used again.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_store_free(s: *mut tcs_xd_store) {
+pub unsafe extern "C" fn tcs_dynxtce_store_free(s: *mut tcs_dynxtce_store) {
     if !s.is_null() {
         drop(unsafe { Box::from_raw(s) });
     }
@@ -1779,17 +1785,17 @@ pub unsafe extern "C" fn tcs_xd_store_free(s: *mut tcs_xd_store) {
 ///
 /// # Returns
 ///
-/// The scratch, to free with `tcs_xd_scratch_free`.
+/// The scratch, to free with `tcs_dynxtce_scratch_free`.
 ///
 /// # Safety
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_scratch_new(
-    m: *const tcs_xd_mission,
-) -> *mut tcs_xd_scratch {
+pub unsafe extern "C" fn tcs_dynxtce_scratch_new(
+    m: *const tcs_dynxtce_mission,
+) -> *mut tcs_dynxtce_scratch {
     let m = unsafe { &*m };
-    Box::into_raw(Box::new(tcs_xd_scratch { s: m.m.scratch() }))
+    Box::into_raw(Box::new(tcs_dynxtce_scratch { s: m.m.scratch() }))
 }
 
 /// Frees a scratch.
@@ -1800,9 +1806,9 @@ pub unsafe extern "C" fn tcs_xd_scratch_new(
 ///
 /// # Safety
 ///
-/// `s` came from `tcs_xd_scratch_new` and isn't used again.
+/// `s` came from `tcs_dynxtce_scratch_new` and isn't used again.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_scratch_free(s: *mut tcs_xd_scratch) {
+pub unsafe extern "C" fn tcs_dynxtce_scratch_free(s: *mut tcs_dynxtce_scratch) {
     if !s.is_null() {
         drop(unsafe { Box::from_raw(s) });
     }
@@ -1820,9 +1826,9 @@ pub unsafe extern "C" fn tcs_xd_scratch_free(s: *mut tcs_xd_scratch) {
 fn run_error(e: tcs_xtce_dynamic::RunError) -> c_int {
     use tcs_xtce_dynamic::RunError as E;
     let status = match &e {
-        E::Packet(_) => tcs_xd_status::Packet,
-        E::Unsupported(_) => tcs_xd_status::Unsupported,
-        E::Foreign => tcs_xd_status::Argument,
+        E::Packet(_) => tcs_dynxtce_status::Packet,
+        E::Unsupported(_) => tcs_dynxtce_status::Unsupported,
+        E::Foreign => tcs_dynxtce_status::Argument,
     };
     fail(status, e)
 }
@@ -1841,28 +1847,28 @@ fn run_error(e: tcs_xtce_dynamic::RunError) -> c_int {
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_PACKET`, `TCS_XD_STATUS_UNSUPPORTED` or
-/// `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_PACKET`, `TCS_DYNXTCE_STATUS_UNSUPPORTED` or
+/// `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission, `scratch` one of its scratches, and `data` has `len`
 /// bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_unpack(
-    m: *const tcs_xd_mission,
-    n: tcs_xd_node,
+pub unsafe extern "C" fn tcs_dynxtce_unpack(
+    m: *const tcs_dynxtce_mission,
+    n: tcs_dynxtce_node,
     data: *const u8,
     len: usize,
-    scratch: *mut tcs_xd_scratch,
-    out: *mut tcs_xd_node,
+    scratch: *mut tcs_dynxtce_scratch,
+    out: *mut tcs_dynxtce_node,
 ) -> c_int {
     guard(|| {
         let (m, Some(s)) = (unsafe { &*m }, unsafe { scratch.as_mut() }) else {
-            return fail(tcs_xd_status::Argument, "a NULL scratch");
+            return fail(tcs_dynxtce_status::Argument, "a NULL scratch");
         };
         let Some(n) = node(&m.m, n) else {
-            return fail(tcs_xd_status::Argument, FOREIGN);
+            return fail(tcs_dynxtce_status::Argument, FOREIGN);
         };
         match m.m.unpack(n, unsafe { bytes(data, len) }, &mut s.s) {
             Ok(got) => {
@@ -1885,25 +1891,25 @@ pub unsafe extern "C" fn tcs_xd_unpack(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_ARGUMENT` for another mission's scratch.
+/// 0, or `TCS_DYNXTCE_STATUS_ARGUMENT` for another mission's scratch.
 ///
 /// # Safety
 ///
 /// `s` is a store and `scratch` a scratch.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_commit(
-    s: *mut tcs_xd_store,
-    scratch: *const tcs_xd_scratch,
+pub unsafe extern "C" fn tcs_dynxtce_commit(
+    s: *mut tcs_dynxtce_store,
+    scratch: *const tcs_dynxtce_scratch,
 ) -> c_int {
     guard(|| {
         let (Some(s), Some(sc)) =
             (unsafe { s.as_mut() }, unsafe { scratch.as_ref() })
         else {
-            return fail(tcs_xd_status::Argument, "a NULL argument");
+            return fail(tcs_dynxtce_status::Argument, "a NULL argument");
         };
         match s.s.commit(&sc.s) {
             Ok(()) => 0,
-            Err(e) => fail(tcs_xd_status::Argument, e),
+            Err(e) => fail(tcs_dynxtce_status::Argument, e),
         }
     })
 }
@@ -1921,29 +1927,29 @@ pub unsafe extern "C" fn tcs_xd_commit(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_PACKET`, `TCS_XD_STATUS_UNSUPPORTED` or
-/// `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_PACKET`, `TCS_DYNXTCE_STATUS_UNSUPPORTED` or
+/// `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `s` one of its stores.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_pack(
-    m: *const tcs_xd_mission,
-    n: tcs_xd_node,
-    s: *mut tcs_xd_store,
+pub unsafe extern "C" fn tcs_dynxtce_pack(
+    m: *const tcs_dynxtce_mission,
+    n: tcs_dynxtce_node,
+    s: *mut tcs_dynxtce_store,
     out: *mut *const u8,
     len: *mut usize,
 ) -> c_int {
     guard(|| {
         let (m, Some(s)) = (unsafe { &*m }, unsafe { s.as_mut() }) else {
-            return fail(tcs_xd_status::Argument, "a NULL store");
+            return fail(tcs_dynxtce_status::Argument, "a NULL store");
         };
         if out.is_null() || len.is_null() {
-            return fail(tcs_xd_status::Argument, "a NULL argument");
+            return fail(tcs_dynxtce_status::Argument, "a NULL argument");
         }
         let Some(n) = node(&m.m, n) else {
-            return fail(tcs_xd_status::Argument, FOREIGN);
+            return fail(tcs_dynxtce_status::Argument, FOREIGN);
         };
         match m.m.pack(n, &s.s, &mut s.out) {
             Ok(b) => {
@@ -1968,9 +1974,9 @@ pub unsafe extern "C" fn tcs_xd_pack(
 /// # Returns
 ///
 /// The C datum.
-fn c_datum(d: Datum<'_>, wide: &mut Vec<u8>) -> tcs_xd_datum {
-    let mut c = tcs_xd_datum {
-        kind: tcs_xd_kind::Int,
+fn c_datum(d: Datum<'_>, wide: &mut Vec<u8>) -> tcs_dynxtce_datum {
+    let mut c = tcs_dynxtce_datum {
+        kind: tcs_dynxtce_kind::Int,
         i: 0,
         f: 0.0,
         b: false,
@@ -1986,41 +1992,41 @@ fn c_datum(d: Datum<'_>, wide: &mut Vec<u8>) -> tcs_xd_datum {
             Ok(i) => c.i = i,
             Err(_) => {
                 big(&i.to_le_bytes());
-                c.kind = tcs_xd_kind::Big;
+                c.kind = tcs_dynxtce_kind::Big;
             }
         },
         Datum::Big(w) => {
             big(&w.to_le_bytes());
-            c.kind = tcs_xd_kind::Big;
+            c.kind = tcs_dynxtce_kind::Big;
         }
         Datum::Float(x) => {
-            c.kind = tcs_xd_kind::Float;
+            c.kind = tcs_dynxtce_kind::Float;
             c.f = x;
         }
         Datum::Time(x) => {
-            c.kind = tcs_xd_kind::Time;
+            c.kind = tcs_dynxtce_kind::Time;
             c.f = x;
         }
         Datum::Enum(i) => {
-            c.kind = tcs_xd_kind::Enum;
+            c.kind = tcs_dynxtce_kind::Enum;
             c.i = i as i64;
         }
         Datum::Bool(b) => {
-            c.kind = tcs_xd_kind::Bool;
+            c.kind = tcs_dynxtce_kind::Bool;
             c.b = b;
         }
         Datum::Str(s) => {
-            c.kind = tcs_xd_kind::Str;
+            c.kind = tcs_dynxtce_kind::Str;
             c.bytes = s.as_ptr();
             c.len = s.len();
         }
         Datum::Binary(b) => {
-            c.kind = tcs_xd_kind::Binary;
+            c.kind = tcs_dynxtce_kind::Binary;
             c.bytes = b.as_ptr();
             c.len = b.len();
         }
     }
-    if c.kind == tcs_xd_kind::Big {
+    if c.kind == tcs_dynxtce_kind::Big {
         c.bytes = wide.as_ptr();
         c.len = wide.len();
     }
@@ -2039,24 +2045,24 @@ fn c_datum(d: Datum<'_>, wide: &mut Vec<u8>) -> tcs_xd_datum {
 ///
 /// # Returns
 ///
-/// 1 if it has a value, 0 if not, or `TCS_XD_STATUS_ARGUMENT`.
+/// 1 if it has a value, 0 if not, or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission, `s` one of its stores, and `out` room for a datum.
 unsafe fn get(
-    m: *const tcs_xd_mission,
-    s: *mut tcs_xd_store,
-    h: tcs_xd_slot,
+    m: *const tcs_dynxtce_mission,
+    s: *mut tcs_dynxtce_store,
+    h: tcs_dynxtce_slot,
     raw: bool,
-    out: *mut tcs_xd_datum,
+    out: *mut tcs_dynxtce_datum,
 ) -> c_int {
     guard(|| {
         let (m, Some(s)) = (unsafe { &*m }, unsafe { s.as_mut() }) else {
-            return fail(tcs_xd_status::Argument, "a NULL store");
+            return fail(tcs_dynxtce_status::Argument, "a NULL store");
         };
         let (Some(h), false) = (slot(&m.m, h), out.is_null()) else {
-            return fail(tcs_xd_status::Argument, FOREIGN);
+            return fail(tcs_dynxtce_status::Argument, FOREIGN);
         };
         let d = if raw { s.s.get_raw(h) } else { s.s.get(h) };
         match d {
@@ -2081,17 +2087,17 @@ unsafe fn get(
 ///
 /// # Returns
 ///
-/// 1 if it has a value, 0 if not, or `TCS_XD_STATUS_ARGUMENT`.
+/// 1 if it has a value, 0 if not, or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `s` one of its stores.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_store_get(
-    m: *const tcs_xd_mission,
-    s: *mut tcs_xd_store,
-    h: tcs_xd_slot,
-    out: *mut tcs_xd_datum,
+pub unsafe extern "C" fn tcs_dynxtce_store_get(
+    m: *const tcs_dynxtce_mission,
+    s: *mut tcs_dynxtce_store,
+    h: tcs_dynxtce_slot,
+    out: *mut tcs_dynxtce_datum,
 ) -> c_int {
     unsafe { get(m, s, h, false, out) }
 }
@@ -2108,17 +2114,17 @@ pub unsafe extern "C" fn tcs_xd_store_get(
 ///
 /// # Returns
 ///
-/// 1 if it has a value, 0 if not, or `TCS_XD_STATUS_ARGUMENT`.
+/// 1 if it has a value, 0 if not, or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `s` one of its stores.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_store_get_raw(
-    m: *const tcs_xd_mission,
-    s: *mut tcs_xd_store,
-    h: tcs_xd_slot,
-    out: *mut tcs_xd_datum,
+pub unsafe extern "C" fn tcs_dynxtce_store_get_raw(
+    m: *const tcs_dynxtce_mission,
+    s: *mut tcs_dynxtce_store,
+    h: tcs_dynxtce_slot,
+    out: *mut tcs_dynxtce_datum,
 ) -> c_int {
     unsafe { get(m, s, h, true, out) }
 }
@@ -2135,49 +2141,54 @@ pub unsafe extern "C" fn tcs_xd_store_get_raw(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_SET` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_SET` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission, `s` one of its stores, and `d` a datum whose bytes,
 /// if it has any, are `len` long.
 unsafe fn put(
-    m: *const tcs_xd_mission,
-    s: *mut tcs_xd_store,
-    h: tcs_xd_slot,
+    m: *const tcs_dynxtce_mission,
+    s: *mut tcs_dynxtce_store,
+    h: tcs_dynxtce_slot,
     raw: bool,
-    d: *const tcs_xd_datum,
+    d: *const tcs_dynxtce_datum,
 ) -> c_int {
     guard(|| {
         let (m, Some(s), Some(d)) =
             (unsafe { &*m }, unsafe { s.as_mut() }, unsafe { d.as_ref() })
         else {
-            return fail(tcs_xd_status::Argument, "a NULL argument");
+            return fail(tcs_dynxtce_status::Argument, "a NULL argument");
         };
         let Some(h) = slot(&m.m, h) else {
-            return fail(tcs_xd_status::Argument, FOREIGN);
+            return fail(tcs_dynxtce_status::Argument, FOREIGN);
         };
         let b = unsafe { bytes(d.bytes, d.len) };
         let wide;
         let datum = match d.kind {
-            tcs_xd_kind::Int => Datum::Int(d.i as i128),
-            tcs_xd_kind::Enum => Datum::Enum(d.i as i128),
-            tcs_xd_kind::Float => Datum::Float(d.f),
-            tcs_xd_kind::Time => Datum::Time(d.f),
-            tcs_xd_kind::Bool => Datum::Bool(d.b),
-            tcs_xd_kind::Binary => Datum::Binary(b),
-            tcs_xd_kind::Str => match std::str::from_utf8(b) {
+            tcs_dynxtce_kind::Int => Datum::Int(d.i as i128),
+            tcs_dynxtce_kind::Enum => Datum::Enum(d.i as i128),
+            tcs_dynxtce_kind::Float => Datum::Float(d.f),
+            tcs_dynxtce_kind::Time => Datum::Time(d.f),
+            tcs_dynxtce_kind::Bool => Datum::Bool(d.b),
+            tcs_dynxtce_kind::Binary => Datum::Binary(b),
+            tcs_dynxtce_kind::Str => match std::str::from_utf8(b) {
                 Ok(t) => Datum::Str(t),
                 Err(_) => {
-                    return fail(tcs_xd_status::Set, "a string not of UTF-8")
+                    return fail(
+                        tcs_dynxtce_status::Set,
+                        "a string not of UTF-8",
+                    )
                 }
             },
-            tcs_xd_kind::Big => match tcs_xtce_dynamic::from_le_bytes(b) {
+            tcs_dynxtce_kind::Big => match tcs_xtce_dynamic::from_le_bytes(b) {
                 Some(w) => {
                     wide = w;
                     Datum::Big(&wide)
                 }
-                None => return fail(tcs_xd_status::Set, "an integer too wide"),
+                None => {
+                    return fail(tcs_dynxtce_status::Set, "an integer too wide")
+                }
             },
         };
         let r = if raw {
@@ -2187,7 +2198,7 @@ unsafe fn put(
         };
         match r {
             Ok(()) => 0,
-            Err(e) => fail(tcs_xd_status::Set, e),
+            Err(e) => fail(tcs_dynxtce_status::Set, e),
         }
     })
 }
@@ -2203,18 +2214,18 @@ unsafe fn put(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_SET` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_SET` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission, `s` one of its stores, and `d` a datum whose bytes,
 /// if it has any, are `len` long.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_store_set(
-    m: *const tcs_xd_mission,
-    s: *mut tcs_xd_store,
-    h: tcs_xd_slot,
-    d: *const tcs_xd_datum,
+pub unsafe extern "C" fn tcs_dynxtce_store_set(
+    m: *const tcs_dynxtce_mission,
+    s: *mut tcs_dynxtce_store,
+    h: tcs_dynxtce_slot,
+    d: *const tcs_dynxtce_datum,
 ) -> c_int {
     unsafe { put(m, s, h, false, d) }
 }
@@ -2230,17 +2241,17 @@ pub unsafe extern "C" fn tcs_xd_store_set(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_SET` or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_SET` or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
-/// As `tcs_xd_store_set`'s.
+/// As `tcs_dynxtce_store_set`'s.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_store_set_raw(
-    m: *const tcs_xd_mission,
-    s: *mut tcs_xd_store,
-    h: tcs_xd_slot,
-    d: *const tcs_xd_datum,
+pub unsafe extern "C" fn tcs_dynxtce_store_set_raw(
+    m: *const tcs_dynxtce_mission,
+    s: *mut tcs_dynxtce_store,
+    h: tcs_dynxtce_slot,
+    d: *const tcs_dynxtce_datum,
 ) -> c_int {
     unsafe { put(m, s, h, true, d) }
 }
@@ -2257,10 +2268,10 @@ pub unsafe extern "C" fn tcs_xd_store_set_raw(
 ///
 /// `m` is a mission and `s` one of its stores.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_store_clear(
-    m: *const tcs_xd_mission,
-    s: *mut tcs_xd_store,
-    h: tcs_xd_slot,
+pub unsafe extern "C" fn tcs_dynxtce_store_clear(
+    m: *const tcs_dynxtce_mission,
+    s: *mut tcs_dynxtce_store,
+    h: tcs_dynxtce_slot,
 ) {
     let (m, Some(s)) = (unsafe { &*m }, unsafe { s.as_mut() }) else {
         return;
@@ -2274,7 +2285,7 @@ pub unsafe extern "C" fn tcs_xd_store_clear(
 
 /// Called with each alarmed field's name, its length, and its level: 0
 /// (normal) to 5 (severe), or -1 when the field is absent.
-pub type tcs_xd_level_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_level_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     name: *const c_char,
     len: usize,
@@ -2282,7 +2293,7 @@ pub type tcs_xd_level_fn = unsafe extern "C" fn(
 );
 /// Called with each output's name, its length, whether it has a value,
 /// and the value.
-pub type tcs_xd_output_fn = unsafe extern "C" fn(
+pub type tcs_dynxtce_output_fn = unsafe extern "C" fn(
     ctx: *mut c_void,
     name: *const c_char,
     len: usize,
@@ -2315,22 +2326,22 @@ fn level(l: Option<AlarmLevel>) -> c_int {
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `scratch` one of its scratches.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_alarms(
-    m: *const tcs_xd_mission,
-    scratch: *const tcs_xd_scratch,
-    f: tcs_xd_level_fn,
+pub unsafe extern "C" fn tcs_dynxtce_alarms(
+    m: *const tcs_dynxtce_mission,
+    scratch: *const tcs_dynxtce_scratch,
+    f: tcs_dynxtce_level_fn,
     ctx: *mut c_void,
 ) -> c_int {
     guard(|| {
         let (m, Some(sc)) = (unsafe { &*m }, unsafe { scratch.as_ref() })
         else {
-            return fail(tcs_xd_status::Argument, "a NULL scratch");
+            return fail(tcs_dynxtce_status::Argument, "a NULL scratch");
         };
         let r = m.m.alarms(&sc.s, |n, l| unsafe {
             f(ctx, n.as_ptr() as *const c_char, n.len(), level(l))
@@ -2350,16 +2361,16 @@ pub unsafe extern "C" fn tcs_xd_alarms(
 ///
 /// # Returns
 ///
-/// The monitor, to free with `tcs_xd_monitor_free`.
+/// The monitor, to free with `tcs_dynxtce_monitor_free`.
 ///
 /// # Safety
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_monitor_new(
-    m: *const tcs_xd_mission,
-) -> *mut tcs_xd_monitor {
-    Box::into_raw(Box::new(tcs_xd_monitor {
+pub unsafe extern "C" fn tcs_dynxtce_monitor_new(
+    m: *const tcs_dynxtce_mission,
+) -> *mut tcs_dynxtce_monitor {
+    Box::into_raw(Box::new(tcs_dynxtce_monitor {
         m: unsafe { &*m }.m.monitor(),
     }))
 }
@@ -2372,9 +2383,11 @@ pub unsafe extern "C" fn tcs_xd_monitor_new(
 ///
 /// # Safety
 ///
-/// `mon` came from `tcs_xd_monitor_new` and isn't used again.
+/// `mon` came from `tcs_dynxtce_monitor_new` and isn't used again.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_monitor_free(mon: *mut tcs_xd_monitor) {
+pub unsafe extern "C" fn tcs_dynxtce_monitor_free(
+    mon: *mut tcs_dynxtce_monitor,
+) {
     if !mon.is_null() {
         drop(unsafe { Box::from_raw(mon) });
     }
@@ -2394,18 +2407,18 @@ pub unsafe extern "C" fn tcs_xd_monitor_free(mon: *mut tcs_xd_monitor) {
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission, and `scratch` and `mon` are its.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_monitor_alarms(
-    m: *const tcs_xd_mission,
-    scratch: *const tcs_xd_scratch,
-    mon: *mut tcs_xd_monitor,
+pub unsafe extern "C" fn tcs_dynxtce_monitor_alarms(
+    m: *const tcs_dynxtce_mission,
+    scratch: *const tcs_dynxtce_scratch,
+    mon: *mut tcs_dynxtce_monitor,
     t: f64,
-    f: tcs_xd_level_fn,
+    f: tcs_dynxtce_level_fn,
     ctx: *mut c_void,
 ) -> c_int {
     guard(|| {
@@ -2414,7 +2427,7 @@ pub unsafe extern "C" fn tcs_xd_monitor_alarms(
                 mon.as_mut()
             })
         else {
-            return fail(tcs_xd_status::Argument, "a NULL argument");
+            return fail(tcs_dynxtce_status::Argument, "a NULL argument");
         };
         let r = m.m.monitor_alarms(&sc.s, &mut mon.m, t, |n, l| unsafe {
             f(ctx, n.as_ptr() as *const c_char, n.len(), level(l))
@@ -2438,22 +2451,22 @@ pub unsafe extern "C" fn tcs_xd_monitor_alarms(
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_ARGUMENT`.
+/// 0, or `TCS_DYNXTCE_STATUS_ARGUMENT`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `scratch` one of its scratches.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_derived(
-    m: *const tcs_xd_mission,
-    scratch: *const tcs_xd_scratch,
-    f: tcs_xd_output_fn,
+pub unsafe extern "C" fn tcs_dynxtce_derived(
+    m: *const tcs_dynxtce_mission,
+    scratch: *const tcs_dynxtce_scratch,
+    f: tcs_dynxtce_output_fn,
     ctx: *mut c_void,
 ) -> c_int {
     guard(|| {
         let (m, Some(sc)) = (unsafe { &*m }, unsafe { scratch.as_ref() })
         else {
-            return fail(tcs_xd_status::Argument, "a NULL scratch");
+            return fail(tcs_dynxtce_status::Argument, "a NULL scratch");
         };
         let r = m.m.derived(&sc.s, |n, v| unsafe {
             f(
@@ -2487,8 +2500,8 @@ pub unsafe extern "C" fn tcs_xd_derived(
 ///
 /// `m` is a mission.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_stream_count(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_stream_count(
+    m: *const tcs_dynxtce_mission,
 ) -> usize {
     unsafe { &*m }.m.streams().len()
 }
@@ -2498,7 +2511,7 @@ pub unsafe extern "C" fn tcs_xd_stream_count(
 /// # Arguments
 ///
 /// * `m`   - The mission.
-/// * `i`   - Its place, less than `tcs_xd_stream_count`.
+/// * `i`   - Its place, less than `tcs_dynxtce_stream_count`.
 /// * `buf` - Where the name goes, or NULL.
 /// * `len` - The buffer's size, NUL included.
 ///
@@ -2510,8 +2523,8 @@ pub unsafe extern "C" fn tcs_xd_stream_count(
 ///
 /// `m` is a mission and `buf` has room for `len` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_stream_name(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_stream_name(
+    m: *const tcs_dynxtce_mission,
     i: usize,
     buf: *mut c_char,
     len: usize,
@@ -2527,27 +2540,27 @@ pub unsafe extern "C" fn tcs_xd_stream_name(
 ///
 /// * `m`    - The mission.
 /// * `path` - The stream's qualified name.
-/// * `out`  - Where the stream goes, to free with `tcs_xd_deframer_free`.
+/// * `out`  - Where the stream goes, to free with `tcs_dynxtce_deframer_free`.
 ///
 /// # Returns
 ///
-/// 0, or `TCS_XD_STATUS_LOOKUP`.
+/// 0, or `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `path` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_stream(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_stream(
+    m: *const tcs_dynxtce_mission,
     path: *const c_char,
-    out: *mut *mut tcs_xd_deframer,
+    out: *mut *mut tcs_dynxtce_deframer,
 ) -> c_int {
     guard(|| {
         let (m, Some(p)) = (unsafe { &*m }, unsafe { text(path) }) else {
-            return fail(tcs_xd_status::Argument, "a NULL path");
+            return fail(tcs_dynxtce_status::Argument, "a NULL path");
         };
         if out.is_null() {
-            return fail(tcs_xd_status::Argument, "a NULL argument");
+            return fail(tcs_dynxtce_status::Argument, "a NULL argument");
         }
         match m.m.stream(p) {
             Ok(d) => {
@@ -2555,11 +2568,11 @@ pub unsafe extern "C" fn tcs_xd_stream(
                 // dropped first, and the Rc it is boxed with keeps the
                 // mission alive until then.
                 let d: Deframer<'static> = unsafe { std::mem::transmute(d) };
-                let b = Box::new(tcs_xd_deframer { d, _m: m.m.clone() });
+                let b = Box::new(tcs_dynxtce_deframer { d, _m: m.m.clone() });
                 unsafe { *out = Box::into_raw(b) };
                 0
             }
-            Err(e) => fail(tcs_xd_status::Lookup, e),
+            Err(e) => fail(tcs_dynxtce_status::Lookup, e),
         }
     })
 }
@@ -2572,16 +2585,18 @@ pub unsafe extern "C" fn tcs_xd_stream(
 ///
 /// # Safety
 ///
-/// `d` came from `tcs_xd_stream` and isn't used again.
+/// `d` came from `tcs_dynxtce_stream` and isn't used again.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_deframer_free(d: *mut tcs_xd_deframer) {
+pub unsafe extern "C" fn tcs_dynxtce_deframer_free(
+    d: *mut tcs_dynxtce_deframer,
+) {
     if !d.is_null() {
         drop(unsafe { Box::from_raw(d) });
     }
 }
 
 /// Called with each frame a stream completes.
-pub type tcs_xd_frame_fn =
+pub type tcs_dynxtce_frame_fn =
     unsafe extern "C" fn(ctx: *mut c_void, frame: *const u8, len: usize);
 
 /// Takes a stream's next bytes, calling a function with each frame they
@@ -2599,11 +2614,11 @@ pub type tcs_xd_frame_fn =
 ///
 /// `d` is a stream and `data` has `len` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_deframer_push(
-    d: *mut tcs_xd_deframer,
+pub unsafe extern "C" fn tcs_dynxtce_deframer_push(
+    d: *mut tcs_dynxtce_deframer,
     data: *const u8,
     len: usize,
-    f: tcs_xd_frame_fn,
+    f: tcs_dynxtce_frame_fn,
     ctx: *mut c_void,
 ) {
     let Some(d) = (unsafe { d.as_mut() }) else {
@@ -2625,20 +2640,20 @@ pub unsafe extern "C" fn tcs_xd_deframer_push(
 /// # Returns
 ///
 /// 1 if its frames are a container's, 0 for a CustomStream, or
-/// `TCS_XD_STATUS_LOOKUP`.
+/// `TCS_DYNXTCE_STATUS_LOOKUP`.
 ///
 /// # Safety
 ///
 /// `m` is a mission and `path` a C string.
 #[no_mangle]
-pub unsafe extern "C" fn tcs_xd_stream_container(
-    m: *const tcs_xd_mission,
+pub unsafe extern "C" fn tcs_dynxtce_stream_container(
+    m: *const tcs_dynxtce_mission,
     path: *const c_char,
-    out: *mut tcs_xd_node,
+    out: *mut tcs_dynxtce_node,
 ) -> c_int {
     guard(|| {
         let (m, Some(p)) = (unsafe { &*m }, unsafe { text(path) }) else {
-            return fail(tcs_xd_status::Argument, "a NULL path");
+            return fail(tcs_dynxtce_status::Argument, "a NULL path");
         };
         match m.m.stream_container(p) {
             Ok(Some(n)) => {
@@ -2648,7 +2663,7 @@ pub unsafe extern "C" fn tcs_xd_stream_container(
                 1
             }
             Ok(None) => 0,
-            Err(e) => fail(tcs_xd_status::Lookup, e),
+            Err(e) => fail(tcs_dynxtce_status::Lookup, e),
         }
     })
 }

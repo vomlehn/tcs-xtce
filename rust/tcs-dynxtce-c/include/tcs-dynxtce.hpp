@@ -1,13 +1,13 @@
 /* The C++ interface to tcs-xtce-dynamic, the tcs-xtce run-time codec: a
- * header-only layer over the C interface, tcs-xtce-dynamic.h, that does
+ * header-only layer over the C interface, tcs-dynxtce.h, that does
  * nothing the C interface doesn't.  Its classes free what they hold when
- * they are destroyed, failures are thrown as tcs::xd::Error, and the
+ * they are destroyed, failures are thrown as tcs::dynxtce::Error, and the
  * functions an application supplies are any callable.
  *
- * Link with libtcs-xtce-dynamic.  C++20. */
+ * Link with libtcs-dynxtce.  C++20. */
 
-#ifndef TCS_XTCE_DYNAMIC_HPP
-#define TCS_XTCE_DYNAMIC_HPP
+#ifndef TCS_DYNXTCE_HPP
+#define TCS_DYNXTCE_HPP
 
 #include <array>
 #include <cstdint>
@@ -20,9 +20,9 @@
 #include <utility>
 #include <vector>
 
-#include "tcs-xtce-dynamic.h"
+#include "tcs-dynxtce.h"
 
-namespace tcs::xd {
+namespace tcs::dynxtce {
 
 /** A failure of a call to the codec: its status and message. */
 class Error : public std::runtime_error {
@@ -31,13 +31,13 @@ public:
          *
          * @param status  The status the call returned. */
         explicit Error(int status)
-                : std::runtime_error(tcs_xd_last_error()), status_(status)
+                : std::runtime_error(tcs_dynxtce_last_error()), status_(status)
         {
         }
 
         /** Gives the status the call returned.
          *
-         * @return  A negative tcs_xd_status. */
+         * @return  A negative tcs_dynxtce_status. */
         int status() const { return status_; }
 
 private:
@@ -73,15 +73,15 @@ template <class Get> std::string text(Get get)
 }
 
 /** A SpaceSystem of a mission. */
-using Space = tcs_xd_space;
+using Space = tcs_dynxtce_space;
 /** A container or meta-command of a mission. */
-using Node = tcs_xd_node;
+using Node = tcs_dynxtce_node;
 /** One scalar value of a mission. */
-using Slot = tcs_xd_slot;
+using Slot = tcs_dynxtce_slot;
 /** The slots of a whole value. */
-using Slots = tcs_xd_slots;
+using Slots = tcs_dynxtce_slots;
 /** A value of a slot. */
-using Datum = tcs_xd_datum;
+using Datum = tcs_dynxtce_datum;
 
 /** Makes a datum of an integer.
  *
@@ -90,7 +90,7 @@ using Datum = tcs_xd_datum;
 inline Datum int_datum(std::int64_t i)
 {
         Datum d{};
-        d.kind = TCS_XD_KIND_INT;
+        d.kind = TCS_DYNXTCE_KIND_INT;
         d.i = i;
         return d;
 }
@@ -102,7 +102,7 @@ inline Datum int_datum(std::int64_t i)
 inline Datum enum_datum(std::int64_t i)
 {
         Datum d{};
-        d.kind = TCS_XD_KIND_ENUM;
+        d.kind = TCS_DYNXTCE_KIND_ENUM;
         d.i = i;
         return d;
 }
@@ -114,7 +114,7 @@ inline Datum enum_datum(std::int64_t i)
 inline Datum float_datum(double f)
 {
         Datum d{};
-        d.kind = TCS_XD_KIND_FLOAT;
+        d.kind = TCS_DYNXTCE_KIND_FLOAT;
         d.f = f;
         return d;
 }
@@ -126,7 +126,7 @@ inline Datum float_datum(double f)
 inline Datum str_datum(std::string_view s)
 {
         Datum d{};
-        d.kind = TCS_XD_KIND_STR;
+        d.kind = TCS_DYNXTCE_KIND_STR;
         d.bytes = reinterpret_cast<const std::uint8_t *>(s.data());
         d.len = s.size();
         return d;
@@ -170,21 +170,21 @@ public:
                                 d.data()));
                         n.push_back(d.size());
                 }
-                tcs_xd_mission *m = nullptr;
-                checked(tcs_xd_mission_read(p.data(), n.data(), p.size(),
-                                            &m));
+                tcs_dynxtce_mission *m = nullptr;
+                checked(tcs_dynxtce_mission_read(p.data(), n.data(), p.size(),
+                                                 &m));
                 m_.reset(m);
         }
 
         /** Gives the C mission.
          *
          * @return  It. */
-        tcs_xd_mission *c() const { return m_.get(); }
+        tcs_dynxtce_mission *c() const { return m_.get(); }
 
         /** Gives the top SpaceSystem.
          *
          * @return  Its handle. */
-        Space top() const { return tcs_xd_top(c()); }
+        Space top() const { return tcs_dynxtce_top(c()); }
 
         /** Looks a SpaceSystem up from a base.
          *
@@ -194,7 +194,7 @@ public:
         Space space_system(Space base, const std::string &path) const
         {
                 Space s{};
-                checked(tcs_xd_space_system(c(), base, path.c_str(), &s));
+                checked(tcs_dynxtce_space_system(c(), base, path.c_str(), &s));
                 return s;
         }
 
@@ -206,7 +206,7 @@ public:
         Node container(Space base, const std::string &path) const
         {
                 Node n{};
-                checked(tcs_xd_container(c(), base, path.c_str(), &n));
+                checked(tcs_dynxtce_container(c(), base, path.c_str(), &n));
                 return n;
         }
 
@@ -218,7 +218,7 @@ public:
         Node meta_command(Space base, const std::string &path) const
         {
                 Node n{};
-                checked(tcs_xd_meta_command(c(), base, path.c_str(), &n));
+                checked(tcs_dynxtce_meta_command(c(), base, path.c_str(), &n));
                 return n;
         }
 
@@ -230,7 +230,7 @@ public:
         Slot parameter(Space base, const std::string &path) const
         {
                 Slot s{};
-                checked(tcs_xd_parameter(c(), base, path.c_str(), &s));
+                checked(tcs_dynxtce_parameter(c(), base, path.c_str(), &s));
                 return s;
         }
 
@@ -243,7 +243,8 @@ public:
         Slots parameter_slots(Space base, const std::string &path) const
         {
                 Slots s{};
-                checked(tcs_xd_parameter_slots(c(), base, path.c_str(), &s));
+                checked(tcs_dynxtce_parameter_slots(c(), base, path.c_str(),
+                                                    &s));
                 return s;
         }
 
@@ -255,7 +256,7 @@ public:
         Slot argument(Node cmd, const std::string &name) const
         {
                 Slot s{};
-                checked(tcs_xd_argument(c(), cmd, name.c_str(), &s));
+                checked(tcs_dynxtce_argument(c(), cmd, name.c_str(), &s));
                 return s;
         }
 
@@ -267,7 +268,7 @@ public:
         Slot entry(Node n, const std::string &name) const
         {
                 Slot s{};
-                checked(tcs_xd_entry(c(), n, name.c_str(), &s));
+                checked(tcs_dynxtce_entry(c(), n, name.c_str(), &s));
                 return s;
         }
 
@@ -280,7 +281,7 @@ public:
         Slots argument_slots(Node cmd, const std::string &name) const
         {
                 Slots s{};
-                checked(tcs_xd_argument_slots(c(), cmd, name.c_str(), &s));
+                checked(tcs_dynxtce_argument_slots(c(), cmd, name.c_str(), &s));
                 return s;
         }
 
@@ -293,7 +294,7 @@ public:
         Slots entry_slots(Node n, const std::string &name) const
         {
                 Slots s{};
-                checked(tcs_xd_entry_slots(c(), n, name.c_str(), &s));
+                checked(tcs_dynxtce_entry_slots(c(), n, name.c_str(), &s));
                 return s;
         }
 
@@ -303,7 +304,7 @@ public:
         std::array<std::uint8_t, 16> digest() const
         {
                 std::array<std::uint8_t, 16> d{};
-                tcs_xd_mission_digest(c(), d.data());
+                tcs_dynxtce_mission_digest(c(), d.data());
                 return d;
         }
 
@@ -314,7 +315,7 @@ public:
         std::string path_of(Space s) const
         {
                 return text([&](char *b, std::size_t l) {
-                        return tcs_xd_path_of_space(c(), s, b, l);
+                        return tcs_dynxtce_path_of_space(c(), s, b, l);
                 });
         }
 
@@ -326,7 +327,7 @@ public:
         std::string kind(Slot s) const
         {
                 return text([&](char *b, std::size_t l) {
-                        return tcs_xd_slot_kind(c(), s, b, l);
+                        return tcs_dynxtce_slot_kind(c(), s, b, l);
                 });
         }
 
@@ -335,13 +336,16 @@ public:
          * @param s  The slot.
          * @return   1 for an absolute time, 2 for a relative one, 0 for
          *           anything else. */
-        int time(Slot s) const { return tcs_xd_slot_time(c(), s); }
+        int time(Slot s) const { return tcs_dynxtce_slot_time(c(), s); }
 
         /** Says whether a node is abstract.
          *
          * @param n  The node.
          * @return   Whether it is. */
-        bool is_abstract(Node n) const { return tcs_xd_is_abstract(c(), n); }
+        bool is_abstract(Node n) const
+        {
+                return tcs_dynxtce_is_abstract(c(), n);
+        }
 
         /** Gives the most bytes a packet of a node takes.
          *
@@ -349,7 +353,7 @@ public:
          * @return   The bytes, or 0 if they aren't known. */
         std::size_t max_bytes(Node n) const
         {
-                return tcs_xd_max_bytes(c(), n);
+                return tcs_dynxtce_max_bytes(c(), n);
         }
 
         /** Gives what the mission's packets use that the codec doesn't run
@@ -359,7 +363,7 @@ public:
         std::string unsupported() const
         {
                 return text([&](char *b, std::size_t l) {
-                        return tcs_xd_unsupported(c(), b, l);
+                        return tcs_dynxtce_unsupported(c(), b, l);
                 });
         }
 
@@ -369,8 +373,9 @@ public:
         std::vector<Slot> unbounded() const
         {
                 std::vector<Slot> v;
-                for (std::size_t i = 0; i < tcs_xd_unbounded_count(c()); i++)
-                        v.push_back(tcs_xd_unbounded(c(), i));
+                std::size_t n = tcs_dynxtce_unbounded_count(c());
+                for (std::size_t i = 0; i < n; i++)
+                        v.push_back(tcs_dynxtce_unbounded(c(), i));
                 return v;
         }
 
@@ -390,10 +395,10 @@ public:
         std::vector<Algorithm> algorithms() const
         {
                 std::vector<Algorithm> v;
-                for (std::size_t i = 0; i < tcs_xd_algorithm_count(c());
+                for (std::size_t i = 0; i < tcs_dynxtce_algorithm_count(c());
                      i++) {
                         char name[512], kind[64];
-                        int set = checked(tcs_xd_algorithm(
+                        int set = checked(tcs_dynxtce_algorithm(
                                 c(), i, name, sizeof name, kind,
                                 sizeof kind));
                         v.push_back({name, kind, set == 1});
@@ -407,9 +412,9 @@ public:
         std::vector<std::string> streams() const
         {
                 std::vector<std::string> v;
-                for (std::size_t i = 0; i < tcs_xd_stream_count(c()); i++)
+                for (std::size_t i = 0; i < tcs_dynxtce_stream_count(c()); i++)
                         v.push_back(text([&](char *b, std::size_t l) {
-                                return tcs_xd_stream_name(c(), i, b, l);
+                                return tcs_dynxtce_stream_name(c(), i, b, l);
                         }));
                 return v;
         }
@@ -422,8 +427,8 @@ public:
          *              CustomStream. */
         bool stream_container(const std::string &path, Node &out) const
         {
-                return checked(tcs_xd_stream_container(c(), path.c_str(),
-                                                       &out)) == 1;
+                return checked(tcs_dynxtce_stream_container(c(), path.c_str(),
+                                                            &out)) == 1;
         }
 
         /** Gives a node's absolute path.
@@ -433,7 +438,7 @@ public:
         std::string path_of(Node n) const
         {
                 return text([&](char *b, std::size_t l) {
-                        return tcs_xd_path_of_node(c(), n, b, l);
+                        return tcs_dynxtce_path_of_node(c(), n, b, l);
                 });
         }
 
@@ -444,7 +449,7 @@ public:
         std::string path_of(Slot s) const
         {
                 return text([&](char *b, std::size_t l) {
-                        return tcs_xd_path_of_slot(c(), s, b, l);
+                        return tcs_dynxtce_path_of_slot(c(), s, b, l);
                 });
         }
 
@@ -457,7 +462,7 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_criterion(
+                checked(tcs_dynxtce_set_criterion(
                         c(), name.c_str(),
                         [](void *x, const double *v, std::uintptr_t n) {
                                 return (*static_cast<F *>(x))({v, n});
@@ -476,7 +481,7 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_outputs(
+                checked(tcs_dynxtce_set_outputs(
                         c(), name.c_str(),
                         [](void *x, const double *v, std::uintptr_t n,
                            double *o, std::uintptr_t m) {
@@ -495,7 +500,7 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_alarm(
+                checked(tcs_dynxtce_set_alarm(
                         c(), name.c_str(),
                         [](void *x, const double *v, std::uintptr_t n) {
                                 return (*static_cast<F *>(x))({v, n});
@@ -515,7 +520,7 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_checksum(
+                checked(tcs_dynxtce_set_checksum(
                         c(), name.c_str(),
                         [](void *x, const std::uint8_t *d, std::uintptr_t l,
                            std::uintptr_t s, std::uintptr_t e) {
@@ -547,7 +552,7 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_binary_from(
+                checked(tcs_dynxtce_set_binary_from(
                         c(), name.c_str(),
                         [](void *x, const std::uint8_t *b, std::uintptr_t n,
                            std::uint8_t *o, std::uintptr_t cap,
@@ -575,7 +580,7 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_binary_to(
+                checked(tcs_dynxtce_set_binary_to(
                         c(), name.c_str(),
                         [](void *x, const std::uint8_t *b, std::uintptr_t n,
                            std::uint8_t *o, std::uintptr_t cap,
@@ -601,7 +606,7 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_time_from(
+                checked(tcs_dynxtce_set_time_from(
                         c(), name.c_str(),
                         [](void *x, const std::uint8_t *b, std::uintptr_t n,
                            std::uintptr_t *took, double *secs) {
@@ -626,7 +631,7 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_time_to(
+                checked(tcs_dynxtce_set_time_to(
                         c(), name.c_str(),
                         [](void *x, double secs, std::uint8_t *o,
                            std::uintptr_t cap, std::uintptr_t *made) {
@@ -653,10 +658,10 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_stream_decode(
+                checked(tcs_dynxtce_set_stream_decode(
                         c(), name.c_str(),
                         [](void *x, const std::uint8_t *b, std::uintptr_t n,
-                           tcs_xd_emit_fn emit, void *ectx) {
+                           tcs_dynxtce_emit_fn emit, void *ectx) {
                                 (*static_cast<F *>(x))(
                                         {b, n},
                                         [&](std::span<const std::uint8_t> s) {
@@ -676,7 +681,7 @@ public:
         {
                 using F = decltype(f);
                 auto *p = new F(std::move(f));
-                checked(tcs_xd_set_bit_invert(
+                checked(tcs_dynxtce_set_bit_invert(
                         c(), name.c_str(),
                         [](void *x, std::uint8_t b) {
                                 return (*static_cast<F *>(x))(b);
@@ -746,14 +751,14 @@ private:
                 /** Frees it.
                  *
                  * @param m  The mission. */
-                void operator()(tcs_xd_mission *m) const
+                void operator()(tcs_dynxtce_mission *m) const
                 {
-                        tcs_xd_mission_free(m);
+                        tcs_dynxtce_mission_free(m);
                 }
         };
 
         /** The C mission. */
-        std::unique_ptr<tcs_xd_mission, Free> m_;
+        std::unique_ptr<tcs_dynxtce_mission, Free> m_;
 };
 
 /** The current value of every slot of a mission. */
@@ -763,14 +768,14 @@ public:
          *
          * @param m  The mission. */
         explicit Store(const Mission &m)
-                : m_(&m), s_(tcs_xd_store_new(m.c()))
+                : m_(&m), s_(tcs_dynxtce_store_new(m.c()))
         {
         }
 
         /** Gives the C store.
          *
          * @return  It. */
-        tcs_xd_store *c() const { return s_.get(); }
+        tcs_dynxtce_store *c() const { return s_.get(); }
 
         /** Gives a slot's current value.
          *
@@ -779,7 +784,8 @@ public:
          * @return     Whether it has a value. */
         bool get(Slot s, Datum &out) const
         {
-                return checked(tcs_xd_store_get(m_->c(), c(), s, &out)) == 1;
+                return checked(tcs_dynxtce_store_get(m_->c(), c(), s, &out))
+                       == 1;
         }
 
         /** Gives a slot a value, checked against its type.
@@ -788,7 +794,7 @@ public:
          * @param d  The value. */
         void set(Slot s, const Datum &d)
         {
-                checked(tcs_xd_store_set(m_->c(), c(), s, &d));
+                checked(tcs_dynxtce_store_set(m_->c(), c(), s, &d));
         }
 
         /** Gives a slot's raw value: before its calibrator.
@@ -798,7 +804,7 @@ public:
          * @return     Whether it has a value. */
         bool get_raw(Slot s, Datum &out) const
         {
-                return checked(tcs_xd_store_get_raw(m_->c(), c(), s, &out))
+                return checked(tcs_dynxtce_store_get_raw(m_->c(), c(), s, &out))
                        == 1;
         }
 
@@ -808,13 +814,13 @@ public:
          * @param d  The raw value. */
         void set_raw(Slot s, const Datum &d)
         {
-                checked(tcs_xd_store_set_raw(m_->c(), c(), s, &d));
+                checked(tcs_dynxtce_store_set_raw(m_->c(), c(), s, &d));
         }
 
         /** Takes a slot's value away.
          *
          * @param s  The slot. */
-        void clear(Slot s) { tcs_xd_store_clear(m_->c(), c(), s); }
+        void clear(Slot s) { tcs_dynxtce_store_clear(m_->c(), c(), s); }
 
         /** Makes the values a scratch holds the current ones.
          *
@@ -827,16 +833,16 @@ private:
                 /** Frees it.
                  *
                  * @param s  The store. */
-                void operator()(tcs_xd_store *s) const
+                void operator()(tcs_dynxtce_store *s) const
                 {
-                        tcs_xd_store_free(s);
+                        tcs_dynxtce_store_free(s);
                 }
         };
 
         /** The mission. */
         const Mission *m_;
         /** The C store. */
-        std::unique_ptr<tcs_xd_store, Free> s_;
+        std::unique_ptr<tcs_dynxtce_store, Free> s_;
 };
 
 /** A packet decoded and not yet committed. */
@@ -845,12 +851,15 @@ public:
         /** Makes a scratch.
          *
          * @param m  The mission. */
-        explicit Scratch(const Mission &m) : s_(tcs_xd_scratch_new(m.c())) {}
+        explicit Scratch(const Mission &m)
+                : s_(tcs_dynxtce_scratch_new(m.c()))
+        {
+        }
 
         /** Gives the C scratch.
          *
          * @return  It. */
-        tcs_xd_scratch *c() const { return s_.get(); }
+        tcs_dynxtce_scratch *c() const { return s_.get(); }
 
 private:
         /** Frees a C scratch. */
@@ -858,14 +867,14 @@ private:
                 /** Frees it.
                  *
                  * @param s  The scratch. */
-                void operator()(tcs_xd_scratch *s) const
+                void operator()(tcs_dynxtce_scratch *s) const
                 {
-                        tcs_xd_scratch_free(s);
+                        tcs_dynxtce_scratch_free(s);
                 }
         };
 
         /** The C scratch. */
-        std::unique_ptr<tcs_xd_scratch, Free> s_;
+        std::unique_ptr<tcs_dynxtce_scratch, Free> s_;
 };
 
 /** The alarm state that change ranges and minimum violations count. */
@@ -874,12 +883,15 @@ public:
         /** Makes a monitor with no samples.
          *
          * @param m  The mission. */
-        explicit Monitor(const Mission &m) : m_(tcs_xd_monitor_new(m.c())) {}
+        explicit Monitor(const Mission &m)
+                : m_(tcs_dynxtce_monitor_new(m.c()))
+        {
+        }
 
         /** Gives the C monitor.
          *
          * @return  It. */
-        tcs_xd_monitor *c() const { return m_.get(); }
+        tcs_dynxtce_monitor *c() const { return m_.get(); }
 
 private:
         /** Frees a C monitor. */
@@ -887,14 +899,14 @@ private:
                 /** Frees it.
                  *
                  * @param m  The monitor. */
-                void operator()(tcs_xd_monitor *m) const
+                void operator()(tcs_dynxtce_monitor *m) const
                 {
-                        tcs_xd_monitor_free(m);
+                        tcs_dynxtce_monitor_free(m);
                 }
         };
 
         /** The C monitor. */
-        std::unique_ptr<tcs_xd_monitor, Free> m_;
+        std::unique_ptr<tcs_dynxtce_monitor, Free> m_;
 };
 
 /** A stream's frame synchronizer, which keeps its mission alive. */
@@ -903,7 +915,7 @@ public:
         /** Takes a C stream.
          *
          * @param d  The stream. */
-        explicit Deframer(tcs_xd_deframer *d) : d_(d) {}
+        explicit Deframer(tcs_dynxtce_deframer *d) : d_(d) {}
 
         /** Takes the stream's next bytes, calling a function with each
          * frame they complete.
@@ -914,7 +926,7 @@ public:
                   const std::function<void(std::span<const std::uint8_t>)> &f)
         {
                 using F = std::function<void(std::span<const std::uint8_t>)>;
-                tcs_xd_deframer_push(
+                tcs_dynxtce_deframer_push(
                         d_.get(), data.data(), data.size(),
                         [](void *x, const std::uint8_t *fr, std::uintptr_t n) {
                                 (*static_cast<const F *>(x))({fr, n});
@@ -928,22 +940,22 @@ private:
                 /** Frees it.
                  *
                  * @param d  The stream. */
-                void operator()(tcs_xd_deframer *d) const
+                void operator()(tcs_dynxtce_deframer *d) const
                 {
-                        tcs_xd_deframer_free(d);
+                        tcs_dynxtce_deframer_free(d);
                 }
         };
 
         /** The C stream. */
-        std::unique_ptr<tcs_xd_deframer, Free> d_;
+        std::unique_ptr<tcs_dynxtce_deframer, Free> d_;
 };
 
 inline Node Mission::unpack(Node n, std::span<const std::uint8_t> data,
                             Scratch &scratch) const
 {
         Node got{};
-        checked(tcs_xd_unpack(c(), n, data.data(), data.size(), scratch.c(),
-                              &got));
+        checked(tcs_dynxtce_unpack(c(), n, data.data(), data.size(),
+                                   scratch.c(), &got));
         return got;
 }
 
@@ -951,7 +963,7 @@ inline std::span<const std::uint8_t> Mission::pack(Node n, Store &s) const
 {
         const std::uint8_t *out = nullptr;
         std::uintptr_t len = 0;
-        checked(tcs_xd_pack(c(), n, s.c(), &out, &len));
+        checked(tcs_dynxtce_pack(c(), n, s.c(), &out, &len));
         return {out, len};
 }
 
@@ -960,7 +972,7 @@ inline void Mission::alarms(
         const std::function<void(std::string_view, int)> &f) const
 {
         using F = std::function<void(std::string_view, int)>;
-        checked(tcs_xd_alarms(
+        checked(tcs_dynxtce_alarms(
                 c(), scratch.c(),
                 [](void *x, const char *name, std::uintptr_t len, int level) {
                         (*static_cast<const F *>(x))({name, len}, level);
@@ -973,7 +985,7 @@ inline void Mission::monitor_alarms(
         const std::function<void(std::string_view, int)> &f) const
 {
         using F = std::function<void(std::string_view, int)>;
-        checked(tcs_xd_monitor_alarms(
+        checked(tcs_dynxtce_monitor_alarms(
                 c(), scratch.c(), mon.c(), t,
                 [](void *x, const char *name, std::uintptr_t len, int level) {
                         (*static_cast<const F *>(x))({name, len}, level);
@@ -986,7 +998,7 @@ inline void Mission::derived(
         const std::function<void(std::string_view, bool, double)> &f) const
 {
         using F = std::function<void(std::string_view, bool, double)>;
-        checked(tcs_xd_derived(
+        checked(tcs_dynxtce_derived(
                 c(), scratch.c(),
                 [](void *x, const char *name, std::uintptr_t len, bool here,
                    double v) {
@@ -997,16 +1009,16 @@ inline void Mission::derived(
 
 inline Deframer Mission::stream(const std::string &path) const
 {
-        tcs_xd_deframer *d = nullptr;
-        checked(tcs_xd_stream(c(), path.c_str(), &d));
+        tcs_dynxtce_deframer *d = nullptr;
+        checked(tcs_dynxtce_stream(c(), path.c_str(), &d));
         return Deframer(d);
 }
 
 inline void Store::commit(const Scratch &scratch)
 {
-        checked(tcs_xd_commit(c(), scratch.c()));
+        checked(tcs_dynxtce_commit(c(), scratch.c()));
 }
 
-} // namespace tcs::xd
+} // namespace tcs::dynxtce
 
 #endif
