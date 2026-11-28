@@ -382,8 +382,11 @@ starts.</li>
 <li><tt class="docutils literal">Datum</tt> holds an integer of more than 128 bits as <tt class="docutils literal">Big</tt>, a
 <tt class="docutils literal">WideInt</tt> (two's complement in 1032 bytes, which hold any integer
 of up to 8192 bits, the most the codec runs; <tt class="docutils literal">to_big</tt> and
-<tt class="docutils literal">from_big</tt> convert it), and has no
-<tt class="docutils literal">Time</tt> yet: a time is the float the compiler makes of it.</li>
+<tt class="docutils literal">from_big</tt> convert it).</li>
+<li><tt class="docutils literal"><span class="pre">Datum::Time</span></tt> is a time in seconds, which <tt class="docutils literal"><span class="pre">Type::time</span></tt> says is
+absolute or relative. The model keeps times as floats, saying what
+they are only in the type's description, which the codec reads in one
+place; a time encoded as text or bytes keeps its text or bytes.</li>
 <li><tt class="docutils literal"><span class="pre">Store::set_raw</span></tt> leaves the slot without an engineering value until
 one is set or unpacked: <tt class="docutils literal">get</tt> gives none, and <tt class="docutils literal">get_raw</tt> the raw
 value.</li>

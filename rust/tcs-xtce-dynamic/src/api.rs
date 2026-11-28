@@ -46,6 +46,9 @@ pub enum Datum<'s> {
     Str(&'s str),
     /// Binary data.
     Binary(&'s [u8]),
+    /// A time, in seconds: since its epoch for an absolute time, and as a
+    /// duration for a relative one (see [`crate::Type::time`]).
+    Time(f64),
 }
 
 /// Why a packet couldn't be packed or unpacked.
@@ -405,6 +408,9 @@ fn put_datum(
                 Val::Enum(i64::try_from(i).map_err(|_| SetError::OutOfRange)?)
         }
         ("float", Datum::Float(x)) => *dst = Val::Float(x),
+        ("float", Datum::Time(x)) if crate::time_kind(vt).is_some() => {
+            *dst = Val::Float(x)
+        }
         ("float", Datum::Int(i)) => *dst = Val::Float(i as f64),
         ("bool", Datum::Bool(b)) => *dst = Val::Bool(b),
         ("string", Datum::Str(s)) => {
@@ -450,7 +456,12 @@ impl Store {
         if slot.mission != self.mission {
             return None;
         }
-        self.values.val(slot.index as i64).map(to_datum)
+        let d = self.values.val(slot.index as i64).map(to_datum)?;
+        let time = crate::time_kind(&self.types[slot.index]).is_some();
+        Some(match d {
+            Datum::Float(x) if time => Datum::Time(x),
+            d => d,
+        })
     }
 
     /// Gives the current value of each slot of a whole value, such as an
@@ -518,7 +529,7 @@ impl Store {
                 interp::check_valid(&vt, &Val::Float(x as f64))
                     .map_err(|_| SetError::OutOfRange)?;
             }
-            Datum::Float(x) => {
+            Datum::Float(x) | Datum::Time(x) => {
                 interp::check_valid(&vt, &Val::Float(x))
                     .map_err(|_| SetError::OutOfRange)?;
             }

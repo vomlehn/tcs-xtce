@@ -20,8 +20,11 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
 - ``Datum`` holds an integer of more than 128 bits as ``Big``, a
   ``WideInt`` (two's complement in 1032 bytes, which hold any integer
   of up to 8192 bits, the most the codec runs; ``to_big`` and
-  ``from_big`` convert it), and has no
-  ``Time`` yet: a time is the float the compiler makes of it.
+  ``from_big`` convert it).
+- ``Datum::Time`` is a time in seconds, which ``Type::time`` says is
+  absolute or relative. The model keeps times as floats, saying what
+  they are only in the type's description, which the codec reads in one
+  place; a time encoded as text or bytes keeps its text or bytes.
 - ``Store::set_raw`` leaves the slot without an engineering value until
   one is set or unpacked: ``get`` gives none, and ``get_raw`` the raw
   value.

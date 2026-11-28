@@ -234,6 +234,17 @@ impl Type {
         self.vt.valid_range
     }
 
+    /// Says whether the value is a time, and which kind.
+    ///
+    /// # Returns
+    ///
+    /// `absolute` or `relative` for a time in seconds, which values of the
+    /// slot are as [`Datum::Time`]; `None` for anything else, a time
+    /// encoded as text or bytes included, which keeps its text or bytes.
+    pub fn time(&self) -> Option<&'static str> {
+        time_kind(&self.vt)
+    }
+
     /// Says whether the value is calibrated: whether its engineering
     /// value differs from its raw one.
     ///
@@ -368,6 +379,33 @@ fn step_text(s: &Step) -> String {
     match s {
         Step::Name(n) => format!(".{n}"),
         Step::Index(i) => format!("[{i}]"),
+    }
+}
+
+/// Says whether a type is a time in seconds, and which kind. The model
+/// keeps times as floats, saying what they are only in the type's
+/// description, which the compiler writes as `absolute time, seconds
+/// ...` or `relative time, seconds ...`; this is the one place that reads
+/// it, and the tests check it against the demo mission's times.
+///
+/// # Arguments
+///
+/// * `vt` - The type.
+///
+/// # Returns
+///
+/// `absolute` or `relative`, or `None` for anything but a time in
+/// seconds.
+pub(crate) fn time_kind(vt: &VType) -> Option<&'static str> {
+    if vt.kind != "float" {
+        return None;
+    }
+    if vt.doc.starts_with("absolute time, seconds") {
+        Some("absolute")
+    } else if vt.doc.starts_with("relative time, seconds") {
+        Some("relative")
+    } else {
+        None
     }
 }
 
