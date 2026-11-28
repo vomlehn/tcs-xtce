@@ -369,9 +369,8 @@ resolves a mission and looks its names up, as <a class="reference internal" href
 describes. Its interpreter (<tt class="docutils literal">interp</tt>) decodes, classifies, encodes
 and describes packets by running their items through the tcsxtce
 helpers, as <a class="reference internal" href="#interpreting">Interpreting</a> describes; on the demo mission's vectors it
-agrees with the generated codecs on every packet it runs, which is
-every packet but those that use custom algorithms or transforms, the
-functions the application supplies. <tt class="docutils literal"><span class="pre">Mission::pack</span></tt> and <tt class="docutils literal">unpack</tt>,
+agrees with the generated codecs on every packet. <tt class="docutils literal"><span class="pre">Mission::pack</span></tt> and
+<tt class="docutils literal">unpack</tt>,
 <tt class="docutils literal">Store</tt>, <tt class="docutils literal">Scratch</tt> and <tt class="docutils literal">Datum</tt> give programs the interface of
 <a class="reference internal" href="#the-interface">The interface</a>, so far with these differences:</p>
 <ul class="simple">
@@ -389,8 +388,15 @@ value.</li>
 nothing once the store and scratch are made, except for integers of
 more than 64 bits, which the codec holds as <tt class="docutils literal">BigInt</tt>s, and for the
 message of a packet that fails.</li>
-<li><tt class="docutils literal"><span class="pre">Mission::unbounded</span></tt>, and custom algorithms and transforms, are
-still to come.</li>
+<li>The functions an application supplies for custom algorithms,
+custom checksums and transforms are set with
+<tt class="docutils literal"><span class="pre">Mission::set_algorithm</span></tt>, by the algorithm's name, as an
+<tt class="docutils literal">Algorithm</tt> of the kind its use needs, which is the type the
+generated code's <tt class="docutils literal">hooks</tt> module takes; <tt class="docutils literal"><span class="pre">Mission::algorithms</span></tt>
+lists them, and a packet that needs one not set fails with
+<tt class="docutils literal">NoAlgorithm</tt>. They are set after the mission is read, not before
+it resolves.</li>
+<li><tt class="docutils literal"><span class="pre">Mission::unbounded</span></tt> is still to come.</li>
 </ul>
 <p>Until <tt class="docutils literal">StringSpec</tt> and <tt class="docutils literal">ByteOrder</tt> gain a lifetime (see <a class="reference internal" href="#freeing-what-was-read">Freeing
 what was read</a>), the interpreter keeps each distinct string terminator
@@ -739,9 +745,8 @@ than 128 bits, command containers from other meta-commands, streams
 with frame synchronization, alarms and <tt class="docutils literal">MathAlgorithm</tt>s.</li>
 </ol>
 <p>Transform algorithms and custom algorithms are supplied by the
-application to generated code. The run-time codec would take them as
-functions registered with the mission before it resolves; until then,
-a mission that uses one fails to resolve.</p>
+application to generated code. The run-time codec takes them as
+functions set on the mission once it is read (see the status above).</p>
 </div>
 <div class="section" id="testing">
 <h1><a class="toc-backref" href="#toc-entry-12">Testing</a></h1>

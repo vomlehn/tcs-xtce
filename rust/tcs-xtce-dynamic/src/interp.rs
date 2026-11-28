@@ -20,14 +20,106 @@ use tcs_xtce::packet::{
 use tcs_xtce_model::dump::Shared;
 use tcs_xtce_model::model::{
     walk, CalCase, Calibrator, Check, Count, Criterion, DynSize, Encoding,
-    Expr, Input, Item, Lit, Local, Member, Node, Num, Order, PathStep, Spec,
-    Term, VType,
+    Expr, Hook, Input, Item, Lit, Local, Member, Node, Num, Order, PathStep,
+    Spec, Term, Transform, VType,
 };
 
 /// The name the interpreter gives the runtime's helpers for a field: the
 /// runtime takes only names fixed when it is compiled, so the
 /// interpreter names the field in its own error instead.
 const F: &str = "field";
+
+/// A function the application supplies for one of a mission's
+/// algorithms, of the kind the algorithm's use needs: the same as the
+/// code generated for the mission takes in its `hooks` module.
+#[derive(Debug, Clone, Copy)]
+pub enum Algorithm {
+    /// A custom algorithm in a criterion: whether it holds, from its
+    /// inputs.
+    Criterion(fn(&[f64]) -> bool),
+    /// A CustomAlgorithm's outputs from its inputs; false if it gives
+    /// none.
+    Outputs(fn(&[f64], &mut [f64]) -> bool),
+    /// An alarm's level from its inputs.
+    Alarm(fn(&[f64]) -> u8),
+    /// A checksum of the bits from `start` to `end` of the data.
+    Checksum(fn(&[u8], usize, usize) -> u64),
+    /// Decodes a value's bytes: the bytes it took and those it made.
+    BinaryFrom(pk::BinaryFromFn),
+    /// Encodes a value's bytes: the bytes it made.
+    BinaryTo(pk::BinaryToFn),
+    /// Decodes a time: the bytes it took and the seconds.
+    TimeFrom(pk::TimeFromFn),
+    /// Encodes a time: the bytes it made.
+    TimeTo(pk::TimeToFn),
+}
+
+impl Algorithm {
+    /// Gives the kind of use the function is for, as the model names it.
+    ///
+    /// # Returns
+    ///
+    /// `criterion`, `algorithm`, `alarm`, `checksum`, `binary_from`,
+    /// `binary_to`, `time_from` or `time_to`.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Algorithm::Criterion(_) => "criterion",
+            Algorithm::Outputs(_) => "algorithm",
+            Algorithm::Alarm(_) => "alarm",
+            Algorithm::Checksum(_) => "checksum",
+            Algorithm::BinaryFrom(_) => "binary_from",
+            Algorithm::BinaryTo(_) => "binary_to",
+            Algorithm::TimeFrom(_) => "time_from",
+            Algorithm::TimeTo(_) => "time_to",
+        }
+    }
+}
+
+/// The functions an application has supplied for a mission's
+/// algorithms, by the name each has in the generated code.
+#[derive(Debug, Clone, Default)]
+pub struct HookTable {
+    /// The place of each hook, by its name in the generated code.
+    index: Rc<HashMap<String, usize>>,
+    /// Each hook's function, if it is set.
+    fns: Vec<Option<Algorithm>>,
+}
+
+impl HookTable {
+    /// Gives the function set for a hook.
+    ///
+    /// # Arguments
+    ///
+    /// * `h` - The hook.
+    ///
+    /// # Returns
+    ///
+    /// The function.
+    ///
+    /// # Errors
+    ///
+    /// NoAlgorithm, if none is set.
+    fn get(&self, h: &Hook) -> pk::Result<Algorithm> {
+        self.index
+            .get(h.ident.as_str())
+            .and_then(|&i| self.fns[i])
+            .ok_or(PacketError::NoAlgorithm { name: F })
+    }
+
+    /// Copies the functions of another table of the same mission,
+    /// without allocating.
+    ///
+    /// # Arguments
+    ///
+    /// * `o` - The other table.
+    fn copy(&mut self, o: &HookTable) {
+        if self.fns.len() == o.fns.len() {
+            self.fns.copy_from_slice(&o.fns);
+        } else {
+            *self = o.clone();
+        }
+    }
+}
 
 /// A decoded value, as the interpreter holds it.
 #[derive(Debug, Clone, PartialEq)]
@@ -104,6 +196,183 @@ fn at(field: &str) -> impl Fn(PacketError) -> CodecError + '_ {
 
 // --- what can be run ---------------------------------------------------
 
+/// Gives the decoding function of a transform.
+///
+/// # Arguments
+///
+/// * `h`    - The hook, or `None` where the document gives only the other
+///            way.
+/// * `vals` - The values of the packet, which carry the functions set.
+///
+/// # Returns
+///
+/// The function, or `None` for none, which the runtime refuses as
+/// NotInvertible.
+///
+/// # Errors
+///
+/// NoAlgorithm, if the application hasn't set it.
+fn binary_from(
+    h: &Option<Shared<Hook>>,
+    vals: &dyn Look,
+) -> pk::Result<Option<pk::BinaryFromFn>> {
+    let Some(h) = h else { return Ok(None) };
+    match vals.hooks().get(&h.get())? {
+        Algorithm::BinaryFrom(f) => Ok(Some(f)),
+        _ => Err(PacketError::NoAlgorithm { name: F }),
+    }
+}
+
+/// Gives the encoding function of a transform.
+///
+/// # Arguments
+///
+/// * `h`    - The hook, or `None` where the document gives only the other
+///            way.
+/// * `vals` - The values of the packet, which carry the functions set.
+///
+/// # Returns
+///
+/// The function, or `None` for none.
+///
+/// # Errors
+///
+/// NoAlgorithm, if the application hasn't set it.
+fn binary_to(
+    h: &Option<Shared<Hook>>,
+    vals: &dyn Look,
+) -> pk::Result<Option<pk::BinaryToFn>> {
+    let Some(h) = h else { return Ok(None) };
+    match vals.hooks().get(&h.get())? {
+        Algorithm::BinaryTo(f) => Ok(Some(f)),
+        _ => Err(PacketError::NoAlgorithm { name: F }),
+    }
+}
+
+/// Gives the decoding function of a time.
+///
+/// # Arguments
+///
+/// * `h`    - The hook, or `None` where the document gives only the other
+///            way.
+/// * `vals` - The values of the packet, which carry the functions set.
+///
+/// # Returns
+///
+/// The function, or `None` for none.
+///
+/// # Errors
+///
+/// NoAlgorithm, if the application hasn't set it.
+fn time_from(
+    h: &Option<Shared<Hook>>,
+    vals: &dyn Look,
+) -> pk::Result<Option<pk::TimeFromFn>> {
+    let Some(h) = h else { return Ok(None) };
+    match vals.hooks().get(&h.get())? {
+        Algorithm::TimeFrom(f) => Ok(Some(f)),
+        _ => Err(PacketError::NoAlgorithm { name: F }),
+    }
+}
+
+/// Gives the encoding function of a time.
+///
+/// # Arguments
+///
+/// * `h`    - The hook, or `None` where the document gives only the other
+///            way.
+/// * `vals` - The values of the packet, which carry the functions set.
+///
+/// # Returns
+///
+/// The function, or `None` for none.
+///
+/// # Errors
+///
+/// NoAlgorithm, if the application hasn't set it.
+fn time_to(
+    h: &Option<Shared<Hook>>,
+    vals: &dyn Look,
+) -> pk::Result<Option<pk::TimeToFn>> {
+    let Some(h) = h else { return Ok(None) };
+    match vals.hooks().get(&h.get())? {
+        Algorithm::TimeTo(f) => Ok(Some(f)),
+        _ => Err(PacketError::NoAlgorithm { name: F }),
+    }
+}
+
+/// The most inputs of a custom algorithm the interpreter gathers on the
+/// stack; one with more gathers them on the heap.
+const INPUTS: usize = 32;
+
+/// Gathers a custom algorithm's inputs and calls a function with them.
+///
+/// # Arguments
+///
+/// * `inputs` - The inputs.
+/// * `vals`   - The values of the packet, which they read.
+/// * `f`      - What is called with them.
+///
+/// # Returns
+///
+/// What it gives.
+///
+/// # Errors
+///
+/// Missing, if a value it reads isn't there; BadSize, if an element it
+/// reads isn't.
+fn with_inputs<T>(
+    inputs: &[Input],
+    vals: &dyn Look,
+    f: impl FnOnce(&[f64]) -> T,
+) -> pk::Result<T> {
+    let one = |i: &Input| -> pk::Result<f64> {
+        match i {
+            Input::Const(x) => Ok(lit_f64(x)),
+            Input::Value(l, path, _) => {
+                let l = l.get();
+                let v =
+                    vals.val(l.id).ok_or(PacketError::Missing { field: F })?;
+                let (v, _) = reach(v, &l.vt(), path)?;
+                math_value(v)
+            }
+        }
+    };
+    if inputs.len() <= INPUTS {
+        let mut a = [0.0; INPUTS];
+        for (d, i) in a.iter_mut().zip(inputs) {
+            *d = one(i)?;
+        }
+        return Ok(f(&a[..inputs.len()]));
+    }
+    let a = inputs.iter().map(one).collect::<pk::Result<Vec<f64>>>()?;
+    Ok(f(&a))
+}
+
+/// Gives a literal as a float, as an algorithm's constant input.
+///
+/// # Arguments
+///
+/// * `x` - The literal.
+///
+/// # Returns
+///
+/// The float; a boolean is 1 or 0, and anything else not a number.
+fn lit_f64(x: &Lit) -> f64 {
+    match x {
+        Lit::Int(i) => i.to_f64().unwrap_or(f64::NAN),
+        Lit::Float(f) => *f,
+        Lit::Bool(b) => {
+            if *b {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        _ => f64::NAN,
+    }
+}
+
 /// Finds the first construct of a type that the interpreter can't run.
 ///
 /// # Arguments
@@ -142,9 +411,6 @@ fn type_unsupported(vt: &VType) -> Option<String> {
         Encoding::Binary(_) => {}
         Encoding::Array(e) => return type_unsupported(&e.elem),
         Encoding::Aggregate(e) => {
-            if e.transform.is_some() {
-                return what("a repeated container with a transform");
-            }
             for r in &e.checks {
                 if let Some(w) = r.criteria.iter().find_map(term_unsupported) {
                     return Some(w);
@@ -156,7 +422,7 @@ fn type_unsupported(vt: &VType) -> Option<String> {
                 }
             }
         }
-        Encoding::Xform(_) => return what("a transform"),
+        Encoding::Xform(_) => {}
     }
     None
 }
@@ -172,7 +438,7 @@ fn type_unsupported(vt: &VType) -> Option<String> {
 /// What it is, or `None` if it can be run.
 fn term_unsupported(t: &Term) -> Option<String> {
     match t {
-        Term::Custom(_) => Some("a custom algorithm in a criterion".into()),
+        Term::Custom(_) => None,
         Term::AllOf(a) => a.get().terms.iter().find_map(term_unsupported),
         Term::AnyOf(a) => a.get().terms.iter().find_map(term_unsupported),
         Term::Criterion(c) => {
@@ -213,8 +479,8 @@ fn items_unsupported(items: &[Item]) -> Option<String> {
             }
             Item::TailSeek(_) | Item::TailPad(_) => None,
             Item::LengthEnd(_) => None,
-            Item::Transform(_) => Some("a transform".into()),
-            Item::Verify(v) => check_unsupported(&v.check.get()),
+            Item::Transform(t) => items_unsupported(&t.get().items),
+            Item::Verify(_) => None,
             Item::Segment(_) => None,
             Item::EndSeek(_) | Item::NextSeek(_) => {
                 Some("a location from another entry".into())
@@ -238,22 +504,13 @@ fn items_unsupported(items: &[Item]) -> Option<String> {
 ///
 /// What it is, or `None` if the packet can be decoded and encoded.
 pub fn unsupported(n: &Shared<Node>) -> Option<String> {
-    let found = n
-        .chain()
-        .iter()
-        .find_map(|m| {
-            let m = m.get();
-            m.criteria
-                .iter()
-                .find_map(term_unsupported)
-                .or_else(|| items_unsupported(&m.items))
-        })
-        .or_else(|| {
-            n.get()
-                .checks
-                .iter()
-                .find_map(|c| check_unsupported(&c.get()))
-        });
+    let found = n.chain().iter().find_map(|m| {
+        let m = m.get();
+        m.criteria
+            .iter()
+            .find_map(term_unsupported)
+            .or_else(|| items_unsupported(&m.items))
+    });
     found.map(|w| format!("{}: {w}", n.get().key))
 }
 
@@ -1084,6 +1341,9 @@ pub struct Bufs {
     pub wire: Vec<u8>,
     /// The text of a boolean encoded as a string.
     pub text: String,
+    /// Buffers for the transformed data of repeated containers, one for
+    /// each held inside another.
+    pub xforms: Vec<Vec<u8>>,
 }
 
 /// Reads one value into its storage, which keeps the room it has.
@@ -1146,28 +1406,23 @@ fn read_plain(
             if !matches!(dst, Val::Agg(_)) {
                 *dst = template(vt);
             }
-            let Val::Agg(ms) = dst else {
-                unreachable!("an aggregate")
+            let Some(x) = &e.transform else {
+                return read_members(r, e, dst, vals, bufs);
             };
-            // Each member's size may come from those before it.
-            for (i, m) in e.members.iter().enumerate() {
-                if m.skip != 0 {
-                    r.pad(m.skip as usize, F)?;
-                }
-                let (done, rest) = ms.split_at_mut(i);
-                read_into(
-                    r,
-                    &m.vtype,
-                    &mut rest[0],
-                    vals,
-                    (&e.members, done),
-                    bufs,
-                )?;
-            }
-            if e.pad != 0 {
-                r.pad(e.pad as usize, F)?;
-            }
-            copy_checks(e, dst, vals)
+            // The members are read from what the transform makes of its
+            // bytes.
+            let mut buf = bufs.xforms.pop().unwrap_or_default();
+            buf.clear();
+            buf.resize(x.cap.max(0) as usize, 0);
+            let got = (|| {
+                let f = binary_from(&x.decode, vals)?;
+                let raw = x.raw.map(|r| r as usize);
+                let n = r.binary_from(f, raw, &mut buf[..], F)?;
+                let mut t = BitReader::new(&buf[..n]);
+                read_members(&mut t, e, dst, vals, bufs)
+            })();
+            bufs.xforms.push(buf);
+            got
         }
         Encoding::Array(e) => {
             let n = count_of(&e.count, vals, inner)? as usize;
@@ -1322,8 +1577,72 @@ fn read_plain(
             };
             pk::read_string_into(r, &sp, &mut bufs.wire, s, F)
         }
-        Encoding::Xform(_) => unreachable!("a supported type"),
+        Encoding::Xform(e) => {
+            let raw = e.raw.map(|r| r as usize);
+            if e.time {
+                let f = time_from(&e.decode, vals)?;
+                *dst = Val::Float(r.time_from(f, raw, F)?);
+                return Ok(());
+            }
+            if !matches!(dst, Val::Bytes(_)) {
+                *dst = template(vt);
+            }
+            let Val::Bytes(b) = dst else {
+                unreachable!("binary")
+            };
+            let f = binary_from(&e.decode, vals)?;
+            b.clear();
+            b.resize(e.cap.max(0) as usize, 0);
+            match r.binary_from(f, raw, &mut b[..], F) {
+                Ok(n) => {
+                    b.truncate(n);
+                    Ok(())
+                }
+                Err(x) => {
+                    b.clear();
+                    Err(x)
+                }
+            }
+        }
     }
+}
+
+/// Reads an aggregate's members into its storage.
+///
+/// # Arguments
+///
+/// * `r`    - The reader.
+/// * `e`    - The aggregate's encoding.
+/// * `dst`  - Its storage, an aggregate of its type.
+/// * `vals` - The values of the packet so far, which sizes come from.
+/// * `bufs` - Storage the decoding reuses.
+///
+/// # Errors
+///
+/// The runtime's, or Mismatch if a repeated container's own criteria
+/// don't hold.
+fn read_members(
+    r: &mut BitReader<'_>,
+    e: &tcs_xtce_model::model::AggregateEnc,
+    dst: &mut Val,
+    vals: &dyn Look,
+    bufs: &mut Bufs,
+) -> pk::Result<()> {
+    let Val::Agg(ms) = dst else {
+        unreachable!("an aggregate")
+    };
+    // Each member's size may come from those before it.
+    for (i, m) in e.members.iter().enumerate() {
+        if m.skip != 0 {
+            r.pad(m.skip as usize, F)?;
+        }
+        let (done, rest) = ms.split_at_mut(i);
+        read_into(r, &m.vtype, &mut rest[0], vals, (&e.members, done), bufs)?;
+    }
+    if e.pad != 0 {
+        r.pad(e.pad as usize, F)?;
+    }
+    copy_checks(e, dst, vals)
 }
 
 /// Makes storage for a value of a type, with the room its largest value
@@ -1375,9 +1694,10 @@ pub fn template(vt: &VType) -> Val {
 /// # Returns
 ///
 /// The bytes.
-fn bytes_cap(vt: &VType) -> usize {
+pub fn bytes_cap(vt: &VType) -> usize {
     match &vt.enc {
         Encoding::Binary(e) => (e.bits / 8).max(0) as usize,
+        Encoding::Xform(e) => e.cap.max(0) as usize,
         _ => 0,
     }
 }
@@ -1428,6 +1748,13 @@ pub trait Look {
     ///
     /// The value, or `None` if it is absent.
     fn val(&self, id: i64) -> Option<&Val>;
+
+    /// Gives the functions the application has supplied.
+    ///
+    /// # Returns
+    ///
+    /// The functions.
+    fn hooks(&self) -> &HookTable;
 }
 
 /// The values of a packet being decoded or encoded, by the number of the
@@ -1439,6 +1766,9 @@ pub struct Values {
     v: Vec<Val>,
     /// Whether each Local has a value in this packet.
     here: Vec<bool>,
+    /// The functions the application has supplied, which criteria,
+    /// checksums and transforms call.
+    hooks: HookTable,
 }
 
 /// Copies storage, keeping the room each string, binary value and array
@@ -1495,7 +1825,21 @@ impl Values {
     /// The storage, every value absent.
     pub fn new(v: Vec<Val>) -> Self {
         let here = vec![false; v.len()];
-        Values { v, here }
+        Values {
+            v,
+            here,
+            hooks: HookTable::default(),
+        }
+    }
+
+    /// Takes the functions the application has supplied, without
+    /// allocating once they have been taken from the same table.
+    ///
+    /// # Arguments
+    ///
+    /// * `h` - The functions.
+    pub fn set_hooks(&mut self, h: &HookTable) {
+        self.hooks.copy(h);
     }
 
     /// Takes a value's storage out, to fill it in place.
@@ -1565,6 +1909,10 @@ impl Look for Values {
     fn val(&self, id: i64) -> Option<&Val> {
         self.here[id as usize].then(|| &self.v[id as usize])
     }
+
+    fn hooks(&self) -> &HookTable {
+        &self.hooks
+    }
 }
 
 /// Values with one more: the copy of a repeated container that its own
@@ -1585,6 +1933,10 @@ impl Look for With<'_> {
         } else {
             self.base.val(id)
         }
+    }
+
+    fn hooks(&self) -> &HookTable {
+        self.base.hooks()
     }
 }
 
@@ -1788,7 +2140,14 @@ fn term(t: &Term, vals: &dyn Look) -> pk::Result<bool> {
             }
             Ok(false)
         }
-        Term::Custom(_) => unreachable!("a supported term"),
+        Term::Custom(c) => {
+            let c = c.get();
+            let f = vals.hooks().get(&c.hook.get())?;
+            match f {
+                Algorithm::Criterion(f) => with_inputs(&c.inputs, vals, f),
+                _ => Err(PacketError::NoAlgorithm { name: F }),
+            }
+        }
         Term::Criterion(c) => criterion(&c.get(), vals),
     }
 }
@@ -1885,37 +2244,23 @@ fn require(
 
 // --- checksums ---------------------------------------------------------
 
-/// Finds what of a check the interpreter can't run.
-///
-/// # Arguments
-///
-/// * `c` - The check.
-///
-/// # Returns
-///
-/// What it is, or `None` if it can be run.
-fn check_unsupported(c: &Check) -> Option<String> {
-    if matches!(c.spec, Spec::Custom(_)) {
-        Some("a custom checksum".into())
-    } else if c.stop.is_some() || c.late.is_some() {
-        Some("a checksum in transformed data".into())
-    } else {
-        None
-    }
-}
-
 /// Gives the runtime's checksum of a check.
 ///
 /// # Arguments
 ///
 /// * `spec` - The check's algorithm.
+/// * `vals` - The values of the packet, which carry the functions set.
 ///
 /// # Returns
 ///
 /// The runtime's.
-fn checksum_spec(spec: &Spec) -> pk::Checksum {
+///
+/// # Errors
+///
+/// NoAlgorithm, for a custom one the application hasn't set.
+fn checksum_spec(spec: &Spec, vals: &dyn Look) -> pk::Result<pk::Checksum> {
     use pk::Checksum as C;
-    match spec {
+    Ok(match spec {
         Spec::Crc(width, poly, init, fin, rd, rr) => C::Crc {
             width: *width as u32,
             poly: *poly,
@@ -1935,8 +2280,11 @@ fn checksum_spec(spec: &Spec) -> pk::Checksum {
             ("verhoeff", _) => C::Verhoeff,
             _ => C::Damm,
         },
-        Spec::Custom(_) => unreachable!("a supported checksum"),
-    }
+        Spec::Custom(h) => match vals.hooks().get(&h.get())? {
+            Algorithm::Checksum(f) => C::Custom(f),
+            _ => return Err(PacketError::NoAlgorithm { name: F }),
+        },
+    })
 }
 
 /// Gives the bits a check covers, as the generated code works them out.
@@ -1972,7 +2320,13 @@ fn region(
         Some(m) => marks[m as usize],
         None => end,
     };
-    let last = if c.from_end {
+    let last = if let Some(stop) = c.stop {
+        // The bits end before the transformed container with the field.
+        marks[stop as usize].saturating_sub(c.stop_back as usize)
+    } else if c.late.is_some() {
+        // The field is before the bits, which run to the end.
+        last
+    } else if c.from_end {
         last.saturating_sub(c.skip as usize)
     } else if c.start == 0 && !shifted {
         // The field always follows the packet's start.
@@ -2039,6 +2393,44 @@ pub struct Plan {
     raw_templates: Vec<Val>,
     /// What each node is, by its address.
     nodes: HashMap<usize, NodeInfo>,
+    /// The functions the application has supplied.
+    hooks: HookTable,
+    /// The Mark each transformed container starts at, and the most bytes
+    /// of its items.
+    transforms: Vec<(usize, usize)>,
+    /// The most bytes of a repeated container's transformed data.
+    xform_cap: usize,
+    /// The most repeated containers with transforms inside each other.
+    xform_depth: usize,
+}
+
+/// Gives how many repeated containers with transforms a type holds
+/// inside each other, and the most bytes of their transformed data.
+///
+/// # Arguments
+///
+/// * `vt` - The type.
+///
+/// # Returns
+///
+/// The depth and the bytes.
+fn xform_nesting(vt: &VType) -> (usize, usize) {
+    match &vt.enc {
+        Encoding::Aggregate(e) => {
+            let (mut d, mut c) = (0, 0);
+            for m in &e.members {
+                let (md, mc) = xform_nesting(&m.vtype);
+                d = d.max(md);
+                c = c.max(mc);
+            }
+            match &e.transform {
+                Some(x) => (d + 1, c.max(x.cap.max(0) as usize)),
+                None => (d, c),
+            }
+        }
+        Encoding::Array(e) => xform_nesting(&e.elem),
+        _ => (0, 0),
+    }
 }
 
 /// What the interpreter knows of a node.
@@ -2107,6 +2499,7 @@ impl Plan {
     ///
     /// * `nodes` - Every node of the mission.
     /// * `size`  - One more than the largest number of a Local or Mark.
+    /// * `hooks` - The hooks of the mission's custom algorithms.
     ///
     /// # Returns
     ///
@@ -2114,16 +2507,36 @@ impl Plan {
     pub fn new<'n>(
         nodes: impl Iterator<Item = &'n Shared<Node>>,
         size: usize,
+        hooks: &[Shared<Hook>],
     ) -> Plan {
+        let mut index = HashMap::new();
+        for h in hooks {
+            let n = index.len();
+            index.entry(h.get().ident.clone()).or_insert(n);
+        }
         let mut p = Plan {
             size,
             templates: vec![Val::Bool(false); size],
             raw_types: vec![None; size],
             raw_templates: vec![Val::Bool(false); size],
             nodes: HashMap::new(),
+            hooks: HookTable {
+                fns: vec![None; index.len()],
+                index: Rc::new(index),
+            },
+            transforms: Vec::new(),
+            xform_cap: 0,
+            xform_depth: 0,
         };
         for n in nodes {
             let m = n.get();
+            for it in walk(&m.items, true) {
+                if let Item::Transform(t) = it {
+                    let t = t.get();
+                    p.transforms
+                        .push((t.start as usize, t.cap.max(0) as usize));
+                }
+            }
             let info = NodeInfo {
                 crit: m
                     .criteria
@@ -2140,6 +2553,9 @@ impl Plan {
                 let vt = l.vt();
                 let id = l.id as usize;
                 intern_type(&vt);
+                let (d, c) = xform_nesting(&vt);
+                p.xform_depth = p.xform_depth.max(d);
+                p.xform_cap = p.xform_cap.max(c);
                 p.templates[id] = template(&vt);
                 if calibrated(&vt) {
                     let rt = Rc::new(raw_type(&vt));
@@ -2175,6 +2591,42 @@ impl Plan {
     /// The type, or `None` for a Local that isn't calibrated.
     pub fn raw_type(&self, id: i64) -> Option<&Rc<VType>> {
         self.raw_types[id as usize].as_ref()
+    }
+
+    /// Sets the function for a hook.
+    ///
+    /// # Arguments
+    ///
+    /// * `ident` - The hook's name in the generated code.
+    /// * `f`     - The function.
+    ///
+    /// # Returns
+    ///
+    /// Whether the plan has the hook.
+    pub fn set_hook(&mut self, ident: &str, f: Algorithm) -> bool {
+        match self.hooks.index.get(ident) {
+            Some(&i) => {
+                self.hooks.fns[i] = Some(f);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Says whether a hook's function is set.
+    ///
+    /// # Arguments
+    ///
+    /// * `ident` - The hook's name in the generated code.
+    ///
+    /// # Returns
+    ///
+    /// Whether it is.
+    pub fn hook_set(&self, ident: &str) -> bool {
+        self.hooks
+            .index
+            .get(ident)
+            .is_some_and(|&i| self.hooks.fns[i].is_some())
     }
 
     /// Says what a packet uses that the interpreter can't run.
@@ -2217,6 +2669,13 @@ pub struct Workspace {
     derived: Vec<bool>,
     /// Buffers for strings.
     bufs: Bufs,
+    /// The data of each transformed container, by the Mark it starts at.
+    tbufs: Vec<Vec<u8>>,
+    /// Where each transformed container starts, when encoding.
+    tstart: Vec<usize>,
+    /// The bytes of each transformed container's data kept before it was
+    /// transformed, when encoding.
+    kept: Vec<usize>,
 }
 
 impl Workspace {
@@ -2240,7 +2699,11 @@ impl Workspace {
             .max()
             .unwrap_or(0);
         Workspace {
-            vals: Values::like(&p.templates),
+            vals: {
+                let mut v = Values::like(&p.templates);
+                v.hooks = p.hooks.clone();
+                v
+            },
             raws: Values::like(&p.raw_templates),
             marks: vec![0; p.size],
             sums: vec![0; p.size],
@@ -2251,7 +2714,19 @@ impl Workspace {
             bufs: Bufs {
                 wire: Vec::with_capacity(4 * wire + 8),
                 text: String::with_capacity(4 * wire + 8),
+                xforms: (0..p.xform_depth)
+                    .map(|_| Vec::with_capacity(p.xform_cap))
+                    .collect(),
             },
+            tbufs: {
+                let mut t = vec![Vec::new(); p.size];
+                for &(m, cap) in &p.transforms {
+                    t[m] = Vec::with_capacity(cap);
+                }
+                t
+            },
+            tstart: vec![0; p.size],
+            kept: vec![0; p.size],
         }
     }
 }
@@ -2302,7 +2777,12 @@ impl Dec<'_, '_> {
         let (start, end) = region(c, &self.ws.marks, pos, self.r.packet_end());
         let x = self
             .r
-            .checksum(&checksum_spec(&c.spec), start, end, F)
+            .checksum(
+                &checksum_spec(&c.spec, &self.ws.vals).map_err(at(&l.name))?,
+                start,
+                end,
+                F,
+            )
             .map_err(at(&l.name))?;
         let value = match self.ws.vals.val(l.id) {
             Some(Val::Int(v)) => Some(*v as u64),
@@ -2503,6 +2983,7 @@ impl Dec<'_, '_> {
                     };
                 }
                 Item::Value(v) => self.value(&v.local.get(), v.assembled)?,
+                Item::Transform(t) => self.transform(&t.get(), where_)?,
                 Item::Cond(c) => {
                     let mut ok = true;
                     for t in &c.criteria {
@@ -2517,6 +2998,60 @@ impl Dec<'_, '_> {
                 }
                 _ => unreachable!("a supported item"),
             }
+        }
+        Ok(())
+    }
+
+    /// Reads a transformed container's items from what its decoding
+    /// algorithm makes of its bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `t`      - The transformed container.
+    /// * `where_` - The container it is in, for errors.
+    ///
+    /// # Errors
+    ///
+    /// The runtime's, or Mismatch if criteria don't hold.
+    fn transform(&mut self, t: &Transform, where_: &str) -> CodecResult<()> {
+        let i = t.start as usize;
+        let mut buf = std::mem::take(&mut self.ws.tbufs[i]);
+        buf.clear();
+        buf.resize(t.cap.max(0) as usize, 0);
+        let got = self.transformed(t, &mut buf, where_);
+        self.ws.tbufs[i] = buf;
+        got
+    }
+
+    /// Reads a transformed container's items, its data decoded into a
+    /// buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `t`      - The transformed container.
+    /// * `buf`    - The buffer, as long as the most bytes of its items.
+    /// * `where_` - The container it is in, for errors.
+    ///
+    /// # Errors
+    ///
+    /// The runtime's, or Mismatch if criteria don't hold.
+    fn transformed(
+        &mut self,
+        t: &Transform,
+        buf: &mut [u8],
+        where_: &str,
+    ) -> CodecResult<()> {
+        let f = binary_from(&t.decode, &self.ws.vals).map_err(at(&t.name))?;
+        let raw = t.raw.map(|r| r as usize);
+        let n = self.r.binary_from(f, raw, buf, F).map_err(at(&t.name))?;
+        let mut d = Dec {
+            r: BitReader::new(&buf[..n]),
+            ws: &mut *self.ws,
+            plan: self.plan,
+        };
+        d.items(&t.items, where_)?;
+        if let Some(l) = &t.length {
+            d.r.finish(F).map_err(at(&l.get().name))?;
         }
         Ok(())
     }
@@ -2627,11 +3162,34 @@ fn start<'d, 'w>(
 ) -> Dec<'d, 'w> {
     ws.vals.clear();
     ws.raws.clear();
+    ws.vals.set_hooks(&plan.hooks);
     Dec {
         r: BitReader::new(data),
         ws,
         plan,
     }
+}
+
+/// Checks that the application has set every function a packet's
+/// decoding or encoding calls, as the generated code checks before it
+/// starts.
+///
+/// # Arguments
+///
+/// * `n`    - The packet.
+/// * `plan` - The plan.
+///
+/// # Errors
+///
+/// NoAlgorithm, naming the first that isn't set.
+fn need_hooks(n: &Node, plan: &Plan) -> CodecResult<()> {
+    for h in &n.hooks {
+        let h = h.get();
+        if !plan.hook_set(&h.ident) {
+            return Err(at(&h.name)(PacketError::NoAlgorithm { name: F }));
+        }
+    }
+    Ok(())
 }
 
 /// Decodes a concrete packet into a workspace.
@@ -2656,6 +3214,7 @@ pub fn decode(
     plan: &Plan,
     ws: &mut Workspace,
 ) -> CodecResult<Decoded> {
+    need_hooks(&n.get(), plan)?;
     let mut d = start(data, plan, ws);
     d.chain(n)?;
     d.finish(n)?;
@@ -2718,13 +3277,6 @@ fn node_unsupported(n: &Shared<Node>) -> Option<String> {
         .iter()
         .find_map(term_unsupported)
         .or_else(|| items_unsupported(&m.items))
-        .or_else(|| {
-            if m.abstract_ {
-                None
-            } else {
-                m.checks.iter().find_map(|c| check_unsupported(&c.get()))
-            }
-        })
         .map(|w| format!("{}: {w}", m.key))
 }
 
@@ -3051,6 +3603,8 @@ fn write_plain(
     match (&vt.enc, v) {
         (Encoding::Aggregate(e), Val::Agg(ms)) => {
             copy_checks(e, v, vals)?;
+            // A transform is of the members written.
+            let t = w.position();
             for (m, x) in e.members.iter().zip(ms) {
                 if m.skip != 0 {
                     w.zeros(m.skip as usize);
@@ -3060,7 +3614,25 @@ fn write_plain(
             if e.pad != 0 {
                 w.zeros(e.pad as usize);
             }
+            if let Some(x) = &e.transform {
+                let f = binary_to(&x.encode, vals)?;
+                let raw = x.raw.map(|r| r as usize);
+                w.transform(t, f, raw, raw.unwrap_or(x.cap as usize), F)?;
+            }
             Ok(())
+        }
+        (Encoding::Xform(e), _) => {
+            let raw = e.raw.map(|r| r as usize);
+            let cap = raw.unwrap_or(e.cap.max(0) as usize);
+            match v {
+                Val::Float(x) if e.time => {
+                    w.time_to(time_to(&e.encode, vals)?, *x, raw, cap, F)
+                }
+                Val::Bytes(b) if !e.time => {
+                    w.binary_to(binary_to(&e.encode, vals)?, b, raw, cap, F)
+                }
+                _ => Err(PacketError::OutOfRange { field: F }),
+            }
         }
         (Encoding::Array(e), Val::Arr(all, used)) => {
             let es = &all[..*used];
@@ -3223,16 +3795,22 @@ impl Enc<'_, '_> {
         }
     }
 
-    /// Puts the checksum of what a check covers into its field.
+    /// Puts the checksum of what a check covers into its field, unless it
+    /// is computed elsewhere: before a transform when it has a `stop`,
+    /// and otherwise once the packet is encoded.
     ///
     /// # Arguments
     ///
-    /// * `c` - The check.
+    /// * `c`     - The check.
+    /// * `early` - Whether this is before the transform of its field.
     ///
     /// # Errors
     ///
     /// The runtime's, if the bits it covers aren't all written.
-    fn patch(&mut self, c: &Check) -> CodecResult<()> {
+    fn patch(&mut self, c: &Check, early: bool) -> CodecResult<()> {
+        if c.late.is_some() || c.stop.is_some() != early {
+            return Ok(());
+        }
         let l = c.local.get();
         let Encoding::Int(e) = &l.vt().enc else {
             unreachable!("an integer")
@@ -3241,7 +3819,7 @@ impl Enc<'_, '_> {
         let (start, end) = region(c, &self.ws.marks, at_, self.w.packet_end());
         self.w
             .patch_checksum(
-                &checksum_spec(&c.spec),
+                &checksum_spec(&c.spec, &self.ws.vals).map_err(at(&l.name))?,
                 start,
                 end,
                 at_,
@@ -3250,6 +3828,108 @@ impl Enc<'_, '_> {
                 F,
             )
             .map_err(at(&l.name))
+    }
+
+    /// Puts the checksum of a late check into its transformed data, which
+    /// it transforms again.
+    ///
+    /// # Arguments
+    ///
+    /// * `c` - The check, which is late.
+    ///
+    /// # Errors
+    ///
+    /// The runtime's, if the bits it covers aren't all written or the
+    /// transform fails.
+    fn late_patch(&mut self, c: &Check) -> CodecResult<()> {
+        let l = c.local.get();
+        let Encoding::Int(e) = &l.vt().enc else {
+            unreachable!("an integer")
+        };
+        let late = c.late.as_ref().expect("a late check").get();
+        let at_ = self.ws.computed[l.id as usize];
+        let (start, end) = region(c, &self.ws.marks, at_, self.w.packet_end());
+        let t = late.start as usize;
+        let ts = self.ws.tstart[t];
+        let spec =
+            checksum_spec(&c.spec, &self.ws.vals).map_err(at(&l.name))?;
+        let f = binary_to(&late.encode, &self.ws.vals).map_err(at(&l.name))?;
+        let plain = &self.ws.tbufs[t][..self.ws.kept[t]];
+        self.w
+            .patch_transformed_checksum(
+                &spec,
+                start,
+                end,
+                plain,
+                at_ - ts,
+                e.bits as u32,
+                matches!(e.order, Order::Le),
+                ts,
+                f,
+                late.raw.unwrap_or(0) as usize,
+                late.out_cap.max(0) as usize,
+                F,
+            )
+            .map_err(at(&l.name))
+    }
+
+    /// Writes a packet length field's value, once what it measures is
+    /// written.
+    ///
+    /// # Arguments
+    ///
+    /// * `l` - The field.
+    ///
+    /// # Errors
+    ///
+    /// The runtime's, if the length doesn't fit.
+    fn patch_length(&mut self, l: &Local) -> CodecResult<()> {
+        let Encoding::Int(enc) = &l.vt().enc else {
+            unreachable!("an integer")
+        };
+        let le = matches!(enc.order, Order::Le);
+        let at_ = self.ws.computed[l.id as usize];
+        self.w
+            .patch_length(at_, enc.bits as u32, le, l.length.unwrap(), F)
+            .map_err(at(&l.name))
+    }
+
+    /// Writes a transformed container: its items, then what its encoding
+    /// algorithm makes of them.
+    ///
+    /// # Arguments
+    ///
+    /// * `t`      - The transformed container.
+    /// * `where_` - The container it is in, for errors.
+    ///
+    /// # Errors
+    ///
+    /// As [`Enc::items`]', or the runtime's if the transform fails.
+    fn transform(&mut self, t: &Transform, where_: &str) -> CodecResult<()> {
+        let start = self.w.position();
+        let i = t.start as usize;
+        self.ws.tstart[i] = start;
+        self.items(&t.items, where_)?;
+        if let Some(l) = &t.length {
+            self.patch_length(&l.get())?;
+        }
+        for c in &t.patches {
+            self.patch(&c.get(), true)?;
+        }
+        if t.keeps {
+            // For checks of what follows it, which are late.
+            let mut buf = std::mem::take(&mut self.ws.tbufs[i]);
+            buf.clear();
+            buf.resize(t.cap.max(0) as usize, 0);
+            let n = self.w.copy_out(start, &mut buf, F);
+            self.ws.tbufs[i] = buf;
+            self.ws.kept[i] = n.map_err(at(&t.name))?;
+        }
+        let f = binary_to(&t.encode, &self.ws.vals).map_err(at(&t.name))?;
+        let raw = t.raw.map(|r| r as usize);
+        self.w
+            .transform(start, f, raw, t.out_cap.max(0) as usize, F)
+            .map_err(at(&t.name))
     }
 
     /// Writes items.
@@ -3317,7 +3997,8 @@ impl Enc<'_, '_> {
                         self.items(&c.items, where_)?;
                     }
                 }
-                Item::Verify(v) => self.patch(&v.check.get())?,
+                Item::Verify(v) => self.patch(&v.check.get(), false)?,
+                Item::Transform(t) => self.transform(&t.get(), where_)?,
                 Item::TailSeek(t) => {
                     let back =
                         tail_back(t, &self.ws.vals).map_err(at(where_))?;
@@ -3496,6 +4177,8 @@ pub fn encode<'b>(
     out: &'b mut Buffer,
 ) -> CodecResult<&'b [u8]> {
     let nb = n.get();
+    ws.vals.set_hooks(&plan.hooks);
+    need_hooks(&nb, plan)?;
     for (l, lit) in &nb.fixed.0 {
         let l = l.get();
         let mut x = ws.vals.take(l.id);
@@ -3540,17 +4223,17 @@ pub fn encode<'b>(
         let mut e = Enc { w: &mut w, ws };
         e.chain(n)?;
         if let Some(l) = &plan.info(n).length {
-            let l = l.get();
-            let Encoding::Int(enc) = &l.vt().enc else {
-                unreachable!("an integer")
-            };
-            let le = matches!(enc.order, Order::Le);
-            let at_ = e.ws.computed[l.id as usize];
-            e.w.patch_length(at_, enc.bits as u32, le, l.length.unwrap(), F)
-                .map_err(at(&l.name))?;
+            e.patch_length(&l.get())?;
+        }
+        // Late checks first: transforming their data again changes what
+        // the others cover.
+        for c in &nb.checks {
+            if c.get().late.is_some() {
+                e.late_patch(&c.get())?;
+            }
         }
         for c in &nb.checks {
-            e.patch(&c.get())?;
+            e.patch(&c.get(), false)?;
         }
     }
     drop(w);

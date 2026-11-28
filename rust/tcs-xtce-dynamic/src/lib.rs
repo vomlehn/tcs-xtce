@@ -14,6 +14,7 @@ pub mod interp;
 mod wide;
 
 pub use api::{Datum, RunError, Scratch, SetError, Store};
+pub use interp::Algorithm;
 
 use std::fmt;
 use std::rc::Rc;
@@ -261,6 +262,10 @@ pub struct Mission {
     slot_types: std::rc::Rc<Vec<Rc<VType>>>,
     /// The most bytes each string or binary slot holds.
     slot_caps: std::rc::Rc<Vec<usize>>,
+    /// Each algorithm whose function the application supplies: its
+    /// qualified name, its kind and its hook's name in the generated
+    /// code.
+    hooks: Vec<(String, String, String)>,
     /// The first slot of each parameter and argument, and how many it
     /// has, by its key.
     owner_slots: std::collections::HashMap<String, (usize, usize)>,
@@ -579,7 +584,16 @@ impl Mission {
             });
         }
         let all: Vec<_> = c.nodes.iter().map(|(_, n)| n.clone()).collect();
-        let plan = interp::Plan::new(all.iter(), (c.ids + 1) as usize);
+        let plan =
+            interp::Plan::new(all.iter(), (c.ids + 1) as usize, &c.hook_order);
+        let hooks: Vec<(String, String, String)> = c
+            .hook_order
+            .iter()
+            .map(|h| {
+                let h = h.get();
+                (h.name.clone(), h.kind.clone(), h.ident.clone())
+            })
+            .collect();
         let slot_types: Vec<Rc<VType>> =
             slots.iter().map(|s| s.vt.clone()).collect();
         let slot_raw_types: Vec<Rc<VType>> = slot_types
@@ -594,10 +608,7 @@ impl Mission {
             .iter()
             .map(|t| match t.kind.as_str() {
                 "string" => interp::str_cap(t),
-                "binary" => match &t.enc {
-                    Encoding::Binary(e) => e.bits.max(0) as usize / 8,
-                    _ => 0,
-                },
+                "binary" => interp::bytes_cap(t),
                 _ => 0,
             })
             .collect();
@@ -625,6 +636,7 @@ impl Mission {
             slot_types: Rc::new(slot_types),
             slot_caps: Rc::new(slot_caps),
             owner_slots,
+            hooks,
         })
     }
 
@@ -1283,6 +1295,64 @@ impl Mission {
         assert_eq!(node.mission, self.id, "a NodeId of another mission");
         let n = self.nodes[node.index].node.get();
         (!n.abstract_).then_some(n.max_bytes as usize)
+    }
+
+    /// Lists the algorithms whose functions the application supplies:
+    /// custom algorithms in criteria, custom checksums, the algorithms of
+    /// transforms, and CustomAlgorithms.
+    ///
+    /// # Returns
+    ///
+    /// Each one's qualified name, the kind of function it needs (as
+    /// [`Algorithm::kind`] names it), and whether one is set.
+    pub fn algorithms(&self) -> Vec<(&str, &str, bool)> {
+        self.hooks
+            .iter()
+            .map(|(name, kind, ident)| {
+                (name.as_str(), kind.as_str(), self.plan.hook_set(ident))
+            })
+            .collect()
+    }
+
+    /// Supplies the function for one of the mission's algorithms, which
+    /// decoding and encoding the packets that use it call.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The algorithm's qualified name, as [`Mission::algorithms`]
+    ///            lists it.
+    /// * `f`    - The function, of the kind its use needs.
+    ///
+    /// # Errors
+    ///
+    /// A LookupError, if the mission has no algorithm of that name used
+    /// in that way.
+    pub fn set_algorithm(
+        &mut self,
+        name: &str,
+        f: Algorithm,
+    ) -> Result<(), LookupError> {
+        let found = self
+            .hooks
+            .iter()
+            .find(|(n, k, _)| n == name && k == f.kind());
+        match found {
+            Some((_, _, ident)) => {
+                let ident = ident.clone();
+                self.plan.set_hook(&ident, f);
+                Ok(())
+            }
+            None => Err(LookupError {
+                what: "algorithm",
+                path: name.to_string(),
+                tried: Vec::new(),
+                reason: self
+                    .hooks
+                    .iter()
+                    .find(|(n, _, _)| n == name)
+                    .map(|(_, k, _)| format!("it is used as a {k}")),
+            }),
+        }
     }
 
     /// Gives what the interpreter knows of the mission's nodes.

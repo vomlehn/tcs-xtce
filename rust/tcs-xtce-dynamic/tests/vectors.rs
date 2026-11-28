@@ -3,6 +3,8 @@
 //! generated codecs do (`tests/mission/vectors.expected`), for each packet
 //! whose constructs it runs so far.
 
+mod common;
+
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -70,9 +72,10 @@ fn line(
 
 #[test]
 fn vectors_decode_and_encode_as_the_generated_codecs_do() {
-    let m =
+    let mut m =
         Mission::read_from([File::open(mission_file("demo.xtce")).unwrap()])
             .unwrap();
+    common::set_algorithms(&mut m);
     let model = m.model();
     let plan = m.plan();
     let mut ws = Workspace::new(plan);

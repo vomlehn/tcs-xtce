@@ -7,9 +7,8 @@ resolves a mission and looks its names up, as `Looking names up`_
 describes. Its interpreter (``interp``) decodes, classifies, encodes
 and describes packets by running their items through the tcsxtce
 helpers, as `Interpreting`_ describes; on the demo mission's vectors it
-agrees with the generated codecs on every packet it runs, which is
-every packet but those that use custom algorithms or transforms, the
-functions the application supplies. ``Mission::pack`` and ``unpack``,
+agrees with the generated codecs on every packet. ``Mission::pack`` and
+``unpack``,
 ``Store``, ``Scratch`` and ``Datum`` give programs the interface of
 `The interface`_, so far with these differences:
 
@@ -27,8 +26,15 @@ functions the application supplies. ``Mission::pack`` and ``unpack``,
   nothing once the store and scratch are made, except for integers of
   more than 64 bits, which the codec holds as ``BigInt``\s, and for the
   message of a packet that fails.
-- ``Mission::unbounded``, and custom algorithms and transforms, are
-  still to come.
+- The functions an application supplies for custom algorithms,
+  custom checksums and transforms are set with
+  ``Mission::set_algorithm``, by the algorithm's name, as an
+  ``Algorithm`` of the kind its use needs, which is the type the
+  generated code's ``hooks`` module takes; ``Mission::algorithms``
+  lists them, and a packet that needs one not set fails with
+  ``NoAlgorithm``. They are set after the mission is read, not before
+  it resolves.
+- ``Mission::unbounded`` is still to come.
 
 
 
@@ -367,9 +373,8 @@ run-time codec, naming the construct and its line.
    with frame synchronization, alarms and ``MathAlgorithm``\s.
 
 Transform algorithms and custom algorithms are supplied by the
-application to generated code. The run-time codec would take them as
-functions registered with the mission before it resolves; until then,
-a mission that uses one fails to resolve.
+application to generated code. The run-time codec takes them as
+functions set on the mission once it is read (see the status above).
 
 Testing
 =======

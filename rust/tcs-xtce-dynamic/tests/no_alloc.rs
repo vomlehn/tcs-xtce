@@ -6,6 +6,8 @@
 //! as `BigInt`s, are the exception, and so is a packet that fails, for
 //! its error's message.
 
+mod common;
+
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs::File;
 use std::path::PathBuf;
@@ -101,9 +103,10 @@ fn holds_wide(m: &Mission, node: tcs_xtce_dynamic::NodeId) -> bool {
 
 #[test]
 fn packets_unpack_and_pack_without_allocating() {
-    let m =
+    let mut m =
         Mission::read_from([File::open(mission_file("demo.xtce")).unwrap()])
             .unwrap();
+    common::set_algorithms(&mut m);
     let top = m.top();
     let tm = m.container(top, "/Demo/CCSDSPacket").unwrap();
     let tc = m.meta_command(top, "/Demo/CCSDSCommand").unwrap();

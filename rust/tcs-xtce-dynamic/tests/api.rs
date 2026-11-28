@@ -6,7 +6,9 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use tcs_xtce::buffer::Buffer;
-use tcs_xtce_dynamic::{Datum, Mission, RunError, SetError};
+use tcs_xtce_dynamic::{Algorithm, Datum, Mission, RunError, SetError};
+
+mod common;
 
 /// Reads the demo mission.
 ///
@@ -136,14 +138,49 @@ fn a_command_unpacks_into_its_arguments() {
 }
 
 #[test]
-fn what_is_not_run_yet_is_listed_and_refused() {
+fn abstract_nodes_are_refused_for_packing() {
     let m = demo();
-    let left = m.unsupported();
-    assert!(left.iter().any(|w| w.contains("transform")), "{left:?}");
+    assert_eq!(m.unsupported(), Vec::<String>::new());
     let abstract_ = m.container(m.top(), "/Demo/CCSDSPacket").unwrap();
     let mut out = Buffer::with_capacity(64);
     let e = m.pack(abstract_, &m.store(), &mut out).unwrap_err();
     assert!(matches!(e, RunError::Unsupported(_)), "{e:?}");
+}
+
+/// The vector of a packet with a transform: XorBlock, its data masked.
+const XOR: &str = "0a62c02a0004f0e1968777";
+
+#[test]
+fn algorithms_are_listed_and_needed_until_supplied() {
+    let mut m = demo();
+    let left: Vec<_> = m
+        .algorithms()
+        .into_iter()
+        .filter(|a| !a.2)
+        .map(|a| a.0.to_string())
+        .collect();
+    assert!(left.iter().any(|a| a == "Unmask"), "{left:?}");
+    let root = m.container(m.top(), "/Demo/CCSDSPacket").unwrap();
+    let mut scratch = m.scratch();
+    let e = m.unpack(root, &bytes(XOR), &mut scratch).unwrap_err();
+    let RunError::Packet(p) = &e else {
+        panic!("{e:?}")
+    };
+    assert_eq!(p.kind(), "NoAlgorithm", "{e:?}");
+    // Of another kind, or not of the mission.
+    assert!(m
+        .set_algorithm("Unmask", Algorithm::Criterion(|_| true))
+        .is_err());
+    assert!(m
+        .set_algorithm("/Demo/Nothing", Algorithm::Criterion(|_| true))
+        .is_err());
+    common::set_algorithms(&mut m);
+    assert!(m.algorithms().iter().all(|a| a.2));
+    let got = m.unpack(root, &bytes(XOR), &mut scratch).unwrap();
+    let mut store = m.store();
+    store.commit(&scratch).unwrap();
+    let mut out = Buffer::with_capacity(256);
+    assert_eq!(m.pack(got, &store, &mut out).unwrap(), &bytes(XOR)[..]);
 }
 
 #[test]
