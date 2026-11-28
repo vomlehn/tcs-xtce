@@ -13,21 +13,20 @@
 //! A store and a scratch get all the storage they need when they are
 //! made, each string, binary value and array the room its largest value
 //! needs, so packing, unpacking, setting and committing allocate nothing,
-//! except for integers of more than 64 bits, which are `BigInt`s, and
-//! for the message of an error.
+//! except for the message of an error.
 
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
-use num_bigint::BigInt;
-use num_traits::ToPrimitive;
 use tcs_xtce::buffer::Buffer;
 use tcs_xtce_model::dump::Shared;
 use tcs_xtce_model::model::{Count, Encoding, Node, VType};
 
 use crate::interp::{self, CodecError, Look, Val, Values, Workspace};
-use crate::{alarms, AlarmLevel, Mission, Monitor, NodeId, SlotId, Slots};
+use crate::{
+    alarms, wide::WideInt, AlarmLevel, Mission, Monitor, NodeId, SlotId, Slots,
+};
 
 /// A value of a slot, as a program gives and reads it: an engineering
 /// value, after calibration.
@@ -36,7 +35,7 @@ pub enum Datum<'s> {
     /// An integer of up to 128 bits.
     Int(i128),
     /// An integer of more than 128 bits.
-    Big(&'s BigInt),
+    Big(WideInt),
     /// A float.
     Float(f64),
     /// An enumeration's value; its label is in the type.
@@ -202,7 +201,7 @@ fn assign(dst: &mut Val, src: &Val) {
             a.clear();
             a.extend_from_slice(b);
         }
-        (Val::Big(a), Val::Big(b)) => a.clone_from(b),
+        (Val::Big(a), Val::Big(b)) => *a = *b,
         (Val::Agg(a), Val::Agg(b)) => {
             for (x, y) in a.iter_mut().zip(b) {
                 assign(x, y);
@@ -356,9 +355,9 @@ fn gather(vt: &VType, dst: &mut Val, store: &Store, at: &mut usize) -> bool {
 fn to_datum(v: &Val) -> Datum<'_> {
     match v {
         Val::Int(i) | Val::RawInt(i) => Datum::Int(*i),
-        Val::Big(b) => match b.to_i128() {
+        Val::Big(b) => match crate::wide::to_i128(b) {
             Some(i) => Datum::Int(i),
-            None => Datum::Big(b),
+            None => Datum::Big(*b),
         },
         Val::Float(x) | Val::RawFloat(x) => Datum::Float(*x),
         Val::Enum(i) => Datum::Enum(*i as i128),
@@ -393,11 +392,13 @@ fn put_datum(
         want: vt.kind.clone(),
     };
     match (vt.kind.as_str(), d) {
-        ("int", Datum::Int(i)) if vt.wide() => *dst = Val::Big(BigInt::from(i)),
-        ("int", Datum::Big(b)) if vt.wide() => *dst = Val::Big(b.clone()),
+        ("int", Datum::Int(i)) if vt.wide() => {
+            *dst = Val::Big(crate::wide::from_i128(i))
+        }
+        ("int", Datum::Big(b)) if vt.wide() => *dst = Val::Big(b),
         ("int", Datum::Int(i)) => *dst = Val::Int(i),
         ("enum", Datum::Enum(i)) if vt.wide() => {
-            *dst = Val::Big(BigInt::from(i))
+            *dst = Val::Big(crate::wide::from_i128(i))
         }
         ("enum", Datum::Enum(i)) => {
             *dst =

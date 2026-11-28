@@ -127,7 +127,7 @@ pub enum Val {
     /// An integer.
     Int(i128),
     /// An integer, or an enumeration's value, of more than 64 bits.
-    Big(num_bigint::BigInt),
+    Big(crate::wide::WideInt),
     /// The raw value of an integer encoding, to be written as it is: not
     /// calibrated, and checked against its encoding only.
     RawInt(i128),
@@ -770,7 +770,7 @@ fn spline_orders(s: &tcs_xtce_model::model::Spline, x: f64) -> pk::Result<f64> {
 pub(crate) fn math_value(v: &Val) -> pk::Result<f64> {
     Ok(match v {
         Val::Int(i) => *i as f64,
-        Val::Big(i) => i.to_f64().unwrap_or(f64::NAN),
+        Val::Big(i) => crate::wide::to_f64(i),
         Val::Float(x) => *x,
         Val::Enum(i) => *i as f64,
         Val::Bool(b) => {
@@ -1163,7 +1163,7 @@ fn source(d: &DynSize, vals: &dyn Look, inner: Inner<'_>) -> pk::Result<f64> {
     let (x, _) = reach(v, &l.get().vt(), &d.path)?;
     Ok(match x {
         Val::Int(i) => *i as f64,
-        Val::Big(i) => i.to_f64().unwrap_or(f64::NAN),
+        Val::Big(i) => crate::wide::to_f64(i),
         Val::Enum(i) => *i as f64,
         Val::Float(f) => *f,
         Val::Bool(b) => *b as u8 as f64,
@@ -1466,7 +1466,7 @@ fn read_plain(
                 let n = ((e.bits + 8) / 8) as usize;
                 let w = crate::wide::Wide { signed: false, ..w };
                 let x = crate::wide::read(r, w, n)?;
-                Val::Bool(x != num_bigint::BigInt::from(0))
+                Val::Bool(x != crate::wide::from_i128(0))
             } else {
                 Val::Big(crate::wide::read(r, w, (vt.width() / 8) as usize)?)
             };
@@ -1676,10 +1676,10 @@ pub fn template(vt: &VType) -> Val {
             "string" => Val::Str(String::with_capacity(str_cap(vt))),
             "binary" => Val::Bytes(Vec::with_capacity(bytes_cap(vt))),
             "float" => Val::Float(0.0),
-            "enum" if vt.wide() => Val::Big(num_bigint::BigInt::from(0)),
+            "enum" if vt.wide() => Val::Big(crate::wide::from_i128(0)),
             "enum" => Val::Enum(0),
             "bool" => Val::Bool(false),
-            _ if vt.wide() => Val::Big(num_bigint::BigInt::from(0)),
+            _ if vt.wide() => Val::Big(crate::wide::from_i128(0)),
             _ => Val::Int(0),
         },
     }
@@ -2047,7 +2047,7 @@ fn holds(op: &str, o: Option<std::cmp::Ordering>) -> bool {
 /// How the value compares with it.
 fn cmp_lit(v: &Val, vt: &VType, lit: &Lit) -> Option<std::cmp::Ordering> {
     match (v, lit) {
-        (Val::Big(a), Lit::Int(b)) => a.partial_cmp(b),
+        (Val::Big(a), Lit::Int(b)) => Some(crate::wide::cmp_big(a, b)),
         (Val::Int(a), Lit::Int(b)) => match b.to_i128() {
             Some(b) => a.partial_cmp(&b),
             // Outside what any value holds: every value is on one side.
@@ -2094,11 +2094,9 @@ fn cmp_vals(a: &Val, b: &Val) -> Option<std::cmp::Ordering> {
         (Val::Int(x), Val::Int(y)) => x.partial_cmp(y),
         (Val::Big(x), Val::Big(y)) => x.partial_cmp(y),
         (Val::Big(x), Val::Int(y)) => {
-            x.partial_cmp(&num_bigint::BigInt::from(*y))
+            x.partial_cmp(&crate::wide::from_i128(*y))
         }
-        (Val::Int(x), Val::Big(y)) => {
-            num_bigint::BigInt::from(*x).partial_cmp(y)
-        }
+        (Val::Int(x), Val::Big(y)) => crate::wide::from_i128(*x).partial_cmp(y),
         (Val::Enum(x), Val::Enum(y)) => x.partial_cmp(y),
         (Val::Float(x), Val::Float(y)) => x.partial_cmp(y),
         (Val::Bool(x), Val::Bool(y)) => x.partial_cmp(y),
@@ -2787,7 +2785,7 @@ impl Dec<'_, '_> {
         let value = match self.ws.vals.val(l.id) {
             Some(Val::Int(v)) => Some(*v as u64),
             // A wider field holds the value with zeros above it.
-            Some(Val::Big(v)) => v.to_u64(),
+            Some(Val::Big(v)) => crate::wide::to_u64(v),
             _ => Some(0),
         };
         if l.vt().wide() {
@@ -2877,7 +2875,7 @@ impl Dec<'_, '_> {
         let n = match &x {
             Val::Int(n) => Some(*n as u64),
             // A wider field must hold a length a u64 holds.
-            Val::Big(n) => match n.to_u64() {
+            Val::Big(n) => match crate::wide::to_u64(n) {
                 Some(n) => Some(n),
                 None if l.length.is_some() => {
                     ws.vals.restore(id, x);
@@ -3366,14 +3364,16 @@ pub(crate) fn check_valid(vt: &VType, v: &Val) -> pk::Result<()> {
         Num::Int(i) => i.to_i128().unwrap_or(0),
         Num::Float(x) => *x as i128,
     };
-    let big = |n: &Num| match n {
-        Num::Int(i) => i.clone(),
-        Num::Float(x) => num_bigint::BigInt::from(*x as i128),
+    // How a wide value compares with a bound.
+    let big = |x: &crate::wide::WideInt, n: &Num| match n {
+        Num::Int(i) => crate::wide::cmp_big(x, i),
+        Num::Float(f) => x.cmp(&crate::wide::from_i128(*f as i128)),
     };
     let ok = vt.valid.iter().any(|b| match v {
         Val::Big(x) => {
-            b.lo.as_ref().is_none_or(|lo| big(lo) <= *x)
-                && b.hi.as_ref().is_none_or(|hi| *x <= big(hi))
+            use std::cmp::Ordering::{Greater, Less};
+            b.lo.as_ref().is_none_or(|lo| big(x, lo) != Less)
+                && b.hi.as_ref().is_none_or(|hi| big(x, hi) != Greater)
         }
         Val::Int(x) => {
             b.lo.as_ref().is_none_or(|lo| int(lo) <= *x)
@@ -3453,7 +3453,7 @@ fn write_raw(w: &mut BitWriter<'_>, vt: &VType, v: &Val) -> pk::Result<()> {
                 signed: enc != IntEncoding::Unsigned,
             };
             let bytes = crate::wide::raw_bytes(e.bits as u32);
-            crate::wide::write(w, w_, bytes, &num_bigint::BigInt::from(*x))
+            crate::wide::write(w, w_, bytes, &crate::wide::from_i128(*x))
         }
         (Encoding::Int(e), Val::RawInt(x)) => {
             let bits = e.bits as u32;
@@ -3673,7 +3673,7 @@ fn write_plain(
                         bcd: None,
                         ..w_
                     };
-                    let x = num_bigint::BigInt::from(*b as u8);
+                    let x = crate::wide::from_i128(*b as i128);
                     crate::wide::write(w, w_, n, &x)
                 }
                 Val::Big(x) => {
@@ -4254,7 +4254,7 @@ pub fn lit_assign(dst: &mut Val, vt: &VType, lit: &Lit) {
         }
         ("float", Lit::Float(x)) => *dst = Val::Float(*x),
         ("int" | "enum", Lit::Int(i)) if vt.wide() => {
-            *dst = Val::Big(i.clone())
+            *dst = Val::Big(crate::wide::from_big(i).unwrap_or_default())
         }
         ("enum", Lit::Int(i)) => *dst = Val::Enum(i.to_i64().unwrap_or(0)),
         (_, Lit::Int(i)) => *dst = Val::Int(i.to_i128().unwrap_or(0)),
@@ -4334,13 +4334,13 @@ pub fn describe(vt: &VType, v: &Val, out: &mut String) {
             let _ = write!(out, "{x}");
         }
         (_, Val::Big(x)) => {
-            let label = x.to_i64().and_then(|v| {
+            let label = crate::wide::to_i64(x).and_then(|v| {
                 vt.labels.iter().find(|l| l.value <= v && v <= l.max_value)
             });
             match label {
                 Some(l) if vt.kind == "enum" => out.push_str(&l.label),
                 _ => {
-                    let _ = write!(out, "{x}");
+                    let _ = write!(out, "{}", crate::wide::to_big(x));
                 }
             }
         }

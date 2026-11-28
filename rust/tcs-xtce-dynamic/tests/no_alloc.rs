@@ -3,9 +3,8 @@
 //! nothing once the store, scratch and alarm monitor are made, as the
 //! codecs generated with `--dynamic-allocations false` don't: every
 //! string, binary value and array has the room its largest value needs
-//! from the start. Integers of more than 64 bits, which the codec holds
-//! as `BigInt`s, are the exception, and so is a packet that fails, for
-//! its error's message.
+//! from the start, and integers of more than 64 bits are held in a fixed
+//! width. A packet that fails is the exception, for its error's message.
 
 mod common;
 
@@ -16,7 +15,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tcs_xtce::buffer::Buffer;
 use tcs_xtce_dynamic::Mission;
-use tcs_xtce_model::model::{walk, Encoding, Item};
 
 /// Counts the allocations the test makes.
 struct Counting;
@@ -58,50 +56,6 @@ fn mission_file(name: &str) -> PathBuf {
         .join(name)
 }
 
-/// Says whether a packet holds an integer of more than 64 bits, which
-/// the codec holds as a `BigInt`.
-///
-/// # Arguments
-///
-/// * `m`    - The mission.
-/// * `node` - The node.
-///
-/// # Returns
-///
-/// Whether it does.
-fn holds_wide(m: &Mission, node: tcs_xtce_dynamic::NodeId) -> bool {
-    let key = m.path_of_node(node);
-    let n = m
-        .model()
-        .nodes
-        .iter()
-        .find(|n| n.get().key == key)
-        .expect("the node")
-        .clone();
-    // Every value of the packet, its length and checksum fields too.
-    let items = n.all_items();
-    walk(&items, true).iter().any(|it| {
-        let Item::Value(v) = it else {
-            return false;
-        };
-        let vt = v.local.get().vt();
-        let mut wide = false;
-        let mut stack = vec![vt];
-        while let Some(t) = stack.pop() {
-            wide |=
-                t.wide() || matches!(&t.enc, Encoding::Int(e) if e.bits > 64);
-            match &t.enc {
-                Encoding::Aggregate(e) => {
-                    stack.extend(e.members.iter().map(|m| m.vtype.clone()))
-                }
-                Encoding::Array(e) => stack.push(e.elem.clone()),
-                _ => {}
-            }
-        }
-        wide
-    })
-}
-
 #[test]
 fn packets_unpack_and_pack_without_allocating() {
     let mut m =
@@ -136,7 +90,7 @@ fn packets_unpack_and_pack_without_allocating() {
     let mut out = Buffer::with_capacity(70_000);
     let mut mon = m.monitor();
     let mut t = 0.0;
-    let (mut clean, mut wide) = (0, 0);
+    let mut clean = 0;
     let mut allocating = Vec::new();
     for (node, data, note) in &packets {
         let before = ALLOCS.load(Ordering::Relaxed);
@@ -157,19 +111,15 @@ fn packets_unpack_and_pack_without_allocating() {
         let made = ALLOCS.load(Ordering::Relaxed) - before;
         if made == 0 {
             clean += 1;
-        } else if holds_wide(&m, got) {
-            wide += 1;
         } else {
             allocating.push(format!("{note} ({made} allocations)"));
         }
     }
-    eprintln!(
-        "no_alloc: {clean} packets allocate nothing; {wide} hold wide integers"
-    );
+    eprintln!("no_alloc: {clean} packets allocate nothing");
     assert!(
         allocating.is_empty(),
         "these packets allocate:\n{}",
         allocating.join("\n")
     );
-    assert!(clean > 80, "only {clean} packets were run");
+    assert!(clean > 120, "only {clean} packets were run");
 }

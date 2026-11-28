@@ -17,15 +17,16 @@ agrees with the generated codecs on every packet. ``Mission::pack`` and
   uses, and ``Mission::unsupported`` lists every such container and
   meta-command, so that a program can refuse the mission before it
   starts.
-- ``Datum`` holds an integer of more than 128 bits as ``Big``, and has
-  no ``Time`` yet: a time is the float the compiler makes of it.
+- ``Datum`` holds an integer of more than 128 bits as ``Big``, a
+  ``WideInt`` (72 bytes of two's complement, which hold any integer of
+  up to 512 bits; ``to_big`` and ``from_big`` convert it), and has no
+  ``Time`` yet: a time is the float the compiler makes of it.
 - ``Store::set_raw`` leaves the slot without an engineering value until
   one is set or unpacked: ``get`` gives none, and ``get_raw`` the raw
   value.
 - Packing, unpacking, ``Store::set`` and ``Store::commit`` allocate
-  nothing once the store and scratch are made, except for integers of
-  more than 64 bits, which the codec holds as ``BigInt``\s, and for the
-  message of a packet that fails.
+  nothing once the store and scratch are made, integers of more than 64
+  bits included, except for the message of a packet that fails.
 - The functions an application supplies for custom algorithms,
   custom checksums and transforms are set with
   ``Mission::set_algorithm``, by the algorithm's name, as an

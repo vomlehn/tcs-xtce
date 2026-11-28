@@ -2,12 +2,145 @@
 //! integers of a width fixed when the program is compiled, as the code
 //! generated for a mission does; the interpreter learns the width only
 //! when it reads the mission, so it runs the runtime's helpers at each
-//! width from 9 to 64 bytes, and holds the values as `BigInt`s.
+//! width from 9 to 64 bytes, and holds the values as [`WideInt`]s, of a
+//! width that holds them all, so that nothing is allocated for them.
+
+use std::cmp::Ordering;
 
 use num_bigint::{BigInt, Sign};
+use tcs_xtce::packet::bnum::cast::CastFrom;
 use tcs_xtce::packet::{
     self as pk, BitReader, BitWriter, ByteOrder, IntEncoding, PacketError,
 };
+
+/// The bytes of a [`WideInt`].
+const WIDE: usize = 72;
+
+/// An integer of more than 64 bits, as the codec holds it: 72 bytes of
+/// two's complement, which hold every signed and unsigned integer of up
+/// to 512 bits.
+pub type WideInt = pk::Int<WIDE>;
+
+/// Gives an integer as a wide one.
+///
+/// # Arguments
+///
+/// * `x` - The integer.
+///
+/// # Returns
+///
+/// It.
+pub fn from_i128(x: i128) -> WideInt {
+    WideInt::cast_from(x)
+}
+
+/// Gives a wide integer as an `i128`.
+///
+/// # Arguments
+///
+/// * `w` - The integer.
+///
+/// # Returns
+///
+/// It, or `None` if an `i128` doesn't hold it.
+pub fn to_i128(w: &WideInt) -> Option<i128> {
+    let x = i128::cast_from(*w);
+    (from_i128(x) == *w).then_some(x)
+}
+
+/// Gives a wide integer as an `i64`.
+///
+/// # Arguments
+///
+/// * `w` - The integer.
+///
+/// # Returns
+///
+/// It, or `None` if an `i64` doesn't hold it.
+pub fn to_i64(w: &WideInt) -> Option<i64> {
+    to_i128(w).and_then(|x| i64::try_from(x).ok())
+}
+
+/// Gives a wide integer as a `u64`.
+///
+/// # Arguments
+///
+/// * `w` - The integer.
+///
+/// # Returns
+///
+/// It, or `None` if a `u64` doesn't hold it.
+pub fn to_u64(w: &WideInt) -> Option<u64> {
+    to_i128(w).and_then(|x| u64::try_from(x).ok())
+}
+
+/// Gives a wide integer as a float.
+///
+/// # Arguments
+///
+/// * `w` - The integer.
+///
+/// # Returns
+///
+/// The nearest float.
+pub fn to_f64(w: &WideInt) -> f64 {
+    f64::cast_from(*w)
+}
+
+/// Gives a document's integer as a wide one, without allocating.
+///
+/// # Arguments
+///
+/// * `b` - The integer.
+///
+/// # Returns
+///
+/// It, or `None` if a [`WideInt`] doesn't hold it.
+pub fn from_big(b: &BigInt) -> Option<WideInt> {
+    let mut bytes = [0u8; WIDE];
+    for (i, d) in b.iter_u64_digits().enumerate() {
+        let at = bytes.get_mut(8 * i..8 * i + 8)?;
+        at.copy_from_slice(&d.to_le_bytes());
+    }
+    if bytes[WIDE - 1] & 0x80 != 0 {
+        return None;
+    }
+    let m = WideInt::from_le_bytes(bytes);
+    Some(if b.sign() == Sign::Minus { -m } else { m })
+}
+
+/// Gives a wide integer as a `BigInt`, which allocates.
+///
+/// # Arguments
+///
+/// * `w` - The integer.
+///
+/// # Returns
+///
+/// It.
+pub fn to_big(w: &WideInt) -> BigInt {
+    BigInt::from_signed_bytes_le(&w.to_le_bytes())
+}
+
+/// Compares a wide integer with a document's integer, without
+/// allocating.
+///
+/// # Arguments
+///
+/// * `w` - The wide integer.
+/// * `b` - The document's.
+///
+/// # Returns
+///
+/// How the first compares with the second.
+pub fn cmp_big(w: &WideInt, b: &BigInt) -> Ordering {
+    match from_big(b) {
+        Some(v) => w.cmp(&v),
+        // Past every wide integer.
+        None if b.sign() == Sign::Minus => Ordering::Greater,
+        None => Ordering::Less,
+    }
+}
 
 /// The name the interpreter gives the runtime's helpers for a field.
 const F: &str = "field";
@@ -112,22 +245,23 @@ pub struct Wide {
 /// # Errors
 ///
 /// OutOfRange, if it doesn't fit, or is negative and not signed.
-fn le_bytes<const N: usize>(v: &BigInt, signed: bool) -> pk::Result<[u8; N]> {
+fn le_bytes<const N: usize>(v: &WideInt, signed: bool) -> pk::Result<[u8; N]> {
     let bad = PacketError::OutOfRange { field: F };
-    let (b, fill) = if signed {
-        let fill = if v.sign() == Sign::Minus { 0xff } else { 0 };
-        (v.to_signed_bytes_le(), fill)
-    } else {
-        if v.sign() == Sign::Minus {
-            return Err(bad);
-        }
-        (v.to_bytes_le().1, 0)
-    };
-    if b.len() > N {
+    let b = v.to_le_bytes();
+    let negative = b[WIDE - 1] & 0x80 != 0;
+    if negative && !signed {
         return Err(bad);
     }
-    let mut out = [fill; N];
-    out[..b.len()].copy_from_slice(&b);
+    let fill = if negative { 0xff } else { 0 };
+    // What the N bytes don't hold must be the sign's.
+    if b[N..].iter().any(|&x| x != fill) {
+        return Err(bad);
+    }
+    if signed && (b[N - 1] & 0x80 != 0) != negative {
+        return Err(bad);
+    }
+    let mut out = [0u8; N];
+    out.copy_from_slice(&b[..N]);
     Ok(out)
 }
 
@@ -148,16 +282,16 @@ fn le_bytes<const N: usize>(v: &BigInt, signed: bool) -> pk::Result<[u8; N]> {
 fn read_n<const N: usize>(
     r: &mut BitReader<'_>,
     e: Wide,
-) -> pk::Result<BigInt> {
+) -> pk::Result<WideInt> {
     let mut x = r.wide::<N>(e.bits, e.lsb, e.order, F)?;
     if let Some(packed) = e.bcd {
         x = pk::wide_bcd_decode(x, e.bits, packed, F)?;
     }
     if e.signed {
         let v = pk::wide_to_signed(x, e.bits, e.enc);
-        Ok(BigInt::from_signed_bytes_le(&v.to_le_bytes()))
+        Ok(WideInt::cast_from(v))
     } else {
-        Ok(BigInt::from_bytes_le(Sign::Plus, &x.to_le_bytes()))
+        Ok(WideInt::cast_from(x))
     }
 }
 
@@ -175,7 +309,7 @@ fn read_n<const N: usize>(
 fn write_n<const N: usize>(
     w: &mut BitWriter<'_>,
     e: Wide,
-    v: &BigInt,
+    v: &WideInt,
 ) -> pk::Result<()> {
     let raw = if let Some(packed) = e.bcd {
         let u = pk::Uint::<N>::from_le_bytes(le_bytes::<N>(v, false)?);
@@ -210,7 +344,7 @@ pub fn read(
     r: &mut BitReader<'_>,
     e: Wide,
     bytes: usize,
-) -> pk::Result<BigInt> {
+) -> pk::Result<WideInt> {
     at_width!(bytes, read_n, r, e)
 }
 
@@ -230,7 +364,7 @@ pub fn write(
     w: &mut BitWriter<'_>,
     e: Wide,
     bytes: usize,
-    v: &BigInt,
+    v: &WideInt,
 ) -> pk::Result<()> {
     at_width!(bytes, write_n, w, e, v)
 }

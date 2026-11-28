@@ -278,7 +278,7 @@ fn cmp_bound(x: &Val, n: &Num) -> Option<Ordering> {
             None if b.sign() == Sign::Minus => Ordering::Greater,
             None => Ordering::Less,
         }),
-        (Val::Big(i), Num::Int(b)) => Some(i.cmp(b)),
+        (Val::Big(i), Num::Int(b)) => Some(crate::wide::cmp_big(i, b)),
         (x, n) => interp::math_value(x).ok()?.partial_cmp(&n.as_f64()),
     }
 }
@@ -400,7 +400,7 @@ fn alarm_def(
     if vt.kind == "enum" && (!ad.labels.is_empty() || ad.default != 0) {
         let v = match x {
             Val::Enum(i) => Some(*i),
-            Val::Big(b) => b.to_i64(),
+            Val::Big(b) => crate::wide::to_i64(b),
             _ => None,
         };
         let level = v

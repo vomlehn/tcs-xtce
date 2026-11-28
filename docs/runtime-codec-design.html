@@ -379,15 +379,16 @@ same; <tt class="docutils literal">pack</tt> and <tt class="docutils literal">un
 uses, and <tt class="docutils literal"><span class="pre">Mission::unsupported</span></tt> lists every such container and
 meta-command, so that a program can refuse the mission before it
 starts.</li>
-<li><tt class="docutils literal">Datum</tt> holds an integer of more than 128 bits as <tt class="docutils literal">Big</tt>, and has
-no <tt class="docutils literal">Time</tt> yet: a time is the float the compiler makes of it.</li>
+<li><tt class="docutils literal">Datum</tt> holds an integer of more than 128 bits as <tt class="docutils literal">Big</tt>, a
+<tt class="docutils literal">WideInt</tt> (72 bytes of two's complement, which hold any integer of
+up to 512 bits; <tt class="docutils literal">to_big</tt> and <tt class="docutils literal">from_big</tt> convert it), and has no
+<tt class="docutils literal">Time</tt> yet: a time is the float the compiler makes of it.</li>
 <li><tt class="docutils literal"><span class="pre">Store::set_raw</span></tt> leaves the slot without an engineering value until
 one is set or unpacked: <tt class="docutils literal">get</tt> gives none, and <tt class="docutils literal">get_raw</tt> the raw
 value.</li>
 <li>Packing, unpacking, <tt class="docutils literal"><span class="pre">Store::set</span></tt> and <tt class="docutils literal"><span class="pre">Store::commit</span></tt> allocate
-nothing once the store and scratch are made, except for integers of
-more than 64 bits, which the codec holds as <tt class="docutils literal">BigInt</tt>s, and for the
-message of a packet that fails.</li>
+nothing once the store and scratch are made, integers of more than 64
+bits included, except for the message of a packet that fails.</li>
 <li>The functions an application supplies for custom algorithms,
 custom checksums and transforms are set with
 <tt class="docutils literal"><span class="pre">Mission::set_algorithm</span></tt>, by the algorithm's name, as an

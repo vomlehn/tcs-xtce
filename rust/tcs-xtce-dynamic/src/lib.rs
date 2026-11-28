@@ -13,6 +13,7 @@ mod alarms;
 pub mod api;
 pub mod interp;
 mod wide;
+pub use wide::{from_big, to_big, WideInt};
 
 pub use alarms::Monitor;
 pub use api::{Datum, RunError, Scratch, SetError, Store};
